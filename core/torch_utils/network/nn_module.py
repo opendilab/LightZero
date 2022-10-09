@@ -6,7 +6,7 @@ from torch.nn.init import xavier_normal_, kaiming_normal_, orthogonal_
 from typing import Union, Tuple, List, Callable
 from ding.compatibility import torch_ge_131
 
-from .normalization import build_normalization
+from ding.torch_utils.network.normalization import build_normalization
 
 
 def weight_init_(weight: torch.Tensor, init_type: str = "xavier", activation: str = None) -> None:

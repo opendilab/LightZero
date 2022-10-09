@@ -1,4 +1,4 @@
-# NEURAL DISCRETE REINFORCEMENT LEARNING
+# LightZero
 ![pipeline](assets/lightzero_overview.png)
 
 LightZero is a library with a pytorch implementation of Monte Carlo tree search (MCTS) algorithms such as AlphaZero, MuZero, EfficientZero and Sampled MuZero.

@@ -6,7 +6,7 @@ import copy
 import torch
 import numpy as np
 import core.rl_utils.mcts.ctree.cytree as tree
-from ding.model.template.efficientzero.efficientzero_base_model import inverse_scalar_transform
+from core.model.template.efficientzero.efficientzero_base_model import inverse_scalar_transform
 
 
 class MCTSCtree(object):

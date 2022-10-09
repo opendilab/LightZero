@@ -9,7 +9,7 @@ import numpy as np
 import gym
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
-from dizoo.atari.envs.atari_wrappers import wrap_muzero, wrap_muzero_dqn_expert_data
+from zoo.atari.envs.atari_wrappers import wrap_muzero, wrap_muzero_dqn_expert_data
 
 # from ding.utils import ENV_REGISTRY
 from core.utils import ENV_REGISTRY

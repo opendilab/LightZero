@@ -1,6 +1,6 @@
 import torch
 from easydict import EasyDict
-from ding.model.template.efficientzero.efficientzero_base_model import inverse_scalar_transform
+from core.model.template.efficientzero.efficientzero_base_model import inverse_scalar_transform
 import pytest
 
 

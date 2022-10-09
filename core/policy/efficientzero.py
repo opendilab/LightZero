@@ -8,7 +8,7 @@ import numpy as np
 from torch.nn import L1Loss
 import torch.nn.functional as F
 from ding.rl_utils import get_nstep_return_data, get_train_sample
-from ding.rl_utils.image_transform_muzero import Transforms
+from core.rl_utils.image_transform_muzero import Transforms
 
 # cpp mcts
 from core.rl_utils.mcts.ctree import cytree
@@ -18,7 +18,7 @@ import core.rl_utils.mcts.ptree as tree
 from core.rl_utils.mcts.mcts_ptree import EfficientZeroMCTSPtree as MCTSPtree
 from core.rl_utils.mcts.utils import select_action
 from ding.torch_utils import to_tensor, to_device
-from ding.model.template.efficientzero.efficientzero_base_model import scalar_transform, inverse_scalar_transform
+from core.model.template.efficientzero.efficientzero_base_model import scalar_transform, inverse_scalar_transform
 # TODO(pu): choose game config
 from zoo.board_games.atari.config.atari_config import game_config
 # from zoo.board_games.tictactoe.config.tictactoe_config import game_config

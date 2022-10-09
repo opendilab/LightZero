@@ -26,6 +26,7 @@ from ding.envs import get_env_manager_cls, BaseEnvManager
 from core.envs.env import get_env_cls
 
 from core.policy import get_policy_cls
+from core.worker.collector import get_serial_collector_cls
 
 
 class Config(object):

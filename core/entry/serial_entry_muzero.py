@@ -6,7 +6,7 @@ from functools import partial
 from tensorboardX import SummaryWriter
 import numpy as np
 # from ding.envs import get_vec_env_setting, create_env_manager
-from ding.worker import BaseLearner, BaseSerialCommander, create_serial_collector
+from ding.worker import BaseLearner, BaseSerialCommander
 
 
 from ding.utils import set_pkg_seed
@@ -21,6 +21,8 @@ from core.rl_utils.mcts.game_buffer import GameBuffer
 # from ding.policy import create_policy
 from core.config import read_config, compile_config
 from core.policy import create_policy
+from core.worker import create_serial_collector
+
 
 # @profile
 def serial_pipeline_muzero(
