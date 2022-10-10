@@ -1,7 +1,6 @@
 from typing import List, Dict, Any, Tuple, Union
 import treetensor.torch as ttorch
 import torch.optim as optim
-from ding.model import model_wrap
 import torch
 import copy
 import numpy as np
@@ -20,19 +19,13 @@ from core.rl_utils.mcts.utils import select_action
 from ding.torch_utils import to_tensor, to_device
 from core.model.template.efficientzero.efficientzero_base_model import scalar_transform, inverse_scalar_transform
 # TODO(pu): choose game config
-from zoo.board_games.atari.config.atari_config import game_config
+from zoo.atari.config.atari_config import game_config
 # from zoo.board_games.tictactoe.config.tictactoe_config import game_config
 # from zoo.board_games.gomoku.config.gomoku_config import game_config
 
-
-from core.policy.base_policy import Policy
-from core.utils import POLICY_REGISTRY
-from core.model.wrapper.model_wrappers import model_wrap
-
-
-# from ding.utils import POLICY_REGISTRY
-# from ding.policy.base_policy import Policy
-# from ding.model import model_wrap
+from ding.utils import POLICY_REGISTRY
+from ding.policy.base_policy import Policy
+from ding.model import model_wrap
 
 
 @POLICY_REGISTRY.register('efficientzero')
@@ -496,7 +489,9 @@ class EfficientZeroPolicy(Policy):
         )
 
     # @profile
-    def _forward_collect(self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None, ready_env_id=None):
+    def _forward_collect(
+        self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None, ready_env_id=None
+    ):
         """
         Shapes:
             obs: (B, S, C, H, W), where S is the stack num
@@ -530,9 +525,8 @@ class EfficientZeroPolicy(Policy):
                 action_num = int(action_mask[0].sum())
                 roots = cytree.Roots(active_collect_env_num, action_num, self.game_config.num_simulations)
                 noises = [
-                    np.random.dirichlet([self.game_config.root_dirichlet_alpha] * action_num).astype(np.float32
-                                                                                                     ).tolist()
-                    for j in range(active_collect_env_num)
+                    np.random.dirichlet([self.game_config.root_dirichlet_alpha] * action_num
+                                        ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 ]
                 roots.prepare(self.game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
                 # do MCTS for a policy (argmax in testing)
@@ -540,15 +534,13 @@ class EfficientZeroPolicy(Policy):
             else:
                 # python mcts
                 legal_actions = [
-                    [i for i, x in enumerate(action_mask[j]) if x == 1]
-                    for j in range(active_collect_env_num)
+                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
                 roots = tree.Roots(active_collect_env_num, legal_actions, self.game_config.num_simulations)
                 # the only difference between collect and eval is the dirichlet noise
                 noises = [
                     np.random.dirichlet([self.game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                        ).astype(np.float32).tolist()
-                    for j in range(active_collect_env_num)
+                                        ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 ]
                 roots.prepare(
                     self.game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
@@ -570,7 +562,9 @@ class EfficientZeroPolicy(Policy):
                 # select the argmax, not sampling
                 # TODO(pu):
                 # only legal actions have visit counts
-                action, visit_count_distribution_entropy = select_action(distributions, temperature=temperature[i], deterministic=False)
+                action, visit_count_distribution_entropy = select_action(
+                    distributions, temperature=temperature[i], deterministic=False
+                )
                 # action, _ = select_action(distributions, temperature=1, deterministic=True)
                 # TODO(pu): transform to the real action index in legal action set
                 action = np.where(action_mask[i] == 1.0)[0][action]
@@ -647,8 +641,7 @@ class EfficientZeroPolicy(Policy):
             else:
                 # python mcts
                 legal_actions = [
-                    [i for i, x in enumerate(action_mask[j]) if x == 1]
-                    for j in range(active_eval_env_num)
+                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
                 roots = tree.Roots(active_eval_env_num, legal_actions, self.game_config.num_simulations)
 

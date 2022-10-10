@@ -1,13 +1,13 @@
-# from ding.utils import POLICY_REGISTRY
-from .base_policy import CommandModePolicy
-
 from ding.rl_utils import get_epsilon_greedy_fn
 
 from .efficientzero import EfficientZeroPolicy
 from .efficientzero_expert_data import EfficientZeroExertDataPolicy
 
-from core.utils import POLICY_REGISTRY  # NOTE: use customized POLICY_REGISTRY
-from .base_policy import CommandModePolicy
+from ding.utils import POLICY_REGISTRY
+from ding.policy.base_policy import CommandModePolicy
+
+# from core.utils import POLICY_REGISTRY  # NOTE: use customized POLICY_REGISTRY
+# from .base_policy import CommandModePolicy
 
 
 class EpsCommandModePolicy(CommandModePolicy):
@@ -56,7 +56,6 @@ class DummyCommandModePolicy(CommandModePolicy):
 
     def _get_setting_eval(self, command_info: dict) -> dict:
         return {}
-
 
 
 @POLICY_REGISTRY.register('efficientzero_command')

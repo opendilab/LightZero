@@ -15,6 +15,7 @@ class GomokuExpert(object):
         Interfaces:
             ``__init__``, ``get_action``.
     """
+
     def __init__(self):
         """
         Overview:
@@ -90,10 +91,7 @@ class GomokuExpert(object):
         # scan left
         m, n = i, j - 1
         while n >= 0:
-            is_continue, value, grade = self.caculate_once_value(m, n,
-                                                                 player,
-                                                                 value,
-                                                                 grade)
+            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
             if is_continue:
                 # Continue to move one step to the left
                 n = n - 1
@@ -104,10 +102,7 @@ class GomokuExpert(object):
         grade = self.grade
         n = j + 1
         while n < self.board_width:
-            is_continue, value, grade = self.caculate_once_value(m, n,
-                                                                 player,
-                                                                 value,
-                                                                 grade)
+            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
             if is_continue:
                 # Continue to move one step to the right
                 n = n + 1
@@ -138,10 +133,7 @@ class GomokuExpert(object):
         m, n = i - 1, j
         # scan up
         while m >= 0:
-            is_continue, value, grade = self.caculate_once_value(m, n,
-                                                                 player,
-                                                                 value,
-                                                                 grade)
+            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
             if is_continue:
                 # Continue to move one step to the up
                 m = m - 1
@@ -153,10 +145,7 @@ class GomokuExpert(object):
         m = i + 1
         # scan down
         while m < self.board_height:
-            is_continue, value, grade = self.caculate_once_value(m, n,
-                                                                 player,
-                                                                 value,
-                                                                 grade)
+            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
             if is_continue:
                 # Continue to move one step to the down
                 m = m + 1
@@ -187,10 +176,7 @@ class GomokuExpert(object):
         m, n = i - 1, j - 1
         # scan left up
         while m >= 0 and n >= 0:
-            is_continue, value, grade = self.caculate_once_value(m, n,
-                                                                 player,
-                                                                 value,
-                                                                 grade)
+            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
             if is_continue:
                 # Continue to move one step to the left up
                 m, n = m - 1, n - 1
@@ -202,10 +188,7 @@ class GomokuExpert(object):
         # right down
         m, n = i + 1, j + 1
         while m < self.board_height and n < self.board_width:
-            is_continue, value, grade = self.caculate_once_value(m, n,
-                                                                 player,
-                                                                 value,
-                                                                 grade)
+            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
             if is_continue:
                 # Continue to move one step down to the right
                 m, n = m + 1, n + 1
@@ -235,10 +218,7 @@ class GomokuExpert(object):
         # scan left down
         m, n = i + 1, j - 1
         while m < self.board_height and n >= 0:
-            is_continue, value, grade = self.caculate_once_value(m, n,
-                                                                 player,
-                                                                 value,
-                                                                 grade)
+            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
             if is_continue:
                 m, n = m + 1, n - 1
             else:
@@ -248,10 +228,7 @@ class GomokuExpert(object):
         # scan right up
         m, n = i - 1, j + 1
         while m >= 0 and n < self.board_width:
-            is_continue, value, grade = self.caculate_once_value(m, n,
-                                                                 player,
-                                                                 value,
-                                                                 grade)
+            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
             if is_continue:
                 # Continue to move up one step to the right
                 m, n = m - 1, n + 1
@@ -324,10 +301,9 @@ class GomokuExpert(object):
 
             # Comprehensive score in all directions
             self.action_value[action][4] = (
-                self.action_value[action][0] +
-                self.action_value[action][1] +
-                self.action_value[action][2] +
-                self.action_value[action][3])
+                self.action_value[action][0] + self.action_value[action][1] + self.action_value[action][2] +
+                self.action_value[action][3]
+            )
 
         action = max(self.available, key=lambda x: self.action_value[x][4])
 
@@ -371,12 +347,10 @@ class GomokuExpert(object):
 
         m_action, m_value = self.evaluate_all_value(self.m_player_id)
 
-        logging.info("loaction:{loc},value:{value}".format(
-                     loc=self.action_to_location(m_action), value=m_value))
+        logging.info("loaction:{loc},value:{value}".format(loc=self.action_to_location(m_action), value=m_value))
 
         s_action, s_value = self.evaluate_all_value(self.s_player_id)
-        logging.info("O_loaction:{loc},value:{value}".format(
-                      loc=self.action_to_location(s_action), value=s_value))
+        logging.info("O_loaction:{loc},value:{value}".format(loc=self.action_to_location(s_action), value=s_value))
         # Block this position if it is better for the opponent to play here
         if m_value >= s_value:
             return m_action

@@ -20,16 +20,15 @@ from core.rl_utils.mcts.utils import select_action
 from ding.torch_utils import to_tensor, to_device
 from core.model.template.efficientzero.efficientzero_base_model import inverse_scalar_transform
 # TODO(pu): choose game config
-from zoo.board_games.atari.config.atari_expert_data_config import game_config
+from zoo.atari.config.atari_expert_data_config import game_config
 # from zoo.board_games.tictactoe.config.tictactoe_config import game_config
 # from zoo.board_games.gomoku.config.gomoku_efficientzero_config import game_config
 
+# from core.policy.base_policy import Policy
+# from core.utils import POLICY_REGISTRY
 
-from core.policy.base_policy import Policy
-from core.utils import POLICY_REGISTRY
-
-# from ding.utils import POLICY_REGISTRY
-# from ding.policy.base_policy import Policy
+from ding.utils import POLICY_REGISTRY
+from ding.policy.base_policy import Policy
 from ding.model import model_wrap
 
 

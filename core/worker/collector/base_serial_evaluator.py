@@ -8,9 +8,9 @@ import torch
 
 from ding.torch_utils import to_tensor, to_ndarray, tensor_to_list
 
-# from ding.utils import SERIAL_EVALUATOR_REGISTRY, import_module, lists_to_dicts
-from ding.utils import import_module, lists_to_dicts
-from core.utils import SERIAL_EVALUATOR_REGISTRY
+from ding.utils import SERIAL_EVALUATOR_REGISTRY, import_module, lists_to_dicts
+# from ding.utils import import_module, lists_to_dicts
+# from core.utils import SERIAL_EVALUATOR_REGISTRY
 
 
 class ISerialEvaluator(ABC):

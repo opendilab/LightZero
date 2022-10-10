@@ -15,6 +15,7 @@ from zoo.board_games.base_game_env import BaseGameEnv
 
 @ENV_REGISTRY.register('tictactoe')
 class TicTacToeEnv(BaseGameEnv):
+
     def __init__(self, cfg=None):
         self.battle_mode = cfg.battle_mode
         self.board_size = 3
@@ -78,7 +79,7 @@ class TicTacToeEnv(BaseGameEnv):
             # print('player 2 (computer player): ' + self.action_to_string(expert_action))
             timestep_player2 = self._player_step(expert_action)
             # the final_eval_reward is calculated from Player 1's perspective
-            timestep_player2.info['final_eval_reward'] = - timestep_player2.reward
+            timestep_player2.info['final_eval_reward'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
             timestep = timestep_player2

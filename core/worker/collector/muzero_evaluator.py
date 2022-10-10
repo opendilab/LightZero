@@ -218,7 +218,9 @@ class MuZeroEvaluator(ISerialEvaluator):
 
         game_histories = [
             GameHistory(
-                self._env.action_space, game_history_length=self.game_config.game_history_length, config=self.game_config
+                self._env.action_space,
+                game_history_length=self.game_config.game_history_length,
+                config=self.game_config
             ) for _ in range(env_nums)
         ]
         for i in range(env_nums):
@@ -228,15 +230,15 @@ class MuZeroEvaluator(ISerialEvaluator):
 
         ep_ori_rewards = np.zeros(env_nums)
         ep_clip_rewards = np.zeros(env_nums)
-        
+
         ready_env_id = set()
         remain_episode = n_episode
 
         with self._timer:
             while not eval_monitor.is_finished():
                 # stack_obs = [game_history.step_obs() for game_history in game_histories]
-                
-                # Get current ready env obs. 
+
+                # Get current ready env obs.
                 # only for subprocess, to get the ready_env_id
                 obs = self._env.ready_obs
                 # TODO(pu): subprocess
@@ -244,13 +246,13 @@ class MuZeroEvaluator(ISerialEvaluator):
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
 
-                stack_obs = {env_id: game_histories[env_id].step_obs()  for env_id in ready_env_id}
+                stack_obs = {env_id: game_histories[env_id].step_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
 
-                action_mask_dict = {env_id: action_mask_dict[env_id]  for env_id in ready_env_id}
-                to_play_dict =  {env_id: to_play_dict[env_id]  for env_id in ready_env_id}
-                action_mask = [action_mask_dict[env_id]  for env_id in ready_env_id]
-                to_play =  [to_play_dict[env_id]  for env_id in ready_env_id]
+                action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
+                to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
+                action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
+                to_play = [to_play_dict[env_id] for env_id in ready_env_id]
 
                 stack_obs = to_ndarray(stack_obs)
 
@@ -264,7 +266,6 @@ class MuZeroEvaluator(ISerialEvaluator):
                 else:
                     policy_output = self._policy.forward(stack_obs, action_mask, None)
 
-
                 actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                 distributions_dict_no_env_id = {k: v['distributions'] for k, v in policy_output.items()}
                 value_dict_no_env_id = {k: v['value'] for k, v in policy_output.items()}
@@ -272,15 +273,15 @@ class MuZeroEvaluator(ISerialEvaluator):
                 # visit_entropy_dict_no_env_id = {k: v['visit_count_distribution_entropy'] for k, v in policy_output.items()}
 
                 # TODO(pu): subprocess
-                actions={}
-                distributions_dict={}
-                value_dict={}
+                actions = {}
+                distributions_dict = {}
+                value_dict = {}
                 # pred_value_dict={}
                 # visit_entropy_dict={}
                 for index, env_id in enumerate(ready_env_id):
                     actions[env_id] = actions_no_env_id.pop(index)
                     distributions_dict[env_id] = distributions_dict_no_env_id.pop(index)
-                    value_dict[env_id] =  value_dict_no_env_id.pop(index)
+                    value_dict[env_id] = value_dict_no_env_id.pop(index)
                     # pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
                     # visit_entropy_dict[env_id] =   visit_entropy_dict_no_env_id.pop(index)
 
@@ -303,7 +304,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                         # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
                         # in ``game_histories[env_id].init``, we have append o_{t} in ``self.obs_history``
                         game_histories[i].append(
-                            actions[i], to_ndarray(obs['observation']), clip_reward, action_mask_dict[i], to_play_dict[i]
+                            actions[i], to_ndarray(obs['observation']), clip_reward, action_mask_dict[i],
+                            to_play_dict[i]
                         )
                     else:
                         game_histories[i].append(actions[i], to_ndarray(obs['observation']), clip_reward)
@@ -333,7 +335,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                         if n_episode > self._env_num:
                             # reset the finished env
                             init_obses = self._env.ready_obs
-                            if len( init_obses .keys())!=self._env_num:
+                            if len(init_obses.keys()) != self._env_num:
                                 while env_id not in init_obses.keys():
                                     init_obses = self._env.ready_obs
                                     print(f'wailt the {env_id} env to reset')

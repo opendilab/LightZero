@@ -84,7 +84,7 @@ class GomokuEnv(BaseGameEnv):
             timestep_player2 = self._player_step(expert_action)
             # self.render()  # TODO(pu): visualize
             # the final_eval_reward is calculated from Player 1's perspective
-            timestep_player2.info['final_eval_reward'] = - timestep_player2.reward
+            timestep_player2.info['final_eval_reward'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
             timestep = timestep_player2

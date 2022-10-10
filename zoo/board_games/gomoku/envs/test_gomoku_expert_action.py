@@ -4,6 +4,7 @@ from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 
 @pytest.mark.envtest
 class TestExpertAction:
+
     def test_naive():
         env = GomokuEnv()
         obs = env.reset()
@@ -14,7 +15,7 @@ class TestExpertAction:
             # action = env.random_action()
             action = env.human_to_action()
             # action = env.expert_action()
-            print('original player 1: ',action)
+            print('original player 1: ', action)
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
             env.render()

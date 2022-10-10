@@ -13,21 +13,26 @@ class TicTacToeModel(nn.Module):
     def __init__(self, model_cfg={}):
         super(TicTacToeModel, self).__init__()
         self.cfg = model_cfg
-        self.input_channels = self.cfg.get('input_channels',3)
-        self.board_size = self.cfg.get('board_size',3)
+        self.input_channels = self.cfg.get('input_channels', 3)
+        self.board_size = self.cfg.get('board_size', 3)
 
         # encoder part
         self.encoder = nn.Sequential(
-            conv2d_block(in_channels=3, out_channels=16, kernel_size=1, stride=1, padding=0, activation=nn.ReLU(),
-                         norm_type=None),
-            ResBlock(in_channels=16, activation=nn.ReLU(), norm_type=None)
+            conv2d_block(
+                in_channels=3,
+                out_channels=16,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+                activation=nn.ReLU(),
+                norm_type=None
+            ), ResBlock(in_channels=16, activation=nn.ReLU(), norm_type=None)
         )
 
         # action policy head
         self.policy_head = nn.Sequential(
             conv2d_block(in_channels=16, out_channels=4, kernel_size=3, stride=1, padding=1, activation=nn.ReLU()),
-            nn.Flatten(),
-            nn.Linear(4 * self.board_size * self.board_size, self.board_size * self.board_size)
+            nn.Flatten(), nn.Linear(4 * self.board_size * self.board_size, self.board_size * self.board_size)
         )
 
         # state value layers
@@ -68,8 +73,6 @@ if __name__ == '__main__':
     input_channels = 3
     batch_size = 4
 
-
     inputs = torch.randn(batch_size, input_channels, board_size, board_size)
     model = TicTacToeModel({})
     print(model(inputs))
-    

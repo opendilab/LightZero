@@ -7,10 +7,9 @@ import copy
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_tensor
 
-# from ding.utils import SERIAL_COLLECTOR_REGISTRY, import_module
-from ding.utils import import_module
-from core.utils import SERIAL_COLLECTOR_REGISTRY
-
+from ding.utils import SERIAL_COLLECTOR_REGISTRY, import_module
+# from core.utils import import_module
+# from core.utils import SERIAL_COLLECTOR_REGISTRY
 
 INF = float("inf")
 

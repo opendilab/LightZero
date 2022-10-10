@@ -21,7 +21,6 @@ from core.worker.collector.muzero_evaluator import MuZeroEvaluator as BaseSerial
 from core.rl_utils.mcts.game_buffer import GameBuffer
 
 
-
 def serial_pipeline_muzero_expert_data(
         input_cfg: Union[str, Tuple[dict, dict]],
         seed: int = 0,

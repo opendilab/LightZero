@@ -91,12 +91,18 @@ class EfficientZeroMCTSPtree(object):
                 # obtain the states for leaf nodes
                 for ix, iy in zip(hidden_state_index_x_lst, hidden_state_index_y_lst):
                     hidden_states.append(hidden_state_pool[ix][iy])  # hidden_state_pool[ix][iy] shape (12,3,3)
-                    hidden_states_c_reward.append(reward_hidden_state_c_pool[ix][0][iy]) # reward_hidden_state_c_pool[ix][0][iy] shape (64,)
-                    hidden_states_h_reward.append(reward_hidden_state_h_pool[ix][0][iy]) # reward_hidden_state_h_pool[ix][0][iy] shape (64,)
+                    hidden_states_c_reward.append(
+                        reward_hidden_state_c_pool[ix][0][iy]
+                    )  # reward_hidden_state_c_pool[ix][0][iy] shape (64,)
+                    hidden_states_h_reward.append(
+                        reward_hidden_state_h_pool[ix][0][iy]
+                    )  # reward_hidden_state_h_pool[ix][0][iy] shape (64,)
 
                 hidden_states = torch.from_numpy(np.asarray(hidden_states)).to(device).float()
-                hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(device).unsqueeze(0)  # shape (1,1, 64)
-                hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(device).unsqueeze(0)  # shape (1,1, 64)
+                hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)
+                                                          ).to(device).unsqueeze(0)  # shape (1,1, 64)
+                hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)
+                                                          ).to(device).unsqueeze(0)  # shape (1,1, 64)
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).long()
 
                 # MCTS stage 2:

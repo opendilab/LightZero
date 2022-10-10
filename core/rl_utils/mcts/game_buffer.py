@@ -478,7 +478,7 @@ class GameBuffer(Buffer):
             # td_steps = config.td_steps - delta_td
             # td_steps = np.clip(td_steps, 1, 5).astype(np.int)
             # TODO(pu):
-            td_steps = np.clip(config.td_steps, 1, max(1, traj_len-state_index)).astype(np.int)
+            td_steps = np.clip(config.td_steps, 1, max(1, traj_len - state_index)).astype(np.int)
 
             # prepare the corresponding observations for bootstrapped values o_{t+k}
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
@@ -742,7 +742,7 @@ class GameBuffer(Buffer):
 
             # get last state value
             value_lst = value_lst.reshape(-1) * (
-                    np.array([self.config.discount for _ in range(batch_size)]) ** td_steps_lst
+                np.array([self.config.discount for _ in range(batch_size)]) ** td_steps_lst
             )
             value_lst = value_lst * np.array(value_mask)
             value_lst = value_lst.tolist()

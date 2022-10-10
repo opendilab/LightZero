@@ -109,7 +109,9 @@ def wrap_muzero(config, warp_frame=True, save_video=False, save_path=None, video
     return env
 
 
-def wrap_muzero_dqn_expert_data(config, warp_frame=True, save_video=False, save_path=None, video_callable=None, uid=None):
+def wrap_muzero_dqn_expert_data(
+    config, warp_frame=True, save_video=False, save_path=None, video_callable=None, uid=None
+):
     """
     Overview:
         Configure environment for MuZero-style Atari. The observation is

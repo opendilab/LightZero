@@ -9,13 +9,12 @@ import numpy as np
 import torch.nn as nn
 from ding.torch_utils.network.res_block import ResBlock
 
-# from ding.utils import MODEL_REGISTRY
+from ding.utils import MODEL_REGISTRY
 # from core.model.template.efficientzero.efficientzero_base_model import BaseNet, renormalize
 
 from core.torch_utils.network.nn_module import MLP
 from core.model.template.efficientzero.efficientzero_base_model import BaseNet, renormalize
-from core.utils import MODEL_REGISTRY
-
+# from core.utils import MODEL_REGISTRY
 
 
 def conv3x3(in_channels, out_channels, stride=1):
@@ -112,12 +111,12 @@ class DownSample(nn.Module):
 class RepresentationNetwork(nn.Module):
 
     def __init__(
-            self,
-            observation_shape,
-            num_blocks,
-            num_channels,
-            downsample,
-            momentum=0.1,
+        self,
+        observation_shape,
+        num_blocks,
+        num_channels,
+        downsample,
+        momentum=0.1,
     ):
         """
         Overview: Representation network
@@ -161,16 +160,16 @@ class RepresentationNetwork(nn.Module):
 class DynamicsNetwork(nn.Module):
 
     def __init__(
-            self,
-            num_blocks,
-            num_channels,
-            reduced_channels_reward,
-            fc_reward_layers,
-            full_support_size,
-            block_output_size_reward,
-            lstm_hidden_size=64,
-            momentum=0.1,
-            last_linear_layer_init_zero=False,
+        self,
+        num_blocks,
+        num_channels,
+        reduced_channels_reward,
+        fc_reward_layers,
+        full_support_size,
+        block_output_size_reward,
+        lstm_hidden_size=64,
+        momentum=0.1,
+        last_linear_layer_init_zero=False,
     ):
         """
         Overview:
@@ -204,10 +203,17 @@ class DynamicsNetwork(nn.Module):
         self.lstm = nn.LSTM(input_size=self.block_output_size_reward, hidden_size=self.lstm_hidden_size)
         self.bn_value_prefix = nn.BatchNorm1d(self.lstm_hidden_size, momentum=momentum)
         # TODO(pu)
-        self.fc = MLP(in_channels=self.lstm_hidden_size, hidden_channels=fc_reward_layers[0],
-                      out_channels=full_support_size, layer_num=len(fc_reward_layers) + 1, activation=nn.ReLU(inplace=True),
-                      norm_type='BN',
-                      output_activation=nn.Identity(), output_norm_type=None, last_linear_layer_init_zero=last_linear_layer_init_zero)
+        self.fc = MLP(
+            in_channels=self.lstm_hidden_size,
+            hidden_channels=fc_reward_layers[0],
+            out_channels=full_support_size,
+            layer_num=len(fc_reward_layers) + 1,
+            activation=nn.ReLU(inplace=True),
+            norm_type='BN',
+            output_activation=nn.Identity(),
+            output_norm_type=None,
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
         self.activation = nn.ReLU(inplace=True)
 
     def forward(self, x, reward_hidden_state):
@@ -260,19 +266,19 @@ class DynamicsNetwork(nn.Module):
 class PredictionNetwork(nn.Module):
 
     def __init__(
-            self,
-            action_space_size,
-            num_blocks,
-            num_channels,
-            reduced_channels_value,
-            reduced_channels_policy,
-            fc_value_layers,
-            fc_policy_layers,
-            full_support_size,
-            block_output_size_value,
-            block_output_size_policy,
-            momentum=0.1,
-            last_linear_layer_init_zero=False,
+        self,
+        action_space_size,
+        num_blocks,
+        num_channels,
+        reduced_channels_value,
+        reduced_channels_policy,
+        fc_value_layers,
+        fc_policy_layers,
+        full_support_size,
+        block_output_size_value,
+        block_output_size_policy,
+        momentum=0.1,
+        last_linear_layer_init_zero=False,
     ):
         """Prediction network
         Parameters
@@ -312,14 +318,28 @@ class PredictionNetwork(nn.Module):
         self.block_output_size_value = block_output_size_value
         self.block_output_size_policy = block_output_size_policy
         # TODO(pu)
-        self.fc_value = MLP(in_channels=self.block_output_size_value, hidden_channels=fc_value_layers[0],
-                      out_channels=full_support_size, layer_num=len(fc_value_layers) + 1, activation=nn.ReLU(inplace=True),
-                      norm_type='BN',
-                      output_activation=nn.Identity(), output_norm_type=None, last_linear_layer_init_zero=last_linear_layer_init_zero)
-        self.fc_policy = MLP(in_channels=self.block_output_size_policy, hidden_channels=fc_policy_layers[0],
-                      out_channels=action_space_size, layer_num=len(fc_policy_layers) + 1, activation=nn.ReLU(inplace=True),
-                      norm_type='BN',
-                      output_activation=nn.Identity(), output_norm_type=None, last_linear_layer_init_zero=last_linear_layer_init_zero)
+        self.fc_value = MLP(
+            in_channels=self.block_output_size_value,
+            hidden_channels=fc_value_layers[0],
+            out_channels=full_support_size,
+            layer_num=len(fc_value_layers) + 1,
+            activation=nn.ReLU(inplace=True),
+            norm_type='BN',
+            output_activation=nn.Identity(),
+            output_norm_type=None,
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
+        self.fc_policy = MLP(
+            in_channels=self.block_output_size_policy,
+            hidden_channels=fc_policy_layers[0],
+            out_channels=action_space_size,
+            layer_num=len(fc_policy_layers) + 1,
+            activation=nn.ReLU(inplace=True),
+            norm_type='BN',
+            output_activation=nn.Identity(),
+            output_norm_type=None,
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
 
         self.activation = nn.ReLU(inplace=True)
 
@@ -345,30 +365,30 @@ class PredictionNetwork(nn.Module):
 class EfficientZeroNet(BaseNet):
 
     def __init__(
-            self,
-            env_type,
-            representation_model_type,
-            observation_shape,
-            action_space_size,
-            num_blocks,
-            num_channels,
-            reduced_channels_reward,
-            reduced_channels_value,
-            reduced_channels_policy,
-            fc_reward_layers,
-            fc_value_layers,
-            fc_policy_layers,
-            reward_support_size,
-            value_support_size,
-            downsample,
-            lstm_hidden_size=512,
-            bn_mt=0.1,
-            proj_hid=256,
-            proj_out=256,
-            pred_hid=64,
-            pred_out=256,
-            last_linear_layer_init_zero=False,
-            state_norm=False
+        self,
+        env_type,
+        representation_model_type,
+        observation_shape,
+        action_space_size,
+        num_blocks,
+        num_channels,
+        reduced_channels_reward,
+        reduced_channels_value,
+        reduced_channels_policy,
+        fc_reward_layers,
+        fc_value_layers,
+        fc_policy_layers,
+        reward_support_size,
+        value_support_size,
+        downsample,
+        lstm_hidden_size=512,
+        bn_mt=0.1,
+        proj_hid=256,
+        proj_out=256,
+        pred_hid=64,
+        pred_out=256,
+        last_linear_layer_init_zero=False,
+        state_norm=False
     ):
         """EfficientZero network
         Parameters

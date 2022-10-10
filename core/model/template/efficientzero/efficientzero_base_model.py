@@ -79,7 +79,8 @@ class DiscreteSupport(object):
         self.size = len(self.range)
         self.delta = delta
 
-def scalar_transform(x, support_size, epsilon = 0.001):
+
+def scalar_transform(x, support_size, epsilon=0.001):
     """
     Overview:
         Reference from MuZero: Appendix F => Network Architecture
@@ -97,6 +98,7 @@ def scalar_transform(x, support_size, epsilon = 0.001):
     # output = sign * (torch.sqrt(torch.abs(x / delta) + 1) - 1) + epsilon * x / delta
     return output
 
+
 def inverse_scalar_transform(logits, support_size, epsilon=0.001):
     """
     Overview:
@@ -111,7 +113,9 @@ def inverse_scalar_transform(logits, support_size, epsilon=0.001):
     value_support = value_support.to(device=value_probs.device)
     value = (value_support * value_probs).sum(1, keepdim=True)
 
-    output = torch.sign(value) * (((torch.sqrt(1 + 4 * epsilon * (torch.abs(value) + 1 + epsilon)) - 1) / (2 * epsilon)) ** 2 - 1)
+    output = torch.sign(value) * (
+        ((torch.sqrt(1 + 4 * epsilon * (torch.abs(value) + 1 + epsilon)) - 1) / (2 * epsilon)) ** 2 - 1
+    )
 
     output[torch.abs(output) < epsilon] = 0.
 
@@ -147,16 +151,16 @@ def inverse_scalar_transform_old(logits, support_size, epsilon=0.001):
 import time
 
 support_size = 300
-logits=torch.randn([1024, 601])
+logits = torch.randn([1024, 601])
 # st=time.time()
 # inverse_scalar_transform(logits, support_size)
 # et=time.time()
 # print(et-st)
 
-st=time.time()
+st = time.time()
 inverse_scalar_transform_old(logits, support_size)
-et=time.time()
-print(et-st)
+et = time.time()
+print(et - st)
 
 
 def renormalize(tensor, first_dim=1):
@@ -169,4 +173,3 @@ def renormalize(tensor, first_dim=1):
     flat_tensor = (flat_tensor - min_val) / (max_val - min_val)
 
     return flat_tensor.view(*tensor.shape)
-

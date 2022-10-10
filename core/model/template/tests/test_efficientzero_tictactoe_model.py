@@ -36,19 +36,19 @@ class TestEfficientZero:
     def test_representation_network(self, batch_size):
         batch = batch_size
         obs = torch.rand(batch, 1, 3, 3)
-        representation_network = RepresentationNetwork(observation_shape=[1, 3, 3], num_blocks=1, num_channels=16,
-                                                       downsample=False)
+        representation_network = RepresentationNetwork(
+            observation_shape=[1, 3, 3], num_blocks=1, num_channels=16, downsample=False
+        )
         state = representation_network(obs)
         assert state.shape == torch.Size([10, 16, 3, 3])
 
     @pytest.mark.parametrize(
         'num_blocks, num_channels, reduced_channels_reward, fc_reward_layers, full_support_size,'
-        'block_output_size_reward',
-        dynamics_network_args
+        'block_output_size_reward', dynamics_network_args
     )
     def test_dynamics_network(
-            self, num_blocks, num_channels, reduced_channels_reward, fc_reward_layers, full_support_size,
-            block_output_size_reward
+        self, num_blocks, num_channels, reduced_channels_reward, fc_reward_layers, full_support_size,
+        block_output_size_reward
     ):
         batch = 100
         state = torch.rand(batch, 3, 3, 3)

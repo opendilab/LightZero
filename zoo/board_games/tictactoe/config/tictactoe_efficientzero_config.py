@@ -43,7 +43,6 @@ tictactoe_efficientzero_config = dict(
 
             # observation_shape=(3, 3, 3),  # if frame_stack_nums=1
             # num_channels=3,  # if frame_stack_nums=1
-
             action_space_size=9,
             downsample=False,
             num_blocks=1,
@@ -82,7 +81,6 @@ tictactoe_efficientzero_config = dict(
             # two_player_mode, board_size=3, episode_length=3**2=9
             # collector_env_num=8,  update_per_collect=9*8=72
             # update_per_collect=int(3 ** 2 * collector_env_num),
-
             batch_size=64,
             update_per_collect=int(50),
 
@@ -123,15 +121,21 @@ tictactoe_efficientzero_create_config = dict(
         type='tictactoe',
         import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
     ),
-    policy=dict(type='efficientzero'),
     # env_manager=dict(type='base'),
-    # TODO
     env_manager=dict(type='subprocess'),
-    collector=dict(type='episode_muzero', get_train_sample=True),
+    policy=dict(
+        type='efficientzero',
+        import_names=['core.policy.efficientzero'],
+    ),
+    collector=dict(
+        type='episode_muzero',
+        get_train_sample=True,
+        import_names=['core.worker.collector.muzero_collector'],
+    )
 )
 tictactoe_efficientzero_create_config = EasyDict(tictactoe_efficientzero_create_config)
 create_config = tictactoe_efficientzero_create_config
 
 if __name__ == "__main__":
-    from ding.entry import serial_pipeline_muzero
+    from core.entry import serial_pipeline_muzero
     serial_pipeline_muzero([main_config, create_config], game_config=game_config, seed=0, max_env_step=int(1e6))

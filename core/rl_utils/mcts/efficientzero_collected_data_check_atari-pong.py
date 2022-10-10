@@ -4,13 +4,13 @@ import sys
 sys.path.extend(['/Users/puyuan/code/DI-engine', '/Users/puyuan/code/EfficientZero'])
 
 one_episode_replay_buffer_img_ez = np.load(
-    '/Users/puyuan/code/DI-engine/dizoo/board_games/atari/config/one_episode_replay_buffer_img_ez.npy', allow_pickle=True
+    '/Users/puyuan/code/DI-engine/dizoo/board_games/atari/config/one_episode_replay_buffer_img_ez.npy',
+    allow_pickle=True
 )
 
 one_episode_replay_buffer_img = np.load(
     '/Users/puyuan/code/DI-engine/dizoo/board_games/atari/config/one_episode_replay_buffer_img.npy', allow_pickle=True
 )
-
 """
 Note: please refer to ding/rl_utils/mcts/game.py for details.
 
@@ -75,8 +75,9 @@ for one_episode_game_histories in [one_episode_replay_buffer_img_ez, one_episode
     """
     for i in range(13):
         print(
-            np.array(one_episode_game_histories[0].reward_history[16 + i] == one_episode_game_histories[1].reward_history[i]
-                     ).astype(int)
+            np.array(
+                one_episode_game_histories[0].reward_history[16 + i] == one_episode_game_histories[1].reward_history[i]
+            ).astype(int)
         )
     """
     check obs_history in the neighboring game history

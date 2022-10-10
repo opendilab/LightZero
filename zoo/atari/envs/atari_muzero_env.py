@@ -11,12 +11,13 @@ from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
 from zoo.atari.envs.atari_wrappers import wrap_muzero, wrap_muzero_dqn_expert_data
 
-# from ding.utils import ENV_REGISTRY
-from core.utils import ENV_REGISTRY
+from ding.utils import ENV_REGISTRY
+# from core.utils import ENV_REGISTRY
 
 
 @ENV_REGISTRY.register('atari-muzero')
 class AtariMuZeroEnv(BaseEnv):
+
     def __init__(self, cfg=None):
         self.cfg = cfg
         self._init_flag = False
@@ -33,7 +34,7 @@ class AtariMuZeroEnv(BaseEnv):
             self._observation_space = self._env.env.observation_space
             self._action_space = self._env.env.action_space
             self._reward_space = gym.spaces.Box(
-                low=self._env.env.reward_range[0], high=self._env.env.reward_range[1], shape=(1,), dtype=np.float32
+                low=self._env.env.reward_range[0], high=self._env.env.reward_range[1], shape=(1, ), dtype=np.float32
             )
 
             self._init_flag = True
@@ -93,11 +94,7 @@ class AtariMuZeroEnv(BaseEnv):
         while True:
             try:
                 print(f"Current available actions for the player are:{self.legal_actions}")
-                choice = int(
-                    input(
-                        f"Enter the index of next action: "
-                    )
-                )
+                choice = int(input(f"Enter the index of next action: "))
                 if choice in self.legal_actions:
                     break
                 else:

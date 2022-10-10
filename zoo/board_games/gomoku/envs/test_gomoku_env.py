@@ -5,6 +5,7 @@ from easydict import EasyDict
 
 @pytest.mark.envtest
 class TestGomokuEnv:
+
     def test_two_player_mode(self):
         cfg = EasyDict(battle_mode='two_player_mode')
         env = GomokuEnv(cfg)

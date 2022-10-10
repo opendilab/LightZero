@@ -36,8 +36,8 @@ class Node:
         self.hidden_state_index_y = 0
 
     def expand(
-            self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, value_prefix: float,
-            policy_logits: List[float]
+        self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, value_prefix: float,
+        policy_logits: List[float]
     ):
         self.to_play = to_play
         if self.legal_actions is None:
@@ -288,7 +288,7 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
         for i in range(path_len - 1, -1, -1):
             node = search_path[i]
             # to_play related
-            node.value_sum += bootstrap_value if node.to_play == to_play else - bootstrap_value
+            node.value_sum += bootstrap_value if node.to_play == to_play else -bootstrap_value
 
             node.visit_count += 1
 
@@ -303,7 +303,7 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
             if is_reset == 1:
                 true_reward = node.value_prefix
             # to_play related
-            bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
+            bootstrap_value = (-true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
 
         min_max_stats.clear()
         root = search_path[0]
@@ -337,8 +337,9 @@ def batch_back_propagate(
             back_propagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], to_play[i], values[i], discount)
 
 
-def select_child(root: Node, min_max_stats, pb_c_base: int, pb_c_int: float, discount: float, mean_q: float,
-                 players: int) -> int:
+def select_child(
+        root: Node, min_max_stats, pb_c_base: int, pb_c_int: float, discount: float, mean_q: float, players: int
+) -> int:
     max_score = -np.inf
     epsilon = 0.000001
     max_index_lst = []
@@ -363,16 +364,16 @@ def select_child(root: Node, min_max_stats, pb_c_base: int, pb_c_int: float, dis
 
 
 def compute_ucb_score(
-        child: Node,
-        min_max_stats,
-        parent_mean_q,
-        is_reset: int,
-        total_children_visit_counts: float,
-        parent_value_prefix: float,
-        pb_c_base: float,
-        pb_c_init: float,
-        discount: float,
-        players=1
+    child: Node,
+    min_max_stats,
+    parent_mean_q,
+    is_reset: int,
+    total_children_visit_counts: float,
+    parent_value_prefix: float,
+    pb_c_base: float,
+    pb_c_init: float,
+    discount: float,
+    players=1
 ):
     """
     Overview:
@@ -407,8 +408,7 @@ def compute_ucb_score(
 
 
 def batch_traverse(
-        roots, pb_c_base: int, pb_c_init: float, discount: float, min_max_stats_lst, results: SearchResults,
-        virtual_to_play
+    roots, pb_c_base: int, pb_c_init: float, discount: float, min_max_stats_lst, results: SearchResults, virtual_to_play
 ):
     last_action = 0
     parent_q = 0.0

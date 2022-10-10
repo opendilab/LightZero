@@ -5,23 +5,24 @@ import logging
 from functools import partial
 from tensorboardX import SummaryWriter
 import numpy as np
-# from ding.envs import get_vec_env_setting, create_env_manager
 from ding.worker import BaseLearner, BaseSerialCommander
-
 
 from ding.utils import set_pkg_seed
 from ding.envs import create_env_manager
 
-from core.envs.env import get_vec_env_setting
+from ding.envs import get_vec_env_setting
+# from core.envs.env import get_vec_env_setting
 
 from core.worker.collector.muzero_evaluator import MuZeroEvaluator as BaseSerialEvaluator
 from core.rl_utils.mcts.game_buffer import GameBuffer
 
-# from ding.config import read_config, compile_config
-# from ding.policy import create_policy
-from core.config import read_config, compile_config
-from core.policy import create_policy
-from core.worker import create_serial_collector
+from ding.config import read_config, compile_config
+from ding.policy import create_policy
+from ding.worker import create_serial_collector
+
+# from core.config import read_config, compile_config
+# from core.policy import create_policy
+# from core.worker import create_serial_collector
 
 
 # @profile
@@ -130,7 +131,7 @@ def serial_pipeline_muzero(
         # returns = np.array(returns)
         # print(f'win rate: {len(np.where(returns == 1.)[0])/ test_episodes}, draw rate: {len(np.where(returns == 0.)[0])/test_episodes}, lose rate: {len(np.where(returns == -1.)[0])/ test_episodes}')
         # break
-        
+
         # test muzero_evaluator
         # for i in range(10):
         #     stop, reward = evaluator.eval(

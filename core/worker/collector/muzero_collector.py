@@ -12,11 +12,10 @@ from core.rl_utils.mcts.utils import select_action, prepare_observation_lst
 from torch.nn import L1Loss
 from ding.envs import BaseEnvTimestep
 
-# from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
+from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
 
-from ding.utils import build_logger, EasyTimer
-from core.utils import SERIAL_COLLECTOR_REGISTRY
-
+# from ding.utils import build_logger, EasyTimer
+# from core.utils import SERIAL_COLLECTOR_REGISTRY
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
@@ -330,7 +329,6 @@ class MuZeroCollector(ISerialCollector):
         return_data = []
         env_nums = self._env_num
 
-
         # initializations
         init_obses = self._env.ready_obs
         action_mask = [to_ndarray(init_obses[i]['action_mask']) for i in range(env_nums)]
@@ -406,8 +404,8 @@ class MuZeroCollector(ISerialCollector):
         while True:
             with self._timer:
                 # stack_obs = [game_history.step_obs() for game_history in game_histories]
-                
-                # Get current ready env obs. 
+
+                # Get current ready env obs.
                 # only for subprocess, to get the ready_env_id
                 obs = self._env.ready_obs
                 # TODO(pu): subprocess
@@ -415,15 +413,13 @@ class MuZeroCollector(ISerialCollector):
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
 
-                stack_obs = {env_id: game_histories[env_id].step_obs()  for env_id in ready_env_id}
+                stack_obs = {env_id: game_histories[env_id].step_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
 
-   
-
-                action_mask_dict = {env_id: action_mask_dict[env_id]  for env_id in ready_env_id}
-                to_play_dict =  {env_id: to_play_dict[env_id]  for env_id in ready_env_id}
-                action_mask = [action_mask_dict[env_id]  for env_id in ready_env_id]
-                to_play =  [to_play_dict[env_id]  for env_id in ready_env_id]
+                action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
+                to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
+                action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
+                to_play = [to_play_dict[env_id] for env_id in ready_env_id]
 
                 stack_obs = to_ndarray(stack_obs)
                 stack_obs = prepare_observation_lst(stack_obs)
@@ -441,20 +437,23 @@ class MuZeroCollector(ISerialCollector):
                 distributions_dict_no_env_id = {k: v['distributions'] for k, v in policy_output.items()}
                 value_dict_no_env_id = {k: v['value'] for k, v in policy_output.items()}
                 pred_value_dict_no_env_id = {k: v['pred_value'] for k, v in policy_output.items()}
-                visit_entropy_dict_no_env_id = {k: v['visit_count_distribution_entropy'] for k, v in policy_output.items()}
+                visit_entropy_dict_no_env_id = {
+                    k: v['visit_count_distribution_entropy']
+                    for k, v in policy_output.items()
+                }
 
                 # TODO(pu): subprocess
-                actions={}
-                distributions_dict={}
-                value_dict={}
-                pred_value_dict={}
-                visit_entropy_dict={}
+                actions = {}
+                distributions_dict = {}
+                value_dict = {}
+                pred_value_dict = {}
+                visit_entropy_dict = {}
                 for index, env_id in enumerate(ready_env_id):
                     actions[env_id] = actions_no_env_id.pop(index)
                     distributions_dict[env_id] = distributions_dict_no_env_id.pop(index)
-                    value_dict[env_id] =  value_dict_no_env_id.pop(index)
+                    value_dict[env_id] = value_dict_no_env_id.pop(index)
                     pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
-                    visit_entropy_dict[env_id] =   visit_entropy_dict_no_env_id.pop(index)
+                    visit_entropy_dict[env_id] = visit_entropy_dict_no_env_id.pop(index)
 
                 # Interact with env.
                 timesteps = self._env.step(actions)
@@ -488,7 +487,8 @@ class MuZeroCollector(ISerialCollector):
                         # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
                         # in ``game_histories[env_id].init``, we have append o_{t} in ``self.obs_history``
                         game_histories[env_id].append(
-                            actions[env_id], to_ndarray(obs['observation']), clip_reward, action_mask_dict[env_id], to_play_dict[env_id]
+                            actions[env_id], to_ndarray(obs['observation']), clip_reward, action_mask_dict[env_id],
+                            to_play_dict[env_id]
                         )
                     else:
                         game_histories[env_id].append(actions[env_id], to_ndarray(obs['observation']), clip_reward)
@@ -522,7 +522,9 @@ class MuZeroCollector(ISerialCollector):
                         # pad over last block trajectory
                         if last_game_histories[env_id] is not None:
                             # TODO(pu): return the one game history
-                            self.put_last_trajectory(i, last_game_histories, last_game_priorities, game_histories, dones)
+                            self.put_last_trajectory(
+                                i, last_game_histories, last_game_priorities, game_histories, dones
+                            )
 
                         # calculate priority
                         priorities = self.get_priorities(i, pred_values_lst, search_values_lst)
@@ -575,14 +577,13 @@ class MuZeroCollector(ISerialCollector):
                     # assert len(game_histories[env_id]) == len(priorities)
                     self.trajectory_pool.append((game_histories[env_id], priorities, dones[env_id]))
 
-
                     # TODO(pu)
                     # reset the finished env and init game_histories
 
                     if n_episode > self._env_num:
                         init_obses = self._env.ready_obs
-                        
-                        if len( init_obses .keys())!=self._env_num:
+
+                        if len(init_obses.keys()) != self._env_num:
                             while env_id not in init_obses.keys():
                                 init_obses = self._env.ready_obs
                                 print(f'wailt the {env_id} env to reset')
@@ -626,7 +627,6 @@ class MuZeroCollector(ISerialCollector):
                     # TODO(pu): subprocess
                     ready_env_id.remove(env_id)
 
-
             if collected_episode >= n_episode:
                 # logs
                 visit_entropies = np.array(self_play_visit_entropy).mean()
@@ -635,12 +635,12 @@ class MuZeroCollector(ISerialCollector):
                 # print('visit_entropies:', visit_entropies)
 
                 return_data = [self.trajectory_pool[i][0] for i in range(self.len_pool())], [
-                        {
-                            'priorities': self.trajectory_pool[i][1],
-                            'end_tag': self.trajectory_pool[i][2],
-                            'gap_steps': self.gap_step
-                        } for i in range(self.len_pool())
-                    ]
+                    {
+                        'priorities': self.trajectory_pool[i][1],
+                        'end_tag': self.trajectory_pool[i][2],
+                        'gap_steps': self.gap_step
+                    } for i in range(self.len_pool())
+                ]
 
                 # save the game histories and clear the pool
                 # self.trajectory_pool: list of (game_history, priority)

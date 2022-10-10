@@ -76,7 +76,6 @@ gomoku_efficientzero_config = dict(
             # two_player_mode, board_size=6, episode_length=6**2=36
             # collector_env_num=8,  update_per_collect=36*8=268
             update_per_collect=int(board_size ** 2 * collector_env_num),
-
             learning_rate=0.002,
             # Frequency of target network update.
             target_update_freq=400,
@@ -114,12 +113,20 @@ gomoku_efficientzero_create_config = dict(
     ),
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
-    policy=dict(type='efficientzero'),
-    collector=dict(type='episode_muzero', get_train_sample=True)
+    # env_manager=dict(type='subprocess'),
+    policy=dict(
+        type='efficientzero',
+        import_names=['core.policy.efficientzero'],
+    ),
+    collector=dict(
+        type='episode_muzero',
+        get_train_sample=True,
+        import_names=['core.worker.collector.muzero_collector'],
+    )
 )
 gomoku_efficientzero_create_config = EasyDict(gomoku_efficientzero_create_config)
 create_config = gomoku_efficientzero_create_config
 
 if __name__ == "__main__":
-    from ding.entry import serial_pipeline_muzero
+    from core.entry import serial_pipeline_muzero
     serial_pipeline_muzero([main_config, create_config], game_config=game_config, seed=0, max_env_step=int(1e6))

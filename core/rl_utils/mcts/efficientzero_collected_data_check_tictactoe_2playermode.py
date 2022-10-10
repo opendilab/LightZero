@@ -4,9 +4,9 @@ import sys
 sys.path.extend(['/Users/puyuan/code/DI-engine', '/Users/puyuan/code/MuZero'])
 
 one_episode_replay_buffer_tictocetoe_2_player_mode = np.load(
-    '/Users/puyuan/code/DI-engine/dizoo/board_games/tictactoe/config/one_episode_replay_buffer_tictactoe_2-player-mode.npy', allow_pickle=True
+    '/Users/puyuan/code/DI-engine/dizoo/board_games/tictactoe/config/one_episode_replay_buffer_tictactoe_2-player-mode.npy',
+    allow_pickle=True
 )
-
 """
 Note: please refer to ding/rl_utils/mcts/game.py for details.
 
@@ -35,7 +35,6 @@ game_history_t+1:
     rew:             9       3 1
                 ----...----|---|-|
 """
-
 
 one_episode_game_histories = one_episode_replay_buffer_tictocetoe_2_player_mode
 
