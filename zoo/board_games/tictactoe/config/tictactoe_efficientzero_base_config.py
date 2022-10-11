@@ -4,10 +4,10 @@ from core.rl_utils.mcts.game_base_config import GameBaseConfig, DiscreteSupport
 game_config = EasyDict(
     dict(
         env_name='tictactoe',
-        model_type='board_game',
-        device='cuda',
+        env_type='board_games',
+        # device='cuda',
         # debug
-        # device='cpu',
+        device='cpu',
         mcts_ctree=False,
         # TODO: mcts_ctree now only support env_num=1, because in cpp MCTS root node,
         #  we must specify the one same action mask,
@@ -38,8 +38,8 @@ game_config = EasyDict(
         augmentation=['shift', 'intensity'],
 
         # debug
-        # collector_env_num=2,
-        # evaluator_env_num=2,
+        # collector_env_num=3,
+        # evaluator_env_num=3,
         # num_simulations=5,
         # batch_size=4,
         # total_transitions=int(3e3),
@@ -47,8 +47,9 @@ game_config = EasyDict(
         # td_steps=2,
         # num_unroll_steps=3,
         # lstm_horizon_len=3,
+
         collector_env_num=8,
-        evaluator_env_num=5,
+        evaluator_env_num=8,
         num_simulations=25,
         batch_size=64,
         total_transitions=int(3e3),
@@ -116,24 +117,28 @@ game_config = EasyDict(
         transition_num=1,
         # frame skip & stack observation
         frame_skip=4,
+        # TODO(pu): EfficientZero -> MuZero
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
-        # reward_loss_coeff=1,  # value_prefix_loss
-        reward_loss_coeff=0,  # value_prefix_loss
+        reward_loss_coeff=1,  # value_prefix_loss
+        # reward_loss_coeff=0,  # value_prefix_loss
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-        # consistency_coeff=2,
-        consistency_coeff=0,
+        consistency_coeff=2,
+        # consistency_coeff=0,
         bn_mt=0.1,
+
         # siamese
         # proj_hid=128,
         # proj_out=128,
         # pred_hid=64,
         # pred_out=128,
+
         proj_hid=32,
         proj_out=32,
         pred_hid=16,
         pred_out=32,
+
         blocks=1,  # Number of blocks in the ResNet
         channels=16,  # Number of channels in the ResNet
         reduced_channels_reward=16,  # x36 Number of channels in reward head

@@ -2,16 +2,18 @@
 the option of cpp mcts or python mcts occurred in ding/policy/mcts ding/data/buffer/game_buffer
 """
 from easydict import EasyDict
-from zoo.board_games.tictactoe.config.tictactoe_config import game_config
+from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config
 
-# debug
-# collector_env_num = 2
-# evaluator_env_num = 2
+# for debug
+# collector_env_num = 3
+# evaluator_env_num = 3
 
 collector_env_num = 8
-evaluator_env_num = 5
+evaluator_env_num = 8
+n_episode = 8
+
 tictactoe_efficientzero_config = dict(
-    exp_name='data_ez_ptree/tictactoe_2pm_efficientzero_seed0',
+    exp_name='data_ez_ptree/tictactoe_2pm_efficientzero_seed0_sub8',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -69,7 +71,7 @@ tictactoe_efficientzero_config = dict(
         ),
         # learn_mode config
         learn=dict(
-            # debug
+            # for debug
             # update_per_collect=2,
             # batch_size=4,
 
@@ -93,23 +95,16 @@ tictactoe_efficientzero_config = dict(
         collect=dict(
             # You can use either "n_sample" or "n_episode" in collector.collect.
             # Get "n_sample" samples per collect.
-            n_episode=collector_env_num,
+            n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
         eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        # for debug
+        # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
         other=dict(
-            # Epsilon greedy with decay.
-            eps=dict(
-                # Decay type. Support ['exp', 'linear'].
-                type='exp',
-                start=0.95,
-                end=0.1,
-                decay=int(5e4),
-            ),
             # the replay_buffer_size is ineffective, we specify it in game config
-            # replay_buffer=dict(replay_buffer_size=int(1e5), type='game')
-            replay_buffer=dict(replay_buffer_size=int(3e3), type='game')
+            replay_buffer=dict(type='game')
         ),
     ),
 )

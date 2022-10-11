@@ -20,8 +20,8 @@ from ding.torch_utils import to_tensor, to_device
 from core.model.efficientzero.efficientzero_base_model import scalar_transform, inverse_scalar_transform
 # TODO(pu): choose game config
 from zoo.atari.config.atari_efficientzero_base_config import game_config
-# from zoo.board_games.tictactoe.config.tictactoe_config import game_config
-# from zoo.board_games.gomoku.config.gomoku_config import game_config
+# from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config
+# from zoo.board_games.gomoku.config.gomoku_efficientzero_base_config import game_config
 
 from ding.utils import POLICY_REGISTRY
 from ding.policy.base_policy import Policy
@@ -594,7 +594,7 @@ class EfficientZeroPolicy(Policy):
             self._mcts_eval = MCTSPtree(self.game_config)
 
     # @profile
-    def _forward_eval(self, data: ttorch.Tensor, action_mask: list, to_play: None):
+    def _forward_eval(self, data: ttorch.Tensor, action_mask: list, to_play: None, ready_env_id=None):
         """
         Overview:
             Forward computation graph of eval mode(evaluate policy performance), at most cases, it is similar to \
@@ -652,19 +652,24 @@ class EfficientZeroPolicy(Policy):
             roots_values = roots.get_values()  # {list: 1}
             data_id = [i for i in range(active_eval_env_num)]
             output = {i: None for i in data_id}
-            for i in range(active_eval_env_num):
+
+            if ready_env_id is None:
+                ready_env_id = np.arange(active_eval_env_num)
+
+            for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_distributions[i], roots_values[i]
                 # select the argmax, not sampling
-                action, _ = select_action(distributions, temperature=1, deterministic=True)
+                action, visit_count_distribution_entropy = select_action(distributions, temperature=1, deterministic=True)
                 # TODO(pu): transform to the real action index in legal action set
                 action = np.where(action_mask[i] == 1.0)[0][action]
-                output[i] = {
+                output[env_id] = {
                     'action': action,
                     'distributions': distributions,
+                    'visit_count_distribution_entropy': visit_count_distribution_entropy,
                     'value': value,
-                    ' policy_logits_pool': policy_logits_pool
+                    'pred_value': pred_values_pool[i],
+                    'policy_logits': policy_logits_pool[i],
                 }
-                # print('eval:',output[i])
 
         return output
 

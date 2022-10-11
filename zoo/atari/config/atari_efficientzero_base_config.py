@@ -4,8 +4,9 @@ from core.rl_utils.mcts.game_base_config import GameBaseConfig, DiscreteSupport
 game_config = EasyDict(
     dict(
         env_name='PongNoFrameskip-v4',
-        model_type='atari',
+        env_type='atari_games',
         # device='cuda',
+        # for debug
         device='cpu',
         # if mcts_ctree=True, using cpp mcts code
         mcts_ctree=True,
@@ -30,32 +31,34 @@ game_config = EasyDict(
         augmentation=['shift', 'intensity'],
 
         # for debug
-        collector_env_num=1,
-        evaluator_env_num=1,
-        num_simulations=6,
-        batch_size=4,
-        game_history_length=20,
-        total_transitions=int(1e5),
-        td_steps=5,
-        lstm_hidden_size=512,
-        num_unroll_steps=5,
-        lstm_horizon_len=5,
-
-        # collector_env_num=1,
-        # evaluator_env_num=3,
-        # # TODO(pu): how to set proper num_simulations?
-        # num_simulations=50,
-        # batch_size=256,
-        # game_history_length=400,
-        # total_transitions=int(1e5),
+        # collector_env_num=8,
+        # evaluator_env_num=8,
+        # # collector_env_num=1,
+        # # evaluator_env_num=1,
+        # num_simulations=2,
+        # batch_size=4,
+        # game_history_length=10,
+        # total_transitions=int(1e2),
         # td_steps=5,
-        # channels=64,  # Number of channels in the ResNet, config in EZ original repo
-        # lstm_hidden_size=512,  # default config in EZ original repo
-        # # The env step is twice as large as the original size model when converging
-        # # channels=32,  # Number of channels in the ResNet, for time efficiency
-        # # lstm_hidden_size=256,  # for time efficiency
+        # lstm_hidden_size=32,
         # num_unroll_steps=5,
         # lstm_horizon_len=5,
+
+        collector_env_num=8,
+        evaluator_env_num=8,
+        # TODO(pu): how to set proper num_simulations?
+        num_simulations=50,
+        batch_size=256,
+        game_history_length=400,
+        total_transitions=int(1e5),
+        td_steps=5,
+        channels=64,  # Number of channels in the ResNet, config in EZ original repo
+        lstm_hidden_size=512,  # default config in EZ original repo
+        # The env step is twice as large as the original size model when converging
+        # channels=32,  # Number of channels in the ResNet, for time efficiency
+        # lstm_hidden_size=256,  # for time efficiency
+        num_unroll_steps=5,
+        lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
         revisit_policy_search_rate=0.99,
@@ -116,6 +119,7 @@ game_config = EasyDict(
         # frame skip & stack observation
         frame_skip=4,
         frame_stack_num=4,
+        # TODO(pu): EfficientZero -> MuZero
         # coefficient
         reward_loss_coeff=1,
         value_loss_coeff=0.25,

@@ -21,7 +21,7 @@ def test_game_history(env_name):
     if env_name == 'PongNoFrameskip-v4':
         from zoo.atari.config.atari_efficientzero_base_config import game_config
     elif env_name == 'tictactoe':
-        from zoo.board_games.tictactoe.config.tictactoe_config import game_config
+        from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config
     config = game_config
 
     # set some additional config for test

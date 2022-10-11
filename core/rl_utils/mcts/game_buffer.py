@@ -340,7 +340,8 @@ class GameBuffer(Buffer):
         # total number of transitions
         total = self.get_num_of_transitions()
 
-        probs = self.priorities ** self._alpha
+        # +1e-11 for numerical stability
+        probs = self.priorities ** self._alpha + 1e-11
 
         probs /= probs.sum()
         # TODO(pu): sample data in PER way
@@ -802,7 +803,7 @@ class GameBuffer(Buffer):
 
         device = self.config.device
 
-        if self.config.model_type == 'board_game':
+        if self.config.env_type == 'board_games':
             # for two_player board games
             # to_play
             to_play = []
@@ -1012,7 +1013,7 @@ class GameBuffer(Buffer):
 
         game_history_batch_size = len(state_index_lst)
 
-        if self.config.model_type == 'board_game':
+        if self.config.env_type == 'board_game':
             # for two_player board games
             # action_mask
             action_mask = []
@@ -1063,7 +1064,7 @@ class GameBuffer(Buffer):
                             """
                             python mcts
                             """
-                            if self.config.model_type == 'atari':
+                            if self.config.env_type == 'atari_games':
                                 # for one_player atari games
                                 target_policies.append(distributions)
                             else:

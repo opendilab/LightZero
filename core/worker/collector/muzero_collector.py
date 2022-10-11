@@ -14,9 +14,6 @@ from ding.envs import BaseEnvTimestep
 
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
 
-# from ding.utils import build_logger, EasyTimer
-# from core.utils import SERIAL_COLLECTOR_REGISTRY
-
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
 class MuZeroCollector(ISerialCollector):
@@ -423,6 +420,7 @@ class MuZeroCollector(ISerialCollector):
 
                 stack_obs = to_ndarray(stack_obs)
                 stack_obs = prepare_observation_lst(stack_obs)
+
                 if self.game_config.image_based:
                     stack_obs = torch.from_numpy(stack_obs).to(self.game_config.device).float() / 255.0
                 else:
@@ -590,7 +588,6 @@ class MuZeroCollector(ISerialCollector):
 
                         init_obs = init_obses[env_id]['observation']
                         #  init_obses [0]['observation']
-
                         init_obs = to_ndarray(init_obs)
                         action_mask_dict[env_id] = to_ndarray(init_obses[env_id]['action_mask'])
                         to_play_dict[env_id] = to_ndarray(init_obses[env_id]['to_play'])

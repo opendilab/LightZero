@@ -6,7 +6,7 @@ board_size = 6  # default_size is 15
 game_config = EasyDict(
     dict(
         env_name='gomoku',
-        model_type='board_game',
+        model_type='board_games',
         device='cuda',
         # device='cpu',
         # TODO: mcts_ctree now only support env_num=1, because in cpp MCTS root node,

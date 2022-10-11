@@ -11,14 +11,12 @@ representation_model = RepresentationNetwork(
     momentum=0.1,
 )
 
-# for debug
-collector_env_num = 1
-evaluator_env_num = 1
+collector_env_num = 8
+evaluator_env_num = 8
+n_episode = 8
 
-# collector_env_num = 1
-# evaluator_env_num = 3
 atari_efficientzero_config = dict(
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000',
+    exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub8',
     # exp_name='data_ez_ptree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000',
     env=dict(
         collector_env_num=collector_env_num,
@@ -26,10 +24,13 @@ atari_efficientzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         stop_value=20,
         env_name='PongNoFrameskip-v4',
-        # env_name='Pong-v4',
         max_episode_steps=int(1.08e5),
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
+        # for debug
+        # max_episode_steps=int(100),
+        # collect_max_episode_steps=int(100),
+        # eval_max_episode_steps=int(100),
         frame_skip=4,
         obs_shape=(12, 96, 96),
         episode_life=True,
@@ -80,11 +81,12 @@ atari_efficientzero_config = dict(
         # learn_mode config
         learn=dict(
             # for debug
-            update_per_collect=2,
-            batch_size=4,
+            # update_per_collect=2,
+            # batch_size=4,
 
-            # update_per_collect=1000,
-            # batch_size=256,
+            update_per_collect=1000,
+            batch_size=256,
+
             learning_rate=0.2,
             # Frequency of target network update.
             target_update_freq=400,
@@ -93,22 +95,17 @@ atari_efficientzero_config = dict(
         collect=dict(
             # You can use either "n_sample" or "n_episode" in collector.collect.
             # Get "n_sample" samples per collect.
-            n_episode=collector_env_num,
+            n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
         eval=dict(evaluator=dict(eval_freq=int(1e4), )),
-        # command_mode config
+        # for debug
+        # eval=dict(evaluator=dict(eval_freq=int(2), )),
+
+        # # command_mode config
         other=dict(
-            # Epsilon greedy with decay.
-            eps=dict(
-                # Decay type. Support ['exp', 'linear'].
-                type='exp',
-                start=0.95,
-                end=0.1,
-                decay=int(5e4),
-            ),
-            # the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(replay_buffer_size=int(1e5), type='game')
+            # NOTE: the replay_buffer_size is ineffective, we specify it in game config
+            replay_buffer=dict(type='game')
         ),
     ),
 )
@@ -120,8 +117,8 @@ atari_efficientzero_create_config = dict(
         type='atari-muzero',
         import_names=['zoo.atari.envs.atari_muzero_env'],
     ),
-    env_manager=dict(type='base'),
-    # env_manager=dict(type='subprocess'),
+    # env_manager=dict(type='base'),
+    env_manager=dict(type='subprocess'),
     policy=dict(
         type='efficientzero',
         import_names=['core.policy.efficientzero'],
