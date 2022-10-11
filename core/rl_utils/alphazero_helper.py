@@ -94,7 +94,8 @@ class MCTS(object):
 
         # calc the move probabilities based on visit counts at the root node
         action_visits = []
-        for action in range(state.num_actions):
+        # for action in range(state.num_actions):
+        for action in range(state.action_space.n):
             if action in root.children:
                 action_visits.append((action, root.children[action].visit_count))
             else:
@@ -122,9 +123,14 @@ class MCTS(object):
         """
         while not node.is_leaf():
             action, node = self._select_child(node)
-            state.do_action(action)
+            # state.do_action(action)
+            state.step(action)
 
-        end, winner = state.game_end()
+
+        # end, winner = state.game_end()
+        end, winner = state.have_winner()
+
+
         if not end:
             leaf_value = self._expand_leaf_node(node, state, policy_forward_fn)
         else:

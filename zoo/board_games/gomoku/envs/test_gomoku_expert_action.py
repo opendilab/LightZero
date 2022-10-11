@@ -1,19 +1,20 @@
 import pytest
 from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
+from easydict import EasyDict
 
 
 @pytest.mark.envtest
 class TestExpertAction:
 
-    def test_naive():
-        env = GomokuEnv()
+    def test_naive(self):
+        cfg = EasyDict(board_size=18, battle_mode='two_player_mode', prob_random_agent=0)
+        env = GomokuEnv(cfg)
         obs = env.reset()
         print('init board state: ', obs)
         env.render()
-        done = False
         while True:
-            # action = env.random_action()
-            action = env.human_to_action()
+            action = env.random_action()
+            # action = env.human_to_action()
             # action = env.expert_action()
             print('original player 1: ', action)
             print('player 1: ' + env.action_to_string(action))

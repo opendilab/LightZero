@@ -7,7 +7,7 @@ from easydict import EasyDict
 class TestGomokuEnv:
 
     def test_two_player_mode(self):
-        cfg = EasyDict(battle_mode='two_player_mode')
+        cfg = EasyDict(board_size=15, battle_mode='two_player_mode', prob_random_agent=0)
         env = GomokuEnv(cfg)
         obs = env.reset()
         print('init board state: ')
@@ -25,7 +25,8 @@ class TestGomokuEnv:
                     print('draw')
                 break
 
-            action = env.expert_action()
+            # action = env.expert_action()
+            action = env.random_action()
             # action = env.human_to_action()
             print('player 2 (computer player): ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
@@ -38,7 +39,7 @@ class TestGomokuEnv:
                 break
 
     def test_one_player_mode(self):
-        cfg = EasyDict(battle_mode='one_player_mode')
+        cfg = EasyDict(board_size=15, battle_mode='one_player_mode', prob_random_agent=0)
         env = GomokuEnv(cfg)
         env.reset()
         print('init board state: ')

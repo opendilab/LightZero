@@ -81,8 +81,8 @@ class AlphazeroCollector:
             mcts_probs.append(move_probs)
             current_players.append(self.env.current_player)
             # perform an action
-            self.env.do_action(action)
-            done, winner = self.env.game_end()
+            self.env.step(action)
+            done, winner = self.env.have_winner()
             if done:
                 # winner from the perspective of the current player of each state
                 winners = np.zeros(len(current_players), dtype=np.float32)
@@ -149,7 +149,7 @@ class AlphazeroCollector:
 
 if __name__ == '__main__':
     from ding.config.config import read_config_yaml
-    from ding.policy.model_based.alphazero_policy import AlphaZeroPolicy
+    from core.policy.alphazero import AlphaZeroPolicy
     from ding.envs import get_env_cls
     from ding.model import create_model
 

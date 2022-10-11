@@ -76,8 +76,10 @@ class AlphazeroEvaluator:
             done = False
             while not done:
                 action, move_probs = self._policy.forward(self.env)
-                self.env.do_action(action)
-                done, winner = self.env.game_end()
+                # self.env.step(action)
+                self.env.step(action)
+
+                done, winner = self.env.have_winner()
                 if done:
                     winner_list.append(winner)
                     # if winner != -1:
@@ -86,8 +88,8 @@ class AlphazeroEvaluator:
                     #     print("Game end. Tie")
                     break
                 action = self.env.expert_action()
-                self.env.do_action(action)
-                done, winner = self.env.game_end()
+                self.env.step(action)
+                done, winner = self.env.have_winner()
                 if done:
                     winner_list.append(winner)
                     # if winner != -1:
@@ -114,8 +116,8 @@ class AlphazeroEvaluator:
             done = False
             while not done:
                 action, move_probs = self._policy.forward(self.env)
-                self.env.do_action(action)
-                done, winner = self.env.game_end()
+                self.env.step(action)
+                done, winner = self.env.have_winner()
                 if done:
                     winner_list.append(winner)
                     # if winner != -1:
@@ -124,8 +126,8 @@ class AlphazeroEvaluator:
                     #     print("Game end. Tie")
                     break
                 action = self.env.expert_action()
-                self.env.do_action(action)
-                done, winner = self.env.game_end()
+                self.env.step(action)
+                done, winner = self.env.have_winner()
                 if done:
                     winner_list.append(winner)
                     # if winner != -1:
@@ -142,8 +144,8 @@ class AlphazeroEvaluator:
             done = False
             while not done:
                 action = self.env.expert_action()
-                self.env.do_action(action)
-                done, winner = self.env.game_end()
+                self.env.step(action)
+                done, winner = self.env.have_winner()
                 if done:
                     winner_list.append(winner)
                     # if winner != -1:
@@ -153,8 +155,8 @@ class AlphazeroEvaluator:
                     break
 
                 action, move_probs = self._policy.forward(self.env)
-                self.env.do_action(action)
-                done, winner = self.env.game_end()
+                self.env.step(action)
+                done, winner = self.env.have_winner()
                 if done:
                     winner_list.append(winner)
                     # if winner != -1:
@@ -199,7 +201,7 @@ class AlphazeroEvaluator:
 
 if __name__ == '__main__':
     from ding.config.config import read_config_yaml
-    from ding.policy.model_based.alphazero_policy import AlphaZeroPolicy
+    from core.policy.alphazero import AlphaZeroPolicy
     from ding.envs import get_env_cls
     from ding.model import create_model
 

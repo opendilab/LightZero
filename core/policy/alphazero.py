@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from ding.config.config import read_config_yaml
 from ding.model import model_wrap
 from ding.policy.base_policy import Policy
-from ding.policy.alphazero.alphazero_helper import MCTS
+from core.rl_utils.alphazero_helper import MCTS
 from ding.torch_utils import Adam, to_device
 from ding.utils import POLICY_REGISTRY
 from ding.utils.data import default_collate
@@ -163,6 +163,8 @@ class AlphaZeroPolicy(Policy):
         legal_actions = env.legal_actions
         current_state = env.current_state()
         current_state = torch.from_numpy(current_state).to(device=self._device, dtype=torch.float).unsqueeze(0)
+        # TODO
+        current_state = current_state.reshape(-1, 3, 6, 6)
         with torch.no_grad():
             action_probs, value = self.compute_prob_value(current_state)
         # action_probs_zip = zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().numpy().tolist())
@@ -192,7 +194,8 @@ class AlphaZeroPolicy(Policy):
         return log_probs, values
 
     def default_model(self) -> Tuple[str, List[str]]:
-        return 'vac', ['ding.model.template.vac']
+        # return 'vac', ['ding.model.template.vac']
+        return 'GomokuModel', ['core.model.template.alphazero.alphazero_model_gomoku']
 
     def _monitor_vars_learn(self) -> List[str]:
         return super()._monitor_vars_learn() + ['policy_loss', 'value_loss', 'entropy_loss', 'grad_norm']

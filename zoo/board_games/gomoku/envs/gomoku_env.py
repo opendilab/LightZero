@@ -4,6 +4,7 @@ import numpy as np
 import sys
 from typing import Any, List, Union, Sequence
 import copy
+from easydict import EasyDict
 
 from zoo.board_games.base_game_env import BaseGameEnv
 from ding.envs import BaseEnvTimestep
@@ -14,13 +15,24 @@ from zoo.board_games.gomoku.envs.gomoku_expert import GomokuExpert
 @ENV_REGISTRY.register('gomoku')
 class GomokuEnv(BaseGameEnv):
 
-    def __init__(self, cfg: dict = None, board_size: int = 15):
+    config = dict(
+        prob_random_agent=0,
+        board_size=15,
+        battle_mode='two_player_mode',
+    )
+
+    @classmethod
+    def default_config(cls: type) -> EasyDict:
+        cfg = EasyDict(copy.deepcopy(cls.config))
+        cfg.cfg_type = cls.__name__ + 'Dict'
+        return cfg
+
+    def __init__(self, cfg: dict = None):
         self.cfg = cfg
         self.battle_mode = cfg.battle_mode
-        if hasattr(cfg, 'board_size'):
-            self.board_size = cfg.board_size
-        else:
-            self.board_size = board_size
+        self.board_size = cfg.board_size
+        self.prob_random_agent = cfg.prob_random_agent
+
         self.players = [1, 2]
         self.board_markers = [str(i + 1) for i in range(self.board_size)]
         self.total_num_actions = self.board_size * self.board_size
@@ -198,7 +210,7 @@ class GomokuEnv(BaseGameEnv):
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
         obs = {'observation': self.current_state(), 'action_mask': action_mask}
-        return self.expert.get_move(obs)
+        return self.expert.get_action(obs)
 
     def human_to_action(self):
         """

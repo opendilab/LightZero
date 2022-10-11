@@ -1,0 +1,233 @@
+15b1748
+
+commit 15b1748b754bd04d8be9c4cf41bf37e744b88466
+Author: puyuan1996 <2402552459@qq.com>
+Date:   Mon Oct 10 16:44:04 2022 +0800
+
+    refactor atari structure and reuse the registry of DI-engine
+
+ core/config/__init__.py                            |   2 -
+ core/config/config.py                              | 581 ---------------------
+ core/entry/__init__.py                             |   1 -
+ core/entry/serial_entry_muzero.py                  |  19 +-
+ core/entry/serial_entry_muzero_expert_data.py      |   1 -
+ core/envs/env/__init__.py                          |   1 -
+ core/envs/env/base_env.py                          | 189 -------
+ core/model/common/__init__.py                      |   2 -
+ core/model/common/head.py                          | 116 ----
+ core/model/common/utils.py                         |  21 -
+ .../efficientzero/efficientzero_base_model.py      |  17 +-
+ .../template/efficientzero/efficientzero_model.py  | 156 +++---
+ .../tests/test_efficientzero_tictactoe_model.py    |  12 +-
+ core/policy/__init__.py                            |   4 +-
+ core/policy/base_policy.py                         | 316 -----------
+ core/policy/command_mode_policy_instance.py        |  11 +-
+ core/policy/efficientzero.py                       |  37 +-
+ core/policy/efficientzero_expert_data.py           |  11 +-
+ ...fficientzero_collected_data_check_atari-pong.py |   9 +-
+ ...o_collected_data_check_tictactoe_2playermode.py |   5 +-
+ core/rl_utils/mcts/game_buffer.py                  |   4 +-
+ core/rl_utils/mcts/mcts_ptree.py                   |  14 +-
+ core/rl_utils/mcts/ptree/node.py                   |  36 +-
+ core/rl_utils/tests/cprofile_mcts_ptree.py         |   2 -
+ .../tests/test_efficientzero_game_history.py       |   2 +-
+ core/utils/__init__.py                             |   1 -
+ core/utils/registry.py                             | 105 ----
+ core/utils/registry_factory.py                     |  45 --
+ core/worker/collector/base_serial_collector.py     |   7 +-
+ core/worker/collector/base_serial_evaluator.py     |   6 +-
+ core/worker/collector/muzero_collector.py          |  68 +--
+ core/worker/collector/muzero_evaluator.py          |  34 +-
+ zoo/atari/config/atari_config.py                   | 141 +++++
+ .../atari/config/atari_efficientzero_config.py     |  37 +-
+ .../config/atari_efficientzero_config_cprofile.py  |   4 +-
+ .../atari_efficientzero_config_lineprofile.py      |   4 +-
+ .../atari_efficientzero_expert_data_config.py      |  24 +-
+ zoo/atari/config/atari_expert_data_config.py       | 142 +++++
+ zoo/atari/envs/atari_muzero_env.py                 |  13 +-
+ zoo/atari/envs/atari_wrappers.py                   |   4 +-
+ zoo/atari/envs/test_atari_muzero_env.py            |  24 +-
+ zoo/board_games/atari/config/atari_config.py       | 145 -----
+ .../atari/config/atari_expert_data_config.py       | 147 ------
+ .../atari/config/one_episode_replay_buffer.npy     | Bin 2720593 -> 0 bytes
+ .../atari/config/one_episode_replay_buffer_img.npy | Bin 524896 -> 0 bytes
+ .../config/one_episode_replay_buffer_img_ez.npy    | Bin 44166253 -> 0 bytes
+ .../config/profile/pong_ctree_cprofile.result.png  | Bin 799325 -> 0 bytes
+ .../config/profile/pong_ptree_cprofile.result.png  | Bin 572591 -> 0 bytes
+ zoo/board_games/gomoku/config/gomoku_config.py     | 283 +++++-----
+ .../gomoku/config/gomoku_efficientzero_config.py   |  15 +-
+ zoo/board_games/gomoku/envs/gomoku_env.py          |   2 +-
+ zoo/board_games/gomoku/envs/gomoku_expert.py       |  54 +-
+ zoo/board_games/gomoku/envs/test_gomoku_env.py     |   1 +
+ .../gomoku/envs/test_gomoku_expert_action.py       |   3 +-
+ .../tictactoe/config/tictactoe_config.py           | 292 +++++------
+ .../config/tictactoe_efficientzero_config.py       |  16 +-
+ .../tictactoe/envs/test_tictactoe_env.py           |   1 +
+ zoo/board_games/tictactoe/envs/tictactoe_env.py    |   3 +-
+ zoo/board_games/tictactoe/model/tictactoe_model.py |  21 +-
+ 59 files changed, 912 insertions(+), 2299 deletions(-)
+
+commit 2571528545f381d6afc62801d2dfb0ab810dbe86
+Author: puyuan1996 <2402552459@qq.com>
+Date:   Mon Oct 10 00:48:11 2022 +0800
+
+    fix(pu): use the customised policy/model/collector/evaluator in LightZero
+
+ README.md                                          |   2 +-
+ assets/lightzero_overview.png                      | Bin 0 -> 839793 bytes
+ core/config/config.py                              |   1 +
+ core/entry/serial_entry_muzero.py                  |   4 +-
+ .../template/efficientzero/efficientzero_model.py  |   4 +-
+ core/policy/efficientzero.py                       |   4 +-
+ core/policy/efficientzero_expert_data.py           |   4 +-
+ core/rl_utils/mcts/game_base_config.py             |   2 +-
+ core/rl_utils/mcts/game_buffer.py                  |   2 +-
+ core/rl_utils/mcts/mcts_ctree.py                   |   2 +-
+ core/rl_utils/mcts/mcts_ptree.py                   |   2 +-
+ core/rl_utils/tests/cprofile_mcts_ptree.py         |   2 +-
+ core/rl_utils/tests/test_mcts_ptree.py             |   2 +-
+ core/torch_utils/network/nn_module.py              |   2 +-
+ core/utils/__init__.py                             |   2 +-
+ core/worker/__init__.py                            |   1 +
+ core/worker/collector/__init__.py                  |   3 +
+ core/worker/collector/base_serial_collector.py     | 228 +++++++++++++++++++++
+ core/worker/collector/base_serial_evaluator.py     | 223 ++++++++++++++++++++
+ zoo/atari/envs/atari_muzero_env.py                 |   2 +-
+ zoo/board_games/atari/config/atari_config.py       |   4 +-
+ 21 files changed, 477 insertions(+), 19 deletions(-)
+
+commit dc1b91bbd718e8d9bbc8708b239eca64a0dbd26d
+Author: puyuan1996 <2402552459@qq.com>
+Date:   Sun Oct 9 23:58:30 2022 +0800
+
+    feature(pu): add MuZero/EfficientZero based on DI-engine
+
+ .gitignore                                         | 1426 +++
+ .style.yapf                                        |   11 +
+ README.md                                          |   44 +
+ core/__init__.py                                   |    0
+ core/config/__init__.py                            |    2 +
+ core/config/config.py                              |  580 ++
+ core/entry/__init__.py                             |    4 +
+ core/entry/serial_entry_muzero.py                  |  193 +
+ core/entry/serial_entry_muzero_expert_data.py      |  174 +
+ core/entry/utils.py                                |   66 +
+ core/envs/env/__init__.py                          |    1 +
+ core/envs/env/base_env.py                          |  189 +
+ core/model/__init__.py                             |    0
+ core/model/common/__init__.py                      |    2 +
+ core/model/common/head.py                          |  116 +
+ core/model/common/utils.py                         |   21 +
+ .../efficientzero/efficientzero_base_model.py      |  172 +
+ .../template/efficientzero/efficientzero_model.py  |  559 ++
+ .../tests/test_efficientzero_tictactoe_model.py    |   67 +
+ core/model/wrapper/__init__.py                     |    1 +
+ core/model/wrapper/model_wrappers.py               |  569 ++
+ core/policy/__init__.py                            |    5 +
+ core/policy/alphazero/alphazero_collector.py       |  181 +
+ core/policy/alphazero/alphazero_config_gomoku.yaml |   71 +
+ core/policy/alphazero/alphazero_entry.py           |  127 +
+ core/policy/alphazero/alphazero_evaluator.py       |  227 +
+ core/policy/alphazero/alphazero_helper.py          |  165 +
+ core/policy/alphazero/alphazero_policy.py          |  204 +
+ core/policy/base_policy.py                         |  316 +
+ core/policy/command_mode_policy_instance.py        |   69 +
+ core/policy/efficientzero.py                       |  770 ++
+ core/policy/efficientzero_expert_data.py           |  691 ++
+ core/rl_utils/image_transform_muzero.py            |   76 +
+ core/rl_utils/mcts/__init__.py                     |    0
+ .../cytree.cpython-38-darwin.so                    |  Bin 0 -> 157896 bytes
+ .../temp.macosx-10.9-x86_64-cpython-38/cytree.o    |  Bin 0 -> 1192880 bytes
+ core/rl_utils/mcts/ctree/cminimax.cpp              |   66 +
+ core/rl_utils/mcts/ctree/cminimax.h                |   38 +
+ core/rl_utils/mcts/ctree/cnode.cpp                 |  420 +
+ core/rl_utils/mcts/ctree/cnode.h                   |   85 +
+ core/rl_utils/mcts/ctree/ctree.pxd                 |   74 +
+ core/rl_utils/mcts/ctree/cytree.cpp                | 9188 ++++++++++++++++++++
+ .../mcts/ctree/cytree.cpython-38-darwin.so         |  Bin 0 -> 157896 bytes
+ core/rl_utils/mcts/ctree/cytree.pyx                |  103 +
+ core/rl_utils/mcts/ctree/make.sh                   |    1 +
+ core/rl_utils/mcts/ctree/setup.py                  |    5 +
+ ...fficientzero_collected_data_check_atari-pong.py |   88 +
+ ...o_collected_data_check_tictactoe_2playermode.py |   48 +
+ core/rl_utils/mcts/game.py                         |  250 +
+ core/rl_utils/mcts/game_base_config.py             |   97 +
+ core/rl_utils/mcts/game_buffer.py                  | 1119 +++
+ core/rl_utils/mcts/mcts_ctree.py                   |  139 +
+ core/rl_utils/mcts/mcts_ptree.py                   |  161 +
+ core/rl_utils/mcts/ptree/__init__.py               |    2 +
+ core/rl_utils/mcts/ptree/minimax.py                |   44 +
+ core/rl_utils/mcts/ptree/node.py                   |  466 +
+ core/rl_utils/mcts/utils.py                        |  201 +
+ core/rl_utils/tests/cprofile_mcts_ptree.py         |  160 +
+ .../tests/test_efficientzero_game_history.py       |  107 +
+ core/rl_utils/tests/test_game_buffer.py            |  167 +
+ core/rl_utils/tests/test_mcts_ptree.py             |  111 +
+ core/rl_utils/tests/test_muzero_utils.py           |   24 +
+ core/torch_utils/network/nn_module.py              |  687 ++
+ core/utils/__init__.py                             |    1 +
+ core/utils/registry.py                             |  105 +
+ core/utils/registry_factory.py                     |   45 +
+ core/worker/collector/__init__.py                  |    2 +
+ core/worker/collector/muzero_collector.py          |  714 ++
+ core/worker/collector/muzero_evaluator.py          |  398 +
+ format.sh                                          |   20 +
+ requirements.txt                                   |    1 +
+ zoo/atari/envs/__init__.py                         |    1 +
+ zoo/atari/envs/atari_muzero_env.py                 |  149 +
+ zoo/atari/envs/atari_wrappers.py                   |  252 +
+ zoo/atari/envs/test_atari_muzero_env.py            |   31 +
+ zoo/board_games/__init__.py                        |    0
+ zoo/board_games/atari/config/atari_config.py       |  145 +
+ .../atari/config/atari_efficientzero_config.py     |  128 +
+ .../config/atari_efficientzero_config_cprofile.py  |  120 +
+ .../atari_efficientzero_config_lineprofile.py      |  117 +
+ .../atari_efficientzero_expert_data_config.py      |  127 +
+ .../atari/config/atari_expert_data_config.py       |  147 +
+ .../atari/config/one_episode_replay_buffer.npy     |  Bin 0 -> 2720593 bytes
+ .../atari/config/one_episode_replay_buffer_img.npy |  Bin 0 -> 524896 bytes
+ .../config/one_episode_replay_buffer_img_ez.npy    |  Bin 0 -> 44166253 bytes
+ .../config/profile/pong_ctree_cprofile.result.png  |  Bin 0 -> 799325 bytes
+ .../config/profile/pong_ptree_cprofile.result.png  |  Bin 0 -> 572591 bytes
+ zoo/board_games/base_game_env.py                   |   56 +
+ zoo/board_games/chess/envs/chess_env_game.py       |  198 +
+ zoo/board_games/chess/envs/test_chess_env_game.py  |   40 +
+ zoo/board_games/go/__init__.py                     |    0
+ zoo/board_games/go/envs/__init__.py                |    0
+ zoo/board_games/go/envs/go_env_game.py             |  318 +
+ zoo/board_games/go/envs/test_go_env_game.py        |   39 +
+ zoo/board_games/go/img/GO_Tile0.png                |  Bin 0 -> 146 bytes
+ zoo/board_games/go/img/GO_Tile1.png                |  Bin 0 -> 129 bytes
+ zoo/board_games/go/img/GO_Tile2.png                |  Bin 0 -> 130 bytes
+ zoo/board_games/go/img/GO_Tile3.png                |  Bin 0 -> 134 bytes
+ zoo/board_games/go/img/GO_Tile4.png                |  Bin 0 -> 127 bytes
+ zoo/board_games/go/img/GO_Tile5.png                |  Bin 0 -> 117 bytes
+ zoo/board_games/go/img/GO_Tile6.png                |  Bin 0 -> 120 bytes
+ zoo/board_games/go/img/GO_Tile7.png                |  Bin 0 -> 121 bytes
+ zoo/board_games/go/img/GO_Tile8.png                |  Bin 0 -> 121 bytes
+ zoo/board_games/go/img/GoBlackPiece.png            |  Bin 0 -> 113 bytes
+ zoo/board_games/go/img/GoBoard.png                 |  Bin 0 -> 450 bytes
+ zoo/board_games/go/img/GoWhitePiece.png            |  Bin 0 -> 108 bytes
+ zoo/board_games/gomoku/config/gomoku_config.py     |  151 +
+ .../gomoku/config/gomoku_efficientzero_config.py   |  125 +
+ zoo/board_games/gomoku/envs/gomoku_env.py          |  306 +
+ zoo/board_games/gomoku/envs/gomoku_expert.py       |  384 +
+ zoo/board_games/gomoku/envs/test_gomoku_env.py     |   59 +
+ .../gomoku/envs/test_gomoku_expert_action.py       |   37 +
+ ...isode_replay_buffer_tictactoe_2-player-mode.npy |  Bin 0 -> 10703 bytes
+ .../tictactoe/config/tictactoe_config.py           |  154 +
+ .../config/tictactoe_efficientzero_config.py       |  137 +
+ .../tictactoe/envs/test_tictactoe_env.py           |   59 +
+ .../tictactoe/envs/test_tictactoe_expert_action.py |   30 +
+ zoo/board_games/tictactoe/envs/tictactoe_env.py    |  329 +
+ zoo/board_games/tictactoe/model/tictactoe_model.py |   75 +
+ 119 files changed, 25950 insertions(+)
+
+commit 2feee1452f542b9b851837859be2cf0478890309
+Author: Swain <niuyazhe314@outlook.com>
+Date:   Sat Oct 8 12:12:44 2022 +0800
+
+    Initial commit
+
+ LICENSE | 201 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 201 insertions(+)

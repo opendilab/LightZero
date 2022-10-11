@@ -7,10 +7,10 @@ from tensorboardX import SummaryWriter
 
 from ding.config.config import read_config_yaml
 from ding.envs import get_env_cls
-from ding.policy.alphazero.alphazero_policy import AlphaZeroPolicy
+from core.policy.alphazero import AlphaZeroPolicy
 from ding.model import create_model
-from ding.policy.alphazero.alphazero_collector import AlphazeroCollector
-from ding.policy.alphazero.alphazero_evaluator import AlphazeroEvaluator
+from core.worker.collector.alphazero_collector import AlphazeroCollector
+from core.worker.collector.alphazero_evaluator import AlphazeroEvaluator
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner, create_buffer
 
@@ -123,5 +123,5 @@ def serial_pipeline_alphazero(
 
 
 if __name__ == '__main__':
-    cfg_path = os.path.join(os.getcwd(), 'alphazero_config_gomoku.yaml')
+    cfg_path = os.path.join(os.getcwd(), '../../zoo/board_games/gomoku/config/gomoku_alphazero_config.yaml')
     serial_pipeline_alphazero(cfg_path)
