@@ -5,9 +5,9 @@ game_config = EasyDict(
     dict(
         env_name='PongNoFrameskip-v4',
         env_type='atari_games',
-        device='cuda',
+        # device='cuda',
         # for debug
-        # device='cpu',
+        device='cpu',
         # if mcts_ctree=True, using cpp mcts code
         mcts_ctree=True,
         # mcts_ctree=False,

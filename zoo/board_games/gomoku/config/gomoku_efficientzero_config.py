@@ -1,5 +1,5 @@
 from easydict import EasyDict
-from zoo.board_games.gomoku.config.gomoku_efficientzero_base_config import game_config
+from gomoku_efficientzero_base_config import game_config
 
 # debug
 # collector_env_num = 2

@@ -2,7 +2,7 @@
 the option of cpp mcts or python mcts occurred in ding/policy/mcts ding/data/buffer/game_buffer
 """
 from easydict import EasyDict
-from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config
+from tictactoe_efficientzero_base_config import game_config
 
 # for debug
 # collector_env_num = 3

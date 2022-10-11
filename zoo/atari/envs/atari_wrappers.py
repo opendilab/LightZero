@@ -8,7 +8,7 @@ from ding.envs import NoopResetWrapper, MaxAndSkipWrapper, EpisodicLifeWrapper, 
     ClipRewardWrapper, FrameStackWrapper
 import numpy as np
 from ding.utils.compression_helper import jpeg_data_compressor
-from gym.wrappers import Monitor
+from gym.wrappers import RecordVideo
 import cv2
 
 
@@ -101,7 +101,8 @@ def wrap_muzero(config, warp_frame=True, save_video=False, save_path=None, video
     if warp_frame:
         env = WarpFrame(env, width=config.obs_shape[1], height=config.obs_shape[2], grayscale=config.gray_scale)
     if save_video:
-        env = Monitor(env, directory=save_path, force=True, video_callable=video_callable, uid=uid)
+        env = RecordVideo(env, video_folder=save_path, episode_trigger=lambda episode_id: True, name_prefix='rl-video-{}'.format(uid))
+
     env = JpegWrapper(env, cvt_string=config.cvt_string)
     if config.game_wrapper:
         env = GameWrapper(env)
@@ -134,7 +135,8 @@ def wrap_muzero_dqn_expert_data(
         # for collecting dqn expert data
         env = WarpFrame(env, width=84, height=84, grayscale=False)
     if save_video:
-        env = Monitor(env, directory=save_path, force=True, video_callable=video_callable, uid=uid)
+        env = RecordVideo(env, video_folder=save_path, episode_trigger=lambda episode_id: True, name_prefix='rl-video-{}'.format(uid))
+
     env = JpegWrapper(env, cvt_string=config.cvt_string)
     if config.game_wrapper:
         env = GameWrapper(env)
