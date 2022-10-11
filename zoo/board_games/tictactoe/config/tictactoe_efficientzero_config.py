@@ -36,8 +36,8 @@ tictactoe_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            env_type='tictactoe',
-            representation_model_type='raw_obs',
+            projection_input_dim_type='board_games',
+            representation_model_type='identity',
             observation_shape=(12, 3, 3),  # if frame_stack_nums=4
             num_channels=12,  # if frame_stack_nums=4
 

@@ -12,12 +12,19 @@ class GomokuModel(nn.Module):
     def __init__(self, model_cfg):
         super(GomokuModel, self).__init__()
         self.cfg = model_cfg
-        self.input_channels = self.cfg.get('input_channels',3)
+        self.input_channels = self.cfg.get('input_channels', 3)
         self.board_size = self.cfg.get('board_size', 6)
 
         # encoder part
         self.encoder = nn.Sequential(
-            conv2d_block(in_channels=3, out_channels=32, kernel_size=self.input_channels, stride=1, padding=1, activation=nn.ReLU()),
+            conv2d_block(
+                in_channels=3,
+                out_channels=32,
+                kernel_size=self.input_channels,
+                stride=1,
+                padding=1,
+                activation=nn.ReLU()
+            ),
             conv2d_block(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1, activation=nn.ReLU()),
             conv2d_block(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1, activation=nn.ReLU()),
         )
@@ -25,8 +32,7 @@ class GomokuModel(nn.Module):
         # action policy head
         self.policy_head = nn.Sequential(
             conv2d_block(in_channels=128, out_channels=4, kernel_size=3, stride=1, padding=1, activation=nn.ReLU()),
-            nn.Flatten(),
-            nn.Linear(4 * self.board_size * self.board_size, self.board_size * self.board_size)
+            nn.Flatten(), nn.Linear(4 * self.board_size * self.board_size, self.board_size * self.board_size)
         )
 
         # state value layers
@@ -67,8 +73,7 @@ if __name__ == '__main__':
     board_size = 19
     input_channels = 3
     batch_size = 4
-    cfg = EasyDict(board_size=board_size,
-                   input_channels= input_channels)
+    cfg = EasyDict(board_size=board_size, input_channels=input_channels)
 
     inputs = torch.randn(batch_size, input_channels, board_size, board_size)
     model = GomokuModel(cfg)

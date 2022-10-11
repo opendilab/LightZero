@@ -16,16 +16,26 @@ from ding.utils.data import default_collate
 
 @POLICY_REGISTRY.register('alphazero')
 class AlphaZeroPolicy(Policy):
+    config = dict(
+        type='alphazero',
+        # (bool) Whether use cuda in policy
+        cuda=False,
+        # learn_mode config
+        learn=dict(weight_decay=1e-4, grad_norm=1, value_weight=1)
+    )
+
+    def default_model(self) -> Tuple[str, List[str]]:
+        return 'GomokuModel', ['core.model.template.alphazero.alphazero_model_gomoku']
 
     def _init_learn(self):
         # Optimizer
-        self._grad_norm = self._cfg.learn.get('grad_norm', 1)
+        self._grad_norm = self._cfg.learn.grad_norm
         self._learning_rate = self._cfg.learn.learning_rate
-        self._weight_decay = self._cfg.learn.get('weight_decay', 0)
+        self._weight_decay = self._cfg.learn.weight_decay
         self._optimizer = Adam(self._model.parameters(), weight_decay=self._weight_decay, lr=self._learning_rate)
 
         # Algorithm config
-        self._value_weight = self._cfg.learn.get('value_weight', 1)
+        self._value_weight = self._cfg.learn.value_weight
         # Main and target models
         self._learn_model = model_wrap(self._model, wrapper_name='base')
         self._learn_model.reset()
@@ -192,10 +202,6 @@ class AlphaZeroPolicy(Policy):
         logits, values = self._model(state_batch)
         log_probs = F.log_softmax(logits, dim=-1)
         return log_probs, values
-
-    def default_model(self) -> Tuple[str, List[str]]:
-        # return 'vac', ['ding.model.template.vac']
-        return 'GomokuModel', ['core.model.template.alphazero.alphazero_model_gomoku']
 
     def _monitor_vars_learn(self) -> List[str]:
         return super()._monitor_vars_learn() + ['policy_loss', 'value_loss', 'entropy_loss', 'grad_norm']

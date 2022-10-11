@@ -120,8 +120,3 @@ def serial_pipeline_alphazero(
     # Learner's after_run hook.
     learner.call_hook('after_run')
     return policy
-
-
-if __name__ == '__main__':
-    cfg_path = os.path.join(os.getcwd(), '../../zoo/board_games/gomoku/config/gomoku_alphazero_config.yaml')
-    serial_pipeline_alphazero(cfg_path)

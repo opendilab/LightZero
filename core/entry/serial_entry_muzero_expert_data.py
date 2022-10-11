@@ -52,7 +52,9 @@ def serial_pipeline_muzero_expert_data(
         cfg, create_cfg = read_config(input_cfg)
     else:
         cfg, create_cfg = input_cfg
-    create_cfg.policy.type = create_cfg.policy.type + '_command'
+    # create_cfg.policy.type = create_cfg.policy.type + '_command'
+    create_cfg.policy.type = create_cfg.policy.type
+
     env_fn = None if env_setting is None else env_setting[0]
     cfg = compile_config(cfg, seed=seed, env=env_fn, auto=True, create_cfg=create_cfg, save_cfg=True)
     # Create main components: env, policy
@@ -65,7 +67,7 @@ def serial_pipeline_muzero_expert_data(
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
-    policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval', 'command'])
+    policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained dqn model
     if cfg.policy.collect_model_path is not None:
@@ -107,9 +109,9 @@ def serial_pipeline_muzero_expert_data(
         game_config=game_config
     )
 
-    commander = BaseSerialCommander(
-        cfg.policy.other.commander, learner, collector, evaluator, replay_buffer, policy.command_mode
-    )
+    # commander = BaseSerialCommander(
+    #     cfg.policy.other.commander, learner, collector, evaluator, replay_buffer, policy.command_mode
+    # )
     # ==========
     # Main loop
     # ==========
@@ -117,7 +119,9 @@ def serial_pipeline_muzero_expert_data(
     learner.call_hook('before_run')
 
     while True:
-        collect_kwargs = commander.step()
+        # collect_kwargs = commander.step()
+        collect_kwargs = {}
+
         # set temperature for visit count distributions according to the train_iter,
         # please refer to Appendix A.1 in EfficientZero for details
         collect_kwargs['temperature'] = np.array(

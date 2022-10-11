@@ -1,5 +1,5 @@
 from easydict import EasyDict
-from zoo.atari.config.atari_config import game_config
+from zoo.atari.config.atari_efficientzero_base_config import game_config
 
 # debug
 # collector_env_num = 1

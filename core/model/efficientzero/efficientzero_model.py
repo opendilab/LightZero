@@ -363,8 +363,7 @@ class EfficientZeroNet(BaseNet):
 
     def __init__(
         self,
-        env_type,
-        representation_model_type,
+        projection_input_dim_type,
         observation_shape,
         action_space_size,
         num_blocks,
@@ -378,6 +377,8 @@ class EfficientZeroNet(BaseNet):
         reward_support_size,
         value_support_size,
         downsample,
+        representation_model_type: str = 'conv_res_blocks',
+        representation_model: nn.Module = None,
         lstm_hidden_size=512,
         bn_mt=0.1,
         proj_hid=256,
@@ -387,51 +388,33 @@ class EfficientZeroNet(BaseNet):
         last_linear_layer_init_zero=False,
         state_norm=False
     ):
-        """EfficientZero network
-        Parameters
-        ----------
-        observation_shape: tuple or list
-            shape of observations: [C, W, H]
-        action_space_size: int
-            action space
-        num_blocks: int
-            number of res blocks
-        num_channels: int
-            channels of hidden states
-        reduced_channels_reward: int
-            channels of reward head
-        reduced_channels_value: int
-            channels of value head
-        reduced_channels_policy: int
-            channels of policy head
-        fc_reward_layers: list
-            hidden layers of the reward prediction head (MLP head)
-        fc_value_layers: list
-            hidden layers of the value prediction head (MLP head)
-        fc_policy_layers: list
-            hidden layers of the policy prediction head (MLP head)
-        reward_support_size: int
-            dim of reward output
-        value_support_size: int
-            dim of value output
-        downsample: bool
-            True -> do downsampling for observations. (For board games, do not need)
-        lstm_hidden_size: int
-            dim of lstm hidden
-        bn_mt: float
-            Momentum of BN
-        proj_hid: int
-            dim of projection hidden layer
-        proj_out: int
-            dim of projection output layer
-        pred_hid: int
-            dim of projection head (prediction) hidden layer
-        pred_out: int
-            dim of projection head (prediction) output layer
-        last_linear_layer_init_zero: bool
-            True -> zero initialization for the last layer of value/policy mlp
-        state_norm: bool
-            True -> normalization for hidden states
+        """
+        Overview:
+            EfficientZero network
+        Arguments:
+            - projection_input_dim_type
+            - representation_model_type
+            - observation_shape: tuple or list. shape of observations: [C, W, H]
+            - action_space_size: (:obj:`int`): . action space
+            - num_blocks (:obj:`int`):  number of res blocks
+            - num_channels (:obj:`int`): channels of hidden states
+            - reduced_channels_reward (:obj:`int`): channels of reward head
+            - reduced_channels_value (:obj:`int`): channels of value head
+            - reduced_channels_policy (:obj:`int`): channels of policy head
+            - fc_reward_layers (:obj:`list`):  hidden layers of the reward prediction head (MLP head)
+            - fc_value_layers (:obj:`list`):  hidden layers of the value prediction head (MLP head)
+            - fc_policy_layers (:obj:`list`):  hidden layers of the policy prediction head (MLP head)
+            - reward_support_size (:obj:`int`): dim of reward output
+            - value_support_size (:obj:`int`): dim of value output
+            - downsample (:obj:`bool`): True -> do downsampling for observations. (For board games, do not need)
+            - lstm_hidden_size (:obj:`int`):  dim of lstm hidden
+            - bn_mt (:obj:`float`):  Momentum of BN
+            - proj_hid (:obj:`int`): dim of projection hidden layer
+            - proj_out (:obj:`int`): dim of projection output layer
+            - pred_hid (:obj:`int`):dim of projection head (prediction) hidden layer
+            - pred_out (:obj:`int`): dim of projection head (prediction) output layer
+            - last_linear_layer_init_zero (:obj:`bool`): True -> zero initialization for the last layer of value/policy mlp
+            - state_norm (:obj:`bool`):  True -> normalization for hidden states
         """
         super(EfficientZeroNet, self).__init__(lstm_hidden_size)
         self.proj_hid = proj_hid
@@ -441,7 +424,8 @@ class EfficientZeroNet(BaseNet):
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
         self.representation_model_type = representation_model_type
-        self.env_type = env_type
+        self.representation_model = representation_model
+        self.projection_input_dim_type = projection_input_dim_type
 
         self.action_space_size = action_space_size
         block_output_size_reward = (
@@ -462,16 +446,19 @@ class EfficientZeroNet(BaseNet):
             (reduced_channels_policy * observation_shape[1] * observation_shape[2])
         )
 
-        if self.representation_model_type == 'raw_obs':
-            self.representation_network = nn.Identity()
-        elif self.representation_model_type == 'conv_res':
-            self.representation_network = RepresentationNetwork(
-                observation_shape,
-                num_blocks,
-                num_channels,
-                downsample,
-                momentum=bn_mt,
-            )
+        if self.representation_model is None:
+            if self.representation_model_type == 'identity':
+                self.representation_network = nn.Identity()
+            elif self.representation_model_type == 'conv_res_blocks':
+                self.representation_network = RepresentationNetwork(
+                    observation_shape,
+                    num_blocks,
+                    num_channels,
+                    downsample,
+                    momentum=bn_mt,
+                )
+        else:
+            self.representation_network = self.representation_model
 
         self.dynamics_network = DynamicsNetwork(
             num_blocks,
@@ -502,14 +489,14 @@ class EfficientZeroNet(BaseNet):
 
         # projection
         # TODO(pu)
-        if self.env_type == 'atari':
-            in_dim = num_channels * math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
-        else:
-            in_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
+        if self.projection_input_dim_type == 'atari':
+            self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
+                                                                 ) * math.ceil(observation_shape[2] / 16)
+        elif self.projection_input_dim_type == 'board_games':
+            self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
 
-        self.porjection_in_dim = in_dim
         self.projection = nn.Sequential(
-            nn.Linear(self.porjection_in_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), nn.ReLU(inplace=True),
+            nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), nn.ReLU(inplace=True),
             nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), nn.ReLU(inplace=True),
             nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
         )
@@ -564,8 +551,8 @@ class EfficientZeroNet(BaseNet):
 
     def project(self, hidden_state, with_grad=True):
         # only the branch of proj + pred can share the gradients
-        # hidden_state = hidden_state.view(-1, self.porjection_in_dim)
-        hidden_state = hidden_state.reshape(-1, self.porjection_in_dim)
+        # hidden_state = hidden_state.view(-1, self.projection_input_dim)
+        hidden_state = hidden_state.reshape(-1, self.projection_input_dim)
 
         proj = self.projection(hidden_state)
 

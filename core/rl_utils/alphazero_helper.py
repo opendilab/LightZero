@@ -126,10 +126,8 @@ class MCTS(object):
             # state.do_action(action)
             state.step(action)
 
-
         # end, winner = state.game_end()
         end, winner = state.have_winner()
-
 
         if not end:
             leaf_value = self._expand_leaf_node(node, state, policy_forward_fn)

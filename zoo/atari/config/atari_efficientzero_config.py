@@ -1,5 +1,15 @@
 from easydict import EasyDict
-from zoo.atari.config.atari_config import game_config
+from zoo.atari.config.atari_efficientzero_base_config import game_config
+
+from core.model.efficientzero.efficientzero_model import RepresentationNetwork
+
+representation_model = RepresentationNetwork(
+    observation_shape=(12, 96, 96),
+    num_blocks=1,
+    num_channels=64,
+    downsample=True,
+    momentum=0.1,
+)
 
 # for debug
 collector_env_num = 1
@@ -39,8 +49,9 @@ atari_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            env_type='atari',
-            representation_model_type='conv_res',
+            projection_input_dim_type='atari',
+            representation_model_type='conv_res_blocks',
+            # representation_model=representation_model,
             observation_shape=(12, 96, 96),  # 3,96,96 stack=4
             action_space_size=6,
             downsample=True,
@@ -105,10 +116,6 @@ atari_efficientzero_config = EasyDict(atari_efficientzero_config)
 main_config = atari_efficientzero_config
 
 atari_efficientzero_create_config = dict(
-    # env=dict(
-    #     type='atari-muzero',
-    #     import_names=['dizoo.atari.envs.atari_muzero_env'],
-    # ),
     env=dict(
         type='atari-muzero',
         import_names=['zoo.atari.envs.atari_muzero_env'],

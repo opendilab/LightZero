@@ -19,7 +19,7 @@ args = ['PongNoFrameskip-v4', 'tictactoe']
 @pytest.mark.parametrize('env_name', args)
 def test_game_history(env_name):
     if env_name == 'PongNoFrameskip-v4':
-        from zoo.atari.config.atari_config import game_config
+        from zoo.atari.config.atari_efficientzero_base_config import game_config
     elif env_name == 'tictactoe':
         from zoo.board_games.tictactoe.config.tictactoe_config import game_config
     config = game_config

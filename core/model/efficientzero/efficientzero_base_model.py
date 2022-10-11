@@ -10,6 +10,18 @@ from dataclasses import dataclass
 from core.rl_utils.mcts.utils import mask_nan
 
 
+def renormalize(tensor, first_dim=1):
+    # normalize the tensor (states)
+    if first_dim < 0:
+        first_dim = len(tensor.shape) + first_dim
+    flat_tensor = tensor.view(*tensor.shape[:first_dim], -1)
+    max_val = torch.max(flat_tensor, first_dim, keepdim=True).values
+    min_val = torch.min(flat_tensor, first_dim, keepdim=True).values
+    flat_tensor = (flat_tensor - min_val) / (max_val - min_val)
+
+    return flat_tensor.view(*tensor.shape)
+
+
 @dataclass
 class NetworkOutput:
     # output format of the model
@@ -27,7 +39,7 @@ class BaseNet(nn.Module):
         Overview:
             Base Network
         Arguments：
-            - lstm_hidden_size: int dim of lstm hidden
+            - lstm_hidden_size (:obj:`int`): dim of lstm hidden
         """
         super(BaseNet, self).__init__()
         self.lstm_hidden_size = lstm_hidden_size
@@ -140,6 +152,7 @@ def inverse_scalar_transform_old(logits, support_size, epsilon=0.001):
 
     sign = torch.ones_like(value)
     sign[value < 0] = -1.0
+
     output = (((torch.sqrt(1 + 4 * epsilon * (torch.abs(value) + 1 + epsilon)) - 1) / (2 * epsilon)) ** 2 - 1)
     output = sign * output * delta
 
@@ -148,28 +161,27 @@ def inverse_scalar_transform_old(logits, support_size, epsilon=0.001):
     return output
 
 
-import time
-
-support_size = 300
-logits = torch.randn([1024, 601])
-# st=time.time()
-# inverse_scalar_transform(logits, support_size)
-# et=time.time()
-# print(et-st)
-
-st = time.time()
-inverse_scalar_transform_old(logits, support_size)
-et = time.time()
-print(et - st)
-
-
-def renormalize(tensor, first_dim=1):
-    # normalize the tensor (states)
-    if first_dim < 0:
-        first_dim = len(tensor.shape) + first_dim
-    flat_tensor = tensor.view(*tensor.shape[:first_dim], -1)
-    max_val = torch.max(flat_tensor, first_dim, keepdim=True).values
-    min_val = torch.min(flat_tensor, first_dim, keepdim=True).values
-    flat_tensor = (flat_tensor - min_val) / (max_val - min_val)
-
-    return flat_tensor.view(*tensor.shape)
+# import time
+#
+# new_time = 0
+# old_time = 0
+# for i in range(1000):
+#     support_size = 300
+#     logits = torch.randn([1024, 601])
+#     st = time.time()
+#     inverse_scalar_transform(logits, support_size)
+#     et = time.time()
+#
+#     new_time += (et - st)
+#     print(et - st)
+#
+#     st = time.time()
+#     inverse_scalar_transform_old(logits, support_size)
+#     et = time.time()
+#     old_time += (et - st)
+#     print(et - st)
+#
+#     print('----')
+#
+# print('new_time:', new_time)
+# print('old_time:', old_time)

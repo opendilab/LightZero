@@ -68,14 +68,10 @@ gomoku_alphazero_config = dict(
                 print_freq=10,
                 augmentation=True,
             ),
-            mcts=dict(
-                num_simulations=50, )
+            mcts=dict(num_simulations=50, )
         ),
         # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(n_episode=10, eval_freq=int(10), stop_value=1),
-                  mcts=dict(
-                      num_simulations=50, )
-                  ),
+        eval=dict(evaluator=dict(n_episode=10, eval_freq=int(10), stop_value=1), mcts=dict(num_simulations=50, )),
 
         # command_mode config
         other=dict(
@@ -88,8 +84,13 @@ gomoku_alphazero_config = dict(
                 decay=int(5e4),
             ),
             # the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(replay_buffer_size=int(1e3), type='naive', deepcopy=False, enable_track_used_data=False,
-                               periodic_thruput_seconds=10000)
+            replay_buffer=dict(
+                replay_buffer_size=int(1e3),
+                type='naive',
+                deepcopy=False,
+                enable_track_used_data=False,
+                periodic_thruput_seconds=10000
+            )
         ),
     ),
 )

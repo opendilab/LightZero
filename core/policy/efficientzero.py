@@ -19,7 +19,7 @@ from core.rl_utils.mcts.utils import select_action
 from ding.torch_utils import to_tensor, to_device
 from core.model.efficientzero.efficientzero_base_model import scalar_transform, inverse_scalar_transform
 # TODO(pu): choose game config
-from zoo.atari.config.atari_config import game_config
+from zoo.atari.config.atari_efficientzero_base_config import game_config
 # from zoo.board_games.tictactoe.config.tictactoe_config import game_config
 # from zoo.board_games.gomoku.config.gomoku_config import game_config
 
@@ -32,8 +32,7 @@ from ding.model import model_wrap
 class EfficientZeroPolicy(Policy):
     """
     Overview:
-        MuZero
-        EfficientZero
+        The policy class for EfficientZero
     """
     config = dict(
         type='efficientzero',
@@ -127,7 +126,6 @@ class EfficientZeroPolicy(Policy):
             by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
         """
         # return 'EfficientZeroNet', ['ding.model.template.efficientzero.efficientzero_model']
-
         return 'EfficientZeroNet', ['core.model.efficientzero.efficientzero_model']
 
     def _init_learn(self) -> None:
