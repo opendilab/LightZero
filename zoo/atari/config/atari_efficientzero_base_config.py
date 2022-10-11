@@ -5,9 +5,9 @@ game_config = EasyDict(
     dict(
         env_name='PongNoFrameskip-v4',
         env_type='atari_games',
-        # device='cuda',
+        device='cuda',
         # for debug
-        device='cpu',
+        # device='cpu',
         # if mcts_ctree=True, using cpp mcts code
         mcts_ctree=True,
         # mcts_ctree=False,
@@ -45,7 +45,7 @@ game_config = EasyDict(
         # lstm_horizon_len=5,
 
         collector_env_num=8,
-        evaluator_env_num=8,
+        evaluator_env_num=3,
         # TODO(pu): how to set proper num_simulations?
         num_simulations=50,
         batch_size=256,

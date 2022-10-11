@@ -14,10 +14,8 @@ from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.model import model_wrap
 
-# from ding.worker.collector.muzero_evaluator import MuZeroEvaluator as BaseSerialEvaluator
-# from core.rl_utils.mcts.game_buffer import GameBuffer
 
-from core.worker.collector.muzero_evaluator_backup import MuZeroEvaluator as BaseSerialEvaluator
+from core.worker.collector.muzero_evaluator import MuZeroEvaluator as BaseSerialEvaluator
 from core.rl_utils.mcts.game_buffer import GameBuffer
 
 

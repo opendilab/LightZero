@@ -9,11 +9,12 @@ from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import
 # evaluator_env_num = 3
 
 collector_env_num = 8
-evaluator_env_num = 8
 n_episode = 8
 
+evaluator_env_num = 8
+
 tictactoe_efficientzero_config = dict(
-    exp_name='data_ez_ptree/tictactoe_2pm_efficientzero_seed0_sub8',
+    exp_name='data_ez_ptree/tictactoe_2pm_efficientzero_seed0_sub888',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

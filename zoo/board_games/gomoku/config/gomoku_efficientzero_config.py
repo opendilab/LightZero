@@ -6,11 +6,13 @@ from zoo.board_games.gomoku.config.gomoku_efficientzero_base_config import game_
 # evaluator_env_num = 2
 
 collector_env_num = 8
+n_episode = 8
 evaluator_env_num = 3
 board_size = 6  # default_size is 15
 
 gomoku_efficientzero_config = dict(
-    exp_name='data_ez_ptree/gomoku_2pm_efficientzero_seed0',
+    # exp_name='data_ez_ptree/gomoku_2pm_efficientzero_seed0_sub883',
+    exp_name='data_ez_ptree/gomoku_1pm_efficientzero_seed0_sub883',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -19,7 +21,8 @@ gomoku_efficientzero_config = dict(
         board_size=board_size,  # default_size is 15
         # 'one_player_mode' when eval, 'two_player_mode' when collect
         # automatically assign in gomoku env
-        battle_mode='two_player_mode',
+        battle_mode='one_player_mode',
+        # battle_mode='two_player_mode',
         # prob_random_agent=0.1,
         prob_random_agent=0.,
         # battle_mode='one_player_mode',
@@ -67,15 +70,17 @@ gomoku_efficientzero_config = dict(
             # debug
             # update_per_collect=2,
             # batch_size=4,
+
             batch_size=512,
 
             # one_player_mode, board_size=6, episode_length=6**2/2=18
-            # collector_env_num=8,  update_per_collect=18*8=144
-            # update_per_collect=int(board_size**2/2*collector_env_num),
+            # n_episode=8,  update_per_collect=18*8=144
+            update_per_collect=int(board_size**2/2*n_episode),
 
             # two_player_mode, board_size=6, episode_length=6**2=36
-            # collector_env_num=8,  update_per_collect=36*8=268
-            update_per_collect=int(board_size ** 2 * collector_env_num),
+            # n_episode=8,  update_per_collect=36*8=268
+            # update_per_collect=int(board_size ** 2 * n_episode),
+
             learning_rate=0.002,
             # Frequency of target network update.
             target_update_freq=400,
@@ -84,22 +89,14 @@ gomoku_efficientzero_config = dict(
         collect=dict(
             # You can use either "n_sample" or "n_episode" in collector.collect.
             # Get "n_sample" samples per collect.
-            n_episode=collector_env_num,
+            n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
         eval=dict(evaluator=dict(eval_freq=int(5e3), )),
         # command_mode config
         other=dict(
-            # Epsilon greedy with decay.
-            eps=dict(
-                # Decay type. Support ['exp', 'linear'].
-                type='exp',
-                start=0.95,
-                end=0.1,
-                decay=int(5e4),
-            ),
             # the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(replay_buffer_size=int(1e4), type='game')
+            replay_buffer=dict(type='game')
         ),
     ),
 )
@@ -113,7 +110,6 @@ gomoku_efficientzero_create_config = dict(
     ),
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
-    # env_manager=dict(type='subprocess'),
     policy=dict(
         type='efficientzero',
         import_names=['core.policy.efficientzero'],

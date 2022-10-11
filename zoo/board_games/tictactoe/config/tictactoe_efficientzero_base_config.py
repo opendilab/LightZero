@@ -5,9 +5,9 @@ game_config = EasyDict(
     dict(
         env_name='tictactoe',
         env_type='board_games',
-        # device='cuda',
+        device='cuda',
         # debug
-        device='cpu',
+        # device='cpu',
         mcts_ctree=False,
         # TODO: mcts_ctree now only support env_num=1, because in cpp MCTS root node,
         #  we must specify the one same action mask,

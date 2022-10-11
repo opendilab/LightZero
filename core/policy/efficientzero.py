@@ -18,10 +18,11 @@ from core.rl_utils.mcts.mcts_ptree import EfficientZeroMCTSPtree as MCTSPtree
 from core.rl_utils.mcts.utils import select_action
 from ding.torch_utils import to_tensor, to_device
 from core.model.efficientzero.efficientzero_base_model import scalar_transform, inverse_scalar_transform
+
 # TODO(pu): choose game config
 from zoo.atari.config.atari_efficientzero_base_config import game_config
-# from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config
 # from zoo.board_games.gomoku.config.gomoku_efficientzero_base_config import game_config
+# from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config
 
 from ding.utils import POLICY_REGISTRY
 from ding.policy.base_policy import Policy
