@@ -7,7 +7,7 @@ import torch
 import copy
 
 import core.rl_utils.mcts.ptree as tree
-from core.model.template.efficientzero.efficientzero_base_model import inverse_scalar_transform
+from core.model.efficientzero.efficientzero_base_model import inverse_scalar_transform
 
 
 class EfficientZeroMCTSPtree(object):

@@ -324,7 +324,7 @@ def MLP(
         - dropout_probability (:obj:`float`): probability of an element to be zeroed in the dropout. Default: 0.5
         - output_activation (:obj:`nn.Module`): the optional activation function in the last layer
         - output_norm_type (:obj:`str`): type of the normalization in the last layer
-        - last_linear_layer_linit_zero (:obj:`bool`): zero initialization for the last linear layer (including w and b).
+        - last_linear_layer_init_zero (:obj:`bool`): zero initialization for the last linear layer (including w and b).
             This can provide stable zero outputs in the beginning.
     Returns:
         - block (:obj:`nn.Sequential`): a sequential list containing the torch layers of the fully-connected block

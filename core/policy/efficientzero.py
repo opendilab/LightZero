@@ -17,7 +17,7 @@ import core.rl_utils.mcts.ptree as tree
 from core.rl_utils.mcts.mcts_ptree import EfficientZeroMCTSPtree as MCTSPtree
 from core.rl_utils.mcts.utils import select_action
 from ding.torch_utils import to_tensor, to_device
-from core.model.template.efficientzero.efficientzero_base_model import scalar_transform, inverse_scalar_transform
+from core.model.efficientzero.efficientzero_base_model import scalar_transform, inverse_scalar_transform
 # TODO(pu): choose game config
 from zoo.atari.config.atari_config import game_config
 # from zoo.board_games.tictactoe.config.tictactoe_config import game_config
@@ -128,7 +128,7 @@ class EfficientZeroPolicy(Policy):
         """
         # return 'EfficientZeroNet', ['ding.model.template.efficientzero.efficientzero_model']
 
-        return 'EfficientZeroNet', ['core.model.template.efficientzero.efficientzero_model']
+        return 'EfficientZeroNet', ['core.model.efficientzero.efficientzero_model']
 
     def _init_learn(self) -> None:
         self._optimizer = optim.SGD(
