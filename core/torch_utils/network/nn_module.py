@@ -1,12 +1,12 @@
 import math
-from typing import Union, Tuple, List, Callable
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ding.compatibility import torch_ge_131
-from ding.torch_utils.network.normalization import build_normalization
 from torch.nn.init import xavier_normal_, kaiming_normal_, orthogonal_
+from typing import Union, Tuple, List, Callable
+from ding.compatibility import torch_ge_131
+
+from ding.torch_utils.network import build_normalization
 
 
 def weight_init_(weight: torch.Tensor, init_type: str = "xavier", activation: str = None) -> None:
@@ -115,11 +115,12 @@ def conv2d_block(
         groups: int = 1,
         pad_type: str = 'zero',
         activation: nn.Module = None,
-        norm_type: str = None
+        norm_type: str = None,
+        bias: bool = True
 ) -> nn.Sequential:
     r"""
     Overview:
-        Create a 2-dim convlution layer with activation and normalization.
+        Create a 2-dim convolution layer with activation and normalization.
     Arguments:
         - in_channels (:obj:`int`): Number of channels in the input tensor
         - out_channels (:obj:`int`): Number of channels in the output tensor
@@ -131,6 +132,7 @@ def conv2d_block(
         - pad_type (:obj:`str`): the way to add padding, include ['zero', 'reflect', 'replicate'], default: None
         - activation (:obj:`nn.Module`): the optional activation function
         - norm_type (:obj:`str`): type of the normalization, default set to None, now support ['BN', 'IN', 'SyncBN']
+        - bias (:obj:`bool`): whether adds a learnable bias to the nn.Conv2d. default set to True
     Returns:
         - block (:obj:`nn.Sequential`): a sequential list containing the torch layers of the 2 dim convlution layer
 
@@ -149,7 +151,16 @@ def conv2d_block(
         block.append(nn.ReplicationPad2d(padding))
         padding = 0
     block.append(
-        nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding=padding, dilation=dilation, groups=groups)
+        nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+            bias=bias
+        )
     )
     if norm_type is not None:
         block.append(build_normalization(norm_type, dim=2)(out_channels))
@@ -305,33 +316,33 @@ def MLP(
     dropout_probability: float = 0.5,
     output_activation: nn.Module = None,
     output_norm_type: str = None,
-    last_linear_layer_init_zero: bool = False,
+    last_linear_layer_init_zero: bool = False
 ):
     r"""
     Overview:
         create a multi-layer perceptron using fully-connected blocks with activation, normalization and dropout,
-        optional normalization can be done to the dim 1 (across the channels)
+        optional normalization can be done to the dim 1 (across the channels).
         x -> fc -> norm -> act -> dropout -> out
     Arguments:
-        - in_channels (:obj:`int`): Number of channels in the input tensor
-        - hidden_channels (:obj:`int`): Number of channels in the hidden tensor
-        - out_channels (:obj:`int`): Number of channels in the output tensor
-        - layer_num (:obj:`int`): Number of layers
-        - layer_fn (:obj:`Callable`): layer function
-        - activation (:obj:`nn.Module`): the optional activation function
-        - norm_type (:obj:`str`): type of the normalization
-        - use_dropout (:obj:`bool`): whether to use dropout in the fully-connected block
-        - dropout_probability (:obj:`float`): probability of an element to be zeroed in the dropout. Default: 0.5
-        - output_activation (:obj:`nn.Module`): the optional activation function in the last layer
-        - output_norm_type (:obj:`str`): type of the normalization in the last layer
-        - last_linear_layer_init_zero (:obj:`bool`): zero initialization for the last linear layer (including w and b).
-            This can provide stable zero outputs in the beginning.
+        - in_channels (:obj:`int`): Number of channels in the input tensor.
+        - hidden_channels (:obj:`int`): Number of channels in the hidden tensor.
+        - out_channels (:obj:`int`): Number of channels in the output tensor.
+        - layer_num (:obj:`int`): Number of layers.
+        - layer_fn (:obj:`Callable`): layer function.
+        - activation (:obj:`nn.Module`): the optional activation function.
+        - norm_type (:obj:`str`): type of the normalization.
+        - use_dropout (:obj:`bool`): whether to use dropout in the fully-connected block.
+        - dropout_probability (:obj:`float`): probability of an element to be zeroed in the dropout. Default: 0.5.
+        - output_activation (:obj:`nn.Module`): the optional activation function in the last layer.
+        - output_norm_type (:obj:`str`): type of the normalization in the last layer.
+        - last_linear_layer_init_zero (:obj:`bool`): zero initialization for the last linear layer (including w and b),
+            which can provide stable zero outputs in the beginning.
     Returns:
-        - block (:obj:`nn.Sequential`): a sequential list containing the torch layers of the fully-connected block
+        - block (:obj:`nn.Sequential`): a sequential list containing the torch layers of the fully-connected block.
 
     .. note::
 
-        you can refer to nn.linear (https://pytorch.org/docs/master/generated/torch.nn.Linear.html)
+        you can refer to nn.linear (https://pytorch.org/docs/master/generated/torch.nn.Linear.html).
     """
     assert layer_num >= 0, layer_num
     if layer_num == 0:
