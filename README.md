@@ -1,9 +1,16 @@
 # LightZero
 ![pipeline](assets/lightzero_overview.png)
 
-LightZero is a library with a pytorch implementation of Monte Carlo tree search (MCTS) algorithms such as AlphaZero, MuZero, EfficientZero and Sampled MuZero.
+LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of Monte Carlo tree search (MCTS) algorithms such as:
+- [MuZero](https://arxiv.org/abs/1911.08265)
+- [EfficientZero](https://arxiv.org/abs/2111.00210)
+- [Sampled MuZero](https://arxiv.org/abs/2104.06303)
 
-Our implementation is completely based on [DI-engine](https://github.com/opendilab/DI-engie).
+[comment]: <> (- [AlphaGo Zero]&#40;https://www.nature.com/articles/nature24270&#41; )
+
+[comment]: <> (- [AlphaZero]&#40;https://www.science.org/doi/10.1126/science.aar6404&#41; )
+
+Our implementation is mainly based on [DI-engine](https://github.com/opendilab/DI-engie).
 
 [comment]: <> (The paper has been accepted by CoRL 2022 and we will release the code soon.)
 

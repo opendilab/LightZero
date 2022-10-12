@@ -1,5 +1,6 @@
 import torch
 from easydict import EasyDict
+
 from core.model.efficientzero.efficientzero_base_model import inverse_scalar_transform
 
 

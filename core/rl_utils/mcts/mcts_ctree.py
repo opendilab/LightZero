@@ -1,12 +1,14 @@
 """
 The following code is adapted from https://github.com/YeWR/EfficientZero/core/mcts.py
 """
-from easydict import EasyDict
 import copy
-import torch
-import numpy as np
+
 import core.rl_utils.mcts.ctree.cytree as tree
-from core.model.efficientzero.efficientzero_base_model import inverse_scalar_transform
+import numpy as np
+import torch
+from easydict import EasyDict
+
+from core.rl_utils import inverse_scalar_transform
 
 
 class MCTSCtree(object):

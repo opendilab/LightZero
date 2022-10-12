@@ -3,6 +3,7 @@ The following code is adapted from https://github.com/YeWR/EfficientZero/blob/ma
 """
 
 import copy
+
 import numpy as np
 from ding.utils.compression_helper import jpeg_data_decompressor
 

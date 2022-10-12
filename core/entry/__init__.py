@@ -1,4 +1,2 @@
-from .serial_entry_alphazero import serial_pipeline_alphazero
 from .serial_entry_muzero import serial_pipeline_muzero
 from .serial_entry_muzero_expert_data import serial_pipeline_muzero_expert_data
-from ding.entry.utils import random_collect

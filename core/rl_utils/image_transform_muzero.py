@@ -5,7 +5,7 @@ The following code is adapted from https://github.com/YeWR/EfficientZero/core/da
 import torch
 import torch.nn as nn
 
-from kornia.augmentation import RandomAffine, RandomCrop, CenterCrop, RandomResizedCrop
+from kornia.augmentation import RandomAffine, RandomCrop, RandomResizedCrop
 from kornia.filters import GaussianBlur2d
 
 

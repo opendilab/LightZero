@@ -1,13 +1,14 @@
 """
 The following code is adapted from https://github.com/werner-duvaud/muzero-general
 """
-from easydict import EasyDict
-import numpy as np
-import torch
 import copy
 
+import numpy as np
+import torch
+from easydict import EasyDict
+
 import core.rl_utils.mcts.ptree as tree
-from core.model.efficientzero.efficientzero_base_model import inverse_scalar_transform
+from core.rl_utils import inverse_scalar_transform
 
 
 class EfficientZeroMCTSPtree(object):

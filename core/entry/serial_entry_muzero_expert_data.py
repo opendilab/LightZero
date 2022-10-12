@@ -1,22 +1,20 @@
-from typing import Union, Optional, List, Any, Tuple
-import os
-import torch
 import logging
+import os
 from functools import partial
-from tensorboardX import SummaryWriter
-import numpy as np
-from ding.envs import get_vec_env_setting, create_env_manager
-from ding.worker import BaseLearner, BaseSerialCommander, \
-    create_serial_collector
+from typing import Union, Optional, List, Any, Tuple
 
+import numpy as np
+import torch
 from ding.config import read_config, compile_config
+from ding.envs import get_vec_env_setting, create_env_manager
+from ding.model import model_wrap
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
-from ding.model import model_wrap
+from ding.worker import BaseLearner, create_serial_collector
+from tensorboardX import SummaryWriter
 
-
-from core.worker.collector.muzero_evaluator import MuZeroEvaluator as BaseSerialEvaluator
 from core.rl_utils.mcts.game_buffer import GameBuffer
+from core.worker.collector.muzero_evaluator import MuZeroEvaluator as BaseSerialEvaluator
 
 
 def serial_pipeline_muzero_expert_data(

@@ -1,5 +1,6 @@
-import numpy as np
 import sys
+
+import numpy as np
 
 sys.path.extend(['/Users/puyuan/code/DI-engine', '/Users/puyuan/code/EfficientZero'])
 

@@ -4,10 +4,9 @@ The Node and Roots class for MCTS in board games in which we must consider legal
 import math
 import random
 from typing import List, Any
-import torch
 
 import numpy as np
-from scipy.special import softmax
+import torch
 
 
 class Node:

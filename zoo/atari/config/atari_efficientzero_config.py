@@ -83,10 +83,8 @@ atari_efficientzero_config = dict(
             # for debug
             # update_per_collect=2,
             # batch_size=4,
-
             update_per_collect=8000,
             batch_size=256,
-
             learning_rate=0.2,
             # Frequency of target network update.
             target_update_freq=400,
@@ -101,8 +99,7 @@ atari_efficientzero_config = dict(
         eval=dict(evaluator=dict(eval_freq=int(1e4), )),
         # for debug
         # eval=dict(evaluator=dict(eval_freq=int(2), )),
-
-        # # command_mode config
+        # command_mode config
         other=dict(
             # NOTE: the replay_buffer_size is ineffective, we specify it in game config
             replay_buffer=dict(type='game')

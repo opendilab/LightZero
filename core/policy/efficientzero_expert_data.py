@@ -1,35 +1,33 @@
-from typing import List, Dict, Any, Tuple, Union
-import treetensor.torch as ttorch
-import torch.optim as optim
-import torch
 import copy
-import numpy as np
-from torch.nn import L1Loss
-import torch.nn.functional as F
-from ding.rl_utils import get_nstep_return_data, get_train_sample
-from core.rl_utils.image_transform_muzero import Transforms
-from ding.torch_utils.data_helper import to_ndarray
+from typing import List, Dict, Any, Tuple, Union
 
+import numpy as np
+import torch
+import torch.nn.functional as F
+import torch.optim as optim
+import treetensor.torch as ttorch
+from ding.model import model_wrap
+from ding.policy.base_policy import Policy
+from ding.rl_utils import get_nstep_return_data, get_train_sample
+from ding.torch_utils import to_tensor, to_device
+from ding.torch_utils.data_helper import to_ndarray
+from ding.utils import POLICY_REGISTRY
+from torch.nn import L1Loss
+
+# python mcts
+import core.rl_utils.mcts.ptree as tree
+from core.rl_utils import inverse_scalar_transform
+from core.rl_utils.image_transform_muzero import Transforms
 # cpp mcts
 from core.rl_utils.mcts.ctree import cytree
 from core.rl_utils.mcts.mcts_ctree import MCTSCtree
-# python mcts
-import core.rl_utils.mcts.ptree as tree
 from core.rl_utils.mcts.mcts_ptree import EfficientZeroMCTSPtree as MCTS_ptree
 from core.rl_utils.mcts.utils import select_action
-from ding.torch_utils import to_tensor, to_device
-from core.model.efficientzero.efficientzero_base_model import inverse_scalar_transform
 # TODO(pu): choose game config
 from zoo.atari.config.atari_expert_data_config import game_config
+
 # from zoo.board_games.tictactoe.config.tictactoe_config import game_config
 # from zoo.board_games.gomoku.config.gomoku_efficientzero_config import game_config
-
-# from core.policy.base_policy import Policy
-# from core.utils import POLICY_REGISTRY
-
-from ding.utils import POLICY_REGISTRY
-from ding.policy.base_policy import Policy
-from ding.model import model_wrap
 
 
 @POLICY_REGISTRY.register('efficientzero_expert_data')

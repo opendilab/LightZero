@@ -1,18 +1,17 @@
-from typing import Optional, Any, List
 from collections import namedtuple
-from easydict import EasyDict
+from typing import Optional, Any, List
+
 import numpy as np
 import torch
-
 from ding.envs import BaseEnvManager
-from ding.torch_utils import to_tensor, to_ndarray
-from ding.worker.collector.base_serial_collector import ISerialCollector, CachePool, TrajBuffer, INF, to_tensor_transitions
-from core.rl_utils.mcts.game import GameHistory
-from core.rl_utils.mcts.utils import select_action, prepare_observation_lst
-from torch.nn import L1Loss
-from ding.envs import BaseEnvTimestep
-
+from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
+from ding.worker.collector.base_serial_collector import ISerialCollector, CachePool, TrajBuffer, INF
+from easydict import EasyDict
+from torch.nn import L1Loss
+
+from core.rl_utils.mcts.game import GameHistory
+from core.rl_utils.mcts.utils import prepare_observation_lst
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')

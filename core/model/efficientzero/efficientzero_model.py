@@ -3,15 +3,16 @@ The following code is adapted from https://github.com/YeWR/EfficientZero/blob/ma
 """
 
 import math
-import torch
 
 import numpy as np
+import torch
 import torch.nn as nn
-
 from ding.utils import MODEL_REGISTRY
 
+from core.model.efficientzero.efficientzero_base_model import BaseNet
 from core.torch_utils.network.nn_module import MLP
-from core.model.efficientzero.efficientzero_base_model import BaseNet, renormalize
+from core.rl_utils import renormalize
+from ding.torch_utils import ResBlock
 
 
 def conv3x3(in_channels, out_channels, stride=1):
@@ -130,11 +131,12 @@ class RepresentationNetwork(nn.Module):
                 observation_shape[0],
                 num_channels,
             )
-        self.conv = conv3x3(
-            observation_shape[0],
-            num_channels,
-        )
-        self.bn = nn.BatchNorm2d(num_channels, momentum=momentum)
+        else:
+            self.conv = conv3x3(
+                observation_shape[0],
+                num_channels,
+            )
+            self.bn = nn.BatchNorm2d(num_channels, momentum=momentum)
         self.resblocks = nn.ModuleList(
             [ResidualBlock(num_channels, num_channels, momentum=momentum) for _ in range(num_blocks)]
         )

@@ -2,25 +2,27 @@
 The following code is adapted from https://github.com/YeWR/EfficientZero/core/replay_buffer.py
 """
 
-from dataclasses import dataclass
-import time
-import torch
-import numpy as np
-from ding.utils import BUFFER_REGISTRY
 import itertools
-import random
 import logging
+import random
+import time
+from dataclasses import dataclass
 from typing import Any, List, Optional, Union
+
+import numpy as np
+import torch
 from ding.data.buffer import Buffer
-from core.rl_utils.mcts.utils import prepare_observation_lst, concat_output, concat_output_value
+from ding.torch_utils.data_helper import to_ndarray
+from ding.utils import BUFFER_REGISTRY
+
+# python mcts
+import core.rl_utils.mcts.ptree as tree
+from core.rl_utils import inverse_scalar_transform
 # cpp mcts
 from core.rl_utils.mcts.ctree import cytree
 from core.rl_utils.mcts.mcts_ctree import MCTSCtree
-# python mcts
-import core.rl_utils.mcts.ptree as tree
 from core.rl_utils.mcts.mcts_ptree import EfficientZeroMCTSPtree as MCTS_ptree
-from core.model.efficientzero.efficientzero_base_model import inverse_scalar_transform
-from ding.torch_utils.data_helper import to_ndarray
+from core.rl_utils.mcts.utils import prepare_observation_lst, concat_output, concat_output_value
 
 
 @dataclass

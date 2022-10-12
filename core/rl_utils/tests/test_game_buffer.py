@@ -1,11 +1,13 @@
-import pytest
 import time
 from typing import Callable
-from core.rl_utils.mcts.game_buffer import GameBuffer
-from ding.data.buffer.buffer import BufferedData
+
 import numpy as np
-from easydict import EasyDict
+import pytest
+from ding.data.buffer.buffer import BufferedData
 from ding.torch_utils import to_list
+from easydict import EasyDict
+
+from core.rl_utils.mcts.game_buffer import GameBuffer
 
 
 class RateLimit:

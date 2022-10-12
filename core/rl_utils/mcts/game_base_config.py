@@ -1,8 +1,9 @@
 """
 The following code is adapted from https://github.com/YeWR/EfficientZero
 """
-import torch
 import numpy as np
+import torch
+
 from core.model.efficientzero.efficientzero_model import EfficientZeroNet
 
 

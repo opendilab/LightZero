@@ -1,16 +1,16 @@
 """
 The following code is adapted from https://github.com/YeWR/EfficientZero/blob/main/core/test.py
 """
+import core.rl_utils.mcts.ctree.cytree as cytree
+import numpy as np
 import pytest
 import torch
-import numpy as np
 from torch.cuda.amp import autocast as autocast
 
-import core.rl_utils.mcts.ctree.cytree as cytree
 from core.rl_utils.mcts.game import GameHistory
-from core.rl_utils.mcts.utils import select_action, prepare_observation_lst
 # from core.rl_utils.mcts.mcts_ptree import EfficientZeroMCTSPtree as MCTS
 from core.rl_utils.mcts.mcts_ctree import MCTSCtree as MCTS
+from core.rl_utils.mcts.utils import select_action, prepare_observation_lst
 
 args = ['PongNoFrameskip-v4', 'tictactoe']
 

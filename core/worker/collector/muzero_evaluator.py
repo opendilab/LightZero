@@ -1,16 +1,17 @@
-from typing import Any, Optional, Callable, Tuple
-from collections import namedtuple, deque
-from easydict import EasyDict
 import copy
+from collections import namedtuple
+from typing import Optional, Callable, Tuple
+
 import numpy as np
 import torch
-
-from ding.utils import build_logger, EasyTimer, lists_to_dicts
 from ding.envs import BaseEnvManager
-from ding.torch_utils import to_tensor, to_ndarray, tensor_to_list
+from ding.torch_utils import to_ndarray
+from ding.utils import build_logger, EasyTimer
+from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
+from easydict import EasyDict
+
 from core.rl_utils.mcts.game import GameHistory
 from core.rl_utils.mcts.utils import prepare_observation_lst
-from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
 
 
 class MuZeroEvaluator(ISerialEvaluator):
@@ -279,14 +280,14 @@ class MuZeroEvaluator(ISerialEvaluator):
                 actions = {}
                 distributions_dict = {}
                 value_dict = {}
-                pred_value_dict={}
-                visit_entropy_dict={}
+                pred_value_dict = {}
+                visit_entropy_dict = {}
                 for index, env_id in enumerate(ready_env_id):
                     actions[env_id] = actions_no_env_id.pop(index)
                     distributions_dict[env_id] = distributions_dict_no_env_id.pop(index)
                     value_dict[env_id] = value_dict_no_env_id.pop(index)
                     pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
-                    visit_entropy_dict[env_id] =  visit_entropy_dict_no_env_id.pop(index)
+                    visit_entropy_dict[env_id] = visit_entropy_dict_no_env_id.pop(index)
 
                 # Interact with env.
                 timesteps = self._env.step(actions)

@@ -1,5 +1,6 @@
-import pytest
 from itertools import product
+
+import pytest
 import torch
 from ding.model.template.efficientzero.efficientzero_model import DynamicsNetwork
 from ding.model.template.efficientzero.efficientzero_model import RepresentationNetwork

@@ -70,17 +70,15 @@ gomoku_efficientzero_config = dict(
             # debug
             # update_per_collect=2,
             # batch_size=4,
-
             batch_size=512,
 
             # one_player_mode, board_size=6, episode_length=6**2/2=18
             # n_episode=8,  update_per_collect=18*8=144
-            update_per_collect=int(board_size**2/2*n_episode),
+            update_per_collect=int(board_size ** 2 / 2 * n_episode),
 
             # two_player_mode, board_size=6, episode_length=6**2=36
             # n_episode=8,  update_per_collect=36*8=268
             # update_per_collect=int(board_size ** 2 * n_episode),
-
             learning_rate=0.002,
             # Frequency of target network update.
             target_update_freq=400,
