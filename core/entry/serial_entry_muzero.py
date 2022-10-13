@@ -14,14 +14,8 @@ from ding.worker import BaseLearner
 from ding.worker import create_serial_collector
 from tensorboardX import SummaryWriter
 
-from core.rl_utils.mcts.game_buffer import GameBuffer
-from core.worker.collector.muzero_evaluator import MuZeroEvaluator as BaseSerialEvaluator
-
-# from core.envs.env import get_vec_env_setting
-
-# from core.config import read_config, compile_config
-# from core.policy import create_policy
-# from core.worker import create_serial_collector
+from core.rl_utils import GameBuffer
+from core.worker import MuZeroEvaluator as BaseSerialEvaluator
 
 
 # @profile

@@ -8,7 +8,7 @@ import torch
 from easydict import EasyDict
 
 import core.rl_utils.mcts.ptree as tree
-from core.rl_utils import inverse_scalar_transform
+from ..scaling_transform import inverse_scalar_transform
 
 
 class EfficientZeroMCTSPtree(object):

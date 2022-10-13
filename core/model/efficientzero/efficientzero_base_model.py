@@ -19,6 +19,18 @@ class NetworkOutput:
     reward_hidden_state: object
 
 
+def renormalize(input, first_dim=1):
+    # normalize the input (states)
+    if first_dim < 0:
+        first_dim = len(input.shape) + first_dim
+    flat_input = input.view(*input.shape[:first_dim], -1)
+    max_val = torch.max(flat_input, first_dim, keepdim=True).values
+    min_val = torch.min(flat_input, first_dim, keepdim=True).values
+    flat_input = (flat_input - min_val) / (max_val - min_val)
+
+    return flat_input.view(*input.shape)
+
+
 class BaseNet(nn.Module):
 
     def __init__(self, lstm_hidden_size):

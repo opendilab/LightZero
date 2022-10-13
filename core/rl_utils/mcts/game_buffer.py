@@ -17,12 +17,12 @@ from ding.utils import BUFFER_REGISTRY
 
 # python mcts
 import core.rl_utils.mcts.ptree as tree
-from core.rl_utils import inverse_scalar_transform
 # cpp mcts
-from core.rl_utils.mcts.ctree import cytree
-from core.rl_utils.mcts.mcts_ctree import MCTSCtree
-from core.rl_utils.mcts.mcts_ptree import EfficientZeroMCTSPtree as MCTS_ptree
-from core.rl_utils.mcts.utils import prepare_observation_lst, concat_output, concat_output_value
+from .ctree import cytree as tree
+from .mcts_ctree import MCTSCtree
+from .mcts_ptree import EfficientZeroMCTSPtree as MCTS_ptree
+from .utils import prepare_observation_lst, concat_output, concat_output_value
+from ..scaling_transform import inverse_scalar_transform
 
 
 @dataclass

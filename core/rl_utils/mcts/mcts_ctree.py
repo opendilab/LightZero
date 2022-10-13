@@ -3,12 +3,12 @@ The following code is adapted from https://github.com/YeWR/EfficientZero/core/mc
 """
 import copy
 
-import core.rl_utils.mcts.ctree.cytree as tree
 import numpy as np
 import torch
 from easydict import EasyDict
 
-from core.rl_utils import inverse_scalar_transform
+from .ctree import cytree as tree
+from ..scaling_transform import inverse_scalar_transform
 
 
 class MCTSCtree(object):

@@ -2,18 +2,6 @@ import numpy as np
 import torch
 
 
-def renormalize(tensor, first_dim=1):
-    # normalize the tensor (states)
-    if first_dim < 0:
-        first_dim = len(tensor.shape) + first_dim
-    flat_tensor = tensor.view(*tensor.shape[:first_dim], -1)
-    max_val = torch.max(flat_tensor, first_dim, keepdim=True).values
-    min_val = torch.min(flat_tensor, first_dim, keepdim=True).values
-    flat_tensor = (flat_tensor - min_val) / (max_val - min_val)
-
-    return flat_tensor.view(*tensor.shape)
-
-
 class DiscreteSupport(object):
 
     def __init__(self, min: int, max: int, delta=1.):

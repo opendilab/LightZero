@@ -26,6 +26,7 @@ from core.rl_utils.mcts.utils import select_action
 # TODO(pu): choose game config
 from zoo.atari.config.atari_expert_data_config import game_config
 
+
 # from zoo.board_games.tictactoe.config.tictactoe_config import game_config
 # from zoo.board_games.gomoku.config.gomoku_efficientzero_config import game_config
 

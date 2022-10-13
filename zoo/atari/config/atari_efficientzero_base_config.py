@@ -1,13 +1,13 @@
 from easydict import EasyDict
-from core.rl_utils.mcts.game_base_config import GameBaseConfig, DiscreteSupport
+from core.rl_utils import GameBaseConfig, DiscreteSupport
 
 game_config = EasyDict(
     dict(
         env_name='PongNoFrameskip-v4',
         env_type='atari_games',
-        device='cuda',
+        # device='cuda',
         # for debug
-        # device='cpu',
+        device='cpu',
         # if mcts_ctree=True, using cpp mcts code
         mcts_ctree=True,
         # mcts_ctree=False,

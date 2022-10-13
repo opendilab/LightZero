@@ -4,7 +4,7 @@ The following code is adapted from https://github.com/YeWR/EfficientZero
 import numpy as np
 import torch
 
-from core.model.efficientzero.efficientzero_model import EfficientZeroNet
+from core.model import EfficientZeroNet
 
 
 class DiscreteSupport(object):

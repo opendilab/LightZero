@@ -15,15 +15,16 @@ from torch.nn import L1Loss
 
 # python mcts
 import core.rl_utils.mcts.ptree as tree
-from core.rl_utils import scalar_transform, inverse_scalar_transform
-from core.rl_utils.image_transform_muzero import Transforms
+from core.rl_utils import EfficientZeroMCTSPtree as MCTSPtree
+from core.rl_utils import MCTSCtree
 # cpp mcts
-from core.rl_utils.mcts.ctree import cytree
-from core.rl_utils.mcts.mcts_ctree import MCTSCtree
-from core.rl_utils.mcts.mcts_ptree import EfficientZeroMCTSPtree as MCTSPtree
-from core.rl_utils.mcts.utils import select_action
+from core.rl_utils import cytree
+from core.rl_utils import scalar_transform, inverse_scalar_transform
+from core.rl_utils import select_action
+from core.rl_utils import Transforms
 # TODO(pu): choose game config
 from zoo.atari.config.atari_efficientzero_base_config import game_config
+
 
 # from zoo.board_games.gomoku.config.gomoku_efficientzero_base_config import game_config
 # from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config

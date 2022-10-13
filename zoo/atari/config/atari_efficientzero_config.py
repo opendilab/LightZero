@@ -1,7 +1,7 @@
 from easydict import EasyDict
 from atari_efficientzero_base_config import game_config
 
-from core.model.efficientzero.efficientzero_model import RepresentationNetwork
+from core.model import RepresentationNetwork
 
 representation_model = RepresentationNetwork(
     observation_shape=(12, 96, 96),
@@ -16,7 +16,7 @@ n_episode = 8
 evaluator_env_num = 3
 
 atari_efficientzero_config = dict(
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc8000_sub883',
+    exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_sub883_upc8000',
     # exp_name='data_ez_ptree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000',
     env=dict(
         collector_env_num=collector_env_num,

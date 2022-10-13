@@ -13,8 +13,8 @@ from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner, create_serial_collector
 from tensorboardX import SummaryWriter
 
-from core.rl_utils.mcts.game_buffer import GameBuffer
-from core.worker.collector.muzero_evaluator import MuZeroEvaluator as BaseSerialEvaluator
+from core.rl_utils import GameBuffer
+from core.worker import MuZeroEvaluator as BaseSerialEvaluator
 
 
 def serial_pipeline_muzero_expert_data(

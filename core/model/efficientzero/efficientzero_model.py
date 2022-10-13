@@ -7,12 +7,10 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
+from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY
 
-from core.model.efficientzero.efficientzero_base_model import BaseNet
-from core.torch_utils.network.nn_module import MLP
-from core.rl_utils import renormalize
-from core.torch_utils.network.res_block import ResBlock
+from .efficientzero_base_model import BaseNet, renormalize
 
 
 def conv3x3(in_channels, out_channels, stride=1):
