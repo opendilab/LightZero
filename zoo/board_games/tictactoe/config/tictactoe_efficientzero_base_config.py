@@ -1,15 +1,20 @@
+import torch
 from easydict import EasyDict
-from core.rl_utils.mcts.game_base_config import GameBaseConfig, DiscreteSupport
+
+from core.rl_utils import GameBaseConfig, DiscreteSupport
+
+if torch.cuda.is_available():
+    device = 'cuda'
+else:
+    device = 'cpu'
 
 game_config = EasyDict(
     dict(
         env_name='tictactoe',
         env_type='board_games',
-        device='cuda',
-        # debug
-        # device='cpu',
+        device=device,
         mcts_ctree=False,
-        # TODO: mcts_ctree now only support env_num=1, because in cpp MCTS root node,
+        # TODO: for board_games, mcts_ctree now only support env_num=1, because in cpp MCTS root node,
         #  we must specify the one same action mask,
         #  when env_num>1, the action mask for different env may be different.
         battle_mode='two_player_mode',

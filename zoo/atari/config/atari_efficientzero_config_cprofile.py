@@ -1,4 +1,5 @@
 from easydict import EasyDict
+
 from zoo.atari.config.atari_efficientzero_base_config import game_config
 
 # debug

@@ -1,13 +1,18 @@
+import torch
 from easydict import EasyDict
+
 from core.rl_utils import GameBaseConfig, DiscreteSupport
+
+if torch.cuda.is_available():
+    device = 'cuda'
+else:
+    device = 'cpu'
 
 game_config = EasyDict(
     dict(
         env_name='PongNoFrameskip-v4',
         env_type='atari_games',
-        # device='cuda',
-        # for debug
-        device='cpu',
+        device=device,
         # if mcts_ctree=True, using cpp mcts code
         mcts_ctree=True,
         # mcts_ctree=False,

@@ -2,7 +2,7 @@
 # https://github.com/LouisCaixuran/gomoku/blob/c1b6d508522d9e8c78be827f326bbee54c4dfd8b/gomoku/expert.py
 
 from collections import defaultdict
-import logging
+
 import numpy as np
 
 

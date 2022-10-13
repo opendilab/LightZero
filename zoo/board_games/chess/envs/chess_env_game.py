@@ -2,15 +2,17 @@
 Adapt Chess to BaseGameEnv interface from pettingzoo: https://github.com/Farama-Foundation/PettingZoo
 """
 
-import chess
-from gym import spaces
-from pettingzoo.utils.agent_selector import agent_selector
-from pettingzoo.classic.chess import chess_utils
-import numpy as np
 import sys
-from zoo.board_games.base_game_env import BaseGameEnv
+
+import chess
+import numpy as np
 from ding.envs import BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
+from gym import spaces
+from pettingzoo.classic.chess import chess_utils
+from pettingzoo.utils.agent_selector import agent_selector
+
+from zoo.board_games.base_game_env import BaseGameEnv
 
 
 @ENV_REGISTRY.register('Chess')

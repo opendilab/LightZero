@@ -2,16 +2,19 @@
 Adapt Atari to BaseGameEnv interface
 """
 
-import sys
-from typing import Any, List, Union, Sequence
 import copy
-import numpy as np
+import sys
+from typing import List
+
 import gym
+import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
+from ding.utils import ENV_REGISTRY
+
 from zoo.atari.envs.atari_wrappers import wrap_muzero, wrap_muzero_dqn_expert_data
 
-from ding.utils import ENV_REGISTRY
+
 # from core.utils import ENV_REGISTRY
 
 

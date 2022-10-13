@@ -1,4 +1,5 @@
 from easydict import EasyDict
+
 from core.rl_utils.mcts.game_base_config import GameBaseConfig, DiscreteSupport
 
 game_config = EasyDict(

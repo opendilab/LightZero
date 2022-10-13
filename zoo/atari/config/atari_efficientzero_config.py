@@ -1,6 +1,6 @@
 from easydict import EasyDict
-from atari_efficientzero_base_config import game_config
 
+from atari_efficientzero_base_config import game_config
 from core.model import RepresentationNetwork
 
 representation_model = RepresentationNetwork(

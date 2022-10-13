@@ -1,15 +1,14 @@
 # Borrow a lot from openai baselines:
 # https://github.com/openai/baselines/blob/master/baselines/common/atari_wrappers.py
 
+import cv2
 import gym
-from collections import deque
+import numpy as np
 from ding.envs import NoopResetWrapper, MaxAndSkipWrapper, EpisodicLifeWrapper, FireResetWrapper, WarpFrameWrapper, \
     ScaledFloatFrameWrapper, \
     ClipRewardWrapper, FrameStackWrapper
-import numpy as np
 from ding.utils.compression_helper import jpeg_data_compressor
 from gym.wrappers import RecordVideo
-import cv2
 
 
 def wrap_deepmind(env_id, episode_life=True, clip_rewards=True, frame_stack=4, scale=True, warp_frame=True):

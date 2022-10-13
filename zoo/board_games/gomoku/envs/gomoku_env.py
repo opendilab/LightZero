@@ -1,14 +1,15 @@
-from ditk import logging
+import copy
+import sys
+from typing import List
+
 import gym
 import numpy as np
-import sys
-from typing import Any, List, Union, Sequence
-import copy
+from ding.envs import BaseEnvTimestep
+from ding.utils import ENV_REGISTRY
+from ditk import logging
 from easydict import EasyDict
 
 from zoo.board_games.base_game_env import BaseGameEnv
-from ding.envs import BaseEnvTimestep
-from ding.utils import ENV_REGISTRY
 from zoo.board_games.gomoku.envs.gomoku_expert import GomokuExpert
 
 

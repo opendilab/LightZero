@@ -1,15 +1,16 @@
 """
 Adapt TicTacToe to BaseGameEnv interface from https://github.com/werner-duvaud/muzero-general
 """
-from ditk import logging
-import sys
-from typing import Any, List, Union, Sequence
-import gym
 import copy
-import numpy as np
+import sys
+from typing import List
 
+import gym
+import numpy as np
 from ding.envs.env.base_env import BaseEnvTimestep
 from ding.utils.registry_factory import ENV_REGISTRY
+from ditk import logging
+
 from zoo.board_games.base_game_env import BaseGameEnv
 
 

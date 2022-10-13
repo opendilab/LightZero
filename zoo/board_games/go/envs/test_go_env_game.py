@@ -1,4 +1,5 @@
 import pytest
+
 from zoo.board_games.go.envs.go_env_game import GoEnv
 
 

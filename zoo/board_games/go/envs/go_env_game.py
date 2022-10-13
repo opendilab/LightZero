@@ -2,16 +2,18 @@
 Adapt Go to BaseGameEnv interface from pettingzoo: https://github.com/Farama-Foundation/PettingZoo
 """
 
-import sys
-from zoo.board_games.base_game_env import BaseGameEnv
-from ding.envs import BaseEnvTimestep
-from ding.utils import ENV_REGISTRY
 import os
+import sys
+
 import numpy as np
 import pygame
+from ding.envs import BaseEnvTimestep
+from ding.utils import ENV_REGISTRY
 from gym import spaces
-from pettingzoo.utils.agent_selector import agent_selector
 from pettingzoo.classic.go import coords, go
+from pettingzoo.utils.agent_selector import agent_selector
+
+from zoo.board_games.base_game_env import BaseGameEnv
 
 
 def get_image(path):

@@ -1,5 +1,12 @@
+import torch
 from easydict import EasyDict
-from core.rl_utils.mcts.game_base_config import GameBaseConfig, DiscreteSupport
+
+from core.rl_utils import GameBaseConfig, DiscreteSupport
+
+if torch.cuda.is_available():
+    device = 'cuda'
+else:
+    device = 'cpu'
 
 board_size = 6  # default_size is 15
 
@@ -7,9 +14,8 @@ game_config = EasyDict(
     dict(
         env_name='gomoku',
         model_type='board_games',
-        device='cuda',
-        # device='cpu',
-        # TODO: mcts_ctree now only support env_num=1, because in cpp MCTS root node,
+        device=device,
+        # TODO: for board_games, mcts_ctree now only support env_num=1, because in cpp MCTS root node,
         #  we must specify the one same action mask,
         #  when env_num>1, the action mask for different env may be different.
         mcts_ctree=False,

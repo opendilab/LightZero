@@ -1,6 +1,7 @@
 import pytest
-from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 from easydict import EasyDict
+
+from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 
 
 @pytest.mark.envtest

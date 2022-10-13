@@ -1,6 +1,7 @@
 import pytest
-from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 from easydict import EasyDict
+
+from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 
 
 @pytest.mark.envtest

@@ -1,4 +1,5 @@
 from easydict import EasyDict
+
 from gomoku_efficientzero_base_config import game_config
 
 # debug
