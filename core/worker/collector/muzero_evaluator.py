@@ -364,6 +364,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                                 [init_obses[i]['observation'] for _ in range(self.game_config.frame_stack_num)]
                             )
 
+                        # TODO(pu): subprocess
+                        ready_env_id.remove(env_id)
+
                     envstep_count += 1
         duration = self._timer.value
         episode_reward = eval_monitor.get_episode_reward()

@@ -83,8 +83,10 @@ atari_efficientzero_config = dict(
             # for debug
             # update_per_collect=2,
             # batch_size=4,
+
             update_per_collect=8000,
             batch_size=256,
+
             learning_rate=0.2,
             # Frequency of target network update.
             target_update_freq=400,
