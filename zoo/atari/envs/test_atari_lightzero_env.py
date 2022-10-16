@@ -1,5 +1,5 @@
 import pytest
-from dizoo.atari.envs.atari_muzero_env import AtariMuZeroEnv
+from .atari_lightzero_env import AtariLightZeroEnv
 from easydict import EasyDict
 
 cfg = EasyDict(
@@ -13,14 +13,15 @@ cfg = EasyDict(
     cvt_string=True,
     max_episode_steps=1.08e5,
     game_wrapper=True,
+    dqn_expert_data=False,
 )
 
 
 @pytest.mark.envtest
-class TestAtariMuZeroEnv:
+class TestAtariLightZeroEnv:
 
     def test_naive(self):
-        env = AtariMuZeroEnv(cfg)
+        env = AtariLightZeroEnv(cfg)
         env.reset()
         # env.render()
         while True:

@@ -1,6 +1,6 @@
-"""
-the option of cpp mcts or python mcts occurred in ding/policy/mcts ding/data/buffer/game_buffer
-"""
+import sys
+sys.path.append('/Users/puyuan/code/LightZero')
+
 from easydict import EasyDict
 
 from tictactoe_efficientzero_base_config import game_config
@@ -11,7 +11,6 @@ from tictactoe_efficientzero_base_config import game_config
 
 collector_env_num = 8
 n_episode = 8
-
 evaluator_env_num = 8
 
 tictactoe_efficientzero_config = dict(
@@ -21,8 +20,9 @@ tictactoe_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         stop_value=1,
-        # 'one_player_mode' when eval, 'two_player_mode' when collect
-        # automatically assign in tictactoe env
+        # if battle_mode='two_player_mode',
+        # automatically assign 'one_player_mode' when eval, 'two_player_mode' when collect
+        # battle_mode='two_player_mode',
         battle_mode='two_player_mode',
         # prob_random_agent=0.1,
         prob_random_agent=0.,

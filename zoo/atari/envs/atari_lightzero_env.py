@@ -12,24 +12,36 @@ from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
 
-from zoo.atari.envs.atari_wrappers import wrap_muzero, wrap_muzero_dqn_expert_data
+from zoo.atari.envs.atari_wrappers import wrap_lightzero, wrap_lightzero_dqn_expert_data
+from easydict import EasyDict
 
 
 # from core.utils import ENV_REGISTRY
 
 
-@ENV_REGISTRY.register('atari-muzero')
-class AtariMuZeroEnv(BaseEnv):
+@ENV_REGISTRY.register('atari_lightzero')
+class AtariLightZeroEnv(BaseEnv):
 
+    config = dict(
+        dqn_expert_data=False,
+    )
+
+    @classmethod
+    def default_config(cls: type) -> EasyDict:
+        cfg = EasyDict(copy.deepcopy(cls.config))
+        cfg.cfg_type = cls.__name__ + 'Dict'
+        return cfg
+    
     def __init__(self, cfg=None):
         self.cfg = cfg
+        self.dqn_expert_data = cfg.dqn_expert_data
         self._init_flag = False
 
     def _make_env(self):
-        if self.cfg.dqn_expert_data:
-            return wrap_muzero_dqn_expert_data(self.cfg)
+        if self.dqn_expert_data:
+            return wrap_lightzero_dqn_expert_data(self.cfg)
         else:
-            return wrap_muzero(self.cfg)
+            return wrap_lightzero(self.cfg)
 
     def reset(self):
         if not self._init_flag:

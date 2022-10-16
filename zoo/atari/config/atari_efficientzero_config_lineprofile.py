@@ -1,41 +1,49 @@
 from easydict import EasyDict
 
-from zoo.atari.config.atari_efficientzero_base_config import game_config
+from atari_efficientzero_base_config import game_config
 
 # debug
 # collector_env_num = 1
 # evaluator_env_num = 1
 
-collector_env_num = 1
+collector_env_num = 8
+n_episode = 8
 evaluator_env_num = 3
+
 atari_efficientzero_config = dict(
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_upc200_lineprofile',
-    # exp_name='data_ez_ptree/pong_efficientzero_seed0_lr0.2_ns50_upc200_lineprofile',
+    exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc2000_sub883_lineprofile',
+    # exp_name='data_ez_ptree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc2000_sub883_lineprofile',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         stop_value=20,
         env_name='PongNoFrameskip-v4',
+        max_episode_steps=int(1.08e5),
+        collect_max_episode_steps=int(1.08e4),
+        eval_max_episode_steps=int(1.08e5),
         frame_skip=4,
         obs_shape=(12, 96, 96),
-        max_episode_steps=int(1.08e5),
         episode_life=True,
         gray_scale=False,
-        cvt_string=True,
-        # cvt_string=False, # for check data
+        # cvt_string=True,
+        # trade memory for speed
+        cvt_string=False,
         game_wrapper=True,
         dqn_expert_data=False,
+        manager=dict(shared_memory=False, ),
+
     ),
     policy=dict(
+        model_path=None,
         env_name='PongNoFrameskip-v4',
         # TODO(pu): how to pass into game_config, which is class, not a dict
         # game_config=game_config,
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            env_type='atari',
-            representation_model_type='conv_res',
+            projection_input_dim_type='atari',
+            representation_model_type='conv_res_blocks',
             observation_shape=(12, 96, 96),  # 3,96,96 stack=4
             action_space_size=6,
             downsample=True,
@@ -55,7 +63,7 @@ atari_efficientzero_config = dict(
             proj_out=1024,
             pred_hid=512,
             pred_out=1024,
-            init_zero=True,
+            last_linear_layer_init_zero=True,
             state_norm=False,
         ),
         # learn_mode config
@@ -63,7 +71,7 @@ atari_efficientzero_config = dict(
             # debug
             # update_per_collect=8,
             # batch_size=4,
-            update_per_collect=200,  # TODO(pu): 1000
+            update_per_collect=2000,
             batch_size=256,
             learning_rate=0.2,
             # Frequency of target network update.
@@ -98,19 +106,26 @@ main_config = atari_efficientzero_config
 
 atari_efficientzero_create_config = dict(
     env=dict(
-        type='atari-muzero',
-        import_names=['dizoo.atari.envs.atari_muzero_env'],
+        type='atari_lightzero',
+        import_names=['zoo.atari.envs.atari_lightzero_env'],
     ),
     # env_manager=dict(type='subprocess'),
     env_manager=dict(type='base'),
-    policy=dict(type='efficientzero'),
-    collector=dict(type='episode_muzero', get_train_sample=True)
+    policy=dict(
+        type='efficientzero',
+        import_names=['core.policy.efficientzero'],
+    ),
+    collector=dict(
+        type='episode_efficientzero',
+        get_train_sample=True,
+        import_names=['core.worker.collector.efficientzero_collector'],
+    )
 )
 atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
 create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
-    from ding.entry import serial_pipeline_muzero
+    from core.entry import serial_pipeline_efficientzero
 
     max_env_step = int(1000)
-    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=max_env_step, game_config=game_config)
+    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=max_env_step, game_config=game_config)

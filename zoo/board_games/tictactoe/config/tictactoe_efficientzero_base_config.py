@@ -69,7 +69,7 @@ game_config = EasyDict(
 
         # TODO(pu): why not use adam?
         # lr_manually=True,
-        lr_manually=False,
+        lr_manually=False,  # use fixed lr
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority

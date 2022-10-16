@@ -1,3 +1,4 @@
+import time
 from collections import namedtuple
 from typing import Optional, Any, List
 
@@ -326,18 +327,31 @@ class EfficientZeroCollector(ISerialCollector):
         env_nums = self._env_num
 
         # initializations
-        init_obses = self._env.ready_obs
-        action_mask = [to_ndarray(init_obses[i]['action_mask']) for i in range(env_nums)]
-        action_mask_dict = {i: to_ndarray(init_obses[i]['action_mask']) for i in range(env_nums)}
+        init_obs = self._env.ready_obs
 
-        if 'to_play' in init_obses[0]:
+        retry_waiting_time = 0.1
+        while len(init_obs.keys()) != self._env_num:
+            # Wait for all envs to finish resetting.
+            # self._logger.info('-----'*20)
+            # print('init_obs.keys():', init_obs.keys())
+            self._logger.info('Wait for all envs to finish resetting:')
+            self._logger.info('self._env_states {}'.format(self._env._env_states))
+            time.sleep(retry_waiting_time)
+            self._logger.info('sleep {} s'.format(retry_waiting_time))
+            self._logger.info('self._env_states {}'.format(self._env._env_states))
+            init_obs = self._env.ready_obs
+
+        action_mask = [to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)]
+        action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
+
+        if 'to_play' in init_obs[0]:
             two_player_game = True
         else:
             two_player_game = False
 
         if two_player_game:
-            to_play = [to_ndarray(init_obses[i]['to_play']) for i in range(env_nums)]
-            to_play_dict = {i: to_ndarray(init_obses[i]['to_play']) for i in range(env_nums)}
+            to_play = [to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)]
+            to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
 
         dones = np.array([False for _ in range(env_nums)])
         game_histories = [
@@ -349,17 +363,17 @@ class EfficientZeroCollector(ISerialCollector):
         ]
         for i in range(env_nums):
             game_histories[i].init(
-                [to_ndarray(init_obses[i]['observation']) for _ in range(self.game_config.frame_stack_num)]
+                [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.frame_stack_num)]
             )
 
         last_game_histories = [None for _ in range(env_nums)]
         last_game_priorities = [None for _ in range(env_nums)]
 
-        # stack observation windows in boundary: s398, s399, s400, current s1 -> for not init trajectory
+        # stacked observation windows in reset stage for init game_histories
         stack_obs_windows = [[] for _ in range(env_nums)]
         for i in range(env_nums):
             stack_obs_windows[i] = [
-                to_ndarray(init_obses[i]['observation']) for _ in range(self.game_config.frame_stack_num)
+                to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.frame_stack_num)
             ]
             game_histories[i].init(stack_obs_windows[i])
 
@@ -389,11 +403,11 @@ class EfficientZeroCollector(ISerialCollector):
             return ep
 
         max_visit_entropy = _get_max_entropy(self.game_config.action_space_size)
-        print('max_visit_entropy', max_visit_entropy)
+        # print('max_visit_entropy', max_visit_entropy)
 
         ready_env_id = set()
         remain_episode = n_episode
-        # new_available_env_id = set(init_obses.keys()).difference(ready_env_id)
+        # new_available_env_id = set(init_obs.keys()).difference(ready_env_id)
         # ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
         # remain_episode -= min(len(new_available_env_id), remain_episode)
 
@@ -578,18 +592,18 @@ class EfficientZeroCollector(ISerialCollector):
                     # reset the finished env and init game_histories
 
                     if n_episode > self._env_num:
-                        init_obses = self._env.ready_obs
+                        init_obs = self._env.ready_obs
 
-                        if len(init_obses.keys()) != self._env_num:
-                            while env_id not in init_obses.keys():
-                                init_obses = self._env.ready_obs
-                                print(f'wailt the {env_id} env to reset')
+                        if len(init_obs.keys()) != self._env_num:
+                            while env_id not in init_obs.keys():
+                                init_obs = self._env.ready_obs
+                                print(f'wait the {env_id} env to reset')
 
-                        init_obs = init_obses[env_id]['observation']
-                        #  init_obses [0]['observation']
+                        init_obs = init_obs[env_id]['observation']
+                        #  init_obs [0]['observation']
                         init_obs = to_ndarray(init_obs)
-                        action_mask_dict[env_id] = to_ndarray(init_obses[env_id]['action_mask'])
-                        to_play_dict[env_id] = to_ndarray(init_obses[env_id]['to_play'])
+                        action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
+                        to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
 
                         game_histories[env_id] = GameHistory(
                             self._env.action_space,
@@ -626,8 +640,8 @@ class EfficientZeroCollector(ISerialCollector):
             if collected_episode >= n_episode:
                 # logs
                 visit_entropies = np.array(self_play_visit_entropy).mean()
-                # visit_entropies /= max_visit_entropy
                 # for debug
+                # visit_entropies /= max_visit_entropy
                 # print('visit_entropies:', visit_entropies)
 
                 return_data = [self.trajectory_pool[i][0] for i in range(self.len_pool())], [

@@ -1,3 +1,4 @@
+import time
 import copy
 from collections import namedtuple
 from typing import Optional, Callable, Tuple
@@ -202,18 +203,31 @@ class EfficientZeroEvaluator(ISerialEvaluator):
         self._policy.reset()
 
         # initializations
-        init_obses = self._env.ready_obs
-        # init_obses = to_tensor(init_obses, dtype=torch.float32)
-        action_mask = [init_obses[i]['action_mask'] for i in range(env_nums)]
-        action_mask_dict = {i: to_ndarray(init_obses[i]['action_mask']) for i in range(env_nums)}
+        init_obs = self._env.ready_obs
 
-        if 'to_play' in init_obses[0]:
+        retry_waiting_time = 0.1
+        while len(init_obs.keys()) != self._env_num:
+            # Wait for all envs to finish resetting.
+            # self._logger.info('-----'*20)
+            # print('init_obs.keys():', init_obs.keys())
+            self._logger.info('Wait for all envs to finish resetting:')
+            self._logger.info('self._env_states {}'.format(self._env._env_states))
+            time.sleep(retry_waiting_time)
+            self._logger.info('sleep {} s'.format(retry_waiting_time))
+            self._logger.info('self._env_states {}'.format(self._env._env_states))
+            init_obs = self._env.ready_obs
+
+        # init_obs = to_tensor(init_obs, dtype=torch.float32)
+        action_mask = [init_obs[i]['action_mask'] for i in range(env_nums)]
+        action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
+
+        if 'to_play' in init_obs[0]:
             two_player_game = True
         else:
             two_player_game = False
         if two_player_game:
-            to_play = [init_obses[i]['to_play'] for i in range(env_nums)]
-            to_play_dict = {i: to_ndarray(init_obses[i]['to_play']) for i in range(env_nums)}
+            to_play = [init_obs[i]['to_play'] for i in range(env_nums)]
+            to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
 
         dones = np.array([False for _ in range(env_nums)])
 
@@ -226,7 +240,7 @@ class EfficientZeroEvaluator(ISerialEvaluator):
         ]
         for i in range(env_nums):
             game_histories[i].init(
-                [to_ndarray(init_obses[i]['observation']) for _ in range(self.game_config.frame_stack_num)]
+                [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.frame_stack_num)]
             )
 
         ep_ori_rewards = np.zeros(env_nums)
@@ -338,17 +352,17 @@ class EfficientZeroEvaluator(ISerialEvaluator):
                         )
                         if n_episode > self._env_num:
                             # reset the finished env
-                            init_obses = self._env.ready_obs
+                            init_obs = self._env.ready_obs
 
-                            if len(init_obses.keys()) != self._env_num:
-                                while env_id not in init_obses.keys():
-                                    init_obses = self._env.ready_obs
+                            if len(init_obs.keys()) != self._env_num:
+                                while env_id not in init_obs.keys():
+                                    init_obs = self._env.ready_obs
                                     print(f'wailt the {env_id} env to reset')
 
-                            init_obs = init_obses[env_id]['observation']
+                            init_obs = init_obs[env_id]['observation']
                             init_obs = to_ndarray(init_obs)
-                            action_mask_dict[env_id] = to_ndarray(init_obses[env_id]['action_mask'])
-                            to_play_dict[env_id] = to_ndarray(init_obses[env_id]['to_play'])
+                            action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
+                            to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
 
                             game_histories[i] = GameHistory(
                                 self._env.action_space,
@@ -361,7 +375,7 @@ class EfficientZeroEvaluator(ISerialEvaluator):
                             # last_game_priorities[env_id] = None
 
                             game_histories[i].init(
-                                [init_obses[i]['observation'] for _ in range(self.game_config.frame_stack_num)]
+                                [init_obs[i]['observation'] for _ in range(self.game_config.frame_stack_num)]
                             )
 
                         # TODO(pu): subprocess

@@ -2,36 +2,36 @@ from easydict import EasyDict
 
 from gomoku_efficientzero_base_config import game_config
 
+board_size = 6  # default_size is 15
+
 # debug
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
+# collector_env_num = 3
+# n_episode = 3
+# evaluator_env_num = 3
 
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 3
-board_size = 6  # default_size is 15
+evaluator_env_num = 5
 
 gomoku_efficientzero_config = dict(
-    # exp_name='data_ez_ptree/gomoku_2pm_efficientzero_seed0_sub883',
-    exp_name='data_ez_ptree/gomoku_1pm_efficientzero_seed0_sub883',
+    # exp_name='data_ez_ptree/gomoku_2pm_efficientzero_seed0_sub885',
+    exp_name='data_ez_ptree/gomoku_1pm_efficientzero_seed0_sub885',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         stop_value=1,
-        board_size=board_size,  # default_size is 15
-        # 'one_player_mode' when eval, 'two_player_mode' when collect
-        # automatically assign in gomoku env
-        battle_mode='one_player_mode',
-        # battle_mode='two_player_mode',
-        # prob_random_agent=0.1,
-        prob_random_agent=0.,
-        # battle_mode='one_player_mode',
-        manager=dict(shared_memory=False, ),
         max_episode_steps=int(1.08e5),
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
+        board_size=board_size,  # default_size is 15
+        # if battle_mode='two_player_mode',
+        # automatically assign 'one_player_mode' when eval, 'two_player_mode' when collect
+        # battle_mode='two_player_mode',
+        battle_mode='one_player_mode',
+        prob_random_agent=0.,
+        manager=dict(shared_memory=False, ),
+
     ),
     policy=dict(
         # pretrained model
@@ -59,6 +59,8 @@ gomoku_efficientzero_config = dict(
             value_support_size=601,
             downsample=False,
             lstm_hidden_size=512,
+            # for debug
+            # lstm_hidden_size=64,
             bn_mt=0.1,
             proj_hid=1024,
             proj_out=1024,
@@ -72,7 +74,8 @@ gomoku_efficientzero_config = dict(
             # debug
             # update_per_collect=2,
             # batch_size=4,
-            batch_size=512,
+
+            batch_size=256,
 
             # one_player_mode, board_size=6, episode_length=6**2/2=18
             # n_episode=8,  update_per_collect=18*8=144
@@ -115,9 +118,9 @@ gomoku_efficientzero_create_config = dict(
         import_names=['core.policy.efficientzero'],
     ),
     collector=dict(
-        type='episode_muzero',
+        type='episode_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.muzero_collector'],
+        import_names=['core.worker.collector.efficientzero_collector'],
     )
 )
 gomoku_efficientzero_create_config = EasyDict(gomoku_efficientzero_create_config)

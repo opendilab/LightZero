@@ -13,7 +13,7 @@ board_size = 6  # default_size is 15
 game_config = EasyDict(
     dict(
         env_name='gomoku',
-        model_type='board_games',
+        env_type='board_games',
         device=device,
         # TODO: for board_games, mcts_ctree now only support env_num=1, because in cpp MCTS root node,
         #  we must specify the one same action mask,
@@ -42,26 +42,26 @@ game_config = EasyDict(
         augmentation=['shift', 'intensity'],
 
         # debug
-        # collector_env_num=1,
-        # evaluator_env_num=1,
-        # max_episode_steps=int(1.08e5),
-        # test_max_episode_steps=int(1.08e5),
+        # collector_env_num=3,
+        # evaluator_env_num=3,
+        # total_transitions=int(1e5),
         # num_simulations=2,
         # batch_size=4,
-        # total_transitions=int(1e5),
-        # td_steps=5,
         # lstm_hidden_size=64,
+        # # to make sure the value target is the final outcome
+        # td_steps=5,
+        # # td_steps=int(board_size * board_size),
         # num_unroll_steps=5,
         # lstm_horizon_len=5,
+
         collector_env_num=8,
-        evaluator_env_num=3,
-        max_episode_steps=int(1.08e5),
-        test_max_episode_steps=int(1.08e5),
-        num_simulations=50,
-        batch_size=512,
+        evaluator_env_num=5,
         total_transitions=int(1e5),
+        num_simulations=50,
+        batch_size=256,
         lstm_hidden_size=512,
-        td_steps=int(board_size * board_size),  # to make sure the value target is the final outcome
+        # to make sure the value target is the final outcome
+        td_steps=int(board_size * board_size),
         num_unroll_steps=5,
         lstm_horizon_len=5,
 
@@ -126,12 +126,12 @@ game_config = EasyDict(
         frame_stack_num=4,
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
-        # reward_loss_coeff=1,  # value_prefix_loss
-        reward_loss_coeff=0,  # value_prefix_loss
+        reward_loss_coeff=1,  # value_prefix_loss
+        # reward_loss_coeff=0,  # value_prefix_loss
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-        # consistency_coeff=2,
-        consistency_coeff=0,
+        consistency_coeff=2,
+        # consistency_coeff=0,
         bn_mt=0.1,
         # siamese
         proj_hid=1024,

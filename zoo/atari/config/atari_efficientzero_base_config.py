@@ -49,7 +49,7 @@ game_config = EasyDict(
         # num_unroll_steps=5,
         # lstm_horizon_len=5,
 
-        collector_env_num=8,
+        collector_env_num=4,
         evaluator_env_num=3,
         # TODO(pu): how to set proper num_simulations?
         num_simulations=50,

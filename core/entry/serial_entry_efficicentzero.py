@@ -130,7 +130,7 @@ def serial_pipeline_efficientzero(
         # break
 
         # TODO(pu): test muzero_evaluator
-        # for i in range(10):
+        # for i in range(2):
         #     stop, reward = evaluator.eval(
         #             learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
         #         )

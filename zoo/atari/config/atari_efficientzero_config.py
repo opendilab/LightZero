@@ -11,13 +11,14 @@ representation_model = RepresentationNetwork(
     momentum=0.1,
 )
 
-collector_env_num = 8
-n_episode = 8
+collector_env_num = 4
+n_episode = 4
 evaluator_env_num = 3
 
 atari_efficientzero_config = dict(
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_sub883_upc2000',
-    # exp_name='data_ez_ptree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000',
+    exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub443',
+    # exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
+    # exp_name='data_ez_ptree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -113,8 +114,8 @@ main_config = atari_efficientzero_config
 
 atari_efficientzero_create_config = dict(
     env=dict(
-        type='atari-muzero',
-        import_names=['zoo.atari.envs.atari_muzero_env'],
+        type='atari_lightzero',
+        import_names=['zoo.atari.envs.atari_lightzero_env'],
     ),
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
@@ -123,9 +124,9 @@ atari_efficientzero_create_config = dict(
         import_names=['core.policy.efficientzero'],
     ),
     collector=dict(
-        type='episode_muzero',
+        type='episode_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.muzero_collector'],
+        import_names=['core.worker.collector.efficientzero_collector'],
     )
 )
 atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)

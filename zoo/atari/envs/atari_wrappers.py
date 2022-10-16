@@ -78,7 +78,7 @@ The following code is adapted from https://github.com/YeWR/EfficientZero
 """
 
 
-def wrap_muzero(config, warp_frame=True, save_video=False, save_path=None, video_callable=None, uid=None):
+def wrap_lightzero(config, warp_frame=True, save_video=False, save_path=None, video_callable=None, uid=None):
     """
     Overview:
         Configure environment for MuZero-style Atari. The observation is
@@ -111,7 +111,7 @@ def wrap_muzero(config, warp_frame=True, save_video=False, save_path=None, video
     return env
 
 
-def wrap_muzero_dqn_expert_data(
+def wrap_lightzero_dqn_expert_data(
     config, warp_frame=True, save_video=False, save_path=None, video_callable=None, uid=None
 ):
     """
