@@ -16,7 +16,7 @@ n_episode = 8
 evaluator_env_num = 3
 
 atari_efficientzero_config = dict(
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_sub883_upc8000',
+    exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_sub883_upc2000',
     # exp_name='data_ez_ptree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000',
     env=dict(
         collector_env_num=collector_env_num,
@@ -84,7 +84,7 @@ atari_efficientzero_config = dict(
             # update_per_collect=2,
             # batch_size=4,
 
-            update_per_collect=8000,
+            update_per_collect=2000,
             batch_size=256,
 
             learning_rate=0.2,
@@ -98,7 +98,7 @@ atari_efficientzero_config = dict(
             n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(1e4), )),
+        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
         # for debug
         # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
@@ -132,5 +132,5 @@ atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
 create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_muzero
-    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(1e6), game_config=game_config)
+    from core.entry import serial_pipeline_efficientzero
+    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6), game_config=game_config)

@@ -14,20 +14,18 @@ from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
 
 # python mcts
-import core.rl_utils.mcts.ptree as tree
+import core.rl_utils.mcts.ptree as ptree
 from core.rl_utils import EfficientZeroMCTSPtree as MCTSPtree
 from core.rl_utils import MCTSCtree
 # cpp mcts
-from core.rl_utils import cytree
+from core.rl_utils import cytree as ctree
 from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
 from core.rl_utils import Transforms
 # TODO(pu): choose game config
-from zoo.atari.config.atari_efficientzero_base_config import game_config
-
-
+# from zoo.atari.config.atari_efficientzero_base_config import game_config
 # from zoo.board_games.gomoku.config.gomoku_efficientzero_base_config import game_config
-# from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config
+from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config
 
 
 @POLICY_REGISTRY.register('efficientzero')
@@ -523,7 +521,7 @@ class EfficientZeroPolicy(Policy):
             # cpp mcts
             if self.game_config.mcts_ctree:
                 action_num = int(action_mask[0].sum())
-                roots = cytree.Roots(active_collect_env_num, action_num, self.game_config.num_simulations)
+                roots = ctree.Roots(active_collect_env_num, action_num, self.game_config.num_simulations)
                 noises = [
                     np.random.dirichlet([self.game_config.root_dirichlet_alpha] * action_num
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
@@ -536,7 +534,7 @@ class EfficientZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = tree.Roots(active_collect_env_num, legal_actions, self.game_config.num_simulations)
+                roots = ptree.Roots(active_collect_env_num, legal_actions, self.game_config.num_simulations)
                 # the only difference between collect and eval is the dirichlet noise
                 noises = [
                     np.random.dirichlet([self.game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -634,7 +632,7 @@ class EfficientZeroPolicy(Policy):
                 # cpp mcts
                 # TODO(pu): for board games, when action_num is a list, adapt the Roots method
                 action_num = int(action_mask[0].sum())
-                roots = cytree.Roots(active_eval_env_num, action_num, self.game_config.num_simulations)
+                roots = ctree.Roots(active_eval_env_num, action_num, self.game_config.num_simulations)
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool)
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots)
@@ -643,7 +641,7 @@ class EfficientZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = tree.Roots(active_eval_env_num, legal_actions, self.game_config.num_simulations)
+                roots = ptree.Roots(active_eval_env_num, legal_actions, self.game_config.num_simulations)
 
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)

@@ -52,6 +52,7 @@ game_config = EasyDict(
         # td_steps=2,
         # num_unroll_steps=3,
         # lstm_horizon_len=3,
+
         collector_env_num=8,
         evaluator_env_num=8,
         num_simulations=25,

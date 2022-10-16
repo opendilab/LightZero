@@ -125,14 +125,14 @@ tictactoe_efficientzero_create_config = dict(
         import_names=['core.policy.efficientzero'],
     ),
     collector=dict(
-        type='episode_muzero',
+        type='episode_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.muzero_collector'],
+        import_names=['core.worker.collector.efficientzero_collector'],
     )
 )
 tictactoe_efficientzero_create_config = EasyDict(tictactoe_efficientzero_create_config)
 create_config = tictactoe_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_muzero
-    serial_pipeline_muzero([main_config, create_config], game_config=game_config, seed=0, max_env_step=int(1e6))
+    from core.entry import serial_pipeline_efficientzero
+    serial_pipeline_efficientzero([main_config, create_config], game_config=game_config, seed=0, max_env_step=int(1e6))

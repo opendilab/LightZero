@@ -6,24 +6,23 @@ from typing import Union, Optional, List, Any, Tuple
 import numpy as np
 import torch
 from ding.config import read_config, compile_config
-from ding.envs import create_env_manager
-from ding.envs import get_vec_env_setting
+from ding.envs import get_vec_env_setting, create_env_manager
+from ding.model import model_wrap
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
-from ding.worker import BaseLearner
-from ding.worker import create_serial_collector
+from ding.worker import BaseLearner, create_serial_collector
 from tensorboardX import SummaryWriter
 
 from core.rl_utils import GameBuffer
-from core.worker import MuZeroEvaluator as BaseSerialEvaluator
+from core.worker import EfficientZeroEvaluator as BaseSerialEvaluator
 
 
-# @profile
-def serial_pipeline_muzero(
+def serial_pipeline_muzero_expert_data(
         input_cfg: Union[str, Tuple[dict, dict]],
         seed: int = 0,
         env_setting: Optional[List[Any]] = None,
         model: Optional[torch.nn.Module] = None,
+        collect_model: Optional[torch.nn.Module] = None,
         max_train_iter: Optional[int] = int(1e10),
         max_env_step: Optional[int] = int(1e10),
         game_config: Optional[dict] = None,
@@ -31,6 +30,7 @@ def serial_pipeline_muzero(
     """
     Overview:
         Serial pipeline entry for MuZero and its variants, such as EfficientZero.
+        collect expert data using dqn collect_model.
     Arguments:
         - input_cfg (:obj:`Union[str, Tuple[dict, dict]]`): Config in dict type. \
             ``str`` type means config file path. \
@@ -63,12 +63,22 @@ def serial_pipeline_muzero(
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
-    # policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval', 'command'])
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
-    # load pretrained model
-    if cfg.policy.model_path is not None:
-        policy.learn_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
+    # load pretrained dqn model
+    if cfg.policy.collect_model_path is not None:
+        if game_config.device == 'cuda':
+            policy._collect_model = model_wrap(collect_model.cuda(), wrapper_name='eps_greedy_sample')
+            policy._collect_model.reset()
+            policy._collect_model.load_state_dict(
+                torch.load(cfg.policy.collect_model_path, map_location='cuda')['model']
+            )
+        else:
+            policy._collect_model = model_wrap(collect_model, wrapper_name='eps_greedy_sample')
+            policy._collect_model.reset()
+            policy._collect_model.load_state_dict(
+                torch.load(cfg.policy.collect_model_path, map_location='cpu')['model']
+            )
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
@@ -107,6 +117,7 @@ def serial_pipeline_muzero(
     while True:
         # collect_kwargs = commander.step()
         collect_kwargs = {}
+
         # set temperature for visit count distributions according to the train_iter,
         # please refer to Appendix A.1 in EfficientZero for details
         collect_kwargs['temperature'] = np.array(
@@ -115,26 +126,6 @@ def serial_pipeline_muzero(
                 for _ in range(game_config.collector_env_num)
             ]
         )
-
-        # TODO(pu): eval trained model
-        # returns = []
-        # test_episodes = 1
-        # for i in range(test_episodes):
-        #     stop, reward = evaluator.eval(
-        #         learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-        #     )
-        #     returns.append(reward)
-        # print(returns)
-        # returns = np.array(returns)
-        # print(f'win rate: {len(np.where(returns == 1.)[0])/ test_episodes}, draw rate: {len(np.where(returns == 0.)[0])/test_episodes}, lose rate: {len(np.where(returns == -1.)[0])/ test_episodes}')
-        # break
-
-        # TODO(pu): test muzero_evaluator
-        # for i in range(10):
-        #     stop, reward = evaluator.eval(
-        #             learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-        #         )
-
         # Evaluate policy performance
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(
@@ -145,13 +136,10 @@ def serial_pipeline_muzero(
 
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
-
-        # TODO(pu): collector return data
-        replay_buffer.push_games(new_data[0], new_data[1])
-
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
-
+        # TODO(pu): collector return data
+        # replay_buffer.push(new_data, cur_collector_envstep=collector.envstep)
         # Learn policy from collected data
         for i in range(cfg.policy.learn.update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
@@ -170,19 +158,11 @@ def serial_pipeline_muzero(
                 break
 
             learner.train(train_data, collector.envstep)
-
-            # if game_config.lr_manually:
-            #     # learning rate decay manually like EfficientZero paper
-            #     if learner.train_iter > 1e5 and learner.train_iter <= 2e5:
-            #         policy._optimizer.lr = 0.02
-            #     elif learner.train_iter > 2e5:
-            #         policy._optimizer.lr = 0.002
             if game_config.lr_manually:
-                if learner.train_iter < 0.5 * game_config.max_training_steps:
-                    policy._optimizer.lr = 0.2
-                elif learner.train_iter < 0.75 * game_config.max_training_steps:
+                # learning rate decay manually like EfficientZero paper
+                if learner.train_iter > 1e5 and learner.train_iter <= 2e5:
                     policy._optimizer.lr = 0.02
-                else:
+                elif learner.train_iter > 2e5:
                     policy._optimizer.lr = 0.002
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:

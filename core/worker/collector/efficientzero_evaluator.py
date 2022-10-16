@@ -14,7 +14,7 @@ from core.rl_utils.mcts.game import GameHistory
 from core.rl_utils.mcts.utils import prepare_observation_lst
 
 
-class MuZeroEvaluator(ISerialEvaluator):
+class EfficientZeroEvaluator(ISerialEvaluator):
     """
     Overview:
         Base class for serial evaluator.

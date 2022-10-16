@@ -4,6 +4,7 @@ from gomoku_efficientzero_base_config import game_config
 
 # debug
 # collector_env_num = 2
+# n_episode = 2
 # evaluator_env_num = 2
 
 collector_env_num = 8
@@ -91,7 +92,7 @@ gomoku_efficientzero_config = dict(
             n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(5e3), )),
+        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
         # command_mode config
         other=dict(
             # the replay_buffer_size is ineffective, we specify it in game config
@@ -123,5 +124,5 @@ gomoku_efficientzero_create_config = EasyDict(gomoku_efficientzero_create_config
 create_config = gomoku_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_muzero
-    serial_pipeline_muzero([main_config, create_config], game_config=game_config, seed=0, max_env_step=int(1e6))
+    from core.entry import serial_pipeline_efficientzero
+    serial_pipeline_efficientzero([main_config, create_config], game_config=game_config, seed=0, max_env_step=int(1e6))

@@ -1,2 +1,2 @@
-from .serial_entry_muzero import serial_pipeline_muzero
-from .serial_entry_muzero_expert_data import serial_pipeline_muzero_expert_data
+from .serial_entry_efficicentzero import serial_pipeline_efficientzero
+from .serial_entry_efficientzero_expert_data import serial_pipeline_muzero_expert_data

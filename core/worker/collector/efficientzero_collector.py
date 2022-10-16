@@ -14,8 +14,8 @@ from core.rl_utils.mcts.game import GameHistory
 from core.rl_utils.mcts.utils import prepare_observation_lst
 
 
-@SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
-class MuZeroCollector(ISerialCollector):
+@SERIAL_COLLECTOR_REGISTRY.register('episode_efficientzero')
+class EfficientZeroCollector(ISerialCollector):
     """
     Overview:
         MuZero collector(n_episode)
