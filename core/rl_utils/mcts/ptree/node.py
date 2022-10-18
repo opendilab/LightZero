@@ -25,7 +25,7 @@ class Node:
         self.visit_count = 0
         self.value_sum = 0
         self.best_action = -1
-        self.to_play = 0  # default one_player_mode
+        self.to_play = 0  # default 0 means one_player_mode
         self.value_prefix = 0.0
         self.children = {}
         self.children_index = []
@@ -287,7 +287,7 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
         for i in range(path_len - 1, -1, -1):
             node = search_path[i]
             # to_play related
-            node.value_sum += bootstrap_value if node.to_play == to_play else -bootstrap_value
+            node.value_sum += bootstrap_value if node.to_play == to_play else - bootstrap_value
 
             node.visit_count += 1
 
@@ -302,7 +302,7 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
             if is_reset == 1:
                 true_reward = node.value_prefix
             # to_play related
-            bootstrap_value = (-true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
+            bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
 
         min_max_stats.clear()
         root = search_path[0]
@@ -321,13 +321,15 @@ def batch_back_propagate(
         to_play: list = None
 ) -> None:
     for i in range(results.num):
+
+        # expand the leaf node
         #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
-        # TODO(pu): why to_play=0, hidden_state_index_x=hidden_state_index_x, hidden_state_index_y=i
         if to_play is None:
             # set to_play=0, because two_player mode to_play = {1,2}
             results.nodes[i].expand(0, hidden_state_index_x, i, value_prefixs[i], policies[i])
         else:
             results.nodes[i].expand(to_play[i], hidden_state_index_x, i, value_prefixs[i], policies[i])
+
         # reset
         results.nodes[i].is_reset = is_reset_lst[i]
         if to_play is None:
@@ -409,6 +411,18 @@ def compute_ucb_score(
 def batch_traverse(
     roots, pb_c_base: int, pb_c_init: float, discount: float, min_max_stats_lst, results: SearchResults, virtual_to_play
 ):
+    """
+    Overview:
+        traverse, also called expandsion. process a batch roots parallely
+    Arguments:
+        - roots (:obj:`Any`): a batch of root nodes to be expanded.
+        - pb_c_base (:obj:`int`): constant c1 used in pUCT rule, typically 1.25
+        - pb_c_init (:obj:`int`): constant c2 used in pUCT rule, typically 19652
+        - discount (:obj:`int`): discount factor used i calculating bootstrapped value, if env is board_games, we set discount=1
+        - virtual_to_play (:obj:`list`): the to_play list used in self_play collecting and trainin gin board games,
+            `virtual` is to emphasize that actions are performed on an imaginary hidden state.
+    """
+
     last_action = 0
     parent_q = 0.0
     results.search_lens = [None for i in range(results.num)]
@@ -431,6 +445,7 @@ def batch_traverse(
 
         # MCTS stage 1:
         # Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
+        # the lef node is not expanded
         while node.expanded:
 
             mean_q = node.get_mean_q(is_root, parent_q, discount)
@@ -446,6 +461,7 @@ def batch_traverse(
                 else:
                     virtual_to_play[i] = 1
             node.best_action = action
+
             # move to child node according to action
             node = node.get_child(action)
             last_action = action
@@ -459,6 +475,7 @@ def batch_traverse(
             results.hidden_state_index_y_lst[i] = parent.hidden_state_index_y
             results.last_actions[i] = last_action
             results.search_lens[i] = search_len
+            # the leaf node
             results.nodes[i] = node
 
     # print(f'env {i} one simulation done!')

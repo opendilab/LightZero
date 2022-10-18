@@ -21,7 +21,7 @@ class TicTacToeEnv(BaseGameEnv):
 
     config = dict(
         prob_random_agent=0,
-        battle_mode='eval_mode',
+        battle_mode='one_player_mode',
     )
 
     @classmethod
@@ -355,8 +355,12 @@ class TicTacToeEnv(BaseGameEnv):
     def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
         evaluator_env_num = cfg.pop('evaluator_env_num')
         cfg = copy.deepcopy(cfg)
-        # NOTE: when in eval phase, we use 'eval_mode' to evaluate the current agent with bot
-        cfg.battle_mode = 'eval_mode'
+        # NOTE: when collect and train in two_player_mode,
+        # in eval phase, we use 'eval_mode' to evaluate the current agent with bot,
+        # in contrast with 'one_player_mode', in 'eval_mode', we include the to_play in obs,
+        # which is used in q calculation to differentiate between 2 players of the game.
+        if cfg.battle_mode == 'two_player_mode':
+            cfg.battle_mode = 'eval_mode'
         return [cfg for _ in range(evaluator_env_num)]
 
     def __repr__(self) -> str:

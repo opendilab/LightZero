@@ -14,8 +14,8 @@ n_episode = 8
 evaluator_env_num = 5
 
 gomoku_efficientzero_config = dict(
-    # exp_name='data_ez_ptree/gomoku_2pm_efficientzero_seed0_sub885',
-    exp_name='data_ez_ptree/gomoku_1pm_efficientzero_seed0_sub885',
+    exp_name='data_ez_ptree/gomoku_2pm_efficientzero_seed0_sub885',
+    # exp_name='data_ez_ptree/gomoku_1pm_efficientzero_seed0_sub885',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -26,9 +26,9 @@ gomoku_efficientzero_config = dict(
         eval_max_episode_steps=int(1.08e5),
         board_size=board_size,  # default_size is 15
         # if battle_mode='two_player_mode',
-        # automatically assign 'one_player_mode' when eval, 'two_player_mode' when collect
-        # battle_mode='two_player_mode',
-        battle_mode='one_player_mode',
+        # automatically assign 'eval_mode' when eval, 'two_player_mode' when collect
+        battle_mode='two_player_mode',
+        # battle_mode='one_player_mode',
         prob_random_agent=0.,
         manager=dict(shared_memory=False, ),
 
@@ -83,6 +83,7 @@ gomoku_efficientzero_config = dict(
             # two_player_mode, board_size=6, episode_length=6**2=36
             # n_episode=8,  update_per_collect=36*8=268
             # update_per_collect=int(board_size ** 2 * n_episode),
+
             learning_rate=0.002,
             # Frequency of target network update.
             target_update_freq=400,
@@ -94,7 +95,7 @@ gomoku_efficientzero_config = dict(
             n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        eval=dict(evaluator=dict(eval_freq=int(500), )),
         # command_mode config
         other=dict(
             # the replay_buffer_size is ineffective, we specify it in game config

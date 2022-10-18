@@ -6,14 +6,14 @@ from easydict import EasyDict
 from tictactoe_efficientzero_base_config import game_config
 
 # for debug
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
 
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 5
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 5
 
 tictactoe_efficientzero_config = dict(
     exp_name='data_ez_ptree/tictactoe_2pm_efficientzero_seed0_sub885',
@@ -24,12 +24,10 @@ tictactoe_efficientzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         stop_value=1,
         # if battle_mode='two_player_mode',
-        # automatically assign 'one_player_mode' when eval, 'two_player_mode' when collect
-        # battle_mode='two_player_mode',
+        # automatically assign 'eval_mode' when eval, 'two_player_mode' when collect
         battle_mode='two_player_mode',
-        # prob_random_agent=0.1,
-        prob_random_agent=0.,
         # battle_mode='one_player_mode',
+        prob_random_agent=0.,
         max_episode_steps=int(1.08e5),
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),

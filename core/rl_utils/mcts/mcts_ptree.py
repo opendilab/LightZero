@@ -12,7 +12,6 @@ from ..scaling_transform import inverse_scalar_transform
 
 
 class EfficientZeroMCTSPtree(object):
-
     config = dict(
         device='cpu',
         pb_c_base=19652,
@@ -67,10 +66,11 @@ class EfficientZeroMCTSPtree(object):
             # minimax value storage
             min_max_stats_lst = tree.MinMaxStatsList(num)
 
-            horizons = self.config.lstm_horizon_len
-
             # virtual_to_play = copy.deepcopy(to_play)
             for index_simulation in range(self.config.num_simulations):
+                """
+                each simulation, we expanded a new node, so we have `num_simulations)` num of node at most
+                """
                 # import pdb; pdb.set_trace()
                 hidden_states = []
                 hidden_states_c_reward = []
@@ -79,10 +79,13 @@ class EfficientZeroMCTSPtree(object):
                 # prepare a result wrapper to transport results between python and c++ parts
                 results = tree.SearchResults(num=num)
 
-                # traverse to select actions for each root
-                # hidden_state_index_x_lst: the first index of leaf node states in hidden_state_pool, i.e. the search deepth index
-                # hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool, i.e. the batch root node index, max is env_num
-                # the hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
+                # traverse to select actions for each root hidden_state_index_x_lst: the first index of leaf node
+                # states in hidden_state_pool, i.e. the search deepth index hidden_state_index_y_lst: the second
+                # index of leaf node states in hidden_state_pool, i.e. the batch root node index, max is env_num the
+                # hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
+
+                # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
+                # simulation reaches a leaf node s_l.
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play = tree.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play)
                 )
@@ -107,10 +110,13 @@ class EfficientZeroMCTSPtree(object):
                                                           ).to(device).unsqueeze(0)  # shape (1,1, 64)
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).long()
 
-                # MCTS stage 2:
-                # Expansion: At the final time-step l of the simulation, the reward and state are computed by the dynamics function
+                # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are
+                # computed by the dynamics function
 
                 # evaluation for leaf nodes
+
+                # Inside the search tree we use the dynamics function to obtain the next hidden
+                # state given an action and the previous hidden state
                 network_output = model.recurrent_inference(
                     hidden_states, (hidden_states_c_reward, hidden_states_h_reward), last_actions
                 )
@@ -142,8 +148,9 @@ class EfficientZeroMCTSPtree(object):
                 # reset 0
                 # reset the hidden states in LSTM every horizon steps in search
                 # only need to predict the value prefix in a range (eg: s0 -> s5)
-                assert horizons > 0
-                reset_idx = (np.array(search_lens) % horizons == 0)
+                assert self.config.lstm_horizon_len > 0
+                reset_idx = (np.array(search_lens) % self.config.lstm_horizon_len == 0)
+
                 reward_hidden_state_nodes[0][:, reset_idx, :] = 0
                 reward_hidden_state_nodes[1][:, reset_idx, :] = 0
                 is_reset_lst = reset_idx.astype(np.int32).tolist()
@@ -165,7 +172,6 @@ class EfficientZeroMCTSPtree(object):
 
 
 class MuZeroMCTSPtree(object):
-
     config = dict(
         device='cpu',
         pb_c_base=19652,
@@ -261,7 +267,6 @@ class MuZeroMCTSPtree(object):
 
                 # MCTS stage 2:
                 # Expansion: At the final time-step l of the simulation, the reward and state are computed by the dynamics function
-
                 # evaluation for leaf nodes
                 network_output = model.recurrent_inference(
                     hidden_states, (hidden_states_c_reward, hidden_states_h_reward), last_actions
@@ -307,11 +312,11 @@ class MuZeroMCTSPtree(object):
                 hidden_state_index_x += 1
 
                 # MCTS stage 3:
-                # Backup: At the end of the simulation, the statistics along the trajectory are updated.
+                # expand the leaf node
+                # backpropagation: At the end of the simulation, the statistics along the trajectory are updated.
 
                 # backpropagation along the search path to update the attributes
                 tree.batch_back_propagate(
                     hidden_state_index_x, discount, value_prefix_pool, value_pool, policy_logits_pool,
                     min_max_stats_lst, results, is_reset_lst, virtual_to_play
                 )
-

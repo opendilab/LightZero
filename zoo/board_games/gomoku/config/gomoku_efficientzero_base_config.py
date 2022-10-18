@@ -19,10 +19,10 @@ game_config = EasyDict(
         #  we must specify the one same action mask,
         #  when env_num>1, the action mask for different env may be different.
         mcts_ctree=False,
-        # battle_mode='two_player_mode',
-        # game_history_length=36,
-        battle_mode='one_player_mode',
-        game_history_length=18,
+        battle_mode='two_player_mode',
+        game_history_length=36,
+        # battle_mode='one_player_mode',
+        # game_history_length=18,
         image_based=False,
         cvt_string=False,
         clip_reward=True,
@@ -124,6 +124,7 @@ game_config = EasyDict(
         # frame skip & stack observation
         frame_skip=4,
         frame_stack_num=4,
+
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
         reward_loss_coeff=1,  # value_prefix_loss
@@ -132,6 +133,7 @@ game_config = EasyDict(
         policy_loss_coeff=1,
         consistency_coeff=2,
         # consistency_coeff=0,
+
         bn_mt=0.1,
         # siamese
         proj_hid=1024,
