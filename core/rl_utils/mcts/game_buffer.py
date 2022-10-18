@@ -594,7 +594,7 @@ class GameBuffer(Buffer):
     def compute_target_reward_value(self, reward_value_context, model):
         """
         Overview:
-            prepare reward and value targets from the context of rewards and values
+            prepare reward and value targets from the context of rewards and values.
         """
         value_obs_lst, value_mask, state_index_lst, rewards_lst, traj_lens, td_steps_lst, action_mask_history, \
             to_play_history = reward_value_context
@@ -1060,8 +1060,22 @@ class GameBuffer(Buffer):
                             """
                             cpp mcts
                             """
-                            # for one_player atari games
-                            target_policies.append(distributions)
+                            if self.config.env_type == 'atari_games':
+                                # for one_player atari games
+                                target_policies.append(distributions)
+                            else:
+                                # for two_player board games
+                                policy_tmp = [0 for _ in range(self.config.action_space_size)]
+                                # to make sure target_policies have the same dimension <self.config.action_space_size>
+                                # sum_visits = sum(distributions)
+                                # distributions = [visit_count / sum_visits for visit_count in distributions]
+                                for index, legal_action in enumerate(legal_actions[policy_index]):
+                                    # try:
+                                    # only the action in ``legal_action`` the policy logits is nonzero
+                                    policy_tmp[legal_action] = distributions[index]
+                                    # except Exception as error:
+                                    #     print(error)
+                                target_policies.append(policy_tmp)
                         else:
                             """
                             python mcts

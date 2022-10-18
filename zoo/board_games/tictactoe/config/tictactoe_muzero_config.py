@@ -3,21 +3,18 @@ sys.path.append('/Users/puyuan/code/LightZero')
 
 from easydict import EasyDict
 
-from tictactoe_efficientzero_base_config import game_config
+from tictactoe_muzero_base_config import game_config
 
 # for debug
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-
+# collector_env_num = 3
+# evaluator_env_num = 3
 
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 5
 
-tictactoe_efficientzero_config = dict(
-    exp_name='data_ez_ptree/tictactoe_2pm_efficientzero_seed0_sub885',
-
+tictactoe_muzero_config = dict(
+    exp_name='data_ez_ptree/tictactoe_2pm_muzero_seed0_sub885',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -103,7 +100,7 @@ tictactoe_efficientzero_config = dict(
             n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(1e3), )),
+        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
         # for debug
         # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
@@ -113,10 +110,10 @@ tictactoe_efficientzero_config = dict(
         ),
     ),
 )
-tictactoe_efficientzero_config = EasyDict(tictactoe_efficientzero_config)
-main_config = tictactoe_efficientzero_config
+tictactoe_muzero_config = EasyDict(tictactoe_muzero_config)
+main_config = tictactoe_muzero_config
 
-tictactoe_efficientzero_create_config = dict(
+tictactoe_muzero_create_config = dict(
     env=dict(
         type='tictactoe',
         import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
@@ -124,18 +121,18 @@ tictactoe_efficientzero_create_config = dict(
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='efficientzero',
-        import_names=['core.policy.efficientzero'],
+        type='muzero',
+        import_names=['core.policy.muzero'],
     ),
     collector=dict(
-        type='episode_efficientzero',
+        type='episode_muzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.efficientzero_collector'],
+        import_names=['core.worker.collector.muzero_collector'],
     )
 )
-tictactoe_efficientzero_create_config = EasyDict(tictactoe_efficientzero_create_config)
-create_config = tictactoe_efficientzero_create_config
+tictactoe_muzero_create_config = EasyDict(tictactoe_muzero_create_config)
+create_config = tictactoe_muzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], game_config=game_config, seed=0, max_env_step=int(1e6))
+    from core.entry import serial_pipeline_muzero
+    serial_pipeline_muzero([main_config, create_config], game_config=game_config, seed=0, max_env_step=int(1e6))

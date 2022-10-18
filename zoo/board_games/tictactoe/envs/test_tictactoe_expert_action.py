@@ -1,4 +1,5 @@
 import numpy as np
+from easydict import EasyDict
 import pytest
 
 from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
@@ -8,7 +9,8 @@ from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 class TestExpertAction:
 
     def test_expert_action(self):
-        env = TicTacToeEnv()
+        cfg = EasyDict(battle_mode='one_player_mode', prob_random_agent=0)
+        env = TicTacToeEnv(cfg)
         env.reset()
         print('init board state: ')
         env.render()

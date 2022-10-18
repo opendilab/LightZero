@@ -85,7 +85,7 @@ atari_efficientzero_config = dict(
             # update_per_collect=2,
             # batch_size=4,
 
-            update_per_collect=2000,
+            update_per_collect=1000,
             batch_size=256,
 
             learning_rate=0.2,

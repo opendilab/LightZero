@@ -19,7 +19,7 @@ from core.worker import EfficientZeroEvaluator as BaseSerialEvaluator
 
 
 # @profile
-def serial_pipeline_efficientzero(
+def serial_pipeline_muzero(
         input_cfg: Union[str, Tuple[dict, dict]],
         seed: int = 0,
         env_setting: Optional[List[Any]] = None,
@@ -130,7 +130,7 @@ def serial_pipeline_efficientzero(
         # break
 
         # TODO(pu): test muzero_evaluator
-        # for i in range(5):
+        # for i in range(2):
         #     stop, reward = evaluator.eval(
         #             learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
         #         )

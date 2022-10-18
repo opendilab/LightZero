@@ -15,11 +15,11 @@ from core.rl_utils.mcts.game import GameHistory
 from core.rl_utils.mcts.utils import prepare_observation_lst
 
 
-@SERIAL_COLLECTOR_REGISTRY.register('episode_efficientzero')
-class EfficientZeroCollector(ISerialCollector):
+@SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
+class MuZeroCollector(ISerialCollector):
     """
     Overview:
-        EfficientZero collector(n_episode)
+        MuZero collector(n_episode)
     Interfaces:
         __init__, reset, reset_env, reset_policy, collect, close
     Property:
@@ -196,7 +196,7 @@ class EfficientZeroCollector(ISerialCollector):
         self.close()
 
     """
-    MCTS related method
+    MuZero related method
     """
 
     def get_priorities(self, i, pred_values_lst, search_values_lst):
@@ -361,11 +361,10 @@ class EfficientZeroCollector(ISerialCollector):
                 config=self.game_config
             ) for _ in range(env_nums)
         ]
-
-        # for i in range(env_nums):
-        #     game_histories[i].init(
-        #         [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.frame_stack_num)]
-        #     )
+        for i in range(env_nums):
+            game_histories[i].init(
+                [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.frame_stack_num)]
+            )
 
         last_game_histories = [None for _ in range(env_nums)]
         last_game_priorities = [None for _ in range(env_nums)]
@@ -523,7 +522,7 @@ class EfficientZeroCollector(ISerialCollector):
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
 
-                    # updte stack windows: delete the first obs and append the newest obs
+                    # fresh stack windows
                     del stack_obs_windows[env_id][0]
                     stack_obs_windows[env_id].append(to_ndarray(obs['observation']))
 
@@ -543,7 +542,7 @@ class EfficientZeroCollector(ISerialCollector):
                         pred_values_lst[env_id] = []
                         search_values_lst[env_id] = []
 
-                        # the game_histories become last_game_history
+                        #  the game_histories become last_game_history
                         last_game_histories[env_id] = game_histories[env_id]
                         last_game_priorities[env_id] = priorities
 
@@ -575,7 +574,7 @@ class EfficientZeroCollector(ISerialCollector):
 
                     # if it is the end of the game, we will save the game history
 
-                    # NOTE: put the second last game history in one episode into the trajectory_pool
+                    # NOTE: put the  second last game history in one episode into the trajectory_pool
                     # pad over 2th last game_history using the last game_history
                     if last_game_histories[env_id] is not None:
                         self.put_last_trajectory(i, last_game_histories, last_game_priorities, game_histories, dones)
@@ -591,6 +590,7 @@ class EfficientZeroCollector(ISerialCollector):
 
                     # TODO(pu)
                     # reset the finished env and init game_histories
+
                     if n_episode > self._env_num:
                         init_obs = self._env.ready_obs
 
@@ -651,16 +651,6 @@ class EfficientZeroCollector(ISerialCollector):
                         'gap_steps': self.gap_step
                     } for i in range(self.len_pool())
                 ]
-
-                """
-                for i in range(len(self.trajectory_pool)):
-                    print(self.trajectory_pool[i][0].reward_history)
-                    
-                for i in range(len(return_data[0])):
-                    print(return_data[0][i].reward_history)
-    
-                """
-
 
                 # save the game histories and clear the pool
                 # self.trajectory_pool: list of (game_history, priority)

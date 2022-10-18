@@ -8,29 +8,28 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
+board_size = 6  # default_size is 15
+
 game_config = EasyDict(
     dict(
-        env_name='tictactoe',
+        env_name='gomoku',
         env_type='board_games',
         device=device,
-        mcts_ctree=False,
         # TODO: for board_games, mcts_ctree now only support env_num=1, because in cpp MCTS root node,
         #  we must specify the one same action mask,
         #  when env_num>1, the action mask for different env may be different.
-        battle_mode='two_player_mode',
-        game_history_length=9,
-        # battle_mode='one_player_mode',
-        # game_history_length=5,
+        mcts_ctree=False,
+        # battle_mode='two_player_mode',
+        # game_history_length=36,
+        battle_mode='one_player_mode',
+        game_history_length=18,
         image_based=False,
         cvt_string=False,
         clip_reward=True,
         game_wrapper=True,
-        action_space_size=int(3 * 3),
+        action_space_size=int(board_size * board_size),
         amp_type='none',
-        obs_shape=(12, 3, 3),  # if frame_stack_num=4
-        frame_stack_num=4,
-        # obs_shape=(3, 3, 3),  # if frame_stack_num=1
-        # frame_stack_num=1,
+        obs_shape=(12, board_size, board_size),  # if frame_stack_num=4
         image_channel=3,
         gray_scale=False,
         downsample=False,
@@ -43,27 +42,28 @@ game_config = EasyDict(
         augmentation=['shift', 'intensity'],
 
         # debug
-        # collector_env_num=2,
-        # evaluator_env_num=2,
-        # num_simulations=9,
+        # collector_env_num=3,
+        # evaluator_env_num=3,
+        # total_transitions=int(1e5),
+        # num_simulations=2,
         # batch_size=4,
-        # total_transitions=int(3e3),
-        # lstm_hidden_size=32,
-        # # # to make sure the value target is the final outcome
-        # td_steps=9,
-        # num_unroll_steps=3,
-        # lstm_horizon_len=3,
+        # lstm_hidden_size=64,
+        # # to make sure the value target is the final outcome
+        # td_steps=5,
+        # # td_steps=int(board_size * board_size),
+        # num_unroll_steps=5,
+        # lstm_horizon_len=5,
 
-        collector_env_num=8,
-        evaluator_env_num=5,
-        num_simulations=25,
-        batch_size=64,
-        total_transitions=int(3e3),
-        lstm_hidden_size=64,
+        collector_env_num=1,
+        evaluator_env_num=1,
+        total_transitions=int(1e5),
+        num_simulations=50,
+        batch_size=256,
+        lstm_hidden_size=512,
         # to make sure the value target is the final outcome
-        td_steps=9,
-        num_unroll_steps=3,
-        lstm_horizon_len=3,
+        td_steps=int(board_size * board_size),
+        num_unroll_steps=5,
+        lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
         revisit_policy_search_rate=0.99,
@@ -75,7 +75,7 @@ game_config = EasyDict(
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority
         # use_max_priority=False,
-        use_priority=False,
+        use_priority=True,
 
         # TODO(pu): only used for adjust temperature manually
         max_training_steps=int(1e5),
@@ -86,7 +86,7 @@ game_config = EasyDict(
         use_root_value=False,
 
         # TODO(pu): test the effect
-        last_linear_layer_init_zero=True,
+        init_zero=True,
         state_norm=False,
         mini_infer_size=2,
         # (Float type) How much prioritization is used: 0 means no prioritization while 1 means full prioritization
@@ -103,9 +103,9 @@ game_config = EasyDict(
         # UCB formula
         pb_c_base=19652,
         pb_c_init=1.25,
-        support_size=10,
-        value_support=DiscreteSupport(-10, 10, delta=1),
-        reward_support=DiscreteSupport(-10, 10, delta=1),
+        support_size=300,
+        value_support=DiscreteSupport(-300, 300, delta=1),
+        reward_support=DiscreteSupport(-300, 300, delta=1),
         max_grad_norm=10,
         test_interval=10000,
         log_interval=1000,
@@ -123,35 +123,29 @@ game_config = EasyDict(
         transition_num=1,
         # frame skip & stack observation
         frame_skip=4,
-        # TODO(pu): EfficientZero -> MuZero
+        frame_stack_num=4,
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
         reward_loss_coeff=1,  # value_prefix_loss
         # reward_loss_coeff=0,  # value_prefix_loss
-        consistency_coeff=2,
-        # consistency_coeff=0,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-
+        consistency_coeff=2,
+        # consistency_coeff=0,
         bn_mt=0.1,
-
         # siamese
-        # proj_hid=128,
-        # proj_out=128,
-        # pred_hid=64,
-        # pred_out=128,
-        proj_hid=32,
-        proj_out=32,
-        pred_hid=16,
-        pred_out=32,
+        proj_hid=1024,
+        proj_out=1024,
+        pred_hid=512,
+        pred_out=1024,
         blocks=1,  # Number of blocks in the ResNet
         channels=16,  # Number of channels in the ResNet
         reduced_channels_reward=16,  # x36 Number of channels in reward head
         reduced_channels_value=16,  # x36 Number of channels in value head
         reduced_channels_policy=16,  # x36 Number of channels in policy head
-        resnet_fc_reward_layers=[8],  # Define the hidden layers in the reward head of the dynamic network
-        resnet_fc_value_layers=[8],  # Define the hidden layers in the value head of the prediction network
-        resnet_fc_policy_layers=[8],  # Define the hidden layers in the policy head of the prediction network
+        resnet_fc_reward_layers=[32],  # Define the hidden layers in the reward head of the dynamic network
+        resnet_fc_value_layers=[32],  # Define the hidden layers in the value head of the prediction network
+        resnet_fc_policy_layers=[32],  # Define the hidden layers in the policy head of the prediction network
     )
 )
 

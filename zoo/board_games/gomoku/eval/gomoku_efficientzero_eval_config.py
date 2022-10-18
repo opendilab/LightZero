@@ -1,21 +1,17 @@
 from easydict import EasyDict
 
-from gomoku_efficientzero_base_config import game_config
+from gomoku_efficientzero_base_eval_config import game_config
 
 board_size = 6  # default_size is 15
 
-# debug
-# collector_env_num = 3
-# n_episode = 3
-# evaluator_env_num = 3
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 5
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
 
 gomoku_efficientzero_config = dict(
-    # exp_name='data_ez_ptree/gomoku_2pm_efficientzero_seed0_sub885',
-    exp_name='data_ez_ptree/gomoku_1pm_efficientzero_seed0_sub885',
+    # exp_name='data_ptree/gomoku_2pm_efficientzero_seed0_sub885',
+    exp_name='data_ptree_eval/gomoku_1pm_efficientzero_seed0_sub885',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -35,7 +31,8 @@ gomoku_efficientzero_config = dict(
     ),
     policy=dict(
         # pretrained model
-        model_path=None,
+        model_path='/Users/puyuan/code/LightZero/data_ez_ptree/gomoku_1pm_efficientzero_seed0_sub885_221016_120924/ckpt/ckpt_best.pth.tar',
+        # model_path=None,
         env_name='gomoku',
         # TODO(pu): how to pass into game_config, which is class, not a dict
         # game_config=game_config,
@@ -126,5 +123,7 @@ gomoku_efficientzero_create_config = EasyDict(gomoku_efficientzero_create_config
 create_config = gomoku_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], game_config=game_config, seed=0, max_env_step=int(1e6))
+    from core.entry import serial_pipeline_efficientzero_eval
+    for seed in range(10):
+        serial_pipeline_efficientzero_eval([main_config, create_config], game_config=game_config, seed=seed, max_env_step=int(1e6))
+        print(f'eval seed {seed} done!')

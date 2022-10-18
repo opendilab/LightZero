@@ -23,19 +23,19 @@ from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
 from core.rl_utils import Transforms
 # TODO(pu): choose game config
-# from zoo.atari.config.atari_efficientzero_base_config import game_config
-# from zoo.board_games.gomoku.config.gomoku_efficientzero_base_config import game_config
-from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config
+# from zoo.atari.config.atari_muzero_base_config import game_config
+# from zoo.board_games.gomoku.config.gomoku_muzero_base_config import game_config
+from zoo.board_games.tictactoe.config.tictactoe_muzero_base_config import game_config
 
 
-@POLICY_REGISTRY.register('efficientzero')
-class EfficientZeroPolicy(Policy):
+@POLICY_REGISTRY.register('muzero')
+class MuZeroPolicy(Policy):
     """
     Overview:
-        The policy class for EfficientZero
+        The policy class for MuZero
     """
     config = dict(
-        type='efficientzero',
+        type='muzero',
         # (bool) Whether use cuda in policy
         cuda=False,
         # (bool) Whether learning policy is the same as collecting data policy(on-policy)
@@ -125,8 +125,8 @@ class EfficientZeroPolicy(Policy):
             The user can define and use customized network model but must obey the same inferface definition indicated \
             by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
         """
-        # return 'EfficientZeroNet', ['ding.model.template.efficientzero.efficientzero_model']
-        return 'EfficientZeroNet', ['core.model.efficientzero.efficientzero_model']
+        # return 'EfficientZeroNet', ['ding.model.template.muzero.muzero_model']
+        return 'EfficientZeroNet', ['core.model.muzero.muzero_model']
 
     def _init_learn(self) -> None:
         self._optimizer = optim.SGD(
