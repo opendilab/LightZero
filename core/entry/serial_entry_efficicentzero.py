@@ -116,25 +116,6 @@ def serial_pipeline_efficientzero(
             ]
         )
 
-        # TODO(pu): eval trained model
-        # returns = []
-        # test_episodes = 1
-        # for i in range(test_episodes):
-        #     stop, reward = evaluator.eval(
-        #         learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-        #     )
-        #     returns.append(reward)
-        # print(returns)
-        # returns = np.array(returns)
-        # print(f'win rate: {len(np.where(returns == 1.)[0])/ test_episodes}, draw rate: {len(np.where(returns == 0.)[0])/test_episodes}, lose rate: {len(np.where(returns == -1.)[0])/ test_episodes}')
-        # break
-
-        # TODO(pu): test muzero_evaluator
-        # for i in range(5):
-        #     stop, reward = evaluator.eval(
-        #             learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-        #         )
-
         # Evaluate policy performance
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(
@@ -146,7 +127,7 @@ def serial_pipeline_efficientzero(
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
-        # TODO(pu): collector return data
+        # TODO(pu): save returned data collected by the collector
         replay_buffer.push_games(new_data[0], new_data[1])
 
         # remove the oldest data if the replay buffer is full.

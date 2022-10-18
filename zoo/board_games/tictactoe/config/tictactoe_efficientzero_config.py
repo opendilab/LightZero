@@ -6,14 +6,14 @@ from easydict import EasyDict
 from tictactoe_efficientzero_base_config import game_config
 
 # for debug
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-
-
 # collector_env_num = 8
 # n_episode = 8
-# evaluator_env_num = 5
+# evaluator_env_num = 8
+
+
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 5
 
 tictactoe_efficientzero_config = dict(
     exp_name='data_ez_ptree/tictactoe_2pm_efficientzero_seed0_sub885',
@@ -82,12 +82,13 @@ tictactoe_efficientzero_config = dict(
             # collector_env_num=8,  update_per_collect=5*8=40
             # update_per_collect=int(3 ** 2 / 2 * collector_env_num),
             # update_per_collect=int(40),
+            # batch_size=64,
 
             # two_player_mode, board_size=3, episode_length=3**2=9
             # collector_env_num=8,  update_per_collect=9*8=72
             # update_per_collect=int(3 ** 2 * collector_env_num),
-            batch_size=64,
             update_per_collect=int(50),
+            batch_size=64,
 
             # learning_rate=0.2,
             learning_rate=0.002,
@@ -119,8 +120,8 @@ tictactoe_efficientzero_create_config = dict(
         type='tictactoe',
         import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
     ),
-    # env_manager=dict(type='base'),
-    env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
+    # env_manager=dict(type='subprocess'),
     policy=dict(
         type='efficientzero',
         import_names=['core.policy.efficientzero'],

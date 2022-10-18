@@ -243,7 +243,7 @@ class EfficientZeroCollector(ISerialCollector):
 
             del self.trajectory_pool[:]
 
-    def put_last_trajectory(self, i, last_game_histories, last_game_priorities, game_histories, done):
+    def pad_and_save_last_trajectory(self, i, last_game_histories, last_game_priorities, game_histories, done):
         """
         Overview:
             put the last game history into the pool if the current game is finished
@@ -534,7 +534,7 @@ class EfficientZeroCollector(ISerialCollector):
                         # pad over last block trajectory
                         if last_game_histories[env_id] is not None:
                             # TODO(pu): return the one game history
-                            self.put_last_trajectory(
+                            self.pad_and_save_last_trajectory(
                                 i, last_game_histories, last_game_priorities, game_histories, dones
                             )
 
@@ -554,6 +554,8 @@ class EfficientZeroCollector(ISerialCollector):
                             config=self.game_config
                         )
                         game_histories[env_id].init(stack_obs_windows[env_id])
+                        # print(game_histories[env_id].reward_history)
+
                         # TODO(pu): return data
 
                     self._env_info[env_id]['step'] += 1
@@ -575,10 +577,10 @@ class EfficientZeroCollector(ISerialCollector):
 
                     # if it is the end of the game, we will save the game history
 
-                    # NOTE: put the second last game history in one episode into the trajectory_pool
+                    # NOTE: put the penultimate game history in one episode into the trajectory_pool
                     # pad over 2th last game_history using the last game_history
                     if last_game_histories[env_id] is not None:
-                        self.put_last_trajectory(i, last_game_histories, last_game_priorities, game_histories, dones)
+                        self.pad_and_save_last_trajectory(i, last_game_histories, last_game_priorities, game_histories, dones)
 
                     # store current block trajectory
                     priorities = self.get_priorities(i, pred_values_lst, search_values_lst)
@@ -587,8 +589,11 @@ class EfficientZeroCollector(ISerialCollector):
                     game_histories[env_id].game_history_to_array()
 
                     # assert len(game_histories[env_id]) == len(priorities)
-                    self.trajectory_pool.append((game_histories[env_id], priorities, dones[env_id]))
+                    # NOTE: save the last game history in one episode into the trajectory_pool if it's not null
+                    if len(game_histories[env_id].reward_history) != 0:
+                        self.trajectory_pool.append((game_histories[env_id], priorities, dones[env_id]))
 
+                    # print(game_histories[env_id].reward_history)
                     # TODO(pu)
                     # reset the finished env and init game_histories
                     if n_episode > self._env_num:
@@ -654,6 +659,7 @@ class EfficientZeroCollector(ISerialCollector):
 
                 """
                 for i in range(len(self.trajectory_pool)):
+                    print(self.trajectory_pool[i][0].obs_history.__len__())
                     print(self.trajectory_pool[i][0].reward_history)
                     
                 for i in range(len(return_data[0])):

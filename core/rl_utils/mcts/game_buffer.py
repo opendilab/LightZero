@@ -453,7 +453,7 @@ class GameBuffer(Buffer):
     def prepare_reward_value_context(self, indices, games, state_index_lst, total_transitions):
         """
         Overview:
-            prepare the context of rewards and values for reanalyzing part
+            prepare the context of rewards and values for calculating TD value target in reanalyzing part.
         Arguments:
             - indices (:obj:`list`): transition index in replay buffer
             - games (:obj:`list`): list of game histories
@@ -487,6 +487,7 @@ class GameBuffer(Buffer):
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
             # t=2+3 -> o[2+3, 2+3+4+5] -> o[5, 14]
             game_obs = game.obs(state_index + td_steps, config.num_unroll_steps)
+
             rewards_lst.append(game.reward_history)
 
             # for two_player board games
@@ -494,15 +495,18 @@ class GameBuffer(Buffer):
             to_play_history.append(game.to_play_history)
 
             for current_index in range(state_index, state_index + config.num_unroll_steps + 1):
-                # get the 6 bootstrapped target obs
+                # get the <num_unroll_steps+1>  bootstrapped target obs
                 td_steps_lst.append(td_steps)
                 # index of bootstrapped obs o_{t+td_steps}
                 bootstrap_index = current_index + td_steps
 
                 if bootstrap_index < traj_len:
                     value_mask.append(1)
-                    beg_index = bootstrap_index - (state_index + td_steps)
+                    # beg_index = bootstrap_index - (state_index + td_steps)
+                    # max of beg_index is num_unroll_steps
+                    beg_index = current_index - state_index
                     end_index = beg_index + config.frame_stack_num
+                    # the stacked obs in time t
                     obs = game_obs[beg_index:end_index]
                 else:
                     value_mask.append(0)
@@ -519,7 +523,7 @@ class GameBuffer(Buffer):
     def prepare_policy_non_reanalyzed_context(self, indices, games, state_index_lst):
         """
         Overview:
-            prepare the context of policies for non-reanalyzing part, just return the policy in self-play
+            prepare the context of policies for calculating policy target in non-reanalyzing part, just return the policy in self-play
         Arguments:
             - indices (:obj:`list`): transition index in replay buffer
             - games (:obj:`list`): list of game histories
@@ -545,7 +549,7 @@ class GameBuffer(Buffer):
     def prepare_policy_reanalyzed_context(self, indices, games, state_index_lst):
         """
         Overview:
-            prepare the context of policies for reanalyzing part
+            prepare the context of policies for calculating policy target in reanalyzing part.
         Arguments:
             - indices (:obj:'list'):transition index in replay buffer
             - games (:obj:'list'):list of game histories
@@ -651,7 +655,10 @@ class GameBuffer(Buffer):
                     m_obs = torch.from_numpy(value_obs_lst[beg_index:end_index]).to(device).float() / 255.0
                 else:
                     m_obs = torch.from_numpy(value_obs_lst[beg_index:end_index]).to(device).float()
+
+                # calculate the target value
                 m_output = model.initial_inference(m_obs)
+
                 # TODO(pu)
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward

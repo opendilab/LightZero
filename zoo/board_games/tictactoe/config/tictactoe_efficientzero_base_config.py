@@ -43,27 +43,27 @@ game_config = EasyDict(
         augmentation=['shift', 'intensity'],
 
         # debug
-        collector_env_num=2,
-        evaluator_env_num=2,
-        num_simulations=9,
-        batch_size=4,
-        total_transitions=int(3e3),
-        lstm_hidden_size=32,
-        # # to make sure the value target is the final outcome
-        td_steps=9,
-        num_unroll_steps=3,
-        lstm_horizon_len=3,
-
         # collector_env_num=8,
-        # evaluator_env_num=5,
-        # num_simulations=25,
-        # batch_size=64,
+        # evaluator_env_num=8,
+        # num_simulations=9,
+        # batch_size=4,
         # total_transitions=int(3e3),
-        # lstm_hidden_size=64,
-        # # to make sure the value target is the final outcome
+        # lstm_hidden_size=32,
+        # # # to make sure the value target is the final outcome
         # td_steps=9,
         # num_unroll_steps=3,
         # lstm_horizon_len=3,
+
+        collector_env_num=8,
+        evaluator_env_num=5,
+        num_simulations=25,
+        batch_size=64,
+        total_transitions=int(3e3),
+        lstm_hidden_size=64,
+        # to make sure the value target is the final outcome
+        td_steps=9,
+        num_unroll_steps=3,
+        lstm_horizon_len=3,
 
         # TODO(pu): why 0.99?
         revisit_policy_search_rate=0.99,
