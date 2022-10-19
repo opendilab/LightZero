@@ -11,13 +11,12 @@ representation_model = RepresentationNetwork(
     momentum=0.1,
 )
 
-collector_env_num = 4
-n_episode = 4
+collector_env_num = 8
+n_episode = 8
 evaluator_env_num = 3
 
 atari_efficientzero_config = dict(
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub443',
-    # exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
+    exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
     # exp_name='data_ez_ptree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
     env=dict(
         collector_env_num=collector_env_num,

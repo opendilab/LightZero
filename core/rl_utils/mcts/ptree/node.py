@@ -445,7 +445,7 @@ def batch_traverse(
 
         # MCTS stage 1:
         # Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
-        # the lef node is not expanded
+        # the leaf node is not expanded
         while node.expanded:
 
             mean_q = node.get_mean_q(is_root, parent_q, discount)

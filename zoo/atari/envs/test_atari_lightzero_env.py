@@ -10,7 +10,8 @@ cfg = EasyDict(
     obs_shape=(12, 96, 96),
     gray_scale=False,
     discount=0.997,
-    cvt_string=True,
+    # cvt_string=True,
+    cvt_string=False,
     max_episode_steps=1.08e5,
     game_wrapper=True,
     dqn_expert_data=False,
@@ -28,6 +29,7 @@ class TestAtariLightZeroEnv:
             action = env.random_action()
             # action = env.human_to_action()
             obs, reward, done, info = env.step(action)
+            # print(obs['observation'].shape)
             # env.render()
             if done:
                 print(info)

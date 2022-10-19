@@ -518,10 +518,16 @@ class EfficientZeroNet(BaseNet):
         # projection
         # TODO(pu)
         if self.projection_input_dim_type == 'atari':
+            # due to downsample
             self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
                                                                  ) * math.ceil(observation_shape[2] / 16)
         elif self.projection_input_dim_type == 'board_games':
             self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
+        else:
+            # self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
+            self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
+
+
 
         self.projection = nn.Sequential(
             nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), nn.ReLU(inplace=True),

@@ -359,7 +359,10 @@ class GameBuffer(Buffer):
         game_history_pos_lst = []
 
         for idx in indices_lst:
-            game_history_idx, game_history_pos = self.game_history_look_up[idx]
+            try:
+                game_history_idx, game_history_pos = self.game_history_look_up[idx]
+            except Exception as error:
+                print(error)
             game_history_idx -= self.base_idx
             game = self.buffer[game_history_idx]
 
@@ -1067,7 +1070,7 @@ class GameBuffer(Buffer):
                             """
                             cpp mcts
                             """
-                            if self.config.env_type == 'atari_games':
+                            if self.config.env_type == 'no_board_games':
                                 # for one_player atari games
                                 target_policies.append(distributions)
                             else:
@@ -1087,7 +1090,7 @@ class GameBuffer(Buffer):
                             """
                             python mcts
                             """
-                            if self.config.env_type == 'atari_games':
+                            if self.config.env_type == 'no_board_games':
                                 # for one_player atari games
                                 target_policies.append(distributions)
                             else:

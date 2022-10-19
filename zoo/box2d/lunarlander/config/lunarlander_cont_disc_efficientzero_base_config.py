@@ -10,57 +10,63 @@ else:
 
 game_config = EasyDict(
     dict(
-        env_name='PongNoFrameskip-v4',
+        env_name='lunarlander_cont_disc',
         env_type='no_board_games',
         device=device,
-        # if mcts_ctree=True, using cpp mcts code
-        mcts_ctree=True,
         # mcts_ctree=False,
-        image_based=True,
-        # cvt_string=True,
-        # trade memory for speed
+        mcts_ctree=True,
+
+        # TODO: for board_games, mcts_ctree now only support env_num=1, because in cpp MCTS root node,
+        #  we must specify the one same action mask,
+        #  when env_num>1, the action mask for different env may be different.
+        battle_mode='one_player_mode',
+        game_history_length=200,
+
+        image_based=False,
         cvt_string=False,
         clip_reward=True,
         game_wrapper=True,
-        action_space_size=6,
+        action_space_size=16,  # 4**2
         amp_type='none',
-        obs_shape=(12, 96, 96),
-        image_channel=3,
+
+
+        # [S, W, H, C] -> [S x C, W, H]
+        # [4,8,1,1] -> [4*1, 8, 1]
+        image_channel=1,
+        obs_shape=(4, 8, 1),  # if frame_stack_nums=4
+        frame_stack_num=4,
+
+        # obs_shape=(8, 1, 1),  # if frame_stack_num=1
+        # frame_stack_num=1,
+
         gray_scale=False,
-        downsample=True,
+        downsample=False,
         vis_result=True,
-        # TODO(pu): test the effect of augmentation
-        use_augmentation=True,
+        # TODO(pu): test the effect of augmentation,
+        # use_augmentation=True,  # only for atari image obs
+        use_augmentation=False,
         # Style of augmentation
         # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
         augmentation=['shift', 'intensity'],
 
-        # for debug
-        # collector_env_num=8,
-        # evaluator_env_num=8,
-        # # collector_env_num=1,
-        # # evaluator_env_num=1,
-        # num_simulations=2,
+        # debug
+        # collector_env_num=1,
+        # evaluator_env_num=1,
+        # num_simulations=9,
         # batch_size=4,
-        # game_history_length=10,
-        # total_transitions=int(1e2),
+        # total_transitions=int(1e5),
+        # lstm_hidden_size=256,
+        # # # to make sure the value target is the final outcome
         # td_steps=5,
-        # lstm_hidden_size=32,
-        # num_unroll_steps=5,
-        # lstm_horizon_len=5,
+        # num_unroll_steps=3,
+        # lstm_horizon_len=3,
 
         collector_env_num=8,
-        evaluator_env_num=3,
-        # TODO(pu): how to set proper num_simulations?
+        evaluator_env_num=5,
         num_simulations=50,
         batch_size=256,
-        game_history_length=400,
         total_transitions=int(1e5),
-        channels=64,  # Number of channels in the ResNet, config in EZ original repo
-        lstm_hidden_size=512,  # default config in EZ original repo
-        # The env step is twice as large as the original size model when converging
-        # channels=32,  # Number of channels in the ResNet, for time efficiency
-        # lstm_hidden_size=256,  # for time efficiency
+        lstm_hidden_size=512,
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
@@ -123,7 +129,6 @@ game_config = EasyDict(
         transition_num=1,
         # frame skip & stack observation
         frame_skip=4,
-        frame_stack_num=4,
         # TODO(pu): EfficientZero -> MuZero
         # coefficient
         reward_loss_coeff=1,
