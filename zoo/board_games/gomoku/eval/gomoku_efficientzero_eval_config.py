@@ -10,8 +10,8 @@ n_episode = 1
 evaluator_env_num = 1
 
 gomoku_efficientzero_config = dict(
-    # exp_name='data_ptree/gomoku_2pm_efficientzero_seed0_sub885',
-    exp_name='data_ptree_eval/gomoku_1pm_efficientzero_seed0_sub885',
+    exp_name='data_ptree/gomoku_2pm_efficientzero_seed0',
+    # exp_name='data_ptree_eval/gomoku_1pm_efficientzero_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -23,15 +23,16 @@ gomoku_efficientzero_config = dict(
         board_size=board_size,  # default_size is 15
         # if battle_mode='two_player_mode',
         # automatically assign 'one_player_mode' when eval, 'two_player_mode' when collect
-        # battle_mode='two_player_mode',
-        battle_mode='one_player_mode',
+        battle_mode='two_player_mode',
+        # battle_mode='one_player_mode',
         prob_random_agent=0.,
         manager=dict(shared_memory=False, ),
 
     ),
     policy=dict(
         # pretrained model
-        model_path='/Users/puyuan/code/LightZero/data_ez_ptree/gomoku_1pm_efficientzero_seed0_sub885_221016_120924/ckpt/ckpt_best.pth.tar',
+        # model_path='/Users/puyuan/code/LightZero/data_ez_ptree/gomoku_1pm_efficientzero_seed0_sub885_221016_120924/ckpt/ckpt_best.pth.tar',
+        model_path='/Users/puyuan/code/LightZero/data_ez_ptree/gomoku_2pm_efficientzero_seed0_sub885_221018_235827/ckpt/ckpt_best.pth.tar',
         # model_path=None,
         env_name='gomoku',
         # TODO(pu): how to pass into game_config, which is class, not a dict
@@ -107,8 +108,8 @@ gomoku_efficientzero_create_config = dict(
         type='gomoku',
         import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
     ),
-    # env_manager=dict(type='base'),
-    env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
+    # env_manager=dict(type='subprocess'),
     policy=dict(
         type='efficientzero',
         import_names=['core.policy.efficientzero'],
@@ -124,6 +125,6 @@ create_config = gomoku_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_efficientzero_eval
-    for seed in range(10):
+    for seed in range(5):
         serial_pipeline_efficientzero_eval([main_config, create_config], game_config=game_config, seed=seed, max_env_step=int(1e6))
         print(f'eval seed {seed} done!')

@@ -301,8 +301,8 @@ class GomokuExpert(object):
 
             # Comprehensive score in all directions
             self.action_value[action][4] = (
-                self.action_value[action][0] + self.action_value[action][1] + self.action_value[action][2] +
-                self.action_value[action][3]
+                    self.action_value[action][0] + self.action_value[action][1] + self.action_value[action][2] +
+                    self.action_value[action][3]
             )
 
         action = max(self.available, key=lambda x: self.action_value[x][4])
@@ -322,9 +322,12 @@ class GomokuExpert(object):
         self.board = obs
 
         if self.board['observation'].shape[0] == self.board['observation'].shape[1]:
-            self.board['observation'] = self.board['observation'].reshape(
-                3, self.board['observation'].shape[0], self.board['observation'].shape[1]
-            )
+            # reshape is wrong
+            # self.board['observation'] = self.board['observation'].reshape(
+            #     3, self.board['observation'].shape[0], self.board['observation'].shape[1]
+            # )
+            # shape: 6,6,3 -> 3,6,6
+            self.board['observation'] = self.board['observation'].transpose(2, 0, 1)
 
         if self.init_board_flag is False:
             self.board_width = self.board['observation'][0].shape[0]
