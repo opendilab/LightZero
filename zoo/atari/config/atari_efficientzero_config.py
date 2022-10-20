@@ -15,6 +15,11 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 
+# debug
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+
 atari_efficientzero_config = dict(
     exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
     # exp_name='data_ez_ptree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',

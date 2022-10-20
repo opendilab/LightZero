@@ -24,7 +24,11 @@ game_config = EasyDict(
 
         image_based=False,
         cvt_string=False,
-        clip_reward=True,
+
+        # clip_reward=True,
+        # TODO(pu)
+        clip_reward=False,
+
         game_wrapper=True,
         action_space_size=16,  # 4**2
         amp_type='none',

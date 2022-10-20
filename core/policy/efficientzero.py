@@ -23,9 +23,9 @@ from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
 from core.rl_utils import Transforms
 # TODO(pu): choose game config
-# from zoo.atari.config.atari_efficientzero_base_config import game_config
+from zoo.atari.config.atari_efficientzero_base_config import game_config
 # from zoo.board_games.gomoku.config.gomoku_efficientzero_base_config import game_config
-from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config
+# from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config
 # from zoo.box2d.lunarlander.config.lunarlander_cont_disc_efficientzero_base_config import game_config
 
 
@@ -176,13 +176,36 @@ class EfficientZeroPolicy(Policy):
         # obs_batch_ori is the original observations in a batch
         # obs_batch is the observation for hat s_t (predicted hidden states from dynamics function)
         # obs_target_batch is the observations for s_t (hidden states from representation function)
+
         # to save GPU memory usage, obs_batch_ori contains (stack + unroll steps) frames
+
 
         if self.game_config.image_based:
             obs_batch_ori = torch.from_numpy(obs_batch_ori / 255.0).to(self.game_config.device).float()
         else:
             obs_batch_ori = torch.from_numpy(obs_batch_ori).to(self.game_config.device).float()
+
+        # collector data process:
+        # (batch_size, stack_num+num_unroll_steps, W, H, C) -> (batch_size, (stack_num+num_unroll_steps)*C, W, H )
+
+        # e.g. in pong: stack_num=4, num_unroll_steps=5
+        # (4, 9, 96, 96, 3) -> (4, 9*3, 96, 96) = 4,27,96,96
+
+        # in the second dim:
+        # timestep t: 1,2,3,4,5,6,7,8,9
+        # channel_num:    3    3     3   3     3    3    3   3       3
+        #                ---, ---, ---, ---,  ---, ---, ---, ---,   ---
+
+        # (4, 4*3, 96, 96) = (4, 12, 96, 96)
+        # take the first stacked obs at timestep t: o_t_stack
+        # used in initial_inference
         obs_batch = obs_batch_ori[:, 0:self.game_config.frame_stack_num * self.game_config.image_channel, :, :]
+
+        # take the all obs other than timestep t1:
+        # obs_target_batch is used for calculate consistency loss, which is only performed in the last 8 timesteps
+        # for i in rnage(num_unroll_steeps):
+        #   beg_index = self.game_config.image_channel * step_i
+        #   end_index = self.game_config.image_channel * (step_i + self.game_config.frame_stack_num)
         obs_target_batch = obs_batch_ori[:, self.game_config.image_channel:, :, :]
 
         # do augmentations
@@ -229,7 +252,9 @@ class EfficientZeroPolicy(Policy):
 
         transformed_target_value = scalar_transform(target_value, self.game_config.support_size)
         target_value_phi = self.game_config.value_phi(transformed_target_value)
+
         network_output = self._learn_model.initial_inference(obs_batch)
+
         value = network_output.value
         value_prefix = network_output.value_prefix
         hidden_state = network_output.hidden_state  # （2, 64, 6, 6）
@@ -265,7 +290,7 @@ class EfficientZeroPolicy(Policy):
         value_priority = L1Loss(reduction='none')(scaled_value.squeeze(-1), target_value[:, 0])
         value_priority = value_priority.data.cpu().numpy() + self.game_config.prioritized_replay_eps
 
-        # loss of the first step
+        # calculate loss for the first step
         value_loss = self.game_config.modified_cross_entropy_loss(value, target_value_phi[:, 0])
         policy_loss = self.game_config.modified_cross_entropy_loss(policy_logits, target_policy[:, 0])
         value_prefix_loss = torch.zeros(batch_size, device=self.game_config.device)
@@ -273,6 +298,7 @@ class EfficientZeroPolicy(Policy):
 
         target_value_prefix_cpu = target_value_prefix.detach().cpu()
         gradient_scale = 1 / self.game_config.num_unroll_steps
+
         # loss of the unrolled steps
         for step_i in range(self.game_config.num_unroll_steps):
             # unroll with the dynamics function
@@ -317,6 +343,7 @@ class EfficientZeroPolicy(Policy):
                 other_loss['consist_' + str(step_i + 1)] = temp_loss.mean().item()
                 consistency_loss += temp_loss
 
+            # the target policy, target_value_phi, target_value_prefix_phi is calculated in game buffer now
             policy_loss += self.game_config.modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
             value_loss += self.game_config.modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
             value_prefix_loss += self.game_config.modified_cross_entropy_loss(

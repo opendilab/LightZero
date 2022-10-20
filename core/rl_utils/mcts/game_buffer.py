@@ -401,6 +401,7 @@ class GameBuffer(Buffer):
             _mask = [1. for i in range(len(_actions))]
             _mask += [0. for _ in range(self.config.num_unroll_steps - len(_mask))]
 
+            # pad random action
             _actions += [
                 np.random.randint(0, game.action_space_size)
                 for _ in range(self.config.num_unroll_steps - len(_actions))

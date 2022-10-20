@@ -16,8 +16,10 @@ class DiscreteSupport(object):
 def scalar_transform(x, support_size, epsilon=0.001):
     """
     Overview:
-        Reference from MuZero: Appendix F => Network Architecture
-        & Appendix A : Proposition A.2 in https://arxiv.org/pdf/1805.11593.pdf (Page-11)
+        h(.) function
+        Reference:
+            MuZero: Appendix F: Network Architecture
+            https://arxiv.org/pdf/1805.11593.pdf (Page-11) Appendix A : Proposition A.2
     """
     scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
     assert scalar_support.delta == 1
@@ -35,8 +37,10 @@ def scalar_transform(x, support_size, epsilon=0.001):
 def inverse_scalar_transform(logits, support_size, epsilon=0.001):
     """
     Overview:
-        Reference from MuZero: Appendix F => Network Architecture
-        & Appendix A : Proposition A.2 in https://arxiv.org/pdf/1805.11593.pdf (Page-11)
+        h^(-1)(.) function
+        Reference:
+            MuZero: Appendix F: Network Architecture
+            https://arxiv.org/pdf/1805.11593.pdf (Page-11) Appendix A : Proposition A.2 (iii)
     """
     scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
     value_probs = torch.softmax(logits, dim=1)
