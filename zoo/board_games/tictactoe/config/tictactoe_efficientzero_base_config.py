@@ -59,7 +59,7 @@ game_config = EasyDict(
         num_simulations=25,
         batch_size=64,
         total_transitions=int(3e3),
-        lstm_hidden_size=64,
+        lstm_hidden_size=256,
         # to make sure the value target is the final outcome
         td_steps=9,
         num_unroll_steps=3,

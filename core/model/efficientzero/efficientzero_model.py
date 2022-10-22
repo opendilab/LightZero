@@ -285,6 +285,7 @@ class PredictionNetwork(nn.Module):
             self,
             action_space_size,
             num_blocks,
+            in_channels,
             num_channels,
             reduced_channels_value,
             reduced_channels_policy,
@@ -303,6 +304,8 @@ class PredictionNetwork(nn.Module):
             action space
         num_blocks: int
             number of res blocks
+        in_channels: int
+            channels of input
         num_channels: int
             channels of hidden states
         reduced_channels_value: int
@@ -323,6 +326,10 @@ class PredictionNetwork(nn.Module):
             True -> zero initialization for the last layer of value/policy mlp
         """
         super().__init__()
+        self.in_channels = in_channels
+        if self.in_channels is not None:
+            self.conv_input = nn.Conv2d(in_channels, num_channels, 1)
+
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
@@ -368,6 +375,9 @@ class PredictionNetwork(nn.Module):
         self.activation = nn.ReLU(inplace=True)
 
     def forward(self, x):
+        if self.in_channels is not None:
+            x = self.conv_input(x)
+
         for block in self.resblocks:
             x = block(x)
         value = self.conv1x1_value(x)
@@ -390,7 +400,6 @@ class EfficientZeroNet(BaseNet):
 
     def __init__(
             self,
-            projection_input_dim_type,
             observation_shape,
             action_space_size,
             num_blocks,
@@ -419,7 +428,6 @@ class EfficientZeroNet(BaseNet):
         Overview:
             EfficientZero network
         Arguments:
-            - projection_input_dim_type
             - representation_model_type
             - observation_shape: tuple or list. shape of observations: [C, W, H]
             - action_space_size: (:obj:`int`): . action space
@@ -453,7 +461,7 @@ class EfficientZeroNet(BaseNet):
         self.state_norm = state_norm
         self.representation_model_type = representation_model_type
         self.representation_model = representation_model
-        self.projection_input_dim_type = projection_input_dim_type
+        self.downsample = downsample
 
         self.action_space_size = action_space_size
         block_output_size_reward = (
@@ -488,46 +496,73 @@ class EfficientZeroNet(BaseNet):
         else:
             self.representation_network = self.representation_model
 
-        self.dynamics_network = DynamicsNetwork(
-            num_blocks,
-            num_channels + 1,
-            reduced_channels_reward,
-            fc_reward_layers,
-            reward_support_size,
-            block_output_size_reward,
-            lstm_hidden_size=lstm_hidden_size,
-            momentum=bn_mt,
-            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-        )
-
-        self.prediction_network = PredictionNetwork(
-            action_space_size,
-            num_blocks,
-            num_channels,
-            reduced_channels_value,
-            reduced_channels_policy,
-            fc_value_layers,
-            fc_policy_layers,
-            value_support_size,
-            block_output_size_value,
-            block_output_size_policy,
-            momentum=bn_mt,
-            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-        )
+        if self.representation_model_type == 'identity':
+            self.dynamics_network = DynamicsNetwork(
+                num_blocks,
+                observation_shape[0] + 1,  # in_channels=observation_shape[0]
+                reduced_channels_reward,
+                fc_reward_layers,
+                reward_support_size,
+                block_output_size_reward,
+                lstm_hidden_size=lstm_hidden_size,
+                momentum=bn_mt,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            )
+            self.prediction_network = PredictionNetwork(
+                action_space_size,
+                num_blocks,
+                observation_shape[0],  # in_channels
+                num_channels,
+                reduced_channels_value,
+                reduced_channels_policy,
+                fc_value_layers,
+                fc_policy_layers,
+                value_support_size,
+                block_output_size_value,
+                block_output_size_policy,
+                momentum=bn_mt,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            )
+        else:
+            self.dynamics_network = DynamicsNetwork(
+                num_blocks,
+                num_channels + 1,
+                reduced_channels_reward,
+                fc_reward_layers,
+                reward_support_size,
+                block_output_size_reward,
+                lstm_hidden_size=lstm_hidden_size,
+                momentum=bn_mt,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            )
+            self.prediction_network = PredictionNetwork(
+                action_space_size,
+                num_blocks,
+                None,  # in_channels
+                num_channels,
+                reduced_channels_value,
+                reduced_channels_policy,
+                fc_value_layers,
+                fc_policy_layers,
+                value_support_size,
+                block_output_size_value,
+                block_output_size_policy,
+                momentum=bn_mt,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            )
 
         # projection
-        # TODO(pu)
-        if self.projection_input_dim_type == 'atari':
-            # due to downsample
-            self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
-                                                                 ) * math.ceil(observation_shape[2] / 16)
-        elif self.projection_input_dim_type == 'board_games':
+        if self.representation_model_type == 'identity':
             self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
         else:
-            # self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
-            self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
-
-
+            if self.downsample:
+                # for atari, due to downsample
+                # observation_shape=(12, 96, 96),  # stack=4
+                # 3 * 96/16 * 96/16 = 3*6*6 = 108
+                self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
+                                                                 ) * math.ceil(observation_shape[2] / 16)
+            else:
+                self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
         self.projection = nn.Sequential(
             nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), nn.ReLU(inplace=True),
@@ -582,8 +617,21 @@ class EfficientZeroNet(BaseNet):
 
     def project(self, hidden_state, with_grad=True):
         # only the branch of proj + pred can share the gradients
-        # hidden_state = hidden_state.view(-1, self.projection_input_dim)
-        hidden_state = hidden_state.reshape(-1, self.projection_input_dim)
+
+        # for lunarlander:
+        # observation_shape = (4, 8, 1),  # stack=4
+        # self.projection_input_dim = 64*8*1
+        # hidden_state.shape: (batch_size, num_channel, obs_shape[1], obs_shape[2])  256,64,8,1
+        # 256,64,8,1 -> 256,64*8*1
+
+        # for atari:
+        # observation_shape = (12, 96, 96),  # 3,96,96 stack=4
+        # self.projection_input_dim = 3*6*6 = 108
+        # hidden_state.shape: (batch_size, num_channel, obs_shape[1]/16, obs_shape[2]/16)  256,64,96/16,96/16 = 256,64,6,6
+        # 256, 64, 6, 6 -> 256,64*6*6
+
+        # hidden_state.shape[0] = batch_size
+        hidden_state = hidden_state.reshape(hidden_state.shape[0], -1)
 
         proj = self.projection(hidden_state)
 

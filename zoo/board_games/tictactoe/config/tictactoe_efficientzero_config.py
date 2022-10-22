@@ -42,15 +42,16 @@ tictactoe_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            projection_input_dim_type='board_games',
-            representation_model_type='identity',
+            # representation_model_type='identity',
+            representation_model_type='conv_res_blocks',
             # [S, W, H, C] -> [S x C, W, H]
             # [4, 3, 3, 3] -> [12, 3, 3]
             observation_shape=(12, 3, 3),  # if frame_stack_nums=4
             action_space_size=9,
             downsample=False,
             num_blocks=1,
-            num_channels=12,
+            num_channels=16,  # TODO
+            lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -59,7 +60,6 @@ tictactoe_efficientzero_config = dict(
             fc_policy_layers=[8],
             reward_support_size=21,
             value_support_size=21,
-            lstm_hidden_size=64,
             bn_mt=0.1,
             # proj_hid=128,
             # proj_out=128,

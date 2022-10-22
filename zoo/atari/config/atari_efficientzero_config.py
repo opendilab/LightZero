@@ -55,18 +55,18 @@ atari_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            projection_input_dim_type='atari',
             representation_model_type='conv_res_blocks',
             # representation_model=representation_model,
             observation_shape=(12, 96, 96),  # 3,96,96 stack=4
             action_space_size=6,
             downsample=True,
             num_blocks=1,
-            num_channels=64,  # Number of channels in the ResNet, default config in EZ original repo
-            lstm_hidden_size=512,  # default config in EZ original repo
+            # default config in EZ original repo
+            num_channels=64,
+            lstm_hidden_size=512,
             # The env step is twice as large as the original size model when converging
-            # num_channels=32,  # Number of channels in the ResNet, for time efficiency
-            # lstm_hidden_size=256,  # for time efficiency
+            # num_channels=32,
+            # lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,

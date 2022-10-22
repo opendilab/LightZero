@@ -42,7 +42,7 @@ gomoku_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            projection_input_dim_type='board_games',
+            # representation_model_type='identity',
             representation_model_type='conv_res_blocks',
             # [S, W, H, C] -> [S x C, W, H]
             # [4, board_size, board_size, 3] -> [12, board_size, board_size]

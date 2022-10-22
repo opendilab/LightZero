@@ -2,6 +2,7 @@ import pytest
 from .atari_lightzero_env import AtariLightZeroEnv
 from easydict import EasyDict
 
+
 cfg = EasyDict(
     env_name='PongNoFrameskip-v4',
     frame_skip=4,

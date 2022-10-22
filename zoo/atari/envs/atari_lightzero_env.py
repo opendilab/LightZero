@@ -16,9 +16,6 @@ from zoo.atari.envs.atari_wrappers import wrap_lightzero, wrap_lightzero_dqn_exp
 from easydict import EasyDict
 
 
-# from core.utils import ENV_REGISTRY
-
-
 @ENV_REGISTRY.register('atari_lightzero')
 class AtariLightZeroEnv(BaseEnv):
 
