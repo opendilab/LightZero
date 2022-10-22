@@ -40,7 +40,7 @@ game_config = EasyDict(
         obs_shape=(4, 8, 1),  # if frame_stack_nums=4
         frame_stack_num=4,
 
-        # obs_shape=(8, 1, 1),  # if frame_stack_num=1
+        # obs_shape=(1, 8, 1),  # if frame_stack_num=1
         # frame_stack_num=1,
 
         gray_scale=False,
@@ -67,7 +67,9 @@ game_config = EasyDict(
 
         collector_env_num=8,
         evaluator_env_num=5,
-        num_simulations=50,
+        # num_simulations=50,
+        # TODO
+        num_simulations=100,
         batch_size=256,
         total_transitions=int(1e5),
         lstm_hidden_size=512,
@@ -79,7 +81,8 @@ game_config = EasyDict(
         revisit_policy_search_rate=0.99,
 
         # TODO(pu): why not use adam?
-        lr_manually=True,
+        # lr_manually=True,
+        lr_manually=False,
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority

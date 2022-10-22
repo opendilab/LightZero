@@ -44,10 +44,15 @@ gomoku_efficientzero_config = dict(
         model=dict(
             projection_input_dim_type='board_games',
             representation_model_type='conv_res_blocks',
+            # [S, W, H, C] -> [S x C, W, H]
+            # [4, board_size, board_size, 3] -> [12, board_size, board_size]
             observation_shape=(12, board_size, board_size),  # if frame_stack_num=4
             action_space_size=int(1 * board_size * board_size),
+
+            downsample=False,
             num_blocks=1,
-            num_channels=12,
+            num_channels=64,
+            lstm_hidden_size=512,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -56,10 +61,6 @@ gomoku_efficientzero_config = dict(
             fc_policy_layers=[32],
             reward_support_size=601,
             value_support_size=601,
-            downsample=False,
-            lstm_hidden_size=512,
-            # for debug
-            # lstm_hidden_size=64,
             bn_mt=0.1,
             proj_hid=1024,
             proj_out=1024,
@@ -84,7 +85,7 @@ gomoku_efficientzero_config = dict(
             # n_episode=8,  update_per_collect=36*8=268
             # update_per_collect=int(board_size ** 2 * n_episode),
 
-            learning_rate=0.002,
+            learning_rate=0.0003,  # fixed lr
             # Frequency of target network update.
             target_update_freq=400,
         ),

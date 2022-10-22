@@ -31,6 +31,7 @@ class LunarLanderDiscEnv(BaseEnv):
     config = dict(
         save_replay_gif=False,
         replay_path_gif=None,
+        replay_path=None,
         use_act_scale=False,
         delay_reward_step=0,
         each_dim_disc_size=4,
@@ -41,6 +42,7 @@ class LunarLanderDiscEnv(BaseEnv):
         self._init_flag = False
         # env_id: LunarLander-v2, LunarLanderContinuous-v2
         self._env_id = cfg.env_id
+        self._replay_path = cfg.replay_path
         self._replay_path_gif = cfg.replay_path_gif
         self._save_replay_gif = cfg.save_replay_gif
         self._save_replay_count = 0
@@ -52,13 +54,13 @@ class LunarLanderDiscEnv(BaseEnv):
     def reset(self) -> np.ndarray:
         if not self._init_flag:
             self._env = gym.make(self._cfg.env_id)
-            # if self._replay_path is not None:
-            #     self._env = gym.wrappers.RecordVideo(
-            #         self._env,
-            #         video_folder=self._replay_path,
-            #         episode_trigger=lambda episode_id: True,
-            #         name_prefix='rl-video-{}'.format(id(self))
-            #     )
+            if self._replay_path is not None:
+                self._env = gym.wrappers.RecordVideo(
+                    self._env,
+                    video_folder=self._replay_path,
+                    episode_trigger=lambda episode_id: True,
+                    name_prefix='rl-video-{}'.format(id(self))
+                )
             if hasattr(self._cfg, 'obs_plus_prev_action_reward') and self._cfg.obs_plus_prev_action_reward:
                 self._env = ObsPlusPrevActRewWrapper(self._env)
             self._observation_space = self._env.observation_space
@@ -92,9 +94,10 @@ class LunarLanderDiscEnv(BaseEnv):
         # the modified discrete action space
         self._action_space = gym.spaces.Discrete(self.K)
 
-        action_mask = np.ones(self.K, 'int8')
-        # to be compatible with cnn
+        # to be compatible with efficientzero
+        # shape: [W, H, C]
         obs = obs.reshape(8, 1, 1)
+        action_mask = np.ones(self.K, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
 
         return obs
@@ -117,8 +120,6 @@ class LunarLanderDiscEnv(BaseEnv):
         action = [-1 + 2 / self.n * k for k in self.disc_to_cont[int(action)]]
         action = to_ndarray(action)
 
-        # assert isinstance(action, np.ndarray), type(action)
-
         if action.shape == (1,):
             action = action.item()  # 0-dim array
         if self._act_scale:
@@ -126,10 +127,11 @@ class LunarLanderDiscEnv(BaseEnv):
         if self._save_replay_gif:
             self._frames.append(self._env.render(mode='rgb_array'))
         obs, rew, done, info = self._env.step(action)
-        action_mask = np.ones(self._action_space.n, 'int8')
-        # to be compatible with cnn
-        # shape:   [ W, H, C]
+
+        # to be compatible with efficientzero
+        # shape: [W, H, C]
         obs = obs.reshape(8, 1, 1)
+        action_mask = np.ones(self._action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
 
         # self._env.render()
@@ -161,13 +163,6 @@ class LunarLanderDiscEnv(BaseEnv):
         self._replay_path = replay_path
         self._save_replay_gif = True
         self._save_replay_count = 0
-        # this function can lead to the meaningless result
-        self._env = gym.wrappers.RecordVideo(
-            self._env,
-            video_folder=self._replay_path,
-            episode_trigger=lambda episode_id: True,
-            name_prefix='rl-video-{}'.format(id(self))
-        )
 
     @staticmethod
     def display_frames_as_gif(frames: list, path: str) -> None:

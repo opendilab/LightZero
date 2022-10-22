@@ -8,31 +8,39 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-board_size = 6  # default_size is 15
-
 game_config = EasyDict(
     dict(
-        env_name='gomoku',
-        env_type='board_games',
+        env_name='lunarlander_disc',
+        env_type='no_board_games',
         device=device,
+        # mcts_ctree=False,
+        mcts_ctree=True,
         # TODO: for board_games, mcts_ctree now only support env_num=1, because in cpp MCTS root node,
         #  we must specify the one same action mask,
         #  when env_num>1, the action mask for different env may be different.
-        mcts_ctree=False,
-        battle_mode='two_player_mode',
-        game_history_length=36,
-        # battle_mode='one_player_mode',
-        # game_history_length=18,
+        battle_mode='one_player_mode',
+        game_history_length=200,
+
         image_based=False,
         cvt_string=False,
-        clip_reward=True,
+
+        # clip_reward=True,
+        # TODO(pu)
+        clip_reward=False,
+
         game_wrapper=True,
-        action_space_size=int(board_size * board_size),
+        action_space_size=4,
         amp_type='none',
+
         # [S, W, H, C] -> [S x C, W, H]
-        # [4, board_size, board_size, 3] -> [12, board_size, board_size]
-        obs_shape=(12, board_size, board_size),  # if frame_stack_num=4
-        image_channel=3,
+        # [4,8,1,1] -> [4*1, 8, 1]
+        image_channel=1,
+        obs_shape=(4, 8, 1),  # if frame_stack_nums=4
+        frame_stack_num=4,
+
+        # obs_shape=(1, 8, 1),  # if frame_stack_num=1
+        # frame_stack_num=1,
+
         gray_scale=False,
         downsample=False,
         vis_result=True,
@@ -44,26 +52,24 @@ game_config = EasyDict(
         augmentation=['shift', 'intensity'],
 
         # debug
-        # collector_env_num=3,
-        # evaluator_env_num=3,
-        # total_transitions=int(1e5),
-        # num_simulations=2,
+        # collector_env_num=1,
+        # evaluator_env_num=1,
+        # num_simulations=9,
         # batch_size=4,
-        # lstm_hidden_size=64,
-        # # to make sure the value target is the final outcome
+        # total_transitions=int(1e5),
+        # lstm_hidden_size=256,
+        # # # to make sure the value target is the final outcome
         # td_steps=5,
-        # # td_steps=int(board_size * board_size),
-        # num_unroll_steps=5,
-        # lstm_horizon_len=5,
+        # num_unroll_steps=3,
+        # lstm_horizon_len=3,
 
         collector_env_num=8,
         evaluator_env_num=5,
-        total_transitions=int(1e5),
         num_simulations=50,
         batch_size=256,
+        total_transitions=int(1e5),
         lstm_hidden_size=512,
-        # to make sure the value target is the final outcome
-        td_steps=int(board_size * board_size),
+        td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
 
@@ -72,7 +78,7 @@ game_config = EasyDict(
 
         # TODO(pu): why not use adam?
         # lr_manually=True,
-        lr_manually=False,  # use fixed lr
+        lr_manually=False,
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority
@@ -88,7 +94,7 @@ game_config = EasyDict(
         use_root_value=False,
 
         # TODO(pu): test the effect
-        init_zero=True,
+        last_linear_layer_init_zero=True,
         state_norm=False,
         mini_infer_size=2,
         # (Float type) How much prioritization is used: 0 means no prioritization while 1 means full prioritization
@@ -115,35 +121,31 @@ game_config = EasyDict(
         checkpoint_interval=100,
         target_model_interval=200,
         save_ckpt_interval=10000,
-        discount=1,
+        discount=0.997,
         dirichlet_alpha=0.3,
         value_delta_max=0.01,
         num_actors=1,
         # network initialization/ & normalization
         episode_life=True,
+        # replay window
         start_transitions=8,
         transition_num=1,
         # frame skip & stack observation
         frame_skip=4,
-        frame_stack_num=4,
-
+        # TODO(pu): EfficientZero -> MuZero
         # coefficient
-        # TODO(pu): test the effect of value_prefix_loss and consistency_loss
-        reward_loss_coeff=1,  # value_prefix_loss
-        # reward_loss_coeff=0,  # value_prefix_loss
+        reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
         consistency_coeff=2,
-        # consistency_coeff=0,
 
-        bn_mt=0.1,
         # siamese
         proj_hid=1024,
         proj_out=1024,
         pred_hid=512,
         pred_out=1024,
+        bn_mt=0.1,
         blocks=1,  # Number of blocks in the ResNet
-        channels=16,  # Number of channels in the ResNet
         reduced_channels_reward=16,  # x36 Number of channels in reward head
         reduced_channels_value=16,  # x36 Number of channels in value head
         reduced_channels_policy=16,  # x36 Number of channels in policy head

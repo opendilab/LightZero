@@ -27,10 +27,10 @@ game_config = EasyDict(
         game_wrapper=True,
         action_space_size=int(3 * 3),
         amp_type='none',
+        # [S, W, H, C] -> [S x C, W, H]
+        # [4, 3, 3, 3] -> [12, 3, 3]
         obs_shape=(12, 3, 3),  # if frame_stack_num=4
         frame_stack_num=4,
-        # obs_shape=(3, 3, 3),  # if frame_stack_num=1
-        # frame_stack_num=1,
         image_channel=3,
         gray_scale=False,
         downsample=False,

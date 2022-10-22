@@ -1,26 +1,40 @@
 from typing import Any, List, Union, Optional
 import time
+import copy
+
 import gym
 import os
 import numpy as np
+from easydict import EasyDict
+
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray, to_list
 from ding.utils import ENV_REGISTRY
 from ding.envs.common import affine_transform
 from ding.envs import ObsPlusPrevActRewWrapper
-from matplotlib import animation
-import matplotlib.pyplot as plt
-from itertools import product
 
 
 @ENV_REGISTRY.register('lunarlander')
 class LunarLanderEnv(BaseEnv):
+
+    @classmethod
+    def default_config(cls: type) -> EasyDict:
+        cfg = EasyDict(copy.deepcopy(cls.config))
+        cfg.cfg_type = cls.__name__ + 'Dict'
+        return cfg
+
+    config = dict(
+        save_replay_gif=False,
+        replay_path_gif=None,
+        replay_path=None,
+    )
 
     def __init__(self, cfg: dict) -> None:
         self._cfg = cfg
         self._init_flag = False
         # env_id: LunarLander-v2, LunarLanderContinuous-v2
         self._env_id = cfg.env_id
+        self._replay_path = cfg.replay_path
         self._replay_path = cfg.replay_path
         self._save_replay_gif = cfg.save_replay_gif
         self._save_replay_count = 0
@@ -32,13 +46,13 @@ class LunarLanderEnv(BaseEnv):
     def reset(self) -> np.ndarray:
         if not self._init_flag:
             self._env = gym.make(self._cfg.env_id)
-            # if self._replay_path is not None:
-            #     self._env = gym.wrappers.RecordVideo(
-            #         self._env,
-            #         video_folder=self._replay_path,
-            #         episode_trigger=lambda episode_id: True,
-            #         name_prefix='rl-video-{}'.format(id(self))
-            #     )
+            if self._replay_path is not None:
+                self._env = gym.wrappers.RecordVideo(
+                    self._env,
+                    video_folder=self._replay_path,
+                    episode_trigger=lambda episode_id: True,
+                    name_prefix='rl-video-{}'.format(id(self))
+                )
             if hasattr(self._cfg, 'obs_plus_prev_action_reward') and self._cfg.obs_plus_prev_action_reward:
                 self._env = ObsPlusPrevActRewWrapper(self._env)
             self._observation_space = self._env.observation_space
@@ -57,6 +71,13 @@ class LunarLanderEnv(BaseEnv):
         obs = to_ndarray(obs)
         if self._save_replay_gif:
             self._frames = []
+
+        if 'Continuous' not in self._env_id:
+            # to be compatible with efficientzero
+            # shape: [W, H, C]
+            obs = obs.reshape(8, 1, 1)
+            action_mask = np.ones(4, 'int8')
+            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
         return obs
 
     def close(self) -> None:
@@ -73,7 +94,6 @@ class LunarLanderEnv(BaseEnv):
         np.random.seed(self._seed)
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
-        assert isinstance(action, np.ndarray), type(action)
         if action.shape == (1, ):
             action = action.item()  # 0-dim array
         if self._act_scale:
@@ -81,6 +101,12 @@ class LunarLanderEnv(BaseEnv):
         if self._save_replay_gif:
             self._frames.append(self._env.render(mode='rgb_array'))
         obs, rew, done, info = self._env.step(action)
+        if 'Continuous' not in self._env_id:
+            # to be compatible with efficientzero
+            # shape: [W, H, C]
+            obs = obs.reshape(8, 1, 1)
+            action_mask = np.ones(4, 'int8')
+            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
         # self._env.render()
         # print(action, obs, rew, done, info)
         self._final_eval_reward += rew
@@ -100,31 +126,19 @@ class LunarLanderEnv(BaseEnv):
         rew = to_ndarray([rew]).astype(np.float32)  # wrapped to be transferred to a array with shape (1,)
         return BaseEnvTimestep(obs, rew, done, info)
 
+    @property
+    def legal_actions(self):
+        return np.arange(self._action_space.n)
+
     def enable_save_replay(self, replay_path: Optional[str] = None) -> None:
         if replay_path is None:
             replay_path = './video'
         self._replay_path = replay_path
         self._save_replay_gif = True
         self._save_replay_count = 0
-        # this function can lead to the meaningless result
-        self._env = gym.wrappers.RecordVideo(
-            self._env,
-            video_folder=self._replay_path,
-            episode_trigger=lambda episode_id: True,
-            name_prefix='rl-video-{}'.format(id(self))
-        )
 
     @staticmethod
     def display_frames_as_gif(frames: list, path: str) -> None:
-        # patch = plt.imshow(frames[0])
-        # plt.axis('off')
-        #
-        # def animate(i):
-        #     patch.set_data(frames[i])
-        #
-        # anim = animation.FuncAnimation(plt.gcf(), animate, frames=len(frames), interval=5)
-        # anim.save(path, writer='imagemagick', fps=20)
-
         import imageio
         imageio.mimsave(path, frames, fps=20)
 

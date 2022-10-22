@@ -3,7 +3,7 @@ sys.path.append('/Users/puyuan/code/LightZero')
 
 from easydict import EasyDict
 
-from lunarlander_cont_disc_efficientzero_base_config import game_config
+from lunarlander_disc_efficientzero_base_config import game_config
 
 # for debug
 # collector_env_num = 1
@@ -15,14 +15,14 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 5
 
-lunarlander_cont_disc_efficientzero_config = dict(
-    exp_name='data_ez_ptree/lunarlander_cont_disc_1pm_efficientzero_seed0_sub885_cliprew-false_ns100',
+lunarlander_disc_efficientzero_config = dict(
+    exp_name='data_ez_ctree/lunarlander_disc_1pm_efficientzero_seed0_sub885_cliprew-false_ns50',
 
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        env_id='LunarLanderContinuous-v2',
+        env_id='LunarLander-v2',
         stop_value=300,
         battle_mode='one_player_mode',
         prob_random_agent=0.,
@@ -32,19 +32,21 @@ lunarlander_cont_disc_efficientzero_config = dict(
     ),
     policy=dict(
         model_path=None,
-        env_name='lunarlander_cont_disc',
+        env_name='lunarlander_disc',
         # TODO(pu): how to pass into game_config, which is class, not a dict
         # game_config=game_config,
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            projection_input_dim_type='lunarlander_cont_disc',
+            projection_input_dim_type='lunarlander_disc',
             representation_model_type='identity',
 
             # [S, W, H, C] -> [S x C, W, H]
             # [4,8,1,1] -> [4*1, 8, 1]
             observation_shape=(4, 8, 1),  # if frame_stack_nums=4
-            action_space_size=16,  # 4**2
+            # observation_shape=(1, 8, 1),  # if frame_stack_nums=1
+
+            action_space_size=4,
 
             downsample=False,
             num_blocks=1,
@@ -76,7 +78,7 @@ lunarlander_cont_disc_efficientzero_config = dict(
             update_per_collect=int(500),
             batch_size=256,
 
-            learning_rate=0.0003,  # fixed lr
+            learning_rate=0.005,  # fixed lr
             # Frequency of target network update.
             target_update_freq=400,
         ),
@@ -97,13 +99,13 @@ lunarlander_cont_disc_efficientzero_config = dict(
         ),
     ),
 )
-lunarlander_cont_disc_efficientzero_config = EasyDict(lunarlander_cont_disc_efficientzero_config)
-main_config = lunarlander_cont_disc_efficientzero_config
+lunarlander_disc_efficientzero_config = EasyDict(lunarlander_disc_efficientzero_config)
+main_config = lunarlander_disc_efficientzero_config
 
-lunarlander_cont_disc_efficientzero_create_config = dict(
+lunarlander_disc_efficientzero_create_config = dict(
     env=dict(
-        type='lunarlander_cont_disc',
-        import_names=['zoo.box2d.lunarlander.envs.lunarlander_cont_disc_env'],
+        type='lunarlander',
+        import_names=['zoo.box2d.lunarlander.envs.lunarlander_env'],
     ),
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
@@ -117,8 +119,8 @@ lunarlander_cont_disc_efficientzero_create_config = dict(
         import_names=['core.worker.collector.efficientzero_collector'],
     )
 )
-lunarlander_cont_disc_efficientzero_create_config = EasyDict(lunarlander_cont_disc_efficientzero_create_config)
-create_config = lunarlander_cont_disc_efficientzero_create_config
+lunarlander_disc_efficientzero_create_config = EasyDict(lunarlander_disc_efficientzero_create_config)
+create_config = lunarlander_disc_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_efficientzero

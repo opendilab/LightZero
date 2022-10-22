@@ -44,8 +44,9 @@ tictactoe_efficientzero_config = dict(
         model=dict(
             projection_input_dim_type='board_games',
             representation_model_type='identity',
+            # [S, W, H, C] -> [S x C, W, H]
+            # [4, 3, 3, 3] -> [12, 3, 3]
             observation_shape=(12, 3, 3),  # if frame_stack_nums=4
-            # observation_shape=(3, 3, 3),  # if frame_stack_nums=1
             action_space_size=9,
             downsample=False,
             num_blocks=1,
