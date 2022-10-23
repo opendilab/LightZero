@@ -1,5 +1,7 @@
 import sys
 sys.path.append('/Users/puyuan/code/LightZero')
+# sys.path.append('/mnt/nfs/puyuan/LightZero')
+
 
 from easydict import EasyDict
 
@@ -16,7 +18,7 @@ n_episode = 8
 evaluator_env_num = 5
 
 lunarlander_cont_disc_efficientzero_config = dict(
-    exp_name='data_ez_ptree/lunarlander_cont_disc_1pm_efficientzero_seed0_sub885_cliprew-false_ns100',
+    exp_name='data_ez_ctree/lunarlander_cont_disc_1pm_efficientzero_seed0_sub885_cliprew-false_ns100',
 
     env=dict(
         collector_env_num=collector_env_num,

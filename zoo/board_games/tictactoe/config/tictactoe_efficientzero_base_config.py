@@ -17,10 +17,10 @@ game_config = EasyDict(
         # TODO: for board_games, mcts_ctree now only support env_num=1, because in cpp MCTS root node,
         #  we must specify the one same action mask,
         #  when env_num>1, the action mask for different env may be different.
-        # battle_mode='two_player_mode',
-        # game_history_length=9,
-        battle_mode='one_player_mode',
-        game_history_length=5,
+        battle_mode='two_player_mode',
+        game_history_length=9,
+        # battle_mode='one_player_mode',
+        # game_history_length=5,
         image_based=False,
         cvt_string=False,
         clip_reward=True,
@@ -58,7 +58,8 @@ game_config = EasyDict(
         evaluator_env_num=5,
         num_simulations=25,
         batch_size=64,
-        total_transitions=int(3e3),
+        # total_transitions=int(3e3),
+        total_transitions=int(1e5),
         lstm_hidden_size=256,
         # to make sure the value target is the final outcome
         td_steps=9,
@@ -83,7 +84,8 @@ game_config = EasyDict(
         # only effective when auto_temperature=False
         fixed_temperature_value=0.25,
         # TODO(pu): whether to use root value in reanalyzing?
-        use_root_value=False,
+        # use_root_value=False,
+        use_root_value=True,
 
         # TODO(pu): test the effect
         last_linear_layer_init_zero=True,
@@ -136,14 +138,10 @@ game_config = EasyDict(
         bn_mt=0.1,
 
         # siamese
-        # proj_hid=128,
-        # proj_out=128,
-        # pred_hid=64,
-        # pred_out=128,
-        proj_hid=32,
-        proj_out=32,
-        pred_hid=16,
-        pred_out=32,
+        proj_hid=128,
+        proj_out=128,
+        pred_hid=64,
+        pred_out=128,
         blocks=1,  # Number of blocks in the ResNet
         channels=16,  # Number of channels in the ResNet
         reduced_channels_reward=16,  # x36 Number of channels in reward head

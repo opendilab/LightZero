@@ -10,7 +10,8 @@ else:
 
 game_config = EasyDict(
     dict(
-        env_name='PongNoFrameskip-v4',
+        env_name='BreakoutNoFrameskip-v4',
+        # env_name='PongNoFrameskip-v4',
         env_type='no_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
@@ -22,7 +23,8 @@ game_config = EasyDict(
         cvt_string=False,
         clip_reward=True,
         game_wrapper=True,
-        action_space_size=6,
+        # action_space_size=6,
+        action_space_size=4,  # TODO(pu): different env have different action_space_size
         amp_type='none',
         obs_shape=(12, 96, 96),
         image_channel=3,
@@ -49,16 +51,17 @@ game_config = EasyDict(
 
         collector_env_num=8,
         evaluator_env_num=3,
-        # TODO(pu): how to set proper num_simulations?
+        # TODO(pu): how to set proper num_simulations automatically?
         num_simulations=50,
         batch_size=256,
         game_history_length=400,
         total_transitions=int(1e5),
-        channels=64,  # Number of channels in the ResNet, config in EZ original repo
-        lstm_hidden_size=512,  # default config in EZ original repo
+        # default config in EZ original repo
+        channels=64,
+        lstm_hidden_size=512,
         # The env step is twice as large as the original size model when converging
-        # channels=32,  # Number of channels in the ResNet, for time efficiency
-        # lstm_hidden_size=256,  # for time efficiency
+        # channels=32,
+        # lstm_hidden_size=256,
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
@@ -81,6 +84,7 @@ game_config = EasyDict(
         fixed_temperature_value=0.25,
         # TODO(pu): whether to use root value in reanalyzing?
         use_root_value=False,
+        # use_root_value=True,
 
         # TODO(pu): test the effect
         last_linear_layer_init_zero=True,

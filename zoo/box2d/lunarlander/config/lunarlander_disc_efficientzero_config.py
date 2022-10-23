@@ -1,5 +1,6 @@
 import sys
 sys.path.append('/Users/puyuan/code/LightZero')
+# sys.path.append('/mnt/nfs/puyuan/LightZero')
 
 from easydict import EasyDict
 

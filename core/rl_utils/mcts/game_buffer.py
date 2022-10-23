@@ -179,7 +179,7 @@ class GameBuffer(Buffer):
             if ignore_insufficient:
                 logging.warning(
                     "Sample operation is ignored due to data insufficient, current buffer is {} while sample is {}".
-                    format(self.count(), size)
+                        format(self.count(), size)
                 )
             else:
                 raise ValueError("There are less than {} records/groups in buffer({})".format(size, self.count()))
@@ -605,7 +605,7 @@ class GameBuffer(Buffer):
             prepare reward and value targets from the context of rewards and values.
         """
         value_obs_lst, value_mask, state_index_lst, rewards_lst, traj_lens, td_steps_lst, action_mask_history, \
-            to_play_history = reward_value_context
+        to_play_history = reward_value_context
         device = self.config.device
         batch_size = len(value_obs_lst)
         game_history_batch_size = len(state_index_lst)
@@ -715,7 +715,7 @@ class GameBuffer(Buffer):
                         ]
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1]
-                        for j in range(self.config.evaluator_env_num)
+                        for j in range(batch_size)
                     ]
                     roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations)
                     noises = [
@@ -756,7 +756,7 @@ class GameBuffer(Buffer):
 
             # get last state value
             value_lst = value_lst.reshape(-1) * (
-                np.array([self.config.discount for _ in range(batch_size)]) ** td_steps_lst
+                    np.array([self.config.discount for _ in range(batch_size)]) ** td_steps_lst
             )
             value_lst = value_lst * np.array(value_mask)
             value_lst = value_lst.tolist()
@@ -810,7 +810,7 @@ class GameBuffer(Buffer):
 
         # for two_player board games
         policy_obs_lst, policy_mask, state_index_lst, indices, child_visits, traj_lens, action_mask_history, \
-            to_play_history = policy_re_context
+        to_play_history = policy_re_context
         batch_size = len(policy_obs_lst)
         game_history_batch_size = len(state_index_lst)
 

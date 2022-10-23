@@ -1,5 +1,9 @@
 import sys
 sys.path.append('/Users/puyuan/code/LightZero')
+# sys.path.append('/home/puyuan/LightZero')
+# sys.path.append('/mnt/nfs/puyuan/LightZero')
+# sys.path.append('/mnt/lustre/puyuan/LightZero')
+
 
 from easydict import EasyDict
 
@@ -16,8 +20,8 @@ n_episode = 8
 evaluator_env_num = 5
 
 tictactoe_efficientzero_config = dict(
-    exp_name='data_ez_ptree/tictactoe_1pm_efficientzero_seed0_sub885',
-    # exp_name='data_ez_ptree/tictactoe_2pm_efficientzero_seed0_sub885',
+    # exp_name='data_ez_ptree/tictactoe_1pm_efficientzero_seed0_sub885',
+    exp_name='data_ez_ptree/tictactoe_2pm_efficientzero_seed0_sub885_rmt-conv_nc16_urv-true_rbs1e5',
 
     env=dict(
         collector_env_num=collector_env_num,
@@ -26,8 +30,8 @@ tictactoe_efficientzero_config = dict(
         stop_value=1,
         # if battle_mode='two_player_mode',
         # automatically assign 'eval_mode' when eval, 'two_player_mode' when collect
-        # battle_mode='two_player_mode',
-        battle_mode='one_player_mode',
+        battle_mode='two_player_mode',
+        # battle_mode='one_player_mode',
         prob_random_agent=0.,
         max_episode_steps=int(1.08e5),
         collect_max_episode_steps=int(1.08e4),
@@ -61,14 +65,10 @@ tictactoe_efficientzero_config = dict(
             reward_support_size=21,
             value_support_size=21,
             bn_mt=0.1,
-            # proj_hid=128,
-            # proj_out=128,
-            # pred_hid=64,
-            # pred_out=128,
-            proj_hid=32,
-            proj_out=32,
-            pred_hid=16,
-            pred_out=32,
+            proj_hid=128,
+            proj_out=128,
+            pred_hid=64,
+            pred_out=128,
             last_linear_layer_init_zero=True,
             state_norm=False,
         ),
@@ -81,17 +81,16 @@ tictactoe_efficientzero_config = dict(
             # one_player_mode, board_size=3, episode_length=3**2/2=4.5
             # collector_env_num=8,  update_per_collect=5*8=40
             # update_per_collect=int(3 ** 2 / 2 * collector_env_num),
-            update_per_collect=int(50),
-            batch_size=64,
+            # update_per_collect=int(50),
+            # batch_size=64,
 
             # two_player_mode, board_size=3, episode_length=3**2=9
             # collector_env_num=8,  update_per_collect=9*8=72
             # update_per_collect=int(3 ** 2 * collector_env_num),
-            # update_per_collect=int(100),
-            # batch_size=64,
+            update_per_collect=int(100),
+            batch_size=64,
 
-            # learning_rate=0.2,
-            learning_rate=0.002,
+            learning_rate=0.002, # use fixed lr
             # Frequency of target network update.
             target_update_freq=400,
         ),
@@ -102,7 +101,7 @@ tictactoe_efficientzero_config = dict(
             n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(1e3), )),
+        eval=dict(evaluator=dict(eval_freq=int(5e3), )),
         # for debug
         # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
@@ -120,8 +119,8 @@ tictactoe_efficientzero_create_config = dict(
         type='tictactoe',
         import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
     ),
-    env_manager=dict(type='base'),
-    # env_manager=dict(type='subprocess'),
+    # env_manager=dict(type='base'),
+    env_manager=dict(type='subprocess'),
     policy=dict(
         type='efficientzero',
         import_names=['core.policy.efficientzero'],

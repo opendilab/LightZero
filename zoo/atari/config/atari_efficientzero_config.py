@@ -1,3 +1,9 @@
+import sys
+# sys.path.append('/Users/puyuan/code/LightZero')
+# sys.path.append('/home/puyuan/LightZero')
+# sys.path.append('/mnt/nfs/puyuan/LightZero')
+# sys.path.append('/mnt/lustre/puyuan/LightZero')
+
 from easydict import EasyDict
 
 from atari_efficientzero_base_config import game_config
@@ -21,19 +27,19 @@ evaluator_env_num = 3
 # evaluator_env_num = 1
 
 atari_efficientzero_config = dict(
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
+    exp_name='data_ez_ctree/breakout_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
+    # exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
     # exp_name='data_ez_ptree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         stop_value=20,
-        env_name='PongNoFrameskip-v4',
-        max_episode_steps=int(1.08e5),
+        # env_name='PongNoFrameskip-v4',
+        env_name='BreakoutNoFrameskip-v4',
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
         # for debug
-        # max_episode_steps=int(100),
         # collect_max_episode_steps=int(100),
         # eval_max_episode_steps=int(100),
         frame_skip=4,
@@ -49,7 +55,8 @@ atari_efficientzero_config = dict(
     ),
     policy=dict(
         model_path=None,
-        env_name='PongNoFrameskip-v4',
+        # env_name='PongNoFrameskip-v4',
+        env_name='BreakoutNoFrameskip-v4',
         # TODO(pu): how to pass into game_config, which is class, not a dict
         # game_config=game_config,
         # Whether to use cuda for network.
@@ -58,7 +65,8 @@ atari_efficientzero_config = dict(
             representation_model_type='conv_res_blocks',
             # representation_model=representation_model,
             observation_shape=(12, 96, 96),  # 3,96,96 stack=4
-            action_space_size=6,
+            # action_space_size=6,
+            action_space_size=4,
             downsample=True,
             num_blocks=1,
             # default config in EZ original repo

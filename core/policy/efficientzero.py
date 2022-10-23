@@ -23,10 +23,10 @@ from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
 from core.rl_utils import Transforms
 # TODO(pu): choose game config
-# from zoo.atari.config.atari_efficientzero_base_config import game_config
+from zoo.atari.config.atari_efficientzero_base_config import game_config
 # from zoo.board_games.gomoku.config.gomoku_efficientzero_base_config import game_config
 # from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config
-from zoo.box2d.lunarlander.config.lunarlander_cont_disc_efficientzero_base_config import game_config
+# from zoo.box2d.lunarlander.config.lunarlander_cont_disc_efficientzero_base_config import game_config
 # from zoo.box2d.lunarlander.config.lunarlander_disc_efficientzero_base_config import game_config
 
 
