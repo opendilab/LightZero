@@ -1,2 +1,4 @@
 from .efficientzero_collector import EfficientZeroCollector
 from .efficientzero_evaluator import EfficientZeroEvaluator
+from .sampled_efficientzero_collector import  SampledEfficientZeroCollector
+from .sampled_efficientzero_evaluator import SampledEfficientZeroEvaluator

@@ -34,7 +34,8 @@ atari_efficientzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        stop_value=20,
+        # stop_value=int(20),
+        stop_value=int(1e6),
         # env_name='PongNoFrameskip-v4',
         env_name='BreakoutNoFrameskip-v4',
         collect_max_episode_steps=int(1.08e4),
@@ -146,4 +147,4 @@ create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6), game_config=game_config)
+    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e5), game_config=game_config)

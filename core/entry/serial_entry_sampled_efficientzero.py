@@ -14,12 +14,12 @@ from ding.worker import BaseLearner
 from ding.worker import create_serial_collector
 from tensorboardX import SummaryWriter
 
-from core.rl_utils import GameBuffer
-from core.worker import EfficientZeroEvaluator as BaseSerialEvaluator
+from core.rl_utils import SampledGameBuffer as GameBuffer
+from core.worker import SampledEfficientZeroEvaluator as BaseSerialEvaluator
 
 
 # @profile
-def serial_pipeline_efficientzero(
+def serial_pipeline_sampled_efficientzero(
         input_cfg: Union[str, Tuple[dict, dict]],
         seed: int = 0,
         env_setting: Optional[List[Any]] = None,
@@ -104,10 +104,6 @@ def serial_pipeline_efficientzero(
     # Learner's before_run hook.
     learner.call_hook('before_run')
 
-    # stop, reward = evaluator.eval(
-    #     learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-    # )
-
     while True:
         # collect_kwargs = commander.step()
         collect_kwargs = {}
@@ -120,6 +116,25 @@ def serial_pipeline_efficientzero(
             ]
         )
 
+        # TODO(pu): eval trained model
+        # returns = []
+        # test_episodes = 1
+        # for i in range(test_episodes):
+        #     stop, reward = evaluator.eval(
+        #         learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
+        #     )
+        #     returns.append(reward)
+        # print(returns)
+        # returns = np.array(returns)
+        # print(f'win rate: {len(np.where(returns == 1.)[0])/ test_episodes}, draw rate: {len(np.where(returns == 0.)[0])/test_episodes}, lose rate: {len(np.where(returns == -1.)[0])/ test_episodes}')
+        # break
+
+        # TODO(pu): test sampled_efficientzero_evaluator
+        # for i in range(2):
+        #     stop, reward = evaluator.eval(
+        #             learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
+        #         )
+
         # Evaluate policy performance
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(
@@ -131,7 +146,7 @@ def serial_pipeline_efficientzero(
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
-        # TODO(pu): save returned data collected by the collector
+        # TODO(pu): collector return data
         replay_buffer.push_games(new_data[0], new_data[1])
 
         # remove the oldest data if the replay buffer is full.
@@ -140,19 +155,19 @@ def serial_pipeline_efficientzero(
         # Learn policy from collected data
         for i in range(cfg.policy.learn.update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
-            try:
-                train_data = replay_buffer.sample_train_data(learner.policy.get_attribute('batch_size'), policy)
-            except Exception as exception:
-                print(exception)
-                logging.warning(
-                    f'The data in replay_buffer is not sufficient to sample a minibatch: '
-                    f'batch_size: {replay_buffer.get_batch_size()},'
-                    f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
-                    f'num of game historys: {replay_buffer.get_num_of_game_histories()}, '
-                    f'number of transitions: {replay_buffer.get_num_of_transitions()}, '
-                    f'continue to collect now ....'
-                )
-                break
+            # try:
+            train_data = replay_buffer.sample_train_data(learner.policy.get_attribute('batch_size'), policy)
+            # except Exception as exception:
+            #     print(exception)
+            #     logging.warning(
+            #         f'The data in replay_buffer is not sufficient to sample a minibatch: '
+            #         f'batch_size: {replay_buffer.get_batch_size()},'
+            #         f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
+            #         f'num of game historys: {replay_buffer.get_num_of_game_histories()}, '
+            #         f'number of transitions: {replay_buffer.get_num_of_transitions()}, '
+            #         f'continue to collect now ....'
+            #     )
+            #     break
 
             learner.train(train_data, collector.envstep)
 

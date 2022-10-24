@@ -1,9 +1,13 @@
 import sys
 sys.path.append('/Users/puyuan/code/LightZero')
+# sys.path.append('/home/puyuan/LightZero')
+# sys.path.append('/mnt/nfs/puyuan/LightZero')
+# sys.path.append('/mnt/lustre/puyuan/LightZero')
+
 
 from easydict import EasyDict
 
-from lunarlander_cont_disc_efficientzero_base_config import game_config
+from lunarlander_cont_sampled_efficientzero_base_config import game_config
 
 # for debug
 # collector_env_num = 1
@@ -15,9 +19,8 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 5
 
-lunarlander_cont_disc_efficientzero_config = dict(
-    exp_name='data_ez_ptree/lunarlander_cont_disc_1pm_efficientzero_seed0_sub885',
-
+lunarlander_cont_disc_sampled_efficientzero_config = dict(
+    exp_name='data_ez_ptree/lunarlander_cont_sampled_efficientzero_seed0_sub885_urv-false_ns100',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -26,7 +29,6 @@ lunarlander_cont_disc_efficientzero_config = dict(
         stop_value=300,
         battle_mode='one_player_mode',
         prob_random_agent=0.,
-        # max_episode_steps=int(1.08e5),
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
         manager=dict(shared_memory=False, ),
@@ -39,17 +41,20 @@ lunarlander_cont_disc_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            projection_input_dim_type='lunarlander_cont_disc',
-            representation_model_type='identity',
-
+            # representation_model_type='identity',
+            representation_model_type='conv_res_blocks',
             # [S, W, H, C] -> [S x C, W, H]
             # [4,8,1,1] -> [4*1, 8, 1]
             observation_shape=(4, 8, 1),  # if frame_stack_nums=4
-            action_space_size=16,  # 4**2
+            action_space_size=2,  # 4**2
+            num_of_sampled_actions=20,
+            # for debug
+            # num_of_sampled_actions=5,
+            continuous_action_space=True,
 
-            num_channels=4,
             downsample=False,
             num_blocks=1,
+            num_channels=64,
             lstm_hidden_size=512,
             reduced_channels_reward=16,
             reduced_channels_value=16,
@@ -77,8 +82,7 @@ lunarlander_cont_disc_efficientzero_config = dict(
             update_per_collect=int(500),
             batch_size=256,
 
-            learning_rate=0.2,
-            # learning_rate=0.002,
+            learning_rate=0.0003,  # fixed lr
             # Frequency of target network update.
             target_update_freq=400,
         ),
@@ -89,7 +93,7 @@ lunarlander_cont_disc_efficientzero_config = dict(
             n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(1e3), )),
+        eval=dict(evaluator=dict(eval_freq=int(5e3), )),
         # for debug
         # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
@@ -99,29 +103,29 @@ lunarlander_cont_disc_efficientzero_config = dict(
         ),
     ),
 )
-lunarlander_cont_disc_efficientzero_config = EasyDict(lunarlander_cont_disc_efficientzero_config)
-main_config = lunarlander_cont_disc_efficientzero_config
+lunarlander_cont_disc_sampled_efficientzero_config = EasyDict(lunarlander_cont_disc_sampled_efficientzero_config)
+main_config = lunarlander_cont_disc_sampled_efficientzero_config
 
-lunarlander_cont_disc_efficientzero_create_config = dict(
+lunarlander_cont_disc_sampled_efficientzero_create_config = dict(
     env=dict(
-        type='lunarlander_cont_disc',
-        import_names=['zoo.box2d.lunarlander.envs.lunarlander_cont_disc_env'],
+        type='lunarlander',
+        import_names=['zoo.box2d.lunarlander.envs.lunarlander_env'],
     ),
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='efficientzero',
-        import_names=['core.policy.efficientzero'],
+        type='sampled_efficientzero',
+        import_names=['core.policy.sampled_efficientzero'],
     ),
     collector=dict(
-        type='episode_efficientzero',
+        type='episode_sampled_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.efficientzero_collector'],
+        import_names=['core.worker.collector.sampled_efficientzero_collector'],
     )
 )
-lunarlander_cont_disc_efficientzero_create_config = EasyDict(lunarlander_cont_disc_efficientzero_create_config)
-create_config = lunarlander_cont_disc_efficientzero_create_config
+lunarlander_cont_disc_sampled_efficientzero_create_config = EasyDict(lunarlander_cont_disc_sampled_efficientzero_create_config)
+create_config = lunarlander_cont_disc_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], game_config=game_config, seed=0, max_env_step=int(1e6))
+    from core.entry import serial_pipeline_sampled_efficientzero
+    serial_pipeline_sampled_efficientzero([main_config, create_config], game_config=game_config, seed=0, max_env_step=int(5e5))

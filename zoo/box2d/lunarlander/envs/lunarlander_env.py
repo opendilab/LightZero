@@ -27,6 +27,7 @@ class LunarLanderEnv(BaseEnv):
         save_replay_gif=False,
         replay_path_gif=None,
         replay_path=None,
+        act_scale=True,
     )
 
     def __init__(self, cfg: dict) -> None:
@@ -78,6 +79,13 @@ class LunarLanderEnv(BaseEnv):
             obs = obs.reshape(8, 1, 1)
             action_mask = np.ones(4, 'int8')
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
+        else:
+            # if 'Continuous' in self._env_id:
+            # to be compatible with efficientzero
+            # shape: [W, H, C]
+            obs = obs.reshape(8, 1, 1)
+            action_mask = None
+            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
         return obs
 
     def close(self) -> None:
@@ -106,6 +114,13 @@ class LunarLanderEnv(BaseEnv):
             # shape: [W, H, C]
             obs = obs.reshape(8, 1, 1)
             action_mask = np.ones(4, 'int8')
+            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
+        else:
+            # if 'Continuous' in self._env_id:
+            # to be compatible with efficientzero
+            # shape: [W, H, C]
+            obs = obs.reshape(8, 1, 1)
+            action_mask = None
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
         # self._env.render()
         # print(action, obs, rew, done, info)
