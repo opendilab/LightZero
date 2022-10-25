@@ -350,18 +350,21 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
                 parent_value_prefix = parent.value_prefix
                 is_reset = parent.is_reset
 
-            # TODO(pu): two player mode, we should calculate the true_reward according to the perspective of current
-            #  player
+            # NOTE: in two player mode,
+            # we should calculate the true_reward according to the perspective of current player of node
             true_reward = node.value_prefix - (- parent_value_prefix)
             if is_reset == 1:
                 true_reward = node.value_prefix
 
-            # TODO(pu): why in muzero-general is - node.value
             min_max_stats.update(true_reward + discount * node.value)
+            # TODO(pu): why in muzero-general is - node.value
             # min_max_stats.update(true_reward + discount * - node.value)
 
             # to_play related
-            bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
+            # true_reward is in the perspective of current player of node
+            bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount * bootstrap_value
+            # TODO(pu): why in muzero-general is - node.value
+            # bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
 
         # min_max_stats.clear()
         # root = search_path[0]

@@ -84,8 +84,8 @@ game_config = EasyDict(
         # only effective when auto_temperature=False
         fixed_temperature_value=0.25,
         # TODO(pu): whether to use root value in reanalyzing?
-        # use_root_value=False,
-        use_root_value=True,
+        use_root_value=False,
+        # use_root_value=True,
 
         # TODO(pu): test the effect
         last_linear_layer_init_zero=True,
