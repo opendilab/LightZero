@@ -398,6 +398,9 @@ class SampledGameBuffer(Buffer):
             game_history_pos = game_history_pos_lst[i]
 
             _actions = game.action_history[game_history_pos:game_history_pos + self.config.num_unroll_steps].tolist()
+
+            # _actions = game.action_history[game_history_pos:game_history_pos + self.config.num_unroll_steps]
+
             # NOTE: self.config.num_unroll_steps + 1
             _child_actions = game.child_actions[game_history_pos:game_history_pos + self.config.num_unroll_steps + 1]
 
@@ -405,14 +408,15 @@ class SampledGameBuffer(Buffer):
             _mask = [1. for i in range(len(_actions))]
             _mask += [0. for _ in range(self.config.num_unroll_steps - len(_mask))]
 
+            # sampled related code
             # pad random action
             _actions += [
-                np.random.randint(0, game.action_space_size)
+                np.random.randn(self.config.action_space_size)
                 for _ in range(self.config.num_unroll_steps - len(_actions))
             ]
             _child_actions += [
-                np.random.randn([game.action_space_size],1)
-                for _ in range(self.config.num_unroll_steps - len(_actions))
+                np.random.randn(self.config.num_of_sampled_actions, self.config.action_space_size)
+                for _ in range(self.config.num_unroll_steps+1 - len(_child_actions))
             ]
 
             # obtain the input observations
@@ -432,6 +436,9 @@ class SampledGameBuffer(Buffer):
 
         # formalize the inputs of a batch
         inputs_batch = [obs_lst, action_lst, child_actions_lst, mask_lst, indices_lst, weights_lst, make_time_lst]
+
+        child_actions_lst = np.concatenate([child_actions_lst])
+
         for i in range(len(inputs_batch)):
             inputs_batch[i] = np.asarray(inputs_batch[i])
 
@@ -1104,6 +1111,7 @@ class SampledGameBuffer(Buffer):
                                 # for one_player atari games
                                 target_policies.append(distributions)
                             else:
+
                                 # for two_player board games
                                 policy_tmp = [0 for _ in range(self.config.action_space_size)]
                                 # to make sure target_policies have the same dimension <self.config.action_space_size>
@@ -1138,9 +1146,17 @@ class SampledGameBuffer(Buffer):
                                 target_policies.append(policy_tmp)
 
                     else:
-                        # the invalid target policy
-                        target_policies.append([0 for _ in range(self.config.action_space_size)])
-                        policy_mask.append(0)
+                        if self.config.continuous_action_space:
+                            # for continuous action space games
+                            # the invalid target policy
+                            target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                            policy_mask.append(0)
+
+                        else:
+                            # for discrete action space games
+                            # the invalid target policy
+                            target_policies.append([0 for _ in range(self.config.action_space_size)])
+                            policy_mask.append(0)
 
                     policy_index += 1
 
