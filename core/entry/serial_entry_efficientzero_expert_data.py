@@ -13,7 +13,7 @@ from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner, create_serial_collector
 from tensorboardX import SummaryWriter
 
-from core.rl_utils import GameBuffer
+from core.rl_utils import GameBuffer, visit_count_temperature
 from core.worker import EfficientZeroEvaluator as BaseSerialEvaluator
 
 
@@ -25,7 +25,6 @@ def serial_pipeline_muzero_expert_data(
         collect_model: Optional[torch.nn.Module] = None,
         max_train_iter: Optional[int] = int(1e10),
         max_env_step: Optional[int] = int(1e10),
-        game_config: Optional[dict] = None,
 ) -> 'Policy':  # noqa
     """
     Overview:
@@ -64,6 +63,8 @@ def serial_pipeline_muzero_expert_data(
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
+
+    game_config = cfg.policy
 
     # load pretrained dqn model
     if cfg.policy.collect_model_path is not None:
@@ -122,7 +123,7 @@ def serial_pipeline_muzero_expert_data(
         # please refer to Appendix A.1 in EfficientZero for details
         collect_kwargs['temperature'] = np.array(
             [
-                game_config.visit_count_temperature(trained_steps=learner.train_iter)
+                visit_count_temperature(game_config.auto_temperature, game_config.fixed_temperature_value, game_config.max_training_steps, trained_steps=learner.train_iter)
                 for _ in range(game_config.collector_env_num)
             ]
         )
@@ -136,10 +137,13 @@ def serial_pipeline_muzero_expert_data(
 
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+
+        # TODO(pu): save returned data collected by the collector
+        replay_buffer.push_games(new_data[0], new_data[1])
+
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
-        # TODO(pu): collector return data
-        # replay_buffer.push(new_data, cur_collector_envstep=collector.envstep)
+
         # Learn policy from collected data
         for i in range(cfg.policy.learn.update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
@@ -158,11 +162,14 @@ def serial_pipeline_muzero_expert_data(
                 break
 
             learner.train(train_data, collector.envstep)
+
             if game_config.lr_manually:
-                # learning rate decay manually like EfficientZero paper
-                if learner.train_iter > 1e5 and learner.train_iter <= 2e5:
+                # learning rate decay manually like MuZero paper
+                if learner.train_iter < 0.5 * game_config.max_training_steps:
+                    policy._optimizer.lr = 0.2
+                elif learner.train_iter < 0.75 * game_config.max_training_steps:
                     policy._optimizer.lr = 0.02
-                elif learner.train_iter > 2e5:
+                else:
                     policy._optimizer.lr = 0.002
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:

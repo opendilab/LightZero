@@ -21,14 +21,15 @@ from core.rl_utils import MCTSCtree
 from core.rl_utils import cytree as ctree
 from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
-from core.rl_utils import Transforms
+from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, DiscreteSupport
+
 # TODO(pu): choose game config
 # from zoo.atari.config.atari_efficientzero_base_config import game_config
 # from zoo.board_games.gomoku.config.gomoku_efficientzero_base_config import game_config
 # from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config
 # from zoo.box2d.lunarlander.config.lunarlander_cont_disc_efficientzero_base_config import game_config
 # from zoo.box2d.lunarlander.config.lunarlander_disc_efficientzero_base_config import game_config
-from zoo.box2d.lunarlander.config.lunarlander_cont_sampled_efficientzero_base_config import game_config
+# from zoo.box2d.lunarlander.config.lunarlander_cont_sampled_efficientzero_base_config import game_config
 
 
 @POLICY_REGISTRY.register('sampled_efficientzero')
@@ -154,14 +155,14 @@ class SampledEfficientZeroPolicy(Policy):
         # self._learn_model = self._model
         self._learn_model.reset()
         self._target_model.reset()
-        # TODO(pu): how to pass into game_config, which is class, not a dict
-        # self.game_config = self._cfg.game_config
-        self.game_config = game_config
-        if self.game_config.use_augmentation:
+        if self._cfg.use_augmentation:
             self.transforms = Transforms(
-                self.game_config.augmentation,
-                image_shape=(self.game_config.obs_shape[1], self.game_config.obs_shape[2])
+                self._cfg.augmentation,
+                image_shape=(self._cfg.obs_shape[1], self._cfg.obs_shape[2])
             )
+        self.value_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
+        self.reward_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
+
 
     # @profile
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
@@ -181,10 +182,10 @@ class SampledEfficientZeroPolicy(Policy):
 
         # to save GPU memory usage, obs_batch_ori contains (stack + unroll steps) frames
 
-        if self.game_config.image_based:
-            obs_batch_ori = torch.from_numpy(obs_batch_ori / 255.0).to(self.game_config.device).float()
+        if self._cfg.image_based:
+            obs_batch_ori = torch.from_numpy(obs_batch_ori / 255.0).to(self._cfg.device).float()
         else:
-            obs_batch_ori = torch.from_numpy(obs_batch_ori).to(self.game_config.device).float()
+            obs_batch_ori = torch.from_numpy(obs_batch_ori).to(self._cfg.device).float()
 
         # collector data process:
         # (batch_size, stack_num+num_unroll_steps, W, H, C) -> (batch_size, (stack_num+num_unroll_steps)*C, W, H )
@@ -200,35 +201,35 @@ class SampledEfficientZeroPolicy(Policy):
         # (4, 4*3, 96, 96) = (4, 12, 96, 96)
         # take the first stacked obs at timestep t: o_t_stack
         # used in initial_inference
-        obs_batch = obs_batch_ori[:, 0:self.game_config.frame_stack_num * self.game_config.image_channel, :, :]
+        obs_batch = obs_batch_ori[:, 0:self._cfg.frame_stack_num * self._cfg.image_channel, :, :]
 
         # take the all obs other than timestep t1:
         # obs_target_batch is used for calculate consistency loss, which is only performed in the last 8 timesteps
         # for i in rnage(num_unroll_steeps):
-        #   beg_index = self.game_config.image_channel * step_i
-        #   end_index = self.game_config.image_channel * (step_i + self.game_config.frame_stack_num)
-        obs_target_batch = obs_batch_ori[:, self.game_config.image_channel:, :, :]
+        #   beg_index = self._cfg.image_channel * step_i
+        #   end_index = self._cfg.image_channel * (step_i + self._cfg.frame_stack_num)
+        obs_target_batch = obs_batch_ori[:, self._cfg.image_channel:, :, :]
 
         # do augmentations
-        if self.game_config.use_augmentation:
+        if self._cfg.use_augmentation:
             obs_batch = self.transforms.transform(obs_batch)
             obs_target_batch = self.transforms.transform(obs_target_batch)
 
-        action_batch = torch.from_numpy(action_batch).to(self.game_config.device).unsqueeze(-1).long()
-        child_actions_batch = torch.from_numpy(child_actions_batch).to(self.game_config.device).unsqueeze(-1)
-        mask_batch = torch.from_numpy(mask_batch).to(self.game_config.device).float()
-        target_value_prefix = torch.from_numpy(target_value_prefix.astype('float64')).to(self.game_config.device
+        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
+        child_actions_batch = torch.from_numpy(child_actions_batch).to(self._cfg.device).unsqueeze(-1)
+        mask_batch = torch.from_numpy(mask_batch).to(self._cfg.device).float()
+        target_value_prefix = torch.from_numpy(target_value_prefix.astype('float64')).to(self._cfg.device
                                                                                          ).float()
-        target_value = torch.from_numpy(target_value.astype('float64')).to(self.game_config.device).float()
-        target_policy = torch.from_numpy(target_policy).to(self.game_config.device).float()
-        weights = torch.from_numpy(weights_lst).to(self.game_config.device).float()
+        target_value = torch.from_numpy(target_value.astype('float64')).to(self._cfg.device).float()
+        target_policy = torch.from_numpy(target_policy).to(self._cfg.device).float()
+        weights = torch.from_numpy(weights_lst).to(self._cfg.device).float()
 
         # TODO
-        target_value_prefix = target_value_prefix.view(self.game_config.batch_size, -1)
-        target_value = target_value.view(self.game_config.batch_size, -1)
+        target_value_prefix = target_value_prefix.view(self._cfg.batch_size, -1)
+        target_value = target_value.view(self._cfg.batch_size, -1)
 
         batch_size = obs_batch.size(0)
-        assert batch_size == self.game_config.batch_size == target_value_prefix.size(0)
+        assert batch_size == self._cfg.batch_size == target_value_prefix.size(0)
         metric_loss = torch.nn.L1Loss()
 
         # some logs preparation
@@ -241,7 +242,7 @@ class SampledEfficientZeroPolicy(Policy):
             'l1_-1': -1,
             'l1_0': -1,
         }
-        for i in range(self.game_config.num_unroll_steps):
+        for i in range(self._cfg.num_unroll_steps):
             key = 'unroll_' + str(i + 1) + '_l1'
             other_loss[key] = -1
             other_loss[key + '_1'] = -1
@@ -249,11 +250,11 @@ class SampledEfficientZeroPolicy(Policy):
             other_loss[key + '_0'] = -1
 
         # transform targets to categorical representation
-        transformed_target_value_prefix = scalar_transform(target_value_prefix, self.game_config.support_size)
-        target_value_prefix_phi = self.game_config.reward_phi(transformed_target_value_prefix)
+        transformed_target_value_prefix = scalar_transform(target_value_prefix, self._cfg.support_size)
+        target_value_prefix_phi = reward_phi(self.reward_support, transformed_target_value_prefix)
 
-        transformed_target_value = scalar_transform(target_value, self.game_config.support_size)
-        target_value_phi = self.game_config.value_phi(transformed_target_value)
+        transformed_target_value = scalar_transform(target_value, self._cfg.support_size)
+        target_value_phi = value_phi(self.value_support, transformed_target_value)
 
         network_output = self._learn_model.initial_inference(obs_batch)
 
@@ -263,43 +264,43 @@ class SampledEfficientZeroPolicy(Policy):
         reward_hidden_state = network_output.reward_hidden_state  # {tuple:2} (1,2,512)
         policy_logits = network_output.policy_logits  # {list: 2} {list:6}
 
-        reward_hidden_state = to_device(reward_hidden_state, self.game_config.device)
-        scaled_value = inverse_scalar_transform(value, self.game_config.support_size)
+        reward_hidden_state = to_device(reward_hidden_state, self._cfg.device)
+        scaled_value = inverse_scalar_transform(value, self._cfg.support_size)
 
         # TODO(pu)
         if not self._learn_model.training:
             # if not in training, obtain the scalars of the value/reward
             scaled_value = scaled_value.detach().cpu().numpy()
             scaled_value_prefix = inverse_scalar_transform(value_prefix,
-                                                           self.game_config.support_size).detach().cpu().numpy()
+                                                           self._cfg.support_size).detach().cpu().numpy()
             hidden_state = hidden_state.detach().cpu().numpy()
             reward_hidden_state = (
                 reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
             )
             policy_logits = policy_logits.detach().cpu().numpy()
 
-        if self.game_config.vis_result:
+        if self._cfg.vis_result:
             state_lst = hidden_state.detach().cpu().numpy()
 
         predicted_value_prefixs = []
         # Note: Following line is just for logging.
-        if self.game_config.vis_result:
+        if self._cfg.vis_result:
             predicted_values, predicted_policies = scaled_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
 
         # calculate the new priorities for each transition
         value_priority = L1Loss(reduction='none')(scaled_value.squeeze(-1), target_value[:, 0])
-        value_priority = value_priority.data.cpu().numpy() + self.game_config.prioritized_replay_eps
+        value_priority = value_priority.data.cpu().numpy() + self._cfg.prioritized_replay_eps
 
         # calculate loss for the first step
-        value_loss = self.game_config.modified_cross_entropy_loss(value, target_value_phi[:, 0])
+        value_loss = modified_cross_entropy_loss(value, target_value_phi[:, 0])
 
-        # policy_loss = self.game_config.modified_cross_entropy_loss(policy_logits, target_policy[:, 0])
+        # policy_loss = modified_cross_entropy_loss(policy_logits, target_policy[:, 0])
 
         # sampled related
-        (mu, sigma) = policy_logits[:, : self.game_config.action_space_size], policy_logits[:,
-                                                                              - self.game_config.action_space_size:]
+        (mu, sigma) = policy_logits[:, : self._cfg.action_space_size], policy_logits[:,
+                                                                              - self._cfg.action_space_size:]
         from torch.distributions import Normal, Independent
         dist = Independent(Normal(mu, sigma), 1)
 
@@ -315,7 +316,7 @@ class SampledEfficientZeroPolicy(Policy):
         # batch_size, num_of_sampled_actions -> 4,20
         log_target = torch.log(target_policy_visit + 1e-9)
         log_prob_sampled_actions = []
-        for i in range(self.game_config.num_of_sampled_actions):
+        for i in range(self._cfg.num_of_sampled_actions):
             # target_policy_action[:,i,:].shape: batch_size, action_dim -> 4,2
             # dist.log_prob(target_policy_action[:,i,:]).shape: batch_size -> 4
             log_prob = dist.log_prob(target_policy_action[:, i, :])
@@ -326,14 +327,14 @@ class SampledEfficientZeroPolicy(Policy):
         policy_loss = (torch.exp(log_prob) * (log_prob - log_target)).sum()
         ### calculate KL loss
 
-        value_prefix_loss = torch.zeros(batch_size, device=self.game_config.device)
-        consistency_loss = torch.zeros(batch_size, device=self.game_config.device)
+        value_prefix_loss = torch.zeros(batch_size, device=self._cfg.device)
+        consistency_loss = torch.zeros(batch_size, device=self._cfg.device)
 
         target_value_prefix_cpu = target_value_prefix.detach().cpu()
-        gradient_scale = 1 / self.game_config.num_unroll_steps
+        gradient_scale = 1 / self._cfg.num_unroll_steps
 
         # loss of the unrolled steps
-        for step_i in range(self.game_config.num_unroll_steps):
+        for step_i in range(self._cfg.num_unroll_steps):
             # unroll with the dynamics function
             network_output = self._learn_model.recurrent_inference(
                 hidden_state, reward_hidden_state, action_batch[:, step_i]
@@ -347,20 +348,20 @@ class SampledEfficientZeroPolicy(Policy):
             # TODO(pu)
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                value = inverse_scalar_transform(value, self.game_config.support_size).detach().cpu().numpy()
+                value = inverse_scalar_transform(value, self._cfg.support_size).detach().cpu().numpy()
                 value_prefix = inverse_scalar_transform(value_prefix,
-                                                        self.game_config.support_size).detach().cpu().numpy()
+                                                        self._cfg.support_size).detach().cpu().numpy()
                 hidden_state = hidden_state.detach().cpu().numpy()
                 reward_hidden_state = (
                     reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
                 )
                 policy_logits = policy_logits.detach().cpu().numpy()
 
-            beg_index = self.game_config.image_channel * step_i
-            end_index = self.game_config.image_channel * (step_i + self.game_config.frame_stack_num)
+            beg_index = self._cfg.image_channel * step_i
+            end_index = self._cfg.image_channel * (step_i + self._cfg.frame_stack_num)
 
             # consistency loss
-            if self.game_config.consistency_coeff > 0:
+            if self._cfg.consistency_coeff > 0:
                 # obtain the oracle hidden states from representation function
                 network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
                 presentation_state = network_output.hidden_state
@@ -377,11 +378,11 @@ class SampledEfficientZeroPolicy(Policy):
                 consistency_loss += temp_loss
 
             # the target policy, target_value_phi, target_value_prefix_phi is calculated in game buffer now
-            # policy_loss += self.game_config.modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
+            # policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
 
             # sampled related
-            (mu, sigma) = policy_logits[:, : self.game_config.action_space_size], policy_logits[:,
-                                                                                  - self.game_config.action_space_size:]
+            (mu, sigma) = policy_logits[:, : self._cfg.action_space_size], policy_logits[:,
+                                                                                  - self._cfg.action_space_size:]
             from torch.distributions import Normal, Independent
             dist = Independent(Normal(mu, sigma), 1)
 
@@ -397,7 +398,7 @@ class SampledEfficientZeroPolicy(Policy):
             # batch_size, num_of_sampled_actions -> 4,20
             log_target = torch.log(target_policy_visit + 1e-9)
             log_prob_sampled_actions = []
-            for i in range(self.game_config.num_of_sampled_actions):
+            for i in range(self._cfg.num_of_sampled_actions):
                 # target_policy_action[:,i,:].shape: batch_size, action_dim -> 4,2
                 # dist.log_prob(target_policy_action[:,i,:]).shape: batch_size -> 4
                 log_prob = dist.log_prob(target_policy_action[:, i, :])
@@ -408,8 +409,8 @@ class SampledEfficientZeroPolicy(Policy):
             policy_loss = (torch.exp(log_prob) * (log_prob - log_target)).sum()
             ### calculate KL loss
 
-            value_loss += self.game_config.modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
-            value_prefix_loss += self.game_config.modified_cross_entropy_loss(
+            value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
+            value_prefix_loss += modified_cross_entropy_loss(
                 value_prefix, target_value_prefix_phi[:, step_i]
             )
 
@@ -417,20 +418,20 @@ class SampledEfficientZeroPolicy(Policy):
             # hidden_state.register_hook(lambda grad: grad * 0.5)
 
             # reset hidden states
-            if (step_i + 1) % self.game_config.lstm_horizon_len == 0:
+            if (step_i + 1) % self._cfg.lstm_horizon_len == 0:
                 reward_hidden_state = (
-                    torch.zeros(1, self.game_config.batch_size,
-                                self.game_config.lstm_hidden_size).to(self.game_config.device),
-                    torch.zeros(1, self.game_config.batch_size,
-                                self.game_config.lstm_hidden_size).to(self.game_config.device)
+                    torch.zeros(1, self._cfg.batch_size,
+                                self._cfg.lstm_hidden_size).to(self._cfg.device),
+                    torch.zeros(1, self._cfg.batch_size,
+                                self._cfg.lstm_hidden_size).to(self._cfg.device)
                 )
 
-            if self.game_config.vis_result:
-                scaled_value_prefixs = inverse_scalar_transform(value_prefix.detach(), self.game_config.support_size)
+            if self._cfg.vis_result:
+                scaled_value_prefixs = inverse_scalar_transform(value_prefix.detach(), self._cfg.support_size)
                 scaled_value_prefixs_cpu = scaled_value_prefixs.detach().cpu()
 
                 predicted_values = torch.cat(
-                    (predicted_values, inverse_scalar_transform(value, self.game_config.support_size).detach().cpu())
+                    (predicted_values, inverse_scalar_transform(value, self._cfg.support_size).detach().cpu())
                 )
                 predicted_value_prefixs.append(scaled_value_prefixs_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
@@ -463,8 +464,8 @@ class SampledEfficientZeroPolicy(Policy):
         # ----------------------------------------------------------------------------------
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-                self.game_config.consistency_coeff * consistency_loss + self.game_config.policy_loss_coeff * policy_loss +
-                self.game_config.value_loss_coeff * value_loss + self.game_config.reward_loss_coeff * value_prefix_loss
+                self._cfg.consistency_coeff * consistency_loss + self._cfg.policy_loss_coeff * policy_loss +
+                self._cfg.value_loss_coeff * value_loss + self._cfg.reward_loss_coeff * value_prefix_loss
         )
         weighted_loss = (weights * loss).mean()
 
@@ -476,7 +477,7 @@ class SampledEfficientZeroPolicy(Policy):
         self._optimizer.zero_grad()
 
         total_loss.backward()
-        torch.nn.utils.clip_grad_norm_(parameters, self.game_config.max_grad_norm)
+        torch.nn.utils.clip_grad_norm_(parameters, self._cfg.max_grad_norm)
         self._optimizer.step()
 
         # =============
@@ -494,20 +495,20 @@ class SampledEfficientZeroPolicy(Policy):
             total_loss.item(), weighted_loss.item(), loss.mean().item(), 0, policy_loss.mean().item(),
             value_prefix_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
         )
-        if self.game_config.vis_result:
+        if self._cfg.vis_result:
 
             # reward l1 loss
             value_prefix_indices_0 = (
-                    target_value_prefix_cpu[:, :self.game_config.num_unroll_steps].reshape(-1).unsqueeze(-1) == 0
+                    target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 0
             )
             value_prefix_indices_n1 = (
-                    target_value_prefix_cpu[:, :self.game_config.num_unroll_steps].reshape(-1).unsqueeze(-1) == -1
+                    target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == -1
             )
             value_prefix_indices_1 = (
-                    target_value_prefix_cpu[:, :self.game_config.num_unroll_steps].reshape(-1).unsqueeze(-1) == 1
+                    target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 1
             )
 
-            target_value_prefix_base = target_value_prefix_cpu[:, :self.game_config.
+            target_value_prefix_base = target_value_prefix_cpu[:, :self._cfg.
                 num_unroll_steps].reshape(-1).unsqueeze(-1)
 
             predicted_value_prefixs = torch.stack(predicted_value_prefixs).transpose(1, 0).squeeze(-1)
@@ -564,16 +565,16 @@ class SampledEfficientZeroPolicy(Policy):
         # self._collect_model = model_wrap(self._model, 'base')
         self._collect_model = self._learn_model
         self._collect_model.reset()
-        if self.game_config.mcts_ctree:
-            self._mcts_collect = MCTSCtree(self.game_config)
+        if self._cfg.mcts_ctree:
+            self._mcts_collect = MCTSCtree(self._cfg)
         else:
-            self._mcts_collect = MCTSPtree(self.game_config)
+            self._mcts_collect = MCTSPtree(self._cfg)
 
         # set temperature for distributions
         self.collect_temperature = np.array(
             [
-                self.game_config.visit_count_temperature(trained_steps=0)
-                for _ in range(self.game_config.collector_env_num)
+                visit_count_temperature(self._cfg.auto_temperature, self._cfg.fixed_temperature_value, self._cfg.max_training_steps, trained_steps=0)
+                for _ in range(self._cfg.collector_env_num)
             ]
         )
 
@@ -602,7 +603,7 @@ class SampledEfficientZeroPolicy(Policy):
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
                 pred_values_pool = inverse_scalar_transform(pred_values_pool,
-                                                            self.game_config.support_size).detach().cpu().numpy()
+                                                            self._cfg.support_size).detach().cpu().numpy()
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 reward_hidden_roots = (
                     reward_hidden_roots[0].detach().cpu().numpy(), reward_hidden_roots[1].detach().cpu().numpy()
@@ -611,29 +612,29 @@ class SampledEfficientZeroPolicy(Policy):
 
             # TODO(pu): for board games, when action_num is a list, adapt the Roots method
             # cpp mcts
-            if self.game_config.mcts_ctree:
+            if self._cfg.mcts_ctree:
                 action_num = int(action_mask[0].sum())
-                roots = ctree.Roots(active_collect_env_num, action_num, self.game_config.num_simulations,
-                                    num_of_sampled_actions=self.game_config.num_of_sampled_actions)
+                roots = ctree.Roots(active_collect_env_num, action_num, self._cfg.num_simulations,
+                                    num_of_sampled_actions=self._cfg.num_of_sampled_actions)
                 noises = [
-                    np.random.dirichlet([self.game_config.root_dirichlet_alpha] * action_num
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * action_num
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 ]
-                roots.prepare(self.game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
+                roots.prepare(self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots)
             else:
                 # python mcts
                 if action_mask[0] is None:
                     # continuous action space
-                    roots = ptree.Roots(active_collect_env_num, None, self.game_config.num_simulations,
-                                        action_space_size=self.game_config.action_space_size,
-                                        num_of_sampled_actions=self.game_config.num_of_sampled_actions)
+                    roots = ptree.Roots(active_collect_env_num, None, self._cfg.num_simulations,
+                                        action_space_size=self._cfg.action_space_size,
+                                        num_of_sampled_actions=self._cfg.num_of_sampled_actions)
                     # the only difference between collect and eval is the dirichlet noise
-                    # TODO(pu):  int(self.game_config.action_space_size)
+                    # TODO(pu):  int(self._cfg.action_space_size)
                     noises = [
                         np.random.dirichlet(
-                            [self.game_config.root_dirichlet_alpha] * int(self.game_config.num_of_sampled_actions)
+                            [self._cfg.root_dirichlet_alpha] * int(self._cfg.num_of_sampled_actions)
                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                     ]
                 else:
@@ -641,15 +642,15 @@ class SampledEfficientZeroPolicy(Policy):
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                     ]
-                    roots = ptree.Roots(active_collect_env_num, legal_actions, self.game_config.num_simulations,
-                                        num_of_sampled_actions=self.game_config.num_of_sampled_actions)
+                    roots = ptree.Roots(active_collect_env_num, legal_actions, self._cfg.num_simulations,
+                                        num_of_sampled_actions=self._cfg.num_of_sampled_actions)
                     # the only difference between collect and eval is the dirichlet noise
                     noises = [
-                        np.random.dirichlet([self.game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                     ]
                 roots.prepare(
-                    self.game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
+                    self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
                 )
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
@@ -703,10 +704,10 @@ class SampledEfficientZeroPolicy(Policy):
         self._eval_model = model_wrap(self._model, wrapper_name='base')
 
         self._eval_model.reset()
-        if self.game_config.mcts_ctree:
-            self._mcts_eval = MCTSCtree(self.game_config)
+        if self._cfg.mcts_ctree:
+            self._mcts_eval = MCTSCtree(self._cfg)
         else:
-            self._mcts_eval = MCTSPtree(self.game_config)
+            self._mcts_eval = MCTSPtree(self._cfg)
 
     # @profile
     def _forward_eval(self, data: ttorch.Tensor, action_mask: list, to_play: None, ready_env_id=None):
@@ -735,7 +736,7 @@ class SampledEfficientZeroPolicy(Policy):
             # TODO(pu)
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                pred_values_pool = inverse_scalar_transform(pred_values_pool, self.game_config.support_size
+                pred_values_pool = inverse_scalar_transform(pred_values_pool, self._cfg.support_size
                                                             ).detach().cpu().numpy()  # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 reward_hidden_roots = (
@@ -743,12 +744,12 @@ class SampledEfficientZeroPolicy(Policy):
                 )
                 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()  # list shape（B, A）
 
-            if self.game_config.mcts_ctree:
+            if self._cfg.mcts_ctree:
                 # cpp mcts
                 # TODO(pu): for board games, when action_num is a list, adapt the Roots method
                 action_num = int(action_mask[0].sum())
-                roots = ctree.Roots(active_eval_env_num, action_num, self.game_config.num_simulations,
-                                    num_of_sampled_actions=self.game_config.num_of_sampled_actions)
+                roots = ctree.Roots(active_eval_env_num, action_num, self._cfg.num_simulations,
+                                    num_of_sampled_actions=self._cfg.num_of_sampled_actions)
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool)
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots)
@@ -756,14 +757,14 @@ class SampledEfficientZeroPolicy(Policy):
                 # python mcts
                 if action_mask[0] is None:
                     # continuous action space
-                    roots = ptree.Roots(active_eval_env_num, None, self.game_config.num_simulations,
-                                        action_space_size=self.game_config.action_space_size,
-                                        num_of_sampled_actions=self.game_config.num_of_sampled_actions)
+                    roots = ptree.Roots(active_eval_env_num, None, self._cfg.num_simulations,
+                                        action_space_size=self._cfg.action_space_size,
+                                        num_of_sampled_actions=self._cfg.num_of_sampled_actions)
                     # the only difference between collect and eval is the dirichlet noise
-                    # TODO(pu):  int(self.game_config.action_space_size)
+                    # TODO(pu):  int(self._cfg.action_space_size)
                     noises = [
                         np.random.dirichlet(
-                            [self.game_config.root_dirichlet_alpha] * int(self.game_config.num_of_sampled_actions)
+                            [self._cfg.root_dirichlet_alpha] * int(self._cfg.num_of_sampled_actions)
                         ).astype(np.float32).tolist() for j in range(active_eval_env_num)
                     ]
                 else:
@@ -771,11 +772,11 @@ class SampledEfficientZeroPolicy(Policy):
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                     ]
-                    roots = ptree.Roots(active_eval_env_num, legal_actions, self.game_config.num_simulations,
-                                        num_of_sampled_actions=self.game_config.num_of_sampled_actions)
+                    roots = ptree.Roots(active_eval_env_num, legal_actions, self._cfg.num_simulations,
+                                        num_of_sampled_actions=self._cfg.num_of_sampled_actions)
                     # the only difference between collect and eval is the dirichlet noise
                     noises = [
-                        np.random.dirichlet([self.game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(active_eval_env_num)
                     ]
 
@@ -893,7 +894,7 @@ class SampledEfficientZeroPolicy(Policy):
 
     def _data_preprocess_learn(self, data: ttorch.Tensor):
         # TODO data augmentation before learning
-        data = data.cuda(self.game_config.device)
+        data = data.cuda(self._cfg.device)
         data = ttorch.stack(data)
         return data
 

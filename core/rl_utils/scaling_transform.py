@@ -10,6 +10,7 @@ class DiscreteSupport(object):
         self.max = max
         self.range = np.arange(min, max + 1, delta)
         self.size = len(self.range)
+        self.set_size = len(self.range)
         self.delta = delta
 
 
@@ -51,7 +52,7 @@ def inverse_scalar_transform(logits, support_size, epsilon=0.001):
     value = (value_support * value_probs).sum(1, keepdim=True)
 
     output = torch.sign(value) * (
-        ((torch.sqrt(1 + 4 * epsilon * (torch.abs(value) + 1 + epsilon)) - 1) / (2 * epsilon)) ** 2 - 1
+            ((torch.sqrt(1 + 4 * epsilon * (torch.abs(value) + 1 + epsilon)) - 1) / (2 * epsilon)) ** 2 - 1
     )
 
     output[torch.abs(output) < epsilon] = 0.
@@ -110,3 +111,45 @@ def inverse_scalar_transform_old(logits, support_size, epsilon=0.001):
 #
 # print('new_time:', new_time)
 # print('old_time:', old_time)
+
+def visit_count_temperature(auto_temperature, fixed_temperature_value, max_training_steps, trained_steps):
+    if auto_temperature:
+        if trained_steps < 0.5 * max_training_steps:
+            return 1.0
+        elif trained_steps < 0.75 * max_training_steps:
+            return 0.5
+        else:
+            return 0.25
+    else:
+        return fixed_temperature_value
+
+
+def modified_cross_entropy_loss(prediction, target):
+    return -(torch.log_softmax(prediction, dim=1) * target).sum(1)
+
+
+def value_phi(value_support, x):
+    return _phi(value_support, x)
+
+
+def reward_phi(reward_support, x):
+    return _phi(reward_support, x)
+
+
+def _phi(discrete_support, x):
+    min = discrete_support.min
+    max = discrete_support.max
+    set_size = discrete_support.set_size
+    delta = discrete_support.delta
+
+    x.clamp_(min, max)
+    x_low = x.floor()
+    x_high = x.ceil()
+    p_high = x - x_low
+    p_low = 1 - p_high
+
+    target = torch.zeros(x.shape[0], x.shape[1], set_size).to(x.device)
+    x_high_idx, x_low_idx = x_high - min / delta, x_low - min / delta
+    target.scatter_(2, x_high_idx.long().unsqueeze(-1), p_high.unsqueeze(-1))
+    target.scatter_(2, x_low_idx.long().unsqueeze(-1), p_low.unsqueeze(-1))
+    return target

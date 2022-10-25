@@ -14,7 +14,7 @@ from ding.worker import BaseLearner
 from ding.worker import create_serial_collector
 from tensorboardX import SummaryWriter
 
-from core.rl_utils import SampledGameBuffer as GameBuffer
+from core.rl_utils import SampledGameBuffer as GameBuffer, visit_count_temperature
 from core.worker import SampledEfficientZeroEvaluator as BaseSerialEvaluator
 
 
@@ -26,11 +26,10 @@ def serial_pipeline_sampled_efficientzero(
         model: Optional[torch.nn.Module] = None,
         max_train_iter: Optional[int] = int(1e10),
         max_env_step: Optional[int] = int(1e10),
-        game_config: Optional[dict] = None,
 ) -> 'Policy':  # noqa
     """
     Overview:
-        Serial pipeline entry for MuZero and its variants, such as EfficientZero.
+        Serial pipeline entry for Sampled EfficientZero and its variants, such as Sampled EfficientZero.
     Arguments:
         - input_cfg (:obj:`Union[str, Tuple[dict, dict]]`): Config in dict type. \
             ``str`` type means config file path. \
@@ -74,8 +73,10 @@ def serial_pipeline_sampled_efficientzero(
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
-    # MuZero related code
-    # specific game buffer for MuZero
+    # Sampled EfficientZero related code
+    # specific game buffer for Sampled EfficientZero
+    game_config = cfg.policy
+
     replay_buffer = GameBuffer(game_config)
     collector = create_serial_collector(
         cfg.policy.collect.collector,
@@ -108,10 +109,11 @@ def serial_pipeline_sampled_efficientzero(
         # collect_kwargs = commander.step()
         collect_kwargs = {}
         # set temperature for visit count distributions according to the train_iter,
-        # please refer to Appendix A.1 in EfficientZero for details
+        # please refer to Appendix A.1 in Sampled EfficientZero for details
         collect_kwargs['temperature'] = np.array(
             [
-                game_config.visit_count_temperature(trained_steps=learner.train_iter)
+                visit_count_temperature(game_config.auto_temperature, game_config.fixed_temperature_value,
+                                        game_config.max_training_steps, trained_steps=learner.train_iter)
                 for _ in range(game_config.collector_env_num)
             ]
         )
@@ -172,7 +174,7 @@ def serial_pipeline_sampled_efficientzero(
             learner.train(train_data, collector.envstep)
 
             # if game_config.lr_manually:
-            #     # learning rate decay manually like EfficientZero paper
+            #     # learning rate decay manually like Sampled EfficientZero paper
             #     if learner.train_iter > 1e5 and learner.train_iter <= 2e5:
             #         policy._optimizer.lr = 0.02
             #     elif learner.train_iter > 2e5:
