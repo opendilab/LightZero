@@ -15,8 +15,8 @@ game_config = EasyDict(
         env_type='no_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
-        mcts_ctree=True,
-        # mcts_ctree=False,
+        # mcts_ctree=True,
+        mcts_ctree=False,
         image_based=True,
         # cvt_string=True,
         # trade memory for speed

@@ -33,6 +33,7 @@ class Node:
         # self.hidden_state_index_y = -1
         self.hidden_state_index_x = 0
         self.hidden_state_index_y = 0
+        self.parent_value_prefix = 0  # only used in update_tree_q method
 
     def expand(
         self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, value_prefix: float,
@@ -147,6 +148,9 @@ class Node:
 
     @property
     def value(self):
+        """
+            estimated Q value
+        """
         if self.visit_count == 0:
             return 0
         else:
@@ -226,18 +230,58 @@ class SearchResults:
         self.last_actions = []
         self.search_lens = []
 
+"""if node don't have parent_value_prefix property"""
+# def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
+#     node_stack = []
+#     node_stack.append(root)
+#     parent_value_prefix = 0.0
+#     is_reset = 0
+#     parent_value_prefix_stack = []
+#     while len(node_stack) > 0:
+#         node = node_stack[-1]
+#         node_stack.pop()
+#
+#         if node != root:
+#             true_reward = node.value_prefix - parent_value_prefix
+#             if is_reset == 1:
+#                 true_reward = node.value_prefix
+#             if players == 1:
+#                 q_of_s_a = true_reward + discount * node.value
+#             elif players == 2:
+#                 q_of_s_a = true_reward + discount * (-node.value)
+#
+#             min_max_stats.update(q_of_s_a)
+#
+#         parent_value_prefix = node.value_prefix
+#         parent_value_prefix_stack.append(parent_value_prefix)
+#         is_reset = node.is_reset
+#
+#         num = 0
+#         for a in node.legal_actions:
+#             child = node.get_child(a)
+#             if child.expanded:
+#                 node_stack.append(child)
+#                 num += 1
+#
+#         if num == 0:
+#             # if node have no expanded child
+#             parent_value_prefix = parent_value_prefix_stack.pop()
+#
+#         # if len(node_stack) >= 3:
+#         #     print('len(node_stack)>=3')
 
 def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
+    root.parent_value_prefix = 0
     node_stack = []
     node_stack.append(root)
-    parent_value_prefix = 0.0
     is_reset = 0
     while len(node_stack) > 0:
         node = node_stack[-1]
         node_stack.pop()
 
         if node != root:
-            true_reward = node.value_prefix - parent_value_prefix
+            true_reward = node.value_prefix - node.parent_value_prefix
+
             if is_reset == 1:
                 true_reward = node.value_prefix
             if players == 1:
@@ -246,12 +290,14 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
                 q_of_s_a = true_reward + discount * (-node.value)
 
             min_max_stats.update(q_of_s_a)
+
+        is_reset = node.is_reset
+
         for a in node.legal_actions:
             child = node.get_child(a)
             if child.expanded:
+                child.parent_value_prefix = node.value_prefix
                 node_stack.append(child)
-        parent_value_prefix = node.value_prefix
-        is_reset = node.is_reset
 
 
 def back_propagate(search_path, min_max_stats, to_play, value: float, discount: float):
@@ -298,15 +344,21 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
                 parent_value_prefix = parent.value_prefix
                 is_reset = parent.is_reset
 
-            true_reward = node.value_prefix - parent_value_prefix
+            # TODO(pu): two player mode, we should calculate the true_reward according to the perspective of current
+            #  player
+            true_reward = node.value_prefix - (- parent_value_prefix)
             if is_reset == 1:
                 true_reward = node.value_prefix
+
+            # TODO(pu)
+            min_max_stats.update(true_reward + discount * - node.value)
+
             # to_play related
             bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
 
-        min_max_stats.clear()
-        root = search_path[0]
-        update_tree_q(root, min_max_stats, discount, 2)
+        # min_max_stats.clear()
+        # root = search_path[0]
+        # update_tree_q(root, min_max_stats, discount, 2)
 
 
 def batch_back_propagate(
