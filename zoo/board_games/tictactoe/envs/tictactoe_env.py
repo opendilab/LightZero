@@ -21,6 +21,7 @@ class TicTacToeEnv(BaseGameEnv):
 
     config = dict(
         prob_random_agent=0,
+        prob_expert_agent=0,
         battle_mode='one_player_mode',
     )
 
@@ -36,7 +37,9 @@ class TicTacToeEnv(BaseGameEnv):
         self.players = [1, 2]
         self.total_num_actions = 9
         self.prob_random_agent = cfg.prob_random_agent
-        # self.prob_random_agent = 0.1
+        self.prob_expert_agent = cfg.prob_expert_agent
+        assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
+            f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
 
     @property
     def current_player(self):
@@ -72,8 +75,13 @@ class TicTacToeEnv(BaseGameEnv):
 
     def step(self, action):
         if self.battle_mode == 'two_player_mode':
-            if np.random.rand() < self.prob_random_agent:
-                action = self.random_action()
+            if self.prob_random_agent > 0:
+                if np.random.rand() < self.prob_random_agent:
+                    action = self.random_action()
+            elif self.prob_expert_agent > 0:
+                if np.random.rand() < self.prob_expert_agent:
+                    action = self.expert_action()
+
             timestep = self._player_step(action)
             # print(self.board)
             return timestep

@@ -33,6 +33,7 @@ tictactoe_efficientzero_config = dict(
         battle_mode='two_player_mode',
         # battle_mode='one_player_mode',
         prob_random_agent=0.,
+        prob_expert_agent=0.1,
         max_episode_steps=int(1.08e5),
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
