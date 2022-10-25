@@ -929,7 +929,6 @@ class SampledGameBuffer(Buffer):
                 if to_play_history[0][0] is None:
                     if self.config. continuous_action_space:
                         # for continuous action space games
-                        action_mask = None
                         legal_actions = None
                         # continuous action space
                         roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations,
@@ -992,13 +991,24 @@ class SampledGameBuffer(Buffer):
 
                     if policy_mask[policy_index] == 0:
                         # the null target policy
-                        target_policies.append([0 for _ in range(self.config.action_space_size)])
+                        if self.config.continuous_action_space:
+                            # for continuous action space games
+                            # the invalid target policy
+                            target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                        else:
+                            target_policies.append([0 for _ in range(self.config.action_space_size)])
+
                     else:
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
-                            target_policies.append(
-                                list(np.ones(self.config.action_space_size) / self.config.action_space_size)
-                            )
+                            if self.config.continuous_action_space:
+                                target_policies.append(
+                                    list(np.ones(self.config.num_of_sampled_actions) / self.config.num_of_sampled_actions)
+                                )
+                            else:
+                                target_policies.append(
+                                    list(np.ones(self.config.action_space_size) / self.config.action_space_size)
+                                )
                         else:
                             if self.config.mcts_ctree:
                                 """
@@ -1183,7 +1193,10 @@ class SampledGameBuffer(Buffer):
         batch_target_policies_re = self.compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
         batch_target_policies_non_re = self.compute_target_policy_non_reanalyzed(policy_non_re_context)
         if self.config.revisit_policy_search_rate < 1:
-            batch_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
+            try:
+                batch_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
+            except Exception as error:
+                print(error)
         else:
             batch_policies = batch_target_policies_re
         targets_batch = [batch_value_prefixs, batch_values, batch_policies]

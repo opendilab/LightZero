@@ -318,14 +318,20 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
                 is_reset = parent.is_reset
 
             true_reward = node.value_prefix - parent_value_prefix
+
+            # TODO(pu): why in muzero-general is - node.value
+            min_max_stats.update(true_reward + discount * node.value)
+            # min_max_stats.update(true_reward + discount * - node.value)
+
             if is_reset == 1:
                 true_reward = node.value_prefix
 
             bootstrap_value = true_reward + discount * bootstrap_value
 
-        min_max_stats.clear()
-        root = search_path[0]
-        update_tree_q(root, min_max_stats, discount, 1)
+        # TODO(pu): the effect of different ways to update min_max_stats
+        # min_max_stats.clear()
+        # root = search_path[0]
+        # update_tree_q(root, min_max_stats, discount, 1)
     else:
         # for 2 player mode
         bootstrap_value = value
@@ -350,8 +356,9 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
             if is_reset == 1:
                 true_reward = node.value_prefix
 
-            # TODO(pu)
-            min_max_stats.update(true_reward + discount * - node.value)
+            # TODO(pu): why in muzero-general is - node.value
+            min_max_stats.update(true_reward + discount * node.value)
+            # min_max_stats.update(true_reward + discount * - node.value)
 
             # to_play related
             bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value

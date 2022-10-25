@@ -57,8 +57,8 @@ game_config = EasyDict(
         augmentation=['shift', 'intensity'],
 
         # debug
-        # collector_env_num=1,
-        # evaluator_env_num=1,
+        # collector_env_num=2,
+        # evaluator_env_num=2,
         # num_simulations=9,
         # batch_size=4,
         # total_transitions=int(1e5),
@@ -70,9 +70,8 @@ game_config = EasyDict(
 
         collector_env_num=8,
         evaluator_env_num=5,
-        # num_simulations=50,
-        # TODO
         num_simulations=50,
+        # TODO
         batch_size=256,
         total_transitions=int(1e5),
         lstm_hidden_size=512,

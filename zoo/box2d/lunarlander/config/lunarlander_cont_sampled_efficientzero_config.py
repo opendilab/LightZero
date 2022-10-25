@@ -10,9 +10,9 @@ from easydict import EasyDict
 from lunarlander_cont_sampled_efficientzero_base_config import game_config
 
 # for debug
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
 
 
 collector_env_num = 8
