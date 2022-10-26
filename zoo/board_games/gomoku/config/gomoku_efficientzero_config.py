@@ -54,6 +54,8 @@ gomoku_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
+            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
+            categorical_distribution=True,
             # representation_model_type='identity',
             representation_model_type='conv_res_blocks',
             # [S, W, H, C] -> [S x C, W, H]
@@ -81,7 +83,42 @@ gomoku_efficientzero_config = dict(
             last_linear_layer_init_zero=True,
             state_norm=False,
         ),
-        ### game_config begin###
+        # learn_mode config
+        learn=dict(
+            # debug
+            # update_per_collect=2,
+            # batch_size=4,
+
+            batch_size=256,
+
+            # one_player_mode, board_size=6, episode_length=6**2/2=18
+            # n_episode=8,  update_per_collect=18*8=144
+            update_per_collect=int(board_size ** 2 / 2 * n_episode),
+
+            # two_player_mode, board_size=6, episode_length=6**2=36
+            # n_episode=8,  update_per_collect=36*8=268
+            # update_per_collect=int(board_size ** 2 * n_episode),
+
+            learning_rate=0.0003,  # fixed lr
+            # Frequency of target network update.
+            target_update_freq=400,
+        ),
+        # collect_mode config
+        collect=dict(
+            # You can use either "n_sample" or "n_episode" in collector.collect.
+            # Get "n_sample" samples per collect.
+            n_episode=n_episode,
+        ),
+        # the eval cost is expensive, so we set eval_freq larger
+        eval=dict(evaluator=dict(eval_freq=int(500), )),
+        # command_mode config
+        other=dict(
+            # the replay_buffer_size is ineffective, we specify it in game config
+            replay_buffer=dict(type='game')
+        ),
+        ######################################
+        # game_config begin
+        ######################################
         env_type='board_games',
         device=device,
         # TODO: for board_games, mcts_ctree now only support env_num=1, because in cpp MCTS root node,
@@ -174,6 +211,8 @@ gomoku_efficientzero_config = dict(
         # UCB formula
         pb_c_base=19652,
         pb_c_init=1.25,
+        # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
+        categorical_distribution=True,
         support_size=300,
         # value_support=DiscreteSupport(-300, 300, delta=1),
         # reward_support=DiscreteSupport(-300, 300, delta=1),
@@ -219,40 +258,9 @@ gomoku_efficientzero_config = dict(
         resnet_fc_reward_layers=[32],  # Define the hidden layers in the reward head of the dynamic network
         resnet_fc_value_layers=[32],  # Define the hidden layers in the value head of the prediction network
         resnet_fc_policy_layers=[32],  # Define the hidden layers in the policy head of the prediction network
-        ### game_config end###
-        # learn_mode config
-        learn=dict(
-            # debug
-            # update_per_collect=2,
-            # batch_size=4,
-
-            batch_size=256,
-
-            # one_player_mode, board_size=6, episode_length=6**2/2=18
-            # n_episode=8,  update_per_collect=18*8=144
-            update_per_collect=int(board_size ** 2 / 2 * n_episode),
-
-            # two_player_mode, board_size=6, episode_length=6**2=36
-            # n_episode=8,  update_per_collect=36*8=268
-            # update_per_collect=int(board_size ** 2 * n_episode),
-
-            learning_rate=0.0003,  # fixed lr
-            # Frequency of target network update.
-            target_update_freq=400,
-        ),
-        # collect_mode config
-        collect=dict(
-            # You can use either "n_sample" or "n_episode" in collector.collect.
-            # Get "n_sample" samples per collect.
-            n_episode=n_episode,
-        ),
-        # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(500), )),
-        # command_mode config
-        other=dict(
-            # the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game')
-        ),
+        ######################################
+        # game_config end
+        ######################################
     ),
 )
 gomoku_efficientzero_config = EasyDict(gomoku_efficientzero_config)
