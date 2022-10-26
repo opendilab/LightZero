@@ -33,7 +33,7 @@ evaluator_env_num = 3
 
 atari_efficientzero_config = dict(
     # exp_name='data_ez_ctree/breakout_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub883_lr0.2_ns50_ftv025_upc1000_urv-false_cdt',
+    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub883_lr0.2_ns50_ftv025_upc1000_urv-false_cd-true',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -68,7 +68,7 @@ atari_efficientzero_config = dict(
         cuda=True,
         model=dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=False,
+            categorical_distribution=True,
             representation_model_type='conv_res_blocks',
             # representation_model=representation_model,
             observation_shape=(12, 96, 96),  # 3,96,96 stack=4
@@ -140,8 +140,8 @@ atari_efficientzero_config = dict(
         clip_reward=True,
         game_wrapper=True,
         # NOTE: different env have different action_space_size
-        action_space_size=6,
-        # action_space_size=4,
+        action_space_size=6,  # for pong
+        # action_space_size=4,  # for breakout
         amp_type='none',
         obs_shape=(12, 96, 96),
         image_channel=3,
@@ -222,7 +222,7 @@ atari_efficientzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=False,
+        categorical_distribution=True,
         support_size=300,
         # value_support=DiscreteSupport(-300, 300, delta=1),
         # reward_support=DiscreteSupport(-300, 300, delta=1),

@@ -362,7 +362,7 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
             # to_play related
             # true_reward is in the perspective of current player of node
             bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount * bootstrap_value
-            # TODO(pu): why in muzero-general is - node.value
+            # TODO(pu): why in muzero-general is - true_reward
             # bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
 
         # TODO(pu): the effect of different ways to update min_max_stats
