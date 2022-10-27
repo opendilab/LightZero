@@ -16,9 +16,9 @@ from easydict import EasyDict
 
 
 # for debug
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 8
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
 
 
 collector_env_num = 8
@@ -26,8 +26,7 @@ n_episode = 8
 evaluator_env_num = 5
 
 tictactoe_efficientzero_config = dict(
-    # exp_name='data_ez_ptree/tictactoe_1pm_efficientzero_seed0_sub885',
-    exp_name='data_ez_ptree/tictactoe_2pm_efficientzero_seed0_sub885_rmt-conv_nc16_urv-false_rbs1e5',
+    exp_name='data_ez_ctree/tictactoe_2pm_efficientzero_seed0_sub885_rmt-conv_nc16_urv-false_rbs1e5',
 
     env=dict(
         collector_env_num=collector_env_num,
@@ -39,7 +38,7 @@ tictactoe_efficientzero_config = dict(
         battle_mode='two_player_mode',
         # battle_mode='one_player_mode',
         prob_random_agent=0.,
-        prob_expert_agent=0.1,
+        prob_expert_agent=0.,
         max_episode_steps=int(1.08e5),
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
@@ -121,10 +120,8 @@ tictactoe_efficientzero_config = dict(
         ######################################
         env_type='board_games',
         device=device,
-        mcts_ctree=False,
-        # TODO: for board_games, mcts_ctree now only support env_num=1, because in cpp MCTS root node,
-        #  we must specify the one same action mask,
-        #  when env_num>1, the action mask for different env may be different.
+        mcts_ctree=True,
+        # mcts_ctree=False,
         battle_mode='two_player_mode',
         game_history_length=9,
         # battle_mode='one_player_mode',
@@ -151,8 +148,8 @@ tictactoe_efficientzero_config = dict(
         augmentation=['shift', 'intensity'],
 
         # debug
-        # collector_env_num=8,
-        # evaluator_env_num=8,
+        # collector_env_num=2,
+        # evaluator_env_num=2,
         # num_simulations=9,
         # batch_size=4,
         # total_transitions=int(3e3),
@@ -290,5 +287,4 @@ create_config = tictactoe_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_efficientzero
-
     serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))

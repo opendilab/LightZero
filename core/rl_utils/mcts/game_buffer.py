@@ -691,7 +691,20 @@ class GameBuffer(Buffer):
                     """
                     cpp mcts
                     """
-                    roots = ctree.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
+                    if to_play_history[0][0] is None:
+                        # for one_player atari games
+                        action_mask = [
+                            list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
+                        ]
+                        to_play = [0 for i in range(batch_size)]
+
+                    legal_actions = [
+                        [i for i, x in enumerate(action_mask[j]) if x == 1]
+                        for j in range(batch_size)
+                    ]
+                    # roots = ctree.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
+                    roots = ctree.Roots(batch_size, self.config.num_simulations, legal_actions)
+
                     noises = [
                         np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.action_space_size
                                             ).astype(np.float32).tolist() for _ in range(batch_size)
@@ -701,9 +714,10 @@ class GameBuffer(Buffer):
                         noises,
                         value_prefix_pool,
                         policy_logits_pool,
+                        to_play
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTSCtree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots)
+                    MCTSCtree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 else:
                     """
                     python mcts
@@ -717,7 +731,7 @@ class GameBuffer(Buffer):
                         [i for i, x in enumerate(action_mask[j]) if x == 1]
                         for j in range(batch_size)
                     ]
-                    roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations)
+                    roots = ptree.Roots(batch_size, self.config.num_simulations, legal_actions)
                     noises = [
                         np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(batch_size)
@@ -803,6 +817,7 @@ class GameBuffer(Buffer):
     def compute_target_policy_reanalyzed(self, policy_re_context, model):
         """
         compute policy targets from the reanalyzed context of policies
+
         """
         batch_target_policies_re = []
         if policy_re_context is None:
@@ -812,6 +827,7 @@ class GameBuffer(Buffer):
         policy_obs_lst, policy_mask, state_index_lst, indices, child_visits, traj_lens, action_mask_history, \
         to_play_history = policy_re_context
         batch_size = len(policy_obs_lst)
+        # len(indice)=len(state_index_lst)=len(traj_lens)=game_history_batch_size is batch_size*pho
         game_history_batch_size = len(state_index_lst)
 
         device = self.config.device
@@ -891,7 +907,20 @@ class GameBuffer(Buffer):
                 """
                 cpp mcts
                 """
-                roots = ctree.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
+                if to_play_history[0][0] is None:
+                    # for one_player atari games
+                    action_mask = [
+                        list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
+                    ]
+                    to_play = [0 for i in range(batch_size)]
+
+                legal_actions = [
+                    [i for i, x in enumerate(action_mask[j]) if x == 1]
+                    for j in range(batch_size)
+                ]
+                # roots = ctree.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
+                roots = ctree.Roots(batch_size, self.config.num_simulations, legal_actions)
+
                 noises = [
                     np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.action_space_size
                                         ).astype(np.float32).tolist() for _ in range(batch_size)
@@ -901,9 +930,14 @@ class GameBuffer(Buffer):
                     noises,
                     value_prefix_pool,
                     policy_logits_pool,
+                    to_play
                 )
                 # do MCTS for a new policy with the recent target model
-                MCTSCtree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots)
+                MCTSCtree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                # TODO(pu)
+                # roots_legal_actions_list = roots.legal_actions_list
+                roots_legal_actions_list = legal_actions
+
             else:
                 """
                 python mcts
@@ -968,12 +1002,24 @@ class GameBuffer(Buffer):
                                 """
                                 cpp mcts
                                 """
-                                # for one_player atari games
-                                # TODO(pu): very important
-                                sum_visits = sum(distributions)
-                                policy = [visit_count / sum_visits for visit_count in distributions]
-                                target_policies.append(policy)
-                                # target_policies.append(distributions)
+                                if to_play_history[0][0] is None:
+
+                                    # for one_player atari games
+                                    # TODO(pu): very important
+                                    sum_visits = sum(distributions)
+                                    policy = [visit_count / sum_visits for visit_count in distributions]
+                                    target_policies.append(policy)
+                                    # target_policies.append(distributions)
+                                else:
+                                    # for two_player board games
+                                    policy_tmp = [0 for _ in range(self.config.action_space_size)]
+                                    # to make sure target_policies have the same dimension
+                                    # target_policy = torch.from_numpy(target_policy) be correct
+                                    sum_visits = sum(distributions)
+                                    policy = [visit_count / sum_visits for visit_count in distributions]
+                                    for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
+                                        policy_tmp[legal_action] = policy[index]
+                                    target_policies.append(policy_tmp)
                             else:
                                 """
                                 python mcts

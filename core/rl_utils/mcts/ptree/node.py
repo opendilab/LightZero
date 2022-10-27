@@ -159,7 +159,7 @@ class Node:
 
 class Roots:
 
-    def __init__(self, root_num: int, legal_actions_list: Any, pool_size: int):
+    def __init__(self, root_num: int, pool_size: int, legal_actions_list: Any):
         self.num = root_num
         self.root_num = root_num
         self.legal_actions_list = legal_actions_list  # list of list
@@ -287,6 +287,7 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
             if players == 1:
                 q_of_s_a = true_reward + discount * node.value
             elif players == 2:
+                # TODO
                 q_of_s_a = true_reward + discount * (-node.value)
 
             min_max_stats.update(q_of_s_a)

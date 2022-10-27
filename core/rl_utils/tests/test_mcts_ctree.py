@@ -3,7 +3,9 @@ import pytest
 import torch
 from easydict import EasyDict
 import sys
-sys.path.append('/Users/yangzhenjie/code/jayyoung0802/LightZero/')
+# sys.path.append('/Users/yangzhenjie/code/jayyoung0802/LightZero/')
+sys.path.append('/Users/puyuan/code/LightZero')
+
 
 from core.rl_utils import inverse_scalar_transform
 
@@ -55,7 +57,7 @@ class MuZeroModelFake(torch.nn.Module):
 
 @pytest.mark.unittest
 def test_mcts():
-    import core.rl_utils.mcts.ctree.cytree as tree
+    import core.rl_utils.mcts.ctree.cytree as ctree
     import numpy as np
     from core.rl_utils.mcts.mcts_ctree import MCTSCtree as MCTS
 
@@ -106,7 +108,7 @@ def test_mcts():
     policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
     legal_actions_list = [[i for i in range(game_config.action_space_size)] for _ in range(env_nums)] 
-    roots = tree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
+    roots = ctree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
     noises = [
         np.random.dirichlet([game_config.root_dirichlet_alpha] * game_config.action_space_size
                             ).astype(np.float32).tolist() for _ in range(env_nums)
