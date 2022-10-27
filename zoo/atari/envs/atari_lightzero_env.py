@@ -61,7 +61,7 @@ class AtariLightZeroEnv(BaseEnv):
         self._final_eval_reward = 0.
         self.has_reset = True
         obs = self.observe()
-        # obs.shape: 96.96,3
+        # obs.shape: 96,96,3
         return obs
 
     def observe(self):

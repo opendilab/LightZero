@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import treetensor.torch as ttorch
+from torch.distributions import Normal, Independent
 from ding.model import model_wrap
 from ding.policy.base_policy import Policy
 from ding.rl_utils import get_nstep_return_data, get_train_sample
@@ -21,7 +22,9 @@ from core.rl_utils import MCTSCtree
 from core.rl_utils import cytree as ctree
 from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
-from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, DiscreteSupport
+from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
+    DiscreteSupport
+
 
 # TODO(pu): choose game config
 # from zoo.atari.config.atari_efficientzero_base_config import game_config
@@ -163,7 +166,6 @@ class SampledEfficientZeroPolicy(Policy):
         self.value_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
         self.reward_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
 
-
     # @profile
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
         self._learn_model.train()
@@ -255,6 +257,9 @@ class SampledEfficientZeroPolicy(Policy):
 
         transformed_target_value = scalar_transform(target_value, self._cfg.support_size)
         target_value_phi = value_phi(self.value_support, transformed_target_value)
+        if self._cfg.categorical_distribution:
+            target_value_prefix_phi = reward_phi(self.reward_support, transformed_target_value_prefix)
+            target_value_phi = value_phi(self.value_support, transformed_target_value)
 
         network_output = self._learn_model.initial_inference(obs_batch)
 
@@ -265,14 +270,16 @@ class SampledEfficientZeroPolicy(Policy):
         policy_logits = network_output.policy_logits  # {list: 2} {list:6}
 
         reward_hidden_state = to_device(reward_hidden_state, self._cfg.device)
-        scaled_value = inverse_scalar_transform(value, self._cfg.support_size)
+        scaled_value = inverse_scalar_transform(value, self._cfg.support_size,
+                                                categorical_distribution=self._cfg.categorical_distribution)
 
         # TODO(pu)
         if not self._learn_model.training:
             # if not in training, obtain the scalars of the value/reward
             scaled_value = scaled_value.detach().cpu().numpy()
             scaled_value_prefix = inverse_scalar_transform(value_prefix,
-                                                           self._cfg.support_size).detach().cpu().numpy()
+                                                           self._cfg.support_size,
+                                                           categorical_distribution=self._cfg.categorical_distribution).detach().cpu().numpy()
             hidden_state = hidden_state.detach().cpu().numpy()
             reward_hidden_state = (
                 reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -294,19 +301,24 @@ class SampledEfficientZeroPolicy(Policy):
         value_priority = value_priority.data.cpu().numpy() + self._cfg.prioritized_replay_eps
 
         # calculate loss for the first step
-        value_loss = modified_cross_entropy_loss(value, target_value_phi[:, 0])
+        if self._cfg.categorical_distribution:
+            value_loss = modified_cross_entropy_loss(value, target_value_phi[:, 0])
+        else:
+            value_loss = torch.nn.MSELoss(reduction='none')(value.squeeze(-1), transformed_target_value[:, 0])
 
         # policy_loss = modified_cross_entropy_loss(policy_logits, target_policy[:, 0])
 
+        #############################
+        # calculate policy loss: KL loss
+        #############################
         # sampled related
         (mu, sigma) = policy_logits[:, : self._cfg.action_space_size], policy_logits[:,
-                                                                              - self._cfg.action_space_size:]
-        from torch.distributions import Normal, Independent
+                                                                       - self._cfg.action_space_size:]
         dist = Independent(Normal(mu, sigma), 1)
 
         target_policy_visit = target_policy[:, 0]
         # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
-        # 4,3, 20,2,1 ->  4, 20,2
+        # 4, 3, 20, 2, 1 ->  4, 20, 2
         target_policy_action = child_actions_batch[:, 0].squeeze(-1)
 
         entropy_loss = - dist.entropy().sum()
@@ -325,7 +337,9 @@ class SampledEfficientZeroPolicy(Policy):
         log_prob = torch.stack(log_prob_sampled_actions, dim=-1)
 
         policy_loss = (torch.exp(log_prob) * (log_prob - log_target)).sum()
-        ### calculate KL loss
+        #############################
+        # calculate policy loss: KL loss
+        #############################
 
         value_prefix_loss = torch.zeros(batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(batch_size, device=self._cfg.device)
@@ -348,9 +362,11 @@ class SampledEfficientZeroPolicy(Policy):
             # TODO(pu)
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                value = inverse_scalar_transform(value, self._cfg.support_size).detach().cpu().numpy()
+                value = inverse_scalar_transform(value, self._cfg.support_size,
+                                                 categorical_distribution=self._cfg.categorical_distribution).detach().cpu().numpy()
                 value_prefix = inverse_scalar_transform(value_prefix,
-                                                        self._cfg.support_size).detach().cpu().numpy()
+                                                        self._cfg.support_size,
+                                                        categorical_distribution=self._cfg.categorical_distribution).detach().cpu().numpy()
                 hidden_state = hidden_state.detach().cpu().numpy()
                 reward_hidden_state = (
                     reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -380,10 +396,12 @@ class SampledEfficientZeroPolicy(Policy):
             # the target policy, target_value_phi, target_value_prefix_phi is calculated in game buffer now
             # policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
 
+            #############################
+            # calculate policy loss: KL loss
+            #############################
             # sampled related
             (mu, sigma) = policy_logits[:, : self._cfg.action_space_size], policy_logits[:,
-                                                                                  - self._cfg.action_space_size:]
-            from torch.distributions import Normal, Independent
+                                                                           - self._cfg.action_space_size:]
             dist = Independent(Normal(mu, sigma), 1)
 
             target_policy_visit = target_policy[:, step_i + 1]
@@ -394,7 +412,7 @@ class SampledEfficientZeroPolicy(Policy):
             entropy_loss = - dist.entropy().sum()
 
             # project the sampled-based improved policy back onto the space of representable policies
-            ### calculate KL loss
+
             # batch_size, num_of_sampled_actions -> 4,20
             log_target = torch.log(target_policy_visit + 1e-9)
             log_prob_sampled_actions = []
@@ -407,12 +425,21 @@ class SampledEfficientZeroPolicy(Policy):
             log_prob = torch.stack(log_prob_sampled_actions, dim=-1)
 
             policy_loss = (torch.exp(log_prob) * (log_prob - log_target)).sum()
-            ### calculate KL loss
+            #############################
+            # calculate policy loss: KL loss
+            #############################
 
-            value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
-            value_prefix_loss += modified_cross_entropy_loss(
-                value_prefix, target_value_prefix_phi[:, step_i]
-            )
+            if self._cfg.categorical_distribution:
+                value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
+                value_prefix_loss += modified_cross_entropy_loss(
+                    value_prefix, target_value_prefix_phi[:, step_i]
+                )
+            else:
+                value_loss += torch.nn.MSELoss(reduction='none')(value.squeeze(-1),
+                                                                 transformed_target_value[:, step_i + 1])
+                value_prefix_loss += torch.nn.MSELoss(reduction='none')(
+                    value_prefix.squeeze(-1), transformed_target_value_prefix[:, step_i]
+                )
 
             # Follow MuZero, set half gradient
             # hidden_state.register_hook(lambda grad: grad * 0.5)
@@ -427,11 +454,13 @@ class SampledEfficientZeroPolicy(Policy):
                 )
 
             if self._cfg.vis_result:
-                scaled_value_prefixs = inverse_scalar_transform(value_prefix.detach(), self._cfg.support_size)
+                scaled_value_prefixs = inverse_scalar_transform(value_prefix.detach(), self._cfg.support_size,
+                                                                categorical_distribution=self._cfg.categorical_distribution)
                 scaled_value_prefixs_cpu = scaled_value_prefixs.detach().cpu()
 
                 predicted_values = torch.cat(
-                    (predicted_values, inverse_scalar_transform(value, self._cfg.support_size).detach().cpu())
+                    (predicted_values, inverse_scalar_transform(value, self._cfg.support_size,
+                                                                categorical_distribution=self._cfg.categorical_distribution).detach().cpu())
                 )
                 predicted_value_prefixs.append(scaled_value_prefixs_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
@@ -573,7 +602,8 @@ class SampledEfficientZeroPolicy(Policy):
         # set temperature for distributions
         self.collect_temperature = np.array(
             [
-                visit_count_temperature(self._cfg.auto_temperature, self._cfg.fixed_temperature_value, self._cfg.max_training_steps, trained_steps=0)
+                visit_count_temperature(self._cfg.auto_temperature, self._cfg.fixed_temperature_value,
+                                        self._cfg.max_training_steps, trained_steps=0)
                 for _ in range(self._cfg.collector_env_num)
             ]
         )

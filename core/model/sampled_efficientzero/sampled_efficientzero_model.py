@@ -440,7 +440,8 @@ class SampledEfficientZeroNet(BaseNet):
             pred_hid=64,
             pred_out=256,
             last_linear_layer_init_zero=False,
-            state_norm=False
+            state_norm=False,
+            categorical_distribution=True,
     ):
         """
         Overview:
@@ -468,8 +469,16 @@ class SampledEfficientZeroNet(BaseNet):
             - pred_out (:obj:`int`): dim of projection head (prediction) output layer
             - last_linear_layer_init_zero (:obj:`bool`): True -> zero initialization for the last layer of value/policy mlp
             - state_norm (:obj:`bool`):  True -> normalization for hidden states
+            - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         """
         super(SampledEfficientZeroNet, self).__init__(lstm_hidden_size)
+        self.categorical_distribution = categorical_distribution
+        if not self.categorical_distribution:
+            self.reward_support_size = 1
+            self.value_support_size = 1
+        else:
+            self.reward_support_size = reward_support_size
+            self.value_support_size = value_support_size
 
         self.proj_hid = proj_hid
         self.proj_out = proj_out
@@ -523,7 +532,7 @@ class SampledEfficientZeroNet(BaseNet):
                 1,
                 reduced_channels_reward,
                 fc_reward_layers,
-                reward_support_size,
+                self.reward_support_size,
                 block_output_size_reward,
                 lstm_hidden_size=lstm_hidden_size,
                 momentum=bn_mt,
@@ -538,7 +547,7 @@ class SampledEfficientZeroNet(BaseNet):
                 reduced_channels_policy,
                 fc_value_layers,
                 fc_policy_layers,
-                value_support_size,
+                self.value_support_size,
                 block_output_size_value,
                 block_output_size_policy,
                 momentum=bn_mt,
@@ -552,7 +561,7 @@ class SampledEfficientZeroNet(BaseNet):
                     self.action_space_dim,
                     reduced_channels_reward,
                     fc_reward_layers,
-                    reward_support_size,
+                    self.reward_support_size,
                     block_output_size_reward,
                     lstm_hidden_size=lstm_hidden_size,
                     momentum=bn_mt,
@@ -565,7 +574,7 @@ class SampledEfficientZeroNet(BaseNet):
                     1,
                     reduced_channels_reward,
                     fc_reward_layers,
-                    reward_support_size,
+                    self.reward_support_size,
                     block_output_size_reward,
                     lstm_hidden_size=lstm_hidden_size,
                     momentum=bn_mt,
@@ -580,7 +589,7 @@ class SampledEfficientZeroNet(BaseNet):
                 reduced_channels_policy,
                 fc_value_layers,
                 fc_policy_layers,
-                value_support_size,
+                self.value_support_size,
                 block_output_size_value,
                 block_output_size_policy,
                 momentum=bn_mt,

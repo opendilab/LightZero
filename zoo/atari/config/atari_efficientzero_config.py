@@ -1,4 +1,5 @@
-# sys.path.append('/Users/puyuan/code/LightZero')
+import sys
+sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
 # sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
@@ -32,16 +33,17 @@ evaluator_env_num = 3
 
 atari_efficientzero_config = dict(
     # exp_name='data_ez_ctree/breakout_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
-    # exp_name='data_ez_ctree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
-    exp_name='data_ez_ptree/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
+    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub883_lr0.2_ns50_ftv025_upc1000_urv-false_cd-true',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        # stop_value=int(20),
-        stop_value=int(1e6),
         env_name='PongNoFrameskip-v4',
+        stop_value=int(20),
+
         # env_name='BreakoutNoFrameskip-v4',
+        # stop_value=int(1e6),
+
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
         # for debug
@@ -65,11 +67,13 @@ atari_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
+            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
+            categorical_distribution=True,
             representation_model_type='conv_res_blocks',
             # representation_model=representation_model,
             observation_shape=(12, 96, 96),  # 3,96,96 stack=4
-            # action_space_size=6,
-            action_space_size=4,
+            action_space_size=6,  # for pong
+            # action_space_size=4,  # for breakout
             downsample=True,
             num_blocks=1,
             # default config in EZ original repo
@@ -93,6 +97,33 @@ atari_efficientzero_config = dict(
             pred_out=1024,
             last_linear_layer_init_zero=True,
             state_norm=False,
+        ),        # learn_mode config
+        learn=dict(
+            # for debug
+            # update_per_collect=2,
+            # batch_size=4,
+
+            update_per_collect=1000,
+            batch_size=256,
+
+            learning_rate=0.2,
+            # Frequency of target network update.
+            target_update_freq=400,
+        ),
+        # collect_mode config
+        collect=dict(
+            # You can use either "n_sample" or "n_episode" in collector.collect.
+            # Get "n_sample" samples per collect.
+            n_episode=n_episode,
+        ),
+        # the eval cost is expensive, so we set eval_freq larger
+        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        # for debug
+        # eval=dict(evaluator=dict(eval_freq=int(2), )),
+        # command_mode config
+        other=dict(
+            # NOTE: the replay_buffer_size is ineffective, we specify it in game config
+            replay_buffer=dict(type='game')
         ),
         ######################################
         # game_config begin
@@ -100,16 +131,17 @@ atari_efficientzero_config = dict(
         env_type='no_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
-        # mcts_ctree=True,
-        mcts_ctree=False,
+        mcts_ctree=True,
+        # mcts_ctree=False,
         image_based=True,
         # cvt_string=True,
         # trade memory for speed
         cvt_string=False,
         clip_reward=True,
         game_wrapper=True,
-        # action_space_size=6,
-        action_space_size=4,  # TODO(pu): different env have different action_space_size
+        # NOTE: different env have different action_space_size
+        action_space_size=6,  # for pong
+        # action_space_size=4,  # for breakout
         amp_type='none',
         obs_shape=(12, 96, 96),
         image_channel=3,
@@ -127,7 +159,7 @@ atari_efficientzero_config = dict(
         # evaluator_env_num=1,
         # num_simulations=2,
         # batch_size=4,
-        # game_history_length=10,
+        # game_history_length=20,
         # total_transitions=int(1e2),
         # lstm_hidden_size=32,
         # td_steps=5,
@@ -189,6 +221,8 @@ atari_efficientzero_config = dict(
         # UCB formula
         pb_c_base=19652,
         pb_c_init=1.25,
+        # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
+        categorical_distribution=True,
         support_size=300,
         # value_support=DiscreteSupport(-300, 300, delta=1),
         # reward_support=DiscreteSupport(-300, 300, delta=1),
@@ -234,34 +268,6 @@ atari_efficientzero_config = dict(
         ######################################
         # game_config end
         ######################################
-        # learn_mode config
-        learn=dict(
-            # for debug
-            # update_per_collect=2,
-            # batch_size=4,
-
-            update_per_collect=1000,
-            batch_size=256,
-
-            learning_rate=0.2,
-            # Frequency of target network update.
-            target_update_freq=400,
-        ),
-        # collect_mode config
-        collect=dict(
-            # You can use either "n_sample" or "n_episode" in collector.collect.
-            # Get "n_sample" samples per collect.
-            n_episode=n_episode,
-        ),
-        # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
-        # for debug
-        # eval=dict(evaluator=dict(eval_freq=int(2), )),
-        # command_mode config
-        other=dict(
-            # NOTE: the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game')
-        ),
     ),
 )
 atari_efficientzero_config = EasyDict(atari_efficientzero_config)

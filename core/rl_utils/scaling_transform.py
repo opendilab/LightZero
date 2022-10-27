@@ -35,7 +35,7 @@ def scalar_transform(x, support_size, epsilon=0.001):
     return output
 
 
-def inverse_scalar_transform(logits, support_size, epsilon=0.001):
+def inverse_scalar_transform(logits, support_size, epsilon=0.001, categorical_distribution=True):
     """
     Overview:
         h^(-1)(.) function
@@ -43,13 +43,16 @@ def inverse_scalar_transform(logits, support_size, epsilon=0.001):
             MuZero: Appendix F: Network Architecture
             https://arxiv.org/pdf/1805.11593.pdf (Page-11) Appendix A : Proposition A.2 (iii)
     """
-    scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
-    value_probs = torch.softmax(logits, dim=1)
+    if categorical_distribution:
+        scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
+        value_probs = torch.softmax(logits, dim=1)
 
-    value_support = torch.from_numpy(scalar_support.range).unsqueeze(0)
+        value_support = torch.from_numpy(scalar_support.range).unsqueeze(0)
 
-    value_support = value_support.to(device=value_probs.device)
-    value = (value_support * value_probs).sum(1, keepdim=True)
+        value_support = value_support.to(device=value_probs.device)
+        value = (value_support * value_probs).sum(1, keepdim=True)
+    else:
+        value = logits
 
     output = torch.sign(value) * (
             ((torch.sqrt(1 + 4 * epsilon * (torch.abs(value) + 1 + epsilon)) - 1) / (2 * epsilon)) ** 2 - 1
@@ -137,6 +140,10 @@ def reward_phi(reward_support, x):
 
 
 def _phi(discrete_support, x):
+    """
+    Overview:
+        Under this transformation, each scalar is represented as the linear combination of its two adjacent supports,
+    """
     min = discrete_support.min
     max = discrete_support.max
     set_size = discrete_support.set_size

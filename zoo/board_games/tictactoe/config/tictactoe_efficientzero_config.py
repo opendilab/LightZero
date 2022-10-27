@@ -48,11 +48,11 @@ tictactoe_efficientzero_config = dict(
     policy=dict(
         model_path=None,
         env_name='tictactoe',
-        # TODO(pu): how to pass into game_config, which is class, not a dict
-        # game_config=game_config,
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
+            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
+            categorical_distribution=True,
             # representation_model_type='identity',
             representation_model_type='conv_res_blocks',
             # [S, W, H, C] -> [S x C, W, H]
@@ -79,7 +79,46 @@ tictactoe_efficientzero_config = dict(
             last_linear_layer_init_zero=True,
             state_norm=False,
         ),
-        ### game_config begin ###
+        # learn_mode config
+        learn=dict(
+            # for debug
+            # update_per_collect=2,
+            # batch_size=4,
+
+            # one_player_mode, board_size=3, episode_length=3**2/2=4.5
+            # collector_env_num=8,  update_per_collect=5*8=40
+            # update_per_collect=int(3 ** 2 / 2 * collector_env_num),
+            # update_per_collect=int(50),
+            # batch_size=64,
+
+            # two_player_mode, board_size=3, episode_length=3**2=9
+            # collector_env_num=8,  update_per_collect=9*8=72
+            # update_per_collect=int(3 ** 2 * collector_env_num),
+            update_per_collect=int(100),
+            batch_size=64,
+
+            learning_rate=0.002,  # use fixed lr
+            # Frequency of target network update.
+            target_update_freq=400,
+        ),
+        # collect_mode config
+        collect=dict(
+            # You can use either "n_sample" or "n_episode" in collector.collect.
+            # Get "n_sample" samples per collect.
+            n_episode=n_episode,
+        ),
+        # the eval cost is expensive, so we set eval_freq larger
+        eval=dict(evaluator=dict(eval_freq=int(5e3), )),
+        # for debug
+        # eval=dict(evaluator=dict(eval_freq=int(2), )),
+        # command_mode config
+        other=dict(
+            # the replay_buffer_size is ineffective, we specify it in game config
+            replay_buffer=dict(type='game')
+        ),
+        ######################################
+        # game_config begin
+        ######################################
         env_type='board_games',
         device=device,
         mcts_ctree=False,
@@ -174,6 +213,8 @@ tictactoe_efficientzero_config = dict(
         # UCB formula
         pb_c_base=19652,
         pb_c_init=1.25,
+        # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
+        categorical_distribution=True,
         support_size=10,
         # value_support=DiscreteSupport(-10, 10, delta=1),
         # reward_support=DiscreteSupport(-10, 10, delta=1),
@@ -219,44 +260,9 @@ tictactoe_efficientzero_config = dict(
         resnet_fc_reward_layers=[8],  # Define the hidden layers in the reward head of the dynamic network
         resnet_fc_value_layers=[8],  # Define the hidden layers in the value head of the prediction network
         resnet_fc_policy_layers=[8],  # Define the hidden layers in the policy head of the prediction network
-        ### game_config end ###
-        # learn_mode config
-        learn=dict(
-            # for debug
-            # update_per_collect=2,
-            # batch_size=4,
-
-            # one_player_mode, board_size=3, episode_length=3**2/2=4.5
-            # collector_env_num=8,  update_per_collect=5*8=40
-            # update_per_collect=int(3 ** 2 / 2 * collector_env_num),
-            # update_per_collect=int(50),
-            # batch_size=64,
-
-            # two_player_mode, board_size=3, episode_length=3**2=9
-            # collector_env_num=8,  update_per_collect=9*8=72
-            # update_per_collect=int(3 ** 2 * collector_env_num),
-            update_per_collect=int(100),
-            batch_size=64,
-
-            learning_rate=0.002,  # use fixed lr
-            # Frequency of target network update.
-            target_update_freq=400,
-        ),
-        # collect_mode config
-        collect=dict(
-            # You can use either "n_sample" or "n_episode" in collector.collect.
-            # Get "n_sample" samples per collect.
-            n_episode=n_episode,
-        ),
-        # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(5e3), )),
-        # for debug
-        # eval=dict(evaluator=dict(eval_freq=int(2), )),
-        # command_mode config
-        other=dict(
-            # the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game')
-        ),
+        ######################################
+        # game_config end
+        ######################################
     ),
 )
 tictactoe_efficientzero_config = EasyDict(tictactoe_efficientzero_config)
