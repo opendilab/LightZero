@@ -22,14 +22,14 @@ representation_model = RepresentationNetwork(
     momentum=0.1,
 )
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
 
 # debug
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
 
 atari_efficientzero_config = dict(
     # exp_name='data_ez_ctree/breakout_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
@@ -44,11 +44,11 @@ atari_efficientzero_config = dict(
         # env_name='BreakoutNoFrameskip-v4',
         # stop_value=int(1e6),
 
-        collect_max_episode_steps=int(1.08e4),
-        eval_max_episode_steps=int(1.08e5),
+        # collect_max_episode_steps=int(1.08e4),
+        # eval_max_episode_steps=int(1.08e5),
         # for debug
-        # collect_max_episode_steps=int(100),
-        # eval_max_episode_steps=int(100),
+        collect_max_episode_steps=int(100),
+        eval_max_episode_steps=int(100),
         frame_skip=4,
         obs_shape=(12, 96, 96),
         episode_life=True,
@@ -100,11 +100,11 @@ atari_efficientzero_config = dict(
         ),        # learn_mode config
         learn=dict(
             # for debug
-            # update_per_collect=2,
-            # batch_size=4,
+            update_per_collect=2,
+            batch_size=4,
 
-            update_per_collect=1000,
-            batch_size=256,
+            # update_per_collect=1000,
+            # batch_size=256,
 
             learning_rate=0.2,
             # Frequency of target network update.
@@ -155,33 +155,33 @@ atari_efficientzero_config = dict(
         augmentation=['shift', 'intensity'],
 
         # for debug
-        # collector_env_num=1,
-        # evaluator_env_num=1,
-        # num_simulations=2,
-        # batch_size=4,
-        # game_history_length=10,
-        # total_transitions=int(1e2),
-        # lstm_hidden_size=32,
-        # td_steps=5,
-        # num_unroll_steps=5,
-        # lstm_horizon_len=5,
-
-        collector_env_num=8,
-        evaluator_env_num=3,
-        # TODO(pu): how to set proper num_simulations automatically?
-        num_simulations=50,
-        batch_size=256,
-        game_history_length=400,
-        total_transitions=int(1e5),
-        # default config in EZ original repo
-        channels=64,
-        lstm_hidden_size=512,
-        # The env step is twice as large as the original size model when converging
-        # channels=32,
-        # lstm_hidden_size=256,
+        collector_env_num=1,
+        evaluator_env_num=1,
+        num_simulations=2,
+        batch_size=4,
+        game_history_length=10,
+        total_transitions=int(1e2),
+        lstm_hidden_size=32,
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
+
+        # collector_env_num=8,
+        # evaluator_env_num=3,
+        # # TODO(pu): how to set proper num_simulations automatically?
+        # num_simulations=50,
+        # batch_size=256,
+        # game_history_length=400,
+        # total_transitions=int(1e5),
+        # # default config in EZ original repo
+        # channels=64,
+        # lstm_hidden_size=512,
+        # # The env step is twice as large as the original size model when converging
+        # # channels=32,
+        # # lstm_hidden_size=256,
+        # td_steps=5,
+        # num_unroll_steps=5,
+        # lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
         revisit_policy_search_rate=0.99,

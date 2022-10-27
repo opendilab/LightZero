@@ -318,7 +318,7 @@ class SampledEfficientZeroPolicy(Policy):
 
         target_policy_visit = target_policy[:, 0]
         # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
-        # 4,3, 20,2,1 ->  4, 20,2
+        # 4, 3, 20, 2, 1 ->  4, 20, 2
         target_policy_action = child_actions_batch[:, 0].squeeze(-1)
 
         entropy_loss = - dist.entropy().sum()
