@@ -7,7 +7,8 @@ import numpy as np
 import torch
 from easydict import EasyDict
 
-from .ctree import cytree as tree
+# from .ctree import cytree as tree
+from .ctree_v1 import cytree as tree
 from ..scaling_transform import inverse_scalar_transform
 
 
@@ -76,8 +77,9 @@ class EfficientZeroMCTSCtree(object):
                 # hidden_state_index_x_lst: the first index of leaf node states in hidden_state_pool
                 # hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool
                 # the hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
+                to_play_batch = [to_play for _ in range(num)]
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play = tree.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play)
+                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, to_play_batch
                 )
                 # obtain the search horizon for leaf nodes
                 search_lens = results.get_search_len()

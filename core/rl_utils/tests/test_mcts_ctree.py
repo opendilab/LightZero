@@ -104,14 +104,13 @@ def test_mcts():
     )
     policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
-    roots = tree.Roots(env_nums, game_config.action_space_size, game_config.num_simulations)
+    legal_actions_list = [[i for i in range(game_config.action_space_size)] for _ in range(env_nums)] 
+    roots = tree.Roots(env_nums, game_config.action_space_size, game_config.num_simulations, legal_actions_list)
     noises = [
         np.random.dirichlet([game_config.root_dirichlet_alpha] * game_config.action_space_size
                             ).astype(np.float32).tolist() for _ in range(env_nums)
     ]
-    print('hello')
-    print(roots)
-    roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
-    MCTS(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state)
+    roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play=0)
+    MCTS(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play=0)
     roots_distributions = roots.get_distributions()
     assert np.array(roots_distributions).shape == (batch_size, action_space_size)
