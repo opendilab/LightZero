@@ -46,11 +46,11 @@ cdef class Roots:
         self.pool_size = pool_size
         self.roots = new CRoots(root_num, self.pool_size, legal_actions_list)
 
-    def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, int to_play):
-        self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+    def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):
+        self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
 
-    def prepare_no_noise(self, list value_prefix_pool, list policy_logits_pool, int to_play):
-        self.roots[0].prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+    def prepare_no_noise(self, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):
+        self.roots[0].prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play_batch)
 
     def get_trajectories(self):
         return self.roots[0].get_trajectories()

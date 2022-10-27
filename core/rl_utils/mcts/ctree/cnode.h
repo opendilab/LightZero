@@ -56,8 +56,8 @@ namespace tree {
             CRoots(int root_num, int pool_size, std::vector<std::vector<int> > &legal_actions_list);
             ~CRoots();
 
-            void prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, int to_play);
-            void prepare_no_noise(const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, int to_play);
+            void prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch);
+            void prepare_no_noise(const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch);
             void clear();
             std::vector<std::vector<int> > get_trajectories();
             std::vector<std::vector<int> > get_distributions();

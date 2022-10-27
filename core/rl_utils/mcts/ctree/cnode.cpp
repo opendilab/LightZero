@@ -189,18 +189,18 @@ namespace tree{
 
     CRoots::~CRoots(){}
 
-    void CRoots::prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, int to_play){
+    void CRoots::prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch){
         for(int i = 0; i < this->root_num; ++i){
-            this->roots[i].expand(to_play, 0, i, value_prefixs[i], policies[i]);
+            this->roots[i].expand(to_play_batch[i], 0, i, value_prefixs[i], policies[i]);
             this->roots[i].add_exploration_noise(root_exploration_fraction, noises[i]);
 
             this->roots[i].visit_count += 1;
         }
     }
 
-    void CRoots::prepare_no_noise(const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, int to_play){
+    void CRoots::prepare_no_noise(const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch){
         for(int i = 0; i < this->root_num; ++i){
-            this->roots[i].expand(to_play, 0, i, value_prefixs[i], policies[i]);
+            this->roots[i].expand(to_play_batch[i], 0, i, value_prefixs[i], policies[i]);
 
             this->roots[i].visit_count += 1;
         }

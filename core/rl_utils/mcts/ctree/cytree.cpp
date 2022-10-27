@@ -2091,8 +2091,8 @@ static PyObject *__pyx_pf_6cytree_14ResultsWrapper_2get_search_len(struct __pyx_
 static PyObject *__pyx_pf_6cytree_14ResultsWrapper_4__reduce_cython__(CYTHON_UNUSED struct __pyx_obj_6cytree_ResultsWrapper *__pyx_v_self); /* proto */
 static PyObject *__pyx_pf_6cytree_14ResultsWrapper_6__setstate_cython__(CYTHON_UNUSED struct __pyx_obj_6cytree_ResultsWrapper *__pyx_v_self, CYTHON_UNUSED PyObject *__pyx_v___pyx_state); /* proto */
 static int __pyx_pf_6cytree_5Roots___cinit__(struct __pyx_obj_6cytree_Roots *__pyx_v_self, int __pyx_v_root_num, int __pyx_v_pool_size, std::vector<std::vector<int> >  __pyx_v_legal_actions_list); /* proto */
-static PyObject *__pyx_pf_6cytree_5Roots_2prepare(struct __pyx_obj_6cytree_Roots *__pyx_v_self, float __pyx_v_root_exploration_fraction, PyObject *__pyx_v_noises, PyObject *__pyx_v_value_prefix_pool, PyObject *__pyx_v_policy_logits_pool, int __pyx_v_to_play); /* proto */
-static PyObject *__pyx_pf_6cytree_5Roots_4prepare_no_noise(struct __pyx_obj_6cytree_Roots *__pyx_v_self, PyObject *__pyx_v_value_prefix_pool, PyObject *__pyx_v_policy_logits_pool, int __pyx_v_to_play); /* proto */
+static PyObject *__pyx_pf_6cytree_5Roots_2prepare(struct __pyx_obj_6cytree_Roots *__pyx_v_self, float __pyx_v_root_exploration_fraction, PyObject *__pyx_v_noises, PyObject *__pyx_v_value_prefix_pool, PyObject *__pyx_v_policy_logits_pool, std::vector<int>  __pyx_v_to_play_batch); /* proto */
+static PyObject *__pyx_pf_6cytree_5Roots_4prepare_no_noise(struct __pyx_obj_6cytree_Roots *__pyx_v_self, PyObject *__pyx_v_value_prefix_pool, PyObject *__pyx_v_policy_logits_pool, std::vector<int>  __pyx_v_to_play_batch); /* proto */
 static PyObject *__pyx_pf_6cytree_5Roots_6get_trajectories(struct __pyx_obj_6cytree_Roots *__pyx_v_self); /* proto */
 static PyObject *__pyx_pf_6cytree_5Roots_8get_distributions(struct __pyx_obj_6cytree_Roots *__pyx_v_self); /* proto */
 static PyObject *__pyx_pf_6cytree_5Roots_10get_values(struct __pyx_obj_6cytree_Roots *__pyx_v_self); /* proto */
@@ -2850,7 +2850,7 @@ static int __pyx_pf_6cytree_5Roots___cinit__(struct __pyx_obj_6cytree_Roots *__p
  *         self.pool_size = pool_size
  *         self.roots = new CRoots(root_num, self.pool_size, legal_actions_list)             # <<<<<<<<<<<<<<
  * 
- *     def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, int to_play):
+ *     def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):
  */
   try {
     __pyx_t_1 = new tree::CRoots(__pyx_v_root_num, __pyx_v_self->pool_size, __pyx_v_legal_actions_list);
@@ -2882,8 +2882,8 @@ static int __pyx_pf_6cytree_5Roots___cinit__(struct __pyx_obj_6cytree_Roots *__p
 /* "cytree.pyx":49
  *         self.roots = new CRoots(root_num, self.pool_size, legal_actions_list)
  * 
- *     def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, int to_play):             # <<<<<<<<<<<<<<
- *         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+ *     def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):             # <<<<<<<<<<<<<<
+ *         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
  * 
  */
 
@@ -2894,7 +2894,7 @@ static PyObject *__pyx_pw_6cytree_5Roots_3prepare(PyObject *__pyx_v_self, PyObje
   PyObject *__pyx_v_noises = 0;
   PyObject *__pyx_v_value_prefix_pool = 0;
   PyObject *__pyx_v_policy_logits_pool = 0;
-  int __pyx_v_to_play;
+  std::vector<int>  __pyx_v_to_play_batch;
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
@@ -2902,7 +2902,7 @@ static PyObject *__pyx_pw_6cytree_5Roots_3prepare(PyObject *__pyx_v_self, PyObje
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("prepare (wrapper)", 0);
   {
-    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_root_exploration_fraction,&__pyx_n_s_noises,&__pyx_n_s_value_prefix_pool,&__pyx_n_s_policy_logits_pool,&__pyx_n_s_to_play,0};
+    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_root_exploration_fraction,&__pyx_n_s_noises,&__pyx_n_s_value_prefix_pool,&__pyx_n_s_policy_logits_pool,&__pyx_n_s_to_play_batch,0};
     PyObject* values[5] = {0,0,0,0,0};
     if (unlikely(__pyx_kwds)) {
       Py_ssize_t kw_args;
@@ -2946,7 +2946,7 @@ static PyObject *__pyx_pw_6cytree_5Roots_3prepare(PyObject *__pyx_v_self, PyObje
         }
         CYTHON_FALLTHROUGH;
         case  4:
-        if (likely((values[4] = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_to_play)) != 0)) kw_args--;
+        if (likely((values[4] = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_to_play_batch)) != 0)) kw_args--;
         else {
           __Pyx_RaiseArgtupleInvalid("prepare", 1, 5, 5, 4); __PYX_ERR(1, 49, __pyx_L3_error)
         }
@@ -2967,7 +2967,7 @@ static PyObject *__pyx_pw_6cytree_5Roots_3prepare(PyObject *__pyx_v_self, PyObje
     __pyx_v_noises = ((PyObject*)values[1]);
     __pyx_v_value_prefix_pool = ((PyObject*)values[2]);
     __pyx_v_policy_logits_pool = ((PyObject*)values[3]);
-    __pyx_v_to_play = __Pyx_PyInt_As_int(values[4]); if (unlikely((__pyx_v_to_play == (int)-1) && PyErr_Occurred())) __PYX_ERR(1, 49, __pyx_L3_error)
+    __pyx_v_to_play_batch = __pyx_convert_vector_from_py_int(values[4]); if (unlikely(PyErr_Occurred())) __PYX_ERR(1, 49, __pyx_L3_error)
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
@@ -2980,7 +2980,7 @@ static PyObject *__pyx_pw_6cytree_5Roots_3prepare(PyObject *__pyx_v_self, PyObje
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_noises), (&PyList_Type), 1, "noises", 1))) __PYX_ERR(1, 49, __pyx_L1_error)
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_value_prefix_pool), (&PyList_Type), 1, "value_prefix_pool", 1))) __PYX_ERR(1, 49, __pyx_L1_error)
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_policy_logits_pool), (&PyList_Type), 1, "policy_logits_pool", 1))) __PYX_ERR(1, 49, __pyx_L1_error)
-  __pyx_r = __pyx_pf_6cytree_5Roots_2prepare(((struct __pyx_obj_6cytree_Roots *)__pyx_v_self), __pyx_v_root_exploration_fraction, __pyx_v_noises, __pyx_v_value_prefix_pool, __pyx_v_policy_logits_pool, __pyx_v_to_play);
+  __pyx_r = __pyx_pf_6cytree_5Roots_2prepare(((struct __pyx_obj_6cytree_Roots *)__pyx_v_self), __pyx_v_root_exploration_fraction, __pyx_v_noises, __pyx_v_value_prefix_pool, __pyx_v_policy_logits_pool, __pyx_v_to_play_batch);
 
   /* function exit code */
   goto __pyx_L0;
@@ -2991,7 +2991,7 @@ static PyObject *__pyx_pw_6cytree_5Roots_3prepare(PyObject *__pyx_v_self, PyObje
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6cytree_5Roots_2prepare(struct __pyx_obj_6cytree_Roots *__pyx_v_self, float __pyx_v_root_exploration_fraction, PyObject *__pyx_v_noises, PyObject *__pyx_v_value_prefix_pool, PyObject *__pyx_v_policy_logits_pool, int __pyx_v_to_play) {
+static PyObject *__pyx_pf_6cytree_5Roots_2prepare(struct __pyx_obj_6cytree_Roots *__pyx_v_self, float __pyx_v_root_exploration_fraction, PyObject *__pyx_v_noises, PyObject *__pyx_v_value_prefix_pool, PyObject *__pyx_v_policy_logits_pool, std::vector<int>  __pyx_v_to_play_batch) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   std::vector<std::vector<float> >  __pyx_t_1;
@@ -3004,21 +3004,21 @@ static PyObject *__pyx_pf_6cytree_5Roots_2prepare(struct __pyx_obj_6cytree_Roots
 
   /* "cytree.pyx":50
  * 
- *     def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, int to_play):
- *         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)             # <<<<<<<<<<<<<<
+ *     def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):
+ *         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)             # <<<<<<<<<<<<<<
  * 
- *     def prepare_no_noise(self, list value_prefix_pool, list policy_logits_pool, int to_play):
+ *     def prepare_no_noise(self, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):
  */
   __pyx_t_1 = __pyx_convert_vector_from_py_std_3a__3a_vector_3c_float_3e___(__pyx_v_noises); if (unlikely(PyErr_Occurred())) __PYX_ERR(1, 50, __pyx_L1_error)
   __pyx_t_2 = __pyx_convert_vector_from_py_float(__pyx_v_value_prefix_pool); if (unlikely(PyErr_Occurred())) __PYX_ERR(1, 50, __pyx_L1_error)
   __pyx_t_3 = __pyx_convert_vector_from_py_std_3a__3a_vector_3c_float_3e___(__pyx_v_policy_logits_pool); if (unlikely(PyErr_Occurred())) __PYX_ERR(1, 50, __pyx_L1_error)
-  (__pyx_v_self->roots[0]).prepare(__pyx_v_root_exploration_fraction, __pyx_t_1, __pyx_t_2, __pyx_t_3, __pyx_v_to_play);
+  (__pyx_v_self->roots[0]).prepare(__pyx_v_root_exploration_fraction, __pyx_t_1, __pyx_t_2, __pyx_t_3, __pyx_v_to_play_batch);
 
   /* "cytree.pyx":49
  *         self.roots = new CRoots(root_num, self.pool_size, legal_actions_list)
  * 
- *     def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, int to_play):             # <<<<<<<<<<<<<<
- *         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+ *     def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):             # <<<<<<<<<<<<<<
+ *         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
  * 
  */
 
@@ -3035,10 +3035,10 @@ static PyObject *__pyx_pf_6cytree_5Roots_2prepare(struct __pyx_obj_6cytree_Roots
 }
 
 /* "cytree.pyx":52
- *         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+ *         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
  * 
- *     def prepare_no_noise(self, list value_prefix_pool, list policy_logits_pool, int to_play):             # <<<<<<<<<<<<<<
- *         self.roots[0].prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+ *     def prepare_no_noise(self, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):             # <<<<<<<<<<<<<<
+ *         self.roots[0].prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play_batch)
  * 
  */
 
@@ -3047,7 +3047,7 @@ static PyObject *__pyx_pw_6cytree_5Roots_5prepare_no_noise(PyObject *__pyx_v_sel
 static PyObject *__pyx_pw_6cytree_5Roots_5prepare_no_noise(PyObject *__pyx_v_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
   PyObject *__pyx_v_value_prefix_pool = 0;
   PyObject *__pyx_v_policy_logits_pool = 0;
-  int __pyx_v_to_play;
+  std::vector<int>  __pyx_v_to_play_batch;
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
@@ -3055,7 +3055,7 @@ static PyObject *__pyx_pw_6cytree_5Roots_5prepare_no_noise(PyObject *__pyx_v_sel
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("prepare_no_noise (wrapper)", 0);
   {
-    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_value_prefix_pool,&__pyx_n_s_policy_logits_pool,&__pyx_n_s_to_play,0};
+    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_value_prefix_pool,&__pyx_n_s_policy_logits_pool,&__pyx_n_s_to_play_batch,0};
     PyObject* values[3] = {0,0,0};
     if (unlikely(__pyx_kwds)) {
       Py_ssize_t kw_args;
@@ -3083,7 +3083,7 @@ static PyObject *__pyx_pw_6cytree_5Roots_5prepare_no_noise(PyObject *__pyx_v_sel
         }
         CYTHON_FALLTHROUGH;
         case  2:
-        if (likely((values[2] = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_to_play)) != 0)) kw_args--;
+        if (likely((values[2] = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_to_play_batch)) != 0)) kw_args--;
         else {
           __Pyx_RaiseArgtupleInvalid("prepare_no_noise", 1, 3, 3, 2); __PYX_ERR(1, 52, __pyx_L3_error)
         }
@@ -3100,7 +3100,7 @@ static PyObject *__pyx_pw_6cytree_5Roots_5prepare_no_noise(PyObject *__pyx_v_sel
     }
     __pyx_v_value_prefix_pool = ((PyObject*)values[0]);
     __pyx_v_policy_logits_pool = ((PyObject*)values[1]);
-    __pyx_v_to_play = __Pyx_PyInt_As_int(values[2]); if (unlikely((__pyx_v_to_play == (int)-1) && PyErr_Occurred())) __PYX_ERR(1, 52, __pyx_L3_error)
+    __pyx_v_to_play_batch = __pyx_convert_vector_from_py_int(values[2]); if (unlikely(PyErr_Occurred())) __PYX_ERR(1, 52, __pyx_L3_error)
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
@@ -3112,7 +3112,7 @@ static PyObject *__pyx_pw_6cytree_5Roots_5prepare_no_noise(PyObject *__pyx_v_sel
   __pyx_L4_argument_unpacking_done:;
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_value_prefix_pool), (&PyList_Type), 1, "value_prefix_pool", 1))) __PYX_ERR(1, 52, __pyx_L1_error)
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_policy_logits_pool), (&PyList_Type), 1, "policy_logits_pool", 1))) __PYX_ERR(1, 52, __pyx_L1_error)
-  __pyx_r = __pyx_pf_6cytree_5Roots_4prepare_no_noise(((struct __pyx_obj_6cytree_Roots *)__pyx_v_self), __pyx_v_value_prefix_pool, __pyx_v_policy_logits_pool, __pyx_v_to_play);
+  __pyx_r = __pyx_pf_6cytree_5Roots_4prepare_no_noise(((struct __pyx_obj_6cytree_Roots *)__pyx_v_self), __pyx_v_value_prefix_pool, __pyx_v_policy_logits_pool, __pyx_v_to_play_batch);
 
   /* function exit code */
   goto __pyx_L0;
@@ -3123,7 +3123,7 @@ static PyObject *__pyx_pw_6cytree_5Roots_5prepare_no_noise(PyObject *__pyx_v_sel
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6cytree_5Roots_4prepare_no_noise(struct __pyx_obj_6cytree_Roots *__pyx_v_self, PyObject *__pyx_v_value_prefix_pool, PyObject *__pyx_v_policy_logits_pool, int __pyx_v_to_play) {
+static PyObject *__pyx_pf_6cytree_5Roots_4prepare_no_noise(struct __pyx_obj_6cytree_Roots *__pyx_v_self, PyObject *__pyx_v_value_prefix_pool, PyObject *__pyx_v_policy_logits_pool, std::vector<int>  __pyx_v_to_play_batch) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   std::vector<float>  __pyx_t_1;
@@ -3135,20 +3135,20 @@ static PyObject *__pyx_pf_6cytree_5Roots_4prepare_no_noise(struct __pyx_obj_6cyt
 
   /* "cytree.pyx":53
  * 
- *     def prepare_no_noise(self, list value_prefix_pool, list policy_logits_pool, int to_play):
- *         self.roots[0].prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)             # <<<<<<<<<<<<<<
+ *     def prepare_no_noise(self, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):
+ *         self.roots[0].prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play_batch)             # <<<<<<<<<<<<<<
  * 
  *     def get_trajectories(self):
  */
   __pyx_t_1 = __pyx_convert_vector_from_py_float(__pyx_v_value_prefix_pool); if (unlikely(PyErr_Occurred())) __PYX_ERR(1, 53, __pyx_L1_error)
   __pyx_t_2 = __pyx_convert_vector_from_py_std_3a__3a_vector_3c_float_3e___(__pyx_v_policy_logits_pool); if (unlikely(PyErr_Occurred())) __PYX_ERR(1, 53, __pyx_L1_error)
-  (__pyx_v_self->roots[0]).prepare_no_noise(__pyx_t_1, __pyx_t_2, __pyx_v_to_play);
+  (__pyx_v_self->roots[0]).prepare_no_noise(__pyx_t_1, __pyx_t_2, __pyx_v_to_play_batch);
 
   /* "cytree.pyx":52
- *         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+ *         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
  * 
- *     def prepare_no_noise(self, list value_prefix_pool, list policy_logits_pool, int to_play):             # <<<<<<<<<<<<<<
- *         self.roots[0].prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+ *     def prepare_no_noise(self, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):             # <<<<<<<<<<<<<<
+ *         self.roots[0].prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play_batch)
  * 
  */
 
@@ -3165,7 +3165,7 @@ static PyObject *__pyx_pf_6cytree_5Roots_4prepare_no_noise(struct __pyx_obj_6cyt
 }
 
 /* "cytree.pyx":55
- *         self.roots[0].prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+ *         self.roots[0].prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play_batch)
  * 
  *     def get_trajectories(self):             # <<<<<<<<<<<<<<
  *         return self.roots[0].get_trajectories()
@@ -3209,7 +3209,7 @@ static PyObject *__pyx_pf_6cytree_5Roots_6get_trajectories(struct __pyx_obj_6cyt
   goto __pyx_L0;
 
   /* "cytree.pyx":55
- *         self.roots[0].prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+ *         self.roots[0].prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play_batch)
  * 
  *     def get_trajectories(self):             # <<<<<<<<<<<<<<
  *         return self.roots[0].get_trajectories()

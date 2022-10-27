@@ -33,7 +33,7 @@ class MCTSCtree(object):
             config = config
         self.config = config
 
-    def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=None):
+    def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play_batch):
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
@@ -42,7 +42,7 @@ class MCTSCtree(object):
             - roots (:obj:`Any`): a batch of expanded root nodes
             - hidden_state_roots (:obj:`list`): the hidden states of the roots
             - reward_hidden_state_roots (:obj:`list`): the value prefix hidden states in LSTM of the roots
-            - to_play (:obj:`list`): the to_play list used in two_player mode board games
+            - to_play_batch (:obj:`list`): the to_play_batch list used in two_player mode board games
         """
         with torch.no_grad():
             model.eval()
@@ -76,8 +76,7 @@ class MCTSCtree(object):
                 # hidden_state_index_x_lst: the first index of leaf node states in hidden_state_pool
                 # hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool
                 # the hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
-                to_play_batch = [to_play for _ in range(num)]
-                hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play = tree.batch_traverse(
+                hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play_batch = tree.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, to_play_batch
                 )
                 # obtain the search horizon for leaf nodes
@@ -137,5 +136,5 @@ class MCTSCtree(object):
                 # backpropagation along the search path to update the attributes
                 tree.batch_back_propagate(
                     hidden_state_index_x, discount, value_prefix_pool, value_pool, policy_logits_pool,
-                    min_max_stats_lst, results, is_reset_lst, virtual_to_play
+                    min_max_stats_lst, results, is_reset_lst, virtual_to_play_batch
                 )
