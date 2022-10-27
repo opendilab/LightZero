@@ -10,6 +10,7 @@
 #include <cmath>
 #include <sys/timeb.h>
 #include <sys/time.h>
+#include <map>
 
 const int DEBUG_MODE = 0;
 
@@ -17,13 +18,17 @@ namespace tree {
 
     class CNode {
         public:
-            int visit_count, to_play, action_num, hidden_state_index_x, hidden_state_index_y, best_action, is_reset;
+            int visit_count, to_play, hidden_state_index_x, hidden_state_index_y, best_action, is_reset;
             float value_prefix, prior, value_sum;
+            float parent_value_prefix;
             std::vector<int> children_index;
-            std::vector<CNode>* ptr_node_pool;
+            // std::vector<CNode>* ptr_node_pool;
+            std::map<int, CNode> children;
+
+            std::vector<int> legal_actions;
 
             CNode();
-            CNode(float prior, int action_num, std::vector<CNode> *ptr_node_pool);
+            CNode(float prior, std::vector<int> &legal_actions);
             ~CNode();
 
             void expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix, const std::vector<float> &policy_logits);
@@ -42,16 +47,17 @@ namespace tree {
 
     class CRoots{
         public:
-            int root_num, action_num, pool_size;
+            int root_num, pool_size;
             std::vector<CNode> roots;
-            std::vector<std::vector<CNode> > node_pools;
+            // std::vector<std::vector<CNode> > node_pools;
+            std::vector<std::vector<int> > legal_actions_list;
 
             CRoots();
-            CRoots(int root_num, int action_num, int pool_size);
+            CRoots(int root_num, int pool_size, std::vector<std::vector<int> > &legal_actions_list);
             ~CRoots();
 
-            void prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies);
-            void prepare_no_noise(const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies);
+            void prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, int to_play);
+            void prepare_no_noise(const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, int to_play);
             void clear();
             std::vector<std::vector<int> > get_trajectories();
             std::vector<std::vector<int> > get_distributions();
@@ -74,12 +80,12 @@ namespace tree {
 
 
     //*********************************************************
-    void update_tree_q(CNode* root, tools::CMinMaxStats &min_max_stats, float discount);
+    void update_tree_q(CNode* root, tools::CMinMaxStats &min_max_stats, float discount, int players);
     void cback_propagate(std::vector<CNode*> &search_path, tools::CMinMaxStats &min_max_stats, int to_play, float value, float discount);
-    void cbatch_back_propagate(int hidden_state_index_x, float discount, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> is_reset_lst);
-    int cselect_child(CNode* root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount, float mean_q);
-    float cucb_score(CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, int is_reset, float total_children_visit_counts, float parent_value_prefix, float pb_c_base, float pb_c_init, float discount);
-    void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results);
+    void cbatch_back_propagate(int hidden_state_index_x, float discount, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> is_reset_lst, std::vector<int> &to_play_batch);
+    int cselect_child(CNode* root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount, float mean_q, int players);
+    float cucb_score(CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, int is_reset, float total_children_visit_counts, float parent_value_prefix, float pb_c_base, float pb_c_init, float discount, int players);
+    void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &virtual_to_play_batch);
 }
 
 #endif

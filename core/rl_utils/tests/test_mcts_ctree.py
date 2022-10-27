@@ -54,9 +54,9 @@ class MuZeroModelFake(torch.nn.Module):
 
 @pytest.mark.unittest
 def test_mcts():
-    import core.rl_utils.mcts.ctree_v1.cytree as tree
+    import core.rl_utils.mcts.ctree.cytree as tree
     import numpy as np
-    from core.rl_utils.mcts.mcts_ctree_v1 import EfficientZeroMCTSCtree as MCTS
+    from core.rl_utils.mcts.mcts_ctree import MCTSCtree as MCTS
 
     game_config = EasyDict(
         dict(
@@ -105,7 +105,7 @@ def test_mcts():
     policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
     legal_actions_list = [[i for i in range(game_config.action_space_size)] for _ in range(env_nums)] 
-    roots = tree.Roots(env_nums, game_config.action_space_size, game_config.num_simulations, legal_actions_list)
+    roots = tree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
     noises = [
         np.random.dirichlet([game_config.root_dirichlet_alpha] * game_config.action_space_size
                             ).astype(np.float32).tolist() for _ in range(env_nums)
