@@ -949,7 +949,7 @@ class GameBuffer(Buffer):
                     ]
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
-                roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations)
+                roots = ptree.Roots(batch_size,  self.config.num_simulations, legal_actions)
                 noises = [
                     np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(batch_size)
