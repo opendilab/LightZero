@@ -61,6 +61,8 @@ namespace tree{
         for(int i =0; i<action_num; ++i){
             all_actions.push_back(i);
         }
+        if(this->legal_actions.size()==0)
+            this->legal_actions = assign(all_actions.begin(),all_actions.end());
         float temp_policy;
         float policy_sum = 0.0;
         float policy[action_num];
