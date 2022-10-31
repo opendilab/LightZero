@@ -20,6 +20,7 @@ class GomokuEnv(BaseGameEnv):
         prob_random_agent=0,
         board_size=15,
         battle_mode='one_player_mode',
+        channel_last=True,
     )
 
     @classmethod
@@ -33,6 +34,7 @@ class GomokuEnv(BaseGameEnv):
         self.battle_mode = cfg.battle_mode
         self.board_size = cfg.board_size
         self.prob_random_agent = cfg.prob_random_agent
+        self.channel_last = cfg.channel_last
 
         self.players = [1, 2]
         self.board_markers = [str(i + 1) for i in range(self.board_size)]
@@ -174,8 +176,13 @@ class GomokuEnv(BaseGameEnv):
         board_opponent_player = np.where(self.board == self.to_play, 1, 0)
         board_to_play = np.full((self.board_size, self.board_size), self.current_player)
         raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
-        # move channel dim to last axis to be compatible with EfficientZero
-        return np.moveaxis(raw_obs, 0, 2)
+        if self.channel_last:
+            # move channel dim to last axis to be compatible with EfficientZero
+            # (3,6,6) -> (6,6,3)
+            return np.moveaxis(raw_obs, 0, 2)
+        else:
+            # (3,6,6)
+            return raw_obs
 
     def coord_to_action(self, i, j):
         """
