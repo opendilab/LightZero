@@ -270,7 +270,7 @@ class SearchResults:
 #         # if len(node_stack) >= 3:
 #         #     print('len(node_stack)>=3')
 
-def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
+def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play=0):
     root.parent_value_prefix = 0
     node_stack = []
     node_stack.append(root)
@@ -280,7 +280,12 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
         node_stack.pop()
 
         if node != root:
-            true_reward = node.value_prefix - node.parent_value_prefix
+            if players == 1:
+                true_reward = node.value_prefix - node.parent_value_prefix
+            else:
+                # NOTE: in two player mode,
+                # we should calculate the true_reward according to the perspective of current player of node
+                true_reward = node.value_prefix - (- node.parent_value_prefix)
 
             if is_reset == 1:
                 true_reward = node.value_prefix
@@ -288,7 +293,7 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
                 q_of_s_a = true_reward + discount * node.value
             elif players == 2:
                 # TODO
-                q_of_s_a = true_reward + discount * (-node.value)
+                q_of_s_a = true_reward + discount * node.value
 
             min_max_stats.update(q_of_s_a)
 
@@ -297,6 +302,7 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
         for a in node.legal_actions:
             child = node.get_child(a)
             if child.expanded:
+                # NOTE: the parent_value_prefix is in the perspective of player of parent node
                 child.parent_value_prefix = node.value_prefix
                 node_stack.append(child)
 
@@ -331,7 +337,7 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
         # TODO(pu): the effect of different ways to update min_max_stats
         # min_max_stats.clear()
         # root = search_path[0]
-        # update_tree_q(root, min_max_stats, discount, 1)
+        # update_tree_q(root, min_max_stats, discount, 1, to_play=0)
     else:
         # for 2 player mode
         bootstrap_value = value
@@ -350,26 +356,28 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
                 parent_value_prefix = parent.value_prefix
                 is_reset = parent.is_reset
 
-            # NOTE: in two player mode,
-            # we should calculate the true_reward according to the perspective of current player of node
-            true_reward = node.value_prefix - (- parent_value_prefix)
+            # NOTE: in two player mode, value_prefix is not
+            # according to the perspective of current player of node
+            # true_reward = node.value_prefix - (- parent_value_prefix)
+            true_reward = node.value_prefix - parent_value_prefix
+
             if is_reset == 1:
                 true_reward = node.value_prefix
 
-            min_max_stats.update(true_reward + discount * node.value)
+            # min_max_stats.update(true_reward + discount * node.value)
             # TODO(pu): why in muzero-general is - node.value
-            # min_max_stats.update(true_reward + discount * - node.value)
+            min_max_stats.update(true_reward + discount * - node.value)
 
             # to_play related
             # true_reward is in the perspective of current player of node
-            bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount * bootstrap_value
+            # bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount * bootstrap_value
             # TODO(pu): why in muzero-general is - true_reward
-            # bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
+            bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
 
         # TODO(pu): the effect of different ways to update min_max_stats
         # min_max_stats.clear()
         # root = search_path[0]
-        # update_tree_q(root, min_max_stats, discount, 2)
+        # update_tree_q(root, min_max_stats, discount, 2, to_play=to_play)
 
 
 def batch_back_propagate(

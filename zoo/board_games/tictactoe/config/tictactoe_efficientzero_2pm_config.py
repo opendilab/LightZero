@@ -26,7 +26,8 @@ n_episode = 8
 evaluator_env_num = 5
 
 tictactoe_efficientzero_config = dict(
-    exp_name='data_ez_ctree/tictactoe_2pm_efficientzero_seed0_sub885_rmt-conv_nc16_urv-false_rbs1e5',
+    exp_name='data_ez_ctree/tictactoe_2pm_efficientzero_seed0_sub885_rmt-conv_nc16_urv-false_rbs1e5_fix-value',
+    # exp_name='data_ez_ptree/tictactoe_2pm_efficientzero_seed0_sub885_rmt-conv_nc16_urv-false_rbs1e5',
 
     env=dict(
         collector_env_num=collector_env_num,

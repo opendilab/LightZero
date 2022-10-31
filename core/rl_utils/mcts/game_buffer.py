@@ -769,14 +769,19 @@ class GameBuffer(Buffer):
                 value_lst = concat_output_value(network_output)
 
             # get last state value
-            value_lst = value_lst.reshape(-1) * (
+            if to_play_history[0][0] is not None:
+                # TODO(pu): board_games
+                value_lst = value_lst.reshape(-1) * np.array([self.config.discount ** td_steps_lst[i] if int(td_steps_lst[i])%2==0 else - self.config.discount ** td_steps_lst[i] for i in range(batch_size)])
+
+            else:
+                value_lst = value_lst.reshape(-1) * (
                     np.array([self.config.discount for _ in range(batch_size)]) ** td_steps_lst
             )
             value_lst = value_lst * np.array(value_mask)
             value_lst = value_lst.tolist()
 
             horizon_id, value_index = 0, 0
-            for traj_len_non_re, reward_lst, state_index in zip(traj_lens, rewards_lst, state_index_lst):
+            for traj_len_non_re, reward_lst, state_index, to_play_list in zip(traj_lens, rewards_lst, state_index_lst, to_play_history):
                 # traj_len = len(game)
                 target_values = []
                 target_value_prefixs = []
@@ -787,7 +792,14 @@ class GameBuffer(Buffer):
                     bootstrap_index = current_index + td_steps_lst[value_index]
                     # for i, reward in enumerate(game.rewards[current_index:bootstrap_index]):
                     for i, reward in enumerate(reward_lst[current_index:bootstrap_index]):
-                        value_lst[value_index] += reward * self.config.discount ** i
+                        if to_play_history[0][0] is not None:
+                            # TODO(pu): board_games
+                            if to_play_list[current_index] == to_play_list[i]:
+                                value_lst[value_index] += reward * self.config.discount ** i
+                            else:
+                                value_lst[value_index] += - reward * self.config.discount ** i
+                        else:
+                            value_lst[value_index] += reward * self.config.discount ** i
 
                     # reset every lstm_horizon_len
                     if horizon_id % self.config.lstm_horizon_len == 0:
@@ -800,6 +812,12 @@ class GameBuffer(Buffer):
                         # Since the horizon is small and the discount is close to 1.
                         # Compute the reward sum to approximate the value prefix for simplification
                         value_prefix += reward_lst[current_index]  # * config.discount ** (current_index - base_index)
+
+                        # if to_play_list[current_index] == 1:
+                        #     value_prefix = value_prefix
+                        # else:
+                        #     value_prefix = - value_prefix
+
                         target_value_prefixs.append(value_prefix)
                     else:
                         target_values.append(0)

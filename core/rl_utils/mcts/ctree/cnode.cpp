@@ -62,7 +62,7 @@ namespace tree{
             all_actions.push_back(i);
         }
         if(this->legal_actions.size()==0)
-            this->legal_actions = assign(all_actions.begin(),all_actions.end());
+            this->legal_actions.assign(all_actions.begin(),all_actions.end());
         float temp_policy;
         float policy_sum = 0.0;
         float policy[action_num];
@@ -241,6 +241,7 @@ namespace tree{
     }
 
     //*********************************************************
+    //
     void update_tree_q(CNode* root, tools::CMinMaxStats &min_max_stats, float discount, int players){
         std::stack<CNode*> node_stack;
         node_stack.push(root);
@@ -252,6 +253,7 @@ namespace tree{
 
             if(node != root){
                 float true_reward = node->value_prefix - node->parent_value_prefix;
+
                 if(is_reset == 1){
                     true_reward = node->value_prefix;
                 }
@@ -259,7 +261,9 @@ namespace tree{
                 if(players == 1)
                     qsa = true_reward + discount * node->value();
                 else if(players == 2)
-                    qsa = true_reward + discount * (-1) * node->value();
+                    // TODO(pu):
+                    // qsa = true_reward + discount * (-1) * node->value();
+                    qsa = true_reward + discount * node->value();
 
                 min_max_stats.update(qsa);
             }
@@ -326,7 +330,10 @@ namespace tree{
                     is_reset = parent->is_reset;
                 }
 
-                float true_reward = node->value_prefix - (- parent_value_prefix);
+                // # NOTE: in two player mode, we should calculate the true_reward according to the perspective of current player of node
+//                float true_reward = node->value_prefix - (-1) * parent_value_prefix;
+                float true_reward = node->value_prefix - parent_value_prefix;
+
                 min_max_stats.update(true_reward + discount * node->value());
 
                 if(is_reset == 1){
@@ -337,6 +344,10 @@ namespace tree{
                     bootstrap_value = - true_reward + discount * bootstrap_value;
                 else
                     bootstrap_value = true_reward + discount * bootstrap_value;
+//                if(node->to_play == to_play)
+//                    bootstrap_value = true_reward + discount * bootstrap_value;
+//                else
+//                    bootstrap_value = - true_reward + discount * bootstrap_value;
             }
         }
     }
