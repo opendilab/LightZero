@@ -50,9 +50,9 @@ atari_efficientzero_config = dict(
         # collect_max_episode_steps=int(100),
         # eval_max_episode_steps=int(100),
         frame_skip=4,
-        obs_shape=(12, 96, 96),
+        obs_shape=(4, 96, 96),
         episode_life=True,
-        gray_scale=False,
+        gray_scale=True,
         # cvt_string=True,
         # trade memory for speed
         cvt_string=False,
@@ -71,7 +71,7 @@ atari_efficientzero_config = dict(
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',
             # representation_model=representation_model,
-            observation_shape=(12, 96, 96),  # 3,96,96 stack=4
+            observation_shape=(4, 96, 96),  # 3,96,96 stack=4
             action_space_size=6,  # for pong
             # action_space_size=4,  # for breakout
             downsample=True,
@@ -143,9 +143,9 @@ atari_efficientzero_config = dict(
         action_space_size=6,  # for pong
         # action_space_size=4,  # for breakout
         amp_type='none',
-        obs_shape=(12, 96, 96),
-        image_channel=3,
-        gray_scale=False,
+        obs_shape=(4, 96, 96),
+        image_channel=1,
+        gray_scale=True,
         downsample=True,
         vis_result=True,
         # TODO(pu): test the effect of augmentation
