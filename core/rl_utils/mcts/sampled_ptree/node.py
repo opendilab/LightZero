@@ -202,7 +202,8 @@ class Node:
 
 class Roots:
 
-    def __init__(self, root_num: int, legal_actions_list: Any, pool_size: int, action_space_size: Optional = None, num_of_sampled_actions=20):
+    def __init__(self, root_num: int, legal_actions_list: Any, pool_size: int, action_space_size: Optional = None,
+                 num_of_sampled_actions=20):
         self.num = root_num
         self.root_num = root_num
         self.legal_actions_list = legal_actions_list  # list of list
@@ -215,10 +216,12 @@ class Roots:
                 self.roots.append(Node(0, legal_actions_list[i], num_of_sampled_actions=self.num_of_sampled_actions))
             elif isinstance(legal_actions_list, int):
                 # if legal_actions_list is int
-                self.roots.append(Node(0, np.arange(legal_actions_list), num_of_sampled_actions=self.num_of_sampled_actions))
+                self.roots.append(
+                    Node(0, np.arange(legal_actions_list), num_of_sampled_actions=self.num_of_sampled_actions))
             elif legal_actions_list is None:
                 # continuous action space
-                self.roots.append(Node(0, None, action_space_size=action_space_size, num_of_sampled_actions=self.num_of_sampled_actions))
+                self.roots.append(Node(0, None, action_space_size=action_space_size,
+                                       num_of_sampled_actions=self.num_of_sampled_actions))
 
     def prepare(self, root_exploration_fraction, noises, value_prefixs, policies, to_play=None):
         for i in range(self.root_num):
@@ -364,21 +367,22 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
                 parent_value_prefix = parent.value_prefix
                 is_reset = parent.is_reset
 
-            # NOTE: in two player mode,
-            # we should calculate the true_reward according to the perspective of current player of node
-            true_reward = node.value_prefix - (- parent_value_prefix)
+            # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node, 
+            # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
+            # true_reward = node.value_prefix - (- parent_value_prefix)
+            true_reward = node.value_prefix - parent_value_prefix
             if is_reset == 1:
                 true_reward = node.value_prefix
 
-            min_max_stats.update(true_reward + discount * node.value)
+            # min_max_stats.update(true_reward + discount * node.value)
             # TODO(pu): why in muzero-general is - node.value
-            # min_max_stats.update(true_reward + discount * - node.value)
+            min_max_stats.update(true_reward + discount * - node.value)
 
             # to_play related
             # true_reward is in the perspective of current player of node
-            bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount * bootstrap_value
+            # bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount * bootstrap_value
             # TODO(pu): why in muzero-general is - node.value
-            # bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
+            bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
 
         # TODO(pu): the effect of different ways to update min_max_stats
         # min_max_stats.clear()
@@ -433,7 +437,7 @@ def select_child(
         # empirical_distribution = [1/self.num_of_sampled_actions]
 
         # pi, beta
-        root.children[action] = Node(prior=log_prob[0], legal_actions = None, action_space_size=2) # action_space_size
+        root.children[action] = Node(prior=log_prob[0], legal_actions=None, action_space_size=2)  # action_space_size
         # TODO
         # root.legal_actions.append(action)
 
@@ -485,7 +489,6 @@ def select_child(
     # return action, root.children[action]
     return action
 
-
     # max_score = -np.inf
     # epsilon = 0.000001
     # max_index_lst = []
@@ -536,7 +539,7 @@ def compute_ucb_score(
 
     # prior_score = pb_c * child.prior
     # TODO
-    node_prior="density"
+    node_prior = "density"
     # Uniform prior for continuous action space
     if node_prior == "uniform":
         prior_score = pb_c * (1 / len(parent.children))
