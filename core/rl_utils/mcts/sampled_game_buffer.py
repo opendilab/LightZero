@@ -18,8 +18,8 @@ from ding.utils import BUFFER_REGISTRY
 # python mcts
 import core.rl_utils.mcts.sampled_ptree as ptree
 # cpp mcts
-from .ctree_sampled import cytree as ctree
-from .mcts_ctree_sampled import MCTSCtreeSampled as MCTSCtree
+from .sampled_ctree import cytree as ctree
+from .mcts_sampled_ctree import MCTSSampledCtree as MCTSCtree
 from .sampled_mcts_ptree import SampledEfficientZeroMCTSPtree as MCTS_ptree
 from .utils import prepare_observation_lst, concat_output, concat_output_value
 from ..scaling_transform import inverse_scalar_transform

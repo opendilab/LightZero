@@ -7,11 +7,11 @@ import numpy as np
 import torch
 from easydict import EasyDict
 
-from .ctree_sampled import cytree as tree
+from .sampled_ctree import cytree as tree
 from ..scaling_transform import inverse_scalar_transform
 
 
-class MCTSCtreeSampled(object):
+class MCTSSampledCtree(object):
     config = dict(
         device='cpu',
         pb_c_base=19652,

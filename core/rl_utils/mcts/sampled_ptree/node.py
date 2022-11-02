@@ -631,3 +631,27 @@ class Action:
 
     def __repr__(self):
         return str(self.value)
+
+# class Action:
+#     def __init__(self, value):
+#         self.value = value
+#
+#     def __hash__(self):
+#         return hash(self.value.tostring())
+#
+#     def __eq__(self, other):
+#         return (self.value == other.value).all()
+#
+#     def __gt__(self, other):
+#         return self.value[0] > other.value[0]
+#
+#     def __repr__(self):
+#         return str(self.value)
+#
+# ctypedef Action ACTION
+
+# cdef vector[vector[CAction*]] clegal_actions = legal_actions_list
+
+# vector[CAction*] get_trajectory()
+ # vector[vector[CAction]]* get_trajectories()
+# vector[CAction *] last_actions

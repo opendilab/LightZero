@@ -1,8 +1,52 @@
 #include <iostream>
 #include "cnode.h"
-#include<algorithm>
+#include <algorithm>
+#include <map>
+#include <random>
+#include <chrono>
+#include <iostream>
+#include <math.h>
+
+template <class T>
+size_t hash_combine(std::size_t& seed, const T& v)
+{
+    std::hash<T> hasher;
+    seed ^= hasher(v) + 0x9e3779b9 + (seed<<6) + (seed>>2);
+    return seed;
+}
 
 namespace tree{
+    //*********************************************************
+
+    Action::Action(){
+        this->is_root_action = 0;
+    }
+
+    Action::Action(std::vector<float>, int is_root_action){
+        this->value = value;
+        this->is_root_action = is_root_action;
+    }
+
+    Action::~Action(){}
+
+    std::vector<size_t> Action::get_hash( void ){
+        std::vector<size_t> hash;
+        for(int i =0; i<this->value.size(); ++i){
+            std::size_t hash_i = std::hash<std::string>() (std::to_string(this->value[i]));
+            hash.push_back(hash_i);
+        }
+        return hash;
+    }
+    size_t Action::get_combined_hash( void ){
+        std::vector<size_t> hash=this->get_hash();
+        size_t combined_hash=hash[0];
+        for(int i =1; i<hash.size(); ++i){
+            combined_hash = hash_combine(combined_hash,hash[i]);
+        }
+        return combined_hash;
+    }
+
+    //*********************************************************
 
     CSearchResults::CSearchResults(){
         this->num = 0;
@@ -21,32 +65,38 @@ namespace tree{
 
     CNode::CNode(){
         this->prior = 0;
-        this->action_num = 0;
-        this->best_action = -1;
-        this->legal_actions = legal_actions;
+//        this->legal_actions = Action(-1);
+//        this->legal_actions = -1;
+        this->action_space_size = 9;
+        this->num_of_sampled_actions = 20;
 
         this->is_reset = 0;
         this->visit_count = 0;
         this->value_sum = 0;
+//        this->best_action = -1;
+//        Action best_action = Action(-1);
+        Action best_action;
+        this->best_action = best_action;
+
         this->to_play = 0;
         this->value_prefix = 0.0;
         this->parent_value_prefix = 0.0;
-        this->ptr_node_pool = nullptr;
     }
 
-    CNode::CNode(float prior, int action_num, std::vector<CNode>* ptr_node_pool, std::vector<int> &legal_actions){
+    CNode::CNode(float prior, std::vector<Action> &legal_actions, int  action_space_size, int num_of_sampled_actions){
         this->prior = prior;
-        this->action_num = action_num;
         this->legal_actions = legal_actions;
+        this->action_space_size = action_space_size;
+        this->num_of_sampled_actions = num_of_sampled_actions;
 
         this->is_reset = 0;
         this->visit_count = 0;
         this->value_sum = 0;
-        this->best_action = -1;
+//        this->best_action = -1;
+//        this->best_action = Action(-1);
         this->to_play = 0;
         this->value_prefix = 0.0;
         this->parent_value_prefix = 0.0;
-        this->ptr_node_pool = ptr_node_pool;
         this->hidden_state_index_x = -1;
         this->hidden_state_index_y = -1;
     }
@@ -59,42 +109,99 @@ namespace tree{
         this->hidden_state_index_y = hidden_state_index_y;
         this->value_prefix = value_prefix;
 
-        int action_num = this->action_num;
-        float temp_policy;
-        float policy_sum = 0.0;
-        float policy[action_num];
-        float policy_max = FLOAT_MIN;
-        // for(int a = 0; a < action_num; ++a){
-        for(auto a: this->legal_actions){
-            if(policy_max < policy_logits[a]){
-                policy_max = policy_logits[a];
-            }
+        int action_num = policy_logits.size();
+        std::vector<int> all_actions;
+         for(int i =0; i<action_num; ++i){
+            all_actions.push_back(i);
+        }
+//        if(this->legal_actions.size()==0)
+//            for (int i = 0; i < 1; ++i){
+//              }
+//            this->legal_actions.assign(all_actions.begin(), all_actions.end());
+
+        this->action_space_size = policy_logits.size()/2;
+//        std::vector<float> mu = policy_logits[: self.action_space_size];
+        std::vector<float> mu;
+        std::vector<float> sigma;
+        for(int i = 0; i < this->action_space_size; ++i){
+            mu.push_back(policy_logits[i]);
+            sigma.push_back(policy_logits[this->action_space_size + i]);
         }
 
-        // for(int a = 0; a < action_num; ++a){
-        for(auto a: this->legal_actions){
-            temp_policy = exp(policy_logits[a] - policy_max);
-            policy_sum += temp_policy;
-            policy[a] = temp_policy;
+        // 从epoch（1970年1月1日00:00:00 UTC）开始经过的纳秒数，unsigned类型会截断这个值
+        unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+
+        std::vector<std::vector<float> > sampled_actions;
+        float sampled_action_tmp;
+        std::vector<float> sampled_action;
+        std::vector<float> sampled_actions_log_prob;
+        std::default_random_engine generator(seed);
+      // 第一个参数为高斯分布的平均值，第二个参数为标准差
+      //      std::normal_distribution<double> distribution(mu, sigma);
+        for (int i = 0; i < this->num_of_sampled_actions; ++i){
+            float sampled_action_log_prob = 1;
+                for (int j = 0; j < this->action_space_size; ++j){
+                    std::normal_distribution<double> distribution(mu[j], sigma[j]);
+                    sampled_action_tmp = distribution(generator);
+                    // refer to python normal log_prob method
+                    sampled_action_log_prob *= - pow((sampled_action_tmp - mu[j]), 2) / (2 * pow(sigma[j], 2)) -  log(mu[j]) - log(sqrt(2 * M_PI));
+                    sampled_action.push_back(sampled_action_tmp);
+                }
+                sampled_actions.push_back(sampled_action);
+                sampled_actions_log_prob.push_back(sampled_action_log_prob);
         }
+
+//        std::map<int, float> policy;
+//        for(int i =0; i<this->num_of_sampled_actions; ++i){
+//            this->policy[i] = sampled_actions_log_prob[i];
+//        }
 
         float prior;
-        std::vector<CNode>* ptr_node_pool = this->ptr_node_pool;
-        // for(int a = 0; a < action_num; ++a){
-        for(auto a: this->legal_actions){
-            prior = policy[a] / policy_sum;
-            int index = ptr_node_pool->size();
-            this->children_index.push_back(index);
-
-            ptr_node_pool->push_back(CNode(prior, action_num, ptr_node_pool, this->legal_actions));
+        for (int i = 0; i < this->num_of_sampled_actions; ++i){
+//            prior = policy[a] / policy_sum;
+            Action action = Action(sampled_actions[i], 0);
+            std::vector<Action> legal_actions;
+//            for (int i = 0; i < 1; ++i){
+//
+//              }
+            this->children[action] = CNode(sampled_actions_log_prob[i], legal_actions, this->action_space_size, this->num_of_sampled_actions); // only for muzero/efficient zero, not support alphazero
+            this->legal_actions.push_back(action);
         }
+
+
+
+
+//        float temp_policy;
+//        float policy_sum = 0.0;
+//        float policy[action_num];
+//        float policy_max = FLOAT_MIN;
+//        for(auto a: this->legal_actions){
+//            if(policy_max < policy_logits[a]){
+//                policy_max = policy_logits[a];
+//            }
+//        }
+//
+//        for(auto a: this->legal_actions){
+//            temp_policy = exp(policy_logits[a] - policy_max);
+//            policy_sum += temp_policy;
+//            policy[a] = temp_policy;
+//        }
+//
+//        float prior;
+//        for(auto a: this->legal_actions){
+//            prior = policy[a] / policy_sum;
+//            this->children[a] = CNode(prior, all_actions); // only for muzero/efficient zero, not support alphazero
+//        }
     }
 
     void CNode::add_exploration_noise(float exploration_fraction, const std::vector<float> &noises){
         float noise, prior;
-        for(auto a: this->legal_actions){
-            noise = noises[a];
-            CNode* child = this->get_child(a);
+//        for(auto a: this->legal_actions){
+//            noise = noises[a];
+//            CNode* child = this->get_child(a);
+        for(int i =0; i<this->legal_actions.size(); ++i){
+            noise = noises[i];
+            CNode* child = this->get_child(this->legal_actions[i]);
 
             prior = child->prior;
             child->prior = prior * (1 - exploration_fraction) + noise * exploration_fraction;
@@ -133,13 +240,7 @@ namespace tree{
     }
 
     int CNode::expanded(){
-        int child_num = this->children_index.size();
-        if(child_num > 0) {
-            return 1;
-        }
-        else {
-            return 0;
-        }
+        return this->children.size()>0;
     }
 
     float CNode::value(){
@@ -153,19 +254,40 @@ namespace tree{
         }
     }
 
-    std::vector<int> CNode::get_trajectory(){
-        std::vector<int> traj;
+
+    std::vector<Action> CNode::get_trajectory(){
+        std::vector<Action> traj;
 
         CNode* node = this;
-        int best_action = node->best_action;
-        while(best_action >= 0){
+        Action best_action = node->best_action;
+        while(best_action.is_root_action != 1){
             traj.push_back(best_action);
-
+//            best_action = Action(best_action);
             node = node->get_child(best_action);
             best_action = node->best_action;
         }
         return traj;
     }
+
+//    std::vector<std::vector<float> > CNode::get_trajectory(){
+//        std::vector<Action> traj;
+//
+//        CNode* node = this;
+//        Action best_action = node->best_action;
+//        while(best_action.is_root_action != 1){
+//            traj.push_back(best_action);
+////            best_action = Action(best_action);
+//            node = node->get_child(best_action);
+//            best_action = node->best_action;
+//        }
+//
+//        std::vector<std::vector<float> > traj_return;
+//        for(int i = 0; i < traj.size(); ++i){
+//            traj_return.push_back(traj[i].value());
+//        }
+//    }
+//        return traj_return;
+//    }
 
     std::vector<int> CNode::get_children_distribution(){
         std::vector<int> distribution;
@@ -178,69 +300,80 @@ namespace tree{
         return distribution;
     }
 
-    CNode* CNode::get_child(int action){
-        int index = this->children_index[action];
-        return &((*(this->ptr_node_pool))[index]);
+    CNode* CNode::get_child(Action action){
+        return &(this->children[action]);
     }
 
     //*********************************************************
 
     CRoots::CRoots(){
         this->root_num = 0;
-        this->action_num = 0;
-        this->pool_size = 0;
+//        this->pool_size = 0;
+        this->num_of_sampled_actions = 20;
     }
 
-    CRoots::CRoots(int root_num, int action_num, int pool_size, std::vector<std::vector<int> > &legal_actions_list){
-        this->root_num = root_num;
-        this->action_num = action_num;
-        this->pool_size = pool_size;
-        this->legal_actions_list = legal_actions_list;
+//    CRoots::CRoots(int root_num, std::vector<std::vector<int> > &legal_actions_list, int action_space_size, int num_of_sampled_actions){
+    CRoots::CRoots(int root_num, std::vector<std::vector<Action> > &legal_actions_list, int action_space_size, int num_of_sampled_actions){
 
-        this->node_pools.reserve(root_num);
-        this->roots.reserve(root_num);
+        this->root_num = root_num;
+//        this->pool_size = pool_size;
+        this->legal_actions_list = legal_actions_list;
+        this->num_of_sampled_actions = num_of_sampled_actions;
+        this->action_space_size = action_space_size;
 
         for(int i = 0; i < root_num; ++i){
-            this->node_pools.push_back(std::vector<CNode>());
-            this->node_pools[i].reserve(pool_size);
-
-            this->roots.push_back(CNode(0, action_num, &this->node_pools[i], this->legal_actions_list[i]));
+//            this->roots.push_back(CNode(0, this->legal_actions_list[i], this->num_of_sampled_actions));
+            std::vector<Action> legal_actions;
+            this->roots.push_back(CNode(0, legal_actions, this->action_space_size, this->num_of_sampled_actions));
         }
     }
 
     CRoots::~CRoots(){}
 
-    void CRoots::prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, int to_play){
+    void CRoots::prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch){
         for(int i = 0; i < this->root_num; ++i){
-            this->roots[i].expand(to_play, 0, i, value_prefixs[i], policies[i]);
+            this->roots[i].expand(to_play_batch[i], 0, i, value_prefixs[i], policies[i]);
             this->roots[i].add_exploration_noise(root_exploration_fraction, noises[i]);
 
             this->roots[i].visit_count += 1;
         }
     }
 
-    void CRoots::prepare_no_noise(const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, int to_play){
+    void CRoots::prepare_no_noise(const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch){
         for(int i = 0; i < this->root_num; ++i){
-            this->roots[i].expand(to_play, 0, i, value_prefixs[i], policies[i]);
+            this->roots[i].expand(to_play_batch[i], 0, i, value_prefixs[i], policies[i]);
 
             this->roots[i].visit_count += 1;
         }
     }
 
     void CRoots::clear(){
-        this->node_pools.clear();
         this->roots.clear();
     }
 
-    std::vector<std::vector<int> > CRoots::get_trajectories(){
-        std::vector<std::vector<int> > trajs;
+
+
+    std::vector<std::vector<Action> > * CRoots::get_trajectories(){
+
+        std::vector<std::vector<Action> > trajs;
         trajs.reserve(this->root_num);
 
         for(int i = 0; i < this->root_num; ++i){
             trajs.push_back(this->roots[i].get_trajectory());
         }
-        return trajs;
+        return &trajs;
     }
+
+//    std::vector<std::vector<std::vector<float> > > > CRoots::get_trajectories(){
+//
+//        std::vector<std::vector<std::vector<float> > > > trajs;
+//        trajs.reserve(this->root_num);
+//
+//        for(int i = 0; i < this->root_num; ++i){
+//            trajs.push_back(this->roots[i].get_trajectory());
+//        }
+//        return trajs;
+//    }
 
     std::vector<std::vector<int> > CRoots::get_distributions(){
         std::vector<std::vector<int> > distributions;
@@ -261,6 +394,7 @@ namespace tree{
     }
 
     //*********************************************************
+    //
     void update_tree_q(CNode* root, tools::CMinMaxStats &min_max_stats, float discount, int players){
         std::stack<CNode*> node_stack;
         node_stack.push(root);
@@ -271,7 +405,11 @@ namespace tree{
             node_stack.pop();
 
             if(node != root){
+//                # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
+//                # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
+//                # true_reward = node.value_prefix - (- parent_value_prefix)
                 float true_reward = node->value_prefix - node->parent_value_prefix;
+
                 if(is_reset == 1){
                     true_reward = node->value_prefix;
                 }
@@ -279,7 +417,8 @@ namespace tree{
                 if(players == 1)
                     qsa = true_reward + discount * node->value();
                 else if(players == 2)
-                    qsa = true_reward + discount * (-1) * node->value();
+                    // TODO(pu):
+                     qsa = true_reward + discount * (-1) * node->value();
 
                 min_max_stats.update(qsa);
             }
@@ -346,7 +485,10 @@ namespace tree{
                     is_reset = parent->is_reset;
                 }
 
-                float true_reward = node->value_prefix - (- parent_value_prefix);
+                // NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
+               // but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
+                float true_reward = node->value_prefix - parent_value_prefix;
+
                 min_max_stats.update(true_reward + discount * node->value());
 
                 if(is_reset == 1){
@@ -357,6 +499,10 @@ namespace tree{
                     bootstrap_value = - true_reward + discount * bootstrap_value;
                 else
                     bootstrap_value = true_reward + discount * bootstrap_value;
+//                if(node->to_play == to_play)
+//                    bootstrap_value = true_reward + discount * bootstrap_value;
+//                else
+//                    bootstrap_value = - true_reward + discount * bootstrap_value;
             }
         }
     }
@@ -371,10 +517,10 @@ namespace tree{
         }
     }
 
-    int cselect_child(CNode* root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount, float mean_q, int players){
+    Action cselect_child(CNode* root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount, float mean_q, int players){
         float max_score = FLOAT_MIN;
         const float epsilon = 0.000001;
-        std::vector<int> max_index_lst;
+        std::vector<Action> max_index_lst;
         for(auto a: root->legal_actions){
 
             CNode* child = root->get_child(a);
@@ -391,12 +537,15 @@ namespace tree{
             }
         }
 
-        int action = 0;
+//        int action = 0;
+        Action action;
         if(max_index_lst.size() > 0){
             int rand_index = rand() % max_index_lst.size();
             action = max_index_lst[rand_index];
         }
         return action;
+//        return &action;
+
     }
 
     float cucb_score(CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, int is_reset, float total_children_visit_counts, float parent_value_prefix, float pb_c_base, float pb_c_init, float discount, int players){
@@ -435,7 +584,11 @@ namespace tree{
         gettimeofday(&t1, NULL);
         srand(t1.tv_usec);
 
-        int last_action = -1;
+        std::vector<float> null_value;
+        for (int i = 0; i < 1; ++i){
+            null_value.push_back(i+0.1);
+        }
+        Action last_action=Action(null_value,1);
         float parent_q = 0.0;
         results.search_lens = std::vector<int>();
 
@@ -457,7 +610,8 @@ namespace tree{
                 is_root = 0;
                 parent_q = mean_q;
 
-                int action = cselect_child(node, min_max_stats_lst->stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players);
+//                int action = cselect_child(node, min_max_stats_lst->stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players);
+                Action action = cselect_child(node, min_max_stats_lst->stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players);
                 if(players>1)
                 {
                     if(virtual_to_play_batch[i] == 1)

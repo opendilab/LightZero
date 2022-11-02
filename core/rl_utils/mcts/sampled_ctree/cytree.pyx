@@ -1,7 +1,7 @@
 # distutils: language=c++
 import ctypes
 cimport cython
-from ctree cimport CMinMaxStatsList, CNode, CRoots, CSearchResults, cbatch_back_propagate, cbatch_traverse
+from ctree cimport CMinMaxStatsList, CNode, CRoots, CSearchResults, cbatch_back_propagate, cbatch_traverse, CAction
 from libcpp.vector cimport vector
 from libc.stdlib cimport malloc, free
 from libcpp.list cimport list as cpplist
@@ -11,6 +11,7 @@ cimport numpy as np
 
 ctypedef np.npy_float FLOAT
 ctypedef np.npy_intp INTP
+
 
 
 cdef class MinMaxStatsList:
@@ -36,15 +37,31 @@ cdef class ResultsWrapper:
         return self.cresults.search_lens
 
 
+cdef class Action:
+    cdef int is_root_action
+    cdef vector[float] value
+    cdef CAction action
+
+    def __cinit__(self):
+        pass
+
+    def __cinit__(self, vector[float] value, int is_root_action):
+        self.is_root_action = is_root_action
+        self.value = value
+
+
+
 cdef class Roots:
     cdef int root_num
-    cdef int pool_size
+    cdef int action_space_size
+    cdef int num_of_sampled_actions
     cdef CRoots *roots
 
-    def __cinit__(self, int root_num, int pool_size, vector[vector[int]] legal_actions_list):
+    def __cinit__(self, int root_num, list legal_actions_list, int action_space_size, int num_of_sampled_actions):
         self.root_num = root_num
-        self.pool_size = pool_size
-        self.roots = new CRoots(root_num, self.pool_size, legal_actions_list)
+        self.action_space_size = action_space_size
+        self.num_of_sampled_actions = num_of_sampled_actions
+        self.roots = new CRoots(root_num, legal_actions_list, action_space_size, num_of_sampled_actions)
 
     def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):
         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
@@ -78,7 +95,7 @@ cdef class Node:
     def __cinit__(self):
         pass
 
-    def __cinit__(self, float prior, vector[int] &legal_actions):
+    def __cinit__(self, float prior, vector[int] &legal_actions, int action_space_size, int num_of_sampled_actions):
         pass
 
     def expand(self, int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix, list policy_logits):
