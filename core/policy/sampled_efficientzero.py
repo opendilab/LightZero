@@ -816,12 +816,6 @@ class SampledEfficientZeroPolicy(Policy):
                                         action_space_size=self._cfg.action_space_size,
                                         num_of_sampled_actions=self._cfg.num_of_sampled_actions)
                     # the only difference between collect and eval is the dirichlet noise
-                    # TODO(pu):  int(self._cfg.action_space_size)
-                    noises = [
-                        np.random.dirichlet(
-                            [self._cfg.root_dirichlet_alpha] * int(self._cfg.num_of_sampled_actions)
-                        ).astype(np.float32).tolist() for j in range(active_eval_env_num)
-                    ]
                 else:
                     # discrete action space
                     legal_actions = [
@@ -830,10 +824,6 @@ class SampledEfficientZeroPolicy(Policy):
                     roots = ptree.Roots(active_eval_env_num, legal_actions, self._cfg.num_simulations,
                                         num_of_sampled_actions=self._cfg.num_of_sampled_actions)
                     # the only difference between collect and eval is the dirichlet noise
-                    noises = [
-                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                            ).astype(np.float32).tolist() for j in range(active_eval_env_num)
-                    ]
 
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)

@@ -189,7 +189,8 @@ class DynamicsNetwork(nn.Module):
         self.lstm_hidden_size = lstm_hidden_size
         self.action_space_dim = action_space_size
 
-        self.conv = nn.Conv2d(num_channels, num_channels - self.action_space_dim, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv = nn.Conv2d(num_channels, num_channels - self.action_space_dim, kernel_size=3, stride=1, padding=1,
+                              bias=False)
         self.bn = nn.BatchNorm2d(num_channels - self.action_space_dim, momentum=momentum)
         self.resblocks = nn.ModuleList(
             [
@@ -406,7 +407,7 @@ class PredictionNetwork(nn.Module):
         value = self.fc_value(value)
         #  {'mu': mu, 'sigma': sigma}
         policy = self.sampled_fc_policy(policy)
-        policy = torch.cat([policy['mu'], policy['sigma']],dim=-1)
+        policy = torch.cat([policy['mu'], policy['sigma']], dim=-1)
 
         return policy, value
 
@@ -605,7 +606,7 @@ class SampledEfficientZeroNet(BaseNet):
                 # observation_shape=(12, 96, 96),  # stack=4
                 # 3 * 96/16 * 96/16 = 3*6*6 = 108
                 self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
-                                                                 ) * math.ceil(observation_shape[2] / 16)
+                                                                     ) * math.ceil(observation_shape[2] / 16)
             else:
                 self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
@@ -656,15 +657,24 @@ class SampledEfficientZeroNet(BaseNet):
                 )).to(action.device).float()
             )
             # TODO
-            if len(action.shape)==2:
+            if len(action.shape) == 2:
                 # e.g.,  torch.Size([2, 1]) ->  torch.Size([1, 2, 1])
                 action = action.reshape(-1, self.action_space_dim, 1)
-            elif len(action.shape)==3:
+            elif len(action.shape) == 3 and action.shape[2] == self.action_space_dim:
                 # e.g.,  torch.Size([8, 1, 2]) ->  torch.Size([8, 2, 1])
                 # action = action.reshape(-1, self.action_space_dim, 1)  # wrong
                 action = action.permute(0, 2, 1)
-            action_embedding = torch.cat([action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_dim)], dim=1)
-            # action_embedding = torch.cat([action[:, 0, None, None] * action_one_hot, action[:, 1, None, None] * action_one_hot], dim=1)
+            # if len(action.shape)==3:
+            # action: 8,2,1   action_one_hot: 8,1,8,1
+            # action[:, 0, None, None]: 8,1,1,1
+            # action_embedding: 8,2,8,1
+            try:
+                action_embedding = torch.cat(
+                    [action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_dim)], dim=1)
+                # action_embedding = torch.cat([action[:, 0, None, None] * action_one_hot, action[:, 1, None, None] * action_one_hot], dim=1)
+            except Exception as error:
+                print(error)
+                print(action.shape, action_one_hot.shape)
 
             x = torch.cat((encoded_state, action_embedding), dim=1)
 

@@ -708,21 +708,22 @@ class SampledGameBuffer(Buffer):
                     """
                     cpp mcts
                     """
-                    if to_play[0] is None:
+                    if to_play_history[0][0] is None:
                         # we use to_play=0 means one_player_mode game
                         to_play = [0 for i in range(batch_size)]
-                    if action_mask[0] is None:
+                    # if action_mask_history[0][0] is None:
                         # continuous action space env: all -1
-                        legal_actions = [[-1 for i in range(5)] for _ in range(batch_size)]
+                        legal_actions = [[-1 for i in range(self.config.action_space_size)] for _ in range(batch_size)]
                     else:
                         legal_actions = [
-                            [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)
+                            [i for i, x in enumerate(action_mask[j]) if x == 1]
+                            for j in range(batch_size)
                         ]
 
-                    roots = ctree.Roots(batch_size, legal_actions, self._cfg.action_space_size,
-                                        self._cfg.num_of_sampled_actions)
+                    roots = ctree.Roots(batch_size, legal_actions, self.config.action_space_size,
+                                        self.config.num_of_sampled_actions)
                     noises = [
-                        np.random.dirichlet([self.config.root_dirichlet_alpha] * self._cfg.num_of_sampled_actions
+                        np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.num_of_sampled_actions
                                             ).astype(np.float32).tolist() for _ in range(batch_size)
                     ]
                     roots.prepare(
@@ -887,7 +888,7 @@ class SampledGameBuffer(Buffer):
                         for _ in range(self.config.num_unroll_steps + 1 - len(action_mask_tmp))
                     ]
                 action_mask.append(action_mask_tmp)
-            action_mask = to_ndarray(action_mask)
+            # action_mask = to_ndarray(action_mask)
             tmp = []
             for i in action_mask:
                 tmp += i
@@ -933,21 +934,20 @@ class SampledGameBuffer(Buffer):
                 """
                 cpp mcts
                 """
-                if to_play[0] is None:
+                if to_play_history[0][0] is None:
                     # we use to_play=0 means one_player_mode game
                     to_play = [0 for i in range(batch_size)]
-                if action_mask[0] is None:
+                    # if action_mask_history[0][0] is None:
                     # continuous action space env: all -1
-                    legal_actions = [[-1 for i in range(5)] for _ in range(batch_size)]
+                    legal_actions = [[-1 for i in range(self.config.action_space_size)] for _ in range(batch_size)]
                 else:
-                    action_num = int(action_mask[0].sum())
                     legal_actions = [
-                        [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)
-                    ]
+                        [i for i, x in enumerate(action_mask[j]) if x == 1]
+                        for j in range(batch_size)]
 
-                roots = ctree.Roots(batch_size,  legal_actions, self._cfg.action_space_size, self._cfg.num_of_sampled_actions)
+                roots = ctree.Roots(batch_size,  legal_actions, self.config.action_space_size, self.config.num_of_sampled_actions)
                 noises = [
-                    np.random.dirichlet([self.config.root_dirichlet_alpha] * self._cfg.num_of_sampled_actions
+                    np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for _ in range(batch_size)
                 ]
                 roots.prepare(
