@@ -569,8 +569,12 @@ class EfficientZeroPolicy(Policy):
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
                 roots = ctree.Roots(active_collect_env_num, self._cfg.num_simulations, legal_actions)
+                # noises = [
+                #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * action_num
+                #                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
+                # ]
                 noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * action_num
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 ]
                 roots.prepare(self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
@@ -693,7 +697,7 @@ class EfficientZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ptree.Roots(active_eval_env_num,  self._cfg.num_simulations,legal_actions)
+                roots = ptree.Roots(active_eval_env_num,  self._cfg.num_simulations, legal_actions)
 
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)

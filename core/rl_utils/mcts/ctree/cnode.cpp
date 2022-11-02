@@ -88,9 +88,12 @@ namespace tree{
 
     void CNode::add_exploration_noise(float exploration_fraction, const std::vector<float> &noises){
         float noise, prior;
-        for(auto a: this->legal_actions){
-            noise = noises[a];
-            CNode* child = this->get_child(a);
+//        for(auto a: this->legal_actions){
+//            noise = noises[a];
+//            CNode* child = this->get_child(a);
+        for(int i =0; i<this->legal_actions.size(); ++i){
+            noise = noises[i];
+            CNode* child = this->get_child(this->legal_actions[i]);
 
             prior = child->prior;
             child->prior = prior * (1 - exploration_fraction) + noise * exploration_fraction;
@@ -252,6 +255,9 @@ namespace tree{
             node_stack.pop();
 
             if(node != root){
+//                # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
+//                # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
+//                # true_reward = node.value_prefix - (- parent_value_prefix)
                 float true_reward = node->value_prefix - node->parent_value_prefix;
 
                 if(is_reset == 1){
@@ -262,8 +268,7 @@ namespace tree{
                     qsa = true_reward + discount * node->value();
                 else if(players == 2)
                     // TODO(pu):
-                    // qsa = true_reward + discount * (-1) * node->value();
-                    qsa = true_reward + discount * node->value();
+                     qsa = true_reward + discount * (-1) * node->value();
 
                 min_max_stats.update(qsa);
             }
@@ -330,8 +335,8 @@ namespace tree{
                     is_reset = parent->is_reset;
                 }
 
-                // # NOTE: in two player mode, we should calculate the true_reward according to the perspective of current player of node
-//                float true_reward = node->value_prefix - (-1) * parent_value_prefix;
+                // NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
+               // but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
                 float true_reward = node->value_prefix - parent_value_prefix;
 
                 min_max_stats.update(true_reward + discount * node->value());

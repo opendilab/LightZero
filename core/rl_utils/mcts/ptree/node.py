@@ -283,9 +283,10 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play
             if players == 1:
                 true_reward = node.value_prefix - node.parent_value_prefix
             else:
-                # NOTE: in two player mode,
-                # we should calculate the true_reward according to the perspective of current player of node
-                true_reward = node.value_prefix - (- node.parent_value_prefix)
+                # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
+                # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
+                # true_reward = node.value_prefix - (- parent_value_prefix)
+                true_reward = node.value_prefix - node.parent_value_prefix
 
             if is_reset == 1:
                 true_reward = node.value_prefix
@@ -293,7 +294,7 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play
                 q_of_s_a = true_reward + discount * node.value
             elif players == 2:
                 # TODO
-                q_of_s_a = true_reward + discount * node.value
+                q_of_s_a = true_reward + discount * - node.value
 
             min_max_stats.update(q_of_s_a)
 
@@ -302,7 +303,8 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play
         for a in node.legal_actions:
             child = node.get_child(a)
             if child.expanded:
-                # NOTE: the parent_value_prefix is in the perspective of player of parent node
+                # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
+                # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
                 child.parent_value_prefix = node.value_prefix
                 node_stack.append(child)
 
@@ -356,8 +358,8 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
                 parent_value_prefix = parent.value_prefix
                 is_reset = parent.is_reset
 
-            # NOTE: in two player mode, value_prefix is not
-            # according to the perspective of current player of node
+            # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
+            # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
             # true_reward = node.value_prefix - (- parent_value_prefix)
             true_reward = node.value_prefix - parent_value_prefix
 

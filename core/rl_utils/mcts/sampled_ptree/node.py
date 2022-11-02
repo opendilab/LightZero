@@ -53,6 +53,7 @@ class Node:
             self.legal_actions = []
         #     # TODO
         #     self.legal_actions = np.arange(len(policy_logits))
+        # self.action_space_size = int(len(policy_logits)/2)
 
         self.hidden_state_index_x = hidden_state_index_x
         self.hidden_state_index_y = hidden_state_index_y
@@ -63,6 +64,9 @@ class Node:
         # for action, p in policy.items():
         #     self.children[action] = Node(p)
 
+        ######################
+        # sampled related code
+        ######################
         # policy_logits = {'mu': torch.randn([1, 2]), 'sigma': torch.zeros([1, 2]) + 1e-7}
         # (mu, sigma) = policy_logits['mu'], policy_logits['sigma']
         # (mu, sigma) = policy_logits[:,: self.action_space_size ], policy_logits[:,- self.action_space_size:]
@@ -73,22 +77,15 @@ class Node:
         dist = Independent(Normal(mu, sigma), 1)
         # print(dist.batch_shape, dist.event_shape)
         sampled_actions = dist.sample(torch.tensor([self.num_of_sampled_actions]))
-
         log_prob = dist.log_prob(sampled_actions)
         # TODO: factored policy representation
         # empirical_distribution = [1/self.num_of_sampled_actions]
 
-        # pi, beta
-        policy = {i: [log_prob[i], torch.log(torch.tensor([1 / self.num_of_sampled_actions]))] for i, a in
-                  enumerate(sampled_actions)}
-
-        for action, p in policy.items():
-            # self.children[action] = Node(p)
-            # self.children[Action(sampled_actions[action])] = Node(p, action_space_size=self.action_space_size)
-            self.children[Action(sampled_actions[action].detach().cpu().numpy())] = Node(p,
+        for action_index in range(self.num_of_sampled_actions):
+            self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(log_prob[action_index],
                                                                                          action_space_size=self.action_space_size,
                                                                                          num_of_sampled_actions=self.num_of_sampled_actions)
-            self.legal_actions.append(Action(sampled_actions[action].detach().cpu().numpy()))
+            self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
 
     def add_exploration_noise(self, exploration_fraction: float, noises: List[float]):
         """
@@ -97,25 +94,12 @@ class Node:
         Arguments:
             - noises (:obj: list): length is len(self.legal_actions)
         """
+        ######################
+        # sampled related code
+        ######################
         actions = list(self.children.keys())
-        dirichlet_alpha = 0.2
-        noise = np.random.dirichlet([dirichlet_alpha] * len(actions))
-        frac = exploration_fraction
-        for a, n in zip(actions, noise):
-            self.children[a].prior = self.children[a].prior * (1 - frac) + n * frac
-            # self.children[a].prior_beta = self.children[a].prior_beta * (1 - frac) + n * frac
-
-        # for i, a in enumerate(self.legal_actions):
-        #     """
-        #     i in index, a is action, e.g. self.legal_actions = [0,1,2,4,6,8], i=[0,1,2,3,4,5], a=[0,1,2,4,6,8]
-        #     """
-        #     try:
-        #         noise = noises[i]
-        #     except Exception as error:
-        #         print(error)
-        #     child = self.get_child(a)
-        #     prior = child.prior
-        #     child.prior = prior * (1 - exploration_fraction) + noise * exploration_fraction
+        for a, n in zip(actions, noises):
+            self.children[a].prior = self.children[a].prior * (1 - exploration_fraction) + n * exploration_fraction
 
     def get_mean_q(self, is_root: int, parent_q: float, discount: float):
         """
@@ -211,6 +195,10 @@ class Roots:
         self.num_of_sampled_actions = num_of_sampled_actions
 
         self.roots = []
+
+        ##################
+        # sampled related code
+        ##################
         for i in range(self.root_num):
             if isinstance(legal_actions_list, list):
                 self.roots.append(Node(0, legal_actions_list[i], num_of_sampled_actions=self.num_of_sampled_actions))
@@ -290,32 +278,44 @@ class SearchResults:
         self.last_actions = []
         self.search_lens = []
 
-
-def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
+# not used now
+def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play=0):
+    root.parent_value_prefix = 0
     node_stack = []
     node_stack.append(root)
-    parent_value_prefix = 0.0
     is_reset = 0
     while len(node_stack) > 0:
         node = node_stack[-1]
         node_stack.pop()
 
         if node != root:
-            true_reward = node.value_prefix - parent_value_prefix
+            if players == 1:
+                true_reward = node.value_prefix - node.parent_value_prefix
+            else:
+                # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node, 
+                # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
+                # true_reward = node.value_prefix - (- parent_value_prefix)
+                true_reward = node.value_prefix - node.parent_value_prefix
+
             if is_reset == 1:
                 true_reward = node.value_prefix
             if players == 1:
                 q_of_s_a = true_reward + discount * node.value
             elif players == 2:
-                q_of_s_a = true_reward + discount * (-node.value)
+                # TODO
+                q_of_s_a = true_reward + discount * - node.value
 
             min_max_stats.update(q_of_s_a)
+
+        is_reset = node.is_reset
+
         for a in node.legal_actions:
             child = node.get_child(a)
             if child.expanded:
+                # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node, 
+                # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
+                child.parent_value_prefix = node.value_prefix
                 node_stack.append(child)
-        parent_value_prefix = node.value_prefix
-        is_reset = node.is_reset
 
 
 def back_propagate(search_path, min_max_stats, to_play, value: float, discount: float):
@@ -422,6 +422,9 @@ def batch_back_propagate(
 def select_child(
         root: Node, min_max_stats, pb_c_base: int, pb_c_int: float, discount: float, mean_q: float, players: int
 ) -> int:
+    ##################
+    # sampled related code
+    ##################
     # Progressive widening (See https://hal.archives-ouvertes.fr/hal-00542673v2/document)
     pw_alpha = 0.49
     if len(root.children) < (root.visit_count + 1) ** pw_alpha:
@@ -429,6 +432,7 @@ def select_child(
         sampled_action = distribution.sample().squeeze(0).detach().cpu().numpy()
 
         while Action(sampled_action) in root.children.keys():
+            # if sampled_action is sampled before, we sample a new action now
             sampled_action = distribution.sample().squeeze(0).detach().cpu().numpy()
         action = Action(sampled_action)
 
@@ -445,26 +449,6 @@ def select_child(
         return action
 
     else:
-        # max_ucb = max(
-        #     # root.visit_count-1?
-        #     compute_ucb_score(
-        #         root, child, min_max_stats, mean_q, root.is_reset, root.visit_count, root.value_prefix, pb_c_base,
-        #         pb_c_int,
-        #         discount, players
-        #     )
-        #     for action, child in root.children.items()
-        # )
-        # action = np.random.choice(
-        #     [
-        #         action
-        #         for action, child in root.children.items()
-        #         if compute_ucb_score(
-        #         root, child, min_max_stats, mean_q, root.is_reset, root.visit_count, root.value_prefix, pb_c_base,
-        #         pb_c_int,
-        #         discount, players
-        #     ) == max_ucb
-        #     ]
-        # )
 
         max_score = -np.inf
         epsilon = 0.000001
@@ -480,36 +464,13 @@ def select_child(
                 max_index_lst.clear()
                 max_index_lst.append(action)
             elif temp_score >= max_score - epsilon:
-                # TODO(pu): if the difference is less than  epsilon = 0.000001, we random choice action from  max_index_lst
+                # TODO(pu): if the difference is less than epsilon = 0.000001, we random choice action from  max_index_lst
                 max_index_lst.append(action)
 
         if len(max_index_lst) > 0:
             action = random.choice(max_index_lst)
 
-    # return action, root.children[action]
-    return action
-
-    # max_score = -np.inf
-    # epsilon = 0.000001
-    # max_index_lst = []
-    # for a in root.legal_actions:
-    #     child = root.get_child(a)
-    #     temp_score = compute_ucb_score(
-    #         child, min_max_stats, mean_q, root.is_reset, root.visit_count - 1, root.value_prefix, pb_c_base, pb_c_int,
-    #         discount, players
-    #     )
-    #     if max_score < temp_score:
-    #         max_score = temp_score
-    #         max_index_lst.clear()
-    #         max_index_lst.append(a)
-    #     elif temp_score >= max_score - epsilon:
-    #         # TODO(pu): if the difference is less than  epsilon = 0.000001, we random choice action from  max_index_lst
-    #         max_index_lst.append(a)
-    #
-    # action = 0
-    # if len(max_index_lst) > 0:
-    #     action = random.choice(max_index_lst)
-    # return action
+        return action
 
 
 def compute_ucb_score(
@@ -537,6 +498,9 @@ def compute_ucb_score(
     pb_c = math.log((total_children_visit_counts + pb_c_base + 1) / pb_c_base) + pb_c_init
     pb_c *= (math.sqrt(total_children_visit_counts) / (child.visit_count + 1))
 
+    ##################
+    # sampled related code
+    ##################
     # prior_score = pb_c * child.prior
     # TODO
     node_prior = "density"
