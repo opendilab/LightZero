@@ -112,7 +112,7 @@ def serial_pipeline_efficientzero(
         # please refer to Appendix A.1 in EfficientZero for details
         collect_kwargs['temperature'] = np.array(
             [
-                visit_count_temperature(game_config.auto_temperature, game_config.fixed_temperature_value, game_config.max_training_steps, trained_steps=learner.train_iter)
+                visit_count_temperature(game_config.auto_temperature, game_config.fixed_temperature_value, game_config.max_training_steps, trained_steps=learner.train_iter * cfg.policy.learn.update_per_collect)
                 for _ in range(game_config.collector_env_num)
             ]
         )
@@ -161,9 +161,10 @@ def serial_pipeline_efficientzero(
             #         policy._optimizer.lr = 0.002
             if game_config.lr_manually:
                 # learning rate decay manually like MuZero paper
-                if learner.train_iter < 0.5 * game_config.max_training_steps:
+                train_steps = learner.train_iter * cfg.policy.learn.update_per_collect
+                if train_steps < 0.5 * game_config.max_training_steps:
                     policy._optimizer.lr = 0.2
-                elif learner.train_iter < 0.75 * game_config.max_training_steps:
+                elif train_steps < 0.75 * game_config.max_training_steps:
                     policy._optimizer.lr = 0.02
                 else:
                     policy._optimizer.lr = 0.002

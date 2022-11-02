@@ -69,7 +69,7 @@ namespace tree {
         public:
             int num;
             std::vector<int> hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, search_lens;
-            std::vector<std::vector<int> > virtual_to_play_batch;
+            std::vector<int> virtual_to_play_batchs;
             std::vector<CNode*> nodes;
             std::vector<std::vector<CNode*> > search_paths;
 

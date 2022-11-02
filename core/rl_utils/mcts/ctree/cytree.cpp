@@ -4201,7 +4201,7 @@ static PyObject *__pyx_pf_6cytree_2batch_traverse(CYTHON_UNUSED PyObject *__pyx_
  * 
  *     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount, min_max_stats_lst.cmin_max_stats_lst, results.cresults, virtual_to_play_batch)             # <<<<<<<<<<<<<<
  * 
- *     return results.cresults.hidden_state_index_x_lst, results.cresults.hidden_state_index_y_lst, results.cresults.last_actions, results.cresults.virtual_to_play_batch
+ *     return results.cresults.hidden_state_index_x_lst, results.cresults.hidden_state_index_y_lst, results.cresults.last_actions, results.cresults.virtual_to_play_batchs
  */
   __pyx_t_1 = __pyx_convert_vector_from_py_int(__pyx_v_virtual_to_play_batch); if (unlikely(PyErr_Occurred())) __PYX_ERR(1, 100, __pyx_L1_error)
   tree::cbatch_traverse(__pyx_v_roots->roots, __pyx_v_pb_c_base, __pyx_v_pb_c_init, __pyx_v_discount, __pyx_v_min_max_stats_lst->cmin_max_stats_lst, __pyx_v_results->cresults, __pyx_t_1);
@@ -4209,7 +4209,7 @@ static PyObject *__pyx_pf_6cytree_2batch_traverse(CYTHON_UNUSED PyObject *__pyx_
   /* "cytree.pyx":102
  *     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount, min_max_stats_lst.cmin_max_stats_lst, results.cresults, virtual_to_play_batch)
  * 
- *     return results.cresults.hidden_state_index_x_lst, results.cresults.hidden_state_index_y_lst, results.cresults.last_actions, results.cresults.virtual_to_play_batch             # <<<<<<<<<<<<<<
+ *     return results.cresults.hidden_state_index_x_lst, results.cresults.hidden_state_index_y_lst, results.cresults.last_actions, results.cresults.virtual_to_play_batchs             # <<<<<<<<<<<<<<
  */
   __Pyx_XDECREF(__pyx_r);
   __pyx_t_2 = __pyx_convert_vector_to_py_int(__pyx_v_results->cresults.hidden_state_index_x_lst); if (unlikely(!__pyx_t_2)) __PYX_ERR(1, 102, __pyx_L1_error)
@@ -4218,7 +4218,7 @@ static PyObject *__pyx_pf_6cytree_2batch_traverse(CYTHON_UNUSED PyObject *__pyx_
   __Pyx_GOTREF(__pyx_t_3);
   __pyx_t_4 = __pyx_convert_vector_to_py_int(__pyx_v_results->cresults.last_actions); if (unlikely(!__pyx_t_4)) __PYX_ERR(1, 102, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_5 = __pyx_convert_vector_to_py_std_3a__3a_vector_3c_int_3e___(__pyx_v_results->cresults.virtual_to_play_batch); if (unlikely(!__pyx_t_5)) __PYX_ERR(1, 102, __pyx_L1_error)
+  __pyx_t_5 = __pyx_convert_vector_to_py_int(__pyx_v_results->cresults.virtual_to_play_batchs); if (unlikely(!__pyx_t_5)) __PYX_ERR(1, 102, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __pyx_t_6 = PyTuple_New(4); if (unlikely(!__pyx_t_6)) __PYX_ERR(1, 102, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
