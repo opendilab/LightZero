@@ -23,7 +23,7 @@ n_episode = 8
 evaluator_env_num = 5
 
 lunarlander_cont_disc_sampled_efficientzero_config = dict(
-    exp_name='data_ez_ptree/lunarlander_cont_sampled_efficientzero_seed0_sub885_urv-false_ns50',
+    exp_name='data_ez_ptree/lunarlander_cont_sampled_efficientzero_seed0_sub885_urv-false_ns50_mlr_ghl50',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -85,7 +85,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
             update_per_collect=int(500),
             batch_size=256,
 
-            learning_rate=0.0003,  # fixed lr
+            learning_rate=0.2,  # manually lr
+            # learning_rate=0.0003,  # fixed lr
             # Frequency of target network update.
             target_update_freq=400,
         ),
@@ -111,11 +112,9 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         device=device,
         mcts_ctree=False,
         # mcts_ctree=True,
-        # TODO: for board_games, mcts_ctree now only support env_num=1, because in cpp MCTS root node,
-        #  we must specify the one same action mask,
-        #  when env_num>1, the action mask for different env may be different.
         battle_mode='one_player_mode',
-        game_history_length=200,
+        # game_history_length=200,
+        game_history_length=50,
 
         image_based=False,
         cvt_string=False,
@@ -178,8 +177,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         revisit_policy_search_rate=0.99,
 
         # TODO(pu): why not use adam?
-        # lr_manually=True,
-        lr_manually=False,
+        lr_manually=True,
+        # lr_manually=False,
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority

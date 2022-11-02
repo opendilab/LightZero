@@ -23,7 +23,7 @@ n_episode = 8
 evaluator_env_num = 5
 
 lunarlander_cont_disc_sampled_efficientzero_config = dict(
-    exp_name='data_ez_ptree/lunarlander_cont_sampled_efficientzero_seed0_sub885_urv-false_ns50',
+    exp_name='data_ez_ctree/lunarlander_cont_sampled_efficientzero_seed0_sub885_urv-false_ns50_mlr_ghl50',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -38,7 +38,7 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model_path=None,
-        env_name='lunarlander_cont_disc',
+        env_name='lunarlander_cont',
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
@@ -109,29 +109,21 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         ######################################
         env_type='no_board_games',
         device=device,
-        mcts_ctree=False,
-        # mcts_ctree=True,
-        # TODO: for board_games, mcts_ctree now only support env_num=1, because in cpp MCTS root node,
-        #  we must specify the one same action mask,
-        #  when env_num>1, the action mask for different env may be different.
+        # mcts_ctree=False,
+        mcts_ctree=True,
         battle_mode='one_player_mode',
-        game_history_length=200,
-
-        image_based=False,
-        cvt_string=False,
-
-        # clip_reward=True,
-        # TODO(pu)
-        clip_reward=False,
-
-        game_wrapper=True,
+        # game_history_length=200,
+        game_history_length=50,
         action_space_size=2,  # 4**2
         continuous_action_space=True,
         num_of_sampled_actions=20,
-        # for debug
-        # num_of_sampled_actions=5,
+        # clip_reward=True,
+        # TODO(pu)
+        clip_reward=False,
+        image_based=False,
+        cvt_string=False,
+        game_wrapper=True,
         amp_type='none',
-
         # [S, W, H, C] -> [S x C, W, H]
         # [4,8,1,1] -> [4*1, 8, 1]
         image_channel=1,

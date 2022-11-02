@@ -22,7 +22,9 @@ class MuZeroModelFake(torch.nn.Module):
 
         value = torch.zeros(size=(batch_size, 601))
         value_prefix = [0. for _ in range(batch_size)]
-        policy_logits = torch.zeros(size=(batch_size, self.action_num))
+        # policy_logits = torch.zeros(size=(batch_size, self.action_num))
+        policy_logits = 0.1*torch.ones(size=(batch_size, self.action_num))
+
         hidden_state = torch.zeros(size=(batch_size, 12, 3, 3))
         reward_hidden_state_state = (torch.zeros(size=(1, batch_size, 16)), torch.zeros(size=(1, batch_size, 16)))
 
@@ -42,7 +44,9 @@ class MuZeroModelFake(torch.nn.Module):
         reward_hidden_state_state = (torch.zeros(size=(1, batch_size, 16)), torch.zeros(size=(1, batch_size, 16)))
         value = torch.zeros(size=(batch_size, 601))
         value_prefix = torch.zeros(size=(batch_size, 601))
-        policy_logits = torch.zeros(size=(batch_size, self.action_num))
+        policy_logits = 0.1*torch.ones(size=(batch_size, self.action_num))
+
+        # policy_logits = torch.zeros(size=(batch_size, self.action_num))
 
         output = {
             'value': value,
@@ -66,7 +70,7 @@ def test_mcts():
             lstm_horizon_len=5,
             support_size=300,
             action_space_size=2,
-            num_of_sampled_actions=20,
+            num_of_sampled_actions=6,
             num_simulations=100,
             batch_size=5,
             pb_c_base=1,
@@ -84,11 +88,11 @@ def test_mcts():
     batch_size = env_nums = game_config.batch_size
     action_space_size = game_config.action_space_size
 
-    model = MuZeroModelFake(action_num=100)
+    model = MuZeroModelFake(action_num=game_config.action_space_size*2)
     stack_obs = torch.zeros(
         size=(
             batch_size,
-            100,
+            game_config.action_space_size*2,
         ), dtype=torch.float
     )
 
@@ -108,10 +112,10 @@ def test_mcts():
     )
     policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
-    legal_actions_list = [[[0.5, 0.6] for i in range(5)] for _ in range(env_nums)]
-    #game_config.num_simulations,
+    legal_actions_list = [[-1 for i in range(5)] for _ in range(env_nums)]
+    # game_config.num_simulations
     # roots = ctree.Roots(env_nums, legal_actions_list, action_space_size=2, num_of_sampled_actions=20)
-    roots = ctree.Roots(env_nums, legal_actions_list, 2, 20)
+    roots = ctree.Roots(env_nums, legal_actions_list, game_config.action_space_size, game_config.num_of_sampled_actions)
 
     noises = [
         np.random.dirichlet([game_config.root_dirichlet_alpha] * game_config.num_of_sampled_actions
@@ -122,4 +126,4 @@ def test_mcts():
 
     MCTS(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play_batch)
     roots_distributions = roots.get_distributions()
-    assert np.array(roots_distributions).shape == (batch_size, action_space_size)
+    assert np.array(roots_distributions).shape == (batch_size, game_config.num_of_sampled_actions)

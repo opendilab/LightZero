@@ -58,7 +58,7 @@ cdef extern from "cnode.h" namespace "tree":
 
     cdef cppclass CRoots:
         CRoots() except +
-        CRoots(int root_num, vector[vector[vector[float]]] legal_actions_list, int action_space_size, int num_of_sampled_actions) except +
+        CRoots(int root_num, vector[vector[float]] legal_actions_list, int action_space_size, int num_of_sampled_actions) except +
         int root_num, action_space_size, num_of_sampled_actions
         vector[CNode] roots
         vector[vector[CNode]] node_pools
@@ -68,6 +68,7 @@ cdef extern from "cnode.h" namespace "tree":
         void clear()
         vector[vector[vector[float]]] get_trajectories()
         vector[vector[int]] get_distributions()
+        vector[vector[vector[float]]] get_sampled_actions()
         vector[float] get_values()
 
     cdef cppclass CSearchResults:

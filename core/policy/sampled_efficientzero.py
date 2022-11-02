@@ -19,20 +19,11 @@ import core.rl_utils.mcts.sampled_ptree as ptree
 from core.rl_utils import SampledEfficientZeroMCTSPtree as MCTSPtree
 from core.rl_utils import MCTSCtree
 # cpp mcts
-from core.rl_utils import cytree as ctree
+import core.rl_utils.mcts.sampled_ctree.cytree as ctree
 from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
 from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
-
-
-# TODO(pu): choose game config
-# from zoo.atari.config.atari_efficientzero_base_config import game_config
-# from zoo.board_games.gomoku.config.gomoku_efficientzero_base_config import game_config
-# from zoo.board_games.tictactoe.config.tictactoe_efficientzero_base_config import game_config
-# from zoo.box2d.lunarlander.config.lunarlander_cont_disc_efficientzero_base_config import game_config
-# from zoo.box2d.lunarlander.config.lunarlander_disc_efficientzero_base_config import game_config
-# from zoo.box2d.lunarlander.config.lunarlander_cont_sampled_efficientzero_base_config import game_config
 
 
 @POLICY_REGISTRY.register('sampled_efficientzero')
@@ -646,13 +637,18 @@ class SampledEfficientZeroPolicy(Policy):
                 if to_play[0] is None:
                     # we use to_play=0 means one_player_mode game
                     to_play = [0 for i in range(active_collect_env_num)]
-                action_num = int(action_mask[0].sum())
-                legal_actions = [
-                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
-                ]
-                roots = ctree.Roots(active_collect_env_num, self._cfg.num_simulations, legal_actions)
+                if action_mask[0] is None:
+                    # continuous action space env: all -1
+                    legal_actions = [[-1 for i in range(5)] for _ in range(active_collect_env_num)]
+                else:
+                    action_num = int(action_mask[0].sum())
+                    legal_actions = [
+                        [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
+                    ]
+                roots = ctree.Roots(active_collect_env_num, legal_actions, self._cfg.action_space_size,
+                                        self._cfg.num_of_sampled_actions)
                 noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * action_num
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 ]
                 roots.prepare(self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
@@ -693,6 +689,8 @@ class SampledEfficientZeroPolicy(Policy):
             roots_distributions = roots.get_distributions()  # {list: 1}->{list:6}
             roots_sampled_actions = roots.get_sampled_actions()  # {list: 1}->{list:6}
 
+
+
             roots_values = roots.get_values()  # {list: 1}
             data_id = [i for i in range(active_collect_env_num)]
             output = {i: None for i in data_id}
@@ -703,7 +701,13 @@ class SampledEfficientZeroPolicy(Policy):
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_distributions[i], roots_values[i]
-                child_actions = np.array([action.value for action in roots_sampled_actions[i]])
+                try:
+                    child_actions = np.array([action.value for action in roots_sampled_actions[i]])
+                except Exception as error:
+                    # print(error)
+                    # print('sampled_ctree roots.get_sampled_actions() return list')
+                    child_actions = np.array([action for action in roots_sampled_actions[i]])
+
                 # select the argmax, not sampling
                 # TODO(pu):
                 # only legal actions have visit counts
@@ -715,7 +719,13 @@ class SampledEfficientZeroPolicy(Policy):
                 if action_mask[0] is not None:
                     action = np.where(action_mask[i] == 1.0)[0][action]
                 else:
-                    action = roots_sampled_actions[i][action].value
+                    try:
+                        action = roots_sampled_actions[i][action].value
+                    except Exception as error:
+                        # print(error)
+                        # print('sampled_ctree roots.get_sampled_actions() return list')
+                        action = np.array(roots_sampled_actions[i][action])
+
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,
@@ -784,11 +794,17 @@ class SampledEfficientZeroPolicy(Policy):
                 if to_play[0] is None:
                     # we use to_play=0 means one_player_mode game
                     to_play = [0 for i in range(active_eval_env_num)]
-                action_num = int(action_mask[0].sum())
-                legal_actions = [
-                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
-                ]
-                roots = ctree.Roots(active_eval_env_num, action_num, self._cfg.num_simulations, legal_actions)
+                if action_mask[0] is None:
+                    # continuous action space env: all -1
+                    legal_actions = [[-1 for i in range(5)] for _ in range(active_eval_env_num)]
+                else:
+                    action_num = int(action_mask[0].sum())
+                    legal_actions = [
+                        [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
+                    ]
+                roots = ctree.Roots(active_eval_env_num, legal_actions, self._cfg.action_space_size,
+                                        self._cfg.num_of_sampled_actions)
+
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)

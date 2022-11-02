@@ -137,31 +137,31 @@ def serial_pipeline_efficientzero(
         # Learn policy from collected data
         for i in range(cfg.policy.learn.update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
-            try:
+            if replay_buffer.get_num_of_transitions() > learner.policy.get_attribute('batch_size'):
                 train_data = replay_buffer.sample_train_data(learner.policy.get_attribute('batch_size'), policy)
-            except Exception as exception:
-                print(exception)
+            else:
                 logging.warning(
-                    f'The data in replay_buffer is not sufficient to sample a minibatch: '
-                    f'batch_size: {replay_buffer.get_batch_size()},'
-                    f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
-                    f'num of game historys: {replay_buffer.get_num_of_game_histories()}, '
-                    f'number of transitions: {replay_buffer.get_num_of_transitions()}, '
-                    f'continue to collect now ....'
-                )
+                        f'The data in replay_buffer is not sufficient to sample a minibatch: '
+                        f'batch_size: {replay_buffer.get_batch_size()},'
+                        f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
+                        f'num of game historys: {replay_buffer.get_num_of_game_histories()}, '
+                        f'number of transitions: {replay_buffer.get_num_of_transitions()}, '
+                        f'continue to collect now ....'
+                    )
                 break
 
             learner.train(train_data, collector.envstep)
 
+            train_steps = learner.train_iter * cfg.policy.learn.update_per_collect
+
             # if game_config.lr_manually:
             #     # learning rate decay manually like EfficientZero paper
-            #     if learner.train_iter > 1e5 and learner.train_iter <= 2e5:
+            #     if train_steps  > 1e5 and train_steps  <= 2e5:
             #         policy._optimizer.lr = 0.02
-            #     elif learner.train_iter > 2e5:
+            #     elif train_steps  > 2e5:
             #         policy._optimizer.lr = 0.002
             if game_config.lr_manually:
                 # learning rate decay manually like MuZero paper
-                train_steps = learner.train_iter * cfg.policy.learn.update_per_collect
                 if train_steps < 0.5 * game_config.max_training_steps:
                     policy._optimizer.lr = 0.2
                 elif train_steps < 0.75 * game_config.max_training_steps:

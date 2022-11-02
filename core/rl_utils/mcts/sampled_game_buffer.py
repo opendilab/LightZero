@@ -708,10 +708,21 @@ class SampledGameBuffer(Buffer):
                     """
                     cpp mcts
                     """
-                    roots = ctree.Roots(batch_size, self.config.action_space_size, self.config.num_simulations,
-                                    num_of_sampled_actions=self.config.num_of_sampled_actions)
+                    if to_play[0] is None:
+                        # we use to_play=0 means one_player_mode game
+                        to_play = [0 for i in range(batch_size)]
+                    if action_mask[0] is None:
+                        # continuous action space env: all -1
+                        legal_actions = [[-1 for i in range(5)] for _ in range(batch_size)]
+                    else:
+                        legal_actions = [
+                            [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)
+                        ]
+
+                    roots = ctree.Roots(batch_size, legal_actions, self._cfg.action_space_size,
+                                        self._cfg.num_of_sampled_actions)
                     noises = [
-                        np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.action_space_size
+                        np.random.dirichlet([self.config.root_dirichlet_alpha] * self._cfg.num_of_sampled_actions
                                             ).astype(np.float32).tolist() for _ in range(batch_size)
                     ]
                     roots.prepare(
@@ -719,9 +730,10 @@ class SampledGameBuffer(Buffer):
                         noises,
                         value_prefix_pool,
                         policy_logits_pool,
+                        to_play
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTSCtree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots)
+                    MCTSCtree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 else:
                     """
                     python mcts
@@ -785,7 +797,7 @@ class SampledGameBuffer(Buffer):
             value_lst = value_lst.tolist()
 
             horizon_id, value_index = 0, 0
-            for traj_len_non_re, reward_lst, state_index in zip(traj_lens, rewards_lst, state_index_lst, to_play_history):
+            for traj_len_non_re, reward_lst, state_index, to_play_list in zip(traj_lens, rewards_lst, state_index_lst, to_play_history):
                 # traj_len = len(game)
                 target_values = []
                 target_value_prefixs = []
@@ -921,9 +933,21 @@ class SampledGameBuffer(Buffer):
                 """
                 cpp mcts
                 """
-                roots = ctree.Roots(batch_size, self.config.action_space_size, self.config.num_simulations,num_of_sampled_actions=self.config.num_of_sampled_actions)
+                if to_play[0] is None:
+                    # we use to_play=0 means one_player_mode game
+                    to_play = [0 for i in range(batch_size)]
+                if action_mask[0] is None:
+                    # continuous action space env: all -1
+                    legal_actions = [[-1 for i in range(5)] for _ in range(batch_size)]
+                else:
+                    action_num = int(action_mask[0].sum())
+                    legal_actions = [
+                        [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)
+                    ]
+
+                roots = ctree.Roots(batch_size,  legal_actions, self._cfg.action_space_size, self._cfg.num_of_sampled_actions)
                 noises = [
-                    np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.action_space_size
+                    np.random.dirichlet([self.config.root_dirichlet_alpha] * self._cfg.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for _ in range(batch_size)
                 ]
                 roots.prepare(
@@ -931,9 +955,10 @@ class SampledGameBuffer(Buffer):
                     noises,
                     value_prefix_pool,
                     policy_logits_pool,
+                    to_play
                 )
                 # do MCTS for a new policy with the recent target model
-                MCTSCtree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots)
+                MCTSCtree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
             else:
                 """
                 python mcts

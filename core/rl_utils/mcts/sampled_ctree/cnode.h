@@ -82,12 +82,15 @@ namespace tree {
             int action_space_size;
             std::vector<CNode> roots;
             // std::vector<std::vector<CNode> > node_pools;
-            std::vector<std::vector<std::vector<float> > > legal_actions_list;
+             std::vector<std::vector<float> > legal_actions_list;
+
+//            std::vector<std::vector<std::vector<float> > > legal_actions_list;
 //            std::vector<std::vector<CAction> > legal_actions_list;
 
 
             CRoots();
-            CRoots(int root_num, std::vector<std::vector<std::vector<float> > > legal_actions_list, int action_space_size, int num_of_sampled_actions);
+             CRoots(int root_num, std::vector<std::vector<float> > legal_actions_list, int action_space_size, int num_of_sampled_actions);
+//            CRoots(int root_num, std::vector<std::vector<std::vector<float> > > legal_actions_list, int action_space_size, int num_of_sampled_actions);
 //            CRoots(int root_num, std::vector<std::vector<CAction> > &legal_actions_list, int action_space_size, int num_of_sampled_actions);
             ~CRoots();
 
@@ -98,6 +101,8 @@ namespace tree {
 //            std::vector<std::vector<CAction> >* get_trajectories();
 
             std::vector<std::vector<int> > get_distributions();
+            std::vector<std::vector<std::vector<float> > > get_sampled_actions();
+
             std::vector<float> get_values();
 
     };
@@ -132,7 +137,7 @@ namespace tree {
 //    int cselect_child(CNode* root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount, float mean_q, int players);
     CAction cselect_child(CNode* root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount, float mean_q, int players);
 
-    float cucb_score(CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, int is_reset, float total_children_visit_counts, float parent_value_prefix, float pb_c_base, float pb_c_init, float discount, int players);
+    float cucb_score(CNode *parent, CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, int is_reset, float total_children_visit_counts, float parent_value_prefix, float pb_c_base, float pb_c_init, float discount, int players);
     void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &virtual_to_play_batch);
 }
 

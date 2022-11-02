@@ -656,14 +656,15 @@ class SampledEfficientZeroNet(BaseNet):
                 )).to(action.device).float()
             )
             # TODO
-            try:
-                if len(action.shape)==2:
-                    # e.g.,  torch.Size([2, 1]) ->  torch.Size([1, 2, 1])
-                    action = action.reshape(-1, 2, 1)
-                action_embedding = torch.cat([action[:, 0, None, None] * action_one_hot, action[:, 1, None, None] * action_one_hot], dim=1)
-                # action_embedding = torch.cat([action[:, dim, None, None] * action_one_hot for dim in range(len(action))], dim=1)
-            except Exception as error:
-                print(error)
+            if len(action.shape)==2:
+                # e.g.,  torch.Size([2, 1]) ->  torch.Size([1, 2, 1])
+                action = action.reshape(-1, self.action_space_dim, 1)
+            elif len(action.shape)==3:
+                # e.g.,  torch.Size([8, 1, 2]) ->  torch.Size([8, 2, 1])
+                # action = action.reshape(-1, self.action_space_dim, 1)  # wrong
+                action = action.permute(0, 2, 1)
+            action_embedding = torch.cat([action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_dim)], dim=1)
+            # action_embedding = torch.cat([action[:, 0, None, None] * action_one_hot, action[:, 1, None, None] * action_one_hot], dim=1)
 
             x = torch.cat((encoded_state, action_embedding), dim=1)
 

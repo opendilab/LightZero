@@ -3,7 +3,7 @@ The Node and Roots class for MCTS in board games in which we must consider legal
 """
 import math
 import random
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Union
 
 import numpy as np
 import torch
@@ -17,13 +17,12 @@ class Node:
      Arguments:
      """
 
-    def __init__(self, prior: list and int, legal_actions: Any = None, action_space_size=9, num_of_sampled_actions=20):
+    def __init__(self, prior: Union[list, float], legal_actions: Any = None, action_space_size=9, num_of_sampled_actions=20):
         # pi, beta
         if isinstance(prior, list):
-            # self.prior_pi = prior[0]
             self.prior = prior[0]
             self.prior_beta = prior[1]
-        elif isinstance(prior, int):
+        elif isinstance(prior, float):
             self.prior = prior
         self.mu = None
         self.sigma = None
@@ -48,6 +47,17 @@ class Node:
             self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, value_prefix: float,
             policy_logits: List[float]
     ):
+        """
+        # to varify ctree
+        import numpy as np
+        import torch
+        from torch.distributions import Normal, Independent
+        mu= torch.tensor([0.1,0.1])
+        sigma= torch.tensor([0.1,0.1])
+        dist = Independent(Normal(mu, sigma), 1)
+        sampled_actions=torch.tensor([0.282769,0.376611])
+        dist.log_prob(sampled_actions)
+        """
         self.to_play = to_play
         if self.legal_actions is None:
             self.legal_actions = []
@@ -80,9 +90,8 @@ class Node:
         log_prob = dist.log_prob(sampled_actions)
         # TODO: factored policy representation
         # empirical_distribution = [1/self.num_of_sampled_actions]
-
         for action_index in range(self.num_of_sampled_actions):
-            self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(log_prob[action_index],
+            self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(log_prob[action_index].item(),
                                                                                          action_space_size=self.action_space_size,
                                                                                          num_of_sampled_actions=self.num_of_sampled_actions)
             self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
@@ -453,6 +462,10 @@ def select_child(
         epsilon = 0.000001
         max_index_lst = []
         for action, child in root.children.items():
+            ##################
+            # sampled related code
+            ##################
+            # use root as input argument
             temp_score = compute_ucb_score(
                 root, child, min_max_stats, mean_q, root.is_reset, root.visit_count, root.value_prefix, pb_c_base,
                 pb_c_int,
