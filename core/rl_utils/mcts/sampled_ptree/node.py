@@ -441,10 +441,9 @@ def select_child(
         # empirical_distribution = [1/self.num_of_sampled_actions]
 
         # pi, beta
-        root.children[action] = Node(prior=log_prob[0], legal_actions=None, action_space_size=2)  # action_space_size
+        root.children[action] = Node(prior=log_prob[0], legal_actions=None, action_space_size=sampled_action.shape[0])  # TODO(pu): action_space_size
         # TODO
         # root.legal_actions.append(action)
-
         # return action, root.children[action]
         return action
 

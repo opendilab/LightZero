@@ -65,6 +65,7 @@ cdef extern from "cnode.h" namespace "tree":
         CSearchResults(int num) except +
         int num
         vector[int] hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, search_lens
+        vector[vector[int]] virtual_to_play_batch
         vector[CNode*] nodes
 
     cdef void cback_propagate(vector[CNode*] &search_path, CMinMaxStats &min_max_stats, int to_play, float value, float discount)

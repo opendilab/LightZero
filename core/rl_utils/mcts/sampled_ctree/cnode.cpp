@@ -685,6 +685,8 @@ namespace tree{
             results.last_actions.push_back(last_action);
             results.search_lens.push_back(search_len);
             results.nodes.push_back(node);
+            results.virtual_to_play_batch.push_back(virtual_to_play_batch);
+
         }
     }
 

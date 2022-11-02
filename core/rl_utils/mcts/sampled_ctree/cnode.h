@@ -107,6 +107,8 @@ namespace tree {
             int num;
 //            std::vector<int> hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, search_lens;
             std::vector<int> hidden_state_index_x_lst, hidden_state_index_y_lst, search_lens;
+            std::vector<std::vector<int> > virtual_to_play_batch;
+
 //            std::vector<CAction> last_actions;
             std::vector<std::vector<float> > last_actions;
 
