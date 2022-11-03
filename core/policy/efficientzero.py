@@ -561,21 +561,31 @@ class EfficientZeroPolicy(Policy):
             # TODO(pu): for board games, when action_num is a list, adapt the Roots method
             # cpp mcts
             if self._cfg.mcts_ctree:
+                if to_play[0] is None:
+                    # we use to_play=0 means one_player_mode game
+                    to_play = [0 for i in range(active_collect_env_num)]
                 action_num = int(action_mask[0].sum())
-                roots = ctree.Roots(active_collect_env_num, action_num, self._cfg.num_simulations)
+                legal_actions = [
+                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
+                ]
+                roots = ctree.Roots(active_collect_env_num, self._cfg.num_simulations, legal_actions)
+                # noises = [
+                #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * action_num
+                #                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
+                # ]
                 noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * action_num
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 ]
-                roots.prepare(self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
+                roots.prepare(self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
-                self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots)
+                self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
             else:
                 # python mcts
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = ptree.Roots(active_collect_env_num, legal_actions, self._cfg.num_simulations)
+                roots = ptree.Roots(active_collect_env_num,  self._cfg.num_simulations, legal_actions)
                 # the only difference between collect and eval is the dirichlet noise
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -671,18 +681,23 @@ class EfficientZeroPolicy(Policy):
 
             if self._cfg.mcts_ctree:
                 # cpp mcts
-                # TODO(pu): for board games, when action_num is a list, adapt the Roots method
+                if to_play[0] is None:
+                    # we use to_play=0 means one_player_mode game
+                    to_play = [0 for i in range(active_eval_env_num)]
                 action_num = int(action_mask[0].sum())
-                roots = ctree.Roots(active_eval_env_num, action_num, self._cfg.num_simulations)
-                roots.prepare_no_noise(value_prefix_pool, policy_logits_pool)
+                legal_actions = [
+                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
+                ]
+                roots = ctree.Roots(active_eval_env_num, self._cfg.num_simulations, legal_actions)
+                roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
-                self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots)
+                self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
             else:
                 # python mcts
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ptree.Roots(active_eval_env_num, legal_actions, self._cfg.num_simulations)
+                roots = ptree.Roots(active_eval_env_num,  self._cfg.num_simulations, legal_actions)
 
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)

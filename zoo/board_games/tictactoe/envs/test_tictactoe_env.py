@@ -8,7 +8,7 @@ from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 class TestTicTacToeEnv:
 
     def test_two_player_mode(self):
-        cfg = EasyDict(battle_mode='two_player_mode', prob_random_agent=0)
+        cfg = EasyDict(battle_mode='two_player_mode', prob_random_agent=0, prob_expert_agent=0)
         env = TicTacToeEnv(cfg)
         env.reset()
         print('init board state: ')
@@ -40,7 +40,7 @@ class TestTicTacToeEnv:
                 break
 
     def test_one_player_mode(self):
-        cfg = EasyDict(battle_mode='one_player_mode', prob_random_agent=0)
+        cfg = EasyDict(battle_mode='one_player_mode', prob_random_agent=0, prob_expert_agent=0)
         env = TicTacToeEnv(cfg)
         env.reset()
         print('init board state: ')

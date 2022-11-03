@@ -1,8 +1,12 @@
+from pandas import to_pickle
 import pytest
 import torch
 from easydict import EasyDict
 import sys
-sys.path.append('/Users/yangzhenjie/code/jayyoung0802/LightZero/')
+# sys.path.append('/Users/yangzhenjie/code/jayyoung0802/LightZero/')
+sys.path.append('/Users/puyuan/code/LightZero')
+
+
 from core.rl_utils import inverse_scalar_transform
 
 
@@ -53,9 +57,9 @@ class MuZeroModelFake(torch.nn.Module):
 
 @pytest.mark.unittest
 def test_mcts():
-    import core.rl_utils.mcts.ptree as tree
+    import core.rl_utils.mcts.ctree.cytree as ctree
     import numpy as np
-    from core.rl_utils.mcts.mcts_ptree import EfficientZeroMCTSPtree as MCTS
+    from core.rl_utils.mcts.mcts_ctree import MCTSCtree as MCTS
 
     game_config = EasyDict(
         dict(
@@ -72,6 +76,7 @@ def test_mcts():
             dirichlet_alpha=0.3,
             exploration_fraction=1,
             device='cpu',
+            value_delta_max=0,
         )
     )
 
@@ -102,12 +107,15 @@ def test_mcts():
     )
     policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
-    roots = tree.Roots(env_nums, game_config.action_space_size, game_config.num_simulations)
+    legal_actions_list = [[i for i in range(game_config.action_space_size)] for _ in range(env_nums)] 
+    roots = ctree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
     noises = [
         np.random.dirichlet([game_config.root_dirichlet_alpha] * game_config.action_space_size
                             ).astype(np.float32).tolist() for _ in range(env_nums)
     ]
-    roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
-    MCTS(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state)
+    to_play_batch = [int(np.random.randint(1,2,1)) for _ in range(env_nums)]
+    roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
+
+    MCTS(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play_batch)
     roots_distributions = roots.get_distributions()
     assert np.array(roots_distributions).shape == (batch_size, action_space_size)
