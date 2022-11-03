@@ -16,9 +16,10 @@ from torch.nn import L1Loss
 # python mcts
 import core.rl_utils.mcts.ptree as ptree
 from core.rl_utils import EfficientZeroMCTSPtree as MCTSPtree
-from core.rl_utils import MCTSCtree
 # cpp mcts
-from core.rl_utils import cytree as ctree
+from core.rl_utils.mcts.ctree import cytree as ctree
+from core.rl_utils import EfficientZeroMCTSCtree as MCTS_ctree
+
 from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
 from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, DiscreteSupport
@@ -515,7 +516,7 @@ class EfficientZeroPolicy(Policy):
         self._collect_model = self._learn_model
         self._collect_model.reset()
         if self._cfg.mcts_ctree:
-            self._mcts_collect = MCTSCtree(self._cfg)
+            self._mcts_collect = MCTS_ctree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
 
@@ -640,7 +641,7 @@ class EfficientZeroPolicy(Policy):
 
         self._eval_model.reset()
         if self._cfg.mcts_ctree:
-            self._mcts_eval = MCTSCtree(self._cfg)
+            self._mcts_eval = MCTS_ctree(self._cfg)
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 

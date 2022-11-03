@@ -61,7 +61,7 @@ atari_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        model_path='/Users/puyuan/code/LightZero/data_ez_ctree/pc_mcts/pong_muzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883/ckpt/ckpt_best.pth.tar',
+        model_path=None,
         env_name='PongNoFrameskip-v4',
         # env_name='BreakoutNoFrameskip-v4',
         # Whether to use cuda for network.

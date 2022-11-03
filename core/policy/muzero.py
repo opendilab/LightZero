@@ -14,11 +14,12 @@ from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
 
 # python mcts
-import core.rl_utils.mcts.ptree as ptree
+import core.rl_utils.mcts.ptree_muzero as ptree
 from core.rl_utils import MuZeroMCTSPtree as MCTSPtree
-from core.rl_utils import MCTSCtree
 # cpp mcts
-from core.rl_utils import cytree as ctree
+from core.rl_utils.mcts.ctree_muzero import cytree as ctree
+from core.rl_utils import MuZeroMCTSCtree as MCTSCtree
+
 from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
 from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, DiscreteSupport
@@ -121,7 +122,6 @@ class MuZeroPolicy(Policy):
             The user can define and use customized network model but must obey the same inferface definition indicated \
             by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
         """
-        # return 'MuZeroNet', ['ding.model.template.muzero.muzero_model']
         return 'MuZeroNet', ['core.model.muzero.muzero_model']
 
     def _init_learn(self) -> None:
@@ -243,10 +243,10 @@ class MuZeroPolicy(Policy):
 
         # transform targets to categorical representation
         transformed_target_value_prefix = scalar_transform(target_value_prefix, self._cfg.support_size)
-        target_value_prefix_phi = reward_phi(self.reward_support, transformed_target_value_prefix)
-
         transformed_target_value = scalar_transform(target_value, self._cfg.support_size)
-        target_value_phi = value_phi(self.value_support, transformed_target_value)
+        if self._cfg.categorical_distribution:
+            target_value_prefix_phi = reward_phi(self.reward_support, transformed_target_value_prefix)
+            target_value_phi = value_phi(self.value_support, transformed_target_value)
 
         network_output = self._learn_model.initial_inference(obs_batch)
 
@@ -257,14 +257,14 @@ class MuZeroPolicy(Policy):
         policy_logits = network_output.policy_logits  # {list: 2} {list:6}
 
         reward_hidden_state = to_device(reward_hidden_state, self._cfg.device)
-        scaled_value = inverse_scalar_transform(value, self._cfg.support_size)
+        scaled_value = inverse_scalar_transform(value, self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution)
 
         # TODO(pu)
         if not self._learn_model.training:
             # if not in training, obtain the scalars of the value/reward
             scaled_value = scaled_value.detach().cpu().numpy()
             scaled_value_prefix = inverse_scalar_transform(value_prefix,
-                                                           self._cfg.support_size).detach().cpu().numpy()
+                                                           self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution).detach().cpu().numpy()
             hidden_state = hidden_state.detach().cpu().numpy()
             reward_hidden_state = (
                 reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -286,8 +286,12 @@ class MuZeroPolicy(Policy):
         value_priority = value_priority.data.cpu().numpy() + self._cfg.prioritized_replay_eps
 
         # calculate loss for the first step
-        value_loss = modified_cross_entropy_loss(value, target_value_phi[:, 0])
         policy_loss = modified_cross_entropy_loss(policy_logits, target_policy[:, 0])
+        if self._cfg.categorical_distribution:
+            value_loss = modified_cross_entropy_loss(value, target_value_phi[:,0])
+        else:
+            value_loss = torch.nn.MSELoss(reduction='none')(value.squeeze(-1), transformed_target_value[:, 0])
+
         value_prefix_loss = torch.zeros(batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(batch_size, device=self._cfg.device)
 
@@ -309,9 +313,9 @@ class MuZeroPolicy(Policy):
             # TODO(pu)
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                value = inverse_scalar_transform(value, self._cfg.support_size).detach().cpu().numpy()
+                value = inverse_scalar_transform(value, self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution).detach().cpu().numpy()
                 value_prefix = inverse_scalar_transform(value_prefix,
-                                                        self._cfg.support_size).detach().cpu().numpy()
+                                                        self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution).detach().cpu().numpy()
                 hidden_state = hidden_state.detach().cpu().numpy()
                 reward_hidden_state = (
                     reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -340,10 +344,16 @@ class MuZeroPolicy(Policy):
 
             # the target policy, target_value_phi, target_value_prefix_phi is calculated in game buffer now
             policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
-            value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
-            value_prefix_loss += modified_cross_entropy_loss(
-                value_prefix, target_value_prefix_phi[:, step_i]
-            )
+            if self._cfg.categorical_distribution:
+                value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
+                value_prefix_loss += modified_cross_entropy_loss(
+                    value_prefix, target_value_prefix_phi[:, step_i]
+                )
+            else:
+                value_loss += torch.nn.MSELoss(reduction='none')(value.squeeze(-1), transformed_target_value[:, step_i + 1])
+                value_prefix_loss += torch.nn.MSELoss(reduction='none')(
+                    value_prefix.squeeze(-1), transformed_target_value_prefix[:, step_i]
+                )
 
             # Follow MuZero, set half gradient
             # hidden_state.register_hook(lambda grad: grad * 0.5)
@@ -358,11 +368,11 @@ class MuZeroPolicy(Policy):
                 )
 
             if self._cfg.vis_result:
-                scaled_value_prefixs = inverse_scalar_transform(value_prefix.detach(), self._cfg.support_size)
+                scaled_value_prefixs = inverse_scalar_transform(value_prefix.detach(), self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution)
                 scaled_value_prefixs_cpu = scaled_value_prefixs.detach().cpu()
 
                 predicted_values = torch.cat(
-                    (predicted_values, inverse_scalar_transform(value, self._cfg.support_size).detach().cpu())
+                    (predicted_values, inverse_scalar_transform(value, self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution).detach().cpu())
                 )
                 predicted_value_prefixs.append(scaled_value_prefixs_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
@@ -458,14 +468,23 @@ class MuZeroPolicy(Policy):
                     predicted_value_prefixs[value_prefix_indices_0], target_value_prefix_base[value_prefix_indices_0]
                 )
 
-            td_data = (
-                value_priority, target_value_prefix.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
-                transformed_target_value_prefix.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
-                target_value_prefix_phi.detach().cpu().numpy(), target_value_phi.detach().cpu().numpy(),
-                predicted_value_prefixs.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
-                target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), state_lst, other_loss,
-                other_log, other_dist
-            )
+            if self._cfg.categorical_distribution:
+                td_data = (
+                    value_priority, target_value_prefix.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
+                    transformed_target_value_prefix.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
+                    target_value_prefix_phi.detach().cpu().numpy(), target_value_phi.detach().cpu().numpy(),
+                    predicted_value_prefixs.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
+                    target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), state_lst, other_loss,
+                    other_log, other_dist
+                )
+            else:
+                td_data = (
+                    value_priority, target_value_prefix.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
+                    transformed_target_value_prefix.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
+                    predicted_value_prefixs.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
+                    target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), state_lst, other_loss,
+                    other_log, other_dist
+                )
             priority_data = (weights, indices)
         else:
             td_data, priority_data = None, None
@@ -533,7 +552,7 @@ class MuZeroPolicy(Policy):
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
                 pred_values_pool = inverse_scalar_transform(pred_values_pool,
-                                                            self._cfg.support_size).detach().cpu().numpy()
+                                                            self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution).detach().cpu().numpy()
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 reward_hidden_roots = (
                     reward_hidden_roots[0].detach().cpu().numpy(), reward_hidden_roots[1].detach().cpu().numpy()
@@ -543,21 +562,31 @@ class MuZeroPolicy(Policy):
             # TODO(pu): for board games, when action_num is a list, adapt the Roots method
             # cpp mcts
             if self._cfg.mcts_ctree:
+                if to_play[0] is None:
+                    # we use to_play=0 means one_player_mode game
+                    to_play = [0 for i in range(active_collect_env_num)]
                 action_num = int(action_mask[0].sum())
-                roots = ctree.Roots(active_collect_env_num, action_num, self._cfg.num_simulations)
+                legal_actions = [
+                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
+                ]
+                roots = ctree.Roots(active_collect_env_num, self._cfg.num_simulations, legal_actions)
+                # noises = [
+                #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * action_num
+                #                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
+                # ]
                 noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * action_num
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 ]
-                roots.prepare(self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
+                roots.prepare(self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
-                self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots)
+                self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
             else:
                 # python mcts
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = ptree.Roots(active_collect_env_num, legal_actions, self._cfg.num_simulations)
+                roots = ptree.Roots(active_collect_env_num,  self._cfg.num_simulations, legal_actions)
                 # the only difference between collect and eval is the dirichlet noise
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -643,7 +672,7 @@ class MuZeroPolicy(Policy):
             # TODO(pu)
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                pred_values_pool = inverse_scalar_transform(pred_values_pool, self._cfg.support_size
+                pred_values_pool = inverse_scalar_transform(pred_values_pool, self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution
                                                             ).detach().cpu().numpy()  # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 reward_hidden_roots = (
@@ -653,18 +682,23 @@ class MuZeroPolicy(Policy):
 
             if self._cfg.mcts_ctree:
                 # cpp mcts
-                # TODO(pu): for board games, when action_num is a list, adapt the Roots method
+                if to_play[0] is None:
+                    # we use to_play=0 means one_player_mode game
+                    to_play = [0 for i in range(active_eval_env_num)]
                 action_num = int(action_mask[0].sum())
-                roots = ctree.Roots(active_eval_env_num, action_num, self._cfg.num_simulations)
-                roots.prepare_no_noise(value_prefix_pool, policy_logits_pool)
+                legal_actions = [
+                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
+                ]
+                roots = ctree.Roots(active_eval_env_num, self._cfg.num_simulations, legal_actions)
+                roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
-                self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots)
+                self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
             else:
                 # python mcts
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ptree.Roots(active_eval_env_num, legal_actions, self._cfg.num_simulations)
+                roots = ptree.Roots(active_eval_env_num,  self._cfg.num_simulations, legal_actions)
 
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)

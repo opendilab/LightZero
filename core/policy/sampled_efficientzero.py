@@ -15,11 +15,11 @@ from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
 
 # python mcts
-import core.rl_utils.mcts.sampled_ptree as ptree
+import core.rl_utils.mcts.ptree_sampled_efficientzero as ptree
 from core.rl_utils import SampledEfficientZeroMCTSPtree as MCTSPtree
 from core.rl_utils import MCTSCtree
 # cpp mcts
-import core.rl_utils.mcts.sampled_ctree.cytree as ctree
+import core.rl_utils.mcts.ctree_sampled_efficientzero.cytree as ctree
 from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
 from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
@@ -705,7 +705,7 @@ class SampledEfficientZeroPolicy(Policy):
                     child_actions = np.array([action.value for action in roots_sampled_actions[i]])
                 except Exception as error:
                     # print(error)
-                    # print('sampled_ctree roots.get_sampled_actions() return list')
+                    # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                     child_actions = np.array([action for action in roots_sampled_actions[i]])
 
                 # select the argmax, not sampling
@@ -723,7 +723,7 @@ class SampledEfficientZeroPolicy(Policy):
                         action = roots_sampled_actions[i][action].value
                     except Exception as error:
                         # print(error)
-                        # print('sampled_ctree roots.get_sampled_actions() return list')
+                        # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                         action = np.array(roots_sampled_actions[i][action])
 
                 output[env_id] = {

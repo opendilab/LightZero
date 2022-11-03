@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from easydict import EasyDict
 
-from .sampled_ctree import cytree as tree
+from .ctree_sampled_efficientzero import cytree as tree
 from ..scaling_transform import inverse_scalar_transform
 
 

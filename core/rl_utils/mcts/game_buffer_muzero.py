@@ -16,11 +16,13 @@ from ding.torch_utils.data_helper import to_ndarray
 from ding.utils import BUFFER_REGISTRY
 
 # python mcts
-import core.rl_utils.mcts.ptree as ptree
+import core.rl_utils.mcts.ptree_muzero as ptree
+from .mcts_ptree import MuZeroMCTSPtree as MCTSPtree
+
 # cpp mcts
-from .ctree import cytree as ctree
-from .mcts_ctree import EfficientZeroMCTSCtree as MCTS_ctree
-from .mcts_ptree import EfficientZeroMCTSPtree as MCTS_ptree
+from core.rl_utils.mcts.ctree_muzero import cytree as ctree
+from .mcts_ctree import MuZeroMCTSCtree as MCTSCtree
+
 from .utils import prepare_observation_lst, concat_output, concat_output_value
 from ..scaling_transform import inverse_scalar_transform
 
@@ -32,8 +34,8 @@ class BufferedData:
     meta: dict
 
 
-@BUFFER_REGISTRY.register('game')
-class GameBuffer(Buffer):
+@BUFFER_REGISTRY.register('muzero_game_buffer')
+class MuZeroGameBuffer(Buffer):
     """
     Overview:
         The specific game buffer for MuZero-based policy.
@@ -717,7 +719,7 @@ class GameBuffer(Buffer):
                         to_play
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ctree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                    MCTSCtree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 else:
                     """
                     python mcts
@@ -746,7 +748,7 @@ class GameBuffer(Buffer):
                             to_play=None
                         )
                         # do MCTS for a new policy with the recent target model
-                        MCTS_ptree(self.config).search(
+                        MCTSPtree(self.config).search(
                             roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=None
                         )
                     else:
@@ -758,7 +760,7 @@ class GameBuffer(Buffer):
                             to_play=to_play
                         )
                         # do MCTS for a new policy with the recent target model
-                        MCTS_ptree(self.config).search(
+                        MCTSPtree(self.config).search(
                             roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play
                         )
 
@@ -951,7 +953,7 @@ class GameBuffer(Buffer):
                     to_play
                 )
                 # do MCTS for a new policy with the recent target model
-                MCTS_ctree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                MCTSCtree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 # TODO(pu)
                 # roots_legal_actions_list = roots.legal_actions_list
                 roots_legal_actions_list = legal_actions
@@ -981,7 +983,7 @@ class GameBuffer(Buffer):
                         to_play=None
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ptree(self.config).search(
+                    MCTSPtree(self.config).search(
                         roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=None
                     )
                 else:
@@ -993,7 +995,7 @@ class GameBuffer(Buffer):
                         to_play=to_play
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ptree(self.config).search(
+                    MCTSPtree(self.config).search(
                         roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play
                     )
                 roots_legal_actions_list = roots.legal_actions_list
