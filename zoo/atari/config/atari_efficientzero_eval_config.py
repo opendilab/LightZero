@@ -61,7 +61,8 @@ atari_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        model_path=None,
+        # model_path=None,
+        model_path='/Users/puyuan/code/LightZero/data_ez_ctree/pc_mcts/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883/ckpt/ckpt_best.pth.tar',
         env_name='PongNoFrameskip-v4',
         # env_name='BreakoutNoFrameskip-v4',
         # Whether to use cuda for network.
@@ -294,5 +295,5 @@ atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
 create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e5))
+    from core.entry import serial_pipeline_efficientzero_eval
+    serial_pipeline_efficientzero_eval([main_config, create_config], seed=0, max_env_step=int(5e5))

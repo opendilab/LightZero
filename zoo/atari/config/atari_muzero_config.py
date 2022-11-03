@@ -31,9 +31,9 @@ evaluator_env_num = 3
 # n_episode = 1
 # evaluator_env_num = 1
 
-atari_efficientzero_config = dict(
-    # exp_name='data_ez_ctree/breakout_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub883_lr0.2_ns50_ftv025_upc1000_urv-false_cd-true',
+atari_muzero_config = dict(
+    # exp_name='data_ez_ctree/breakout_muzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
+    exp_name='data_ez_ctree/pong_muzero_seed0_sub883_lr0.2_ns50_ftv025_upc1000_urv-false_cd-true',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -61,7 +61,7 @@ atari_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        model_path=None,
+        model_path='/Users/puyuan/code/LightZero/data_ez_ctree/pc_mcts/pong_muzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883/ckpt/ckpt_best.pth.tar',
         env_name='PongNoFrameskip-v4',
         # env_name='BreakoutNoFrameskip-v4',
         # Whether to use cuda for network.
@@ -270,10 +270,10 @@ atari_efficientzero_config = dict(
         ######################################
     ),
 )
-atari_efficientzero_config = EasyDict(atari_efficientzero_config)
-main_config = atari_efficientzero_config
+atari_muzero_config = EasyDict(atari_muzero_config)
+main_config = atari_muzero_config
 
-atari_efficientzero_create_config = dict(
+atari_muzero_create_config = dict(
     env=dict(
         type='atari_lightzero',
         import_names=['zoo.atari.envs.atari_lightzero_env'],
@@ -281,18 +281,18 @@ atari_efficientzero_create_config = dict(
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='efficientzero',
-        import_names=['core.policy.efficientzero'],
+        type='muzero',
+        import_names=['core.policy.muzero'],
     ),
     collector=dict(
-        type='episode_efficientzero',
+        type='episode_muzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.efficientzero_collector'],
+        import_names=['core.worker.collector.muzero_collector'],
     )
 )
-atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
-create_config = atari_efficientzero_create_config
+atari_muzero_create_config = EasyDict(atari_muzero_create_config)
+create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e5))
+    from core.entry import serial_pipeline_muzero
+    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(1e6))

@@ -13,6 +13,7 @@
 *.mov
 *.pkl
 data_*
+*.so
 
 pkg/
 src/
