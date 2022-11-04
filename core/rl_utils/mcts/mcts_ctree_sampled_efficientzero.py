@@ -11,7 +11,7 @@ from .ctree_sampled_efficientzero import cytree as tree
 from ..scaling_transform import inverse_scalar_transform
 
 
-class MCTSSampledCtree(object):
+class SampledEfficientZeroMCTSCtree(object):
     config = dict(
         device='cpu',
         pb_c_base=19652,

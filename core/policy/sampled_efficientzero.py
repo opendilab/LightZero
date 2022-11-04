@@ -17,9 +17,10 @@ from torch.nn import L1Loss
 # python mcts
 import core.rl_utils.mcts.ptree_sampled_efficientzero as ptree
 from core.rl_utils import SampledEfficientZeroMCTSPtree as MCTSPtree
-from core.rl_utils import MCTSCtree
 # cpp mcts
 import core.rl_utils.mcts.ctree_sampled_efficientzero.cytree as ctree
+from core.rl_utils import SampledEfficientZeroMCTSCtree as MCTSCtree
+
 from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
 from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \

@@ -23,7 +23,8 @@ n_episode = 8
 evaluator_env_num = 5
 
 lunarlander_cont_disc_sampled_efficientzero_config = dict(
-    exp_name='data_ez_ctree/lunarlander_cont_sampled_efficientzero_seed0_sub885_urv-false_ns50_mlr_ghl50',
+    exp_name='data_ez_ctree/lunarlander_cont_sampled_efficientzero_seed0_sub885_urv-false_ns50_k20_mlr_ghl50',
+    # exp_name='data_ez_ptree/lunarlander_cont_sampled_efficientzero_seed0_sub885_urv-false_ns50_k20_mlr_ghl50',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

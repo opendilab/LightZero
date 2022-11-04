@@ -63,7 +63,7 @@ class MuZeroModelFake(torch.nn.Module):
 def test_mcts():
     import core.rl_utils.mcts.ctree_sampled_efficientzero.cytree as ctree
     import numpy as np
-    from core.rl_utils.mcts.mcts_sampled_ctree import MCTSSampledCtree as MCTS
+    from core.rl_utils.mcts.mcts_ctree_sampled_efficientzero import MCTSSampledCtree as MCTS
 
     game_config = EasyDict(
         dict(

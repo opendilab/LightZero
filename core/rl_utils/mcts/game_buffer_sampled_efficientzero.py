@@ -19,8 +19,8 @@ from ding.utils import BUFFER_REGISTRY
 import core.rl_utils.mcts.ptree_sampled_efficientzero as ptree
 # cpp mcts
 from .ctree_sampled_efficientzero import cytree as ctree
-from .mcts_sampled_ctree import MCTSSampledCtree as MCTSCtree
-from .sampled_mcts_ptree import SampledEfficientZeroMCTSPtree as MCTS_ptree
+from .mcts_ctree_sampled_efficientzero import SampledEfficientZeroMCTSCtree as MCTSCtree
+from .mcts_ptree_sampled_efficientzero import SampledEfficientZeroMCTSPtree as MCTS_ptree
 from .utils import prepare_observation_lst, concat_output, concat_output_value
 from ..scaling_transform import inverse_scalar_transform
 
