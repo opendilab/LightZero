@@ -86,8 +86,8 @@ lunarlander_disc_efficientzero_config = dict(
             update_per_collect=int(500),
             batch_size=256,
 
-            # learning_rate=0.005,  # fixed lr
-            learning_rate=0.2,  # fixed lr
+            # learning_rate=0.002,  # fixed lr
+            learning_rate=0.2,  # lr_manually
             # Frequency of target network update.
             target_update_freq=400,
         ),
@@ -111,11 +111,7 @@ lunarlander_disc_efficientzero_config = dict(
         ######################################
         env_type='no_board_games',
         device=device,
-        mcts_ctree=False,
-        # mcts_ctree=True,
-        # TODO: for board_games, mcts_ctree now only support env_num=1, because in cpp MCTS root node,
-        #  we must specify the one same action mask,
-        #  when env_num>1, the action mask for different env may be different.
+        mcts_ctree=True,
         battle_mode='one_player_mode',
         # game_history_length=200,
         game_history_length=50,

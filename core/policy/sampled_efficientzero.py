@@ -842,7 +842,12 @@ class SampledEfficientZeroPolicy(Policy):
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_distributions[i], roots_values[i]
-                child_actions = np.array([action.value for action in roots_sampled_actions[i]])
+                try:
+                    child_actions = np.array([action.value for action in roots_sampled_actions[i]])
+                except Exception as error:
+                    # print(error)
+                    # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                    child_actions = np.array([action for action in roots_sampled_actions[i]])
 
                 # select the argmax, not sampling
                 action, visit_count_distribution_entropy = select_action(

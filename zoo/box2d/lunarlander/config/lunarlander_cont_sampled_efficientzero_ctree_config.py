@@ -85,7 +85,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
             update_per_collect=int(500),
             batch_size=256,
 
-            learning_rate=0.0003,  # fixed lr
+            # learning_rate=0.002,  # fixed lr
+            learning_rate=0.2,  # lr_manually
             # Frequency of target network update.
             target_update_freq=400,
         ),
@@ -170,8 +171,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         revisit_policy_search_rate=0.99,
 
         # TODO(pu): why not use adam?
-        # lr_manually=True,
-        lr_manually=False,
+        lr_manually=True,
+        # lr_manually=False,
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority

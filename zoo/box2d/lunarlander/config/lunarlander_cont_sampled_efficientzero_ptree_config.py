@@ -85,8 +85,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
             update_per_collect=int(500),
             batch_size=256,
 
-            learning_rate=0.2,  # manually lr
-            # learning_rate=0.0003,  # fixed lr
+            # learning_rate=0.002,  # fixed lr
+            learning_rate=0.2,  # lr_manually
             # Frequency of target network update.
             target_update_freq=400,
         ),
