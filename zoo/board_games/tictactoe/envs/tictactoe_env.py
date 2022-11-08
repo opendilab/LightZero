@@ -56,7 +56,7 @@ class TicTacToeEnv(BaseGameEnv):
         """
         return -1 if self.current_player == 1 else 1
 
-    def reset(self, start_player=0):
+    def reset(self, start_player=0, init_state=None):
         self._observation_space = gym.spaces.Box(
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.uint8
         )
@@ -64,7 +64,10 @@ class TicTacToeEnv(BaseGameEnv):
         self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1, ), dtype=np.float32)
 
         self._current_player = self.players[start_player]
-        self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
+        if init_state is not None:
+            self.board = np.array(init_state, dtype="int32")
+        else:
+            self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
         if self.battle_mode == 'two_player_mode' or self.battle_mode == 'eval_mode':
@@ -328,6 +331,52 @@ class TicTacToeEnv(BaseGameEnv):
         row = action_number // self.board_size + 1
         col = action_number % self.board_size + 1
         return f"Play row {row}, column {col}"
+    
+    def is_game_over(self):
+        """
+        Overview:
+            To judge game whether over, and get reward
+        Returns:
+            Returns Bool, Int, Bool means game whether over, Int means last player's reward
+        -------
+        """
+        # Check whether the game is ended or not and give the winner
+        # print('next_to_move={}'.format(self.current_player))
+        have_winner, winner = self.have_winner()
+        # print('winner={}'.format(winner))
+        if have_winner:
+            if winner != self.current_player:
+                return True, 1
+            else:
+                return True, -1
+        elif len(self.legal_actions) == 0:
+            # the agent don't have legal_actions to move, so episode is done
+            # winner=-1 indicates draw
+            return True, 0
+        else:
+            # episode is not done
+            return False, 0
+
+    def simulate_move(self, action):
+        """
+        Overview:
+            simulate action and get next_simulator_env
+        Returns:
+            Returns TicTacToeEnv
+        -------
+        """
+        if action not in self.legal_actions:
+            raise ValueError("move {0} on board {1} is not legal". format(action, self.board))
+        new_board = np.copy(self.board)
+        row, col = self.action_to_coord(action)
+        new_board[row, col] = self.current_player
+        if self.current_player == 1:
+            start_player = 2
+        else:
+            start_player = 1
+        next_simulator_env = copy.deepcopy(self)
+        next_simulator_env.reset(start_player-1, init_state=new_board) # index
+        return next_simulator_env
 
     @property
     def observation_space(self) -> gym.spaces.Space:
