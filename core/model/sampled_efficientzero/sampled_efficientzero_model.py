@@ -236,6 +236,7 @@ class DynamicsNetwork(nn.Module):
         self.activation = nn.ReLU(inplace=True)
 
     def forward(self, x, reward_hidden_state):
+        # take the state encoding
         state = x[:, :-self.action_space_dim, :, :]
         x = self.conv(x)
         x = self.bn(x)

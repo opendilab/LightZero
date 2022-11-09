@@ -1,7 +1,7 @@
 import sys
-sys.path.append('/Users/puyuan/code/LightZero')
+# sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
-# sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 import torch
@@ -20,10 +20,10 @@ else:
 
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 5
+evaluator_env_num = 3
 
 lunarlander_cont_disc_sampled_efficientzero_config = dict(
-    exp_name='data_ez_ctree/lunarlander_cont_sampled_efficientzero_seed0_sub885_urv-false_ns50_k20_mlr_ghl50',
+    exp_name='data_ez_ctree/lunarlander_cont_sampled_efficientzero_seed0_sub883_cliprew-false_ns50_k20_mlr_ghl200_upc100',
     # exp_name='data_ez_ptree/lunarlander_cont_sampled_efficientzero_seed0_sub885_urv-false_ns50_k20_mlr_ghl50',
     env=dict(
         collector_env_num=collector_env_num,
@@ -83,7 +83,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
             # batch_size=4,
 
             # episode_length=200, 200*8=1600
-            update_per_collect=int(500),
+            # update_per_collect=int(500),
+            update_per_collect=int(100),
             batch_size=256,
 
             # learning_rate=0.002,  # fixed lr
@@ -114,8 +115,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         # mcts_ctree=False,
         mcts_ctree=True,
         battle_mode='one_player_mode',
-        # game_history_length=200,
-        game_history_length=50,
+        game_history_length=200,
+        # game_history_length=50,
         action_space_size=2,  # 4**2
         continuous_action_space=True,
         num_of_sampled_actions=20,
@@ -157,8 +158,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         # num_unroll_steps=3,
         # lstm_horizon_len=3,
 
-        collector_env_num=8,
-        evaluator_env_num=5,
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
         num_simulations=50,
         # TODO
         batch_size=256,
@@ -279,4 +280,4 @@ create_config = lunarlander_cont_disc_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_sampled_efficientzero
-    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e5))
+    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e6))

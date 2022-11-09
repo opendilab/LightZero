@@ -858,7 +858,12 @@ class SampledEfficientZeroPolicy(Policy):
                 if action_mask[0] is not None:
                     action = np.where(action_mask[i] == 1.0)[0][action]
                 else:
-                    action = roots_sampled_actions[i][action].value
+                    try:
+                        action = roots_sampled_actions[i][action].value
+                    except Exception as error:
+                        # print(error)
+                        # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                        action = np.array(roots_sampled_actions[i][action])
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,

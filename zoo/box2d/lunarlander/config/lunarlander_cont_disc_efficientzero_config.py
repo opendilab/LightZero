@@ -1,7 +1,7 @@
 import sys
-sys.path.append('/Users/puyuan/code/LightZero')
+# sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
-# sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 import torch
@@ -24,7 +24,7 @@ n_episode = 8
 evaluator_env_num = 5
 
 lunarlander_cont_disc_efficientzero_config = dict(
-    exp_name='data_ez_ctree/lunarlander_cont_disc_efficientzero_seed0_sub885_ns50_cliprew-false_mlr_ghl50',
+    exp_name='data_ez_ctree/lunarlander_cont_disc_efficientzero_seed0_sub885_cliprew-false_mlr_ghl200_ns133_upc100',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -79,7 +79,9 @@ lunarlander_cont_disc_efficientzero_config = dict(
             # batch_size=4,
 
             # episode_length=200, 200*8=1600
-            update_per_collect=int(500),
+            # update_per_collect=int(500),
+            update_per_collect=int(100),
+
             batch_size=256,
 
             # learning_rate=0.002,  # fixed lr
@@ -110,8 +112,8 @@ lunarlander_cont_disc_efficientzero_config = dict(
         device=device,
         mcts_ctree=True,
         battle_mode='one_player_mode',
-        # game_history_length=200,
-        game_history_length=50,
+        game_history_length=200,
+        # game_history_length=50,
 
 
         image_based=False,
@@ -158,9 +160,9 @@ lunarlander_cont_disc_efficientzero_config = dict(
 
         collector_env_num=8,
         evaluator_env_num=5,
-        num_simulations=50,
         # TODO
         # num_simulations=100,
+        num_simulations=133,
         batch_size=256,
         total_transitions=int(1e5),
         lstm_hidden_size=512,

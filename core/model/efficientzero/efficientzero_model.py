@@ -233,6 +233,7 @@ class DynamicsNetwork(nn.Module):
         self.activation = nn.ReLU(inplace=True)
 
     def forward(self, x, reward_hidden_state):
+        # take the state encoding,  x[:, -1, :, :] is action encoding
         state = x[:, :-1, :, :]
         x = self.conv(x)
         x = self.bn(x)
@@ -250,7 +251,10 @@ class DynamicsNetwork(nn.Module):
 
         # RuntimeError: view size is not compatible with input tensor size and stride (at least one dimension spans
         # across two contiguous subspaces)
-        x = x.contiguous().view(-1, self.block_output_size_reward).unsqueeze(0)
+        # x = x.contiguous().view(-1, self.block_output_size_reward).unsqueeze(0)
+        # reference: https://zhuanlan.zhihu.com/p/436892343
+        x = x.reshape(-1, self.block_output_size_reward).unsqueeze(0)
+
         value_prefix, reward_hidden_state = self.lstm(x, reward_hidden_state)
         value_prefix = value_prefix.squeeze(0)
         value_prefix = self.bn_value_prefix(value_prefix)

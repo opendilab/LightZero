@@ -1,7 +1,7 @@
 import sys
-sys.path.append('/Users/puyuan/code/LightZero')
+# sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
-# sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 import torch
@@ -24,7 +24,8 @@ n_episode = 8
 evaluator_env_num = 5
 
 lunarlander_disc_efficientzero_config = dict(
-    exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_cliprew-false_mlr_ghl50',
+    # exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_cliprew-false_mlr_ghl200',
+    exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_cliprew-true_mlr_ghl200_ns33_upc100',
 
     env=dict(
         collector_env_num=collector_env_num,
@@ -83,13 +84,15 @@ lunarlander_disc_efficientzero_config = dict(
             # batch_size=4,
 
             # episode_length=200, 200*8=1600
-            update_per_collect=int(500),
+            # update_per_collect=int(500),
+            update_per_collect=int(100),
+            target_update_freq=400,
+
             batch_size=256,
 
             # learning_rate=0.002,  # fixed lr
             learning_rate=0.2,  # lr_manually
-            # Frequency of target network update.
-            target_update_freq=400,
+
         ),
         # collect_mode config
         collect=dict(
@@ -113,15 +116,15 @@ lunarlander_disc_efficientzero_config = dict(
         device=device,
         mcts_ctree=True,
         battle_mode='one_player_mode',
-        # game_history_length=200,
-        game_history_length=50,
+        game_history_length=200,
+        # game_history_length=50,
 
         image_based=False,
         cvt_string=False,
 
-        # clip_reward=True,
+        clip_reward=True,
         # TODO(pu)
-        clip_reward=False,
+        # clip_reward=False,
 
         game_wrapper=True,
         action_space_size=4,
@@ -160,7 +163,8 @@ lunarlander_disc_efficientzero_config = dict(
 
         collector_env_num=8,
         evaluator_env_num=5,
-        num_simulations=50,
+        # num_simulations=50,  # action_space_size=6
+        num_simulations=33,   # action_space_size=4
         batch_size=256,
         total_transitions=int(1e5),
         lstm_hidden_size=512,
@@ -279,4 +283,4 @@ create_config = lunarlander_disc_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e6))
