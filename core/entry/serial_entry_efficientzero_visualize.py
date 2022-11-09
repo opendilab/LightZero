@@ -19,7 +19,7 @@ from core.worker import EfficientZeroEvaluator as BaseSerialEvaluator
 
 
 # @profile
-def serial_pipeline_efficientzero_eval(
+def serial_pipeline_efficientzero_visualize(
         input_cfg: Union[str, Tuple[dict, dict]],
         seed: int = 0,
         env_setting: Optional[List[Any]] = None,
@@ -29,7 +29,7 @@ def serial_pipeline_efficientzero_eval(
 ) -> 'Policy':  # noqa
     """
     Overview:
-        Serial pipeline entry for MuZero and its variants, such as EfficientZero.
+        Serial pipeline entry for EfficientZero and its variants, such as EfficientZero.
     Arguments:
         - input_cfg (:obj:`Union[str, Tuple[dict, dict]]`): Config in dict type. \
             ``str`` type means config file path. \
@@ -96,14 +96,15 @@ def serial_pipeline_efficientzero_eval(
         game_config=game_config
     )
 
-    # commander = BaseSerialCommander(
-    #     cfg.policy.other.commander, learner, collector, evaluator, replay_buffer, policy.command_mode
-    # )
     # ==========
     # Main loop
     # ==========
     # Learner's before_run hook.
     learner.call_hook('before_run')
+
+    # stop, reward = evaluator.eval(
+    #     learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
+    # )
 
     while True:
         collect_kwargs = {}
@@ -116,22 +117,63 @@ def serial_pipeline_efficientzero_eval(
             ]
         )
 
-        # TODO(pu): eval trained model
-        returns = []
-        test_episodes = 1
-        for i in range(test_episodes):
-            stop, reward = evaluator.eval(
-                learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-            )
-            returns.append(reward)
-        print(returns)
-        returns = np.array(returns)
-        print(f'win rate: {len(np.where(returns == 1.)[0])/ test_episodes}, draw rate: {len(np.where(returns == 0.)[0])/test_episodes}, lose rate: {len(np.where(returns == -1.)[0])/ test_episodes}')
+        # Evaluate policy performance
+        # if evaluator.should_eval(learner.train_iter):
+        #     stop, reward = evaluator.eval(
+        #         learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
+        #     )
+        #     if stop:
+        #         break
+
+        # Collect data by default config n_sample/n_episode
+        new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         break
 
-        # TODO(pu): test muzero_evaluator
-        # for i in range(5):
-        #     stop, reward = evaluator.eval(
-        #             learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-        #         )
 
+        # # TODO(pu): save returned data collected by the collector
+        # replay_buffer.push_games(new_data[0], new_data[1])
+        #
+        # # remove the oldest data if the replay buffer is full.
+        # replay_buffer.remove_oldest_data_to_fit()
+        #
+        # # Learn policy from collected data
+        # for i in range(cfg.policy.learn.update_per_collect):
+        #     # Learner will train ``update_per_collect`` times in one iteration.
+        #     if replay_buffer.get_num_of_transitions() > learner.policy.get_attribute('batch_size'):
+        #         train_data = replay_buffer.sample_train_data(learner.policy.get_attribute('batch_size'), policy)
+        #     else:
+        #         logging.warning(
+        #                 f'The data in replay_buffer is not sufficient to sample a minibatch: '
+        #                 f'batch_size: {replay_buffer.get_batch_size()},'
+        #                 f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
+        #                 f'num of game historys: {replay_buffer.get_num_of_game_histories()}, '
+        #                 f'number of transitions: {replay_buffer.get_num_of_transitions()}, '
+        #                 f'continue to collect now ....'
+        #             )
+        #         break
+        #
+        #     learner.train(train_data, collector.envstep)
+        #
+        #     train_steps = learner.train_iter * cfg.policy.learn.update_per_collect
+        #
+        #     # if game_config.lr_manually:
+        #     #     # learning rate decay manually like EfficientZero paper
+        #     #     if train_steps  > 1e5 and train_steps  <= 2e5:
+        #     #         policy._optimizer.lr = 0.02
+        #     #     elif train_steps  > 2e5:
+        #     #         policy._optimizer.lr = 0.002
+        #     if game_config.lr_manually:
+        #         # learning rate decay manually like MuZero paper
+        #         if train_steps < 0.5 * game_config.max_training_steps:
+        #             policy._optimizer.lr = 0.2
+        #         elif train_steps < 0.75 * game_config.max_training_steps:
+        #             policy._optimizer.lr = 0.02
+        #         else:
+        #             policy._optimizer.lr = 0.002
+        #
+        # if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
+        #     break
+
+    # Learner's after_run hook.
+    learner.call_hook('after_run')
+    return policy

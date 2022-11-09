@@ -395,7 +395,7 @@ def batch_back_propagate(
 ) -> None:
     for i in range(results.num):
 
-        # expand the leaf node
+        ### expand the leaf node
         #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
         if to_play is None:
             # set to_play=0, because two_player mode to_play = {1,2}

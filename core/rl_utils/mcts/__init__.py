@@ -1,5 +1,7 @@
 from .mcts_ptree_sampled_efficientzero import SampledEfficientZeroMCTSPtree
 from .mcts_ptree import MuZeroMCTSPtree, EfficientZeroMCTSPtree
+from .mcts_ptree_visualize import EfficientZeroVisualizeMCTSPtree
+
 from .mcts_ctree import MuZeroMCTSCtree, EfficientZeroMCTSCtree
 from .mcts_ctree_sampled_efficientzero import SampledEfficientZeroMCTSCtree
 

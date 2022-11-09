@@ -3,5 +3,7 @@ from .serial_entry_efficientzero import serial_pipeline_efficientzero
 from .serial_entry_sampled_efficientzero import serial_pipeline_sampled_efficientzero
 
 from .serial_entry_efficientzero_eval import serial_pipeline_efficientzero_eval
+from .serial_entry_efficientzero_visualize import serial_pipeline_efficientzero_visualize
+
 
 from .serial_entry_efficientzero_expert_data import serial_pipeline_muzero_expert_data

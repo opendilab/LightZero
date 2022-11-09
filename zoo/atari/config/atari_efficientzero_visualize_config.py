@@ -22,18 +22,18 @@ representation_model = RepresentationNetwork(
     momentum=0.1,
 )
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
 
 # debug
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
 
 atari_efficientzero_config = dict(
     # exp_name='data_ez_ctree/breakout_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub883_lr0.2_ns50_ftv025_upc1000_urv-false_fix',
+    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub111_lr0.2_ns50_ftv025_upc1000_urv-false_fix',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -167,10 +167,12 @@ atari_efficientzero_config = dict(
         # num_unroll_steps=5,
         # lstm_horizon_len=5,
 
-        collector_env_num=8,
-        evaluator_env_num=3,
+        collector_env_num=1,
+        evaluator_env_num=1,
         # TODO(pu): how to set proper num_simulations automatically?
-        num_simulations=50,
+        # num_simulations=50,
+        num_simulations=5,
+
         batch_size=256,
         game_history_length=400,
         total_transitions=int(1e5),
@@ -282,8 +284,8 @@ atari_efficientzero_create_config = dict(
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='efficientzero',
-        import_names=['core.policy.efficientzero'],
+        type='efficientzero_visualize',
+        import_names=['core.policy.efficientzero_visualize'],
     ),
     collector=dict(
         type='episode_efficientzero',
@@ -295,5 +297,5 @@ atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
 create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero_eval
-    serial_pipeline_efficientzero_eval([main_config, create_config], seed=0, max_env_step=int(5e5))
+    from core.entry import serial_pipeline_efficientzero_visualize
+    serial_pipeline_efficientzero_visualize([main_config, create_config], seed=0, max_env_step=int(5e5))
