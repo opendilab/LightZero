@@ -21,6 +21,8 @@ class MCTSNode(ABC):
         self.state = state
         self.parent = parent
         self.children = []
+        self.parent_action = []
+        self.best_action = -1
 
     @property
     @abstractmethod
@@ -65,11 +67,11 @@ class MCTSNode(ABC):
             (c.q / c.n) + c_param * np.sqrt((2 * np.log(self.n) / c.n))
             for c in self.children
         ]
-        self.best_action_index = np.argmax(choices_weights)
+        self.best_action = self.parent_action[np.argmax(choices_weights)]
         return self.children[np.argmax(choices_weights)]
 
-    def rollout_policy(self, possible_moves):        
-        return possible_moves[np.random.randint(len(possible_moves))]
+    def rollout_policy(self, possible_actions):        
+        return possible_actions[np.random.randint(len(possible_actions))]
 
 
 class TwoPlayersMCTSNode(MCTSNode):
@@ -89,7 +91,7 @@ class TwoPlayersMCTSNode(MCTSNode):
     @property
     def q(self):
         print(self._results)
-        print(self.parent.state.current_player)
+        print('parent.current_player={}'.format(self.parent.state.current_player))
         if self.parent.state.current_player==1:
             wins = self._results[1]
             loses = self._results[-1]
@@ -97,6 +99,7 @@ class TwoPlayersMCTSNode(MCTSNode):
         if self.parent.state.current_player==2:
             wins = self._results[-1]
             loses = self._results[1]
+        print("wins={}, loses={}".format(wins, loses))
         return wins - loses
 
     @property
@@ -105,11 +108,12 @@ class TwoPlayersMCTSNode(MCTSNode):
 
     def expand(self):
         action = self.untried_actions.pop()
-        next_simulator_env = self.state.simulate_move(action)
+        next_simulator_env = self.state.simulate_action(action)
         child_node = TwoPlayersMCTSNode(
             next_simulator_env, parent=self
         )
         self.children.append(child_node)
+        self.parent_action.append(action)
         return child_node
 
     def is_terminal_node(self):
@@ -120,9 +124,9 @@ class TwoPlayersMCTSNode(MCTSNode):
         current_rollout_state = self.state
         print(current_rollout_state.board)
         while not current_rollout_state.is_game_over()[0]:
-            possible_moves = current_rollout_state.legal_actions
-            action = self.rollout_policy(possible_moves)
-            current_rollout_state = current_rollout_state.simulate_move(action)
+            possible_actions = current_rollout_state.legal_actions
+            action = self.rollout_policy(possible_actions)
+            current_rollout_state = current_rollout_state.simulate_action(action)
             print('\n')
             print(current_rollout_state.board)
         print('simulation end \n')
@@ -191,50 +195,18 @@ class MCTSSearchNode(object):
                 current_node = current_node.best_child()
         return current_node
 
+
+
 class MCTSBot: 
     def __init__(self, name, num_simulation=10000):
         self.name = name
         self.num_simulation = num_simulation
     
-    def get_actions(self, state, current_player, env_cfg):
+    def get_actions(self, state, player_index, env_cfg):
         simulator_env = TicTacToeEnv(EasyDict(env_cfg))
-        simulator_env.reset(start_player=current_player, init_state=state)
+        simulator_env.reset(start_player_index=player_index, init_state=state)
         legal_actions = simulator_env.legal_actions
         root = TwoPlayersMCTSNode(simulator_env)
         mcts = MCTSSearchNode(root)
         mcts.best_action(self.num_simulation)
-        return legal_actions[root.best_action_index]
-
-
-def play_tictactoe_two_player_mode():
-    cfg = dict(
-        prob_random_agent=0,
-        prob_expert_agent=0,
-        battle_mode='two_player_mode',
-    )
-    env = TicTacToeEnv(EasyDict(cfg))
-    env.reset()
-    state = env.board
-    player_a = MCTSBot('a', 10)  
-    player_b = MCTSBot('b', 10)
-
-    flag = 0  # A fist
-    print('#'*15)
-    print(state)
-    print('#'*15)
-    print('\n')
-    while not env.have_winner()[0]:
-        if flag == 0:
-            action = player_a.get_actions(state, current_player=flag, env_cfg=cfg)
-            flag = 1
-        else:
-            action = player_b.get_actions(state, current_player=flag, env_cfg=cfg)
-            flag = 0
-        env.step(action)
-        state = env.board
-        print('#'*15)
-        print(state)
-        print('#'*15)
-
-if __name__ == "__main__":
-    play_tictactoe_two_player_mode()
+        return root.best_action
