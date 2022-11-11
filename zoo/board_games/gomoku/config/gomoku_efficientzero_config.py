@@ -26,8 +26,10 @@ n_episode = 8
 evaluator_env_num = 5
 
 gomoku_efficientzero_config = dict(
-    exp_name='data_ez_ptree/gomoku_2pm_efficientzero_seed0_sub885',
-    # exp_name='data_ez_ptree/gomoku_1pm_efficientzero_seed0_sub885',
+    exp_name='data_ez_ctree/gomoku_bs6_1pm_efficientzero_seed0_sub885_ns50',
+    # exp_name='data_ez_ptree/gomoku_bs6_1pm_efficientzero_seed0_sub885_ns50',
+
+    # exp_name='data_ez_ptree/gomoku_2pm_efficientzero_seed0_sub885',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -39,11 +41,10 @@ gomoku_efficientzero_config = dict(
         board_size=board_size,  # default_size is 15
         # if battle_mode='two_player_mode',
         # automatically assign 'eval_mode' when eval, 'two_player_mode' when collect
-        battle_mode='two_player_mode',
-        # battle_mode='one_player_mode',
+        # battle_mode='two_player_mode',
+        battle_mode='one_player_mode',
         prob_random_agent=0.,
         manager=dict(shared_memory=False, ),
-
     ),
     policy=dict(
         # pretrained model
@@ -93,13 +94,14 @@ gomoku_efficientzero_config = dict(
 
             # one_player_mode, board_size=6, episode_length=6**2/2=18
             # n_episode=8,  update_per_collect=18*8=144
-            update_per_collect=int(board_size ** 2 / 2 * n_episode),
+            # update_per_collect=int(board_size ** 2 / 2 * n_episode),
+            update_per_collect=int(board_size ** 2 / 2 * n_episode // 2),
 
             # two_player_mode, board_size=6, episode_length=6**2=36
             # n_episode=8,  update_per_collect=36*8=268
             # update_per_collect=int(board_size ** 2 * n_episode),
 
-            learning_rate=0.0003,  # fixed lr
+            learning_rate=0.0003,  # use manually lr
             # Frequency of target network update.
             target_update_freq=400,
         ),
@@ -121,14 +123,12 @@ gomoku_efficientzero_config = dict(
         ######################################
         env_type='board_games',
         device=device,
-        # TODO: for board_games, mcts_ctree now only support env_num=1, because in cpp MCTS root node,
-        #  we must specify the one same action mask,
-        #  when env_num>1, the action mask for different env may be different.
-        mcts_ctree=False,
-        battle_mode='two_player_mode',
-        game_history_length=36,
-        # battle_mode='one_player_mode',
-        # game_history_length=18,
+        mcts_ctree=True,
+        # mcts_ctree=False,
+        # battle_mode='two_player_mode',
+        # game_history_length=36,
+        battle_mode='one_player_mode',
+        game_history_length=18,
         image_based=False,
         cvt_string=False,
         clip_reward=True,
@@ -177,8 +177,8 @@ gomoku_efficientzero_config = dict(
         revisit_policy_search_rate=0.99,
 
         # TODO(pu): why not use adam?
-        # lr_manually=True,
-        lr_manually=False,  # use fixed lr
+        lr_manually=True,  # use manually lr
+        # lr_manually=False,  # use fixed lr
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority
@@ -288,4 +288,4 @@ create_config = gomoku_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e6))

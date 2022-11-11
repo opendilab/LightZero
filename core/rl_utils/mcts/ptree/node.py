@@ -51,7 +51,7 @@ class Node:
         policy_values = torch.softmax(torch.tensor([policy_logits[a] for a in self.legal_actions]), dim=0).tolist()
         policy = {a: policy_values[i] for i, a in enumerate(self.legal_actions)}
         for action, p in policy.items():
-            self.children[action] = Node(p)
+            self.children[action] = Node(p, action_space_size=self.action_space_size)
 
     def add_exploration_noise(self, exploration_fraction: float, noises: List[float]):
         """
@@ -168,10 +168,14 @@ class Roots:
         self.roots = []
         for i in range(self.root_num):
             if isinstance(legal_actions_list, list):
-                self.roots.append(Node(0, legal_actions_list[i]))
+                self.action_space_size = len(legal_actions_list[i])
+
+                self.roots.append(Node(0, legal_actions_list[i], action_space_size=self.action_space_size))
             else:
                 # if legal_actions_list is int
-                self.roots.append(Node(0, np.arange(legal_actions_list)))
+                self.action_space_size = legal_actions_list
+
+                self.roots.append(Node(0, np.arange(legal_actions_list), action_space_size=self.action_space_size))
 
     def prepare(self, root_exploration_fraction, noises, value_prefixs, policies, to_play=None):
         for i in range(self.root_num):
