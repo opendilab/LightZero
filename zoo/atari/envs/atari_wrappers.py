@@ -85,12 +85,16 @@ def wrap_lightzero(config, warp_frame=True, save_video=False, save_path=None, vi
         channel-first: (c, h, w) instead of (h, w, c).
     Arguments:
         - config (:obj:`Dict`): Dict containing configuration.
-    :param str env_id: the atari environment id.
-    :param bool config.episode_life: wrap the episode life wrapper.
-    :param bool warp_frame: wrap the grayscale + resize observation wrapper.
-    :return: the wrapped atari environment.
+        - wrap_frame (:obj:`bool`):
+        - save_video (:obj:`bool`):
+        - save_path (:obj:`bool`):
+    Return:
+        - the wrapped atari environment.
     """
-    env = gym.make(config.env_name)
+    if config.render_mode_human:
+        env = gym.make(config.env_name, render_mode='human')
+    else:
+        env = gym.make(config.env_name)
     assert 'NoFrameskip' in env.spec.id
     env = NoopResetWrapper(env, noop_max=30)
     env = MaxAndSkipWrapper(env, skip=4)

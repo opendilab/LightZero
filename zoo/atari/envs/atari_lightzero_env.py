@@ -21,6 +21,7 @@ class AtariLightZeroEnv(BaseEnv):
 
     config = dict(
         dqn_expert_data=False,
+        render_mode_human=False,
     )
 
     @classmethod
