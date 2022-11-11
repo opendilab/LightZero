@@ -24,10 +24,11 @@ board_size = 6  # default_size is 15
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 5
+data_reuse_factor = 0.5
 
 gomoku_efficientzero_config = dict(
-    exp_name='data_ez_ctree/gomoku_bs6_1pm_efficientzero_seed0_sub885_ns50',
-    # exp_name='data_ez_ptree/gomoku_bs6_1pm_efficientzero_seed0_sub885_ns50',
+    exp_name='data_ez_ctree/gomoku_bs6_1pm_efficientzero_seed0_sub885_ns50_drf05',
+    # exp_name='data_ez_ptree/gomoku_bs6_1pm_efficientzero_seed0_sub885_ns50_drf05',
 
     # exp_name='data_ez_ptree/gomoku_2pm_efficientzero_seed0_sub885',
     env=dict(
@@ -95,7 +96,7 @@ gomoku_efficientzero_config = dict(
             # one_player_mode, board_size=6, episode_length=6**2/2=18
             # n_episode=8,  update_per_collect=18*8=144
             # update_per_collect=int(board_size ** 2 / 2 * n_episode),
-            update_per_collect=int(board_size ** 2 / 2 * n_episode // 2),
+            update_per_collect=int(board_size ** 2 / 2 * n_episode * data_reuse_factor),
 
             # two_player_mode, board_size=6, episode_length=6**2=36
             # n_episode=8,  update_per_collect=36*8=268
