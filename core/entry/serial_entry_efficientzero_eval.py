@@ -126,7 +126,7 @@ def serial_pipeline_efficientzero_eval(
             returns.append(reward)
         print(returns)
         returns = np.array(returns)
-        print(f'win rate: {len(np.where(returns == 1.)[0])/ test_episodes}, draw rate: {len(np.where(returns == 0.)[0])/test_episodes}, lose rate: {len(np.where(returns == -1.)[0])/ test_episodes}')
+        # print(f'win rate: {len(np.where(returns == 1.)[0])/ test_episodes}, draw rate: {len(np.where(returns == 0.)[0])/test_episodes}, lose rate: {len(np.where(returns == -1.)[0])/ test_episodes}')
         break
 
         # TODO(pu): test muzero_evaluator

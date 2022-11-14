@@ -1,82 +1,69 @@
 import sys
-sys.path.append('/Users/puyuan/code/LightZero')
+# sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
-# sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
-
 
 import torch
 from easydict import EasyDict
-
-from core.model import RepresentationNetwork
 
 if torch.cuda.is_available():
     device = 'cuda'
 else:
     device = 'cpu'
-representation_model = RepresentationNetwork(
-    observation_shape=(12, 96, 96),
-    num_blocks=1,
-    num_channels=64,
-    downsample=True,
-    momentum=0.1,
-)
-
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-num_simulations = 50
 
 
-# debug
+# for debug
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
 
-qbert_efficientzero_config = dict(
-    exp_name='data_ez_ctree/qbert_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc1000',
+
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+
+lunarlander_disc_efficientzero_config = dict(
+    # exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_cliprew-false_mlr_ghl200',
+    exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_cliprew-false_mlr_ghl200_ns50_upc250_halfmodel',
+
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        env_name='QbertNoFrameskip-v4',
-        stop_value=int(1e6),
+        env_id='LunarLander-v2',
+        stop_value=300,
+        battle_mode='one_player_mode',
+        prob_random_agent=0.,
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
-        # for debug
-        # collect_max_episode_steps=int(100),
-        # eval_max_episode_steps=int(100),
-        frame_skip=4,
-        obs_shape=(12, 96, 96),
-        episode_life=True,
-        gray_scale=False,
-        # cvt_string=True,
-        # trade memory for speed
-        cvt_string=False,
-        game_wrapper=True,
-        dqn_expert_data=False,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        model_path=None,
-        env_name='QbertNoFrameskip-v4',
+        # model_path=None,
+        model_path='/Users/puyuan/code/LightZero/data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_cliprew-false_mlr_ghl200/ckpt/ckpt_best.pth.tar',
+        env_name='lunarlander_disc',
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=True,
+            # representation_model_type='identity',
             representation_model_type='conv_res_blocks',
-            # representation_model=representation_model,
-            observation_shape=(12, 96, 96),  # 3,96,96 stack=4
-            action_space_size=6,  # for qbert
-            downsample=True,
+
+            # [S, W, H, C] -> [S x C, W, H]
+            # [4,8,1,1] -> [4*1, 8, 1]
+            observation_shape=(4, 8, 1),  # if frame_stack_nums=4
+            # observation_shape=(1, 8, 1),  # if frame_stack_nums=1
+
+            action_space_size=4,
+
+            downsample=False,
             num_blocks=1,
-            # default config in EfficientZero original repo
-            num_channels=64,
-            lstm_hidden_size=512,
-            # The env step is twice as large as the original size model when converging
-            # num_channels=32,
-            # lstm_hidden_size=256,
+            # num_channels=64,
+            # lstm_hidden_size=512,
+            num_channels=32,
+            lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -90,21 +77,31 @@ qbert_efficientzero_config = dict(
             proj_out=1024,
             pred_hid=512,
             pred_out=1024,
+            # half size model
+            # proj_hid=512,
+            # proj_out=512,
+            # pred_hid=256,
+            # pred_out=512,
             last_linear_layer_init_zero=True,
             state_norm=False,
-        ),        
+        ),
         # learn_mode config
         learn=dict(
             # for debug
             # update_per_collect=2,
             # batch_size=4,
 
-            update_per_collect=1000,
+            # episode_length=200, 200*8=1600
+            # dqn: n_sample 64 -> update_per_collect 10
+            # mcts: 1600 -> 250
+            update_per_collect=int(250),
+            target_update_freq=100,
+
             batch_size=256,
 
-            learning_rate=0.2,
-            # Frequency of target network update.
-            target_update_freq=400,
+            # learning_rate=0.002,  # fixed lr
+            learning_rate=0.2,  # lr_manually
+
         ),
         # collect_mode config
         collect=dict(
@@ -113,12 +110,12 @@ qbert_efficientzero_config = dict(
             n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        eval=dict(evaluator=dict(eval_freq=int(5e3), )),
         # for debug
         # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
         other=dict(
-            # NOTE: the replay_buffer_size is ineffective, we specify it in game config
+            # the replay_buffer_size is ineffective, we specify it in game config
             replay_buffer=dict(type='game')
         ),
         ######################################
@@ -126,63 +123,73 @@ qbert_efficientzero_config = dict(
         ######################################
         env_type='no_board_games',
         device=device,
-        # if mcts_ctree=True, using cpp mcts code
         mcts_ctree=True,
-        # mcts_ctree=False,
-        image_based=True,
-        # cvt_string=True,
-        # trade memory for speed
+        battle_mode='one_player_mode',
+        game_history_length=200,
+        # game_history_length=50,
+
+        image_based=False,
         cvt_string=False,
-        clip_reward=True,
+
+        # clip_reward=True,
+        # TODO(pu)
+        clip_reward=False,
+
         game_wrapper=True,
-        # NOTE: different env have different action_space_size
-        action_space_size=6,  # for qbert
+        action_space_size=4,
         amp_type='none',
-        obs_shape=(12, 96, 96),
-        image_channel=3,
+
+        # [S, W, H, C] -> [S x C, W, H]
+        # [4,8,1,1] -> [4*1, 8, 1]
+        image_channel=1,
+        obs_shape=(4, 8, 1),  # if frame_stack_nums=4
+        frame_stack_num=4,
+
+        # obs_shape=(1, 8, 1),  # if frame_stack_num=1
+        # frame_stack_num=1,
+
         gray_scale=False,
-        downsample=True,
+        downsample=False,
         vis_result=True,
-        # TODO(pu): test the effect of augmentation
-        use_augmentation=True,
+        # TODO(pu): test the effect of augmentation,
+        # use_augmentation=True,  # only for atari image obs
+        use_augmentation=False,
         # Style of augmentation
         # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
         augmentation=['shift', 'intensity'],
 
-        # for debug
+        # debug
         # collector_env_num=1,
         # evaluator_env_num=1,
-        # num_simulations=2,
+        # num_simulations=9,
         # batch_size=4,
-        # game_history_length=20,
-        # total_transitions=int(1e2),
-        # lstm_hidden_size=32,
+        # total_transitions=int(1e5),
+        # lstm_hidden_size=256,
+        # # # to make sure the value target is the final outcome
         # td_steps=5,
-        # num_unroll_steps=5,
-        # lstm_horizon_len=5,
+        # num_unroll_steps=3,
+        # lstm_horizon_len=3,
 
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
-        # TODO(pu): how to set proper num_simulations automatically?
-        num_simulations=num_simulations,
+        num_simulations=50,  # action_space_size=6
+        # num_simulations=33,   # action_space_size=4
         batch_size=256,
-        game_history_length=400,
         total_transitions=int(1e5),
-        # default config in EfficientZero original repo
-        channels=64,
         lstm_hidden_size=512,
-        # The env step is twice as large as the original size model when converging
-        # channels=32,
+        # half size model
         # lstm_hidden_size=256,
+
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        revisit_policy_search_rate=0.99,
+        reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
         lr_manually=True,
+        # lr_manually=False,
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority
@@ -196,7 +203,6 @@ qbert_efficientzero_config = dict(
         fixed_temperature_value=0.25,
         # TODO(pu): whether to use root value in reanalyzing?
         use_root_value=False,
-        # use_root_value=True,
 
         # TODO(pu): test the effect
         last_linear_layer_init_zero=True,
@@ -239,7 +245,6 @@ qbert_efficientzero_config = dict(
         transition_num=1,
         # frame skip & stack observation
         frame_skip=4,
-        frame_stack_num=4,
         # TODO(pu): EfficientZero -> MuZero
         # coefficient
         reward_loss_coeff=1,
@@ -252,6 +257,11 @@ qbert_efficientzero_config = dict(
         proj_out=1024,
         pred_hid=512,
         pred_out=1024,
+        # half size model
+        # proj_hid=512,
+        # proj_out=512,
+        # pred_hid=256,
+        # pred_out=512,
         bn_mt=0.1,
         blocks=1,  # Number of blocks in the ResNet
         reduced_channels_reward=16,  # x36 Number of channels in reward head
@@ -265,13 +275,13 @@ qbert_efficientzero_config = dict(
         ######################################
     ),
 )
-qbert_efficientzero_config = EasyDict(qbert_efficientzero_config)
-main_config = qbert_efficientzero_config
+lunarlander_disc_efficientzero_config = EasyDict(lunarlander_disc_efficientzero_config)
+main_config = lunarlander_disc_efficientzero_config
 
-qbert_efficientzero_create_config = dict(
+lunarlander_disc_efficientzero_create_config = dict(
     env=dict(
-        type='atari_lightzero',
-        import_names=['zoo.atari.envs.atari_lightzero_env'],
+        type='lunarlander',
+        import_names=['zoo.box2d.lunarlander.envs.lunarlander_env'],
     ),
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
@@ -285,9 +295,9 @@ qbert_efficientzero_create_config = dict(
         import_names=['core.worker.collector.efficientzero_collector'],
     )
 )
-qbert_efficientzero_create_config = EasyDict(qbert_efficientzero_create_config)
-create_config = qbert_efficientzero_create_config
+lunarlander_disc_efficientzero_create_config = EasyDict(lunarlander_disc_efficientzero_create_config)
+create_config = lunarlander_disc_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    from core.entry import serial_pipeline_efficientzero_eval
+    serial_pipeline_efficientzero_eval([main_config, create_config], seed=0, max_env_step=int(5e5))

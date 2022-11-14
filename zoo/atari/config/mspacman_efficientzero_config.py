@@ -289,4 +289,4 @@ create_config = mspacman_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e5))
+    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))

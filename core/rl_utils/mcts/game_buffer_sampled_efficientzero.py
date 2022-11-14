@@ -1221,7 +1221,7 @@ class SampledGameBuffer(Buffer):
         policy._target_model.eval()
 
         batch_context = self.prepare_batch_context(batch_size, self.config.priority_prob_beta)
-        input_context = self.make_batch(batch_context, self.config.revisit_policy_search_rate)
+        input_context = self.make_batch(batch_context, self.config.reanalyze_ratio)
         reward_value_context, policy_re_context, policy_non_re_context, inputs_batch = input_context
 
         # target reward, value
@@ -1229,7 +1229,7 @@ class SampledGameBuffer(Buffer):
         # target policy
         batch_target_policies_re = self.compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
         batch_target_policies_non_re = self.compute_target_policy_non_reanalyzed(policy_non_re_context)
-        if self.config.revisit_policy_search_rate < 1:
+        if self.config.reanalyze_ratio < 1:
             try:
                 batch_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
             except Exception as error:

@@ -25,7 +25,7 @@ evaluator_env_num = 3
 
 lunarlander_disc_efficientzero_config = dict(
     # exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_cliprew-false_mlr_ghl200',
-    exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_cliprew-false_mlr_ghl200_ns50_upc250_halfmodel',
+    exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_cliprew-false_mlr_ghl200_ns50_upc500_halfmodel',
 
     env=dict(
         collector_env_num=collector_env_num,
@@ -92,7 +92,9 @@ lunarlander_disc_efficientzero_config = dict(
             # episode_length=200, 200*8=1600
             # dqn: n_sample 64 -> update_per_collect 10
             # mcts: 1600 -> 250
-            update_per_collect=int(250),
+            update_per_collect=int(500),
+            # update_per_collect=int(250),
+
             target_update_freq=100,
 
             batch_size=256,
@@ -168,8 +170,8 @@ lunarlander_disc_efficientzero_config = dict(
         # num_unroll_steps=3,
         # lstm_horizon_len=3,
 
-        collector_env_num=8,
-        evaluator_env_num=5,
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
         num_simulations=50,  # action_space_size=6
         # num_simulations=33,   # action_space_size=4
         batch_size=256,
@@ -182,7 +184,7 @@ lunarlander_disc_efficientzero_config = dict(
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        revisit_policy_search_rate=0.99,
+        reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
         lr_manually=True,
