@@ -21,7 +21,7 @@ else:
 
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 3
+evaluator_env_num = 5
 
 lunarlander_disc_efficientzero_config = dict(
     # exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_cliprew-false_mlr_ghl200',
@@ -60,10 +60,11 @@ lunarlander_disc_efficientzero_config = dict(
 
             downsample=False,
             num_blocks=1,
-            # num_channels=64,
-            # lstm_hidden_size=512,
-            num_channels=32,
-            lstm_hidden_size=256,
+            num_channels=64,
+            lstm_hidden_size=512,
+            # half size model
+            # num_channels=32,
+            # lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,

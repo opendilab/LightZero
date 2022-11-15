@@ -102,6 +102,7 @@ def serial_pipeline_efficientzero_visualize(
     # Learner's before_run hook.
     learner.call_hook('before_run')
 
+    # Evaluate policy performance
     # stop, reward = evaluator.eval(
     #     learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
     # )
