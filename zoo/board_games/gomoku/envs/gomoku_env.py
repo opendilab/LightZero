@@ -56,15 +56,18 @@ class GomokuEnv(BaseGameEnv):
                     legal_actions.append(self.coord_to_action(i, j))
         return legal_actions
 
-    def reset(self, start_player=0):
+    def reset(self, start_player_index=0, init_state=None):
         self._observation_space = gym.spaces.Box(
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.int32
         )
         self._action_space = gym.spaces.Discrete(self.board_size ** 2)
         self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1, ), dtype=np.float32)
-
-        self._current_player = self.players[start_player]
-        self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
+        self.start_player_index = start_player_index
+        self._current_player = self.players[self.start_player_index]
+        if init_state is not None:
+            self.board = np.array(init_state, dtype="int32")
+        else:
+            self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
         if self.battle_mode == 'two_player_mode' or self.battle_mode == 'eval_mode':
@@ -303,6 +306,52 @@ class GomokuEnv(BaseGameEnv):
         row = action_number // self.board_size + 1
         col = action_number % self.board_size + 1
         return f"Play row {row}, column {col}"
+
+    def is_game_over(self):
+        """
+        Overview:
+            To judge game whether over, and get reward
+        Returns:
+            [game_over, reward]
+            if winner = 1  reward = 1
+            if winner = 2  reward = -1
+            if winner = -1 reward = 0
+        """
+        # Check whether the game is ended or not and give the winner
+        print('next_to_play={}'.format(self.current_player))
+        have_winner, winner = self.have_winner()
+        print('winner={}'.format(winner))
+        reward = {1:1, 2:-1, -1:0}
+        if have_winner:
+            return True, reward[winner]
+        elif len(self.legal_actions) == 0:
+            # the agent don't have legal_actions to move, so episode is done
+            # winner=-1 indicates draw
+            return True, reward[winner]
+        else:
+            # episode is not done
+            return False, None
+
+    def simulate_action(self, action):
+        """
+        Overview:
+            simulate action and get next_simulator_env
+        Returns:
+            Returns TicTacToeEnv
+        -------
+        """
+        if action not in self.legal_actions:
+            raise ValueError("action {0} on board {1} is not legal". format(action, self.board))
+        new_board = copy.deepcopy(self.board)
+        row, col = self.action_to_coord(action)
+        new_board[row, col] = self.current_player
+        if self.start_player_index == 0:
+            start_player_index = 1   # self.players = [1, 2], start_player = 2, start_player_index = 1
+        else:
+            start_player_index = 0   # self.players = [1, 2], start_player = 1, start_player_index = 0
+        next_simulator_env = copy.deepcopy(self)
+        next_simulator_env.reset(start_player_index, init_state=new_board) # index
+        return next_simulator_env
 
     @property
     def observation_space(self) -> gym.spaces.Space:
