@@ -16,11 +16,11 @@ from ding.torch_utils.data_helper import to_ndarray
 from ding.utils import BUFFER_REGISTRY
 
 # python mcts
-import core.rl_utils.mcts.ptree as ptree
+import core.rl_utils.mcts.ptree_muzero as ptree
+from .mcts_ptree import MuZeroMCTSPtree as MCTS_ptree
 # cpp mcts
-from .ctree import cytree as ctree
-from .mcts_ctree import EfficientZeroMCTSCtree as MCTS_ctree
-from .mcts_ptree import EfficientZeroMCTSPtree as MCTS_ptree
+from core.rl_utils.mcts.ctree_muzero import cytree as ctree
+from .mcts_ctree import MuZeroMCTSCtree as MCTS_ctree
 from .utils import prepare_observation_lst, concat_output, concat_output_value
 from ..scaling_transform import inverse_scalar_transform
 
@@ -691,7 +691,20 @@ class MuZeroGameBuffer(Buffer):
                     """
                     cpp mcts
                     """
-                    roots = ctree.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
+                    if to_play_history[0][0] is None:
+                        # for one_player atari games
+                        action_mask = [
+                            list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
+                        ]
+                        to_play = [0 for i in range(batch_size)]
+
+                    legal_actions = [
+                        [i for i, x in enumerate(action_mask[j]) if x == 1]
+                        for j in range(batch_size)
+                    ]
+                    # roots = ctree.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
+                    roots = ctree.Roots(batch_size, self.config.num_simulations, legal_actions)
+
                     noises = [
                         np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.action_space_size
                                             ).astype(np.float32).tolist() for _ in range(batch_size)
@@ -701,9 +714,10 @@ class MuZeroGameBuffer(Buffer):
                         noises,
                         value_prefix_pool,
                         policy_logits_pool,
+                        to_play
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTSCtree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots)
+                    MCTS_ctree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 else:
                     """
                     python mcts
@@ -785,7 +799,8 @@ class MuZeroGameBuffer(Buffer):
                         target_values.append(value_lst[value_index])
                         # Since the horizon is small and the discount is close to 1.
                         # Compute the reward sum to approximate the value prefix for simplification
-                        value_prefix += reward_lst[current_index]  # * config.discount ** (current_index - base_index)
+                        # value_prefix += reward_lst[current_index]  # * config.discount ** (current_index - base_index)
+                        # value_prefix += reward_lst[current_index]  # * config.discount ** (current_index - base_index)
                         # target_value_prefixs.append(value_prefix)
                         target_value_prefixs.append(reward_lst[current_index])
                     else:
@@ -893,7 +908,20 @@ class MuZeroGameBuffer(Buffer):
                 """
                 cpp mcts
                 """
-                roots = ctree.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
+                if to_play_history[0][0] is None:
+                    # for one_player atari games
+                    action_mask = [
+                        list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
+                    ]
+                    to_play = [0 for i in range(batch_size)]
+
+                legal_actions = [
+                    [i for i, x in enumerate(action_mask[j]) if x == 1]
+                    for j in range(batch_size)
+                ]
+                # roots = ctree.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
+                roots = ctree.Roots(batch_size, self.config.num_simulations, legal_actions)
+
                 noises = [
                     np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.action_space_size
                                         ).astype(np.float32).tolist() for _ in range(batch_size)
@@ -903,9 +931,14 @@ class MuZeroGameBuffer(Buffer):
                     noises,
                     value_prefix_pool,
                     policy_logits_pool,
+                    to_play
                 )
                 # do MCTS for a new policy with the recent target model
-                MCTSCtree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots)
+                MCTS_ctree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+
+                # TODO(pu)
+                # roots_legal_actions_list = roots.legal_actions_list
+                roots_legal_actions_list = legal_actions
             else:
                 """
                 python mcts
@@ -970,12 +1003,24 @@ class MuZeroGameBuffer(Buffer):
                                 """
                                 cpp mcts
                                 """
-                                # for one_player atari games
-                                # TODO(pu): very important
-                                sum_visits = sum(distributions)
-                                policy = [visit_count / sum_visits for visit_count in distributions]
-                                target_policies.append(policy)
-                                # target_policies.append(distributions)
+                                if to_play_history[0][0] is None:
+
+                                    # for one_player atari games
+                                    # TODO(pu): very important
+                                    sum_visits = sum(distributions)
+                                    policy = [visit_count / sum_visits for visit_count in distributions]
+                                    target_policies.append(policy)
+                                    # target_policies.append(distributions)
+                                else:
+                                    # for two_player board games
+                                    policy_tmp = [0 for _ in range(self.config.action_space_size)]
+                                    # to make sure target_policies have the same dimension
+                                    # target_policy = torch.from_numpy(target_policy) be correct
+                                    sum_visits = sum(distributions)
+                                    policy = [visit_count / sum_visits for visit_count in distributions]
+                                    for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
+                                        policy_tmp[legal_action] = policy[index]
+                                    target_policies.append(policy_tmp)
                             else:
                                 """
                                 python mcts
@@ -1131,7 +1176,7 @@ class MuZeroGameBuffer(Buffer):
         policy._target_model.eval()
 
         batch_context = self.prepare_batch_context(batch_size, self.config.priority_prob_beta)
-        input_context = self.make_batch(batch_context, self.config.revisit_policy_search_rate)
+        input_context = self.make_batch(batch_context, self.config.reanalyze_ratio)
         reward_value_context, policy_re_context, policy_non_re_context, inputs_batch = input_context
 
         # target reward, value
@@ -1139,7 +1184,7 @@ class MuZeroGameBuffer(Buffer):
         # target policy
         batch_target_policies_re = self.compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
         batch_target_policies_non_re = self.compute_target_policy_non_reanalyzed(policy_non_re_context)
-        if self.config.revisit_policy_search_rate < 1:
+        if self.config.reanalyze_ratio < 1:
             batch_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
         else:
             batch_policies = batch_target_policies_re

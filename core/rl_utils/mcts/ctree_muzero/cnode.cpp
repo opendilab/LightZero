@@ -29,8 +29,9 @@ namespace tree{
         this->value_sum = 0;
         this->best_action = -1;
         this->to_play = 0;
-        this->value_prefix = 0.0;
-        this->parent_value_prefix = 0.0;
+//        this->value_prefix = 0.0;
+        this->reward = 0.0;
+//        this->parent_value_prefix = 0.0;
     }
 
     CNode::CNode(float prior, std::vector<int> &legal_actions){
@@ -42,19 +43,19 @@ namespace tree{
         this->value_sum = 0;
         this->best_action = -1;
         this->to_play = 0;
-        this->value_prefix = 0.0;
-        this->parent_value_prefix = 0.0;
+//        this->value_prefix = 0.0;
+//        this->parent_value_prefix = 0.0;
         this->hidden_state_index_x = -1;
         this->hidden_state_index_y = -1;
     }
 
     CNode::~CNode(){}
 
-    void CNode::expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix, const std::vector<float> &policy_logits){
+    void CNode::expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float reward, const std::vector<float> &policy_logits){
         this->to_play = to_play;
         this->hidden_state_index_x = hidden_state_index_x;
         this->hidden_state_index_y = hidden_state_index_y;
-        this->value_prefix = value_prefix;
+        this->reward = reward;
 
         int action_num = policy_logits.size();
         if(this->legal_actions.size()==0){
@@ -103,14 +104,16 @@ namespace tree{
     float CNode::get_mean_q(int isRoot, float parent_q, float discount){
         float total_unsigned_q = 0.0;
         int total_visits = 0;
-        float parent_value_prefix = this->value_prefix;
+//        float parent_value_prefix = this->value_prefix;
         for(auto a: this->legal_actions){
             CNode* child = this->get_child(a);
             if(child->visit_count > 0){
-                float true_reward = child->value_prefix - parent_value_prefix;
-                if(this->is_reset == 1){
-                    true_reward = child->value_prefix;
-                }
+//                float true_reward = child->value_prefix - parent_value_prefix;
+                float true_reward = child->reward;
+
+//                if(this->is_reset == 1){
+//                    true_reward = child->value_prefix;
+//                }
                 float qsa = true_reward + discount * child->value();
                 total_unsigned_q += qsa;
                 total_visits += 1;
@@ -194,18 +197,18 @@ namespace tree{
 
     CRoots::~CRoots(){}
 
-    void CRoots::prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch){
+    void CRoots::prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &rewards, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch){
         for(int i = 0; i < this->root_num; ++i){
-            this->roots[i].expand(to_play_batch[i], 0, i, value_prefixs[i], policies[i]);
+            this->roots[i].expand(to_play_batch[i], 0, i, rewards[i], policies[i]);
             this->roots[i].add_exploration_noise(root_exploration_fraction, noises[i]);
 
             this->roots[i].visit_count += 1;
         }
     }
 
-    void CRoots::prepare_no_noise(const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch){
+    void CRoots::prepare_no_noise(const std::vector<float> &rewards, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch){
         for(int i = 0; i < this->root_num; ++i){
-            this->roots[i].expand(to_play_batch[i], 0, i, value_prefixs[i], policies[i]);
+            this->roots[i].expand(to_play_batch[i], 0, i, rewards[i], policies[i]);
 
             this->roots[i].visit_count += 1;
         }
@@ -248,7 +251,7 @@ namespace tree{
     void update_tree_q(CNode* root, tools::CMinMaxStats &min_max_stats, float discount, int players){
         std::stack<CNode*> node_stack;
         node_stack.push(root);
-        float parent_value_prefix = 0.0;
+//        float parent_value_prefix = 0.0;
         int is_reset = 0;
         while(node_stack.size() > 0){
             CNode* node = node_stack.top();
@@ -258,11 +261,12 @@ namespace tree{
 //                # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
 //                # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
 //                # true_reward = node.value_prefix - (- parent_value_prefix)
-                float true_reward = node->value_prefix - node->parent_value_prefix;
+//                float true_reward = node->value_prefix - node->parent_value_prefix;
+                float true_reward = node->reward;
 
-                if(is_reset == 1){
-                    true_reward = node->value_prefix;
-                }
+//                if(is_reset == 1){
+//                    true_reward = node->value_prefix;
+//                }
                 float qsa;
                 if(players == 1)
                     qsa = true_reward + discount * node->value();
@@ -276,7 +280,7 @@ namespace tree{
             for(auto a: node->legal_actions){
                 CNode* child = node->get_child(a);
                 if(child->expanded()){
-                    child->parent_value_prefix = node->value_prefix;
+//                    child->parent_value_prefix = node->value_prefix;
                     node_stack.push(child);
                 }
             }
@@ -294,23 +298,25 @@ namespace tree{
                 node->value_sum += bootstrap_value;
                 node->visit_count += 1;
 
-                float parent_value_prefix = 0.0;
-                int is_reset = 0;
-                if(i >= 1){
-                    CNode* parent = search_path[i - 1];
-                    parent_value_prefix = parent->value_prefix;
-                    is_reset = parent->is_reset;
-    //                float qsa = (node->value_prefix - parent_value_prefix) + discount * node->value();
-    //                min_max_stats.update(qsa);
-                }
+//                float parent_value_prefix = 0.0;
+//                int is_reset = 0;
+//                if(i >= 1){
+//                    CNode* parent = search_path[i - 1];
+//                    parent_value_prefix = parent->value_prefix;
+//                    is_reset = parent->is_reset;
+//    //                float qsa = (node->value_prefix - parent_value_prefix) + discount * node->value();
+//    //                min_max_stats.update(qsa);
+//                }
 
-                float true_reward = node->value_prefix - parent_value_prefix;
+//                float true_reward = node->value_prefix - parent_value_prefix;
+                float true_reward = node->reward;
+
                 min_max_stats.update(true_reward + discount * node->value());
 
-                if(is_reset == 1){
-                    // parent is reset
-                    true_reward = node->value_prefix;
-                }
+//                if(is_reset == 1){
+//                    // parent is reset
+//                    true_reward = node->value_prefix;
+//                }
 
                 bootstrap_value = true_reward + discount * bootstrap_value;
             }
@@ -327,32 +333,31 @@ namespace tree{
                     node->value_sum += - bootstrap_value;
                 node->visit_count += 1;
 
-                float parent_value_prefix = 0.0;
-                int is_reset = 0;
-                if(i >= 1){
-                    CNode* parent = search_path[i - 1];
-                    parent_value_prefix = parent->value_prefix;
-                    is_reset = parent->is_reset;
-                }
+//                float parent_value_prefix = 0.0;
+//                int is_reset = 0;
+//                if(i >= 1){
+//                    CNode* parent = search_path[i - 1];
+//                    parent_value_prefix = parent->value_prefix;
+//                    is_reset = parent->is_reset;
+//                }
 
                 // NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
                // but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
-                float true_reward = node->value_prefix - parent_value_prefix;
+//                float true_reward = node->value_prefix - parent_value_prefix;
+                float true_reward = node->reward;
 
-                min_max_stats.update(true_reward + discount * node->value());
+            // TODO(pu): why in muzero-general is - node.value
+                min_max_stats.update(true_reward + discount * - node->value());
 
-                if(is_reset == 1){
-                    // parent is reset
-                    true_reward = node->value_prefix;
-                }
+//                if(is_reset == 1){
+//                    // parent is reset
+//                    true_reward = node->value_prefix;
+//                }
                 if(node->to_play == to_play)
                     bootstrap_value = - true_reward + discount * bootstrap_value;
                 else
                     bootstrap_value = true_reward + discount * bootstrap_value;
-//                if(node->to_play == to_play)
-//                    bootstrap_value = true_reward + discount * bootstrap_value;
-//                else
-//                    bootstrap_value = - true_reward + discount * bootstrap_value;
+
             }
         }
     }
@@ -374,7 +379,7 @@ namespace tree{
         for(auto a: root->legal_actions){
 
             CNode* child = root->get_child(a);
-            float temp_score = cucb_score(child, min_max_stats, mean_q, root->is_reset, root->visit_count - 1, root->value_prefix, pb_c_base, pb_c_init, discount, players);
+            float temp_score = cucb_score(child, min_max_stats, mean_q, root->visit_count - 1,  pb_c_base, pb_c_init, discount, players);
 
             if(max_score < temp_score){
                 max_score = temp_score;
@@ -395,7 +400,7 @@ namespace tree{
         return action;
     }
 
-    float cucb_score(CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, int is_reset, float total_children_visit_counts, float parent_value_prefix, float pb_c_base, float pb_c_init, float discount, int players){
+    float cucb_score(CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, float total_children_visit_counts, float pb_c_base, float pb_c_init, float discount, int players){
         float pb_c = 0.0, prior_score = 0.0, value_score = 0.0;
         pb_c = log((total_children_visit_counts + pb_c_base + 1) / pb_c_base) + pb_c_init;
         pb_c *= (sqrt(total_children_visit_counts) / (child->visit_count + 1));
@@ -405,10 +410,12 @@ namespace tree{
             value_score = parent_mean_q;
         }
         else {
-            float true_reward = child->value_prefix - parent_value_prefix;
-            if(is_reset == 1){
-                true_reward = child->value_prefix;
-            }
+//            float true_reward = child->value_prefix - parent_value_prefix;
+            float true_reward = child->reward;
+
+//            if(is_reset == 1){
+//                true_reward = child->value_prefix;
+//            }
 
             if(players == 1)
                 value_score = true_reward + discount * child->value();

@@ -304,75 +304,6 @@ class SearchResults:
         self.last_actions = []
         self.search_lens = []
 
-"""if node don't have parent_value_prefix property"""
-# def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
-#     node_stack = []
-#     node_stack.append(root)
-#     parent_value_prefix = 0.0
-#     is_reset = 0
-#     parent_value_prefix_stack = []
-#     while len(node_stack) > 0:
-#         node = node_stack[-1]
-#         node_stack.pop()
-#
-#         if node != root:
-#             true_reward = node.value_prefix - parent_value_prefix
-#             if is_reset == 1:
-#                 true_reward = node.value_prefix
-#             if players == 1:
-#                 q_of_s_a = true_reward + discount * node.value
-#             elif players == 2:
-#                 q_of_s_a = true_reward + discount * (-node.value)
-#
-#             min_max_stats.update(q_of_s_a)
-#
-#         parent_value_prefix = node.value_prefix
-#         parent_value_prefix_stack.append(parent_value_prefix)
-#         is_reset = node.is_reset
-#
-#         num = 0
-#         for a in node.legal_actions:
-#             child = node.get_child(a)
-#             if child.expanded:
-#                 node_stack.append(child)
-#                 num += 1
-#
-#         if num == 0:
-#             # if node have no expanded child
-#             parent_value_prefix = parent_value_prefix_stack.pop()
-#
-#         # if len(node_stack) >= 3:
-#         #     print('len(node_stack)>=3')
-
-# def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
-#     root.parent_value_prefix = 0
-#     node_stack = []
-#     node_stack.append(root)
-#     is_reset = 0
-#     while len(node_stack) > 0:
-#         node = node_stack[-1]
-#         node_stack.pop()
-
-#         if node != root:
-#             true_reward = node.value_prefix - node.parent_value_prefix
-
-#             if is_reset == 1:
-#                 true_reward = node.value_prefix
-#             if players == 1:
-#                 q_of_s_a = true_reward + discount * node.value
-#             elif players == 2:
-#                 q_of_s_a = true_reward + discount * (-node.value)
-
-#             min_max_stats.update(q_of_s_a)
-
-#         is_reset = node.is_reset
-
-#         for a in node.legal_actions:
-#             child = node.get_child(a)
-#             if child.expanded:
-#                 child.parent_value_prefix = node.value_prefix
-#                 node_stack.append(child)
-
 
 def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
     # root.parent_value_prefix = 0
@@ -447,28 +378,30 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
 
             node.visit_count += 1
 
-            parent_value_prefix = 0.0
-            is_reset = 0
-            if i >= 1:
-                parent = search_path[i - 1]
-                parent_value_prefix = parent.value_prefix
-                is_reset = parent.is_reset
+            # parent_value_prefix = 0.0
+            # is_reset = 0
+            # if i >= 1:
+            #     parent = search_path[i - 1]
+            #     parent_value_prefix = parent.value_prefix
+            #     is_reset = parent.is_reset
 
             # NOTE: in two player mode,
             # we should calculate the true_reward according to the perspective of current player of node
-            true_reward = node.value_prefix - (- parent_value_prefix)
-            if is_reset == 1:
-                true_reward = node.value_prefix
+            # true_reward = node.value_prefix - (- parent_value_prefix)
+            true_reward = node.reward
 
-            min_max_stats.update(true_reward + discount * node.value)
+            # if is_reset == 1:
+            #     true_reward = node.value_prefix
+
+            # min_max_stats.update(true_reward + discount * node.value)
             # TODO(pu): why in muzero-general is - node.value
-            # min_max_stats.update(true_reward + discount * - node.value)
+            min_max_stats.update(true_reward + discount * - node.value)
 
             # to_play related
             # true_reward is in the perspective of current player of node
-            bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount * bootstrap_value
-            # TODO(pu): why in muzero-general is - node.value
-            # bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
+            # bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount * bootstrap_value
+            # TODO(pu): why in muzero-general is - true_reward
+            bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
 
         # TODO(pu): the effect of different ways to update min_max_stats
         # min_max_stats.clear()
@@ -513,8 +446,12 @@ def select_child(
     max_index_lst = []
     for a in root.legal_actions:
         child = root.get_child(a)
+        # temp_score = compute_ucb_score(
+        #     child, min_max_stats, mean_q, root.is_reset, root.visit_count - 1, root.value_prefix, pb_c_base, pb_c_int,
+        #     discount, players
+        # )
         temp_score = compute_ucb_score(
-            child, min_max_stats, mean_q, root.is_reset, root.visit_count - 1, root.value_prefix, pb_c_base, pb_c_int,
+            child, min_max_stats, mean_q, root.visit_count - 1, pb_c_base, pb_c_int,
             discount, players
         )
         if max_score < temp_score:
@@ -535,9 +472,9 @@ def compute_ucb_score(
     child: Node,
     min_max_stats,
     parent_mean_q,
-    is_reset: int,
+    # is_reset: int,
     total_children_visit_counts: float,
-    parent_value_prefix: float,
+    # parent_value_prefix: float,
     pb_c_base: float,
     pb_c_init: float,
     discount: float,
@@ -557,9 +494,10 @@ def compute_ucb_score(
     if child.visit_count == 0:
         value_score = parent_mean_q
     else:
-        true_reward = child.value_prefix - parent_value_prefix
-        if is_reset == 1:
-            true_reward = child.value_prefix
+        # true_reward = child.value_prefix - parent_value_prefix
+        true_reward = child.reward
+        # if is_reset == 1:
+        #     true_reward = child.value_prefix
         if players == 1:
             value_score = true_reward + discount * child.value
         elif players == 2:

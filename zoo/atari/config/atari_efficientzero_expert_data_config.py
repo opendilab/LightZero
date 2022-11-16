@@ -179,7 +179,7 @@ atari_efficientzero_config = dict(
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        revisit_policy_search_rate=0.99,
+        reanayze_ratio=0.99,
 
         # TODO(pu): why not use adam?
         lr_manually=True,

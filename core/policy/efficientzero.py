@@ -607,6 +607,7 @@ class EfficientZeroPolicy(Policy):
                               to_play)
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
+
             else:
                 # python mcts
                 legal_actions = [
@@ -720,6 +721,7 @@ class EfficientZeroPolicy(Policy):
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
+
             else:
                 # python mcts
                 legal_actions = [

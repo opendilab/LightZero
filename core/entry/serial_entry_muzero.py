@@ -14,8 +14,8 @@ from ding.worker import BaseLearner
 from ding.worker import create_serial_collector
 from tensorboardX import SummaryWriter
 
-from core.rl_utils import GameBuffer, visit_count_temperature
-from core.worker import EfficientZeroEvaluator as BaseSerialEvaluator
+from core.rl_utils import MuZeroGameBuffer, visit_count_temperature
+from core.worker import MuZeroEvaluator as BaseSerialEvaluator
 
 
 # @profile
@@ -77,7 +77,7 @@ def serial_pipeline_muzero(
     # specific game buffer for EfficientZero
     game_config = cfg.policy
 
-    replay_buffer = GameBuffer(game_config)
+    replay_buffer = MuZeroGameBuffer(game_config)
     collector = create_serial_collector(
         cfg.policy.collect.collector,
         env=collector_env,

@@ -1,8 +1,8 @@
 import sys
 
-sys.path.append('/Users/puyuan/code/LightZero')
+# sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
-# sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 import torch
@@ -23,12 +23,10 @@ from easydict import EasyDict
 
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 5
+evaluator_env_num = 3
 
-tictactoe_efficientzero_config = dict(
-    exp_name='data_ez_ctree/tictactoe_2pm_efficientzero_seed0_sub885_rmt-conv_nc16_urv-false_rbs1e5_fix-value-toplay',
-    # exp_name='data_ez_ptree/tictactoe_2pm_efficientzero_seed0_sub885_rmt-conv_nc16_urv-false_rbs1e5',
-
+tictactoe_muzero_config = dict(
+    exp_name='data_mz_ctree/tictactoe_2pm_muzero_cc2_seed0_sub883',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -85,21 +83,15 @@ tictactoe_efficientzero_config = dict(
             # update_per_collect=2,
             # batch_size=4,
 
-            # one_player_mode, board_size=3, episode_length=3**2/2=4.5
-            # collector_env_num=8,  update_per_collect=5*8=40
-            # update_per_collect=int(3 ** 2 / 2 * collector_env_num),
-            # update_per_collect=int(50),
-            # batch_size=64,
-
             # two_player_mode, board_size=3, episode_length=3**2=9
             # collector_env_num=8,  update_per_collect=9*8=72
             # update_per_collect=int(3 ** 2 * collector_env_num),
             update_per_collect=int(100),
             batch_size=64,
 
-            learning_rate=0.002,  # use fixed lr
+            learning_rate=0.2,  # use manually lr
             # Frequency of target network update.
-            target_update_freq=400,
+            target_update_freq=100,
         ),
         # collect_mode config
         collect=dict(
@@ -114,7 +106,7 @@ tictactoe_efficientzero_config = dict(
         # command_mode config
         other=dict(
             # the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game_buffer_efficientzero')
+            replay_buffer=dict(type='game_buffer_muzero')
         ),
         ######################################
         # game_config begin
@@ -176,8 +168,8 @@ tictactoe_efficientzero_config = dict(
         reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
-        # lr_manually=True,
-        lr_manually=False,  # use fixed lr
+        lr_manually=True,  # use manually lr
+        # lr_manually=False,  # use fixed lr
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority
@@ -237,9 +229,8 @@ tictactoe_efficientzero_config = dict(
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
         reward_loss_coeff=1,  # value_prefix_loss
-        # reward_loss_coeff=0,  # value_prefix_loss
-        consistency_coeff=2,
         # consistency_coeff=0,
+        consistency_coeff=2,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
 
@@ -263,10 +254,10 @@ tictactoe_efficientzero_config = dict(
         ######################################
     ),
 )
-tictactoe_efficientzero_config = EasyDict(tictactoe_efficientzero_config)
-main_config = tictactoe_efficientzero_config
+tictactoe_muzero_config = EasyDict(tictactoe_muzero_config)
+main_config = tictactoe_muzero_config
 
-tictactoe_efficientzero_create_config = dict(
+tictactoe_muzero_create_config = dict(
     env=dict(
         type='tictactoe',
         import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
@@ -274,18 +265,18 @@ tictactoe_efficientzero_create_config = dict(
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='efficientzero',
-        import_names=['core.policy.efficientzero'],
+        type='muzero',
+        import_names=['core.policy.muzero'],
     ),
     collector=dict(
-        type='episode_efficientzero',
+        type='episode_muzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.efficientzero_collector'],
+        import_names=['core.worker.collector.muzero_collector'],
     )
 )
-tictactoe_efficientzero_create_config = EasyDict(tictactoe_efficientzero_create_config)
-create_config = tictactoe_efficientzero_create_config
+tictactoe_muzero_create_config = EasyDict(tictactoe_muzero_create_config)
+create_config = tictactoe_muzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    from core.entry import serial_pipeline_muzero
+    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(1e6))

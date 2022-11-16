@@ -1,8 +1,7 @@
 import sys
-sys.path.append('/Users/puyuan/code/LightZero')
-
+# sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
-# sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 
@@ -26,6 +25,7 @@ representation_model = RepresentationNetwork(
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
+num_simulations = 50
 
 # debug
 # collector_env_num = 1
@@ -33,18 +33,13 @@ evaluator_env_num = 3
 # evaluator_env_num = 1
 
 atari_efficientzero_config = dict(
-    # exp_name='data_ez_ctree/breakout_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
-    exp_name='data_mz_ctree/pong',
+    exp_name='data_mz_ctree/pong_muzero_cc2_seed0_sub883',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         env_name='PongNoFrameskip-v4',
         stop_value=int(20),
-
-        # env_name='BreakoutNoFrameskip-v4',
-        # stop_value=int(1e6),
-
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
         # for debug
@@ -64,17 +59,15 @@ atari_efficientzero_config = dict(
     policy=dict(
         model_path=None,
         env_name='PongNoFrameskip-v4',
-        # env_name='BreakoutNoFrameskip-v4',
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=False,
+            categorical_distribution=True,
             representation_model_type='conv_res_blocks',
             # representation_model=representation_model,
             observation_shape=(12, 96, 96),  # 3,96,96 stack=4
             action_space_size=6,  # for pong
-            # action_space_size=4,  # for breakout
             downsample=True,
             num_blocks=1,
             # default config in EZ original repo
@@ -107,9 +100,10 @@ atari_efficientzero_config = dict(
             update_per_collect=1000,
             batch_size=256,
 
-            learning_rate=0.2,
+            learning_rate=0.2, # set lr manually: 0.2->0.02->0.002
             # Frequency of target network update.
-            target_update_freq=400,
+            # target_update_freq=400,
+            target_update_freq=100,
         ),
         # collect_mode config
         collect=dict(
@@ -132,8 +126,8 @@ atari_efficientzero_config = dict(
         env_type='no_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
-        # mcts_ctree=True,
-        mcts_ctree=False,
+        mcts_ctree=True,
+        # mcts_ctree=False,
         image_based=True,
         # cvt_string=True,
         # trade memory for speed
@@ -167,10 +161,10 @@ atari_efficientzero_config = dict(
         # num_unroll_steps=5,
         # lstm_horizon_len=5,
 
-        collector_env_num=8,
-        evaluator_env_num=3,
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
         # TODO(pu): how to set proper num_simulations automatically?
-        num_simulations=50,
+        num_simulations=num_simulations,
         batch_size=256,
         game_history_length=400,
         total_transitions=int(1e5),
@@ -185,10 +179,10 @@ atari_efficientzero_config = dict(
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        revisit_policy_search_rate=0.99,
+        reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
-        lr_manually=True,
+        lr_manually=True,  # set lr manually: 0.2->0.02->0.002
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority
@@ -223,7 +217,7 @@ atari_efficientzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=False,
+        categorical_distribution=True,
         support_size=300,
         # value_support=DiscreteSupport(-300, 300, delta=1),
         # reward_support=DiscreteSupport(-300, 300, delta=1),
@@ -252,6 +246,7 @@ atari_efficientzero_config = dict(
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
         consistency_coeff=2,
+        # consistency_coeff=0,
 
         # siamese
         proj_hid=1024,
@@ -296,4 +291,4 @@ create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_muzero
-    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(5e5))
+    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(1e6))

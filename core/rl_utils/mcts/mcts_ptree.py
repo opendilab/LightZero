@@ -7,12 +7,11 @@ import numpy as np
 import torch
 from easydict import EasyDict
 
-from ..scaling_transform import inverse_scalar_transform
-
 ###########################################################
 # EfficientZero
 ###########################################################
 import core.rl_utils.mcts.ptree as tree
+from ..scaling_transform import inverse_scalar_transform
 
 
 class EfficientZeroMCTSPtree(object):
@@ -134,9 +133,13 @@ class EfficientZeroMCTSPtree(object):
                     )
                     # if not in training, obtain the scalars of the value/reward
                     network_output.value = inverse_scalar_transform(network_output.value,
-                                                                    self.config.support_size).detach().cpu().numpy()
+                                                                    self.config.support_size,
+                                                                    categorical_distribution=self.config.categorical_distribution
+                                                                    ).detach().cpu().numpy()
                     network_output.value_prefix = inverse_scalar_transform(
-                        network_output.value_prefix, self.config.support_size
+                        network_output.value_prefix, self.config.support_size,
+                        categorical_distribution=self.config.categorical_distribution
+
                     ).detach().cpu().numpy()
 
                     network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()
@@ -300,9 +303,12 @@ class MuZeroMCTSPtree(object):
                     )
                     # if not in training, obtain the scalars of the value/reward
                     network_output.value = inverse_scalar_transform(network_output.value,
-                                                                    self.config.support_size).detach().cpu().numpy()
+                                                                    self.config.support_size,
+                                                                    categorical_distribution=self.config.categorical_distribution
+                                                                    ).detach().cpu().numpy()
                     network_output.value_prefix = inverse_scalar_transform(
-                        network_output.value_prefix, self.config.support_size
+                        network_output.value_prefix, self.config.support_size,
+                        categorical_distribution=self.config.categorical_distribution
                     ).detach().cpu().numpy()
 
                     network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()
