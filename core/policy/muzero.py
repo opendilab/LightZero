@@ -256,14 +256,14 @@ class MuZeroPolicy(Policy):
         policy_logits = network_output.policy_logits  # {list: 2} {list:6}
 
         reward_hidden_state = to_device(reward_hidden_state, self._cfg.device)
-        scaled_value = inverse_scalar_transform(value, self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution)
+        
+        # transform categorical representation to original_value
+        original_value = inverse_scalar_transform(value, self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution)
 
         # TODO(pu)
         if not self._learn_model.training:
             # if not in training, obtain the scalars of the value/reward
-            scaled_value = scaled_value.detach().cpu().numpy()
-            scaled_value_prefix = inverse_scalar_transform(value_prefix,
-                                                           self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution).detach().cpu().numpy()
+            original_value = original_value.detach().cpu().numpy()
             hidden_state = hidden_state.detach().cpu().numpy()
             reward_hidden_state = (
                 reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -276,12 +276,12 @@ class MuZeroPolicy(Policy):
         predicted_value_prefixs = []
         # Note: Following line is just for logging.
         if self._cfg.vis_result:
-            predicted_values, predicted_policies = scaled_value.detach().cpu(), torch.softmax(
+            predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
 
         # calculate the new priorities for each transition
-        value_priority = L1Loss(reduction='none')(scaled_value.squeeze(-1), target_value[:, 0])
+        value_priority = L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0])
         value_priority = value_priority.data.cpu().numpy() + self._cfg.prioritized_replay_eps
 
         # calculate loss for the first step
@@ -309,12 +309,17 @@ class MuZeroPolicy(Policy):
             hidden_state = network_output.hidden_state  # （2, 64, 6, 6）
             reward_hidden_state = network_output.reward_hidden_state  # {tuple:2} (1,2,512)
 
+            # first transform categorical representation to scalar, then transform to original_value
+            original_value = inverse_scalar_transform(value, self._cfg.support_size,
+                                             categorical_distribution=self._cfg.categorical_distribution)
+            original_value_prefix = inverse_scalar_transform(value_prefix,
+                                                    self._cfg.support_size,
+                                                    categorical_distribution=self._cfg.categorical_distribution)
             # TODO(pu)
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                value = inverse_scalar_transform(value, self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution).detach().cpu().numpy()
-                value_prefix = inverse_scalar_transform(value_prefix,
-                                                        self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution).detach().cpu().numpy()
+                original_value = original_value.detach().cpu().numpy()
+                original_value_prefix = original_value_prefix.detach().cpu().numpy()
                 hidden_state = hidden_state.detach().cpu().numpy()
                 reward_hidden_state = (
                     reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -367,13 +372,13 @@ class MuZeroPolicy(Policy):
                 )
 
             if self._cfg.vis_result:
-                scaled_value_prefixs = inverse_scalar_transform(value_prefix.detach(), self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution)
-                scaled_value_prefixs_cpu = scaled_value_prefixs.detach().cpu()
+                original_value_prefixs = inverse_scalar_transform(value_prefix.detach(), self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution)
+                original_value_prefixs_cpu = original_value_prefixs.detach().cpu()
 
                 predicted_values = torch.cat(
                     (predicted_values, inverse_scalar_transform(value, self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution).detach().cpu())
                 )
-                predicted_value_prefixs.append(scaled_value_prefixs_cpu)
+                predicted_value_prefixs.append(original_value_prefixs_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
                 state_lst = np.concatenate((state_lst, hidden_state.detach().cpu().numpy()))
 
@@ -385,20 +390,20 @@ class MuZeroPolicy(Policy):
 
                 target_value_prefix_base = target_value_prefix_cpu[:, step_i].reshape(-1).unsqueeze(-1)
 
-                other_loss[key] = metric_loss(scaled_value_prefixs_cpu, target_value_prefix_base)
+                other_loss[key] = metric_loss(original_value_prefixs_cpu, target_value_prefix_base)
                 if value_prefix_indices_1.any():
                     other_loss[key + '_1'] = metric_loss(
-                        scaled_value_prefixs_cpu[value_prefix_indices_1],
+                        original_value_prefixs_cpu[value_prefix_indices_1],
                         target_value_prefix_base[value_prefix_indices_1]
                     )
                 if value_prefix_indices_n1.any():
                     other_loss[key + '_-1'] = metric_loss(
-                        scaled_value_prefixs_cpu[value_prefix_indices_n1],
+                        original_value_prefixs_cpu[value_prefix_indices_n1],
                         target_value_prefix_base[value_prefix_indices_n1]
                     )
                 if value_prefix_indices_0.any():
                     other_loss[key + '_0'] = metric_loss(
-                        scaled_value_prefixs_cpu[value_prefix_indices_0],
+                        original_value_prefixs_cpu[value_prefix_indices_0],
                         target_value_prefix_base[value_prefix_indices_0]
                     )
         # ----------------------------------------------------------------------------------
