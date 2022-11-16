@@ -24,7 +24,9 @@ n_episode = 8
 evaluator_env_num = 3
 
 lunarlander_disc_efficientzero_config = dict(
-    exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_halfmodel_ns50_upc250_relu_cdt_rew-max-norm-100',
+    # exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_halfmodel_ns50_upc250_relu_cdt_rew-max-norm-100',
+    exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_halfmodel_ns33_upc100_relu_cdf',
+
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -46,7 +48,9 @@ lunarlander_disc_efficientzero_config = dict(
             activation=torch.nn.ReLU(inplace=True),
             # activation=torch.nn.LeakyReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=True,
+            categorical_distribution=False,
+            # categorical_distribution=True,
+
             # representation_model_type='identity',
             representation_model_type='conv_res_blocks',
 
@@ -94,8 +98,8 @@ lunarlander_disc_efficientzero_config = dict(
             # episode_length=200, 200*8=1600
             # dqn: n_sample 64 -> update_per_collect 10
             # mcts: 1600 -> 250
-            # update_per_collect=int(500),
-            update_per_collect=int(250),
+            update_per_collect=int(100),
+            # update_per_collect=int(250),
             target_update_freq=100,
 
             batch_size=256,
@@ -135,7 +139,8 @@ lunarlander_disc_efficientzero_config = dict(
         # clip_reward=True,
         # TODO(pu)
         clip_reward=False,
-        normalize_reward=True,
+        normalize_reward=False,
+        # normalize_reward=True,
         normalize_reward_scale=100,
 
         game_wrapper=True,
@@ -175,8 +180,8 @@ lunarlander_disc_efficientzero_config = dict(
 
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
-        num_simulations=50,  # action_space_size=6
-        # num_simulations=33,   # action_space_size=4
+        # num_simulations=50,  # action_space_size=6
+        num_simulations=33,   # action_space_size=4
         batch_size=256,
         total_transitions=int(1e5),
         # lstm_hidden_size=512,
@@ -226,7 +231,8 @@ lunarlander_disc_efficientzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=True,
+        categorical_distribution=False,
+        # categorical_distribution=True,
         support_size=300,
         # value_support=DiscreteSupport(-300, 300, delta=1),
         # reward_support=DiscreteSupport(-300, 300, delta=1),

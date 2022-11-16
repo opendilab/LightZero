@@ -1,7 +1,7 @@
 import sys
-sys.path.append('/Users/puyuan/code/LightZero')
+# sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
-# sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 
@@ -33,7 +33,7 @@ num_simulations = 50
 # evaluator_env_num = 1
 
 pong_efficientzero_config = dict(
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc1000',
+    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc1000_cdf',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -63,7 +63,9 @@ pong_efficientzero_config = dict(
         cuda=True,
         model=dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=True,
+            # categorical_distribution=True,
+            categorical_distribution=False,
+
             representation_model_type='conv_res_blocks',
             # representation_model=representation_model,
             observation_shape=(12, 96, 96),  # 3,96,96 stack=4
@@ -128,7 +130,6 @@ pong_efficientzero_config = dict(
         device=device,
         # if mcts_ctree=True, using cpp mcts code
         mcts_ctree=True,
-        # mcts_ctree=False,
         image_based=True,
         # cvt_string=True,
         # trade memory for speed
@@ -217,7 +218,9 @@ pong_efficientzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=True,
+        # categorical_distribution=True,
+        categorical_distribution=False,
+
         support_size=300,
         # value_support=DiscreteSupport(-300, 300, delta=1),
         # reward_support=DiscreteSupport(-300, 300, delta=1),

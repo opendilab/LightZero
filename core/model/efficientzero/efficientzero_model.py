@@ -261,7 +261,6 @@ class DynamicsNetwork(nn.Module):
         value_prefix = value_prefix.squeeze(0)
         value_prefix = self.bn_value_prefix(value_prefix)
         value_prefix = self.activation(value_prefix)
-        value_prefix = self.fc(value_prefix)
 
         return state, reward_hidden_state, value_prefix
 
