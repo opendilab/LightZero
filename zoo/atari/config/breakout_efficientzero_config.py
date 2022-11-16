@@ -1,31 +1,31 @@
 import sys
-sys.path.append('/Users/puyuan/code/LightZero')
+# sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
-# sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 
 import torch
 from easydict import EasyDict
 
-from core.model import RepresentationNetwork
 
 if torch.cuda.is_available():
     device = 'cuda'
 else:
     device = 'cpu'
-representation_model = RepresentationNetwork(
-    observation_shape=(12, 96, 96),
-    num_blocks=1,
-    num_channels=64,
-    downsample=True,
-    momentum=0.1,
-)
+
 
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
+categorical_distribution = True
+
+# TODO(pu):
+# The key hyper-para to tune, for different env, we have different episode_length
+# e.g. reuse_factor = 0.5
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+update_per_collect = 1000
 
 # debug
 # collector_env_num = 1
@@ -33,14 +33,14 @@ num_simulations = 50
 # evaluator_env_num = 1
 
 breakout_efficientzero_config = dict(
-    exp_name='data_ez_ctree/breakout_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc1000',
+    exp_name=f'data_ez_ctree/breakout_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         env_name='BreakoutNoFrameskip-v4',
         stop_value=int(1e6),
-        collect_max_episode_steps=int(1.08e4),
+        collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
         # for debug
         # collect_max_episode_steps=int(100),
@@ -65,17 +65,13 @@ breakout_efficientzero_config = dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',
-            # representation_model=representation_model,
-            observation_shape=(12, 96, 96),  # 3,96,96 stack=4
+            observation_shape=(12, 96, 96),  # if frame_stack_num=4, the original obs shape is（3,96,96）
             action_space_size=4,  # for breakout
             downsample=True,
             num_blocks=1,
-            # default config in EZ original repo
+            # default config in EfficientZero original repo
             num_channels=64,
             lstm_hidden_size=512,
-            # The env step is twice as large as the original size model when converging
-            # num_channels=32,
-            # lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -91,16 +87,17 @@ breakout_efficientzero_config = dict(
             pred_out=1024,
             last_linear_layer_init_zero=True,
             state_norm=False,
-        ),        # learn_mode config
+        ),
+        # learn_mode config
         learn=dict(
             # for debug
             # update_per_collect=2,
             # batch_size=4,
 
-            update_per_collect=1000,
+            update_per_collect=update_per_collect,
             batch_size=256,
 
-            learning_rate=0.2,
+            learning_rate=0.2,  # ez use manually lr: 0.2->0.02->0.002
             # Frequency of target network update.
             target_update_freq=400,
         ),
@@ -169,21 +166,18 @@ breakout_efficientzero_config = dict(
         # default config in EfficientZero original repo
         channels=64,
         lstm_hidden_size=512,
-        # The env step is twice as large as the original size model when converging
-        # channels=32,
-        # lstm_hidden_size=256,
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        revisit_policy_search_rate=0.99,
+        reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
         lr_manually=True,
 
-        # TODO(pu): if true, no priority to sample
-        use_max_priority=True,  # if true, sample without priority
+        # if true, sample without priority
+        use_max_priority=True,
         # use_max_priority=False,
         use_priority=True,
 
@@ -215,10 +209,8 @@ breakout_efficientzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=True,
+        categorical_distribution=categorical_distribution,
         support_size=300,
-        # value_support=DiscreteSupport(-300, 300, delta=1),
-        # reward_support=DiscreteSupport(-300, 300, delta=1),
         max_grad_norm=10,
         test_interval=10000,
         log_interval=1000,
@@ -288,4 +280,4 @@ create_config = breakout_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e5))

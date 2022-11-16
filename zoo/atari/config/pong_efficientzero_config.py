@@ -26,6 +26,7 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
+categorical_distribution = True
 
 # debug
 # collector_env_num = 1
@@ -33,7 +34,7 @@ num_simulations = 50
 # evaluator_env_num = 1
 
 pong_efficientzero_config = dict(
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc1000_cdf',
+    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc1000',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -63,20 +64,17 @@ pong_efficientzero_config = dict(
         cuda=True,
         model=dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            # categorical_distribution=True,
-            categorical_distribution=False,
-
+            categorical_distribution=categorical_distribution,
             representation_model_type='conv_res_blocks',
-            # representation_model=representation_model,
-            observation_shape=(12, 96, 96),  # 3,96,96 stack=4
+            observation_shape=(12, 96, 96),  # if frame_stack_num=4, the original obs shape is（3,96,96）
             action_space_size=6,  # for pong
             # action_space_size=4,  # for breakout
             downsample=True,
             num_blocks=1,
-            # default config in EZ original repo
+            # default config in EfficientZero original repo
             num_channels=64,
             lstm_hidden_size=512,
-            # The env step is twice as large as the original size model when converging
+            # The env steps required for convergence are twice the env steps corresponding to the original size model
             # num_channels=32,
             # lstm_hidden_size=256,
             reduced_channels_reward=16,
@@ -172,7 +170,7 @@ pong_efficientzero_config = dict(
         # default config in EfficientZero original repo
         channels=64,
         lstm_hidden_size=512,
-        # The env step is twice as large as the original size model when converging
+        # The env steps required for convergence are twice the env steps corresponding to the original size model
         # channels=32,
         # lstm_hidden_size=256,
         td_steps=5,
@@ -218,8 +216,7 @@ pong_efficientzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        # categorical_distribution=True,
-        categorical_distribution=False,
+        categorical_distribution=categorical_distribution,
 
         support_size=300,
         # value_support=DiscreteSupport(-300, 300, delta=1),

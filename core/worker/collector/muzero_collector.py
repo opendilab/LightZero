@@ -258,9 +258,13 @@ class MuZeroCollector(ISerialCollector):
         beg_index = self.game_config.frame_stack_num
         end_index = beg_index + self.game_config.num_unroll_steps
 
-        # the start 4 obs is init zero obs, so we take the 4th -(4+5）th obs as the pad obs
+        # the start <frame_stack_num> obs is init zero obs, so we take the [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
+        # e.g. the start 4 obs is init zero obs, the num_unroll_steps is 5, so we take the [4:9] obs as the pad obs
         pad_obs_lst = game_histories[i].obs_history[beg_index:end_index]
-        pad_child_visits_lst = game_histories[i].child_visit_history[beg_index:end_index]
+        pad_child_visits_lst = game_histories[i].child_visit_history[:self.game_config.num_unroll_steps]
+        # EfficientZero bug?
+        # pad_child_visits_lst = game_histories[i].child_visit_history[beg_index:end_index]
+
 
         beg_index = 0
         # self.gap_step = self.game_config.num_unroll_steps + self.game_config.td_steps
