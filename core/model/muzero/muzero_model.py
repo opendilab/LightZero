@@ -1,5 +1,5 @@
 """
-The following code is adapted from https://github.com/YeWR/MuZero/blob/main/config/atari/model.py
+The following code is adapted from https://github.com/YeWR/EfficientZero/blob/main/config/atari/model.py
 """
 
 import math
@@ -185,7 +185,7 @@ class DynamicsNetwork(nn.Module):
         """
         super().__init__()
         self.num_channels = num_channels
-        self.lstm_hidden_size = lstm_hidden_size
+        # self.lstm_hidden_size = lstm_hidden_size
 
         self.conv = nn.Conv2d(num_channels, num_channels - 1, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn = nn.BatchNorm2d(num_channels - 1, momentum=momentum)
@@ -201,43 +201,54 @@ class DynamicsNetwork(nn.Module):
             ]
         )
 
-        self.reward_resblocks = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=num_channels - 1,
-                    activation=torch.nn.ReLU(inplace=True),
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(num_blocks)
-            ]
-        )
+        # self.reward_resblocks = nn.ModuleList(
+        #     [
+        #         ResBlock(
+        #             in_channels=num_channels - 1,
+        #             activation=torch.nn.ReLU(inplace=True),
+        #             norm_type='BN',
+        #             res_type='basic',
+        #             bias=False
+        #         ) for _ in range(num_blocks)
+        #     ]
+        # )
 
         self.conv1x1_reward = nn.Conv2d(num_channels - 1, reduced_channels_reward, 1)
         self.bn_reward = nn.BatchNorm2d(reduced_channels_reward, momentum=momentum)
         self.block_output_size_reward = block_output_size_reward
-        self.lstm = nn.LSTM(input_size=self.block_output_size_reward, hidden_size=self.lstm_hidden_size)
-        self.bn_value_prefix = nn.BatchNorm1d(self.lstm_hidden_size, momentum=momentum)
+        # self.lstm = nn.LSTM(input_size=self.block_output_size_reward, hidden_size=self.lstm_hidden_size)
+        # self.bn_value_prefix = nn.BatchNorm1d(self.lstm_hidden_size, momentum=momentum)
         # TODO(pu)
+        # self.fc = MLP(
+        #     in_channels=self.lstm_hidden_size,
+        #     hidden_channels=fc_reward_layers[0],
+        #     out_channels=full_support_size,
+        #     layer_num=len(fc_reward_layers) + 1,
+        #     activation=nn.ReLU(inplace=True),
+        #     norm_type='BN',
+        #     output_activation=nn.Identity(),
+        #     output_norm_type=None,
+        #     last_linear_layer_init_zero=last_linear_layer_init_zero
+        # )
         self.fc = MLP(
-            in_channels=self.lstm_hidden_size,
+            self.block_output_size_reward,
             hidden_channels=fc_reward_layers[0],
-            out_channels=full_support_size,
             layer_num=len(fc_reward_layers) + 1,
+            out_channels=full_support_size,
             activation=nn.ReLU(inplace=True),
             norm_type='BN',
             output_activation=nn.Identity(),
             output_norm_type=None,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
+        #     last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.activation = nn.ReLU(inplace=True)
 
     def forward(self, x, reward_hidden_state):
-        state = x[:, :-1, :, :]
+        # state = x[:, :-1, :, :]
         x = self.conv(x)
         x = self.bn(x)
 
-        x += state
+        # x += state
         x = self.activation(x)
 
         for block in self.resblocks:
@@ -245,19 +256,23 @@ class DynamicsNetwork(nn.Module):
         state = x
 
         x = self.conv1x1_reward(x)
-        x = self.bn_reward(x)
-        x = self.activation(x)
+        # x = self.bn_reward(x)
+        # x = self.activation(x)
 
-        # RuntimeError: view size is not compatible with input tensor size and stride (at least one dimension spans
-        # across two contiguous subspaces)
-        x = x.contiguous().view(-1, self.block_output_size_reward).unsqueeze(0)
-        value_prefix, reward_hidden_state = self.lstm(x, reward_hidden_state)
-        value_prefix = value_prefix.squeeze(0)
-        value_prefix = self.bn_value_prefix(value_prefix)
-        value_prefix = self.activation(value_prefix)
-        value_prefix = self.fc(value_prefix)
+        x = x.view(-1, self.block_output_size_reward)
+        reward = self.fc(x)
 
-        return state, reward_hidden_state, value_prefix
+        # # RuntimeError: view size is not compatible with input tensor size and stride (at least one dimension spans
+        # # across two contiguous subspaces)
+        # x = x.contiguous().view(-1, self.block_output_size_reward).unsqueeze(0)
+        # value_prefix, reward_hidden_state = self.lstm(x, reward_hidden_state)
+        # value_prefix = value_prefix.squeeze(0)
+        # value_prefix = self.bn_value_prefix(value_prefix)
+        # value_prefix = self.activation(value_prefix)
+        # value_prefix = self.fc(value_prefix)
+
+        # return state, reward_hidden_state, value_prefix
+        return state, reward_hidden_state, reward
 
     def get_dynamic_mean(self):
         dynamic_mean = np.abs(self.conv.weight.detach().cpu().numpy().reshape(-1)).tolist()
@@ -427,7 +442,7 @@ class MuZeroNet(BaseNet):
     ):
         """
         Overview:
-            MuZero network
+            EfficientZero network
         Arguments:
             - representation_model_type
             - observation_shape: tuple or list. shape of observations: [C, W, H]

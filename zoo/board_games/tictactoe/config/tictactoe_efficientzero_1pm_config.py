@@ -113,7 +113,7 @@ tictactoe_efficientzero_config = dict(
         # command_mode config
         other=dict(
             # the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game')
+            replay_buffer=dict(type='game_buffer_efficientzero')
         ),
         ######################################
         # game_config begin

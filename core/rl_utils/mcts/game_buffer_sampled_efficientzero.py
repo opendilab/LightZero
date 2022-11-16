@@ -32,7 +32,7 @@ class BufferedData:
     meta: dict
 
 
-@BUFFER_REGISTRY.register('sampled_game')
+@BUFFER_REGISTRY.register('game_buffer_sampled_efficientzero')
 class SampledGameBuffer(Buffer):
     """
     Overview:

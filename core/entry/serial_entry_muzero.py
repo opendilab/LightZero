@@ -14,8 +14,8 @@ from ding.worker import BaseLearner
 from ding.worker import create_serial_collector
 from tensorboardX import SummaryWriter
 
-from core.rl_utils import MuZeroGameBuffer, visit_count_temperature
-from core.worker import MuZeroEvaluator as BaseSerialEvaluator
+from core.rl_utils import GameBuffer, visit_count_temperature
+from core.worker import EfficientZeroEvaluator as BaseSerialEvaluator
 
 
 # @profile
@@ -73,11 +73,11 @@ def serial_pipeline_muzero(
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
-    # MuZero related code
-    # specific game buffer for MuZero
+    # EfficientZero related code
+    # specific game buffer for EfficientZero
     game_config = cfg.policy
 
-    replay_buffer = MuZeroGameBuffer(game_config)
+    replay_buffer = GameBuffer(game_config)
     collector = create_serial_collector(
         cfg.policy.collect.collector,
         env=collector_env,
@@ -112,18 +112,18 @@ def serial_pipeline_muzero(
         # please refer to Appendix A.1 in EfficientZero for details
         collect_kwargs['temperature'] = np.array(
             [
-                visit_count_temperature(game_config.auto_temperature, game_config.fixed_temperature_value, game_config.max_training_steps, trained_steps=learner.train_iter * cfg.policy.learn.update_per_collect)
+                visit_count_temperature(game_config.auto_temperature, game_config.fixed_temperature_value, game_config.max_training_steps, trained_steps=learner.train_iter)
                 for _ in range(game_config.collector_env_num)
             ]
         )
 
-        # Evaluate policy performance
-        if evaluator.should_eval(learner.train_iter):
-            stop, reward = evaluator.eval(
-                learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-            )
-            if stop:
-                break
+        # # Evaluate policy performance
+        # if evaluator.should_eval(learner.train_iter):
+        #     stop, reward = evaluator.eval(
+        #         learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
+        #     )
+        #     if stop:
+        #         break
 
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
@@ -152,19 +152,17 @@ def serial_pipeline_muzero(
 
             learner.train(train_data, collector.envstep)
 
-            train_steps = learner.train_iter * cfg.policy.learn.update_per_collect
-
             # if game_config.lr_manually:
             #     # learning rate decay manually like EfficientZero paper
-            #     if train_steps  > 1e5 and train_steps  <= 2e5:
+            #     if learner.train_iter > 1e5 and learner.train_iter <= 2e5:
             #         policy._optimizer.lr = 0.02
-            #     elif train_steps  > 2e5:
+            #     elif learner.train_iter > 2e5:
             #         policy._optimizer.lr = 0.002
             if game_config.lr_manually:
                 # learning rate decay manually like MuZero paper
-                if train_steps < 0.5 * game_config.max_training_steps:
+                if learner.train_iter < 0.5 * game_config.max_training_steps:
                     policy._optimizer.lr = 0.2
-                elif train_steps < 0.75 * game_config.max_training_steps:
+                elif learner.train_iter < 0.75 * game_config.max_training_steps:
                     policy._optimizer.lr = 0.02
                 else:
                     policy._optimizer.lr = 0.002

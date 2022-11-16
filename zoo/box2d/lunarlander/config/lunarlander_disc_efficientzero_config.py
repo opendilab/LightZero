@@ -24,7 +24,7 @@ n_episode = 8
 evaluator_env_num = 3
 
 lunarlander_disc_efficientzero_config = dict(
-    exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_cliprew-false_mlr_ghl200_ns50_upc500_halfmodel_leaky',
+    exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_halfmodel_ns50_upc250_relu_cdt_rew-max-norm-100',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -43,8 +43,8 @@ lunarlander_disc_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            # activation=torch.nn.ReLU(inplace=True),
-            activation=torch.nn.LeakyReLU(inplace=True),
+            activation=torch.nn.ReLU(inplace=True),
+            # activation=torch.nn.LeakyReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=True,
             # representation_model_type='identity',
@@ -94,13 +94,13 @@ lunarlander_disc_efficientzero_config = dict(
             # episode_length=200, 200*8=1600
             # dqn: n_sample 64 -> update_per_collect 10
             # mcts: 1600 -> 250
-            update_per_collect=int(500),
-            # update_per_collect=int(250),
-
+            # update_per_collect=int(500),
+            update_per_collect=int(250),
             target_update_freq=100,
 
             batch_size=256,
 
+            optim_type='SGD',
             # learning_rate=0.002,  # fixed lr
             learning_rate=0.2,  # lr_manually
         ),
@@ -117,7 +117,7 @@ lunarlander_disc_efficientzero_config = dict(
         # command_mode config
         other=dict(
             # the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game')
+            replay_buffer=dict(type='game_buffer_efficientzero')
         ),
         ######################################
         # game_config begin
@@ -126,7 +126,7 @@ lunarlander_disc_efficientzero_config = dict(
         device=device,
         mcts_ctree=True,
         battle_mode='one_player_mode',
-        game_history_length=200,
+        game_history_length=400,
         # game_history_length=50,
 
         image_based=False,
@@ -135,6 +135,8 @@ lunarlander_disc_efficientzero_config = dict(
         # clip_reward=True,
         # TODO(pu)
         clip_reward=False,
+        normalize_reward=True,
+        normalize_reward_scale=100,
 
         game_wrapper=True,
         action_space_size=4,

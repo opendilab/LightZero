@@ -17,14 +17,14 @@ from core.rl_utils.mcts.utils import prepare_observation_lst
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
 class MuZeroCollector(ISerialCollector):
-    """
-    Overview:
-        MuZero collector(n_episode)
-    Interfaces:
-        __init__, reset, reset_env, reset_policy, collect, close
-    Property:
-        envstep
-    """
+    # """
+    # Overview:
+    #     EfficientZero collector(n_episode)
+    # Interfaces:
+    #     __init__, reset, reset_env, reset_policy, collect, close
+    # Property:
+    #     envstep
+    # """
 
     config = dict(deepcopy_obs=False, transform_obs=False, collect_print_freq=100, get_train_sample=False)
 
@@ -39,15 +39,15 @@ class MuZeroCollector(ISerialCollector):
             replay_buffer: 'replay_buffer' = None,  # noqa
             game_config: 'game_config' = None,  # noqa
     ) -> None:
-        """
-        Overview:
-            Initialization method.
-        Arguments:
-            - cfg (:obj:`EasyDict`): Config dict
-            - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
-            - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
-            - tb_logger (:obj:`SummaryWriter`): tensorboard handle
-        """
+        # """
+        # Overview:
+        #     Initialization method.
+        # Arguments:
+        #     - cfg (:obj:`EasyDict`): Config dict
+        #     - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
+        #     - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
+        #     - tb_logger (:obj:`SummaryWriter`): tensorboard handle
+        # """
         self._exp_name = exp_name
         self._instance_name = instance_name
         self._collect_print_freq = cfg.collect_print_freq
@@ -73,16 +73,16 @@ class MuZeroCollector(ISerialCollector):
         self.reset(policy, env)
 
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
-        """
-        Overview:
-            Reset the environment.
-            If _env is None, reset the old environment.
-            If _env is not None, replace the old environment in the collector with the new passed \
-                in environment and launch.
-        Arguments:
-            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-                env_manager(BaseEnvManager)
-        """
+        # """
+        # Overview:
+        #     Reset the environment.
+        #     If _env is None, reset the old environment.
+        #     If _env is not None, replace the old environment in the collector with the new passed \
+        #         in environment and launch.
+        # Arguments:
+        #     - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
+        #         env_manager(BaseEnvManager)
+        # """
         if _env is not None:
             self._env = _env
             self._env.launch()
@@ -91,14 +91,14 @@ class MuZeroCollector(ISerialCollector):
             self._env.reset()
 
     def reset_policy(self, _policy: Optional[namedtuple] = None) -> None:
-        """
-        Overview:
-            Reset the policy.
-            If _policy is None, reset the old policy.
-            If _policy is not None, replace the old policy in the collector with the new passed in policy.
-        Arguments:
-            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy
-        """
+        # """
+        # Overview:
+        #     Reset the policy.
+        #     If _policy is None, reset the old policy.
+        #     If _policy is not None, replace the old policy in the collector with the new passed in policy.
+        # Arguments:
+        #     - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy
+        # """
         assert hasattr(self, '_env'), "please set env first"
         if _policy is not None:
             self._policy = _policy
@@ -114,19 +114,19 @@ class MuZeroCollector(ISerialCollector):
         self._policy.reset()
 
     def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
-        """
-        Overview:
-            Reset the environment and policy.
-            If _env is None, reset the old environment.
-            If _env is not None, replace the old environment in the collector with the new passed \
-                in environment and launch.
-            If _policy is None, reset the old policy.
-            If _policy is not None, replace the old policy in the collector with the new passed in policy.
-        Arguments:
-            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy
-            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-                env_manager(BaseEnvManager)
-        """
+        # """
+        # Overview:
+        #     Reset the environment and policy.
+        #     If _env is None, reset the old environment.
+        #     If _env is not None, replace the old environment in the collector with the new passed \
+        #         in environment and launch.
+        #     If _policy is None, reset the old policy.
+        #     If _policy is not None, replace the old policy in the collector with the new passed in policy.
+        # Arguments:
+        #     - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy
+        #     - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
+        #         env_manager(BaseEnvManager)
+        # """
         if _env is not None:
             self.reset_env(_env)
         if _policy is not None:
@@ -151,14 +151,14 @@ class MuZeroCollector(ISerialCollector):
         self.last_model_index = -1
 
     def _reset_stat(self, env_id: int) -> None:
-        """
-        Overview:
-            Reset the collector's state. Including reset the traj_buffer, obs_pool, policy_output_pool\
-                and env_info. Reset these states according to env_id. You can refer to base_serial_collector\
-                to get more messages.
-        Arguments:
-            - env_id (:obj:`int`): the id where we need to reset the collector's state
-        """
+        # """
+        # Overview:
+        #     Reset the collector's state. Including reset the traj_buffer, obs_pool, policy_output_pool\
+        #         and env_info. Reset these states according to env_id. You can refer to base_serial_collector\
+        #         to get more messages.
+        # Arguments:
+        #     - env_id (:obj:`int`): the id where we need to reset the collector's state
+        # """
         self._traj_buffer[env_id].clear()
         self._obs_pool.reset(env_id)
         self._policy_output_pool.reset(env_id)
@@ -166,20 +166,20 @@ class MuZeroCollector(ISerialCollector):
 
     @property
     def envstep(self) -> int:
-        """
-        Overview:
-            Print the total envstep count.
-        Return:
-            - envstep (:obj:`int`): the total envstep count
-        """
+        # """
+        # Overview:
+        #     Print the total envstep count.
+        # Return:
+        #     - envstep (:obj:`int`): the total envstep count
+        # """
         return self._total_envstep_count
 
     def close(self) -> None:
-        """
-        Overview:
-            Close the collector. If end_flag is False, close the environment, flush the tb_logger\
-                and close the tb_logger.
-        """
+        # """
+        # Overview:
+        #     Close the collector. If end_flag is False, close the environment, flush the tb_logger\
+        #         and close the tb_logger.
+        # """
         if self._end_flag:
             return
         self._end_flag = True
@@ -195,15 +195,15 @@ class MuZeroCollector(ISerialCollector):
         """
         self.close()
 
-    """
-    MuZero related method
-    """
+    # """
+    # MCTS related method
+    # """
 
     def get_priorities(self, i, pred_values_lst, search_values_lst):
-        """
-        Overview:
-            obtain the priorities at index i.
-        """
+        # """
+        # Overview:
+        #     obtain the priorities at index i.
+        # """
         if self.game_config.use_priority and not self.game_config.use_max_priority:
             pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.game_config.device).float().view(-1)
             search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.game_config.device
@@ -243,7 +243,7 @@ class MuZeroCollector(ISerialCollector):
 
             del self.trajectory_pool[:]
 
-    def put_last_trajectory(self, i, last_game_histories, last_game_priorities, game_histories, done):
+    def pad_and_save_last_trajectory(self, i, last_game_histories, last_game_priorities, game_histories, done):
         """
         Overview:
             put the last game history into the pool if the current game is finished
@@ -302,17 +302,17 @@ class MuZeroCollector(ISerialCollector):
                 n_episode: Optional[int] = None,
                 train_iter: int = 0,
                 policy_kwargs: Optional[dict] = None) -> List[Any]:
-        """
-        Overview:
-            Collect `n_episode` data with policy_kwargs, which is already trained `train_iter` iterations
-        Arguments:
-            - n_episode (:obj:`int`): the number of collecting data episode
-            - train_iter (:obj:`int`): the number of training iteration
-            - policy_kwargs (:obj:`dict`): the keyword args for policy forward
-        Returns:
-            - return_data (:obj:`List`): A list containing collected episodes if not get_train_sample, otherwise, \
-                return train_samples split by unroll_len.
-        """
+        # """
+        # Overview:
+        #     Collect `n_episode` data with policy_kwargs, which is already trained `train_iter` iterations
+        # Arguments:
+        #     - n_episode (:obj:`int`): the number of collecting data episode
+        #     - train_iter (:obj:`int`): the number of training iteration
+        #     - policy_kwargs (:obj:`dict`): the keyword args for policy forward
+        # Returns:
+        #     - return_data (:obj:`List`): A list containing collected episodes if not get_train_sample, otherwise, \
+        #         return train_samples split by unroll_len.
+        # """
         if n_episode is None:
             if self._default_n_episode is None:
                 raise RuntimeError("Please specify collect n_episode")
@@ -361,10 +361,11 @@ class MuZeroCollector(ISerialCollector):
                 config=self.game_config
             ) for _ in range(env_nums)
         ]
-        for i in range(env_nums):
-            game_histories[i].init(
-                [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.frame_stack_num)]
-            )
+
+        # for i in range(env_nums):
+        #     game_histories[i].init(
+        #         [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.frame_stack_num)]
+        #     )
 
         last_game_histories = [None for _ in range(env_nums)]
         last_game_priorities = [None for _ in range(env_nums)]
@@ -522,7 +523,7 @@ class MuZeroCollector(ISerialCollector):
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
 
-                    # fresh stack windows
+                    # updte stack windows: delete the first obs and append the newest obs
                     del stack_obs_windows[env_id][0]
                     stack_obs_windows[env_id].append(to_ndarray(obs['observation']))
 
@@ -533,7 +534,7 @@ class MuZeroCollector(ISerialCollector):
                         # pad over last block trajectory
                         if last_game_histories[env_id] is not None:
                             # TODO(pu): return the one game history
-                            self.put_last_trajectory(
+                            self.pad_and_save_last_trajectory(
                                 i, last_game_histories, last_game_priorities, game_histories, dones
                             )
 
@@ -542,7 +543,7 @@ class MuZeroCollector(ISerialCollector):
                         pred_values_lst[env_id] = []
                         search_values_lst[env_id] = []
 
-                        #  the game_histories become last_game_history
+                        # the game_histories become last_game_history
                         last_game_histories[env_id] = game_histories[env_id]
                         last_game_priorities[env_id] = priorities
 
@@ -553,6 +554,8 @@ class MuZeroCollector(ISerialCollector):
                             config=self.game_config
                         )
                         game_histories[env_id].init(stack_obs_windows[env_id])
+                        # print(game_histories[env_id].reward_history)
+
                         # TODO(pu): return data
 
                     self._env_info[env_id]['step'] += 1
@@ -574,10 +577,11 @@ class MuZeroCollector(ISerialCollector):
 
                     # if it is the end of the game, we will save the game history
 
-                    # NOTE: put the  second last game history in one episode into the trajectory_pool
+                    # NOTE: put the penultimate game history in one episode into the trajectory_pool
                     # pad over 2th last game_history using the last game_history
                     if last_game_histories[env_id] is not None:
-                        self.put_last_trajectory(i, last_game_histories, last_game_priorities, game_histories, dones)
+                        self.pad_and_save_last_trajectory(i, last_game_histories, last_game_priorities, game_histories,
+                                                          dones)
 
                     # store current block trajectory
                     priorities = self.get_priorities(i, pred_values_lst, search_values_lst)
@@ -586,11 +590,13 @@ class MuZeroCollector(ISerialCollector):
                     game_histories[env_id].game_history_to_array()
 
                     # assert len(game_histories[env_id]) == len(priorities)
-                    self.trajectory_pool.append((game_histories[env_id], priorities, dones[env_id]))
+                    # NOTE: save the last game history in one episode into the trajectory_pool if it's not null
+                    if len(game_histories[env_id].reward_history) != 0:
+                        self.trajectory_pool.append((game_histories[env_id], priorities, dones[env_id]))
 
+                    # print(game_histories[env_id].reward_history)
                     # TODO(pu)
                     # reset the finished env and init game_histories
-
                     if n_episode > self._env_num:
                         init_obs = self._env.ready_obs
 
@@ -652,6 +658,16 @@ class MuZeroCollector(ISerialCollector):
                     } for i in range(self.len_pool())
                 ]
 
+                """
+                for i in range(len(self.trajectory_pool)):
+                    print(self.trajectory_pool[i][0].obs_history.__len__())
+                    print(self.trajectory_pool[i][0].reward_history)
+
+                for i in range(len(return_data[0])):
+                    print(return_data[0][i].reward_history)
+
+                """
+
                 # save the game histories and clear the pool
                 # self.trajectory_pool: list of (game_history, priority)
 
@@ -681,13 +697,13 @@ class MuZeroCollector(ISerialCollector):
         return return_data
 
     def _output_log(self, train_iter: int) -> None:
-        """
-        Overview:
-            Print the output log information. You can refer to Docs/Best Practice/How to understand\
-             training generated folders/Serial mode/log/collector for more details.
-        Arguments:
-            - train_iter (:obj:`int`): the number of training iteration.
-        """
+        # """
+        # Overview:
+        #     Print the output log information. You can refer to Docs/Best Practice/How to understand\
+        #      training generated folders/Serial mode/log/collector for more details.
+        # Arguments:
+        #     - train_iter (:obj:`int`): the number of training iteration.
+        # """
         if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
             self._last_train_iter = train_iter
             episode_count = len(self._episode_info)

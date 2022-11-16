@@ -1,5 +1,6 @@
 import sys
 sys.path.append('/Users/puyuan/code/LightZero')
+
 # sys.path.append('/home/puyuan/LightZero')
 # sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
@@ -31,9 +32,9 @@ evaluator_env_num = 3
 # n_episode = 1
 # evaluator_env_num = 1
 
-atari_muzero_config = dict(
-    # exp_name='data_ez_ctree/breakout_muzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
-    exp_name='data_ez_ctree/pong_muzero_seed0_sub883_lr0.2_ns50_ftv025_upc1000_urv-false_cd-true',
+atari_efficientzero_config = dict(
+    # exp_name='data_ez_ctree/breakout_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
+    exp_name='data_mz_ctree/pong',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -68,7 +69,7 @@ atari_muzero_config = dict(
         cuda=True,
         model=dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=True,
+            categorical_distribution=False,
             representation_model_type='conv_res_blocks',
             # representation_model=representation_model,
             observation_shape=(12, 96, 96),  # 3,96,96 stack=4
@@ -123,7 +124,7 @@ atari_muzero_config = dict(
         # command_mode config
         other=dict(
             # NOTE: the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game')
+            replay_buffer=dict(type='game_buffer_muzero')
         ),
         ######################################
         # game_config begin
@@ -131,8 +132,8 @@ atari_muzero_config = dict(
         env_type='no_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
-        mcts_ctree=True,
-        # mcts_ctree=False,
+        # mcts_ctree=True,
+        mcts_ctree=False,
         image_based=True,
         # cvt_string=True,
         # trade memory for speed
@@ -140,8 +141,8 @@ atari_muzero_config = dict(
         clip_reward=True,
         game_wrapper=True,
         # NOTE: different env have different action_space_size
-        action_space_size=6,  # for pong
-        # action_space_size=4,  # for breakout
+        action_space_size=6,
+        # action_space_size=4,
         amp_type='none',
         obs_shape=(12, 96, 96),
         image_channel=3,
@@ -159,7 +160,7 @@ atari_muzero_config = dict(
         # evaluator_env_num=1,
         # num_simulations=2,
         # batch_size=4,
-        # game_history_length=20,
+        # game_history_length=10,
         # total_transitions=int(1e2),
         # lstm_hidden_size=32,
         # td_steps=5,
@@ -222,7 +223,7 @@ atari_muzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=True,
+        categorical_distribution=False,
         support_size=300,
         # value_support=DiscreteSupport(-300, 300, delta=1),
         # reward_support=DiscreteSupport(-300, 300, delta=1),
@@ -270,10 +271,10 @@ atari_muzero_config = dict(
         ######################################
     ),
 )
-atari_muzero_config = EasyDict(atari_muzero_config)
-main_config = atari_muzero_config
+atari_efficientzero_config = EasyDict(atari_efficientzero_config)
+main_config = atari_efficientzero_config
 
-atari_muzero_create_config = dict(
+atari_efficientzero_create_config = dict(
     env=dict(
         type='atari_lightzero',
         import_names=['zoo.atari.envs.atari_lightzero_env'],
@@ -290,9 +291,9 @@ atari_muzero_create_config = dict(
         import_names=['core.worker.collector.muzero_collector'],
     )
 )
-atari_muzero_create_config = EasyDict(atari_muzero_create_config)
-create_config = atari_muzero_create_config
+atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
+create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_muzero
-    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(5e5))

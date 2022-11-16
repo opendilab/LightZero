@@ -314,6 +314,9 @@ class EfficientZeroEvaluator(ISerialEvaluator):
                     obs, ori_reward, done, info = t.obs, t.reward, t.done, t.info
                     if self.game_config.clip_reward:
                         clip_reward = np.sign(ori_reward)
+                    elif self.game_config.normalize_reward:
+                        # TODO(pu)
+                        clip_reward = ori_reward / self.game_config.normalize_reward_scale
                     else:
                         clip_reward = ori_reward
                     game_histories[i].store_search_stats(distributions_dict[i], value_dict[i])
