@@ -288,7 +288,7 @@ class EfficientZeroPolicy(Policy):
         # calculate loss for the first step
         policy_loss = modified_cross_entropy_loss(policy_logits, target_policy[:, 0])
         if self._cfg.categorical_distribution:
-            value_loss = modified_cross_entropy_loss(value, target_value_phi[:,0])
+            value_loss = modified_cross_entropy_loss(value, target_value_phi[:, 0])
         else:
             value_loss = torch.nn.MSELoss(reduction='none')(value.squeeze(-1), transformed_target_value[:, 0])
 

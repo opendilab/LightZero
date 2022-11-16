@@ -24,9 +24,7 @@ n_episode = 8
 evaluator_env_num = 3
 
 lunarlander_disc_efficientzero_config = dict(
-    # exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_cliprew-false_mlr_ghl200',
-    exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_cliprew-false_mlr_ghl200_ns50_upc500_halfmodel',
-
+    exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_cliprew-false_mlr_ghl200_ns50_upc500_halfmodel_leaky',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -45,6 +43,8 @@ lunarlander_disc_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
+            # activation=torch.nn.ReLU(inplace=True),
+            activation=torch.nn.LeakyReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=True,
             # representation_model_type='identity',
@@ -61,6 +61,7 @@ lunarlander_disc_efficientzero_config = dict(
             num_blocks=1,
             # num_channels=64,
             # lstm_hidden_size=512,
+            # half size model
             num_channels=32,
             lstm_hidden_size=256,
             reduced_channels_reward=16,
@@ -76,6 +77,7 @@ lunarlander_disc_efficientzero_config = dict(
             # proj_out=1024,
             # pred_hid=512,
             # pred_out=1024,
+            # half size model
             proj_hid=512,
             proj_out=512,
             pred_hid=256,
@@ -101,7 +103,6 @@ lunarlander_disc_efficientzero_config = dict(
 
             # learning_rate=0.002,  # fixed lr
             learning_rate=0.2,  # lr_manually
-
         ),
         # collect_mode config
         collect=dict(
@@ -177,6 +178,7 @@ lunarlander_disc_efficientzero_config = dict(
         batch_size=256,
         total_transitions=int(1e5),
         # lstm_hidden_size=512,
+        # half size model
         lstm_hidden_size=256,
 
         td_steps=5,
@@ -256,6 +258,7 @@ lunarlander_disc_efficientzero_config = dict(
         # proj_out=1024,
         # pred_hid=512,
         # pred_out=1024,
+        # half size model
         proj_hid=512,
         proj_out=512,
         pred_hid=256,

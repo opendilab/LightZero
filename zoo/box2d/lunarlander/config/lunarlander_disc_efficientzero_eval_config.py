@@ -1,7 +1,7 @@
 import sys
-# sys.path.append('/Users/puyuan/code/LightZero')
+sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
+# sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 import torch
@@ -22,15 +22,16 @@ else:
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 5
+n_evaluator_episode = 5
 
 lunarlander_disc_efficientzero_config = dict(
-    # exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_cliprew-false_mlr_ghl200',
-    exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_cliprew-false_mlr_ghl200_ns50_upc250_halfmodel',
+    exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_debug',
+    # exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_cliprew-false_mlr_ghl200_ns50_upc250_halfmodel',
 
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
-        n_evaluator_episode=evaluator_env_num,
+        n_evaluator_episode=n_evaluator_episode,
         env_id='LunarLander-v2',
         stop_value=300,
         battle_mode='one_player_mode',
@@ -38,6 +39,8 @@ lunarlander_disc_efficientzero_config = dict(
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
         manager=dict(shared_memory=False, ),
+        # save_replay_gif=True,
+        # replay_path_gif='/Users/puyuan/code/LightZero/data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_cliprew-false_mlr_ghl200/',
     ),
     policy=dict(
         # model_path=None,

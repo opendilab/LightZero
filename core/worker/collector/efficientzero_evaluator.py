@@ -357,7 +357,7 @@ class EfficientZeroEvaluator(ISerialEvaluator):
                             if len(init_obs.keys()) != self._env_num:
                                 while env_id not in init_obs.keys():
                                     init_obs = self._env.ready_obs
-                                    print(f'wailt the {env_id} env to reset')
+                                    print(f'wait the {env_id} env to reset')
 
                             init_obs = init_obs[env_id]['observation']
                             init_obs = to_ndarray(init_obs)

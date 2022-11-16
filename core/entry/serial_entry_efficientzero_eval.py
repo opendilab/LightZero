@@ -68,6 +68,9 @@ def serial_pipeline_efficientzero_eval(
     # load pretrained model
     if cfg.policy.model_path is not None:
         policy.learn_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
+        policy.collect_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
+        policy.eval_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
+
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
@@ -118,7 +121,7 @@ def serial_pipeline_efficientzero_eval(
 
         # TODO(pu): eval trained model
         returns = []
-        test_episodes = 1
+        test_episodes = 10
         for i in range(test_episodes):
             stop, reward = evaluator.eval(
                 learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config

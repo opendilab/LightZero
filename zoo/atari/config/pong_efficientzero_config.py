@@ -240,6 +240,7 @@ pong_efficientzero_config = dict(
         # frame skip & stack observation
         frame_skip=4,
         frame_stack_num=4,
+
         # TODO(pu): EfficientZero -> MuZero
         # coefficient
         reward_loss_coeff=1,
