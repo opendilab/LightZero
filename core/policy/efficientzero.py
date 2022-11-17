@@ -241,7 +241,7 @@ class EfficientZeroPolicy(Policy):
             other_loss[key + '_-1'] = -1
             other_loss[key + '_0'] = -1
 
-        # scalar transform to original Q scale
+        # scalar transform to transformed Q scale, h(.) function
         transformed_target_value_prefix = scalar_transform(target_value_prefix, self._cfg.support_size)
         transformed_target_value = scalar_transform(target_value, self._cfg.support_size)
         if self._cfg.categorical_distribution:
@@ -259,6 +259,8 @@ class EfficientZeroPolicy(Policy):
         policy_logits = network_output.policy_logits  # {list: 2} {list:6}
 
         reward_hidden_state = to_device(reward_hidden_state, self._cfg.device)
+
+        # h^-1(.) function
         # transform categorical representation to original_value
         original_value = inverse_scalar_transform(value, self._cfg.support_size,
                                                 categorical_distribution=self._cfg.categorical_distribution)
@@ -317,6 +319,7 @@ class EfficientZeroPolicy(Policy):
             hidden_state = network_output.hidden_state  # （2, 64, 6, 6）
             reward_hidden_state = network_output.reward_hidden_state  # {tuple:2} (1,2,512)
 
+            # h^-1(.) function
             # first transform categorical representation to scalar, then transform to original_value
             original_value = inverse_scalar_transform(value, self._cfg.support_size,
                                              categorical_distribution=self._cfg.categorical_distribution)
@@ -363,10 +366,15 @@ class EfficientZeroPolicy(Policy):
                     value_prefix, target_value_prefix_phi[:, step_i]
                 )
             else:
-                value_loss += torch.nn.MSELoss(reduction='none')(original_value.squeeze(-1),
+                # value_loss += torch.nn.MSELoss(reduction='none')(original_value.squeeze(-1),
+                #                                                  transformed_target_value[:, step_i + 1])
+                # value_prefix_loss += torch.nn.MSELoss(reduction='none')(
+                #     original_value_prefix.squeeze(-1), transformed_target_value_prefix[:, step_i]
+                # )
+                value_loss += torch.nn.MSELoss(reduction='none')(value.squeeze(-1),
                                                                  transformed_target_value[:, step_i + 1])
                 value_prefix_loss += torch.nn.MSELoss(reduction='none')(
-                    original_value_prefix.squeeze(-1), transformed_target_value_prefix[:, step_i]
+                    value_prefix.squeeze(-1), transformed_target_value_prefix[:, step_i]
                 )
 
             # Follow MuZero, set half gradient
@@ -382,7 +390,7 @@ class EfficientZeroPolicy(Policy):
                 )
 
             if self._cfg.vis_result:
-                original_value_prefixs = inverse_scalar_transform(value_prefix.detach(), self._cfg.support_size,
+                original_value_prefixs = inverse_scalar_transform(value_prefix, self._cfg.support_size,
                                                                 categorical_distribution=self._cfg.categorical_distribution)
                 original_value_prefixs_cpu = original_value_prefixs.detach().cpu()
 
@@ -511,7 +519,35 @@ class EfficientZeroPolicy(Policy):
         else:
             td_data, priority_data = None, None
 
-        return {
+        if self._cfg.categorical_distribution:
+            # loss_data = (
+            #     total_loss.item(), weighted_loss.item(), loss.mean().item(), 0, policy_loss.mean().item(),
+            #     value_prefix_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
+            # )
+            return {
+                # 'priority':priority_info,
+                'total_loss': loss_data[0],
+                'weighted_loss': loss_data[1],
+                'loss_mean': loss_data[2],
+                'policy_loss': loss_data[4],
+                'value_prefix_loss': loss_data[5],
+                'value_loss': loss_data[6],
+                'consistency_loss': loss_data[7],
+                'value_priority': td_data[0].flatten().mean().item(),
+                'target_value_prefix': td_data[1].flatten().mean().item(),
+                'target_value': td_data[2].flatten().mean().item(),
+                'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
+                'transformed_target_value': td_data[4].flatten().mean().item(),
+                'predicted_value_prefixs': td_data[7].flatten().mean().item(),
+                'predicted_values': td_data[8].flatten().mean().item(),
+                # 'target_policy':td_data[9],
+                # 'predicted_policies':td_data[10]
+                # 'td_data': td_data,
+                # 'priority_data_weights': priority_data[0],
+                # 'priority_data_indices': priority_data[1]
+            }
+        else:
+            return {
             # 'priority':priority_info,
             'total_loss': loss_data[0],
             'weighted_loss': loss_data[1],
@@ -523,14 +559,16 @@ class EfficientZeroPolicy(Policy):
             'value_priority': td_data[0].flatten().mean().item(),
             'target_value_prefix': td_data[1].flatten().mean().item(),
             'target_value': td_data[2].flatten().mean().item(),
-            'predicted_value_prefixs': td_data[7].flatten().mean().item(),
-            'predicted_values': td_data[8].flatten().mean().item(),
+            'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
+            'transformed_target_value': td_data[4].flatten().mean().item(),
+            'predicted_value_prefixs': td_data[6].flatten().mean().item(),
+            'predicted_values': td_data[7].flatten().mean().item(),
             # 'target_policy':td_data[9],
             # 'predicted_policies':td_data[10]
             # 'td_data': td_data,
             # 'priority_data_weights': priority_data[0],
             # 'priority_data_indices': priority_data[1]
-        }
+            }
 
     def _init_collect(self) -> None:
         self._unroll_len = self._cfg.collect.unroll_len

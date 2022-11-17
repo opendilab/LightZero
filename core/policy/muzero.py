@@ -290,7 +290,7 @@ class MuZeroPolicy(Policy):
         if self._cfg.categorical_distribution:
             value_loss = modified_cross_entropy_loss(value, target_value_phi[:,0])
         else:
-            value_loss = torch.nn.MSELoss(reduction='none')(original_value.squeeze(-1), transformed_target_value[:, 0])
+            value_loss = torch.nn.MSELoss(reduction='none')(value.squeeze(-1), transformed_target_value[:, 0])
 
         value_prefix_loss = torch.zeros(batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(batch_size, device=self._cfg.device)
@@ -355,9 +355,14 @@ class MuZeroPolicy(Policy):
                     value_prefix, target_value_prefix_phi[:, step_i]
                 )
             else:
-                value_loss += torch.nn.MSELoss(reduction='none')(original_value.squeeze(-1), transformed_target_value[:, step_i + 1])
+                # value_loss += torch.nn.MSELoss(reduction='none')(original_value.squeeze(-1), transformed_target_value[:, step_i + 1])
+                # value_prefix_loss += torch.nn.MSELoss(reduction='none')(
+                #     original_value_prefix.squeeze(-1), transformed_target_value_prefix[:, step_i]
+                # )
+                value_loss += torch.nn.MSELoss(reduction='none')(value.squeeze(-1),
+                                                                 transformed_target_value[:, step_i + 1])
                 value_prefix_loss += torch.nn.MSELoss(reduction='none')(
-                    original_value_prefix.squeeze(-1), transformed_target_value_prefix[:, step_i]
+                    value_prefix.squeeze(-1), transformed_target_value_prefix[:, step_i]
                 )
 
             # Follow MuZero, set half gradient
@@ -494,7 +499,31 @@ class MuZeroPolicy(Policy):
         else:
             td_data, priority_data = None, None
 
-        return {
+        if self._cfg.categorical_distribution:
+            return {
+                # 'priority':priority_info,
+                'total_loss': loss_data[0],
+                'weighted_loss': loss_data[1],
+                'loss_mean': loss_data[2],
+                'policy_loss': loss_data[4],
+                'value_prefix_loss': loss_data[5],
+                'value_loss': loss_data[6],
+                'consistency_loss': loss_data[7],
+                'value_priority': td_data[0].flatten().mean().item(),
+                'target_value_prefix': td_data[1].flatten().mean().item(),
+                'target_value': td_data[2].flatten().mean().item(),
+                'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
+                'transformed_target_value': td_data[4].flatten().mean().item(),
+                'predicted_value_prefixs': td_data[7].flatten().mean().item(),
+                'predicted_values': td_data[8].flatten().mean().item(),
+                # 'target_policy':td_data[9],
+                # 'predicted_policies':td_data[10]
+                # 'td_data': td_data,
+                # 'priority_data_weights': priority_data[0],
+                # 'priority_data_indices': priority_data[1]
+            }
+        else:
+            return {
             # 'priority':priority_info,
             'total_loss': loss_data[0],
             'weighted_loss': loss_data[1],
@@ -506,14 +535,16 @@ class MuZeroPolicy(Policy):
             'value_priority': td_data[0].flatten().mean().item(),
             'target_value_prefix': td_data[1].flatten().mean().item(),
             'target_value': td_data[2].flatten().mean().item(),
-            'predicted_value_prefixs': td_data[7].flatten().mean().item(),
-            'predicted_values': td_data[8].flatten().mean().item(),
+            'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
+            'transformed_target_value': td_data[4].flatten().mean().item(),
+            'predicted_value_prefixs': td_data[6].flatten().mean().item(),
+            'predicted_values': td_data[7].flatten().mean().item(),
             # 'target_policy':td_data[9],
             # 'predicted_policies':td_data[10]
             # 'td_data': td_data,
             # 'priority_data_weights': priority_data[0],
             # 'priority_data_indices': priority_data[1]
-        }
+            }
 
     def _init_collect(self) -> None:
         self._unroll_len = self._cfg.collect.unroll_len

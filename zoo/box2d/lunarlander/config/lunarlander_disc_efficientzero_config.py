@@ -1,4 +1,5 @@
 import sys
+
 # sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
 sys.path.append('/mnt/nfs/puyuan/LightZero')
@@ -12,20 +13,27 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+categorical_distribution = False
+num_simulations = 50  # action_space_size=6
+# num_simulations = 33  # action_space_size=4
+
+# TODO(pu):
+# The key hyper-para to tune, for different env, we have different episode_length
+# e.g. reuse_factor = 0.5
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+update_per_collect = 250
 
 # for debug
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
 
-
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-
 lunarlander_disc_efficientzero_config = dict(
     # exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_halfmodel_ns50_upc250_relu_cdt_rew-max-norm-100',
-    exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_halfmodel_ns33_upc100_relu_cdf',
+    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_halfmodel_ns{num_simulations}_upc{update_per_collect}_relu_cdf_fix',
 
     env=dict(
         collector_env_num=collector_env_num,
@@ -48,8 +56,7 @@ lunarlander_disc_efficientzero_config = dict(
             activation=torch.nn.ReLU(inplace=True),
             # activation=torch.nn.LeakyReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=False,
-            # categorical_distribution=True,
+            categorical_distribution=categorical_distribution,
 
             # representation_model_type='identity',
             representation_model_type='conv_res_blocks',
@@ -98,8 +105,7 @@ lunarlander_disc_efficientzero_config = dict(
             # episode_length=200, 200*8=1600
             # dqn: n_sample 64 -> update_per_collect 10
             # mcts: 1600 -> 250
-            update_per_collect=int(100),
-            # update_per_collect=int(250),
+            update_per_collect=update_per_collect,
             target_update_freq=100,
 
             batch_size=256,
@@ -180,8 +186,8 @@ lunarlander_disc_efficientzero_config = dict(
 
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
-        # num_simulations=50,  # action_space_size=6
-        num_simulations=33,   # action_space_size=4
+
+        num_simulations=num_simulations,
         batch_size=256,
         total_transitions=int(1e5),
         # lstm_hidden_size=512,
@@ -231,11 +237,8 @@ lunarlander_disc_efficientzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=False,
-        # categorical_distribution=True,
+        categorical_distribution=categorical_distribution,
         support_size=300,
-        # value_support=DiscreteSupport(-300, 300, delta=1),
-        # reward_support=DiscreteSupport(-300, 300, delta=1),
         max_grad_norm=10,
         test_interval=10000,
         log_interval=1000,
@@ -309,4 +312,5 @@ create_config = lunarlander_disc_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e6))
+
+    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))

@@ -26,7 +26,12 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-categorical_distribution = True
+categorical_distribution = False
+# TODO(pu):
+# The key hyper-para to tune, for different env, we have different episode_length
+# e.g. reuse_factor = 0.5
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+update_per_collect = 1000
 
 # debug
 # collector_env_num = 1
@@ -34,7 +39,7 @@ categorical_distribution = True
 # evaluator_env_num = 1
 
 pong_efficientzero_config = dict(
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc1000',
+    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc1000_cdf_fix',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
