@@ -57,19 +57,11 @@ namespace tree{
         this->value_prefix = value_prefix;
 
         int action_num = policy_logits.size();
-//        std::vector<int> all_actions;
-//        for(int i =0; i<action_num; ++i){
-//            all_actions.push_back(i);
-//        }
-//        if(this->legal_actions.size()==0)
-//            this->legal_actions.assign(all_actions.begin(),all_actions.end());
-
         if(this->legal_actions.size()==0){
             for(int i=0; i<action_num; ++i){
                 this->legal_actions.push_back(i);
             }
         }
-
         float temp_policy;
         float policy_sum = 0.0;
         float policy[action_num];
@@ -89,11 +81,8 @@ namespace tree{
         float prior;
         for(auto a: this->legal_actions){
             prior = policy[a] / policy_sum;
-//            this->children[a] = CNode(prior, all_actions); // only for muzero/efficient zero, not support alphazero
             std::vector<int> tmp_empty;
-            // only for muzero/efficient zero, in all non-root node the legal_action is the whole action space
-            // not support alphazero, where in non-root node the legal_action is not the whole action space
-            this->children[a] = CNode(prior, tmp_empty);
+            this->children[a] = CNode(prior, tmp_empty); // only for muzero/efficient zero, not support alphazero
         }
     }
 
