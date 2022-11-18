@@ -4,20 +4,23 @@ from abc import ABC, abstractmethod
 import time
 import sys
 from easydict import EasyDict
-sys.path.append('/Users/yangzhenjie/code/jayyoung0802/LightZero')
+sys.path.append('/YOUR/PATH/LightZero')
 
 
 class MCTSNode(ABC):
-    def __init__(self, state, parent=None):
+    def __init__(self, env, parent=None):
         """
         Overview:
             Monte Carlo Tree Search Base Node
             https://github.com/int8/monte-carlo-tree-search
-        Parameters:
-            state: zoo.board_games.xxx.envs.xxx_env.XXXEnv
-            parent: MCTSSearchNode
+        Arguments:
+            env: Class Env, such as 
+                 zoo.board_games.tictactoe.envs.tictactoe_env.TicTacToeEnv,
+                 zoo.board_games.tictactoe.envs.tictactoe_env.TicTacToeEnv
+                 zoo.board_games.gomoku.envs.gomoku_env.GomokuEnv
+            parent: TwoPlayersMCTSNode / MCTSNode
         """
-        self.state = state
+        self.env = env
         self.parent = parent
         self.children = []
         self.parent_action = []
@@ -25,7 +28,7 @@ class MCTSNode(ABC):
 
     @property
     @abstractmethod
-    def untried_actions(self):
+    def legal_actions(self):
         """
         Returns:
             list of zoo.board_games.xxx.envs.xxx_env.XXXEnv.legal_actions
@@ -59,9 +62,19 @@ class MCTSNode(ABC):
         pass
 
     def is_fully_expanded(self):
-        return len(self.untried_actions) == 0
+        return len(self.legal_actions) == 0
 
     def best_child(self, c_param=1.4):
+        '''
+        Overview:
+                 - computer ucb score.
+                    ucb = (q / n) + c_param * np.sqrt((2 * np.log(visited_num) / n))
+                    - q: The estimated value of Node. 
+                    - n: The simulation num of Node.
+                    - visited_num: The visited num of Node
+                    - c_param: constant num=1.4.
+                 - Select the node with the highest ucb score.
+        '''
         choices_weights = [
             (c.q / c.n) + c_param * np.sqrt((2 * np.log(self.n) / c.n))
             for c in self.children
@@ -75,30 +88,40 @@ class MCTSNode(ABC):
 
 class TwoPlayersMCTSNode(MCTSNode):
 
-    def __init__(self, state, parent=None):
-        super().__init__(state, parent)
+    def __init__(self, env, parent=None):
+        super().__init__(env, parent)
         self._number_of_visits = 0.
         self._results = defaultdict(int)
-        self._untried_actions = None
+        self._legal_actions = None
 
     @property
-    def untried_actions(self):
-        if self._untried_actions is None:
-            self._untried_actions = self.state.legal_actions
-        return self._untried_actions
+    def legal_actions(self):
+        if self._legal_actions is None:
+            self._legal_actions = self.env.legal_actions
+        return self._legal_actions
 
     @property
     def q(self):
-        print(self._results)
-        print('parent.current_player={}'.format(self.parent.state.current_player))
-        if self.parent.state.current_player==1:
+        '''
+        Overview:
+                  The estimated value of Node. 
+                  self._results[1]  means current_player 1 number of wins.
+                  self._results[-1] means current_player 2 number of wins.
+        Example:
+                result[1] = 10, result[-1] = 5,
+                As current_player_1, q = 10 - 5 = 5
+                As current_player_2, q = 5 - 10 = -5
+        '''
+        # print(self._results)
+        # print('parent.current_player={}'.format(self.parent.env.current_player))
+        if self.parent.env.current_player==1:
             wins = self._results[1]
             loses = self._results[-1]
         
-        if self.parent.state.current_player==2:
+        if self.parent.env.current_player==2:
             wins = self._results[-1]
             loses = self._results[1]
-        print("wins={}, loses={}".format(wins, loses))
+        # print("wins={}, loses={}".format(wins, loses))
         return wins - loses
 
     @property
@@ -106,8 +129,8 @@ class TwoPlayersMCTSNode(MCTSNode):
         return self._number_of_visits
 
     def expand(self):
-        action = self.untried_actions.pop()
-        next_simulator_env = self.state.simulate_action(action)
+        action = self.legal_actions.pop()
+        next_simulator_env = self.env.simulate_action(action)
         child_node = TwoPlayersMCTSNode(
             next_simulator_env, parent=self
         )
@@ -116,20 +139,20 @@ class TwoPlayersMCTSNode(MCTSNode):
         return child_node
 
     def is_terminal_node(self):
-        return self.state.is_game_over()[0]
+        return self.env.is_game_over()[0]
 
     def rollout(self):
-        print('simulation begin')
-        current_rollout_state = self.state
-        print(current_rollout_state.board)
-        while not current_rollout_state.is_game_over()[0]:
-            possible_actions = current_rollout_state.legal_actions
+        # print('simulation begin')
+        current_rollout_env = self.env
+        # print(current_rollout_env.board)
+        while not current_rollout_env.is_game_over()[0]:
+            possible_actions = current_rollout_env.legal_actions
             action = self.rollout_policy(possible_actions)
-            current_rollout_state = current_rollout_state.simulate_action(action)
-            print('\n')
-            print(current_rollout_state.board)
-        print('simulation end \n')
-        return current_rollout_state.is_game_over()[1]
+            current_rollout_env = current_rollout_env.simulate_action(action)
+            # print('\n')
+            # print(current_rollout_env.board)
+        # print('simulation end \n')
+        return current_rollout_env.is_game_over()[1]
 
     def backpropagate(self, result):
         self._number_of_visits += 1.
@@ -151,7 +174,7 @@ class MCTSSearchNode(object):
     def best_action(self, simulations_number=None, total_simulation_seconds=None):
         """
         Overview:
-
+            By constantly simulating and backpropagating, get the best action and the best children node.
         Arguments:
             simulations_number : int
                 number of simulations performed to get the best action
@@ -173,10 +196,10 @@ class MCTSSearchNode(object):
                     break
         else :
             for i in range(0, simulations_number):
-                print('****simlulation-{}****'.format(i))            
+                # print('****simlulation-{}****'.format(i))            
                 v = self._tree_policy()
                 reward = v.rollout()
-                print('reward={}\n'.format(reward))
+                # print('reward={}\n'.format(reward))
                 v.backpropagate(reward)
         # to select best child go for exploitation only
         return self.root.best_child(c_param=0.)
@@ -184,7 +207,7 @@ class MCTSSearchNode(object):
     def _tree_policy(self):
         """
         Overview:
-            selects node to run rollout
+            The policy used to select action to rollout a episode.
         """
         current_node = self.root
         while not current_node.is_terminal_node():

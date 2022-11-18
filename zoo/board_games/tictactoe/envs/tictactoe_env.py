@@ -350,9 +350,9 @@ class TicTacToeEnv(BaseGameEnv):
             if winner = -1 reward = 0
         """
         # Check whether the game is ended or not and give the winner
-        print('next_to_play={}'.format(self.current_player))
+        #print('next_to_play={}'.format(self.current_player))
         have_winner, winner = self.have_winner()
-        print('winner={}'.format(winner))
+        #print('winner={}'.format(winner))
         reward = {1:1, 2:-1, -1:0}
         if have_winner:
             return True, reward[winner]

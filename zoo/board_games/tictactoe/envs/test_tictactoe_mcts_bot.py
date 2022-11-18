@@ -4,7 +4,8 @@ from abc import ABC, abstractmethod
 import time
 import sys
 from easydict import EasyDict
-sys.path.append('/Users/yangzhenjie/code/jayyoung0802/LightZero')
+sys.path.append('/YOUR/PATH/LightZero')
+sys.path.append('/Users/yangzhenjie/code/jayyoung0802/LightZero/')
 from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 from zoo.board_games.mcts_bot import MCTSBot
 
@@ -23,7 +24,7 @@ class TestTicTacToeBot:
         env = TicTacToeEnv(EasyDict(cfg))
         env.reset()
         state = env.board
-        player_0 = MCTSBot(TicTacToeEnv, cfg, 'a', 100)    # player_index = 0, player = 1
+        player_0 = MCTSBot(TicTacToeEnv, cfg, 'a', 1000)    # player_index = 0, player = 1
         player_1 = MCTSBot(TicTacToeEnv, cfg, 'b', 1)      # player_index = 1, player = 2
 
         player_index = 0  # A fist
@@ -59,7 +60,7 @@ class TestTicTacToeBot:
         env.reset()
         state = env.board
         player_0 = MCTSBot(TicTacToeEnv, cfg, 'a', 1)    # player_index = 0, player = 1
-        player_1 = MCTSBot(TicTacToeEnv, cfg, 'b', 100)    # player_index = 1, player = 2
+        player_1 = MCTSBot(TicTacToeEnv, cfg, 'b', 1000)    # player_index = 1, player = 2
 
         player_index = 0  # A fist
         print('#'*15)
@@ -117,7 +118,7 @@ class TestTicTacToeBot:
             print('#'*15)
         assert env.have_winner()[1] == -1
     
-    def test_tictactoe_two_player_mode_half_episode_1(self):
+    def test_tictactoe_two_player_mode_half_case_1(self):
         cfg = dict(
             prob_random_agent=0,
             prob_expert_agent=0,
@@ -157,7 +158,7 @@ class TestTicTacToeBot:
         assert row == 0, col == 2
     
 
-    def test_tictactoe_two_player_mode_half_episode_2(self):
+    def test_tictactoe_two_player_mode_half_case_2(self):
         cfg = dict(
             prob_random_agent=0,
             prob_expert_agent=0,

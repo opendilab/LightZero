@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 import time
 import sys
 from easydict import EasyDict
-sys.path.append('/Users/yangzhenjie/code/jayyoung0802/LightZero')
+sys.path.append('/YOUR/PATH/LightZero')
 from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 from zoo.board_games.mcts_bot import MCTSBot
 
@@ -16,7 +16,7 @@ class TestGomokuBot:
         # player_0  num_simulation=1000, will win
         # player_1  num_simulation=1
         cfg = dict(
-            board_size = 6,
+            board_size = 5,
             prob_random_agent=0,
             battle_mode='two_player_mode',
         )
@@ -51,7 +51,7 @@ class TestGomokuBot:
         # player_0  num_simulation=1
         # player_1  num_simulation=1000, will win
         cfg = dict(
-            board_size = 6,
+            board_size = 5,
             prob_random_agent=0,
             battle_mode='two_player_mode',
         )
@@ -117,7 +117,7 @@ class TestGomokuBot:
             print('#'*15)
         assert env.have_winner()[1] == -1
     
-    def test_gomoku_two_player_mode_half_episode_1(self):
+    def test_gomoku_two_player_mode_half_case_1(self):
         cfg = dict(
             board_size = 5,
             prob_random_agent=0,
@@ -158,7 +158,7 @@ class TestGomokuBot:
         assert env.have_winner()[1] == 2
         assert state[0,4] == 2
     
-    def test_gomoku_two_player_mode_half_episode_1(self):
+    def test_gomoku_two_player_mode_half_case_1(self):
         cfg = dict(
             board_size = 5,
             prob_random_agent=0,
@@ -166,9 +166,9 @@ class TestGomokuBot:
         )
         env = GomokuEnv(EasyDict(cfg))
         init_state = [[0,0,2,0,0],
-                      [0,1,0,0,0],
-                      [0,0,1,0,0],
-                      [0,0,0,1,2],
+                      [0,1,2,0,0],
+                      [2,2,1,0,0],
+                      [2,0,0,1,2],
                       [1,1,1,0,0],]
         player_0 = MCTSBot(GomokuEnv, cfg, 'a', 100)    # player_index = 0, player = 1
         player_1 = MCTSBot(GomokuEnv, cfg, 'b', 100)    # player_index = 1, player = 2
