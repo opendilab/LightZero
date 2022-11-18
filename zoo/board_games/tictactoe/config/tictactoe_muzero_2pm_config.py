@@ -45,6 +45,7 @@ tictactoe_muzero_config = dict(
     ),
     policy=dict(
         model_path=None,
+        # model_path='/Users/puyuan/code/LightZero/data_mz_ctree/tictactoe_2pm_muzero_cc2_seed0_sub883/ckpt/iteration_100000.pth.tar',
         env_name='tictactoe',
         # Whether to use cuda for network.
         cuda=True,
@@ -59,7 +60,7 @@ tictactoe_muzero_config = dict(
             action_space_size=9,
             downsample=False,
             num_blocks=1,
-            num_channels=16,  # TODO
+            num_channels=16,   # TODO
             lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,

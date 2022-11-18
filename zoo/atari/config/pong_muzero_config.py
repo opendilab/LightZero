@@ -91,7 +91,8 @@ atari_efficientzero_config = dict(
             pred_out=1024,
             last_linear_layer_init_zero=True,
             state_norm=False,
-        ),        # learn_mode config
+        ),
+        # learn_mode config
         learn=dict(
             # for debug
             # update_per_collect=2,
@@ -100,7 +101,7 @@ atari_efficientzero_config = dict(
             update_per_collect=1000,
             batch_size=256,
 
-            learning_rate=0.2, # set lr manually: 0.2->0.02->0.002
+            learning_rate=0.2,  # set lr manually: 0.2->0.02->0.002
             # Frequency of target network update.
             # target_update_freq=400,
             target_update_freq=100,
@@ -291,4 +292,4 @@ create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_muzero
-    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(5e5))

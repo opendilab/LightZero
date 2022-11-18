@@ -785,7 +785,8 @@ class MuZeroPolicy(Policy):
             'target_value',
             'predicted_value_prefixs',
             'predicted_values',
-
+            'transformed_target_value_prefix',
+            'transformed_target_value',
             # 'visit_count_distribution_entropy',
             # 'target_policy',
             # 'predicted_policies'

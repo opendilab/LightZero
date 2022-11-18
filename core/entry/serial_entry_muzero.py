@@ -102,10 +102,6 @@ def serial_pipeline_muzero(
     # Learner's before_run hook.
     learner.call_hook('before_run')
 
-    # stop, reward = evaluator.eval(
-    #     learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-    # )
-
     while True:
         collect_kwargs = {}
         # set temperature for visit count distributions according to the train_iter,
@@ -118,12 +114,12 @@ def serial_pipeline_muzero(
         )
 
         # # Evaluate policy performance
-        # if evaluator.should_eval(learner.train_iter):
-        #     stop, reward = evaluator.eval(
-        #         learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-        #     )
-        #     if stop:
-        #         break
+        if evaluator.should_eval(learner.train_iter):
+            stop, reward = evaluator.eval(
+                learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
+            )
+            if stop:
+                break
 
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)

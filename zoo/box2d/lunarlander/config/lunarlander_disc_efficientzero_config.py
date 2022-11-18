@@ -32,8 +32,8 @@ update_per_collect = 250
 # evaluator_env_num = 1
 
 lunarlander_disc_efficientzero_config = dict(
-    # exp_name='data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_halfmodel_ns50_upc250_relu_cdt_rew-max-norm-100',
-    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_halfmodel_ns{num_simulations}_upc{update_per_collect}_relu_cdf_fix',
+    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_fullmodel_ns{num_simulations}_upc{update_per_collect}_lerelu_cdt_rew-max-norm-100',
+    # exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_fullmodel_ns{num_simulations}_upc{update_per_collect}_relu_cdf',
 
     env=dict(
         collector_env_num=collector_env_num,
@@ -53,8 +53,8 @@ lunarlander_disc_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            activation=torch.nn.ReLU(inplace=True),
-            # activation=torch.nn.LeakyReLU(inplace=True),
+            # activation=torch.nn.ReLU(inplace=True),
+            activation=torch.nn.LeakyReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=categorical_distribution,
 
@@ -70,11 +70,11 @@ lunarlander_disc_efficientzero_config = dict(
 
             downsample=False,
             num_blocks=1,
-            # num_channels=64,
-            # lstm_hidden_size=512,
+            num_channels=64,
+            lstm_hidden_size=512,
             # half size model
-            num_channels=32,
-            lstm_hidden_size=256,
+            # num_channels=32,
+            # lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -84,15 +84,15 @@ lunarlander_disc_efficientzero_config = dict(
             reward_support_size=601,
             value_support_size=601,
             bn_mt=0.1,
-            # proj_hid=1024,
-            # proj_out=1024,
-            # pred_hid=512,
-            # pred_out=1024,
+            proj_hid=1024,
+            proj_out=1024,
+            pred_hid=512,
+            pred_out=1024,
             # half size model
-            proj_hid=512,
-            proj_out=512,
-            pred_hid=256,
-            pred_out=512,
+            # proj_hid=512,
+            # proj_out=512,
+            # pred_hid=256,
+            # pred_out=512,
             last_linear_layer_init_zero=True,
             state_norm=False,
         ),
@@ -145,8 +145,8 @@ lunarlander_disc_efficientzero_config = dict(
         # clip_reward=True,
         # TODO(pu)
         clip_reward=False,
-        normalize_reward=False,
-        # normalize_reward=True,
+        # normalize_reward=False,
+        normalize_reward=True,
         normalize_reward_scale=100,
 
         game_wrapper=True,
@@ -190,9 +190,9 @@ lunarlander_disc_efficientzero_config = dict(
         num_simulations=num_simulations,
         batch_size=256,
         total_transitions=int(1e5),
-        # lstm_hidden_size=512,
+        lstm_hidden_size=512,
         # half size model
-        lstm_hidden_size=256,
+        # lstm_hidden_size=256,
 
         td_steps=5,
         num_unroll_steps=5,
@@ -265,15 +265,15 @@ lunarlander_disc_efficientzero_config = dict(
         consistency_coeff=2,
 
         # siamese
-        # proj_hid=1024,
-        # proj_out=1024,
-        # pred_hid=512,
-        # pred_out=1024,
+        proj_hid=1024,
+        proj_out=1024,
+        pred_hid=512,
+        pred_out=1024,
         # half size model
-        proj_hid=512,
-        proj_out=512,
-        pred_hid=256,
-        pred_out=512,
+        # proj_hid=512,
+        # proj_out=512,
+        # pred_hid=256,
+        # pred_out=512,
         bn_mt=0.1,
         blocks=1,  # Number of blocks in the ResNet
         reduced_channels_reward=16,  # x36 Number of channels in reward head

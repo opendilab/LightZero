@@ -510,6 +510,7 @@ class EfficientZeroNet(BaseNet):
                     num_channels,
                     downsample,
                     momentum=bn_mt,
+                    activation=activation,
                 )
             # elif
         else:
@@ -526,6 +527,7 @@ class EfficientZeroNet(BaseNet):
                 lstm_hidden_size=lstm_hidden_size,
                 momentum=bn_mt,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                activation=activation,
             )
             self.prediction_network = PredictionNetwork(
                 action_space_size,
@@ -541,6 +543,7 @@ class EfficientZeroNet(BaseNet):
                 block_output_size_policy,
                 momentum=bn_mt,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                activation=activation,
             )
         else:
             self.dynamics_network = DynamicsNetwork(
@@ -553,6 +556,7 @@ class EfficientZeroNet(BaseNet):
                 lstm_hidden_size=lstm_hidden_size,
                 momentum=bn_mt,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                activation=activation,
             )
             self.prediction_network = PredictionNetwork(
                 action_space_size,
@@ -568,6 +572,7 @@ class EfficientZeroNet(BaseNet):
                 block_output_size_policy,
                 momentum=bn_mt,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                activation=activation,
             )
 
         # projection
