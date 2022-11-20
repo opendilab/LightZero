@@ -15,18 +15,34 @@ else:
 from easydict import EasyDict
 
 
-# for debug
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-
-
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
+batch_size = 256
+
+categorical_distribution = True
+num_simulations = 25  # action_space_size=9
+
+# TODO(pu):
+# The key hyper-para to tune, for different env, we have different episode_length
+# e.g. reuse_factor = 0.5
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+
+# one_player_mode, board_size=3, episode_length=3**2/2=4.5
+# collector_env_num=8,  n_sample_per_collect=5*8=40
+
+# two_player_mode, board_size=3, episode_length=3**2=9
+# collector_env_num=8,  n_sample_per_collect=9*8=72
+
+update_per_collect = 50
+
+# for debug
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
 
 tictactoe_muzero_config = dict(
-    exp_name='data_mz_ctree/tictactoe_2pm_muzero_cc2_seed0_sub883',
+    exp_name=f'data_mz_ctree/tictactoe_2pm_muzero_seed0_sub883_ghl9_ftv1_cc2_ns{num_simulations}_upc{update_per_collect}_cdt_adam1e-3',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -51,7 +67,7 @@ tictactoe_muzero_config = dict(
         cuda=True,
         model=dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=True,
+            categorical_distribution=categorical_distribution,
             # representation_model_type='identity',
             representation_model_type='conv_res_blocks',
             # [S, W, H, C] -> [S x C, W, H]
@@ -84,13 +100,14 @@ tictactoe_muzero_config = dict(
             # update_per_collect=2,
             # batch_size=4,
 
-            # two_player_mode, board_size=3, episode_length=3**2=9
-            # collector_env_num=8,  update_per_collect=9*8=72
-            # update_per_collect=int(3 ** 2 * collector_env_num),
-            update_per_collect=int(100),
-            batch_size=64,
+            update_per_collect=update_per_collect,
+            batch_size=batch_size,
 
-            learning_rate=0.2,  # use manually lr
+            # optim_type='SGD',
+            optim_type='Adam',
+            learning_rate=0.001,  # adam lr
+            # learning_rate=0.2,  # use manually lr
+
             # Frequency of target network update.
             target_update_freq=100,
         ),
@@ -153,10 +170,10 @@ tictactoe_muzero_config = dict(
         # num_unroll_steps=3,
         # lstm_horizon_len=3,
 
-        collector_env_num=8,
-        evaluator_env_num=5,
-        num_simulations=25,
-        batch_size=64,
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
+        num_simulations=num_simulations,
+        batch_size=batch_size,
         # total_transitions=int(3e3),
         total_transitions=int(1e5),
         lstm_hidden_size=256,
@@ -169,8 +186,8 @@ tictactoe_muzero_config = dict(
         reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
-        lr_manually=True,  # use manually lr
-        # lr_manually=False,  # use fixed lr
+        # lr_manually=True,  # use manually lr
+        lr_manually=False,  # use adam lr
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority
@@ -179,9 +196,11 @@ tictactoe_muzero_config = dict(
 
         # TODO(pu): only used for adjust temperature manually
         max_training_steps=int(1e5),
+
         auto_temperature=False,
         # only effective when auto_temperature=False
-        fixed_temperature_value=0.25,
+        # fixed_temperature_value=0.25,
+        fixed_temperature_value=1,
         # TODO(pu): whether to use root value in reanalyzing?
         use_root_value=False,
         # use_root_value=True,
@@ -196,7 +215,8 @@ tictactoe_muzero_config = dict(
         # TODO(pu): test effect of 0.4->1
         priority_prob_beta=0.4,
         prioritized_replay_eps=1e-6,
-        root_dirichlet_alpha=0.3,
+        # root_dirichlet_alpha=0.3,
+        root_dirichlet_alpha=0.1,
         root_exploration_fraction=0.25,
         auto_td_steps=int(0.3 * 2e5),
         auto_td_steps_ratio=0.3,
@@ -205,10 +225,8 @@ tictactoe_muzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=True,
+        categorical_distribution=categorical_distribution,
         support_size=10,
-        # value_support=DiscreteSupport(-10, 10, delta=1),
-        # reward_support=DiscreteSupport(-10, 10, delta=1),
         max_grad_norm=10,
         test_interval=10000,
         log_interval=1000,
@@ -217,8 +235,11 @@ tictactoe_muzero_config = dict(
         target_model_interval=200,
         save_ckpt_interval=10000,
         discount=1,
-        dirichlet_alpha=0.3,
+
+        # dirichlet_alpha=0.3,
+        # dirichlet_alpha=0.1,
         value_delta_max=0.01,
+
         num_actors=1,
         # network initialization/ & normalization
         episode_life=True,

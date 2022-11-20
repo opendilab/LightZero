@@ -13,23 +13,32 @@ else:
     device = 'cpu'
 
 
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+categorical_distribution = True
+num_simulations = 200  # action_space_size=16
+# num_simulations = 50  # action_space_size=4
+
+# TODO(pu):
+# The key hyper-para to tune, for different env, we have different episode_length
+# e.g. reuse_factor = 0.5
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+update_per_collect = 500
+
 # for debug
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
 
-
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 5
-
 lunarlander_cont_disc_efficientzero_config = dict(
-    exp_name='data_ez_ctree/lunarlander_cont_disc_efficientzero_seed0_sub885_cliprew-false_mlr_ghl200_ns133_upc100',
+    exp_name=f'data_ez_ctree/lunarlander_cont_disc_efficientzero_seed0_sub883_ghl400_halfmodel_ns{num_simulations}_upc{update_per_collect}_cdt_rew-max-norm-100_adam1e-3',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         env_id='LunarLanderContinuous-v2',
+        each_dim_disc_size=4,  # action_space_size=16,  # 4**2
         stop_value=300,
         battle_mode='one_player_mode',
         prob_random_agent=0.,
@@ -43,8 +52,9 @@ lunarlander_cont_disc_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
+            activation=torch.nn.ReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=True,
+            categorical_distribution=categorical_distribution,
             # representation_model_type='identity',
             representation_model_type='conv_res_blocks',
             # [S, W, H, C] -> [S x C, W, H]
@@ -54,8 +64,11 @@ lunarlander_cont_disc_efficientzero_config = dict(
 
             downsample=False,
             num_blocks=1,
-            num_channels=64,
-            lstm_hidden_size=512,
+            # num_channels=64,
+            # lstm_hidden_size=512,
+            # half size model
+            num_channels=32,
+            lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -65,10 +78,15 @@ lunarlander_cont_disc_efficientzero_config = dict(
             reward_support_size=601,
             value_support_size=601,
             bn_mt=0.1,
-            proj_hid=1024,
-            proj_out=1024,
-            pred_hid=512,
-            pred_out=1024,
+            # proj_hid=1024,
+            # proj_out=1024,
+            # pred_hid=512,
+            # pred_out=1024,
+            # half size model
+            proj_hid=512,
+            proj_out=512,
+            pred_hid=256,
+            pred_out=512,
             last_linear_layer_init_zero=True,
             state_norm=False,
         ),
@@ -80,15 +98,16 @@ lunarlander_cont_disc_efficientzero_config = dict(
 
             # episode_length=200, 200*8=1600
             # update_per_collect=int(500),
-            update_per_collect=int(100),
+            update_per_collect=update_per_collect,
 
             batch_size=256,
 
-            # learning_rate=0.002,  # fixed lr
-            learning_rate=0.2,  # manually lr
+            optim_type='Adam',
+            learning_rate=0.001,  # adam lr
+            # learning_rate=0.2,  # lr_manually
 
             # Frequency of target network update.
-            target_update_freq=400,
+            target_update_freq=100,
         ),
         # collect_mode config
         collect=dict(
@@ -97,7 +116,8 @@ lunarlander_cont_disc_efficientzero_config = dict(
             n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(5e3), )),
+        # eval=dict(evaluator=dict(eval_freq=int(5e3), )),
+        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
         # for debug
         # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
@@ -112,9 +132,7 @@ lunarlander_cont_disc_efficientzero_config = dict(
         device=device,
         mcts_ctree=True,
         battle_mode='one_player_mode',
-        game_history_length=200,
-        # game_history_length=50,
-
+        game_history_length=400,
 
         image_based=False,
         cvt_string=False,
@@ -122,6 +140,9 @@ lunarlander_cont_disc_efficientzero_config = dict(
         # clip_reward=True,
         # TODO(pu)
         clip_reward=False,
+        # normalize_reward=False,
+        normalize_reward=True,
+        normalize_reward_scale=100,
 
         game_wrapper=True,
         action_space_size=16,  # 4**2
@@ -158,24 +179,26 @@ lunarlander_cont_disc_efficientzero_config = dict(
         # num_unroll_steps=3,
         # lstm_horizon_len=3,
 
-        collector_env_num=8,
-        evaluator_env_num=5,
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
         # TODO
-        # num_simulations=100,
-        num_simulations=133,
+        num_simulations=num_simulations,
         batch_size=256,
         total_transitions=int(1e5),
-        lstm_hidden_size=512,
+        # lstm_hidden_size=512,
+        # half size model
+        lstm_hidden_size=256,
+
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        revisit_policy_search_rate=0.99,
+        reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
-        lr_manually=True,
-        # lr_manually=False,
+        # lr_manually=True,
+        lr_manually=False,
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority
@@ -209,10 +232,8 @@ lunarlander_cont_disc_efficientzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=True,
+        categorical_distribution=categorical_distribution,
         support_size=300,
-        # value_support=DiscreteSupport(-300, 300, delta=1),
-        # reward_support=DiscreteSupport(-300, 300, delta=1),
         max_grad_norm=10,
         test_interval=10000,
         log_interval=1000,
@@ -239,10 +260,15 @@ lunarlander_cont_disc_efficientzero_config = dict(
         consistency_coeff=2,
 
         # siamese
-        proj_hid=1024,
-        proj_out=1024,
-        pred_hid=512,
-        pred_out=1024,
+        # proj_hid=1024,
+        # proj_out=1024,
+        # pred_hid=512,
+        # pred_out=1024,
+        # half size model
+        proj_hid=512,
+        proj_out=512,
+        pred_hid=256,
+        pred_out=512,
         bn_mt=0.1,
         blocks=1,  # Number of blocks in the ResNet
         reduced_channels_reward=16,  # x36 Number of channels in reward head
@@ -281,4 +307,4 @@ create_config = lunarlander_cont_disc_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e6))
+    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e6))

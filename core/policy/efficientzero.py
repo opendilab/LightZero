@@ -561,8 +561,8 @@ class EfficientZeroPolicy(Policy):
             'target_value': td_data[2].flatten().mean().item(),
             'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
             'transformed_target_value': td_data[4].flatten().mean().item(),
-            'predicted_value_prefixs': td_data[6].flatten().mean().item(),
-            'predicted_values': td_data[7].flatten().mean().item(),
+            'predicted_value_prefixs': td_data[5].flatten().mean().item(),
+            'predicted_values': td_data[6].flatten().mean().item(),
             # 'target_policy':td_data[9],
             # 'predicted_policies':td_data[10]
             # 'td_data': td_data,
