@@ -24,7 +24,7 @@ num_simulations = 50  # action_space_size=6
 # The key hyper-para to tune, for different env, we have different episode_length
 # e.g. reuse_factor = 0.5
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 250
+update_per_collect = 500
 
 # for debug
 # collector_env_num = 1
@@ -32,7 +32,7 @@ update_per_collect = 250
 # evaluator_env_num = 1
 
 lunarlander_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_halfmodel_ns{num_simulations}_upc{update_per_collect}_relu_cdt_rew-max-norm-100',
+    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_halfmodel_ns{num_simulations}_upc{update_per_collect}_relu_cdt_rew-max-norm-100_adam1e-3',
     # exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_fullmodel_ns{num_simulations}_upc{update_per_collect}_relu_cdf',
 
     env=dict(
@@ -110,9 +110,11 @@ lunarlander_disc_efficientzero_config = dict(
 
             batch_size=256,
 
-            optim_type='SGD',
-            learning_rate=0.001,  # fixed lr
+            # optim_type='SGD',
             # learning_rate=0.2,  # lr_manually
+
+            optim_type='Adam',
+            learning_rate=0.001,  # adam lr
         ),
         # collect_mode config
         collect=dict(

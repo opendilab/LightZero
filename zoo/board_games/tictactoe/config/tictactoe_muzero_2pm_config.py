@@ -118,7 +118,9 @@ tictactoe_muzero_config = dict(
             n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(5e3), )),
+        # eval=dict(evaluator=dict(eval_freq=int(5e3), )),
+        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+
         # for debug
         # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
