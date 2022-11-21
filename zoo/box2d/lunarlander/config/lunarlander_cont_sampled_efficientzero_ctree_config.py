@@ -118,7 +118,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
             n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(5e3), )),
+        # eval=dict(evaluator=dict(eval_freq=int(5e3), )),
+        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
         # for debug
         # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
@@ -193,7 +194,7 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        revisit_policy_search_rate=0.99,
+        reanalyze_ratioe=0.99,
 
         # TODO(pu): why not use adam?
         # lr_manually=True,
