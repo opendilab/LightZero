@@ -194,7 +194,7 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        reanalyze_ratioe=0.99,
+        reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
         # lr_manually=True,

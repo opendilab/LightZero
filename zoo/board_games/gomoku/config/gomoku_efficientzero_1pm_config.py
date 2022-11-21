@@ -1,8 +1,8 @@
 import sys
 
-sys.path.append('/Users/puyuan/code/LightZero')
+# sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
-# sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 import torch
@@ -16,21 +16,39 @@ from easydict import EasyDict
 
 board_size = 6  # default_size is 15
 
-# debug
-# collector_env_num = 3
-# n_episode = 3
-# evaluator_env_num = 3
-
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 5
+evaluator_env_num = 3
+
+categorical_distribution = True
+# categorical_distribution = False
+
+# TODO(pu):
+# The key hyper-para to tune, for different env, we have different episode_length
+# e.g. reuse_factor = 0.5
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+
+# one_player_mode, board_size=6, episode_length=6**2/2=18
+# n_episode=8,  update_per_collect=18*8=144
+
+# two_player_mode, board_size=6, episode_length=6**2=36
+# n_episode=8,  update_per_collect=36*8=268
+
 data_reuse_factor = 0.5
+update_per_collect = int(144 * data_reuse_factor)
+
+num_simulations = 50
+
+# debug
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+
 
 gomoku_efficientzero_config = dict(
-    exp_name='data_ez_ctree/gomoku_bs6_1pm_efficientzero_seed0_sub885_ns50_drf05',
-    # exp_name='data_ez_ptree/gomoku_bs6_1pm_efficientzero_seed0_sub885_ns50_drf05',
-
-    # exp_name='data_ez_ptree/gomoku_2pm_efficientzero_seed0_sub885',
+    exp_name=f'data_ez_ctree/gomoku_bs6_1pm_efficientzero_seed0_sub883_halfmodel_ns{num_simulations}_upc{update_per_collect}_cdt_adam1e-3_drf{data_reuse_factor}',
+    # exp_name='data_ez_ctree/gomoku_bs6_1pm_efficientzero_seed0_sub885_ns50_drf05',
+    # exp_name='data_ez_ctree/gomoku_2pm_efficientzero_seed0_sub885',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -57,7 +75,7 @@ gomoku_efficientzero_config = dict(
         cuda=True,
         model=dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=True,
+            categorical_distribution=categorical_distribution,
             # representation_model_type='identity',
             representation_model_type='conv_res_blocks',
             # [S, W, H, C] -> [S x C, W, H]
@@ -67,8 +85,11 @@ gomoku_efficientzero_config = dict(
 
             downsample=False,
             num_blocks=1,
-            num_channels=64,
-            lstm_hidden_size=512,
+            # num_channels=64,
+            # lstm_hidden_size=512,
+            # half size model
+            num_channels=32,
+            lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -78,10 +99,15 @@ gomoku_efficientzero_config = dict(
             reward_support_size=601,
             value_support_size=601,
             bn_mt=0.1,
-            proj_hid=1024,
-            proj_out=1024,
-            pred_hid=512,
-            pred_out=1024,
+            # proj_hid=1024,
+            # proj_out=1024,
+            # pred_hid=512,
+            # pred_out=1024,
+            # half size model
+            proj_hid=512,
+            proj_out=512,
+            pred_hid=256,
+            pred_out=512,
             last_linear_layer_init_zero=True,
             state_norm=False,
         ),
@@ -92,19 +118,16 @@ gomoku_efficientzero_config = dict(
             # batch_size=4,
 
             batch_size=256,
+            update_per_collect=update_per_collect,
 
-            # one_player_mode, board_size=6, episode_length=6**2/2=18
-            # n_episode=8,  update_per_collect=18*8=144
-            # update_per_collect=int(board_size ** 2 / 2 * n_episode),
-            update_per_collect=int(board_size ** 2 / 2 * n_episode * data_reuse_factor),
+            # optim_type='SGD',
+            # learning_rate=0.2,  # lr_manually
+            # should set lr_manually=True, 0.2->0.02->0.002
 
-            # two_player_mode, board_size=6, episode_length=6**2=36
-            # n_episode=8,  update_per_collect=36*8=268
-            # update_per_collect=int(board_size ** 2 * n_episode),
-
-            learning_rate=0.0003,  # use manually lr
+            optim_type='Adam',
+            learning_rate=0.001,  # adam lr
             # Frequency of target network update.
-            target_update_freq=400,
+            target_update_freq=100,
         ),
         # collect_mode config
         collect=dict(
@@ -133,6 +156,10 @@ gomoku_efficientzero_config = dict(
         image_based=False,
         cvt_string=False,
         clip_reward=True,
+        normalize_reward=False,
+        # normalize_reward=True,
+        normalize_reward_scale=100,
+
         game_wrapper=True,
         action_space_size=int(board_size * board_size),
         amp_type='none',
@@ -163,23 +190,25 @@ gomoku_efficientzero_config = dict(
         # num_unroll_steps=5,
         # lstm_horizon_len=5,
 
-        collector_env_num=8,
-        evaluator_env_num=5,
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
         total_transitions=int(1e5),
-        num_simulations=50,
+        num_simulations=num_simulations,
         batch_size=256,
-        lstm_hidden_size=512,
+        # lstm_hidden_size=512,
+        # half size model
+        lstm_hidden_size=256,
         # to make sure the value target is the final outcome
         td_steps=int(board_size * board_size),
         num_unroll_steps=5,
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        revisit_policy_search_rate=0.99,
+        reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
-        lr_manually=True,  # use manually lr
-        # lr_manually=False,  # use fixed lr
+        # lr_manually=True,  # use manually lr
+        lr_manually=False,  # use fixed lr
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority
@@ -190,7 +219,9 @@ gomoku_efficientzero_config = dict(
         max_training_steps=int(1e5),
         auto_temperature=False,
         # only effective when auto_temperature=False
-        fixed_temperature_value=0.25,
+        # fixed_temperature_value=0.25,
+        fixed_temperature_value=1,
+
         # TODO(pu): whether to use root value in reanalyzing?
         use_root_value=False,
 
@@ -213,10 +244,8 @@ gomoku_efficientzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=True,
+        categorical_distribution=categorical_distribution,
         support_size=300,
-        # value_support=DiscreteSupport(-300, 300, delta=1),
-        # reward_support=DiscreteSupport(-300, 300, delta=1),
         max_grad_norm=10,
         test_interval=10000,
         log_interval=1000,
@@ -245,12 +274,18 @@ gomoku_efficientzero_config = dict(
         consistency_coeff=2,
         # consistency_coeff=0,
 
-        bn_mt=0.1,
         # siamese
-        proj_hid=1024,
-        proj_out=1024,
-        pred_hid=512,
-        pred_out=1024,
+        # proj_hid=1024,
+        # proj_out=1024,
+        # pred_hid=512,
+        # pred_out=1024,
+        # half size model
+        proj_hid=512,
+        proj_out=512,
+        pred_hid=256,
+        pred_out=512,
+
+        bn_mt=0.1,
         blocks=1,  # Number of blocks in the ResNet
         channels=16,  # Number of channels in the ResNet
         reduced_channels_reward=16,  # x36 Number of channels in reward head
@@ -289,4 +324,5 @@ create_config = gomoku_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_efficientzero
+
     serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e6))

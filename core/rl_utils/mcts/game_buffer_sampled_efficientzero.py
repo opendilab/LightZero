@@ -1240,3 +1240,21 @@ class SampledGameBuffer(Buffer):
         # a batch contains the inputs and the targets
         train_data = [inputs_batch, targets_batch, self]
         return train_data
+
+    def save_data(self, file_name: str):
+        """
+        Overview:
+            Save buffer data into a file.
+        Arguments:
+            - file_name (:obj:`str`): file name of buffer data
+        """
+        pass
+
+    def load_data(self, file_name: str):
+        """
+        Overview:
+            Load buffer data from a file.
+        Arguments:
+            - file_name (:obj:`str`): file name of buffer data
+        """
+        pass
