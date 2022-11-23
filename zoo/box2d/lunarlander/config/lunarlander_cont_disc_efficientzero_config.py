@@ -1,7 +1,7 @@
 import sys
 # sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/mnt/lustre/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 import torch
@@ -17,14 +17,14 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 categorical_distribution = True
-num_simulations = 200  # action_space_size=16
-# num_simulations = 50  # action_space_size=4
+# num_simulations = 200  # action_space_size=16
+num_simulations = 50  # action_space_size=4
 
 # TODO(pu):
 # The key hyper-para to tune, for different env, we have different episode_length
 # e.g. reuse_factor = 0.5
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 500
+update_per_collect = 250
 
 # for debug
 # collector_env_num = 1
@@ -32,13 +32,13 @@ update_per_collect = 500
 # evaluator_env_num = 1
 
 lunarlander_cont_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/lunarlander_cont_disc_efficientzero_seed0_sub883_ghl400_halfmodel_ns{num_simulations}_upc{update_per_collect}_cdt_rew-max-norm-100_adam1e-3',
+    exp_name=f'data_ez_ctree/lunarlander_cont_disc_k9_efficientzero_seed0_sub883_ghl200_halfmodel_ns{num_simulations}_upc{update_per_collect}_cdt_mlr',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         env_id='LunarLanderContinuous-v2',
-        each_dim_disc_size=4,  # action_space_size=16,  # 4**2
+        each_dim_disc_size=3,  # action_space_size=16,  # 4**2
         stop_value=300,
         battle_mode='one_player_mode',
         prob_random_agent=0.,
@@ -60,7 +60,7 @@ lunarlander_cont_disc_efficientzero_config = dict(
             # [S, W, H, C] -> [S x C, W, H]
             # [4,8,1,1] -> [4*1, 8, 1]
             observation_shape=(4, 8, 1),  # if frame_stack_nums=4
-            action_space_size=16,  # 4**2
+            action_space_size=9,  # 4**2
 
             downsample=False,
             num_blocks=1,
@@ -102,9 +102,11 @@ lunarlander_cont_disc_efficientzero_config = dict(
 
             batch_size=256,
 
-            optim_type='Adam',
-            learning_rate=0.001,  # adam lr
-            # learning_rate=0.2,  # lr_manually
+            # optim_type='Adam',
+            # learning_rate=0.001,  # adam lr
+
+            optim_type='SGD',
+            learning_rate=0.2,  # lr_manually
 
             # Frequency of target network update.
             target_update_freq=100,
@@ -132,7 +134,7 @@ lunarlander_cont_disc_efficientzero_config = dict(
         device=device,
         mcts_ctree=True,
         battle_mode='one_player_mode',
-        game_history_length=400,
+        game_history_length=200,
 
         image_based=False,
         cvt_string=False,
@@ -140,12 +142,12 @@ lunarlander_cont_disc_efficientzero_config = dict(
         # clip_reward=True,
         # TODO(pu)
         clip_reward=False,
-        # normalize_reward=False,
-        normalize_reward=True,
+        normalize_reward=False,
+        # normalize_reward=True,
         normalize_reward_scale=100,
 
         game_wrapper=True,
-        action_space_size=16,  # 4**2
+        action_space_size=9,  # 4**2
         amp_type='none',
 
         # [S, W, H, C] -> [S x C, W, H]
@@ -197,8 +199,8 @@ lunarlander_cont_disc_efficientzero_config = dict(
         reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
-        # lr_manually=True,
-        lr_manually=False,
+        lr_manually=True,
+        # lr_manually=False,
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority

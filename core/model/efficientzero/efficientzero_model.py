@@ -627,6 +627,7 @@ class EfficientZeroNet(BaseNet):
         action_one_hot = (action[:, :, None, None] * action_one_hot / self.action_space_size)
 
         x = torch.cat((encoded_state, action_one_hot), dim=1)
+        # NOTE: the key difference with MuZero
         next_encoded_state, reward_hidden_state, value_prefix = self.dynamics_network(x, reward_hidden_state)
         if not self.state_norm:
             return next_encoded_state, reward_hidden_state, value_prefix

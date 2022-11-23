@@ -125,15 +125,17 @@ class MuZeroPolicy(Policy):
         return 'MuZeroNet', ['core.model.muzero.muzero_model']
 
     def _init_learn(self) -> None:
-        self._optimizer = optim.SGD(
-            self._model.parameters(),
-            lr=self._cfg.learn.learning_rate,
-            momentum=self._cfg.learn.momentum,
-            weight_decay=self._cfg.learn.weight_decay,
-            # grad_clip_type=self._cfg.learn.grad_clip_type,
-            # clip_value=self._cfg.learn.grad_clip_value,
-        )
-        # self._optimizer = Adam(self._model.parameters(), lr=self._cfg.learn.learning_rate)
+        if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
+            self._optimizer = optim.SGD(
+                self._model.parameters(),
+                lr=self._cfg.learn.learning_rate,
+                momentum=self._cfg.learn.momentum,
+                weight_decay=self._cfg.learn.weight_decay,
+                # grad_clip_type=self._cfg.learn.grad_clip_type,
+                # clip_value=self._cfg.learn.grad_clip_value,
+            )
+        elif self._cfg.learn.optim_type == 'Adam':
+            self._optimizer = optim.Adam(self._model.parameters(), lr=self._cfg.learn.learning_rate, weight_decay=self._cfg.learn.weight_decay)
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
@@ -537,8 +539,8 @@ class MuZeroPolicy(Policy):
             'target_value': td_data[2].flatten().mean().item(),
             'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
             'transformed_target_value': td_data[4].flatten().mean().item(),
-            'predicted_value_prefixs': td_data[6].flatten().mean().item(),
-            'predicted_values': td_data[7].flatten().mean().item(),
+            'predicted_value_prefixs': td_data[5].flatten().mean().item(),
+            'predicted_values': td_data[6].flatten().mean().item(),
             # 'target_policy':td_data[9],
             # 'predicted_policies':td_data[10]
             # 'td_data': td_data,

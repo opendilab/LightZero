@@ -16,9 +16,9 @@ from ding.torch_utils.data_helper import to_ndarray
 from ding.utils import BUFFER_REGISTRY
 
 # python mcts
-import core.rl_utils.mcts.ptree as ptree
+import core.rl_utils.mcts.ptree_efficientzero as ptree
 # cpp mcts
-from .ctree import cytree as ctree
+from .ctree_efficientzero import cytree as ctree
 from .mcts_ctree import EfficientZeroMCTSCtree as MCTS_ctree
 from .mcts_ptree import EfficientZeroMCTSPtree as MCTS_ptree
 from .utils import prepare_observation_lst, concat_output, concat_output_value
@@ -702,7 +702,7 @@ class GameBuffer(Buffer):
                         [i for i, x in enumerate(action_mask[j]) if x == 1]
                         for j in range(batch_size)
                     ]
-                    # roots = ctree.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
+                    # roots = ctree_efficientzero.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
                     roots = ctree.Roots(batch_size, self.config.num_simulations, legal_actions)
 
                     noises = [
@@ -731,7 +731,7 @@ class GameBuffer(Buffer):
                         [i for i, x in enumerate(action_mask[j]) if x == 1]
                         for j in range(batch_size)
                     ]
-                    roots = ptree.Roots(batch_size, self.config.num_simulations, legal_actions)
+                    roots = ptree_efficientzero.Roots(batch_size, self.config.num_simulations, legal_actions)
                     noises = [
                         np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(batch_size)
@@ -936,7 +936,7 @@ class GameBuffer(Buffer):
                     [i for i, x in enumerate(action_mask[j]) if x == 1]
                     for j in range(batch_size)
                 ]
-                # roots = ctree.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
+                # roots = ctree_efficientzero.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
                 roots = ctree.Roots(batch_size, self.config.num_simulations, legal_actions)
 
                 noises = [
@@ -967,7 +967,7 @@ class GameBuffer(Buffer):
                     ]
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
-                roots = ptree.Roots(batch_size,  self.config.num_simulations, legal_actions)
+                roots = ptree_efficientzero.Roots(batch_size, self.config.num_simulations, legal_actions)
                 noises = [
                     np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(batch_size)

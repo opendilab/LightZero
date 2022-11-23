@@ -14,7 +14,7 @@ from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
 
 # python mcts
-import core.rl_utils.mcts.ptree as ptree
+import core.rl_utils.mcts.ptree_efficientzero as ptree
 from core.rl_utils import EfficientZeroMCTSCtree as MCTS_ctree
 from core.rl_utils import EfficientZeroVisualizeMCTSPtree as MCTSPtree
 from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
@@ -22,7 +22,7 @@ from core.rl_utils import Transforms, visit_count_temperature, modified_cross_en
 from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
 # cpp mcts
-from core.rl_utils.mcts.ctree import cytree as ctree
+from core.rl_utils.mcts.ctree_efficientzero import cytree as ctree
 
 
 @POLICY_REGISTRY.register('efficientzero_visualize')
@@ -599,7 +599,7 @@ class EfficientZeroVisualizePolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = ptree.Roots(active_collect_env_num, self._cfg.num_simulations, legal_actions)
+                roots = ptree_efficientzero.Roots(active_collect_env_num, self._cfg.num_simulations, legal_actions)
                 # the only difference between collect and eval is the dirichlet noise
                 # noises = [
                 #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -724,7 +724,7 @@ class EfficientZeroVisualizePolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ptree.Roots(active_eval_env_num, self._cfg.num_simulations, legal_actions)
+                roots = ptree_efficientzero.Roots(active_eval_env_num, self._cfg.num_simulations, legal_actions)
 
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)

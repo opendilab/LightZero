@@ -12,7 +12,7 @@ from ..scaling_transform import inverse_scalar_transform
 ###########################################################
 # EfficientZero
 ###########################################################
-import core.rl_utils.mcts.ptree as tree
+import core.rl_utils.mcts.ptree_efficientzero as tree
 
 
 class EfficientZeroVisualizeMCTSPtree(object):

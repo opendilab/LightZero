@@ -24,7 +24,14 @@ num_simulations = 50  # action_space_size=6
 # The key hyper-para to tune, for different env, we have different episode_length
 # e.g. reuse_factor = 0.5
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 500
+
+# episode_length=200, 200*8=1600
+# dqn: n_sample 64 -> update_per_collect 10
+# mcts: 1600 -> 250
+
+# update_per_collect = 500
+update_per_collect = 250
+
 
 # for debug
 # collector_env_num = 1
@@ -32,9 +39,7 @@ update_per_collect = 500
 # evaluator_env_num = 1
 
 lunarlander_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_halfmodel_ns{num_simulations}_upc{update_per_collect}_relu_cdt_rew-max-norm-100_adam1e-3',
-    # exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl400_fullmodel_ns{num_simulations}_upc{update_per_collect}_relu_cdf',
-
+    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl200_halfmodel_ftv025_ns{num_simulations}_upc{update_per_collect}_cdt_mlr_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -102,19 +107,16 @@ lunarlander_disc_efficientzero_config = dict(
             # update_per_collect=2,
             # batch_size=4,
 
-            # episode_length=200, 200*8=1600
-            # dqn: n_sample 64 -> update_per_collect 10
-            # mcts: 1600 -> 250
             update_per_collect=update_per_collect,
             target_update_freq=100,
 
             batch_size=256,
 
-            # optim_type='SGD',
-            # learning_rate=0.2,  # lr_manually
+            optim_type='SGD',
+            learning_rate=0.2,  # lr_manually
 
-            optim_type='Adam',
-            learning_rate=0.001,  # adam lr
+            # optim_type='Adam',
+            # learning_rate=0.001,  # adam lr
         ),
         # collect_mode config
         collect=dict(
@@ -124,7 +126,9 @@ lunarlander_disc_efficientzero_config = dict(
         ),
         # the eval cost is expensive, so we set eval_freq larger
         # eval=dict(evaluator=dict(eval_freq=int(5e3), )),
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        # eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        eval=dict(evaluator=dict(eval_freq=int(1e3), )),
+
         # for debug
         # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
@@ -139,7 +143,7 @@ lunarlander_disc_efficientzero_config = dict(
         device=device,
         mcts_ctree=True,
         battle_mode='one_player_mode',
-        game_history_length=400,
+        game_history_length=200,
         # game_history_length=50,
 
         image_based=False,
@@ -148,8 +152,8 @@ lunarlander_disc_efficientzero_config = dict(
         # clip_reward=True,
         # TODO(pu)
         clip_reward=False,
-        # normalize_reward=False,
-        normalize_reward=True,
+        normalize_reward=False,
+        # normalize_reward=True,
         normalize_reward_scale=100,
 
         game_wrapper=True,
@@ -205,8 +209,8 @@ lunarlander_disc_efficientzero_config = dict(
         reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
-        # lr_manually=True,
-        lr_manually=False,
+        lr_manually=True,
+        # lr_manually=False,
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority
@@ -242,7 +246,9 @@ lunarlander_disc_efficientzero_config = dict(
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         categorical_distribution=categorical_distribution,
         support_size=300,
-        max_grad_norm=10,
+        # max_grad_norm=10,
+        max_grad_norm=0.5,
+
         test_interval=10000,
         log_interval=1000,
         vis_interval=1000,

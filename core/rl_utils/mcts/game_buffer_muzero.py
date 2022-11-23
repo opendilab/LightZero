@@ -645,7 +645,7 @@ class MuZeroGameBuffer(Buffer):
                 tmp += i
             action_mask = tmp
 
-        batch_values, batch_value_prefixs = [], []
+        batch_values, batch_rewards = [], []
         with torch.no_grad():
             value_obs_lst = prepare_observation_lst(value_obs_lst)
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
@@ -681,10 +681,10 @@ class MuZeroGameBuffer(Buffer):
             if self.config.use_root_value:
                 # use the root values from MCTS
                 # the root values have limited improvement but require much more GPU actors;
-                _, value_prefix_pool, policy_logits_pool, hidden_state_roots, reward_hidden_state_roots = concat_output(
+                _, reward_pool, policy_logits_pool, hidden_state_roots, reward_hidden_state_roots = concat_output(
                     network_output
                 )
-                value_prefix_pool = value_prefix_pool.squeeze().tolist()
+                reward_pool = reward_pool.squeeze().tolist()
                 policy_logits_pool = policy_logits_pool.tolist()
 
                 if self.config.mcts_ctree:
@@ -702,7 +702,7 @@ class MuZeroGameBuffer(Buffer):
                         [i for i, x in enumerate(action_mask[j]) if x == 1]
                         for j in range(batch_size)
                     ]
-                    # roots = ctree.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
+                    # roots = ctree_efficientzero.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
                     roots = ctree.Roots(batch_size, self.config.num_simulations, legal_actions)
 
                     noises = [
@@ -712,7 +712,7 @@ class MuZeroGameBuffer(Buffer):
                     roots.prepare(
                         self.config.root_exploration_fraction,
                         noises,
-                        value_prefix_pool,
+                        reward_pool,
                         policy_logits_pool,
                         to_play
                     )
@@ -741,7 +741,7 @@ class MuZeroGameBuffer(Buffer):
                         roots.prepare(
                             self.config.root_exploration_fraction,
                             noises,
-                            value_prefix_pool,
+                            reward_pool,
                             policy_logits_pool,
                             to_play=None
                         )
@@ -753,7 +753,7 @@ class MuZeroGameBuffer(Buffer):
                         roots.prepare(
                             self.config.root_exploration_fraction,
                             noises,
-                            value_prefix_pool,
+                            reward_pool,
                             policy_logits_pool,
                             to_play=to_play
                         )
@@ -779,9 +779,9 @@ class MuZeroGameBuffer(Buffer):
             for traj_len_non_re, reward_lst, state_index in zip(traj_lens, rewards_lst, state_index_lst):
                 # traj_len = len(game)
                 target_values = []
-                target_value_prefixs = []
+                target_rewards = []
 
-                value_prefix = 0.0
+                reward = 0.0
                 base_index = state_index
                 for current_index in range(state_index, state_index + self.config.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_lst[value_index]
@@ -791,7 +791,7 @@ class MuZeroGameBuffer(Buffer):
 
                     # reset every lstm_horizon_len
                     if horizon_id % self.config.lstm_horizon_len == 0:
-                        value_prefix = 0.0
+                        reward = 0.0
                         base_index = current_index
                     horizon_id += 1
 
@@ -799,22 +799,22 @@ class MuZeroGameBuffer(Buffer):
                         target_values.append(value_lst[value_index])
                         # Since the horizon is small and the discount is close to 1.
                         # Compute the reward sum to approximate the value prefix for simplification
-                        # value_prefix += reward_lst[current_index]  # * config.discount ** (current_index - base_index)
-                        # value_prefix += reward_lst[current_index]  # * config.discount ** (current_index - base_index)
-                        # target_value_prefixs.append(value_prefix)
-                        target_value_prefixs.append(reward_lst[current_index])
+                        # reward += reward_lst[current_index]  # * config.discount ** (current_index - base_index)
+                        # reward += reward_lst[current_index]  # * config.discount ** (current_index - base_index)
+                        # target_rewards.append(reward)
+                        target_rewards.append(reward_lst[current_index])
                     else:
                         target_values.append(0)
-                        # target_value_prefixs.append(value_prefix)
-                        target_value_prefixs.append(0.0)
+                        # target_rewards.append(reward)
+                        target_rewards.append(0.0)
                     value_index += 1
 
-                batch_value_prefixs.append(target_value_prefixs)
+                batch_rewards.append(target_rewards)
                 batch_values.append(target_values)
 
-        batch_value_prefixs = np.asarray(batch_value_prefixs)
+        batch_rewards = np.asarray(batch_rewards)
         batch_values = np.asarray(batch_values)
-        return batch_value_prefixs, batch_values
+        return batch_rewards, batch_values
 
     # @profile
     def compute_target_policy_reanalyzed(self, policy_re_context, model):
@@ -899,10 +899,10 @@ class MuZeroGameBuffer(Buffer):
                     )
                 network_output.append(m_output)
 
-            _, value_prefix_pool, policy_logits_pool, hidden_state_roots, reward_hidden_state_roots = concat_output(
+            _, reward_pool, policy_logits_pool, hidden_state_roots, reward_hidden_state_roots = concat_output(
                 network_output
             )
-            value_prefix_pool = value_prefix_pool.squeeze().tolist()
+            reward_pool = reward_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
             if self.config.mcts_ctree:
                 """
@@ -919,7 +919,7 @@ class MuZeroGameBuffer(Buffer):
                     [i for i, x in enumerate(action_mask[j]) if x == 1]
                     for j in range(batch_size)
                 ]
-                # roots = ctree.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
+                # roots = ctree_efficientzero.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
                 roots = ctree.Roots(batch_size, self.config.num_simulations, legal_actions)
 
                 noises = [
@@ -929,7 +929,7 @@ class MuZeroGameBuffer(Buffer):
                 roots.prepare(
                     self.config.root_exploration_fraction,
                     noises,
-                    value_prefix_pool,
+                    reward_pool,
                     policy_logits_pool,
                     to_play
                 )
@@ -959,7 +959,7 @@ class MuZeroGameBuffer(Buffer):
                     roots.prepare(
                         self.config.root_exploration_fraction,
                         noises,
-                        value_prefix_pool,
+                        reward_pool,
                         policy_logits_pool,
                         to_play=None
                     )
@@ -971,7 +971,7 @@ class MuZeroGameBuffer(Buffer):
                     roots.prepare(
                         self.config.root_exploration_fraction,
                         noises,
-                        value_prefix_pool,
+                        reward_pool,
                         policy_logits_pool,
                         to_play=to_play
                     )
@@ -1180,7 +1180,7 @@ class MuZeroGameBuffer(Buffer):
         reward_value_context, policy_re_context, policy_non_re_context, inputs_batch = input_context
 
         # target reward, value
-        batch_value_prefixs, batch_values = self.compute_target_reward_value(reward_value_context, policy._target_model)
+        batch_rewards, batch_values = self.compute_target_reward_value(reward_value_context, policy._target_model)
         # target policy
         batch_target_policies_re = self.compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
         batch_target_policies_non_re = self.compute_target_policy_non_reanalyzed(policy_non_re_context)
@@ -1188,7 +1188,7 @@ class MuZeroGameBuffer(Buffer):
             batch_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
         else:
             batch_policies = batch_target_policies_re
-        targets_batch = [batch_value_prefixs, batch_values, batch_policies]
+        targets_batch = [batch_rewards, batch_values, batch_policies]
         # a batch contains the inputs and the targets
         train_data = [inputs_batch, targets_batch, self]
         return train_data

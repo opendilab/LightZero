@@ -1,8 +1,8 @@
 import sys
 # sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
-# sys.path.append('/mnt/lustre/puyuan/LightZero')
+# sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 import torch
 from easydict import EasyDict
@@ -23,7 +23,9 @@ num_simulations = 50  # action_space_size=20
 # The key hyper-para to tune, for different env, we have different episode_length
 # e.g. reuse_factor = 0.5
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 500
+# update_per_collect = 500
+update_per_collect = 250
+
 
 # for debug
 # collector_env_num = 1
@@ -31,7 +33,8 @@ update_per_collect = 500
 # evaluator_env_num = 1
 
 lunarlander_cont_disc_sampled_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/lunarlander_cont_sampled_efficientzero_seed0_sub883_ghl400_halfmodel_k20_ns{num_simulations}_upc{update_per_collect}_cdt_rew-max-norm-100_adam1e-3',
+    exp_name=f'data_ez_ctree/lunarlander_cont_sampled_efficientzero_seed0_sub883_ghl200_halfmodel_k20_ns{num_simulations}_upc{update_per_collect}_cdt_mlr',
+    # exp_name=f'data_ez_ctree/lunarlander_cont_sampled_efficientzero_seed0_sub883_ghl400_halfmodel_k20_ns{num_simulations}_upc{update_per_collect}_cdt_rew-max-norm-100_adam1e-3',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -105,11 +108,11 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
             target_update_freq=100,
             batch_size=256,
 
-            # optim_type='SGD',
-            # learning_rate=0.2,  # lr_manually
+            optim_type='SGD',
+            learning_rate=0.2,  # lr_manually
 
-            optim_type='Adam',
-            learning_rate=0.001,  # adam lr
+            # optim_type='Adam',
+            # learning_rate=0.001,  # adam lr
         ),
         # collect_mode config
         collect=dict(
@@ -135,7 +138,7 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         # mcts_ctree=False,
         mcts_ctree=True,
         battle_mode='one_player_mode',
-        game_history_length=400,
+        game_history_length=200,
         # game_history_length=50,
         action_space_size=2,  # 4**2
         continuous_action_space=True,
@@ -143,8 +146,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         # clip_reward=True,
         # TODO(pu)
         clip_reward=False,
-        # normalize_reward=False,
-        normalize_reward=True,
+        normalize_reward=False,
+        # normalize_reward=True,
         normalize_reward_scale=100,
 
         image_based=False,
@@ -197,8 +200,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
-        # lr_manually=True,
-        lr_manually=False,
+        lr_manually=True,
+        # lr_manually=False,
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority

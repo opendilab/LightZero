@@ -61,7 +61,7 @@ class TicTacToeEnv(BaseGameEnv):
         Overview: 
             Env reset and custom state start by init_state
         Arguments:
-            start_player_index: players = [1,2], plater_index = [0,1]
+            start_player_index: players = [1,2], player_index = [0,1]
             inti_state: custom state start
         """
         self._observation_space = gym.spaces.Box(

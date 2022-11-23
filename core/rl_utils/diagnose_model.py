@@ -5,7 +5,7 @@ import torch
 
 import models
 from self_play import MCTS, Node, SelfPlay
-from mcts.ptree.node import Node
+from mcts.ptree_efficientzero.node import Node
 from mcts.mcts_ptree import MCTS, Node, SelfPlay
 
 

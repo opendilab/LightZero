@@ -1,7 +1,7 @@
 """
 The following code is adapted from https://github.com/YeWR/EfficientZero/blob/main/core/test.py
 """
-import core.rl_utils.mcts.ctree.cytree as cytree
+import core.rl_utils.mcts.ctree_efficientzero.cytree as cytree
 import numpy as np
 import pytest
 import torch

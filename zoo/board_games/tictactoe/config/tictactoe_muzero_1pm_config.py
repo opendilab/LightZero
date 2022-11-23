@@ -17,13 +17,15 @@ from easydict import EasyDict
 
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 3
+evaluator_env_num = 5
 batch_size = 256
 
 categorical_distribution = True
 num_simulations = 25  # action_space_size=9
 
 # TODO(pu):
+# PER, stack1
+
 # The key hyper-para to tune, for different env, we have different episode_length
 # e.g. reuse_factor = 0.5
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
@@ -34,7 +36,7 @@ num_simulations = 25  # action_space_size=9
 # two_player_mode, board_size=3, episode_length=3**2=9
 # collector_env_num=8,  n_sample_per_collect=9*8=72
 
-update_per_collect = 20
+update_per_collect = 40
 
 # for debug
 # collector_env_num = 1
@@ -42,7 +44,7 @@ update_per_collect = 20
 # evaluator_env_num = 1
 
 tictactoe_muzero_config = dict(
-    exp_name=f'data_mz_ctree/tictactoe_1pm_muzero_seed0_sub883_ghl5_ftv1_cc2_ns{num_simulations}_upc{update_per_collect}_cdt_adam1e-3',
+    exp_name=f'data_mz_ctree/tictactoe_1pm_muzero_seed0_sub885_ghl5_ftv1_cc0_fs2_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -71,7 +73,9 @@ tictactoe_muzero_config = dict(
             representation_model_type='conv_res_blocks',
             # [S, W, H, C] -> [S x C, W, H]
             # [4, 3, 3, 3] -> [12, 3, 3]
-            observation_shape=(12, 3, 3),  # if frame_stack_nums=4
+            # observation_shape=(12, 3, 3),  # if frame_stack_num=4
+            observation_shape=(6, 3, 3),  # if frame_stack_num=2
+            # observation_shape=(3, 3, 3),  # if frame_stack_num=1
             action_space_size=9,
             downsample=False,
             num_blocks=1,
@@ -104,11 +108,14 @@ tictactoe_muzero_config = dict(
 
             # optim_type='SGD',
             optim_type='Adam',
-            learning_rate=0.001,  # adam lr
+            learning_rate=0.003,  # adam lr
             # learning_rate=0.2,  # use manually lr
 
             # Frequency of target network update.
             target_update_freq=100,
+
+            weight_decay=1e-4,
+            momentum=0.9,
         ),
         # collect_mode config
         collect=dict(
@@ -145,8 +152,12 @@ tictactoe_muzero_config = dict(
         amp_type='none',
         # [S, W, H, C] -> [S x C, W, H]
         # [4, 3, 3, 3] -> [12, 3, 3]
-        obs_shape=(12, 3, 3),  # if frame_stack_num=4
-        frame_stack_num=4,
+        # obs_shape=(12, 3, 3),  # if frame_stack_num=4
+        # frame_stack_num=4,
+        obs_shape=(6, 3, 3),  # if frame_stack_num=4
+        frame_stack_num=2,
+        # obs_shape=(3, 3, 3),  # if frame_stack_num=4
+        # frame_stack_num=1,
         image_channel=3,
         gray_scale=False,
         downsample=False,
@@ -227,7 +238,8 @@ tictactoe_muzero_config = dict(
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         categorical_distribution=categorical_distribution,
         support_size=10,
-        max_grad_norm=10,
+        # max_grad_norm=10,
+        max_grad_norm=0.5,
         test_interval=10000,
         log_interval=1000,
         vis_interval=1000,
@@ -247,9 +259,10 @@ tictactoe_muzero_config = dict(
         # TODO(pu): EfficientZero -> MuZero
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
-        reward_loss_coeff=1,  # value_prefix_loss
-        # consistency_coeff=0,
-        consistency_coeff=2,
+        reward_loss_coeff=1,
+        consistency_coeff=0,
+        # consistency_coeff=2,
+
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
 
