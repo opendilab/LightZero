@@ -13,7 +13,7 @@ import torch.nn as nn
 class NetworkOutput:
     # output format of the model
     value: float
-    value_prefix: float
+    reward: float
     policy_logits: List[float]
     hidden_state: List[float]
     reward_hidden_state: object
@@ -63,9 +63,9 @@ class BaseNet(nn.Module):
     def recurrent_inference(
             self, hidden_state: torch.Tensor, reward_hidden: torch.Tensor, action: torch.Tensor
     ) -> NetworkOutput:
-        hidden_state, reward_hidden, value_prefix = self.dynamics(hidden_state, reward_hidden, action)
+        hidden_state, reward_hidden, reward = self.dynamics(hidden_state, reward_hidden, action)
         policy_logits, value = self.prediction(hidden_state)
-        return NetworkOutput(value, value_prefix, policy_logits, hidden_state, reward_hidden)
+        return NetworkOutput(value, reward, policy_logits, hidden_state, reward_hidden)
 
     def get_gradients(self):
         grads = []

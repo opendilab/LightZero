@@ -217,7 +217,7 @@ class DynamicsNetwork(nn.Module):
         self.bn_reward = nn.BatchNorm2d(reduced_channels_reward, momentum=momentum)
         self.block_output_size_reward = block_output_size_reward
         # self.lstm = nn.LSTM(input_size=self.block_output_size_reward, hidden_size=self.lstm_hidden_size)
-        # self.bn_value_prefix = nn.BatchNorm1d(self.lstm_hidden_size, momentum=momentum)
+        # self.bn_reward = nn.BatchNorm1d(self.lstm_hidden_size, momentum=momentum)
         # TODO(pu)
         # self.fc = MLP(
         #     in_channels=self.lstm_hidden_size,
@@ -265,13 +265,13 @@ class DynamicsNetwork(nn.Module):
         # # RuntimeError: view size is not compatible with input tensor size and stride (at least one dimension spans
         # # across two contiguous subspaces)
         # x = x.contiguous().view(-1, self.block_output_size_reward).unsqueeze(0)
-        # value_prefix, reward_hidden_state = self.lstm(x, reward_hidden_state)
-        # value_prefix = value_prefix.squeeze(0)
-        # value_prefix = self.bn_value_prefix(value_prefix)
-        # value_prefix = self.activation(value_prefix)
-        # value_prefix = self.fc(value_prefix)
+        # reward, reward_hidden_state = self.lstm(x, reward_hidden_state)
+        # reward = reward.squeeze(0)
+        # reward = self.bn_reward(reward)
+        # reward = self.activation(reward)
+        # reward = self.fc(reward)
 
-        # return state, reward_hidden_state, value_prefix
+        # return state, reward_hidden_state, reward
         return state, reward_hidden_state, reward
 
     def get_dynamic_mean(self):
@@ -466,7 +466,7 @@ class MuZeroNet(BaseNet):
             - pred_out (:obj:`int`): dim of projection head (prediction) output layer
             - last_linear_layer_init_zero (:obj:`bool`): True -> zero initialization for the last layer of value/policy mlp
             - state_norm (:obj:`bool`):  True -> normalization for hidden states
-            - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/value_prefix
+            - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/reward
         """
         super(MuZeroNet, self).__init__(lstm_hidden_size)
         self.categorical_distribution = categorical_distribution
@@ -625,12 +625,12 @@ class MuZeroNet(BaseNet):
         action_one_hot = (action[:, :, None, None] * action_one_hot / self.action_space_size)
 
         x = torch.cat((encoded_state, action_one_hot), dim=1)
-        next_encoded_state, reward_hidden_state, value_prefix = self.dynamics_network(x, reward_hidden_state)
+        next_encoded_state, reward_hidden_state, reward = self.dynamics_network(x, reward_hidden_state)
         if not self.state_norm:
-            return next_encoded_state, reward_hidden_state, value_prefix
+            return next_encoded_state, reward_hidden_state, reward
         else:
             next_encoded_state_normalized = renormalize(next_encoded_state)
-            return next_encoded_state_normalized, reward_hidden_state, value_prefix
+            return next_encoded_state_normalized, reward_hidden_state, reward
 
     def get_params_mean(self):
         representation_mean = self.representation_network.get_param_mean()
