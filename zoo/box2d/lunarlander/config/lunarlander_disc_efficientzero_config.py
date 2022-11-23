@@ -39,7 +39,7 @@ update_per_collect = 250
 # evaluator_env_num = 1
 
 lunarlander_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl200_halfmodel_ftv025_ns{num_simulations}_upc{update_per_collect}_cdt_mlr_mgn05',
+    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl200_halfmodel_ftv025_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -112,11 +112,11 @@ lunarlander_disc_efficientzero_config = dict(
 
             batch_size=256,
 
-            optim_type='SGD',
-            learning_rate=0.2,  # lr_manually
+            # optim_type='SGD',
+            # learning_rate=0.2,  # lr_manually
 
-            # optim_type='Adam',
-            # learning_rate=0.001,  # adam lr
+            optim_type='Adam',
+            learning_rate=0.003,  # adam lr
         ),
         # collect_mode config
         collect=dict(
@@ -209,8 +209,8 @@ lunarlander_disc_efficientzero_config = dict(
         reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
-        lr_manually=True,
-        # lr_manually=False,
+        # lr_manually=True,
+        lr_manually=False,
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority
@@ -271,7 +271,8 @@ lunarlander_disc_efficientzero_config = dict(
         reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-        consistency_coeff=2,
+        consistency_coeff=0,
+        # consistency_coeff=2,
 
         # siamese
         # proj_hid=1024,
