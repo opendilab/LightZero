@@ -239,10 +239,12 @@ class EfficientZeroVisualizePolicy(Policy):
             other_loss[key + '_-1'] = -1
             other_loss[key + '_0'] = -1
 
-        # transform targets to categorical representation
+        # scalar transform to transformed Q scale, h(.) function
         transformed_target_value_prefix = scalar_transform(target_value_prefix, self._cfg.support_size)
         transformed_target_value = scalar_transform(target_value, self._cfg.support_size)
         if self._cfg.categorical_distribution:
+            # scalar to categorical_distribution
+            # Under this transformation, each scalar is represented as the linear combination of its two adjacent supports,
             target_value_prefix_phi = reward_phi(self.reward_support, transformed_target_value_prefix)
             target_value_phi = value_phi(self.value_support, transformed_target_value)
 
@@ -255,16 +257,21 @@ class EfficientZeroVisualizePolicy(Policy):
         policy_logits = network_output.policy_logits  # {list: 2} {list:6}
 
         reward_hidden_state = to_device(reward_hidden_state, self._cfg.device)
-        scaled_value = inverse_scalar_transform(value, self._cfg.support_size,
-                                                categorical_distribution=self._cfg.categorical_distribution)
+
+        # h^-1(.) function
+        # transform categorical representation to original_value
+        original_value = inverse_scalar_transform(value, self._cfg.support_size,
+                                                  categorical_distribution=self._cfg.categorical_distribution)
+        # original_value_prefix = inverse_scalar_transform(value_prefix,
+        #                                                self._cfg.support_size,
+        #                                                categorical_distribution=self._cfg.categorical_distribution)
 
         # TODO(pu)
         if not self._learn_model.training:
             # if not in training, obtain the scalars of the value/reward
-            scaled_value = scaled_value.detach().cpu().numpy()
-            scaled_value_prefix = inverse_scalar_transform(value_prefix,
-                                                           self._cfg.support_size,
-                                                           categorical_distribution=self._cfg.categorical_distribution).detach().cpu().numpy()
+            original_value = original_value.detach().cpu().numpy()
+            # original_value_prefix = original_value_prefix.detach().cpu().numpy()
+
             hidden_state = hidden_state.detach().cpu().numpy()
             reward_hidden_state = (
                 reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -277,12 +284,12 @@ class EfficientZeroVisualizePolicy(Policy):
         predicted_value_prefixs = []
         # Note: Following line is just for logging.
         if self._cfg.vis_result:
-            predicted_values, predicted_policies = scaled_value.detach().cpu(), torch.softmax(
+            predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
 
         # calculate the new priorities for each transition
-        value_priority = L1Loss(reduction='none')(scaled_value.squeeze(-1), target_value[:, 0])
+        value_priority = L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0])
         value_priority = value_priority.data.cpu().numpy() + self._cfg.prioritized_replay_eps
 
         # calculate loss for the first step
@@ -310,14 +317,20 @@ class EfficientZeroVisualizePolicy(Policy):
             hidden_state = network_output.hidden_state  # （2, 64, 6, 6）
             reward_hidden_state = network_output.reward_hidden_state  # {tuple:2} (1,2,512)
 
+            # h^-1(.) function
+            # first transform categorical representation to scalar, then transform to original_value
+            original_value = inverse_scalar_transform(value, self._cfg.support_size,
+                                                      categorical_distribution=self._cfg.categorical_distribution)
+            original_value_prefix = inverse_scalar_transform(value_prefix,
+                                                             self._cfg.support_size,
+                                                             categorical_distribution=self._cfg.categorical_distribution)
+
             # TODO(pu)
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                value = inverse_scalar_transform(value, self._cfg.support_size,
-                                                 categorical_distribution=self._cfg.categorical_distribution).detach().cpu().numpy()
-                value_prefix = inverse_scalar_transform(value_prefix,
-                                                        self._cfg.support_size,
-                                                        categorical_distribution=self._cfg.categorical_distribution).detach().cpu().numpy()
+                original_value = original_value.detach().cpu().numpy()
+                original_value_prefix = original_value_prefix.detach().cpu().numpy()
+
                 hidden_state = hidden_state.detach().cpu().numpy()
                 reward_hidden_state = (
                     reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -352,6 +365,11 @@ class EfficientZeroVisualizePolicy(Policy):
                     value_prefix, target_value_prefix_phi[:, step_i]
                 )
             else:
+                # value_loss += torch.nn.MSELoss(reduction='none')(original_value.squeeze(-1),
+                #                                                  transformed_target_value[:, step_i + 1])
+                # value_prefix_loss += torch.nn.MSELoss(reduction='none')(
+                #     original_value_prefix.squeeze(-1), transformed_target_value_prefix[:, step_i]
+                # )
                 value_loss += torch.nn.MSELoss(reduction='none')(value.squeeze(-1),
                                                                  transformed_target_value[:, step_i + 1])
                 value_prefix_loss += torch.nn.MSELoss(reduction='none')(
@@ -371,15 +389,15 @@ class EfficientZeroVisualizePolicy(Policy):
                 )
 
             if self._cfg.vis_result:
-                scaled_value_prefixs = inverse_scalar_transform(value_prefix.detach(), self._cfg.support_size,
-                                                                categorical_distribution=self._cfg.categorical_distribution)
-                scaled_value_prefixs_cpu = scaled_value_prefixs.detach().cpu()
+                original_value_prefixs = inverse_scalar_transform(value_prefix, self._cfg.support_size,
+                                                                  categorical_distribution=self._cfg.categorical_distribution)
+                original_value_prefixs_cpu = original_value_prefixs.detach().cpu()
 
                 predicted_values = torch.cat(
                     (predicted_values, inverse_scalar_transform(value, self._cfg.support_size,
                                                                 categorical_distribution=self._cfg.categorical_distribution).detach().cpu())
                 )
-                predicted_value_prefixs.append(scaled_value_prefixs_cpu)
+                predicted_value_prefixs.append(original_value_prefixs_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
                 state_lst = np.concatenate((state_lst, hidden_state.detach().cpu().numpy()))
 
@@ -391,20 +409,20 @@ class EfficientZeroVisualizePolicy(Policy):
 
                 target_value_prefix_base = target_value_prefix_cpu[:, step_i].reshape(-1).unsqueeze(-1)
 
-                other_loss[key] = metric_loss(scaled_value_prefixs_cpu, target_value_prefix_base)
+                other_loss[key] = metric_loss(original_value_prefixs_cpu, target_value_prefix_base)
                 if value_prefix_indices_1.any():
                     other_loss[key + '_1'] = metric_loss(
-                        scaled_value_prefixs_cpu[value_prefix_indices_1],
+                        original_value_prefixs_cpu[value_prefix_indices_1],
                         target_value_prefix_base[value_prefix_indices_1]
                     )
                 if value_prefix_indices_n1.any():
                     other_loss[key + '_-1'] = metric_loss(
-                        scaled_value_prefixs_cpu[value_prefix_indices_n1],
+                        original_value_prefixs_cpu[value_prefix_indices_n1],
                         target_value_prefix_base[value_prefix_indices_n1]
                     )
                 if value_prefix_indices_0.any():
                     other_loss[key + '_0'] = metric_loss(
-                        scaled_value_prefixs_cpu[value_prefix_indices_0],
+                        original_value_prefixs_cpu[value_prefix_indices_0],
                         target_value_prefix_base[value_prefix_indices_0]
                     )
         # ----------------------------------------------------------------------------------
@@ -419,9 +437,11 @@ class EfficientZeroVisualizePolicy(Policy):
         parameters = self._learn_model.parameters()
 
         total_loss = weighted_loss
-        total_loss.register_hook(lambda grad: grad * gradient_scale)
-        self._optimizer.zero_grad()
 
+        # TODO(pu): test the effect
+        total_loss.register_hook(lambda grad: grad * gradient_scale)
+
+        self._optimizer.zero_grad()
         total_loss.backward()
         torch.nn.utils.clip_grad_norm_(parameters, self._cfg.max_grad_norm)
         self._optimizer.step()
@@ -498,26 +518,56 @@ class EfficientZeroVisualizePolicy(Policy):
         else:
             td_data, priority_data = None, None
 
-        return {
-            # 'priority':priority_info,
-            'total_loss': loss_data[0],
-            'weighted_loss': loss_data[1],
-            'loss_mean': loss_data[2],
-            'policy_loss': loss_data[4],
-            'value_prefix_loss': loss_data[5],
-            'value_loss': loss_data[6],
-            'consistency_loss': loss_data[7],
-            'value_priority': td_data[0].flatten().mean().item(),
-            'target_value_prefix': td_data[1].flatten().mean().item(),
-            'target_value': td_data[2].flatten().mean().item(),
-            'predicted_value_prefixs': td_data[7].flatten().mean().item(),
-            'predicted_values': td_data[8].flatten().mean().item(),
-            # 'target_policy':td_data[9],
-            # 'predicted_policies':td_data[10]
-            # 'td_data': td_data,
-            # 'priority_data_weights': priority_data[0],
-            # 'priority_data_indices': priority_data[1]
-        }
+        if self._cfg.categorical_distribution:
+            # loss_data = (
+            #     total_loss.item(), weighted_loss.item(), loss.mean().item(), 0, policy_loss.mean().item(),
+            #     value_prefix_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
+            # )
+            return {
+                # 'priority':priority_info,
+                'total_loss': loss_data[0],
+                'weighted_loss': loss_data[1],
+                'loss_mean': loss_data[2],
+                'policy_loss': loss_data[4],
+                'value_prefix_loss': loss_data[5],
+                'value_loss': loss_data[6],
+                'consistency_loss': loss_data[7],
+                'value_priority': td_data[0].flatten().mean().item(),
+                'target_value_prefix': td_data[1].flatten().mean().item(),
+                'target_value': td_data[2].flatten().mean().item(),
+                'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
+                'transformed_target_value': td_data[4].flatten().mean().item(),
+                'predicted_value_prefixs': td_data[7].flatten().mean().item(),
+                'predicted_values': td_data[8].flatten().mean().item(),
+                # 'target_policy':td_data[9],
+                # 'predicted_policies':td_data[10]
+                # 'td_data': td_data,
+                # 'priority_data_weights': priority_data[0],
+                # 'priority_data_indices': priority_data[1]
+            }
+        else:
+            return {
+                # 'priority':priority_info,
+                'total_loss': loss_data[0],
+                'weighted_loss': loss_data[1],
+                'loss_mean': loss_data[2],
+                'policy_loss': loss_data[4],
+                'value_prefix_loss': loss_data[5],
+                'value_loss': loss_data[6],
+                'consistency_loss': loss_data[7],
+                'value_priority': td_data[0].flatten().mean().item(),
+                'target_value_prefix': td_data[1].flatten().mean().item(),
+                'target_value': td_data[2].flatten().mean().item(),
+                'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
+                'transformed_target_value': td_data[4].flatten().mean().item(),
+                'predicted_value_prefixs': td_data[5].flatten().mean().item(),
+                'predicted_values': td_data[6].flatten().mean().item(),
+                # 'target_policy':td_data[9],
+                # 'predicted_policies':td_data[10]
+                # 'td_data': td_data,
+                # 'priority_data_weights': priority_data[0],
+                # 'priority_data_indices': priority_data[1]
+            }
 
     def _init_collect(self) -> None:
         self._unroll_len = self._cfg.collect.unroll_len
@@ -599,7 +649,7 @@ class EfficientZeroVisualizePolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = ptree_efficientzero.Roots(active_collect_env_num, self._cfg.num_simulations, legal_actions)
+                roots = ptree.Roots(active_collect_env_num, self._cfg.num_simulations, legal_actions)
                 # the only difference between collect and eval is the dirichlet noise
                 # noises = [
                 #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -609,7 +659,8 @@ class EfficientZeroVisualizePolicy(Policy):
                 #     self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
                 # )
                 #################################################
-                # NOTE: collect demo pc data, we don't add noise
+                # visualize related code
+                # NOTE: collect trained expert agent data, we don't add noise
                 #################################################
 
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
@@ -631,7 +682,8 @@ class EfficientZeroVisualizePolicy(Policy):
                 distributions, value = roots_distributions[i], roots_values[i]
                 # select the argmax, not sampling
                 #################################################
-                # NOTE: collect demo pc data, we use deterministic action
+                # visualize related code
+                # NOTE: collect trained expert agent data, we use deterministic action
                 #################################################
                 action, visit_count_distribution_entropy = select_action(
                     distributions, temperature=1, deterministic=True
@@ -724,7 +776,7 @@ class EfficientZeroVisualizePolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ptree_efficientzero.Roots(active_eval_env_num, self._cfg.num_simulations, legal_actions)
+                roots = ptree.Roots(active_eval_env_num, self._cfg.num_simulations, legal_actions)
 
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)

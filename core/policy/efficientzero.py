@@ -326,6 +326,7 @@ class EfficientZeroPolicy(Policy):
             original_value_prefix = inverse_scalar_transform(value_prefix,
                                                     self._cfg.support_size,
                                                     categorical_distribution=self._cfg.categorical_distribution)
+
             # TODO(pu)
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward

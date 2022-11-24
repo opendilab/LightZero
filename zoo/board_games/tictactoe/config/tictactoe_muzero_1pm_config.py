@@ -311,4 +311,4 @@ create_config = tictactoe_muzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_muzero
-    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(1e5))
