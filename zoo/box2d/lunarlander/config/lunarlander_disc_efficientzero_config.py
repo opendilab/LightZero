@@ -39,7 +39,7 @@ update_per_collect = 250
 # evaluator_env_num = 1
 
 lunarlander_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl200_halfmodel_ftv025_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05',
+    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl200_halfmodel_fs1_ftv025_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -68,8 +68,8 @@ lunarlander_disc_efficientzero_config = dict(
 
             # [S, W, H, C] -> [S x C, W, H]
             # [4,8,1,1] -> [4*1, 8, 1]
-            observation_shape=(4, 8, 1),  # if frame_stack_nums=4
-            # observation_shape=(1, 8, 1),  # if frame_stack_nums=1
+            # observation_shape=(4, 8, 1),  # if frame_stack_nums=4
+            observation_shape=(1, 8, 1),  # if frame_stack_nums=1
 
             action_space_size=4,
 
@@ -163,11 +163,11 @@ lunarlander_disc_efficientzero_config = dict(
         # [S, W, H, C] -> [S x C, W, H]
         # [4,8,1,1] -> [4*1, 8, 1]
         image_channel=1,
-        obs_shape=(4, 8, 1),  # if frame_stack_nums=4
-        frame_stack_num=4,
+        # obs_shape=(4, 8, 1),  # if frame_stack_nums=4
+        # frame_stack_num=4,
 
-        # obs_shape=(1, 8, 1),  # if frame_stack_num=1
-        # frame_stack_num=1,
+        obs_shape=(1, 8, 1),  # if frame_stack_num=1
+        frame_stack_num=1,
 
         gray_scale=False,
         downsample=False,

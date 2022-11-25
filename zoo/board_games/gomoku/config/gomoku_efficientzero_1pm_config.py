@@ -34,7 +34,7 @@ categorical_distribution = True
 # two_player_mode, board_size=6, episode_length=6**2=36
 # n_episode=8,  update_per_collect=36*8=268
 
-data_reuse_factor = 0.5
+data_reuse_factor = 1
 update_per_collect = int(144 * data_reuse_factor)
 
 num_simulations = 50
@@ -46,9 +46,7 @@ num_simulations = 50
 
 
 gomoku_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/gomoku_bs6_1pm_efficientzero_seed0_sub883_halfmodel_ns{num_simulations}_upc{update_per_collect}_cdt_adam1e-3_drf{data_reuse_factor}',
-    # exp_name='data_ez_ctree/gomoku_bs6_1pm_efficientzero_seed0_sub885_ns50_drf05',
-    # exp_name='data_ez_ctree/gomoku_2pm_efficientzero_seed0_sub885',
+    exp_name=f'data_ez_ctree/gomoku_bs6_1pm_ghl18_efficientzero_seed0_sub883_halfmodel_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -80,7 +78,9 @@ gomoku_efficientzero_config = dict(
             representation_model_type='conv_res_blocks',
             # [S, W, H, C] -> [S x C, W, H]
             # [4, board_size, board_size, 3] -> [12, board_size, board_size]
-            observation_shape=(12, board_size, board_size),  # if frame_stack_num=4
+            # observation_shape=(12, board_size, board_size),  # if frame_stack_num=4
+            observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
+
             action_space_size=int(1 * board_size * board_size),
 
             downsample=False,
@@ -125,7 +125,7 @@ gomoku_efficientzero_config = dict(
             # should set lr_manually=True, 0.2->0.02->0.002
 
             optim_type='Adam',
-            learning_rate=0.001,  # adam lr
+            learning_rate=0.003,  # adam lr
             # Frequency of target network update.
             target_update_freq=100,
         ),
@@ -165,7 +165,10 @@ gomoku_efficientzero_config = dict(
         amp_type='none',
         # [S, W, H, C] -> [S x C, W, H]
         # [4, board_size, board_size, 3] -> [12, board_size, board_size]
-        obs_shape=(12, board_size, board_size),  # if frame_stack_num=4
+        # obs_shape=(12, board_size, board_size),  # if frame_stack_num=4
+        obs_shape=(3, board_size, board_size),  # if frame_stack_num=1
+        frame_stack_num=1,
+
         image_channel=3,
         gray_scale=False,
         downsample=False,
@@ -246,7 +249,8 @@ gomoku_efficientzero_config = dict(
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         categorical_distribution=categorical_distribution,
         support_size=300,
-        max_grad_norm=10,
+        # max_grad_norm=10,
+        max_grad_norm=0.5,
         test_interval=10000,
         log_interval=1000,
         vis_interval=1000,
@@ -263,7 +267,6 @@ gomoku_efficientzero_config = dict(
         transition_num=1,
         # frame skip & stack observation
         frame_skip=4,
-        frame_stack_num=4,
 
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
@@ -271,8 +274,8 @@ gomoku_efficientzero_config = dict(
         # reward_loss_coeff=0,  # value_prefix_loss
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-        consistency_coeff=2,
-        # consistency_coeff=0,
+        # consistency_coeff=2,
+        consistency_coeff=0,
 
         # siamese
         # proj_hid=1024,
@@ -325,4 +328,4 @@ create_config = gomoku_efficientzero_create_config
 if __name__ == "__main__":
     from core.entry import serial_pipeline_efficientzero
 
-    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e6))
+    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))
