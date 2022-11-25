@@ -1398,7 +1398,7 @@ log/
 htmlcov
 *.lock
 .coverage*
-/test_*
+#/test_*
 .python-version
 /name.txt
 /summary_log
