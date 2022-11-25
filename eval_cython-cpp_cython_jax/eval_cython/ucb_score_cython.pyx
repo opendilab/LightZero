@@ -39,11 +39,11 @@ cdef class MinMaxStats(object):
         return value
         
 cdef float cython_ucb_score(vector[float] child_visit_count, vector[float] child_prior, vector[float] child_reward, vector[float] child_value, MinMaxStats min_max_stats, float total_children_visit_counts, float pb_c_base, float pb_c_init, float discount):
-    cdef float ucb_value=0.0
+    cdef float ucb_value = 0.0
     cdef float pb_c
     cdef float prior_score
     cdef float value_score
-    for i in range(total_children_visit_counts):
+    for i in range(int(total_children_visit_counts)):
         pb_c = 0.0
         prior_score = 0.0
         value_score = 0.0
@@ -52,10 +52,10 @@ cdef float cython_ucb_score(vector[float] child_visit_count, vector[float] child
 
         prior_score = pb_c * child_prior[i]
 
-        value_score = min_max_stats.normalize(child_reward[i] +discount * child_value[i])
+        value_score = min_max_stats.normalize(child_reward[i] + discount * child_value[i])
 
         if (value_score < 0):
-            value_score = 0
+            value_score = 0.
 
         ucb_value = prior_score + value_score
     
