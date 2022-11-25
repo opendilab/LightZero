@@ -33,8 +33,7 @@ update_per_collect = 250
 # evaluator_env_num = 1
 
 lunarlander_cont_disc_sampled_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/lunarlander_cont_sampled_efficientzero_seed0_sub883_ghl200_halfmodel_k20_ns{num_simulations}_upc{update_per_collect}_cdt_mlr',
-    # exp_name=f'data_ez_ctree/lunarlander_cont_sampled_efficientzero_seed0_sub883_ghl400_halfmodel_k20_ns{num_simulations}_upc{update_per_collect}_cdt_rew-max-norm-100_adam1e-3',
+    exp_name=f'data_sez_ctree/lunarlander_cont_sampled_efficientzero_seed0_sub883_ghl200_halfmodel_k20_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -60,7 +59,9 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
             representation_model_type='conv_res_blocks',
             # [S, W, H, C] -> [S x C, W, H]
             # [4,8,1,1] -> [4*1, 8, 1]
-            observation_shape=(4, 8, 1),  # if frame_stack_nums=4
+            # observation_shape=(4, 8, 1),  # if frame_stack_nums=4
+            observation_shape=(1, 8, 1),  # if frame_stack_nums=1
+
             action_space_size=2,  # 4**2
             num_of_sampled_actions=20,
             # for debug
@@ -108,11 +109,11 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
             target_update_freq=100,
             batch_size=256,
 
-            optim_type='SGD',
-            learning_rate=0.2,  # lr_manually
+            # optim_type='SGD',
+            # learning_rate=0.2,  # lr_manually
 
-            # optim_type='Adam',
-            # learning_rate=0.001,  # adam lr
+            optim_type='Adam',
+            learning_rate=0.003,  # adam lr
         ),
         # collect_mode config
         collect=dict(
@@ -122,7 +123,9 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         ),
         # the eval cost is expensive, so we set eval_freq larger
         # eval=dict(evaluator=dict(eval_freq=int(5e3), )),
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        # eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        eval=dict(evaluator=dict(eval_freq=int(1e3), )),
+
         # for debug
         # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
@@ -157,11 +160,13 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         # [S, W, H, C] -> [S x C, W, H]
         # [4,8,1,1] -> [4*1, 8, 1]
         image_channel=1,
-        obs_shape=(4, 8, 1),  # if frame_stack_nums=4
-        frame_stack_num=4,
+        # obs_shape=(4, 8, 1),  # if frame_stack_nums=4
+        # frame_stack_num=4,
 
-        # obs_shape=(1, 8, 1),  # if frame_stack_num=1
-        # frame_stack_num=1,
+        obs_shape=(1, 8, 1),  # if frame_stack_num=1
+        frame_stack_num=1,
+        # frame skip & stack observation
+        frame_skip=4,
 
         gray_scale=False,
         downsample=False,
@@ -200,8 +205,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
-        lr_manually=True,
-        # lr_manually=False,
+        # lr_manually=True,
+        lr_manually=False,
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority
@@ -212,7 +217,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         max_training_steps=int(1e5),
         auto_temperature=False,
         # only effective when auto_temperature=False
-        fixed_temperature_value=0.25,
+        # fixed_temperature_value=0.25,
+        fixed_temperature_value=1,
         # TODO(pu): whether to use root value in reanalyzing?
         use_root_value=False,
 
@@ -237,7 +243,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         categorical_distribution=categorical_distribution,
         support_size=300,
-        max_grad_norm=10,
+        # max_grad_norm=10,
+        max_grad_norm=0.5,
         test_interval=10000,
         log_interval=1000,
         vis_interval=1000,
@@ -253,14 +260,14 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         # replay window
         start_transitions=8,
         transition_num=1,
-        # frame skip & stack observation
-        frame_skip=4,
+
         # TODO(pu): EfficientZero -> MuZero
         # coefficient
         reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-        consistency_coeff=2,
+        # consistency_coeff=2,
+        consistency_coeff=0,
 
         # siamese
         # proj_hid=1024,

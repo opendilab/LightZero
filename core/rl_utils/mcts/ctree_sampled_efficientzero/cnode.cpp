@@ -111,6 +111,7 @@ namespace tree{
         this->hidden_state_index_y = hidden_state_index_y;
         this->value_prefix = value_prefix;
 
+// sampled related code
         int action_num = policy_logits.size();
         std::vector<int> all_actions;
          for(int i =0; i<action_num; ++i){
@@ -376,6 +377,7 @@ namespace tree{
         this->num_of_sampled_actions = num_of_sampled_actions;
         this->action_space_size = action_space_size;
 
+        // sampled related code
         for(int i = 0; i < root_num; ++i){
 //            this->roots.push_back(CNode(0, this->legal_actions_list[i], this->num_of_sampled_actions));
              if(this->legal_actions_list[0][0] == -1){
@@ -407,7 +409,7 @@ namespace tree{
 
     void CRoots::prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch){
 //    void CRoots::prepare(float root_exploration_fraction, const std::vector<std::vector<float> > noises, const std::vector<float> value_prefixs, const std::vector<std::vector<float> > policies, std::vector<int> to_play_batch){
-
+// sampled related code
         for(int i = 0; i < this->root_num; ++i){
             this->roots[i].expand(to_play_batch[i], 0, i, value_prefixs[i], policies[i]);
 //             std::cout << "position expand done!" << std::endl;
@@ -619,6 +621,7 @@ namespace tree{
     }
 
     CAction cselect_child(CNode* root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount, float mean_q, int players){
+        // sampled related code
         // TODO(pu): Progressive widening (See https://hal.archives-ouvertes.fr/hal-00542673v2/document)
         float max_score = FLOAT_MIN;
         const float epsilon = 0.000001;

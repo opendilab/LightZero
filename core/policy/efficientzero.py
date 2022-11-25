@@ -246,7 +246,7 @@ class EfficientZeroPolicy(Policy):
         transformed_target_value = scalar_transform(target_value, self._cfg.support_size)
         if self._cfg.categorical_distribution:
             # scalar to categorical_distribution
-            # Under this transformation, each scalar is represented as the linear combination of its two adjacent supports,
+            # Under this transformation, each scalar is represented as the linear combination of its two adjacent supports
             target_value_prefix_phi = reward_phi(self.reward_support, transformed_target_value_prefix)
             target_value_phi = value_phi(self.value_support, transformed_target_value)
 

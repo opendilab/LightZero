@@ -39,7 +39,7 @@ update_per_collect = 250
 # evaluator_env_num = 1
 
 lunarlander_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl200_halfmodel_fs1_ftv025_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05',
+    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub883_ghl200_halfmodel_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -109,7 +109,6 @@ lunarlander_disc_efficientzero_config = dict(
 
             update_per_collect=update_per_collect,
             target_update_freq=100,
-
             batch_size=256,
 
             # optim_type='SGD',
@@ -221,7 +220,9 @@ lunarlander_disc_efficientzero_config = dict(
         max_training_steps=int(1e5),
         auto_temperature=False,
         # only effective when auto_temperature=False
-        fixed_temperature_value=0.25,
+        # fixed_temperature_value=0.25,
+        fixed_temperature_value=1,
+
         # TODO(pu): whether to use root value in reanalyzing?
         use_root_value=False,
 

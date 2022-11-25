@@ -1,30 +1,29 @@
 import copy
 from typing import List, Dict, Any, Tuple, Union
 
+# cpp mcts
+import core.rl_utils.mcts.ctree_sampled_efficientzero.cytree as ctree
 import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import treetensor.torch as ttorch
-from torch.distributions import Normal, Independent
 from ding.model import model_wrap
 from ding.policy.base_policy import Policy
 from ding.rl_utils import get_nstep_return_data, get_train_sample
 from ding.torch_utils import to_tensor, to_device
 from ding.utils import POLICY_REGISTRY
+from torch.distributions import Normal, Independent
 from torch.nn import L1Loss
 
 # python mcts
 import core.rl_utils.mcts.ptree_sampled_efficientzero as ptree
-from core.rl_utils import SampledEfficientZeroMCTSPtree as MCTSPtree
-# cpp mcts
-import core.rl_utils.mcts.ctree_sampled_efficientzero.cytree as ctree
 from core.rl_utils import SampledEfficientZeroMCTSCtree as MCTSCtree
-
-from core.rl_utils import scalar_transform, inverse_scalar_transform
-from core.rl_utils import select_action
+from core.rl_utils import SampledEfficientZeroMCTSPtree as MCTSPtree
 from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
+from core.rl_utils import scalar_transform, inverse_scalar_transform
+from core.rl_utils import select_action
 
 
 @POLICY_REGISTRY.register('sampled_efficientzero')
@@ -124,19 +123,20 @@ class SampledEfficientZeroPolicy(Policy):
             The user can define and use customized network model but must obey the same inferface definition indicated \
             by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
         """
-        # return 'EfficientZeroNet', ['ding.model.template.efficientzero.efficientzero_model']
         return 'SampledEfficientZeroNet', ['core.model.sampled_efficientzero.sampled_efficientzero_model']
 
     def _init_learn(self) -> None:
-        self._optimizer = optim.SGD(
-            self._model.parameters(),
-            lr=self._cfg.learn.learning_rate,
-            momentum=self._cfg.learn.momentum,
-            weight_decay=self._cfg.learn.weight_decay,
-            # grad_clip_type=self._cfg.learn.grad_clip_type,
-            # clip_value=self._cfg.learn.grad_clip_value,
-        )
-        # self._optimizer = Adam(self._model.parameters(), lr=self._cfg.learn.learning_rate)
+        if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
+            self._optimizer = optim.SGD(
+                self._model.parameters(),
+                lr=self._cfg.learn.learning_rate,
+                momentum=self._cfg.learn.momentum,
+                weight_decay=self._cfg.learn.weight_decay,
+                # grad_clip_type=self._cfg.learn.grad_clip_type,
+                # clip_value=self._cfg.learn.grad_clip_value,
+            )
+        elif self._cfg.learn.optim_type == 'Adam':
+            self._optimizer = optim.Adam(self._model.parameters(), lr=self._cfg.learn.learning_rate, weight_decay=self._cfg.learn.weight_decay)
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
@@ -243,15 +243,14 @@ class SampledEfficientZeroPolicy(Policy):
             other_loss[key + '_-1'] = -1
             other_loss[key + '_0'] = -1
 
-        # transform targets to categorical representation
+        # scalar transform to transformed Q scale, h(.) function
         transformed_target_value_prefix = scalar_transform(target_value_prefix, self._cfg.support_size)
-        target_value_prefix_phi = reward_phi(self.reward_support, transformed_target_value_prefix)
-
         transformed_target_value = scalar_transform(target_value, self._cfg.support_size)
-        target_value_phi = value_phi(self.value_support, transformed_target_value)
         if self._cfg.categorical_distribution:
+            # scalar to categorical_distribution
+            # Under this transformation, each scalar is represented as the linear combination of its two adjacent supports
             target_value_prefix_phi = reward_phi(self.reward_support, transformed_target_value_prefix)
-            target_value_phi = value_phi(self.value_support, transformed_target_value)
+            target_value_phi = value_phi(self.value_support, transformed_target_value_prefix)
 
         network_output = self._learn_model.initial_inference(obs_batch)
 
@@ -262,16 +261,21 @@ class SampledEfficientZeroPolicy(Policy):
         policy_logits = network_output.policy_logits  # {list: 2} {list:6}
 
         reward_hidden_state = to_device(reward_hidden_state, self._cfg.device)
-        scaled_value = inverse_scalar_transform(value, self._cfg.support_size,
-                                                categorical_distribution=self._cfg.categorical_distribution)
+
+        # h^-1(.) function
+        # transform categorical representation to original_value
+        original_value = inverse_scalar_transform(value, self._cfg.support_size,
+                                                  categorical_distribution=self._cfg.categorical_distribution)
+        # original_value_prefix = inverse_scalar_transform(value_prefix,
+        #                                                self._cfg.support_size,
+        #                                                categorical_distribution=self._cfg.categorical_distribution)
 
         # TODO(pu)
         if not self._learn_model.training:
             # if not in training, obtain the scalars of the value/reward
-            scaled_value = scaled_value.detach().cpu().numpy()
-            scaled_value_prefix = inverse_scalar_transform(value_prefix,
-                                                           self._cfg.support_size,
-                                                           categorical_distribution=self._cfg.categorical_distribution).detach().cpu().numpy()
+            original_value = original_value.detach().cpu().numpy()
+            # original_value_prefix = original_value_prefix.detach().cpu().numpy()
+
             hidden_state = hidden_state.detach().cpu().numpy()
             reward_hidden_state = (
                 reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -284,12 +288,12 @@ class SampledEfficientZeroPolicy(Policy):
         predicted_value_prefixs = []
         # Note: Following line is just for logging.
         if self._cfg.vis_result:
-            predicted_values, predicted_policies = scaled_value.detach().cpu(), torch.softmax(
+            predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
 
         # calculate the new priorities for each transition
-        value_priority = L1Loss(reduction='none')(scaled_value.squeeze(-1), target_value[:, 0])
+        value_priority = L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0])
         value_priority = value_priority.data.cpu().numpy() + self._cfg.prioritized_replay_eps
 
         # calculate loss for the first step
@@ -300,10 +304,13 @@ class SampledEfficientZeroPolicy(Policy):
 
         # policy_loss = modified_cross_entropy_loss(policy_logits, target_policy[:, 0])
 
+        ######################
+        # sampled related code
+        ######################
+
         #############################
         # calculate policy loss: KL loss
         #############################
-        # sampled related
         (mu, sigma) = policy_logits[:, : self._cfg.action_space_size], policy_logits[:,
                                                                        - self._cfg.action_space_size:]
         dist = Independent(Normal(mu, sigma), 1)
@@ -351,14 +358,20 @@ class SampledEfficientZeroPolicy(Policy):
             hidden_state = network_output.hidden_state  # （2, 64, 6, 6）
             reward_hidden_state = network_output.reward_hidden_state  # {tuple:2} (1,2,512)
 
+            # h^-1(.) function
+            # first transform categorical representation to scalar, then transform to original_value
+            original_value = inverse_scalar_transform(value, self._cfg.support_size,
+                                                      categorical_distribution=self._cfg.categorical_distribution)
+            original_value_prefix = inverse_scalar_transform(value_prefix,
+                                                             self._cfg.support_size,
+                                                             categorical_distribution=self._cfg.categorical_distribution)
+
             # TODO(pu)
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                value = inverse_scalar_transform(value, self._cfg.support_size,
-                                                 categorical_distribution=self._cfg.categorical_distribution).detach().cpu().numpy()
-                value_prefix = inverse_scalar_transform(value_prefix,
-                                                        self._cfg.support_size,
-                                                        categorical_distribution=self._cfg.categorical_distribution).detach().cpu().numpy()
+                original_value = original_value.detach().cpu().numpy()
+                original_value_prefix = original_value_prefix.detach().cpu().numpy()
+
                 hidden_state = hidden_state.detach().cpu().numpy()
                 reward_hidden_state = (
                     reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -388,10 +401,13 @@ class SampledEfficientZeroPolicy(Policy):
             # the target policy, target_value_phi, target_value_prefix_phi is calculated in game buffer now
             # policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
 
+            ######################
+            # sampled related code
+            ######################
+
             #############################
             # calculate policy loss: KL loss
             #############################
-            # sampled related
             (mu, sigma) = policy_logits[:, : self._cfg.action_space_size], policy_logits[:,
                                                                            - self._cfg.action_space_size:]
             dist = Independent(Normal(mu, sigma), 1)
@@ -446,15 +462,15 @@ class SampledEfficientZeroPolicy(Policy):
                 )
 
             if self._cfg.vis_result:
-                scaled_value_prefixs = inverse_scalar_transform(value_prefix.detach(), self._cfg.support_size,
-                                                                categorical_distribution=self._cfg.categorical_distribution)
-                scaled_value_prefixs_cpu = scaled_value_prefixs.detach().cpu()
+                original_value_prefixs = inverse_scalar_transform(value_prefix, self._cfg.support_size,
+                                                                  categorical_distribution=self._cfg.categorical_distribution)
+                original_value_prefixs_cpu = original_value_prefixs.detach().cpu()
 
                 predicted_values = torch.cat(
                     (predicted_values, inverse_scalar_transform(value, self._cfg.support_size,
                                                                 categorical_distribution=self._cfg.categorical_distribution).detach().cpu())
                 )
-                predicted_value_prefixs.append(scaled_value_prefixs_cpu)
+                predicted_value_prefixs.append(original_value_prefixs_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
                 state_lst = np.concatenate((state_lst, hidden_state.detach().cpu().numpy()))
 
@@ -466,20 +482,20 @@ class SampledEfficientZeroPolicy(Policy):
 
                 target_value_prefix_base = target_value_prefix_cpu[:, step_i].reshape(-1).unsqueeze(-1)
 
-                other_loss[key] = metric_loss(scaled_value_prefixs_cpu, target_value_prefix_base)
+                other_loss[key] = metric_loss(original_value_prefixs_cpu, target_value_prefix_base)
                 if value_prefix_indices_1.any():
                     other_loss[key + '_1'] = metric_loss(
-                        scaled_value_prefixs_cpu[value_prefix_indices_1],
+                        original_value_prefixs_cpu[value_prefix_indices_1],
                         target_value_prefix_base[value_prefix_indices_1]
                     )
                 if value_prefix_indices_n1.any():
                     other_loss[key + '_-1'] = metric_loss(
-                        scaled_value_prefixs_cpu[value_prefix_indices_n1],
+                        original_value_prefixs_cpu[value_prefix_indices_n1],
                         target_value_prefix_base[value_prefix_indices_n1]
                     )
                 if value_prefix_indices_0.any():
                     other_loss[key + '_0'] = metric_loss(
-                        scaled_value_prefixs_cpu[value_prefix_indices_0],
+                        original_value_prefixs_cpu[value_prefix_indices_0],
                         target_value_prefix_base[value_prefix_indices_0]
                     )
         # ----------------------------------------------------------------------------------
@@ -548,38 +564,81 @@ class SampledEfficientZeroPolicy(Policy):
                     predicted_value_prefixs[value_prefix_indices_0], target_value_prefix_base[value_prefix_indices_0]
                 )
 
-            td_data = (
-                value_priority, target_value_prefix.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
-                transformed_target_value_prefix.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
-                target_value_prefix_phi.detach().cpu().numpy(), target_value_phi.detach().cpu().numpy(),
-                predicted_value_prefixs.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
-                target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), state_lst, other_loss,
-                other_log, other_dist
-            )
+            if self._cfg.categorical_distribution:
+                td_data = (
+                    value_priority, target_value_prefix.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
+                    transformed_target_value_prefix.detach().cpu().numpy(),
+                    transformed_target_value.detach().cpu().numpy(),
+                    target_value_prefix_phi.detach().cpu().numpy(), target_value_phi.detach().cpu().numpy(),
+                    predicted_value_prefixs.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
+                    target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), state_lst,
+                    other_loss,
+                    other_log, other_dist
+                )
+            else:
+                td_data = (
+                    value_priority, target_value_prefix.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
+                    transformed_target_value_prefix.detach().cpu().numpy(),
+                    transformed_target_value.detach().cpu().numpy(),
+                    predicted_value_prefixs.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
+                    target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), state_lst,
+                    other_loss,
+                    other_log, other_dist
+                )
             priority_data = (weights, indices)
         else:
             td_data, priority_data = None, None
 
-        return {
-            # 'priority':priority_info,
-            'total_loss': loss_data[0],
-            'weighted_loss': loss_data[1],
-            'loss_mean': loss_data[2],
-            'policy_loss': loss_data[4],
-            'value_prefix_loss': loss_data[5],
-            'value_loss': loss_data[6],
-            'consistency_loss': loss_data[7],
-            'value_priority': td_data[0].flatten().mean().item(),
-            'target_value_prefix': td_data[1].flatten().mean().item(),
-            'target_value': td_data[2].flatten().mean().item(),
-            'predicted_value_prefixs': td_data[7].flatten().mean().item(),
-            'predicted_values': td_data[8].flatten().mean().item(),
-            # 'target_policy':td_data[9],
-            # 'predicted_policies':td_data[10]
-            # 'td_data': td_data,
-            # 'priority_data_weights': priority_data[0],
-            # 'priority_data_indices': priority_data[1]
-        }
+        if self._cfg.categorical_distribution:
+            # loss_data = (
+            #     total_loss.item(), weighted_loss.item(), loss.mean().item(), 0, policy_loss.mean().item(),
+            #     value_prefix_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
+            # )
+            return {
+                # 'priority':priority_info,
+                'total_loss': loss_data[0],
+                'weighted_loss': loss_data[1],
+                'loss_mean': loss_data[2],
+                'policy_loss': loss_data[4],
+                'value_prefix_loss': loss_data[5],
+                'value_loss': loss_data[6],
+                'consistency_loss': loss_data[7],
+                'value_priority': td_data[0].flatten().mean().item(),
+                'target_value_prefix': td_data[1].flatten().mean().item(),
+                'target_value': td_data[2].flatten().mean().item(),
+                'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
+                'transformed_target_value': td_data[4].flatten().mean().item(),
+                'predicted_value_prefixs': td_data[7].flatten().mean().item(),
+                'predicted_values': td_data[8].flatten().mean().item(),
+                # 'target_policy':td_data[9],
+                # 'predicted_policies':td_data[10]
+                # 'td_data': td_data,
+                # 'priority_data_weights': priority_data[0],
+                # 'priority_data_indices': priority_data[1]
+            }
+        else:
+            return {
+                # 'priority':priority_info,
+                'total_loss': loss_data[0],
+                'weighted_loss': loss_data[1],
+                'loss_mean': loss_data[2],
+                'policy_loss': loss_data[4],
+                'value_prefix_loss': loss_data[5],
+                'value_loss': loss_data[6],
+                'consistency_loss': loss_data[7],
+                'value_priority': td_data[0].flatten().mean().item(),
+                'target_value_prefix': td_data[1].flatten().mean().item(),
+                'target_value': td_data[2].flatten().mean().item(),
+                'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
+                'transformed_target_value': td_data[4].flatten().mean().item(),
+                'predicted_value_prefixs': td_data[5].flatten().mean().item(),
+                'predicted_values': td_data[6].flatten().mean().item(),
+                # 'target_policy':td_data[9],
+                # 'predicted_policies':td_data[10]
+                # 'td_data': td_data,
+                # 'priority_data_weights': priority_data[0],
+                # 'priority_data_indices': priority_data[1]
+            }
 
     def _init_collect(self) -> None:
         self._unroll_len = self._cfg.collect.unroll_len
@@ -647,12 +706,13 @@ class SampledEfficientZeroPolicy(Policy):
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                     ]
                 roots = ctree.Roots(active_collect_env_num, legal_actions, self._cfg.action_space_size,
-                                        self._cfg.num_of_sampled_actions)
+                                    self._cfg.num_of_sampled_actions)
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 ]
-                roots.prepare(self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+                roots.prepare(self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool,
+                              to_play)
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
             else:
@@ -689,8 +749,6 @@ class SampledEfficientZeroPolicy(Policy):
 
             roots_distributions = roots.get_distributions()  # {list: 1}->{list:6}
             roots_sampled_actions = roots.get_sampled_actions()  # {list: 1}->{list:6}
-
-
 
             roots_values = roots.get_values()  # {list: 1}
             data_id = [i for i in range(active_collect_env_num)]
@@ -804,7 +862,7 @@ class SampledEfficientZeroPolicy(Policy):
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                     ]
                 roots = ctree.Roots(active_eval_env_num, legal_actions, self._cfg.action_space_size,
-                                        self._cfg.num_of_sampled_actions)
+                                    self._cfg.num_of_sampled_actions)
 
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
