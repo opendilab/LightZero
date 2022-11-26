@@ -139,7 +139,7 @@ if __name__ == "__main__":
 
     print("###execute ucb_score 1000,000 times###")
 
-    eval_jax_time(parent_visit_count, data)
+    # eval_jax_time(parent_visit_count, data)
     eval_cython_time(parent_visit_count, data)
-    eval_cython_cpp_openmp_time(parent_visit_count, data)
-    eval_cython_cpp_time(parent_visit_count, data)
+    # eval_cython_cpp_openmp_time(parent_visit_count, data)
+    # eval_cython_cpp_time(parent_visit_count, data)
