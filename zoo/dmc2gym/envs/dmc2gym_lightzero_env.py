@@ -218,6 +218,19 @@ class DMC2GymEnv(BaseEnv):
         if self._save_replay_gif:
             self._frames = []
 
+        if self._cfg["from_pixels"]:
+            obs = to_ndarray(obs).astype(np.uint8)
+        else:
+            obs = to_ndarray(obs).astype(np.float32)
+
+            # if 'Continuous' in self._env_id:
+            # to be compatible with muzero/efficientzero
+            # shape: [W, H, C]
+            obs = obs.reshape(obs.shape[0], 1, 1)
+            action_mask = None
+
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
+
         return obs
 
     def close(self) -> None:
@@ -231,11 +244,27 @@ class DMC2GymEnv(BaseEnv):
         np.random.seed(self._seed)
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
+        # print('='*20)
+        # print('position 1')
+        # print(action)
+        # import time
+        # print(time.time(), time.localtime(time.time()), time.asctime(time.localtime(time.time())))
+        # print('='*20)
         if self._act_scale:
             action = affine_transform(action, min_val=-1, max_val=1)
 
         action = action.astype('float32')
         obs, rew, done, info = self._env.step(action)
+
+        if self._cfg["from_pixels"]:
+            obs = to_ndarray(obs).astype(np.uint8)
+        else:
+            obs = to_ndarray(obs).astype(np.float32)
+            # to be compatible with muzero/efficientzero
+            # shape: [W, H, C]
+            obs = obs.reshape(obs.shape[0], 1, 1)
+            action_mask = None
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
 
         rew = to_ndarray([rew]).astype(np.float32)  # wrapped to be transfered to a array with shape (1,)
 
@@ -257,6 +286,10 @@ class DMC2GymEnv(BaseEnv):
                 self._save_replay_count += 1
 
         return BaseEnvTimestep(obs, rew, done, info)
+
+    @property
+    def legal_actions(self):
+        return np.arange(self._action_space.n)
 
     def enable_save_replay(self, replay_path: Optional[str] = None) -> None:
         if replay_path is None:

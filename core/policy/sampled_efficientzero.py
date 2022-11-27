@@ -138,6 +138,10 @@ class SampledEfficientZeroPolicy(Policy):
         elif self._cfg.learn.optim_type == 'Adam':
             self._optimizer = optim.Adam(self._model.parameters(), lr=self._cfg.learn.learning_rate, weight_decay=self._cfg.learn.weight_decay)
 
+        if self._cfg.learn.cos_lr_scheduler is True:
+            from torch.optim.lr_scheduler import CosineAnnealingLR
+            self.rl_scheduler = CosineAnnealingLR(self._optimizer, 1e6, eta_min=0, last_epoch=-1)
+
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
         self._target_model = model_wrap(
@@ -320,7 +324,10 @@ class SampledEfficientZeroPolicy(Policy):
         # 4, 3, 20, 2, 1 ->  4, 20, 2
         target_policy_action = child_actions_batch[:, 0].squeeze(-1)
 
-        entropy_loss = - dist.entropy().sum()
+
+        policy_entropy = dist.entropy().sum()
+        entropy_loss = - policy_entropy
+
 
         # project the sampled-based improved policy back onto the space of representable policies
         # calculate KL loss
@@ -417,7 +424,8 @@ class SampledEfficientZeroPolicy(Policy):
             # 4,3, 20,2,1 ->  4, 20,2
             target_policy_action = child_actions_batch[:, step_i + 1].squeeze(-1)
 
-            entropy_loss = - dist.entropy().sum()
+            policy_entropy = dist.entropy().mean()
+            entropy_loss = - policy_entropy
 
             # project the sampled-based improved policy back onto the space of representable policies
 
@@ -432,7 +440,7 @@ class SampledEfficientZeroPolicy(Policy):
             # batch_size, num_of_sampled_actions -> 4,20
             log_prob = torch.stack(log_prob_sampled_actions, dim=-1)
 
-            policy_loss = (torch.exp(log_prob) * (log_prob - log_target)).sum()
+            policy_loss = (torch.exp(log_prob) * (log_prob - log_target)).sum()  # KL divergence
             #############################
             # calculate policy loss: KL loss
             #############################
@@ -516,6 +524,8 @@ class SampledEfficientZeroPolicy(Policy):
         total_loss.backward()
         torch.nn.utils.clip_grad_norm_(parameters, self._cfg.max_grad_norm)
         self._optimizer.step()
+        if self._cfg.learn.cos_lr_scheduler is True:
+            self.rl_scheduler.step()
 
         # =============
         # target model update
@@ -610,6 +620,17 @@ class SampledEfficientZeroPolicy(Policy):
                 'transformed_target_value': td_data[4].flatten().mean().item(),
                 'predicted_value_prefixs': td_data[7].flatten().mean().item(),
                 'predicted_values': td_data[8].flatten().mean().item(),
+
+                ######################
+                # sampled related code
+                ######################
+                'policy_entropy':  policy_entropy.item(),
+                'policy_mu_max': mu.max().item(),
+                'policy_mu_min': mu.min().item(),
+                'policy_mu_mean': mu.mean().item(),
+                'policy_sigma_max': sigma.max().item(),
+                'policy_sigma_min': sigma.min().item(),
+                'policy_sigma_mean': sigma.mean().item(),
                 # 'target_policy':td_data[9],
                 # 'predicted_policies':td_data[10]
                 # 'td_data': td_data,
@@ -633,6 +654,18 @@ class SampledEfficientZeroPolicy(Policy):
                 'transformed_target_value': td_data[4].flatten().mean().item(),
                 'predicted_value_prefixs': td_data[5].flatten().mean().item(),
                 'predicted_values': td_data[6].flatten().mean().item(),
+
+                ######################
+                # sampled related code
+                ######################
+                'policy_entropy': policy_entropy.item(),
+                'policy_mu_max': mu.max().item(),
+                'policy_mu_min': mu.min().item(),
+                'policy_mu_mean': mu.mean().item(),
+                'policy_sigma_max': sigma.max().item(),
+                'policy_sigma_min': sigma.min().item(),
+                'policy_sigma_mean': sigma.mean().item(),
+
                 # 'target_policy':td_data[9],
                 # 'predicted_policies':td_data[10]
                 # 'td_data': td_data,
@@ -949,7 +982,16 @@ class SampledEfficientZeroPolicy(Policy):
             'target_value',
             'predicted_value_prefixs',
             'predicted_values',
-
+            ######################
+            # sampled related code
+            ######################
+            'policy_entropy',
+            'policy_mu_max',
+            'policy_mu_min',
+            'policy_mu_mean',
+            'policy_sigma_max',
+            'policy_sigma_min',
+            'policy_sigma_mean',
             # 'visit_count_distribution_entropy',
             # 'target_policy',
             # 'predicted_policies'

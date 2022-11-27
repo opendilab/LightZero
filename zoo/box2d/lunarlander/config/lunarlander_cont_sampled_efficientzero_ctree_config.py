@@ -32,8 +32,14 @@ update_per_collect = 250
 # n_episode = 1
 # evaluator_env_num = 1
 
+"""
+LunarLanderContinuous-v2
+obs shape: 8
+action shape: 2
+"""
+
 lunarlander_cont_disc_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/lunarlander_cont_sampled_efficientzero_seed0_sub883_ghl200_halfmodel_k20_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05',
+    exp_name=f'data_sez_ctree/lunarlander_cont_sampled_efficientzero_seed0_sub883_ghl200_halfmodel_k20_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_fs03',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -52,6 +58,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
+            sigma_type='fixed',  # conditioned
+            fixed_sigma_value=0.3,
             # activation=torch.nn.ReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=categorical_distribution,
@@ -112,6 +120,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
             # optim_type='SGD',
             # learning_rate=0.2,  # lr_manually
 
+            cos_lr_scheduler=False,
+            weight_decay=2e-5,
             optim_type='Adam',
             learning_rate=0.003,  # adam lr
         ),

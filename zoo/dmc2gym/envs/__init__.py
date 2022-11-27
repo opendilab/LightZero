@@ -1,1 +1,1 @@
-from .dmc2gym_env import DMC2GymEnv
+from .dmc2gym_lightzero_env import DMC2GymEnv
