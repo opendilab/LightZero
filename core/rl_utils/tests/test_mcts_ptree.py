@@ -1,8 +1,9 @@
 import pytest
 import torch
 from easydict import EasyDict
-
-from core.model.efficientzero.efficientzero_base_model import inverse_scalar_transform
+import sys
+sys.path.append('/Users/yangzhenjie/code/jayyoung0802/LightZero/')
+from core.rl_utils import inverse_scalar_transform
 
 
 class MuZeroModelFake(torch.nn.Module):
@@ -52,7 +53,7 @@ class MuZeroModelFake(torch.nn.Module):
 
 @pytest.mark.unittest
 def test_mcts():
-    import core.rl_utils.mcts.ptree as tree
+    import core.rl_utils.mcts.ptree_efficientzero as tree
     import numpy as np
     from core.rl_utils.mcts.mcts_ptree import EfficientZeroMCTSPtree as MCTS
 

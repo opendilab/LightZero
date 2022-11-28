@@ -13,6 +13,8 @@
 *.mov
 *.pkl
 data_*
+*.so
+*seed*
 
 pkg/
 src/
@@ -1397,7 +1399,7 @@ log/
 htmlcov
 *.lock
 .coverage*
-/test_*
+#/test_*
 .python-version
 /name.txt
 /summary_log

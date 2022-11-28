@@ -11,7 +11,7 @@ from ding.utils import build_logger, EasyTimer
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
 from easydict import EasyDict
 
-from core.rl_utils.mcts.sampled_game import GameHistory
+from core.rl_utils.mcts.game_sampled_efficientzero import GameHistory
 from core.rl_utils.mcts.utils import prepare_observation_lst
 
 

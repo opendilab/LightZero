@@ -189,7 +189,8 @@ class DynamicsNetwork(nn.Module):
         self.lstm_hidden_size = lstm_hidden_size
         self.action_space_dim = action_space_size
 
-        self.conv = nn.Conv2d(num_channels, num_channels - self.action_space_dim, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv = nn.Conv2d(num_channels, num_channels - self.action_space_dim, kernel_size=3, stride=1, padding=1,
+                              bias=False)
         self.bn = nn.BatchNorm2d(num_channels - self.action_space_dim, momentum=momentum)
         self.resblocks = nn.ModuleList(
             [
@@ -235,6 +236,7 @@ class DynamicsNetwork(nn.Module):
         self.activation = nn.ReLU(inplace=True)
 
     def forward(self, x, reward_hidden_state):
+        # take the state encoding
         state = x[:, :-self.action_space_dim, :, :]
         x = self.conv(x)
         x = self.bn(x)
@@ -298,6 +300,8 @@ class PredictionNetwork(nn.Module):
             block_output_size_policy,
             momentum=0.1,
             last_linear_layer_init_zero=False,
+            sigma_type='fixed',
+            fixed_sigma_value=0.3,
     ):
         """Prediction network
         Parameters
@@ -328,6 +332,8 @@ class PredictionNetwork(nn.Module):
             True -> zero initialization for the last layer of value/policy mlp
         """
         super().__init__()
+        self.sigma_type = sigma_type
+        self.fixed_sigma_value = fixed_sigma_value
         self.in_channels = in_channels
         if self.in_channels is not None:
             self.conv_input = nn.Conv2d(in_channels, num_channels, 1)
@@ -380,9 +386,12 @@ class PredictionNetwork(nn.Module):
             hidden_size=self.block_output_size_policy,  # 256,
             output_size=action_space_size,
             layer_num=len(fc_policy_layers) + 1,
-            sigma_type='conditioned',
+            # sigma_type='conditioned',
+            sigma_type=self.sigma_type,
+            fixed_sigma_value=self.fixed_sigma_value,
             activation=nn.ReLU(),
-            norm_type=None
+            norm_type=None,
+            bound_type='tanh'  # TODO(pu)
         )
 
         self.activation = nn.ReLU(inplace=True)
@@ -401,12 +410,19 @@ class PredictionNetwork(nn.Module):
         policy = self.bn_policy(policy)
         policy = self.activation(policy)
 
+        # print(value.shape, value)
         value = value.view(-1, self.block_output_size_value)
         policy = policy.view(-1, self.block_output_size_policy)
+        # value = value.reshape(-1, self.block_output_size_value)
+        # policy = policy.reshape(-1, self.block_output_size_policy)
         value = self.fc_value(value)
         #  {'mu': mu, 'sigma': sigma}
         policy = self.sampled_fc_policy(policy)
-        policy = torch.cat([policy['mu'], policy['sigma']],dim=-1)
+
+        # print("policy['mu']", policy['mu'].max(), policy['mu'].min(), policy['mu'].std())
+        # print("policy['sigma']", policy['sigma'].max(), policy['sigma'].min(), policy['sigma'].std())
+
+        policy = torch.cat([policy['mu'], policy['sigma']], dim=-1)
 
         return policy, value
 
@@ -442,6 +458,8 @@ class SampledEfficientZeroNet(BaseNet):
             last_linear_layer_init_zero=False,
             state_norm=False,
             categorical_distribution=True,
+            sigma_type='fixed',
+            fixed_sigma_value=0.3,
     ):
         """
         Overview:
@@ -472,6 +490,8 @@ class SampledEfficientZeroNet(BaseNet):
             - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         """
         super(SampledEfficientZeroNet, self).__init__(lstm_hidden_size)
+        self.sigma_type = sigma_type
+        self.fixed_sigma_value = fixed_sigma_value
         self.categorical_distribution = categorical_distribution
         if not self.categorical_distribution:
             self.reward_support_size = 1
@@ -552,6 +572,8 @@ class SampledEfficientZeroNet(BaseNet):
                 block_output_size_policy,
                 momentum=bn_mt,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                sigma_type=self.sigma_type,
+                fixed_sigma_value=self.fixed_sigma_value,
             )
         else:
             if self.continuous_action_space:
@@ -594,6 +616,8 @@ class SampledEfficientZeroNet(BaseNet):
                 block_output_size_policy,
                 momentum=bn_mt,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                sigma_type=self.sigma_type,
+                fixed_sigma_value=self.fixed_sigma_value,
             )
 
         # projection
@@ -605,7 +629,7 @@ class SampledEfficientZeroNet(BaseNet):
                 # observation_shape=(12, 96, 96),  # stack=4
                 # 3 * 96/16 * 96/16 = 3*6*6 = 108
                 self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
-                                                                 ) * math.ceil(observation_shape[2] / 16)
+                                                                     ) * math.ceil(observation_shape[2] / 16)
             else:
                 self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
@@ -656,14 +680,24 @@ class SampledEfficientZeroNet(BaseNet):
                 )).to(action.device).float()
             )
             # TODO
+            if len(action.shape) == 2:
+                # e.g.,  torch.Size([2, 1]) ->  torch.Size([1, 2, 1])
+                action = action.reshape(-1, self.action_space_dim, 1)
+            elif len(action.shape) == 3 and action.shape[2] == self.action_space_dim:
+                # e.g.,  torch.Size([8, 1, 2]) ->  torch.Size([8, 2, 1])
+                # action = action.reshape(-1, self.action_space_dim, 1)  # wrong
+                action = action.permute(0, 2, 1)
+            # if len(action.shape)==3:
+            # action: 8,2,1   action_one_hot: 8,1,8,1
+            # action[:, 0, None, None]: 8,1,1,1
+            # action_embedding: 8,2,8,1
             try:
-                if len(action.shape)==2:
-                    # e.g.,  torch.Size([2, 1]) ->  torch.Size([1, 2, 1])
-                    action = action.reshape(-1, 2, 1)
-                action_embedding = torch.cat([action[:, 0, None, None] * action_one_hot, action[:, 1, None, None] * action_one_hot], dim=1)
-                # action_embedding = torch.cat([action[:, dim, None, None] * action_one_hot for dim in range(len(action))], dim=1)
+                action_embedding = torch.cat(
+                    [action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_dim)], dim=1)
+                # action_embedding = torch.cat([action[:, 0, None, None] * action_one_hot, action[:, 1, None, None] * action_one_hot], dim=1)
             except Exception as error:
                 print(error)
+                print(action.shape, action_one_hot.shape)
 
             x = torch.cat((encoded_state, action_embedding), dim=1)
 

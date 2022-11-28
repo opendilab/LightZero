@@ -50,7 +50,7 @@ class MuZeroModelFake(torch.nn.Module):
 
 
 def check_mcts():
-    import core.rl_utils.mcts.ptree as tree
+    import core.rl_utils.mcts.ptree_efficientzero as tree
     import numpy as np
     from core.rl_utils.mcts.mcts_ptree import EfficientZeroMCTSPtree as MCTS
 

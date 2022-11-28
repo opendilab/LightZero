@@ -221,7 +221,7 @@ class GameHistory:
             obs:            game_history_length + stack + num_unroll_steps, 20+4+5
             action:         game_history_length -> 20
             reward:         game_history_length + num_unroll_steps + td_steps -1  20+5+5-1
-            root_values:    game_history_length + num_unroll_steps + td_steps -> 20 +5+5
+            root_values:    game_history_length + num_unroll_steps + td_steps -> 20+5+5
             child_visits：  game_history_length + num_unroll_steps -> 20+5
             to_play:        game_history_length -> 20
             action_mask:    game_history_length -> 20
@@ -238,7 +238,7 @@ class GameHistory:
                  ----...----|------|-----|
         game_history_t+1:
             rew:             20        5    4
-                        ----...----|-----|-----|
+                        ----...----|------|-----|
         """
         self.obs_history = np.array(self.obs_history)
         self.action_history = np.array(self.action_history)

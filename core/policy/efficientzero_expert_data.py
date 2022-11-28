@@ -14,7 +14,7 @@ from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
 
 # python mcts
-import core.rl_utils.mcts.ptree as ptree
+import core.rl_utils.mcts.ptree_efficientzero as ptree
 from core.rl_utils import EfficientZeroMCTSPtree as MCTSPtree
 from core.rl_utils import MCTSCtree
 # cpp mcts
@@ -622,7 +622,7 @@ class EfficientZeroExertDataPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ptree.Roots(active_eval_env_num, legal_actions, self._cfg.num_simulations)
+                roots = ptree_efficientzero.Roots(active_eval_env_num, legal_actions, self._cfg.num_simulations)
 
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)

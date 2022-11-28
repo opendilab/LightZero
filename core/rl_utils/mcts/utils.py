@@ -51,10 +51,10 @@ def select_action(visit_counts, temperature=1, deterministic=True):
         - temperature (:obj:`float`): the temperature for the distribution
         - deterministic (:obj:`bool`):  True -> select the argmax, False -> sample from the distribution
     """
-    try:
-        action_probs = [visit_count_i ** (1 / temperature) for visit_count_i in visit_counts]
-    except Exception as error:
-        print(error)
+    # try:
+    action_probs = [visit_count_i ** (1 / temperature) for visit_count_i in visit_counts]
+    # except Exception as error:
+    #     print(error)
     action_probs = [x / sum(action_probs) for x in action_probs]
 
     if deterministic:
@@ -103,7 +103,11 @@ def concat_output(output_lst):
     reward_hidden_state_c_lst, reward_hidden_state_h_lst = [], []
     for output in output_lst:
         value_lst.append(output.value)
-        reward_lst.append(output.value_prefix)
+        try:
+            reward_lst.append(output.value_prefix)
+        except:
+            reward_lst.append(output.reward)
+
         policy_logits_lst.append(output.policy_logits)
         hidden_state_lst.append(output.hidden_state)
         reward_hidden_state_c_lst.append(output.reward_hidden_state[0].squeeze(0))
