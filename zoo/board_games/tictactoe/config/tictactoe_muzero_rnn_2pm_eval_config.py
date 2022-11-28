@@ -1,12 +1,3 @@
-# import glfw
-# assert glfw.init()
-# import os
-# os.environ['MUJOCO_GL']="egl"
-
-import os
-
-os.environ['DISABLE_MUJOCO_RENDERING'] = '1'
-
 import sys
 
 # sys.path.append('/Users/puyuan/code/LightZero')
@@ -15,125 +6,99 @@ sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 import torch
-from easydict import EasyDict
 
 if torch.cuda.is_available():
     device = 'cuda'
 else:
     device = 'cpu'
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-batch_size = 256
-K = 5  # action_space_size=1
-num_simulations = 25  # action_space_size=1
+from easydict import EasyDict
 
+
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 5
+# batch_size = 256
+
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+batch_size = 256
+
+categorical_distribution = True
+num_simulations = 25  # action_space_size=9
+
+# TODO(pu):
+# PER, stack1, lr
+
+# The key hyper-para to tune, for different env, we have different episode_length
+# e.g. reuse_factor = 0.5
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+
+# one_player_mode, board_size=3, episode_length=3**2/2=4.5
+# collector_env_num=8,  n_sample_per_collect=5*8=40
+
+# two_player_mode, board_size=3, episode_length=3**2=9
+# collector_env_num=8,  n_sample_per_collect=9*8=72
+
+update_per_collect = 100
 
 # for debug
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
-# batch_size = 4
-# K = 5  # action_space_size=1
-# num_simulations = 6  # action_space_size=1
 
-categorical_distribution = True
-
-# TODO(pu):
-# The key hyper-para to tune, for different env, we have different episode_length
-# e.g. reuse_factor = 0.5
-# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 250
-# game_history_length = 200
-game_history_length = 50
-observation_dim = 5
-action_dim = 1
-
-dmc2gym_disc_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/dmc2gym_cartpole-balance_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_halfmodel_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_tanh-fs03',
+tictactoe_muzero_rnn_config = dict(
+    exp_name=f'data_mz_ctree/tictactoe_2pm_muzero_rnn_seed0_sub885_ghl9_ftv1_cc0_fs2_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        env_id='dmc2gym_cartpole_balance',
-        stop_value=900,
-
-        domain_name='cartpole',  # obs shape: 5, action shape: 1
-        task_name="balance",
-        # task_name="swingup",
-        # stop_value=850,
-
-        # domain_name="acrobot",  # obs shape: 6, action shape: 1
-        # task_name="swingup",
-
-        # domain_name="hopper",  # obs shape: 15, action shape: 4
-        # task_name="hop",
-
-        # domain_name="manipulator",  # obs shape: 44, action shape: 5
-        # task_name="bring_ball",
-        from_pixels=False,
-        channels_first=False,
-        frame_skip=8,
-        frame_stack=1,
-        norm_obs=dict(use_norm=False, ),
-        norm_reward=dict(use_norm=False, ),
-        use_act_scale=True,
-        battle_mode='one_player_mode',
+        stop_value=1,
+        # if battle_mode='two_player_mode',
+        # automatically assign 'eval_mode' when eval, 'two_player_mode' when collect
+        battle_mode='two_player_mode',
         prob_random_agent=0.,
+        prob_expert_agent=0.,
+        max_episode_steps=int(1.08e5),
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        model_path=None,
-        env_name='dmc2gym',
+        # model_path=None,
+        model_path='/Users/puyuan/code/LightZero/data_mz_ctree/tictactoe_2pm_muzero_seed0_sub885_ghl9_ftv1_cc0_fs2_ns25_upc100_cdt_adam3e-3_mgn05/ckpt/ckpt_best.pth.tar',
+        env_name='tictactoe',
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            sigma_type='fixed',  # conditioned
-            fixed_sigma_value=0.3,
-            # activation=torch.nn.ReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=categorical_distribution,
             # representation_model_type='identity',
             representation_model_type='conv_res_blocks',
             # [S, W, H, C] -> [S x C, W, H]
-            # [4,8,1,1] -> [4*1, 8, 1]
-            # observation_shape=(4,  observation_dim, 1),  # if frame_stack_nums=4
-            observation_shape=(1, observation_dim, 1),  # if frame_stack_nums=1
-
-            action_space_size=action_dim,  # 4**2
-            num_of_sampled_actions=K,
-            # for debug
-            # num_of_sampled_actions=5,
-            continuous_action_space=True,
-
+            # [4, 3, 3, 3] -> [12, 3, 3]
+            # observation_shape=(12, 3, 3),  # if frame_stack_num=4
+            observation_shape=(6, 3, 3),  # if frame_stack_num=2
+            # observation_shape=(3, 3, 3),  # if frame_stack_num=1
+            action_space_size=9,
             downsample=False,
             num_blocks=1,
-            # num_channels=64,
-            # lstm_hidden_size=512,
-            # half size model
-            num_channels=32,
+            num_channels=16,   # TODO
             lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
-            fc_reward_layers=[32],
-            fc_value_layers=[32],
-            fc_policy_layers=[32],
-            reward_support_size=601,
-            value_support_size=601,
+            fc_reward_layers=[8],
+            fc_value_layers=[8],
+            fc_policy_layers=[8],
+            reward_support_size=21,
+            value_support_size=21,
             bn_mt=0.1,
-            # proj_hid=1024,
-            # proj_out=1024,
-            # pred_hid=512,
-            # pred_out=1024,
-            # half size model
-            proj_hid=512,
-            proj_out=512,
-            pred_hid=256,
-            pred_out=512,
+            proj_hid=128,
+            proj_out=128,
+            pred_hid=64,
+            pred_out=128,
             last_linear_layer_init_zero=True,
             state_norm=False,
         ),
@@ -143,24 +108,19 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
             # update_per_collect=2,
             # batch_size=4,
 
-            # episode_length=200, 200*8=1600
-            # update_per_collect=int(500),
-
             update_per_collect=update_per_collect,
-            target_update_freq=100,
             batch_size=batch_size,
 
             # optim_type='SGD',
-            # learning_rate=0.2,  # lr_manually
-
-            # sampled paper
-            # cos_lr_scheduler=True,
-            # learning_rate=1e-4,
-
-            cos_lr_scheduler=False,
-            weight_decay=2e-5,
             optim_type='Adam',
             learning_rate=0.003,  # adam lr
+            # learning_rate=0.2,  # use manually lr
+
+            # Frequency of target network update.
+            target_update_freq=100,
+
+            weight_decay=1e-4,
+            momentum=0.9,
         ),
         # collect_mode config
         collect=dict(
@@ -170,50 +130,40 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
         ),
         # the eval cost is expensive, so we set eval_freq larger
         # eval=dict(evaluator=dict(eval_freq=int(5e3), )),
-        # eval=dict(evaluator=dict(eval_freq=int(2e3), )),
-        eval=dict(evaluator=dict(eval_freq=int(1e3), )),
-
+        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
         # for debug
         # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
         other=dict(
             # the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game_buffer_sampled_efficientzero')
+            replay_buffer=dict(type='game_buffer_muzero_rnn')
         ),
         ######################################
         # game_config begin
         ######################################
-        env_type='no_board_games',
+        env_type='board_games',
         device=device,
-        # mcts_ctree=False,
         mcts_ctree=True,
-        battle_mode='one_player_mode',
-        game_history_length=game_history_length,
-        action_space_size=action_dim,  # 4**2
-        continuous_action_space=True,
-        num_of_sampled_actions=K,
-        # clip_reward=True,
-        # TODO(pu)
-        clip_reward=False,
-        normalize_reward=False,
-        # normalize_reward=True,
-        normalize_reward_scale=100,
-
+        # mcts_ctree=False,
+        battle_mode='two_player_mode',
+        game_history_length=9,
+        # battle_mode='one_player_mode',
+        # game_history_length=5,
         image_based=False,
         cvt_string=False,
+        clip_reward=True,
         game_wrapper=True,
+        action_space_size=int(3 * 3),
         amp_type='none',
         # [S, W, H, C] -> [S x C, W, H]
-        # [4, 4, 1, 1] -> [4*1, 4, 1]
-        image_channel=1,
-        # obs_shape=(4, observation_dim, 1),  # if frame_stack_nums=4
+        # [4, 3, 3, 3] -> [12, 3, 3]
+        # obs_shape=(12, 3, 3),  # if frame_stack_num=4
         # frame_stack_num=4,
-
-        obs_shape=(1, observation_dim, 1),  # if frame_stack_num=1
-        frame_stack_num=1,
-        # frame skip & stack observation
-        frame_skip=4,
-
+        obs_shape=(6, 3, 3),  # if frame_stack_num=4
+        frame_stack_num=2,
+        # obs_shape=(3, 3, 3),  # if frame_stack_num=4
+        # frame_stack_num=1,
+        image_channel=3,
         gray_scale=False,
         downsample=False,
         vis_result=True,
@@ -229,10 +179,10 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
         # evaluator_env_num=2,
         # num_simulations=9,
         # batch_size=4,
-        # total_transitions=int(1e5),
-        # lstm_hidden_size=512,
+        # total_transitions=int(3e3),
+        # lstm_hidden_size=32,
         # # # to make sure the value target is the final outcome
-        # td_steps=5,
+        # td_steps=9,
         # num_unroll_steps=3,
         # lstm_horizon_len=3,
 
@@ -240,32 +190,36 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         num_simulations=num_simulations,
         batch_size=batch_size,
+        # total_transitions=int(3e3),
         total_transitions=int(1e5),
-        lstm_hidden_size=512,
-        td_steps=5,
-        num_unroll_steps=5,
-        lstm_horizon_len=5,
+        lstm_hidden_size=256,
+        # to make sure the value target is the final outcome
+        td_steps=9,
+        num_unroll_steps=3,
+        lstm_horizon_len=3,
 
         # TODO(pu): why 0.99?
         reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
-        # lr_manually=True,
-        lr_manually=False,
+        # lr_manually=True,  # use manually lr
+        lr_manually=False,  # use fixed lr
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority
         # use_max_priority=False,
-        use_priority=True,
+        use_priority=False,
 
         # TODO(pu): only used for adjust temperature manually
         max_training_steps=int(1e5),
+
         auto_temperature=False,
         # only effective when auto_temperature=False
         # fixed_temperature_value=0.25,
         fixed_temperature_value=1,
         # TODO(pu): whether to use root value in reanalyzing?
         use_root_value=False,
+        # use_root_value=True,
 
         # TODO(pu): test the effect
         last_linear_layer_init_zero=True,
@@ -277,7 +231,8 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
         # TODO(pu): test effect of 0.4->1
         priority_prob_beta=0.4,
         prioritized_replay_eps=1e-6,
-        root_dirichlet_alpha=0.3,
+        # root_dirichlet_alpha=0.3,
+        root_dirichlet_alpha=0.1,
         root_exploration_fraction=0.25,
         auto_td_steps=int(0.3 * 2e5),
         auto_td_steps_ratio=0.3,
@@ -287,7 +242,7 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         categorical_distribution=categorical_distribution,
-        support_size=300,
+        support_size=10,
         # max_grad_norm=10,
         max_grad_norm=0.5,
         test_interval=10000,
@@ -296,71 +251,90 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
         checkpoint_interval=100,
         target_model_interval=200,
         save_ckpt_interval=10000,
-        discount=0.997,
-        dirichlet_alpha=0.3,
+        discount=1,
+        # dirichlet_alpha=0.3,
         value_delta_max=0.01,
         num_actors=1,
         # network initialization/ & normalization
         episode_life=True,
-        # replay window
         start_transitions=8,
         transition_num=1,
-
+        # frame skip & stack observation
+        frame_skip=4,
         # TODO(pu): EfficientZero -> MuZero
         # coefficient
+        # TODO(pu): test the effect of value_prefix_loss and consistency_loss
         reward_loss_coeff=1,
+        consistency_coeff=0,
+        # consistency_coeff=2,
+
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-        # consistency_coeff=2,
-        consistency_coeff=0,
+
+        bn_mt=0.1,
 
         # siamese
-        # proj_hid=1024,
-        # proj_out=1024,
-        # pred_hid=512,
-        # pred_out=1024,
-        # half size model
-        proj_hid=512,
-        proj_out=512,
-        pred_hid=256,
-        pred_out=512,
-        bn_mt=0.1,
+        proj_hid=128,
+        proj_out=128,
+        pred_hid=64,
+        pred_out=128,
         blocks=1,  # Number of blocks in the ResNet
+        channels=16,  # Number of channels in the ResNet
         reduced_channels_reward=16,  # x36 Number of channels in reward head
         reduced_channels_value=16,  # x36 Number of channels in value head
         reduced_channels_policy=16,  # x36 Number of channels in policy head
-        resnet_fc_reward_layers=[32],  # Define the hidden layers in the reward head of the dynamic network
-        resnet_fc_value_layers=[32],  # Define the hidden layers in the value head of the prediction network
-        resnet_fc_policy_layers=[32],  # Define the hidden layers in the policy head of the prediction network
+        resnet_fc_reward_layers=[8],  # Define the hidden layers in the reward head of the dynamic network
+        resnet_fc_value_layers=[8],  # Define the hidden layers in the value head of the prediction network
+        resnet_fc_policy_layers=[8],  # Define the hidden layers in the policy head of the prediction network
         ######################################
         # game_config end
         ######################################
     ),
 )
-dmc2gym_disc_sampled_efficientzero_config = EasyDict(dmc2gym_disc_sampled_efficientzero_config)
-main_config = dmc2gym_disc_sampled_efficientzero_config
+tictactoe_muzero_rnn_config = EasyDict(tictactoe_muzero_rnn_config)
+main_config = tictactoe_muzero_rnn_config
 
-dmc2gym_disc_sampled_efficientzero_create_config = dict(
+tictactoe_muzero_rnn_create_config = dict(
     env=dict(
-        type='dmc2gym',
-        import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
+        type='tictactoe',
+        import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
     ),
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='sampled_efficientzero',
-        import_names=['core.policy.sampled_efficientzero'],
+        type='muzero_rnn',
+        import_names=['core.policy.muzero_rnn'],
     ),
     collector=dict(
-        type='episode_sampled_efficientzero',
+        type='episode_muzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.sampled_efficientzero_collector'],
+        import_names=['core.worker.collector.muzero_collector'],
     )
 )
-dmc2gym_disc_sampled_efficientzero_create_config = EasyDict(dmc2gym_disc_sampled_efficientzero_create_config)
-create_config = dmc2gym_disc_sampled_efficientzero_create_config
+tictactoe_muzero_rnn_create_config = EasyDict(tictactoe_muzero_rnn_create_config)
+create_config = tictactoe_muzero_rnn_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_sampled_efficientzero
+    from core.entry import serial_pipeline_muzero_eval
+    import numpy as np
+    # serial_pipeline_muzero_eval([main_config, create_config], seed=0, max_env_step=int(1e5))
 
-    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e6))
+    test_seeds = 10
+    test_episodes_each_seed = 2
+    test_episodes = test_seeds * test_episodes_each_seed
+    reward_all_seeds = []
+    reward_mean_all_seeds = []
+    for seed in range(test_seeds):
+        reward_mean, reward_lst = serial_pipeline_muzero_eval([main_config, create_config], seed=seed, test_episodes=test_episodes_each_seed, max_env_step=int(1e5))
+        reward_mean_all_seeds.append(reward_mean)
+        reward_all_seeds.append(reward_lst)
+
+    reward_all_seeds = np.array(reward_all_seeds)
+    reward_mean_all_seeds = np.array(reward_mean_all_seeds)
+
+    print("=" * 20)
+    print(f'we eval total {test_seeds} seeds. In each seed, we test {test_episodes_each_seed} episodes.')
+    print('reward_all_seeds:', reward_all_seeds)
+    print('reward_mean_all_seeds:', reward_mean_all_seeds.mean())
+    print(f'win rate: {len(np.where(reward_all_seeds == 1.)[0]) / test_episodes}, draw rate: {len(np.where(reward_all_seeds == 0.)[0]) / test_episodes}, lose rate: {len(np.where(reward_all_seeds == -1.)[0]) / test_episodes}')
+    print("=" * 20)

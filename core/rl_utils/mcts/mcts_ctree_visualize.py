@@ -147,6 +147,7 @@ class EfficientZeroVisualizeMCTSCtree(object):
                     min_max_stats_lst, results, is_reset_lst, virtual_to_play_batch
                 )
                 # one env
+                # TODO(pu): ctree
                 # env_root = results.search_paths[0][0]
                 env_root = roots.roots[0]
 

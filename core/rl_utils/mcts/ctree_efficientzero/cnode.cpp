@@ -244,9 +244,9 @@ namespace tree{
     }
 
       // visualize related code
-     CNode* CRoots::get_root(int index){
-        return &(this->roots[index]);
-     }
+//     CNode* CRoots::get_root(int index){
+//        return &(this->roots[index]);
+//     }
 
     //*********************************************************
     //

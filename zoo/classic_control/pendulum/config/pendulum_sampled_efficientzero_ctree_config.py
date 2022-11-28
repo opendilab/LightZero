@@ -45,40 +45,20 @@ categorical_distribution = True
 # e.g. reuse_factor = 0.5
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
 update_per_collect = 250
-# game_history_length = 200
 game_history_length = 50
-observation_dim = 5
+observation_dim = 3
 action_dim = 1
 
-dmc2gym_disc_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/dmc2gym_cartpole-balance_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_halfmodel_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_tanh-fs03',
+pendulum_sampled_efficientzero_config = dict(
+    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_halfmodel_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_tanh-fs03',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        env_id='dmc2gym_cartpole_balance',
+        env_id='pendulum',
         stop_value=900,
-
-        domain_name='cartpole',  # obs shape: 5, action shape: 1
-        task_name="balance",
-        # task_name="swingup",
-        # stop_value=850,
-
-        # domain_name="acrobot",  # obs shape: 6, action shape: 1
-        # task_name="swingup",
-
-        # domain_name="hopper",  # obs shape: 15, action shape: 4
-        # task_name="hop",
-
-        # domain_name="manipulator",  # obs shape: 44, action shape: 5
-        # task_name="bring_ball",
-        from_pixels=False,
-        channels_first=False,
-        frame_skip=8,
-        frame_stack=1,
         norm_obs=dict(use_norm=False, ),
-        norm_reward=dict(use_norm=False, ),
-        use_act_scale=True,
+        act_scale=True,
         battle_mode='one_player_mode',
         prob_random_agent=0.,
         collect_max_episode_steps=int(1.08e4),
@@ -87,7 +67,7 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model_path=None,
-        env_name='dmc2gym',
+        env_name='pendulum',
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
@@ -337,13 +317,13 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
         ######################################
     ),
 )
-dmc2gym_disc_sampled_efficientzero_config = EasyDict(dmc2gym_disc_sampled_efficientzero_config)
-main_config = dmc2gym_disc_sampled_efficientzero_config
+pendulum_sampled_efficientzero_config = EasyDict(pendulum_sampled_efficientzero_config)
+main_config = pendulum_sampled_efficientzero_config
 
-dmc2gym_disc_sampled_efficientzero_create_config = dict(
+pendulum_sampled_efficientzero_create_config = dict(
     env=dict(
-        type='dmc2gym',
-        import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
+        type='pendulum',
+        import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
     ),
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
@@ -357,10 +337,10 @@ dmc2gym_disc_sampled_efficientzero_create_config = dict(
         import_names=['core.worker.collector.sampled_efficientzero_collector'],
     )
 )
-dmc2gym_disc_sampled_efficientzero_create_config = EasyDict(dmc2gym_disc_sampled_efficientzero_create_config)
-create_config = dmc2gym_disc_sampled_efficientzero_create_config
+pendulum_sampled_efficientzero_create_config = EasyDict(pendulum_sampled_efficientzero_create_config)
+create_config = pendulum_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_sampled_efficientzero
 
-    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e6))
+    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))
