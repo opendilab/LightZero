@@ -1,9 +1,7 @@
 import sys
 
 from easydict import EasyDict
-
-# sys.path.append('/YOUR/PATH/LightZero')
-sys.path.append('/Users/puyuan/code/LightZero/')
+sys.path.append('/YOUR/PATH/LightZero')
 from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 from zoo.board_games.mcts_bot import MCTSBot
 
