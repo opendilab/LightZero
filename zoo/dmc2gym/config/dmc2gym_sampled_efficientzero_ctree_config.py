@@ -45,7 +45,7 @@ categorical_distribution = True
 # e.g. reuse_factor = 0.5
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
 update_per_collect = 250
-game_history_length = 50
+game_history_length = 200
 observation_dim = 5
 action_dim = 1
 
