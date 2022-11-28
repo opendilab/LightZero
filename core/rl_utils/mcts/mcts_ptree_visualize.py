@@ -6,13 +6,14 @@ import copy
 import numpy as np
 import torch
 from easydict import EasyDict
-
-from ..scaling_transform import inverse_scalar_transform
+from graphviz import Digraph
 
 ###########################################################
 # EfficientZero
 ###########################################################
 import core.rl_utils.mcts.ptree_efficientzero as tree
+from ..scaling_transform import inverse_scalar_transform
+from core.rl_utils.mcts.utils import plot_simulation_graph
 
 
 class EfficientZeroVisualizeMCTSPtree(object):
@@ -36,6 +37,7 @@ class EfficientZeroVisualizeMCTSPtree(object):
         if config is None:
             config = config
         self.config = config
+        self.current_step = 0
 
     def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=None):
         """
@@ -69,6 +71,7 @@ class EfficientZeroVisualizeMCTSPtree(object):
             hidden_state_index_x = 0
             # minimax value storage
             min_max_stats_lst = tree.MinMaxStatsList(num)
+            env_root = None
 
             # virtual_to_play = copy.deepcopy(to_play)
             for index_simulation in range(self.config.num_simulations):
@@ -175,8 +178,21 @@ class EfficientZeroVisualizeMCTSPtree(object):
                     hidden_state_index_x, discount, value_prefix_pool, value_pool, policy_logits_pool,
                     min_max_stats_lst, results, is_reset_lst, virtual_to_play
                 )
+                # one env
+                # env_root = results.search_paths[0][0]
+                env_root = roots.roots[0]
 
-            return results,  hidden_states
+
+            #################################################
+            # visualize related code
+            #################################################
+            plot_simulation_graph(env_root, self.current_step, graph_directory=self.config.graph_directory)
+            self.current_step += 1
+            #################################################
+            # visualize related code
+            #################################################
+
+            return results, hidden_states
 
 
 ###########################################################
@@ -185,7 +201,7 @@ class EfficientZeroVisualizeMCTSPtree(object):
 import core.rl_utils.mcts.ptree_muzero as tree_muzero
 
 
-class MuZeroMCTSPtree(object):
+class MuZeroVisualizeMCTSPtree(object):
     config = dict(
         device='cpu',
         pb_c_base=19652,

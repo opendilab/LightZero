@@ -2,9 +2,61 @@
 The following code is adapted from https://github.com/YeWR/EfficientZero/core/utils.py
 """
 
+import os
 import numpy as np
 import torch
 from scipy.stats import entropy
+from graphviz import Digraph
+
+
+def obtain_tree_topology(root, to_play=0):
+    node_stack = []
+    edge_topology_list = []
+    node_topology_list = []
+    node_id_list = []
+    node_stack.append(root)
+    while len(node_stack) > 0:
+        node = node_stack[-1]
+        node_stack.pop()
+        node_dict = {}
+        node_dict['node_id'] = node.hidden_state_index_x
+        node_dict['visit_count'] = node.visit_count
+        node_dict['policy_prior'] = node.prior
+        node_dict['value'] = node.value
+        node_topology_list.append(node_dict)
+
+        node_id_list.append(node.hidden_state_index_x)
+        for a in node.legal_actions:
+            child = node.get_child(a)
+            if child.expanded:
+                child.parent_hidden_state_index_x = node.hidden_state_index_x
+                edge_dict = {}
+                edge_dict['parent_id'] = node.hidden_state_index_x
+                edge_dict['child_id'] = child.hidden_state_index_x
+                edge_topology_list.append(edge_dict)
+                node_stack.append(child)
+    return edge_topology_list, node_id_list, node_topology_list
+
+
+def plot_simulation_graph(env_root, current_step, graph_directory=None):
+    edge_topology_list, node_id_list, node_topology_list = obtain_tree_topology(env_root)
+    dot = Digraph(comment='this is direction')
+    for node_topology in node_topology_list:
+        node_name = str(node_topology['node_id'])
+        label = f"node_id: {node_topology['node_id']}, \l visit_count: {node_topology['visit_count']}, \l policy_prior: {round(node_topology['policy_prior'], 4)}, \l value: {round(node_topology['value'], 4)}"
+        dot.node(node_name, label=label)
+    for edge_topology in edge_topology_list:
+        parent_id = str(edge_topology['parent_id'])
+        child_id = str(edge_topology['child_id'])
+        label = parent_id + '-' + child_id
+        dot.edge(parent_id, child_id, label=label)
+    if graph_directory is None:
+        graph_directory = './data_visualize/'
+    if not os.path.exists(graph_directory):
+        os.makedirs(graph_directory)
+    graph_path = graph_directory + 'simulation_visualize_' + str(current_step) + 'step.gv'
+    dot.format = 'png'
+    dot.render(graph_path, view=False)
 
 
 def get_augmented_data(board_size, play_data):

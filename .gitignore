@@ -14,7 +14,7 @@
 *.pkl
 data_*
 *.so
-*seed*
+*.gv
 
 pkg/
 src/

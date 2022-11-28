@@ -4,6 +4,8 @@ from .mcts_ptree_visualize import EfficientZeroVisualizeMCTSPtree
 
 from .mcts_ctree import MuZeroRNNMCTSCtree, MuZeroMCTSCtree, EfficientZeroMCTSCtree
 from .mcts_ctree_sampled_efficientzero import SampledEfficientZeroMCTSCtree
+from .mcts_ctree_visualize import MuZeroRNNVisualizeMCTSCtree, MuZeroVisualizeMCTSCtree, EfficientZeroVisualizeMCTSCtree
+
 
 from .game import Game, GameHistory
 from .game_buffer import GameBuffer

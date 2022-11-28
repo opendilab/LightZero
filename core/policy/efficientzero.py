@@ -16,7 +16,7 @@ from torch.nn import L1Loss
 # python mcts
 import core.rl_utils.mcts.ptree_efficientzero as ptree
 from core.rl_utils import EfficientZeroMCTSCtree as MCTS_ctree
-from core.rl_utils import EfficientZeroMCTSPtree as MCTSPtree
+from core.rl_utils import EfficientZeroMCTSPtree as MCTS_ptree
 from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
 from core.rl_utils import scalar_transform, inverse_scalar_transform
@@ -579,7 +579,7 @@ class EfficientZeroPolicy(Policy):
         if self._cfg.mcts_ctree:
             self._mcts_collect = MCTS_ctree(self._cfg)
         else:
-            self._mcts_collect = MCTSPtree(self._cfg)
+            self._mcts_collect = MCTS_ptree(self._cfg)
 
         # set temperature for distributions
         self.collect_temperature = np.array(
@@ -709,7 +709,7 @@ class EfficientZeroPolicy(Policy):
         if self._cfg.mcts_ctree:
             self._mcts_eval = MCTS_ctree(self._cfg)
         else:
-            self._mcts_eval = MCTSPtree(self._cfg)
+            self._mcts_eval = MCTS_ptree(self._cfg)
 
     # @profile
     def _forward_eval(self, data: ttorch.Tensor, action_mask: list, to_play: None, ready_env_id=None):
