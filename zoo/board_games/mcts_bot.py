@@ -1,9 +1,11 @@
-import numpy as np
-from collections import defaultdict
-from abc import ABC, abstractmethod
-import time
 import sys
+import time
+from abc import ABC, abstractmethod
+from collections import defaultdict
+
+import numpy as np
 from easydict import EasyDict
+
 sys.path.append('/YOUR/PATH/LightZero')
 
 
@@ -16,7 +18,6 @@ class MCTSNode(ABC):
         Arguments:
             env: Class Env, such as 
                  zoo.board_games.tictactoe.envs.tictactoe_env.TicTacToeEnv,
-                 zoo.board_games.tictactoe.envs.tictactoe_env.TicTacToeEnv
                  zoo.board_games.gomoku.envs.gomoku_env.GomokuEnv
             parent: TwoPlayersMCTSNode / MCTSNode
         """
@@ -82,7 +83,7 @@ class MCTSNode(ABC):
         self.best_action = self.parent_action[np.argmax(choices_weights)]
         return self.children[np.argmax(choices_weights)]
 
-    def rollout_policy(self, possible_actions):        
+    def rollout_policy(self, possible_actions):
         return possible_actions[np.random.randint(len(possible_actions))]
 
 
@@ -114,11 +115,11 @@ class TwoPlayersMCTSNode(MCTSNode):
         '''
         # print(self._results)
         # print('parent.current_player={}'.format(self.parent.env.current_player))
-        if self.parent.env.current_player==1:
+        if self.parent.env.current_player == 1:
             wins = self._results[1]
             loses = self._results[-1]
-        
-        if self.parent.env.current_player==2:
+
+        if self.parent.env.current_player == 2:
             wins = self._results[-1]
             loses = self._results[1]
         # print("wins={}, loses={}".format(wins, loses))
@@ -185,8 +186,8 @@ class MCTSSearchNode(object):
         -------
         """
 
-        if simulations_number is None :
-            assert(total_simulation_seconds is not None)
+        if simulations_number is None:
+            assert (total_simulation_seconds is not None)
             end_time = time.time() + total_simulation_seconds
             while True:
                 v = self._tree_policy()
@@ -194,7 +195,7 @@ class MCTSSearchNode(object):
                 v.backpropagate(reward)
                 if time.time() > end_time:
                     break
-        else :
+        else:
             for i in range(0, simulations_number):
                 # print('****simlulation-{}****'.format(i))            
                 v = self._tree_policy()
@@ -218,13 +219,12 @@ class MCTSSearchNode(object):
         return current_node
 
 
-class MCTSBot: 
+class MCTSBot:
     def __init__(self, ENV, cfg, bot_name, num_simulation=10000):
         self.name = bot_name
         self.num_simulation = num_simulation
         self.ENV = ENV
         self.cfg = cfg
-    
     def get_actions(self, state, player_index):
         simulator_env = self.ENV(EasyDict(self.cfg))
         simulator_env.reset(start_player_index=player_index, init_state=state)

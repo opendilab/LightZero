@@ -36,11 +36,11 @@ class LunarLanderEnv(BaseEnv):
         # env_id: LunarLander-v2, LunarLanderContinuous-v2
         self._env_id = cfg.env_id
         self._replay_path = cfg.replay_path
-        self._replay_path = cfg.replay_path
+        self._replay_path_gif = cfg.replay_path_gif
         self._save_replay_gif = cfg.save_replay_gif
         self._save_replay_count = 0
         if 'Continuous' in self._env_id:
-            self._act_scale = cfg.act_scale  # act_scale only works in continous env
+            self._act_scale = cfg.act_scale  # act_scale only works in continuous env
         else:
             self._act_scale = False
 
@@ -67,9 +67,10 @@ class LunarLanderEnv(BaseEnv):
             self._env.seed(self._seed + np_seed)
         elif hasattr(self, '_seed'):
             self._env.seed(self._seed)
-        self._final_eval_reward = 0
+
         obs = self._env.reset()
         obs = to_ndarray(obs)
+        self._final_eval_reward = 0.
         if self._save_replay_gif:
             self._frames = []
 
@@ -81,7 +82,7 @@ class LunarLanderEnv(BaseEnv):
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
         else:
             # if 'Continuous' in self._env_id:
-            # to be compatible with efficientzero
+            # to be compatible with muzero/efficientzero
             # shape: [W, H, C]
             obs = obs.reshape(8, 1, 1)
             action_mask = None
@@ -108,6 +109,7 @@ class LunarLanderEnv(BaseEnv):
             action = affine_transform(action, min_val=-1, max_val=1)
         if self._save_replay_gif:
             self._frames.append(self._env.render(mode='rgb_array'))
+
         obs, rew, done, info = self._env.step(action)
         if 'Continuous' not in self._env_id:
             # to be compatible with efficientzero
@@ -128,13 +130,17 @@ class LunarLanderEnv(BaseEnv):
         if done:
             info['final_eval_reward'] = self._final_eval_reward
             if self._save_replay_gif:
-                print(self._replay_path)
-                if not os.path.exists(self._replay_path):
-                    os.makedirs(self._replay_path)
+                if not os.path.exists(self._replay_path_gif):
+                    os.makedirs(self._replay_path_gif)
+                # path = os.path.join(
+                #     self._replay_path_gif,
+                #     '{}_episode_{}.gif'.format(self._env_id, self._save_replay_count)
+                # )
                 path = os.path.join(
-                    self._replay_path, '{}_episode_{}.gif'.format(self._env_id, self._save_replay_count)
+                    self._replay_path_gif, '{}_episode_{}_seed{}.gif'.format(self._env_id, self._save_replay_count, self._seed)
                 )
                 self.display_frames_as_gif(self._frames, path)
+                print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
                 self._save_replay_count += 1
 
         obs = to_ndarray(obs)
@@ -179,3 +185,17 @@ class LunarLanderEnv(BaseEnv):
 
     def __repr__(self) -> str:
         return "DI-engine LunarLander Env"
+
+    @staticmethod
+    def create_collector_env_cfg(cfg: dict) -> List[dict]:
+        collector_env_num = cfg.pop('collector_env_num')
+        cfg = copy.deepcopy(cfg)
+        cfg.max_episode_steps = cfg.collect_max_episode_steps
+        return [cfg for _ in range(collector_env_num)]
+
+    @staticmethod
+    def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
+        evaluator_env_num = cfg.pop('evaluator_env_num')
+        cfg = copy.deepcopy(cfg)
+        cfg.max_episode_steps = cfg.eval_max_episode_steps
+        return [cfg for _ in range(evaluator_env_num)]

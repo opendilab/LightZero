@@ -236,6 +236,7 @@ class DynamicsNetwork(nn.Module):
         self.activation = nn.ReLU(inplace=True)
 
     def forward(self, x, reward_hidden_state):
+        # take the state encoding
         state = x[:, :-self.action_space_dim, :, :]
         x = self.conv(x)
         x = self.bn(x)
@@ -299,6 +300,8 @@ class PredictionNetwork(nn.Module):
             block_output_size_policy,
             momentum=0.1,
             last_linear_layer_init_zero=False,
+            sigma_type='fixed',
+            fixed_sigma_value=0.3,
     ):
         """Prediction network
         Parameters
@@ -329,6 +332,8 @@ class PredictionNetwork(nn.Module):
             True -> zero initialization for the last layer of value/policy mlp
         """
         super().__init__()
+        self.sigma_type = sigma_type
+        self.fixed_sigma_value = fixed_sigma_value
         self.in_channels = in_channels
         if self.in_channels is not None:
             self.conv_input = nn.Conv2d(in_channels, num_channels, 1)
@@ -381,9 +386,12 @@ class PredictionNetwork(nn.Module):
             hidden_size=self.block_output_size_policy,  # 256,
             output_size=action_space_size,
             layer_num=len(fc_policy_layers) + 1,
-            sigma_type='conditioned',
+            # sigma_type='conditioned',
+            sigma_type=self.sigma_type,
+            fixed_sigma_value=self.fixed_sigma_value,
             activation=nn.ReLU(),
-            norm_type=None
+            norm_type=None,
+            bound_type='tanh'  # TODO(pu)
         )
 
         self.activation = nn.ReLU(inplace=True)
@@ -402,11 +410,18 @@ class PredictionNetwork(nn.Module):
         policy = self.bn_policy(policy)
         policy = self.activation(policy)
 
+        # print(value.shape, value)
         value = value.view(-1, self.block_output_size_value)
         policy = policy.view(-1, self.block_output_size_policy)
+        # value = value.reshape(-1, self.block_output_size_value)
+        # policy = policy.reshape(-1, self.block_output_size_policy)
         value = self.fc_value(value)
         #  {'mu': mu, 'sigma': sigma}
         policy = self.sampled_fc_policy(policy)
+
+        # print("policy['mu']", policy['mu'].max(), policy['mu'].min(), policy['mu'].std())
+        # print("policy['sigma']", policy['sigma'].max(), policy['sigma'].min(), policy['sigma'].std())
+
         policy = torch.cat([policy['mu'], policy['sigma']], dim=-1)
 
         return policy, value
@@ -443,6 +458,8 @@ class SampledEfficientZeroNet(BaseNet):
             last_linear_layer_init_zero=False,
             state_norm=False,
             categorical_distribution=True,
+            sigma_type='fixed',
+            fixed_sigma_value=0.3,
     ):
         """
         Overview:
@@ -473,6 +490,8 @@ class SampledEfficientZeroNet(BaseNet):
             - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         """
         super(SampledEfficientZeroNet, self).__init__(lstm_hidden_size)
+        self.sigma_type = sigma_type
+        self.fixed_sigma_value = fixed_sigma_value
         self.categorical_distribution = categorical_distribution
         if not self.categorical_distribution:
             self.reward_support_size = 1
@@ -553,6 +572,8 @@ class SampledEfficientZeroNet(BaseNet):
                 block_output_size_policy,
                 momentum=bn_mt,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                sigma_type=self.sigma_type,
+                fixed_sigma_value=self.fixed_sigma_value,
             )
         else:
             if self.continuous_action_space:
@@ -595,6 +616,8 @@ class SampledEfficientZeroNet(BaseNet):
                 block_output_size_policy,
                 momentum=bn_mt,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                sigma_type=self.sigma_type,
+                fixed_sigma_value=self.fixed_sigma_value,
             )
 
         # projection

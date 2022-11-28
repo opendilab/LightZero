@@ -57,7 +57,7 @@ class MuZeroModelFake(torch.nn.Module):
 
 @pytest.mark.unittest
 def test_mcts():
-    import core.rl_utils.mcts.ctree.cytree as ctree
+    import core.rl_utils.mcts.ctree_efficientzero.cytree as ctree
     import numpy as np
     from core.rl_utils.mcts.mcts_ctree import MCTSCtree as MCTS
 

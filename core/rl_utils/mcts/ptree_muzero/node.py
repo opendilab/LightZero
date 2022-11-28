@@ -26,6 +26,7 @@ class Node:
         self.value_sum = 0
         self.best_action = -1
         self.to_play = 0  # default 0 means one_player_mode
+        self.reward = 0
         self.value_prefix = 0.0
         self.children = {}
         self.children_index = []
@@ -36,7 +37,7 @@ class Node:
         self.parent_value_prefix = 0  # only used in update_tree_q method
 
     def expand(
-        self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, value_prefix: float,
+        self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, reward: float,
         policy_logits: List[float]
     ):
         self.to_play = to_play
@@ -46,12 +47,30 @@ class Node:
 
         self.hidden_state_index_x = hidden_state_index_x
         self.hidden_state_index_y = hidden_state_index_y
-        self.value_prefix = value_prefix
+        self.reward = reward
 
         policy_values = torch.softmax(torch.tensor([policy_logits[a] for a in self.legal_actions]), dim=0).tolist()
         policy = {a: policy_values[i] for i, a in enumerate(self.legal_actions)}
         for action, p in policy.items():
             self.children[action] = Node(p)
+
+    # def expand(
+    #     self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, value_prefix: float,
+    #     policy_logits: List[float]
+    # ):
+    #     self.to_play = to_play
+    #     if self.legal_actions is None:
+    #         # TODO
+    #         self.legal_actions = np.arange(len(policy_logits))
+
+    #     self.hidden_state_index_x = hidden_state_index_x
+    #     self.hidden_state_index_y = hidden_state_index_y
+    #     self.value_prefix = value_prefix
+
+    #     policy_values = torch.softmax(torch.tensor([policy_logits[a] for a in self.legal_actions]), dim=0).tolist()
+    #     policy = {a: policy_values[i] for i, a in enumerate(self.legal_actions)}
+    #     for action, p in policy.items():
+    #         self.children[action] = Node(p)
 
     def add_exploration_noise(self, exploration_fraction: float, noises: List[float]):
         """
@@ -81,14 +100,15 @@ class Node:
         """
         total_unsigned_q = 0.0
         total_visits = 0
-        parent_value_prefix = self.value_prefix
+        # parent_value_prefix = self.value_prefix
         for a in self.legal_actions:
             child = self.get_child(a)
             if child.visit_count > 0:
-                true_reward = child.value_prefix - parent_value_prefix
-                if self.is_reset == 1:
-                    # TODO(pu)
-                    true_reward = child.value_prefix
+                true_reward = child.reward
+                # true_reward = child.value_prefix - parent_value_prefix
+                # if self.is_reset == 1:
+                #     # TODO(pu)
+                #     true_reward = child.value_prefix
                 # TODO(pu): only one step bootstrap?
                 q_of_s_a = true_reward + discount * child.value
                 total_unsigned_q += q_of_s_a
@@ -100,6 +120,36 @@ class Node:
             # TODO(pu): why parent_q?
             mean_q = (parent_q + total_unsigned_q) / (total_visits + 1)
         return mean_q
+
+
+    # def get_mean_q(self, is_root: int, parent_q: float, discount: float):
+    #     """
+    #     Overview:
+    #         get mean q
+    #     Arguments:
+    #         - is_root (:obj:`int`):
+    #     """
+    #     total_unsigned_q = 0.0
+    #     total_visits = 0
+    #     parent_value_prefix = self.value_prefix
+    #     for a in self.legal_actions:
+    #         child = self.get_child(a)
+    #         if child.visit_count > 0:
+    #             true_reward = child.value_prefix - parent_value_prefix
+    #             if self.is_reset == 1:
+    #                 # TODO(pu)
+    #                 true_reward = child.value_prefix
+    #             # TODO(pu): only one step bootstrap?
+    #             q_of_s_a = true_reward + discount * child.value
+    #             total_unsigned_q += q_of_s_a
+    #             total_visits += 1
+    #     if is_root and total_visits > 0:
+    #         mean_q = total_unsigned_q / total_visits
+    #     else:
+    #         # if is not root node,
+    #         # TODO(pu): why parent_q?
+    #         mean_q = (parent_q + total_unsigned_q) / (total_visits + 1)
+    #     return mean_q
 
     def print_out(self):
         pass
@@ -159,7 +209,7 @@ class Node:
 
 class Roots:
 
-    def __init__(self, root_num: int, pool_size: int, legal_actions_list: Any):
+    def __init__(self, root_num: int, legal_actions_list: Any, pool_size: int):
         self.num = root_num
         self.root_num = root_num
         self.legal_actions_list = legal_actions_list  # list of list
@@ -173,28 +223,52 @@ class Roots:
                 # if legal_actions_list is int
                 self.roots.append(Node(0, np.arange(legal_actions_list)))
 
-    def prepare(self, root_exploration_fraction, noises, value_prefixs, policies, to_play=None):
+    def prepare(self, root_exploration_fraction, noises, rewards, policies, to_play=None):
         for i in range(self.root_num):
             #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
             # TODO(pu): why hidden_state_index_x=0, hidden_state_index_y=i?
             if to_play is None:
-                self.roots[i].expand(0, 0, i, value_prefixs[i], policies[i])
+                self.roots[i].expand(0, 0, i, rewards[i], policies[i])
             elif to_play is [None]:
                 print('debug')
             else:
-                self.roots[i].expand(to_play[i], 0, i, value_prefixs[i], policies[i])
+                self.roots[i].expand(to_play[i], 0, i, rewards[i], policies[i])
 
             self.roots[i].add_exploration_noise(root_exploration_fraction, noises[i])
             self.roots[i].visit_count += 1
 
-    def prepare_no_noise(self, value_prefixs, policies, to_play=None):
+    # def prepare(self, root_exploration_fraction, noises, value_prefixs, policies, to_play=None):
+    #     for i in range(self.root_num):
+    #         #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
+    #         # TODO(pu): why hidden_state_index_x=0, hidden_state_index_y=i?
+    #         if to_play is None:
+    #             self.roots[i].expand(0, 0, i, value_prefixs[i], policies[i])
+    #         elif to_play is [None]:
+    #             print('debug')
+    #         else:
+    #             self.roots[i].expand(to_play[i], 0, i, value_prefixs[i], policies[i])
+
+    #         self.roots[i].add_exploration_noise(root_exploration_fraction, noises[i])
+    #         self.roots[i].visit_count += 1
+
+
+    def prepare_no_noise(self, rewards, policies, to_play=None):
         for i in range(self.root_num):
             if to_play is None:
-                self.roots[i].expand(0, 0, i, value_prefixs[i], policies[i])
+                self.roots[i].expand(0, 0, i, rewards[i], policies[i])
             else:
-                self.roots[i].expand(to_play[i], 0, i, value_prefixs[i], policies[i])
+                self.roots[i].expand(to_play[i], 0, i, rewards[i], policies[i])
 
             self.roots[i].visit_count += 1
+
+    # def prepare_no_noise(self, value_prefixs, policies, to_play=None):
+    #     for i in range(self.root_num):
+    #         if to_play is None:
+    #             self.roots[i].expand(0, 0, i, value_prefixs[i], policies[i])
+    #         else:
+    #             self.roots[i].expand(to_play[i], 0, i, value_prefixs[i], policies[i])
+
+    #         self.roots[i].visit_count += 1
 
     def clear(self):
         self.roots.clear()
@@ -230,48 +304,9 @@ class SearchResults:
         self.last_actions = []
         self.search_lens = []
 
-"""if node don't have parent_value_prefix property"""
-# def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
-#     node_stack = []
-#     node_stack.append(root)
-#     parent_value_prefix = 0.0
-#     is_reset = 0
-#     parent_value_prefix_stack = []
-#     while len(node_stack) > 0:
-#         node = node_stack[-1]
-#         node_stack.pop()
-#
-#         if node != root:
-#             true_reward = node.value_prefix - parent_value_prefix
-#             if is_reset == 1:
-#                 true_reward = node.value_prefix
-#             if players == 1:
-#                 q_of_s_a = true_reward + discount * node.value
-#             elif players == 2:
-#                 q_of_s_a = true_reward + discount * (-node.value)
-#
-#             min_max_stats.update(q_of_s_a)
-#
-#         parent_value_prefix = node.value_prefix
-#         parent_value_prefix_stack.append(parent_value_prefix)
-#         is_reset = node.is_reset
-#
-#         num = 0
-#         for a in node.legal_actions:
-#             child = node.get_child(a)
-#             if child.expanded:
-#                 node_stack.append(child)
-#                 num += 1
-#
-#         if num == 0:
-#             # if node have no expanded child
-#             parent_value_prefix = parent_value_prefix_stack.pop()
-#
-#         # if len(node_stack) >= 3:
-#         #     print('len(node_stack)>=3')
 
-def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play=0):
-    root.parent_value_prefix = 0
+def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
+    # root.parent_value_prefix = 0
     node_stack = []
     node_stack.append(root)
     is_reset = 0
@@ -280,21 +315,15 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play
         node_stack.pop()
 
         if node != root:
-            if players == 1:
-                true_reward = node.value_prefix - node.parent_value_prefix
-            else:
-                # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
-                # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
-                # true_reward = node.value_prefix - (- parent_value_prefix)
-                true_reward = node.value_prefix - node.parent_value_prefix
+            # true_reward = node.value_prefix - node.parent_value_prefix
+            true_reward = node.reward
 
-            if is_reset == 1:
-                true_reward = node.value_prefix
+            # if is_reset == 1:
+            #     true_reward = node.value_prefix
             if players == 1:
                 q_of_s_a = true_reward + discount * node.value
             elif players == 2:
-                # TODO
-                q_of_s_a = true_reward + discount * - node.value
+                q_of_s_a = true_reward + discount * (-node.value)
 
             min_max_stats.update(q_of_s_a)
 
@@ -303,11 +332,8 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play
         for a in node.legal_actions:
             child = node.get_child(a)
             if child.expanded:
-                # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
-                # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
-                child.parent_value_prefix = node.value_prefix
+                # child.parent_value_prefix = node.value_prefix
                 node_stack.append(child)
-
 
 def back_propagate(search_path, min_max_stats, to_play, value: float, discount: float):
     if to_play is None or to_play == 0:
@@ -319,27 +345,28 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
             node.value_sum += bootstrap_value
             node.visit_count += 1
 
-            parent_value_prefix = 0.0
-            is_reset = 0
-            if i >= 1:
-                parent = search_path[i - 1]
-                parent_value_prefix = parent.value_prefix
-                is_reset = parent.is_reset
+            # # parent_value_prefix = 0.0
+            # is_reset = 0
+            # if i >= 1:
+            #     parent = search_path[i - 1]
+            #     parent_value_prefix = parent.value_prefix
+            #     is_reset = parent.is_reset
 
-            true_reward = node.value_prefix - parent_value_prefix
+            # true_reward = node.value_prefix - parent_value_prefix
+            true_reward = node.reward
 
             # TODO(pu): the effect of different ways to update min_max_stats
             min_max_stats.update(true_reward + discount * node.value)
 
-            if is_reset == 1:
-                true_reward = node.value_prefix
+            # if is_reset == 1:
+            #     true_reward = node.value_prefix
 
             bootstrap_value = true_reward + discount * bootstrap_value
 
         # TODO(pu): the effect of different ways to update min_max_stats
         # min_max_stats.clear()
         # root = search_path[0]
-        # update_tree_q(root, min_max_stats, discount, 1, to_play=0)
+        # update_tree_q(root, min_max_stats, discount, 1)
     else:
         # for 2 player mode
         bootstrap_value = value
@@ -351,20 +378,20 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
 
             node.visit_count += 1
 
-            parent_value_prefix = 0.0
-            is_reset = 0
-            if i >= 1:
-                parent = search_path[i - 1]
-                parent_value_prefix = parent.value_prefix
-                is_reset = parent.is_reset
+            # parent_value_prefix = 0.0
+            # is_reset = 0
+            # if i >= 1:
+            #     parent = search_path[i - 1]
+            #     parent_value_prefix = parent.value_prefix
+            #     is_reset = parent.is_reset
 
-            # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
-            # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
+            # NOTE: in two player mode,
+            # we should calculate the true_reward according to the perspective of current player of node
             # true_reward = node.value_prefix - (- parent_value_prefix)
-            true_reward = node.value_prefix - parent_value_prefix
+            true_reward = node.reward
 
-            if is_reset == 1:
-                true_reward = node.value_prefix
+            # if is_reset == 1:
+            #     true_reward = node.value_prefix
 
             # min_max_stats.update(true_reward + discount * node.value)
             # TODO(pu): why in muzero-general is - node.value
@@ -379,7 +406,7 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
         # TODO(pu): the effect of different ways to update min_max_stats
         # min_max_stats.clear()
         # root = search_path[0]
-        # update_tree_q(root, min_max_stats, discount, 2, to_play=to_play)
+        # update_tree_q(root, min_max_stats, discount, 2)
 
 
 def batch_back_propagate(
@@ -419,8 +446,12 @@ def select_child(
     max_index_lst = []
     for a in root.legal_actions:
         child = root.get_child(a)
+        # temp_score = compute_ucb_score(
+        #     child, min_max_stats, mean_q, root.is_reset, root.visit_count - 1, root.value_prefix, pb_c_base, pb_c_int,
+        #     discount, players
+        # )
         temp_score = compute_ucb_score(
-            child, min_max_stats, mean_q, root.is_reset, root.visit_count - 1, root.value_prefix, pb_c_base, pb_c_int,
+            child, min_max_stats, mean_q, root.visit_count - 1, pb_c_base, pb_c_int,
             discount, players
         )
         if max_score < temp_score:
@@ -441,9 +472,9 @@ def compute_ucb_score(
     child: Node,
     min_max_stats,
     parent_mean_q,
-    is_reset: int,
+    # is_reset: int,
     total_children_visit_counts: float,
-    parent_value_prefix: float,
+    # parent_value_prefix: float,
     pb_c_base: float,
     pb_c_init: float,
     discount: float,
@@ -463,9 +494,10 @@ def compute_ucb_score(
     if child.visit_count == 0:
         value_score = parent_mean_q
     else:
-        true_reward = child.value_prefix - parent_value_prefix
-        if is_reset == 1:
-            true_reward = child.value_prefix
+        # true_reward = child.value_prefix - parent_value_prefix
+        true_reward = child.reward
+        # if is_reset == 1:
+        #     true_reward = child.value_prefix
         if players == 1:
             value_score = true_reward + discount * child.value
         elif players == 2:

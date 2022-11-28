@@ -51,12 +51,16 @@ class TestTicTacToeEnv:
             action = env.random_action()
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
+            # reward is in the perspective of player1
             env.render()
             if done:
-                if reward > 0 and info['next player to play'] == 2:
+                if reward != 0 and info['next player to play'] == 2:
                     print('player 1 (human player) win')
-                elif reward > 0 and info['next player to play'] == 1:
+                elif reward != 0 and info['next player to play'] == 1:
                     print('player 2 (computer player) win')
                 else:
                     print('draw')
                 break
+
+# test = TestTicTacToeEnv()
+# test.test_one_player_mode()

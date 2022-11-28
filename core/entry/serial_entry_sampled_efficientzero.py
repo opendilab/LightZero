@@ -118,25 +118,6 @@ def serial_pipeline_sampled_efficientzero(
             ]
         )
 
-        # TODO(pu): eval trained model
-        # returns = []
-        # test_episodes = 1
-        # for i in range(test_episodes):
-        #     stop, reward = evaluator.eval(
-        #         learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-        #     )
-        #     returns.append(reward)
-        # print(returns)
-        # returns = np.array(returns)
-        # print(f'win rate: {len(np.where(returns == 1.)[0])/ test_episodes}, draw rate: {len(np.where(returns == 0.)[0])/test_episodes}, lose rate: {len(np.where(returns == -1.)[0])/ test_episodes}')
-        # break
-
-        # TODO(pu): test sampled_efficientzero_evaluator
-        # for i in range(2):
-        #     stop, reward = evaluator.eval(
-        #             learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-        #         )
-
         # Evaluate policy performance
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(

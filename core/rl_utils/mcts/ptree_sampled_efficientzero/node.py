@@ -17,7 +17,8 @@ class Node:
      Arguments:
      """
 
-    def __init__(self, prior: Union[list, float], legal_actions: Any = None, action_space_size=9, num_of_sampled_actions=20):
+    def __init__(self, prior: Union[list, float], legal_actions: Any = None, action_space_size=9,
+                 num_of_sampled_actions=20):
         # pi, beta
         if isinstance(prior, list):
             self.prior = prior[0]
@@ -48,7 +49,7 @@ class Node:
             policy_logits: List[float]
     ):
         """
-        # to varify ctree
+        # to varify ctree_efficientzero
         import numpy as np
         import torch
         from torch.distributions import Normal, Independent
@@ -91,9 +92,10 @@ class Node:
         # TODO: factored policy representation
         # empirical_distribution = [1/self.num_of_sampled_actions]
         for action_index in range(self.num_of_sampled_actions):
-            self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(log_prob[action_index].item(),
-                                                                                         action_space_size=self.action_space_size,
-                                                                                         num_of_sampled_actions=self.num_of_sampled_actions)
+            self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
+                log_prob[action_index].item(),
+                action_space_size=self.action_space_size,
+                num_of_sampled_actions=self.num_of_sampled_actions)
             self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
 
     def add_exploration_noise(self, exploration_fraction: float, noises: List[float]):
@@ -287,6 +289,7 @@ class SearchResults:
         self.last_actions = []
         self.search_lens = []
 
+
 # not used now
 def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play=0):
     root.parent_value_prefix = 0
@@ -450,7 +453,8 @@ def select_child(
         # empirical_distribution = [1/self.num_of_sampled_actions]
 
         # pi, beta
-        root.children[action] = Node(prior=log_prob[0], legal_actions=None, action_space_size=sampled_action.shape[0])  # TODO(pu): action_space_size
+        root.children[action] = Node(prior=log_prob[0], legal_actions=None,
+                                     action_space_size=sampled_action.shape[0])  # TODO(pu): action_space_size
         # TODO
         # root.legal_actions.append(action)
         # return action, root.children[action]
@@ -665,5 +669,5 @@ class Action:
 # cdef vector[vector[CAction*]] clegal_actions = legal_actions_list
 
 # vector[CAction*] get_trajectory()
- # vector[vector[CAction]]* get_trajectories()
+# vector[vector[CAction]]* get_trajectories()
 # vector[CAction *] last_actions

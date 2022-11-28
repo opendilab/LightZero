@@ -4,7 +4,11 @@ from easydict import EasyDict
 
 
 cfg = EasyDict(
-    env_name='PongNoFrameskip-v4',
+    env_name='PongNoFrameskip-v4',   # action_space_size=6
+    # env_name='QbertNoFrameskip-v4',   # action_space_size=6
+    # env_name='BreakoutNoFrameskip-v4',   # action_space_size=4
+    # env_name='MsPacmanNoFrameskip-v4',  # action_space_size=9
+    render_mode_human=False,
     frame_skip=4,
     frame_stack=4,
     episode_life=True,

@@ -33,7 +33,7 @@ evaluator_env_num = 3
 
 atari_efficientzero_config = dict(
     # exp_name='data_ez_ctree/breakout_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub883_lr0.2_ns50_ftv025_upc1000_urv-false_cd-true',
+    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub883_lr0.2_ns50_ftv025_upc1000_urv-false_fix',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -124,7 +124,7 @@ atari_efficientzero_config = dict(
         # command_mode config
         other=dict(
             # NOTE: the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game')
+            replay_buffer=dict(type='game_buffer_efficientzero')
         ),
         ######################################
         # game_config begin
@@ -132,8 +132,8 @@ atari_efficientzero_config = dict(
         env_type='no_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
-        mcts_ctree=True,
-        # mcts_ctree=False,
+        # mcts_ctree=True,
+        mcts_ctree=False,
         image_based=True,
         # cvt_string=True,
         # trade memory for speed

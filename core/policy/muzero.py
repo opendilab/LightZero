@@ -16,20 +16,20 @@ from torch.nn import L1Loss
 # python mcts
 import core.rl_utils.mcts.ptree_muzero as ptree
 from core.rl_utils import MuZeroMCTSPtree as MCTSPtree
+from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
+    DiscreteSupport
+from core.rl_utils import scalar_transform, inverse_scalar_transform
+from core.rl_utils import select_action
 # cpp mcts
 from core.rl_utils.mcts.ctree_muzero import cytree as ctree
 from core.rl_utils import MuZeroMCTSCtree as MCTSCtree
-
-from core.rl_utils import scalar_transform, inverse_scalar_transform
-from core.rl_utils import select_action
-from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, DiscreteSupport
 
 
 @POLICY_REGISTRY.register('muzero')
 class MuZeroPolicy(Policy):
     """
     Overview:
-        The policy class for MuZero
+        The policy class for EfficientZero
     """
     config = dict(
         type='muzero',
@@ -125,15 +125,17 @@ class MuZeroPolicy(Policy):
         return 'MuZeroNet', ['core.model.muzero.muzero_model']
 
     def _init_learn(self) -> None:
-        self._optimizer = optim.SGD(
-            self._model.parameters(),
-            lr=self._cfg.learn.learning_rate,
-            momentum=self._cfg.learn.momentum,
-            weight_decay=self._cfg.learn.weight_decay,
-            # grad_clip_type=self._cfg.learn.grad_clip_type,
-            # clip_value=self._cfg.learn.grad_clip_value,
-        )
-        # self._optimizer = Adam(self._model.parameters(), lr=self._cfg.learn.learning_rate)
+        if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
+            self._optimizer = optim.SGD(
+                self._model.parameters(),
+                lr=self._cfg.learn.learning_rate,
+                momentum=self._cfg.learn.momentum,
+                weight_decay=self._cfg.learn.weight_decay,
+                # grad_clip_type=self._cfg.learn.grad_clip_type,
+                # clip_value=self._cfg.learn.grad_clip_value,
+            )
+        elif self._cfg.learn.optim_type == 'Adam':
+            self._optimizer = optim.Adam(self._model.parameters(), lr=self._cfg.learn.learning_rate, weight_decay=self._cfg.learn.weight_decay)
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
@@ -165,7 +167,7 @@ class MuZeroPolicy(Policy):
         inputs_batch, targets_batch, replay_buffer = data
 
         obs_batch_ori, action_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
-        target_value_prefix, target_value, target_policy = targets_batch
+        target_reward, target_value, target_policy = targets_batch
 
         # [:, 0: config.frame_stack_num * 3,:,:]
         # obs_batch_ori is the original observations in a batch
@@ -210,18 +212,18 @@ class MuZeroPolicy(Policy):
 
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
         mask_batch = torch.from_numpy(mask_batch).to(self._cfg.device).float()
-        target_value_prefix = torch.from_numpy(target_value_prefix.astype('float64')).to(self._cfg.device
+        target_reward = torch.from_numpy(target_reward.astype('float64')).to(self._cfg.device
                                                                                          ).float()
         target_value = torch.from_numpy(target_value.astype('float64')).to(self._cfg.device).float()
         target_policy = torch.from_numpy(target_policy).to(self._cfg.device).float()
         weights = torch.from_numpy(weights_lst).to(self._cfg.device).float()
 
         # TODO
-        target_value_prefix = target_value_prefix.view(self._cfg.batch_size, -1)
+        target_reward = target_reward.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
 
         batch_size = obs_batch.size(0)
-        assert batch_size == self._cfg.batch_size == target_value_prefix.size(0)
+        assert batch_size == self._cfg.batch_size == target_reward.size(0)
         metric_loss = torch.nn.L1Loss()
 
         # some logs preparation
@@ -241,30 +243,31 @@ class MuZeroPolicy(Policy):
             other_loss[key + '_-1'] = -1
             other_loss[key + '_0'] = -1
 
-        # transform targets to categorical representation
-        transformed_target_value_prefix = scalar_transform(target_value_prefix, self._cfg.support_size)
+        # scalar transform to transformed Q scale, h(.) function
+        transformed_target_reward = scalar_transform(target_reward, self._cfg.support_size)
         transformed_target_value = scalar_transform(target_value, self._cfg.support_size)
         if self._cfg.categorical_distribution:
-            target_value_prefix_phi = reward_phi(self.reward_support, transformed_target_value_prefix)
+            # transform scalar to categorical_distribution
+            target_reward_phi = reward_phi(self.reward_support, transformed_target_reward)
             target_value_phi = value_phi(self.value_support, transformed_target_value)
 
         network_output = self._learn_model.initial_inference(obs_batch)
 
         value = network_output.value
-        value_prefix = network_output.value_prefix
+        reward = network_output.reward
         hidden_state = network_output.hidden_state  # （2, 64, 6, 6）
         reward_hidden_state = network_output.reward_hidden_state  # {tuple:2} (1,2,512)
         policy_logits = network_output.policy_logits  # {list: 2} {list:6}
 
         reward_hidden_state = to_device(reward_hidden_state, self._cfg.device)
-        scaled_value = inverse_scalar_transform(value, self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution)
+        
+        # transform categorical representation to original_value
+        original_value = inverse_scalar_transform(value, self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution)
 
         # TODO(pu)
         if not self._learn_model.training:
             # if not in training, obtain the scalars of the value/reward
-            scaled_value = scaled_value.detach().cpu().numpy()
-            scaled_value_prefix = inverse_scalar_transform(value_prefix,
-                                                           self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution).detach().cpu().numpy()
+            original_value = original_value.detach().cpu().numpy()
             hidden_state = hidden_state.detach().cpu().numpy()
             reward_hidden_state = (
                 reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -274,15 +277,15 @@ class MuZeroPolicy(Policy):
         if self._cfg.vis_result:
             state_lst = hidden_state.detach().cpu().numpy()
 
-        predicted_value_prefixs = []
+        predicted_rewards = []
         # Note: Following line is just for logging.
         if self._cfg.vis_result:
-            predicted_values, predicted_policies = scaled_value.detach().cpu(), torch.softmax(
+            predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
 
         # calculate the new priorities for each transition
-        value_priority = L1Loss(reduction='none')(scaled_value.squeeze(-1), target_value[:, 0])
+        value_priority = L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0])
         value_priority = value_priority.data.cpu().numpy() + self._cfg.prioritized_replay_eps
 
         # calculate loss for the first step
@@ -292,10 +295,10 @@ class MuZeroPolicy(Policy):
         else:
             value_loss = torch.nn.MSELoss(reduction='none')(value.squeeze(-1), transformed_target_value[:, 0])
 
-        value_prefix_loss = torch.zeros(batch_size, device=self._cfg.device)
+        reward_loss = torch.zeros(batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(batch_size, device=self._cfg.device)
 
-        target_value_prefix_cpu = target_value_prefix.detach().cpu()
+        target_reward_cpu = target_reward.detach().cpu()
         gradient_scale = 1 / self._cfg.num_unroll_steps
 
         # loss of the unrolled steps
@@ -305,17 +308,22 @@ class MuZeroPolicy(Policy):
                 hidden_state, reward_hidden_state, action_batch[:, step_i]
             )
             value = network_output.value
-            value_prefix = network_output.value_prefix
+            reward = network_output.reward
             policy_logits = network_output.policy_logits  # {list: 2} {list:6}
             hidden_state = network_output.hidden_state  # （2, 64, 6, 6）
             reward_hidden_state = network_output.reward_hidden_state  # {tuple:2} (1,2,512)
 
+            # first transform categorical representation to scalar, then transform to original_value
+            original_value = inverse_scalar_transform(value, self._cfg.support_size,
+                                             categorical_distribution=self._cfg.categorical_distribution)
+            original_reward = inverse_scalar_transform(reward,
+                                                    self._cfg.support_size,
+                                                    categorical_distribution=self._cfg.categorical_distribution)
             # TODO(pu)
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                value = inverse_scalar_transform(value, self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution).detach().cpu().numpy()
-                value_prefix = inverse_scalar_transform(value_prefix,
-                                                        self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution).detach().cpu().numpy()
+                original_value = original_value.detach().cpu().numpy()
+                original_reward = original_reward.detach().cpu().numpy()
                 hidden_state = hidden_state.detach().cpu().numpy()
                 reward_hidden_state = (
                     reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -342,17 +350,22 @@ class MuZeroPolicy(Policy):
                 other_loss['consist_' + str(step_i + 1)] = temp_loss.mean().item()
                 consistency_loss += temp_loss
 
-            # the target policy, target_value_phi, target_value_prefix_phi is calculated in game buffer now
+            # the target policy, target_value_phi, target_reward_phi is calculated in game buffer now
             policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
             if self._cfg.categorical_distribution:
                 value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
-                value_prefix_loss += modified_cross_entropy_loss(
-                    value_prefix, target_value_prefix_phi[:, step_i]
+                reward_loss += modified_cross_entropy_loss(
+                    reward, target_reward_phi[:, step_i]
                 )
             else:
-                value_loss += torch.nn.MSELoss(reduction='none')(value.squeeze(-1), transformed_target_value[:, step_i + 1])
-                value_prefix_loss += torch.nn.MSELoss(reduction='none')(
-                    value_prefix.squeeze(-1), transformed_target_value_prefix[:, step_i]
+                # value_loss += torch.nn.MSELoss(reduction='none')(original_value.squeeze(-1), transformed_target_value[:, step_i + 1])
+                # reward_loss += torch.nn.MSELoss(reduction='none')(
+                #     original_reward.squeeze(-1), transformed_target_reward[:, step_i]
+                # )
+                value_loss += torch.nn.MSELoss(reduction='none')(value.squeeze(-1),
+                                                                 transformed_target_value[:, step_i + 1])
+                reward_loss += torch.nn.MSELoss(reduction='none')(
+                    reward.squeeze(-1), transformed_target_reward[:, step_i]
                 )
 
             # Follow MuZero, set half gradient
@@ -368,45 +381,45 @@ class MuZeroPolicy(Policy):
                 )
 
             if self._cfg.vis_result:
-                scaled_value_prefixs = inverse_scalar_transform(value_prefix.detach(), self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution)
-                scaled_value_prefixs_cpu = scaled_value_prefixs.detach().cpu()
+                original_rewards = inverse_scalar_transform(reward.detach(), self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution)
+                original_rewards_cpu = original_rewards.detach().cpu()
 
                 predicted_values = torch.cat(
                     (predicted_values, inverse_scalar_transform(value, self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution).detach().cpu())
                 )
-                predicted_value_prefixs.append(scaled_value_prefixs_cpu)
+                predicted_rewards.append(original_rewards_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
                 state_lst = np.concatenate((state_lst, hidden_state.detach().cpu().numpy()))
 
                 key = 'unroll_' + str(step_i + 1) + '_l1'
 
-                value_prefix_indices_0 = (target_value_prefix_cpu[:, step_i].unsqueeze(-1) == 0)
-                value_prefix_indices_n1 = (target_value_prefix_cpu[:, step_i].unsqueeze(-1) == -1)
-                value_prefix_indices_1 = (target_value_prefix_cpu[:, step_i].unsqueeze(-1) == 1)
+                reward_indices_0 = (target_reward_cpu[:, step_i].unsqueeze(-1) == 0)
+                reward_indices_n1 = (target_reward_cpu[:, step_i].unsqueeze(-1) == -1)
+                reward_indices_1 = (target_reward_cpu[:, step_i].unsqueeze(-1) == 1)
 
-                target_value_prefix_base = target_value_prefix_cpu[:, step_i].reshape(-1).unsqueeze(-1)
+                target_reward_base = target_reward_cpu[:, step_i].reshape(-1).unsqueeze(-1)
 
-                other_loss[key] = metric_loss(scaled_value_prefixs_cpu, target_value_prefix_base)
-                if value_prefix_indices_1.any():
+                other_loss[key] = metric_loss(original_rewards_cpu, target_reward_base)
+                if reward_indices_1.any():
                     other_loss[key + '_1'] = metric_loss(
-                        scaled_value_prefixs_cpu[value_prefix_indices_1],
-                        target_value_prefix_base[value_prefix_indices_1]
+                        original_rewards_cpu[reward_indices_1],
+                        target_reward_base[reward_indices_1]
                     )
-                if value_prefix_indices_n1.any():
+                if reward_indices_n1.any():
                     other_loss[key + '_-1'] = metric_loss(
-                        scaled_value_prefixs_cpu[value_prefix_indices_n1],
-                        target_value_prefix_base[value_prefix_indices_n1]
+                        original_rewards_cpu[reward_indices_n1],
+                        target_reward_base[reward_indices_n1]
                     )
-                if value_prefix_indices_0.any():
+                if reward_indices_0.any():
                     other_loss[key + '_0'] = metric_loss(
-                        scaled_value_prefixs_cpu[value_prefix_indices_0],
-                        target_value_prefix_base[value_prefix_indices_0]
+                        original_rewards_cpu[reward_indices_0],
+                        target_reward_base[reward_indices_0]
                     )
         # ----------------------------------------------------------------------------------
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
             self._cfg.consistency_coeff * consistency_loss + self._cfg.policy_loss_coeff * policy_loss +
-            self._cfg.value_loss_coeff * value_loss + self._cfg.reward_loss_coeff * value_prefix_loss
+            self._cfg.value_loss_coeff * value_loss + self._cfg.reward_loss_coeff * reward_loss
         )
         weighted_loss = (weights * loss).mean()
 
@@ -434,54 +447,54 @@ class MuZeroPolicy(Policy):
         # packing data for logging
         loss_data = (
             total_loss.item(), weighted_loss.item(), loss.mean().item(), 0, policy_loss.mean().item(),
-            value_prefix_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
+            reward_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
         )
         if self._cfg.vis_result:
 
             # reward l1 loss
-            value_prefix_indices_0 = (
-                target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 0
+            reward_indices_0 = (
+                target_reward_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 0
             )
-            value_prefix_indices_n1 = (
-                target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == -1
+            reward_indices_n1 = (
+                target_reward_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == -1
             )
-            value_prefix_indices_1 = (
-                target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 1
+            reward_indices_1 = (
+                target_reward_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 1
             )
 
-            target_value_prefix_base = target_value_prefix_cpu[:, :self._cfg.
+            target_reward_base = target_reward_cpu[:, :self._cfg.
                                                                num_unroll_steps].reshape(-1).unsqueeze(-1)
 
-            predicted_value_prefixs = torch.stack(predicted_value_prefixs).transpose(1, 0).squeeze(-1)
-            predicted_value_prefixs = predicted_value_prefixs.reshape(-1).unsqueeze(-1)
-            other_loss['l1'] = metric_loss(predicted_value_prefixs, target_value_prefix_base)
-            if value_prefix_indices_1.any():
+            predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
+            predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
+            other_loss['l1'] = metric_loss(predicted_rewards, target_reward_base)
+            if reward_indices_1.any():
                 other_loss['l1_1'] = metric_loss(
-                    predicted_value_prefixs[value_prefix_indices_1], target_value_prefix_base[value_prefix_indices_1]
+                    predicted_rewards[reward_indices_1], target_reward_base[reward_indices_1]
                 )
-            if value_prefix_indices_n1.any():
+            if reward_indices_n1.any():
                 other_loss['l1_-1'] = metric_loss(
-                    predicted_value_prefixs[value_prefix_indices_n1], target_value_prefix_base[value_prefix_indices_n1]
+                    predicted_rewards[reward_indices_n1], target_reward_base[reward_indices_n1]
                 )
-            if value_prefix_indices_0.any():
+            if reward_indices_0.any():
                 other_loss['l1_0'] = metric_loss(
-                    predicted_value_prefixs[value_prefix_indices_0], target_value_prefix_base[value_prefix_indices_0]
+                    predicted_rewards[reward_indices_0], target_reward_base[reward_indices_0]
                 )
 
             if self._cfg.categorical_distribution:
                 td_data = (
-                    value_priority, target_value_prefix.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
-                    transformed_target_value_prefix.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
-                    target_value_prefix_phi.detach().cpu().numpy(), target_value_phi.detach().cpu().numpy(),
-                    predicted_value_prefixs.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
+                    value_priority, target_reward.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
+                    transformed_target_reward.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
+                    target_reward_phi.detach().cpu().numpy(), target_value_phi.detach().cpu().numpy(),
+                    predicted_rewards.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
                     target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), state_lst, other_loss,
                     other_log, other_dist
                 )
             else:
                 td_data = (
-                    value_priority, target_value_prefix.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
-                    transformed_target_value_prefix.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
-                    predicted_value_prefixs.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
+                    value_priority, target_reward.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
+                    transformed_target_reward.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
+                    predicted_rewards.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
                     target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), state_lst, other_loss,
                     other_log, other_dist
                 )
@@ -489,26 +502,52 @@ class MuZeroPolicy(Policy):
         else:
             td_data, priority_data = None, None
 
-        return {
+        if self._cfg.categorical_distribution:
+            return {
+                # 'priority':priority_info,
+                'total_loss': loss_data[0],
+                'weighted_loss': loss_data[1],
+                'loss_mean': loss_data[2],
+                'policy_loss': loss_data[4],
+                'reward_loss': loss_data[5],
+                'value_loss': loss_data[6],
+                'consistency_loss': loss_data[7],
+                'value_priority': td_data[0].flatten().mean().item(),
+                'target_reward': td_data[1].flatten().mean().item(),
+                'target_value': td_data[2].flatten().mean().item(),
+                'transformed_target_reward': td_data[3].flatten().mean().item(),
+                'transformed_target_value': td_data[4].flatten().mean().item(),
+                'predicted_rewards': td_data[7].flatten().mean().item(),
+                'predicted_values': td_data[8].flatten().mean().item(),
+                # 'target_policy':td_data[9],
+                # 'predicted_policies':td_data[10]
+                # 'td_data': td_data,
+                # 'priority_data_weights': priority_data[0],
+                # 'priority_data_indices': priority_data[1]
+            }
+        else:
+            return {
             # 'priority':priority_info,
             'total_loss': loss_data[0],
             'weighted_loss': loss_data[1],
             'loss_mean': loss_data[2],
             'policy_loss': loss_data[4],
-            'value_prefix_loss': loss_data[5],
+            'reward_loss': loss_data[5],
             'value_loss': loss_data[6],
             'consistency_loss': loss_data[7],
             'value_priority': td_data[0].flatten().mean().item(),
-            'target_value_prefix': td_data[1].flatten().mean().item(),
+            'target_reward': td_data[1].flatten().mean().item(),
             'target_value': td_data[2].flatten().mean().item(),
-            'predicted_value_prefixs': td_data[7].flatten().mean().item(),
-            'predicted_values': td_data[8].flatten().mean().item(),
+            'transformed_target_reward': td_data[3].flatten().mean().item(),
+            'transformed_target_value': td_data[4].flatten().mean().item(),
+            'predicted_rewards': td_data[5].flatten().mean().item(),
+            'predicted_values': td_data[6].flatten().mean().item(),
             # 'target_policy':td_data[9],
             # 'predicted_policies':td_data[10]
             # 'td_data': td_data,
             # 'priority_data_weights': priority_data[0],
             # 'priority_data_indices': priority_data[1]
-        }
+            }
 
     def _init_collect(self) -> None:
         self._unroll_len = self._cfg.collect.unroll_len
@@ -545,7 +584,7 @@ class MuZeroPolicy(Policy):
             hidden_state_roots = network_output.hidden_state  # （2, 64, 6, 6）
             pred_values_pool = network_output.value  # {list: 2}
             policy_logits_pool = network_output.policy_logits  # {list: 2} {list:6}
-            value_prefix_pool = network_output.value_prefix  # {list: 2}
+            reward_pool = network_output.reward  # {list: 2}
             reward_hidden_roots = network_output.reward_hidden_state  # {tuple:2} (1,2,512)
 
             # TODO(pu)
@@ -578,22 +617,24 @@ class MuZeroPolicy(Policy):
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 ]
-                roots.prepare(self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+                roots.prepare(self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool,
+                              to_play)
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
+
             else:
                 # python mcts
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = ptree.Roots(active_collect_env_num,  self._cfg.num_simulations, legal_actions)
+                roots = ptree.Roots(active_collect_env_num, legal_actions, self._cfg.num_simulations)
                 # the only difference between collect and eval is the dirichlet noise
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 ]
                 roots.prepare(
-                    self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
+                    self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play
                 )
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
@@ -666,7 +707,7 @@ class MuZeroPolicy(Policy):
             hidden_state_roots = network_output.hidden_state  # for atari, shape（B, 64, 6, 6）
             pred_values_pool = network_output.value  # for atari, shape（B, 601）
             reward_hidden_roots = network_output.reward_hidden_state  # {tuple:2} each element (1,2,512)
-            value_prefix_pool = network_output.value_prefix  # shape（B, 1）
+            reward_pool = network_output.reward  # shape（B, 1）
             policy_logits_pool = network_output.policy_logits  # shape（B, A）
 
             # TODO(pu)
@@ -690,7 +731,7 @@ class MuZeroPolicy(Policy):
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
                 roots = ctree.Roots(active_eval_env_num, self._cfg.num_simulations, legal_actions)
-                roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+                roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
             else:
@@ -698,9 +739,9 @@ class MuZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ptree.Roots(active_eval_env_num,  self._cfg.num_simulations, legal_actions)
+                roots = ptree.Roots(active_eval_env_num, legal_actions, self._cfg.num_simulations)
 
-                roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+                roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
 
@@ -738,16 +779,17 @@ class MuZeroPolicy(Policy):
             'weighted_loss',
             'loss_mean',
             'policy_loss',
-            'value_prefix_loss',
+            'reward_loss',
             'value_loss',
             'consistency_loss',
             #
             'value_priority',
-            'target_value_prefix',
+            'target_reward',
             'target_value',
-            'predicted_value_prefixs',
+            'predicted_rewards',
             'predicted_values',
-
+            'transformed_target_reward',
+            'transformed_target_value',
             # 'visit_count_distribution_entropy',
             # 'target_policy',
             # 'predicted_policies'
