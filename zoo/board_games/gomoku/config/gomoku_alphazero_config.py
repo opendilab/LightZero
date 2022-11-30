@@ -1,7 +1,10 @@
 import sys
-sys.path.append('/Users/yangzhenjie/code/jayyoung0802/LightZero/')
+
+# sys.path.append('/Users/yangzhenjie/code/jayyoung0802/LightZero/')
+sys.path.append('/Users/puyuan/code/LightZero/')
 
 import torch
+
 if torch.cuda.is_available():
     device = 'cuda'
 else:
@@ -15,7 +18,8 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 1
+update_per_collect = 100
+batch_size = 256
 
 gomoku_alphazero_config = dict(
     exp_name='data_ez_ptree/gomoku_2pm_alphazero',
@@ -24,7 +28,6 @@ gomoku_alphazero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         channel_last=False,
-        max_episode_steps=int(1.08e5),
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
         board_size=board_size,
@@ -42,7 +45,7 @@ gomoku_alphazero_config = dict(
         ),
         learn=dict(
             multi_gpu=False,
-            batch_size=16,
+            batch_size=batch_size,
             learning_rate=0.001,
             weight_decay=0.0001,
             update_per_collect=update_per_collect,
@@ -50,11 +53,11 @@ gomoku_alphazero_config = dict(
             value_weight=1.0,
             optim_type='Adam',
             learner=dict(
-                        hook=dict(
-                            load_ckpt_before_run='',
-                            log_show_after_iter=1,
-                            save_ckpt_after_iter=10000,
-                            save_ckpt_after_run=True,),
+                hook=dict(
+                    load_ckpt_before_run='',
+                    log_show_after_iter=1,
+                    save_ckpt_after_iter=10000,
+                    save_ckpt_after_run=True, ),
             )
         ),
         collect=dict(
@@ -63,25 +66,25 @@ gomoku_alphazero_config = dict(
             collector=dict(
                 env=dict(
                     type='gomoku',
-                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'],),
+                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'], ),
                 augmentation=True,
             ),
             mcts=dict(num_simulations=num_simulations)
         ),
         eval=dict(
             evaluator=dict(
-                n_episode=evaluator_env_num, 
-                eval_freq=int(5),
+                n_episode=evaluator_env_num,
+                eval_freq=int(100),
                 stop_value=1,
                 env=dict(
                     type='gomoku',
-                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'],),
+                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'], ),
             ),
             mcts=dict(num_simulations=num_simulations)
         ),
         other=dict(
             replay_buffer=dict(
-                replay_buffer_size=int(1e3),
+                replay_buffer_size=int(1e5),
                 type='naive',
                 save_episode=False,
                 periodic_thruput_seconds=60,
@@ -107,17 +110,19 @@ gomoku_alphazero_create_config = dict(
     collector=dict(
         type='episode_alphazero',
         get_train_sample=False,
+        # get_train_sample=True,
         import_names=['core.worker.collector.alphazero_collector'],
     ),
     evaluator=dict(
         type='alphazero',
         import_names=['core.worker.collector.alphazero_evaluator'],
     )
-    
+
 )
 gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
 create_config = gomoku_alphazero_create_config
 
 if __name__ == '__main__':
     from core.entry import serial_pipeline_alphazero
+
     serial_pipeline_alphazero([main_config, create_config], seed=0)

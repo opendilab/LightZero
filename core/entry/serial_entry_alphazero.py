@@ -1,23 +1,21 @@
 import logging
 import os
-from typing import Union, Optional, List, Any, Tuple
 from functools import partial
+from typing import Union, Optional, List, Any, Tuple
 
 import torch
-from tensorboardX import SummaryWriter
-
 from ding.config import read_config, compile_config
+from ding.envs import create_env_manager
+from ding.envs import get_vec_env_setting
+from ding.policy import create_policy
 # from ding.envs import get_env_cls
 # from core.policy.alphazero import AlphaZeroPolicy
-from ding.model import create_model
 # from core.worker.collector.alphazero_collector import AlphazeroCollector
 # from core.worker.collector.alphazero_evaluator import AlphazeroEvaluator
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner, create_buffer
-from ding.envs import create_env_manager
-from ding.envs import get_vec_env_setting
-from ding.policy import create_policy
 from ding.worker import create_serial_collector, create_serial_evaluator
+from tensorboardX import SummaryWriter
 
 
 def serial_pipeline_alphazero(
@@ -48,7 +46,7 @@ def serial_pipeline_alphazero(
         cfg, create_cfg = read_config(input_cfg)
     else:
         cfg, create_cfg = input_cfg
-    
+
     create_cfg.policy.type = create_cfg.policy.type
 
     env_fn = None if env_setting is None else env_setting[0]
@@ -95,10 +93,10 @@ def serial_pipeline_alphazero(
     while True:
         # Evaluate policy performance
         if evaluator.should_eval(learner.train_iter):
-            stop, reward = evaluator.eval(learner.save_checkpoint, 
-                                          learner.train_iter, 
-                                          collector.envstep, 
-            )
+            stop, reward = evaluator.eval(learner.save_checkpoint,
+                                          learner.train_iter,
+                                          collector.envstep,
+                                          )
             if stop:
                 break
         # Collect data by default config n_sample/n_episode
@@ -106,7 +104,7 @@ def serial_pipeline_alphazero(
         if not cfg.policy.other.replay_buffer.save_episode:
             new_data = sum(new_data, [])
         replay_buffer.push(new_data, cur_collector_envstep=collector.envstep)
-        
+
         # Learn policy from collected data
         for i in range(cfg.policy.learn.update_per_collect):
             train_data = replay_buffer.sample(learner.policy.get_attribute('batch_size'), learner.train_iter)

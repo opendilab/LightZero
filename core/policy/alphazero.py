@@ -80,6 +80,7 @@ class AlphaZeroPolicy(Policy):
             )
         elif self._cfg.learn.optim_type == 'Adam':
             self._optimizer = optim.Adam(self._model.parameters(), lr=self._cfg.learn.learning_rate, weight_decay=self._cfg.learn.weight_decay)
+
         # Optimizer
         self._grad_norm = self._cfg.learn.grad_norm
 
