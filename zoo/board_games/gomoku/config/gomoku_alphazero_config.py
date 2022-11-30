@@ -1,104 +1,123 @@
+import sys
+sys.path.append('/Users/yangzhenjie/code/jayyoung0802/LightZero/')
+
+import torch
+if torch.cuda.is_available():
+    device = 'cuda'
+else:
+    device = 'cpu'
+
 from easydict import EasyDict
 
+board_size = 6  # default_size is 15
+
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 50
+update_per_collect = 1
+
 gomoku_alphazero_config = dict(
-    seed=0,
-    exp_name='data_ez_ptree/gomoku_2pm_alphazero_seed0',
+    exp_name='data_ez_ptree/gomoku_2pm_alphazero',
     env=dict(
-        type='gomoku',
-        import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
-        board_size=6,
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
+        n_evaluator_episode=evaluator_env_num,
         channel_last=False,
+        max_episode_steps=int(1.08e5),
+        collect_max_episode_steps=int(1.08e4),
+        eval_max_episode_steps=int(1.08e5),
+        board_size=board_size,
         battle_mode='two_player_mode',
         prob_random_agent=0.,
-        max_episode_steps=108000,
-        collect_max_episode_steps=10800,
-        eval_max_episode_steps=108000,
-    ),
-    model=dict(
-        type='gomoku_model',
-        import_names=['core.model.alphazero.alphazero_model_gomoku'],
-        model_cfg=dict(
-            input_channels=3,
-            board_size=6,
-        )
+        manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        # (string) RL policy register name (refer to function "register_policy").
         type='alphazero',
-        # (bool) Whether to use cuda for network.
-        cuda=False,
-        # (bool) whether use on-policy training pipeline(behaviour policy and training policy are the same)
-        on_policy=True,  # for a2c strictly on policy algorithm this line should not be seen by users
-        priority=False,
-        # learn_mode config
+        env_name='gomoku',
+        cuda=True,
+        model=dict(
+            input_channels=3,
+            board_size=board_size,
+        ),
         learn=dict(
-            # (bool) Whether to use multi gpu
             multi_gpu=False,
-            # batch_size=64,
-            batch_size=4,
-
+            batch_size=16,
             learning_rate=0.001,
             weight_decay=0.0001,
-            # (List[float])
-            betas=(0.9, 0.999),
-            # (float)
-            eps=1e-8,
-            # (float)
+            update_per_collect=update_per_collect,
             grad_norm=0.5,
-            # The following configs is algorithm-specific
-            # (float) loss weight of the value network the weight of policy network is set to 1
             value_weight=1.0,
-            #    # (float) loss weight of the entropy regularization the weight of policy network is set to 1
-            #    entropy_weight: 0.01
+            optim_type='Adam',
             learner=dict(
-                # TODO(pu)
-                log_policy=True,
-                train_iterations=10000,
-                hook=dict(
-                    load_ckpt_before_run='',
-                    log_show_after_iter=100,
-                    save_ckpt_after_iter=10000,
-                    save_ckpt_after_run=True,
-                )
+                        hook=dict(
+                            load_ckpt_before_run='',
+                            log_show_after_iter=1,
+                            save_ckpt_after_iter=10000,
+                            save_ckpt_after_run=True,),
             )
         ),
         collect=dict(
+            unroll_len=1,
+            n_episode=n_episode,
             collector=dict(
-                collect_n_episode=1,
-                max_moves=1000,
-                print_freq=10,
+                env=dict(
+                    type='gomoku',
+                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'],),
                 augmentation=True,
             ),
-            mcts=dict(num_simulations=50, )
+            mcts=dict(num_simulations=num_simulations)
         ),
-        # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(n_episode=10, eval_freq=int(10), stop_value=1), mcts=dict(num_simulations=50, )),
-
-        # command_mode config
-        other=dict(
-            # Epsilon greedy with decay.
-            eps=dict(
-                # Decay type. Support ['exp', 'linear'].
-                type='exp',
-                start=0.95,
-                end=0.1,
-                decay=int(5e4),
+        eval=dict(
+            evaluator=dict(
+                n_episode=evaluator_env_num, 
+                eval_freq=int(5),
+                stop_value=1,
+                env=dict(
+                    type='gomoku',
+                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'],),
             ),
-            # the replay_buffer_size is ineffective, we specify it in game config
+            mcts=dict(num_simulations=num_simulations)
+        ),
+        other=dict(
             replay_buffer=dict(
                 replay_buffer_size=int(1e3),
                 type='naive',
-                deepcopy=False,
-                enable_track_used_data=False,
-                periodic_thruput_seconds=10000
+                save_episode=False,
+                periodic_thruput_seconds=60,
             )
         ),
     ),
 )
+
 gomoku_alphazero_config = EasyDict(gomoku_alphazero_config)
 main_config = gomoku_alphazero_config
 
+gomoku_alphazero_create_config = dict(
+    env=dict(
+        type='gomoku',
+        import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
+    ),
+    # env_manager=dict(type='base'),
+    env_manager=dict(type='subprocess'),
+    policy=dict(
+        type='alphazero',
+        import_names=['core.policy.alphazero'],
+    ),
+    collector=dict(
+        type='episode_alphazero',
+        get_train_sample=False,
+        import_names=['core.worker.collector.alphazero_collector'],
+    ),
+    evaluator=dict(
+        type='alphazero',
+        import_names=['core.worker.collector.alphazero_evaluator'],
+    )
+    
+)
+gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
+create_config = gomoku_alphazero_create_config
+
 if __name__ == '__main__':
     from core.entry import serial_pipeline_alphazero
-
-    serial_pipeline_alphazero(main_config)
+    serial_pipeline_alphazero([main_config, create_config], seed=0)
