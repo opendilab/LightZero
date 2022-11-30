@@ -10,8 +10,8 @@ os.environ['DISABLE_MUJOCO_RENDERING'] = '1'
 import sys
 
 # sys.path.append('/Users/puyuan/code/LightZero')
-# sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/home/puyuan/LightZero')
+# sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 import torch
@@ -22,21 +22,23 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-batch_size = 256
-K = 5  # action_space_size=1
-num_simulations = 25  # action_space_size=1
-
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# batch_size = 256
+# K = 5  # action_space_size=1
+# num_simulations = 25  # action_space_size=1
+# update_per_collect = 250
 
 # for debug
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# batch_size = 4
-# K = 5  # action_space_size=1
-# num_simulations = 6  # action_space_size=1
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+batch_size = 32
+K = 3  # action_space_size=1
+num_simulations = 10  # action_space_size=1
+update_per_collect = 50
+
 
 categorical_distribution = True
 
@@ -44,7 +46,7 @@ categorical_distribution = True
 # The key hyper-para to tune, for different env, we have different episode_length
 # e.g. reuse_factor = 0.5
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 250
+
 game_history_length = 50
 observation_dim = 3
 action_dim = 1
@@ -73,6 +75,7 @@ pendulum_sampled_efficientzero_config = dict(
         model=dict(
             sigma_type='fixed',  # conditioned
             fixed_sigma_value=0.3,
+            bound_type=None,
             # activation=torch.nn.ReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=categorical_distribution,
@@ -165,8 +168,8 @@ pendulum_sampled_efficientzero_config = dict(
         ######################################
         env_type='no_board_games',
         device=device,
-        # mcts_ctree=False,
-        mcts_ctree=True,
+        mcts_ctree=False,
+        # mcts_ctree=True,
         battle_mode='one_player_mode',
         game_history_length=game_history_length,
         action_space_size=action_dim,  # 4**2

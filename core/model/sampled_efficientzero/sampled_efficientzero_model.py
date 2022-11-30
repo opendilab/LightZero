@@ -302,6 +302,7 @@ class PredictionNetwork(nn.Module):
             last_linear_layer_init_zero=False,
             sigma_type='fixed',
             fixed_sigma_value=0.3,
+            bound_type=None,
     ):
         """Prediction network
         Parameters
@@ -334,6 +335,7 @@ class PredictionNetwork(nn.Module):
         super().__init__()
         self.sigma_type = sigma_type
         self.fixed_sigma_value = fixed_sigma_value
+        self.bound_type = bound_type
         self.in_channels = in_channels
         if self.in_channels is not None:
             self.conv_input = nn.Conv2d(in_channels, num_channels, 1)
@@ -391,7 +393,7 @@ class PredictionNetwork(nn.Module):
             fixed_sigma_value=self.fixed_sigma_value,
             activation=nn.ReLU(),
             norm_type=None,
-            bound_type='tanh'  # TODO(pu)
+            bound_type=self.bound_type  # TODO(pu)
         )
 
         self.activation = nn.ReLU(inplace=True)
@@ -460,6 +462,7 @@ class SampledEfficientZeroNet(BaseNet):
             categorical_distribution=True,
             sigma_type='fixed',
             fixed_sigma_value=0.3,
+            bound_type=None,
     ):
         """
         Overview:
@@ -492,6 +495,8 @@ class SampledEfficientZeroNet(BaseNet):
         super(SampledEfficientZeroNet, self).__init__(lstm_hidden_size)
         self.sigma_type = sigma_type
         self.fixed_sigma_value = fixed_sigma_value
+        self.bound_type = bound_type
+
         self.categorical_distribution = categorical_distribution
         if not self.categorical_distribution:
             self.reward_support_size = 1
@@ -574,6 +579,7 @@ class SampledEfficientZeroNet(BaseNet):
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                 sigma_type=self.sigma_type,
                 fixed_sigma_value=self.fixed_sigma_value,
+                bound_type=self.bound_type,
             )
         else:
             if self.continuous_action_space:
@@ -618,6 +624,7 @@ class SampledEfficientZeroNet(BaseNet):
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                 sigma_type=self.sigma_type,
                 fixed_sigma_value=self.fixed_sigma_value,
+                bound_type=self.bound_type,
             )
 
         # projection

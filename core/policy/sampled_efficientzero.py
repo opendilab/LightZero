@@ -170,7 +170,7 @@ class SampledEfficientZeroPolicy(Policy):
         # TODO(pu): priority
         inputs_batch, targets_batch, replay_buffer = data
 
-        obs_batch_ori, action_batch, child_actions_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
+        obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
         target_value_prefix, target_value, target_policy = targets_batch
 
         # [:, 0: config.frame_stack_num * 3,:,:]
@@ -214,7 +214,7 @@ class SampledEfficientZeroPolicy(Policy):
             obs_target_batch = self.transforms.transform(obs_target_batch)
 
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
-        child_actions_batch = torch.from_numpy(child_actions_batch).to(self._cfg.device).unsqueeze(-1)
+        child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device).unsqueeze(-1)
         mask_batch = torch.from_numpy(mask_batch).to(self._cfg.device).float()
         target_value_prefix = torch.from_numpy(target_value_prefix.astype('float64')).to(self._cfg.device
                                                                                          ).float()
@@ -319,30 +319,45 @@ class SampledEfficientZeroPolicy(Policy):
                                                                        - self._cfg.action_space_size:]
         dist = Independent(Normal(mu, sigma), 1)
 
-        target_policy_visit = target_policy[:, 0]
+        # take the init hypothetical step k=0
+        target_normalized_visit_count_init_step = target_policy[:, 0]
         # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
-        # 4, 3, 20, 2, 1 ->  4, 20, 2
-        target_policy_action = child_actions_batch[:, 0].squeeze(-1)
+        # e.g. 4, 6, 20, 2, 1 ->  4, 20, 2
+        target_sampled_actions = child_sampled_actions_batch[:, 0].squeeze(-1)
 
-
-        policy_entropy = dist.entropy().sum()
+        policy_entropy = dist.entropy().mean()
         entropy_loss = - policy_entropy
-
 
         # project the sampled-based improved policy back onto the space of representable policies
         # calculate KL loss
         # batch_size, num_of_sampled_actions -> 4,20
-        log_target = torch.log(target_policy_visit + 1e-9)
+        # target_normalized_visit_count_init_step is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
+        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step + 1e-9)
         log_prob_sampled_actions = []
-        for i in range(self._cfg.num_of_sampled_actions):
-            # target_policy_action[:,i,:].shape: batch_size, action_dim -> 4,2
-            # dist.log_prob(target_policy_action[:,i,:]).shape: batch_size -> 4
-            log_prob = dist.log_prob(target_policy_action[:, i, :])
+        for k in range(self._cfg.num_of_sampled_actions):
+            # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
+            # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
+            # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
+
+            # way 1:
+            # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
+
+            # way 2:
+            y = 1 - target_sampled_actions[:, k, :].pow(2) + 1e-9
+            target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions[:, k, :])
+            # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
+            log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
+            log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
+            log_prob = log_prob.squeeze(-1)
+
             log_prob_sampled_actions.append(log_prob)
         # batch_size, num_of_sampled_actions -> 4,20
-        log_prob = torch.stack(log_prob_sampled_actions, dim=-1)
+        log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
 
-        policy_loss = (torch.exp(log_prob) * (log_prob - log_target)).sum()
+
+        # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
+        policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+
         #############################
         # calculate policy loss: KL loss
         #############################
@@ -419,10 +434,11 @@ class SampledEfficientZeroPolicy(Policy):
                                                                            - self._cfg.action_space_size:]
             dist = Independent(Normal(mu, sigma), 1)
 
-            target_policy_visit = target_policy[:, step_i + 1]
+            # take the hypothetical step k>0
+            target_normalized_visit_count = target_policy[:, step_i + 1]
             # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
-            # 4,3, 20,2,1 ->  4, 20,2
-            target_policy_action = child_actions_batch[:, step_i + 1].squeeze(-1)
+            # e.g. 4, 3, 20, 2, 1 ->  4, 20, 2
+            target_sampled_actions = child_sampled_actions_batch[:, step_i + 1].squeeze(-1)
 
             policy_entropy = dist.entropy().mean()
             entropy_loss = - policy_entropy
@@ -430,17 +446,30 @@ class SampledEfficientZeroPolicy(Policy):
             # project the sampled-based improved policy back onto the space of representable policies
 
             # batch_size, num_of_sampled_actions -> 4,20
-            log_target = torch.log(target_policy_visit + 1e-9)
+            target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-9)
             log_prob_sampled_actions = []
-            for i in range(self._cfg.num_of_sampled_actions):
-                # target_policy_action[:,i,:].shape: batch_size, action_dim -> 4,2
-                # dist.log_prob(target_policy_action[:,i,:]).shape: batch_size -> 4
-                log_prob = dist.log_prob(target_policy_action[:, i, :])
-                log_prob_sampled_actions.append(log_prob)
-            # batch_size, num_of_sampled_actions -> 4,20
-            log_prob = torch.stack(log_prob_sampled_actions, dim=-1)
+            for k in range(self._cfg.num_of_sampled_actions):
+                # target_sampled_actions[:,k,:].shape: (batch_size, action_dim) e.g. (4,2)
+                # dist.log_prob(target_sampled_actions[:,k,:]).shape: (batch_size,) e.g. (4,)
 
-            policy_loss = (torch.exp(log_prob) * (log_prob - log_target)).sum()  # KL divergence
+                # way 1:
+                # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
+
+                # way 2:
+                y = 1 - target_sampled_actions[:, k, :].pow(2) + 1e-9
+                target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions[:, k, :])
+                # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
+                log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
+                log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
+                log_prob = log_prob.squeeze(-1)
+
+                log_prob_sampled_actions.append(log_prob)
+            # (batch_size, num_of_sampled_actions) e.g. (4,20)
+            log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
+
+            # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)  # KL divergence
+            policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+
             #############################
             # calculate policy loss: KL loss
             #############################
@@ -783,6 +812,7 @@ class SampledEfficientZeroPolicy(Policy):
             roots_distributions = roots.get_distributions()  # {list: 1}->{list:6}
             roots_sampled_actions = roots.get_sampled_actions()  # {list: 1}->{list:6}
 
+
             roots_values = roots.get_values()  # {list: 1}
             data_id = [i for i in range(active_collect_env_num)]
             output = {i: None for i in data_id}
@@ -799,6 +829,9 @@ class SampledEfficientZeroPolicy(Policy):
                     # print(error)
                     # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                     child_actions = np.array([action for action in roots_sampled_actions[i]])
+
+                if child_actions.max()>1 or child_actions.min()<-1:
+                    print('here')
 
                 # select the argmax, not sampling
                 # TODO(pu):

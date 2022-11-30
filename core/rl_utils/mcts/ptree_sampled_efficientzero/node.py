@@ -87,8 +87,18 @@ class Node:
         self.sigma = sigma
         dist = Independent(Normal(mu, sigma), 1)
         # print(dist.batch_shape, dist.event_shape)
-        sampled_actions = dist.sample(torch.tensor([self.num_of_sampled_actions]))
-        log_prob = dist.log_prob(sampled_actions)
+        sampled_actions_before_tanh = dist.sample(torch.tensor([self.num_of_sampled_actions]))
+
+        # way 1:
+        # log_prob = dist.log_prob(sampled_actions_before_tanh)
+
+        # way 2:
+        sampled_actions = torch.tanh(sampled_actions_before_tanh)
+        y = 1 - sampled_actions.pow(2) + 1e-6
+        # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
+        log_prob = dist.log_prob(sampled_actions_before_tanh).unsqueeze(-1)
+        log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
+
         # TODO: factored policy representation
         # empirical_distribution = [1/self.num_of_sampled_actions]
         for action_index in range(self.num_of_sampled_actions):
@@ -438,55 +448,56 @@ def select_child(
     # sampled related code
     ##################
     # Progressive widening (See https://hal.archives-ouvertes.fr/hal-00542673v2/document)
-    pw_alpha = 0.49
-    if len(root.children) < (root.visit_count + 1) ** pw_alpha:
-        distribution = torch.distributions.normal.Normal(root.mu, root.sigma)
-        sampled_action = distribution.sample().squeeze(0).detach().cpu().numpy()
+    # pw_alpha = 0.49
+    # TODO(pu)
+    # pw_alpha = -1
+    # if len(root.children) < (root.visit_count + 1) ** pw_alpha:
+    #     distribution = torch.distributions.normal.Normal(root.mu, root.sigma)
+    #     sampled_action = distribution.sample().squeeze(0).detach().cpu().numpy()
+    #
+    #     while Action(sampled_action) in root.children.keys():
+    #         # if sampled_action is sampled before, we sample a new action now
+    #         sampled_action = distribution.sample().squeeze(0).detach().cpu()
+    #     action = Action(sampled_action)
+    #
+    #     log_prob = distribution.log_prob(torch.tensor(sampled_action))
+    #     # TODO: factored policy representation
+    #     # empirical_distribution = [1/self.num_of_sampled_actions]
+    #
+    #     # pi, beta
+    #     root.children[action] = Node(prior=log_prob[0], legal_actions=None,
+    #                                  action_space_size=sampled_action.shape[0])  # TODO(pu): action_space_size
+    #     # TODO
+    #     # root.legal_actions.append(action)
+    #     # return action, root.children[action]
+    #     return action
+    #
+    # else:
+    max_score = -np.inf
+    epsilon = 0.000001
+    max_index_lst = []
+    for action, child in root.children.items():
+        ##################
+        # sampled related code
+        ##################
+        # use root as input argument
+        temp_score = compute_ucb_score(
+            root, child, min_max_stats, mean_q, root.is_reset, root.visit_count, root.value_prefix, pb_c_base,
+            pb_c_int,
+            discount, players
+        )
+        if max_score < temp_score:
+            max_score = temp_score
+            max_index_lst.clear()
+            max_index_lst.append(action)
+        elif temp_score >= max_score - epsilon:
+            # TODO(pu): if the difference is less than epsilon = 0.000001, we random choice action from  max_index_lst
+            max_index_lst.append(action)
 
-        while Action(sampled_action) in root.children.keys():
-            # if sampled_action is sampled before, we sample a new action now
-            sampled_action = distribution.sample().squeeze(0).detach().cpu().numpy()
-        action = Action(sampled_action)
+    if len(max_index_lst) > 0:
+        action = random.choice(max_index_lst)
 
-        log_prob = distribution.log_prob(sampled_action)
-        # TODO: factored policy representation
-        # empirical_distribution = [1/self.num_of_sampled_actions]
-
-        # pi, beta
-        root.children[action] = Node(prior=log_prob[0], legal_actions=None,
-                                     action_space_size=sampled_action.shape[0])  # TODO(pu): action_space_size
-        # TODO
-        # root.legal_actions.append(action)
-        # return action, root.children[action]
-        return action
-
-    else:
-
-        max_score = -np.inf
-        epsilon = 0.000001
-        max_index_lst = []
-        for action, child in root.children.items():
-            ##################
-            # sampled related code
-            ##################
-            # use root as input argument
-            temp_score = compute_ucb_score(
-                root, child, min_max_stats, mean_q, root.is_reset, root.visit_count, root.value_prefix, pb_c_base,
-                pb_c_int,
-                discount, players
-            )
-            if max_score < temp_score:
-                max_score = temp_score
-                max_index_lst.clear()
-                max_index_lst.append(action)
-            elif temp_score >= max_score - epsilon:
-                # TODO(pu): if the difference is less than epsilon = 0.000001, we random choice action from  max_index_lst
-                max_index_lst.append(action)
-
-        if len(max_index_lst) > 0:
-            action = random.choice(max_index_lst)
-
-        return action
+    return action
 
 
 def compute_ucb_score(
@@ -524,9 +535,9 @@ def compute_ucb_score(
     if node_prior == "uniform":
         prior_score = pb_c * (1 / len(parent.children))
     elif node_prior == "density":
-        # empirical distribution
+        # TODO(pu): empirical distribution
         prior_score = pb_c * (
-                child.prior / (sum([child.prior for child in parent.children.values()]) + 1e-9)
+                child.prior / (sum([node.prior for node in parent.children.values()]) + 1e-9)
         )
     else:
         raise ValueError("{} is unknown prior option, choose uniform or density")
