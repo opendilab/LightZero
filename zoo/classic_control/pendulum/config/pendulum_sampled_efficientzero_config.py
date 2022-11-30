@@ -28,7 +28,7 @@ else:
 # batch_size = 256
 # K = 5  # action_space_size=1
 # num_simulations = 25  # action_space_size=1
-# update_per_collect = 250
+# update_per_collect = 200
 
 # for debug
 collector_env_num = 1
