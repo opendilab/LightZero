@@ -74,9 +74,9 @@ class GomokuEnv(BaseGameEnv):
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
         if self.battle_mode == 'two_player_mode' or self.battle_mode == 'eval_mode':
-            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': self.board, 'current_player_index':self.start_player_index, 'to_play': self.current_player}
+            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': self.current_player}
         else:
-            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': self.board, 'current_player_index':self.start_player_index, 'to_play': None}
+            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': None}
         return obs
 
     def step(self, action):
@@ -162,7 +162,7 @@ class GomokuEnv(BaseGameEnv):
 
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
-        obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': self.board, 'current_player_index':self.players.index(self.current_player), 'to_play': self.current_player}
+        obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.players.index(self.current_player), 'to_play': self.current_player}
         return BaseEnvTimestep(obs, reward, done, info)
 
     def current_state(self):

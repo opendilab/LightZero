@@ -28,11 +28,25 @@ class AlphaZeroPolicy(Policy):
         # (bool) Whether to use cuda for network.
         cuda=False,
         # (bool) whether use on-policy training pipeline(behaviour policy and training policy are the same)
-        on_policy=True,  # for a2c strictly on policy algorithm this line should not be seen by users
+        on_policy=False,  # for a2c strictly on policy algorithm this line should not be seen by users
         priority=False,
         model=dict(
-            input_channels=3,
-            board_size=6,
+            categorical_distribution=False,
+            representation_model_type='conv_res_blocks',
+            observation_shape=(3, 6, 6),
+            action_space_size=int(1 * 6 * 6),
+            downsample=False,
+            reward_support_size=1,
+            value_support_size=1,
+            num_blocks=1,
+            num_channels=32,
+            reduced_channels_value=16,
+            reduced_channels_policy=16,
+            fc_value_layers=[32],
+            fc_policy_layers=[32],
+            bn_mt=0.1,
+            last_linear_layer_init_zero=True,
+            state_norm=False,
         ),
         # learn_mode config
         learn=dict(
@@ -86,6 +100,7 @@ class AlphaZeroPolicy(Policy):
 
         # Algorithm config
         self._value_weight = self._cfg.learn.value_weight
+        self._entropy_weight = self._cfg.learn.entropy_weight
         # Main and target models
         self._learn_model = model_wrap(self._model, wrapper_name='base')
         self._learn_model.reset()
@@ -104,18 +119,23 @@ class AlphaZeroPolicy(Policy):
         mcts_probs = mcts_probs.to(device=self._device, dtype=torch.float)
         reward = reward.to(device=self._device, dtype=torch.float)
 
-        log_probs, values = self._learn_model.compute_prob_value(state_batch)
+        action_probs, values = self._learn_model.compute_prob_value(state_batch)
+        log_probs = torch.log(action_probs)
+
+        # calc policy entropy, for monitoring only 
+        entropy = torch.mean(-torch.sum(action_probs * log_probs, 1))
+        entropy_loss = -entropy
         # ============
         # policy loss
         # ============
-        policy_loss = -torch.mean(torch.sum(mcts_probs * log_probs))
+        policy_loss = -torch.mean(torch.sum(mcts_probs * log_probs, 1))
 
         # ============
         # value loss
         # ============
         value_loss = F.mse_loss(values.view(-1), reward)
 
-        total_loss = self._value_weight * value_loss + policy_loss
+        total_loss = self._value_weight * value_loss + policy_loss + self._entropy_weight * entropy_loss
         self._optimizer.zero_grad()
         total_loss.backward()
 
@@ -124,8 +144,6 @@ class AlphaZeroPolicy(Policy):
             max_norm=self._grad_norm,
         )
         self._optimizer.step()
-        # calc policy entropy, for monitoring only
-        entropy_loss = -torch.mean(torch.sum(torch.exp(log_probs) * log_probs, 1))
 
         # =============
         # after update
@@ -250,11 +268,9 @@ class AlphaZeroPolicy(Policy):
         current_state = env.current_state()
         current_state = torch.from_numpy(current_state).to(device=self._device, dtype=torch.float).unsqueeze(0)
         # TODO
-        current_state = current_state.reshape(-1, 3, 6, 6)
+        current_state = current_state.reshape(-1, 3, self._cfg.board_size, self._cfg.board_size)
         with torch.no_grad():
-            # action_probs, value = self.compute_prob_value(current_state)
             action_probs, value = self._collect_model.compute_prob_value(current_state)
-        # action_probs_zip = zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().numpy().tolist())
         action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().numpy()))
         value = value.item()
         return action_probs_dict, value
@@ -270,11 +286,9 @@ class AlphaZeroPolicy(Policy):
         current_state = env.current_state()
         current_state = torch.from_numpy(current_state).to(device=self._device, dtype=torch.float).unsqueeze(0)
         # TODO
-        current_state = current_state.reshape(-1, 3, 6, 6)
+        current_state = current_state.reshape(-1, 3, self._cfg.board_size, self._cfg.board_size)
         with torch.no_grad():
-            # action_probs, value = self.compute_prob_value(current_state)
             action_probs, value = self._eval_model.compute_prob_value(current_state)
-        # action_probs_zip = zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().numpy().tolist())
         action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().numpy()))
         value = value.item()
         return action_probs_dict, value

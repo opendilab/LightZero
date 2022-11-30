@@ -169,6 +169,9 @@ class AlphazeroCollector(ISerialCollector):
                 new_available_env_id = set(obs.keys()).difference(ready_env_id)
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
+                # for env_id in ready_env_id:
+                #     print('[collect] env_id = {}'.format(env_id))
+                #     print('board = \n {}'.format(self._env._envs[env_id].board))
                 obs_ = {env_id: obs[env_id] for env_id in ready_env_id}
                 # Policy forward.
                 self._obs_pool.update(obs_)
@@ -181,7 +184,7 @@ class AlphazeroCollector(ISerialCollector):
                 actions = {env_id: output['action'] for env_id, output in policy_output.items()}
                 actions = to_ndarray(actions)
                 timesteps = self._env.step(actions)
-            
+
             # TODO(nyz) this duration may be inaccurate in async env
             interaction_duration = self._timer.value / len(timesteps)
             # TODO(nyz) vectorize this for loop

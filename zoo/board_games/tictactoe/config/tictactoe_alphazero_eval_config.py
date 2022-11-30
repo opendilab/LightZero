@@ -12,17 +12,17 @@ else:
 
 from easydict import EasyDict
 
-board_size = 6  # default_size is 15
+board_size = 3  # fixed
 
-collector_env_num = 32
-n_episode = 32
-evaluator_env_num = 5
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
 num_simulations = 50
 update_per_collect = 100
 batch_size = 256
 
-gomoku_alphazero_config = dict(
-    exp_name='data_ez_ptree/gomoku_2pm_alphazero',
+tictactoe_alphazero_config = dict(
+    exp_name='data_ez_ptree/tictactoe_2pm_alphazero',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -36,8 +36,9 @@ gomoku_alphazero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        model_path='/Users/yangzhenjie/code/jayyoung0802/LightZero/data_ez_ptree/tictactoe_2pm_alphazero/ckpt/ckpt_best.pth.tar',
         type='alphazero',
-        env_name='gomoku',
+        env_name='tictactoe',
         cuda=True,
         board_size=board_size,
         model=dict(
@@ -50,11 +51,11 @@ gomoku_alphazero_config = dict(
             reward_support_size=1,
             value_support_size=1,
             num_blocks=1,
-            num_channels=32,
+            num_channels=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
-            fc_value_layers=[32],
-            fc_policy_layers=[32],
+            fc_value_layers=[8],
+            fc_policy_layers=[8],
             bn_mt=0.1,
             last_linear_layer_init_zero=True,
             state_norm=False,
@@ -82,8 +83,8 @@ gomoku_alphazero_config = dict(
             n_episode=n_episode,
             collector=dict(
                 env=dict(
-                    type='gomoku',
-                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'], ),
+                    type='tictactoe',
+                    import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'], ),
                 augmentation=True,
             ),
             mcts=dict(num_simulations=num_simulations)
@@ -94,8 +95,8 @@ gomoku_alphazero_config = dict(
                 eval_freq=int(100),
                 stop_value=1,
                 env=dict(
-                    type='gomoku',
-                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'], ),
+                    type='tictactoe',
+                    import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'], ),
             ),
             mcts=dict(num_simulations=num_simulations)
         ),
@@ -110,13 +111,13 @@ gomoku_alphazero_config = dict(
     ),
 )
 
-gomoku_alphazero_config = EasyDict(gomoku_alphazero_config)
-main_config = gomoku_alphazero_config
+tictactoe_alphazero_config = EasyDict(tictactoe_alphazero_config)
+main_config = tictactoe_alphazero_config
 
-gomoku_alphazero_create_config = dict(
+tictactoe_alphazero_create_config = dict(
     env=dict(
-        type='gomoku',
-        import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
+        type='tictactoe',
+        import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
     ),
     env_manager=dict(type='base'),
     # env_manager=dict(type='subprocess'),
@@ -136,10 +137,30 @@ gomoku_alphazero_create_config = dict(
     )
 
 )
-gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
-create_config = gomoku_alphazero_create_config
+tictactoe_alphazero_create_config = EasyDict(tictactoe_alphazero_create_config)
+create_config = tictactoe_alphazero_create_config
 
 if __name__ == '__main__':
-    from core.entry import serial_pipeline_alphazero
+    from core.entry import serial_pipeline_alphazero_eval
+    import numpy as np
 
-    serial_pipeline_alphazero([main_config, create_config], seed=0)
+    test_seeds = 5
+    test_episodes_each_seed = 2
+    test_episodes = test_seeds * test_episodes_each_seed
+    reward_all_seeds = []
+    reward_mean_all_seeds = []
+    for seed in range(test_seeds):
+        reward_mean, reward_lst = serial_pipeline_alphazero_eval([main_config, create_config], seed=seed, test_episodes=test_episodes_each_seed, max_env_step=int(1e5))
+        reward_mean_all_seeds.append(reward_mean)
+        reward_all_seeds.append(reward_lst)
+
+    reward_all_seeds = np.array(reward_all_seeds)
+    reward_mean_all_seeds = np.array(reward_mean_all_seeds)
+
+    print("=" * 20)
+    print(f'we eval total {test_seeds} seed. In each seed, we test {test_episodes_each_seed} episodes.')
+    print('reward_all_seeds:', reward_all_seeds)
+    print('reward_mean_all_seeds:', reward_mean_all_seeds.mean())
+    print(f'win rate: {len(np.where(reward_all_seeds == 1.)[0]) / test_episodes}, draw rate: {len(np.where(reward_all_seeds == 0.)[0]) / test_episodes}, lose rate: {len(np.where(reward_all_seeds == -1.)[0]) / test_episodes}')
+    print("=" * 20)
+
