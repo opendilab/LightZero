@@ -15,6 +15,7 @@
 data_*
 *.so
 *.gv
+cytree.cpp
 
 pkg/
 src/

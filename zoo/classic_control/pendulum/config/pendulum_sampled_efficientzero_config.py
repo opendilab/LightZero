@@ -26,10 +26,11 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 batch_size = 256
-# K = 5  # action_space_size=1
-# num_simulations = 25  # action_space_size=1
-K = 20  # action_space_size=1
-num_simulations = 50  # action_space_size=1
+# action_space_size=1
+K = 5
+num_simulations = 25
+# K = 20
+# num_simulations = 50
 update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
 
 # for debug
@@ -41,28 +42,31 @@ update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
 # num_simulations = 10  # action_space_size=1
 # update_per_collect = 10
 
+norm_type = 'BN'  # 'LN'
 
-categorical_distribution = True
 
-# TODO(pu):   ignore_done=True,
+# TODO(pu): ignore_done=True,
 # The key hyper-para to tune, for different env, we have different episode_length
 # e.g. reuse_factor = 0.1
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
 
-game_history_length = 200
+game_history_length = 50  # we should ignore done in pendulum env which have fixed episode length 200
+# game_history_length = 200
+
+categorical_distribution = True
 observation_dim = 3
 action_dim = 1
 
 pendulum_sampled_efficientzero_config = dict(
     # exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_halfmodel_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_tanh-fs03',
-    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_halfmodel_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_tanh_con-sigma-ew5e-3',
+    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_halfmodel_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_tanh_cond-sigma-ew5e-3',
 
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         env_id='pendulum',
-        stop_value=900,
+        stop_value=-200,
         norm_obs=dict(use_norm=False, ),
         act_scale=True,
         battle_mode='one_player_mode',
@@ -81,6 +85,8 @@ pendulum_sampled_efficientzero_config = dict(
             sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
             fixed_sigma_value=0.3,
             bound_type=None,
+            # norm_type='LN',
+            norm_type=norm_type,
             # activation=torch.nn.ReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=categorical_distribution,

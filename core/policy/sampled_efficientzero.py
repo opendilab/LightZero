@@ -354,9 +354,15 @@ class SampledEfficientZeroPolicy(Policy):
         # batch_size, num_of_sampled_actions -> 4,20
         log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
 
-
-        # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
-        policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+        if self._cfg.learn.policy_loss_type == 'KL':
+            # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
+            # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
+            policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
+                        target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+        elif self._cfg.learn.policy_loss_type == 'cross_entropy':
+            # cross_entropy loss: - sum(p * log (q) )
+            policy_loss = - torch.mean(
+                torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
 
         #############################
         # calculate policy loss: KL loss
@@ -460,6 +466,8 @@ class SampledEfficientZeroPolicy(Policy):
                 target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions[:, k, :])
                 # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
                 log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
+
+
                 log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
                 log_prob = log_prob.squeeze(-1)
 
@@ -467,8 +475,15 @@ class SampledEfficientZeroPolicy(Policy):
             # (batch_size, num_of_sampled_actions) e.g. (4,20)
             log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
 
-            # policy_loss += (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)  # KL divergence
-            policy_loss += (torch.exp(target_log_prob_sampled_actions.detach()) * (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+            if self._cfg.learn.policy_loss_type == 'KL':
+                # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
+                # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
+                policy_loss += (torch.exp(target_log_prob_sampled_actions.detach()) * (
+                        target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+            elif self._cfg.learn.policy_loss_type == 'cross_entropy':
+                # cross_entropy loss: - sum(p * log (q) )
+                policy_loss += - torch.mean(
+                    torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
 
             #############################
             # calculate policy loss: KL loss
@@ -551,6 +566,10 @@ class SampledEfficientZeroPolicy(Policy):
         self._optimizer.zero_grad()
 
         total_loss.backward()
+
+        # debug
+        # self._learn_model.state_dict()['prediction_network.sampled_fc_policy.main.0.weight']
+
         torch.nn.utils.clip_grad_norm_(parameters, self._cfg.max_grad_norm)
         self._optimizer.step()
         if self._cfg.learn.cos_lr_scheduler is True:
@@ -1023,6 +1042,10 @@ class SampledEfficientZeroPolicy(Policy):
             'target_value',
             'predicted_value_prefixs',
             'predicted_values',
+
+            'transformed_target_value_prefix',
+            'transformed_target_value',
+
             ######################
             # sampled related code
             ######################

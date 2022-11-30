@@ -725,11 +725,16 @@ namespace tree{
         // TODO(pu): empirical distribution
         std::string empirical_distribution_type = "density";
         if (empirical_distribution_type.compare("density")){
-             float empirical_logprob_sum=0;
+//             float empirical_logprob_sum=0;
+//            for (int i = 0; i < parent->children.size(); ++i){
+//                empirical_logprob_sum += parent->get_child(parent->legal_actions[i])->prior;
+//            }
+//            prior_score = pb_c * child->prior / (empirical_logprob_sum + 1e-9);
+             float empirical_prob_sum=0;
             for (int i = 0; i < parent->children.size(); ++i){
-                empirical_logprob_sum += parent->get_child(parent->legal_actions[i])->prior;
+                empirical_prob_sum += exp(parent->get_child(parent->legal_actions[i])->prior);
             }
-            prior_score = pb_c * child->prior / (empirical_logprob_sum + 1e-9);
+            prior_score = pb_c * exp(child->prior) / (empirical_prob_sum + 1e-9);
         }
         else if(empirical_distribution_type.compare("uniform")){
             prior_score = pb_c * 1 / parent->children.size();

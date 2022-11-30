@@ -537,7 +537,7 @@ def compute_ucb_score(
     elif node_prior == "density":
         # TODO(pu): empirical distribution
         prior_score = pb_c * (
-                child.prior / (sum([node.prior for node in parent.children.values()]) + 1e-9)
+                torch.exp(child.prior) / (sum([torch.exp(node.prior) for node in parent.children.values()]) + 1e-9)
         )
     else:
         raise ValueError("{} is unknown prior option, choose uniform or density")
