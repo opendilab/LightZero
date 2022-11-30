@@ -388,7 +388,6 @@ class PredictionNetwork(nn.Module):
             hidden_size=self.block_output_size_policy,  # 256,
             output_size=action_space_size,
             layer_num=len(fc_policy_layers) + 1,
-            # sigma_type='conditioned',
             sigma_type=self.sigma_type,
             fixed_sigma_value=self.fixed_sigma_value,
             activation=nn.ReLU(),

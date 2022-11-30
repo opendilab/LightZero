@@ -326,7 +326,7 @@ class SampledEfficientZeroPolicy(Policy):
         target_sampled_actions = child_sampled_actions_batch[:, 0].squeeze(-1)
 
         policy_entropy = dist.entropy().mean()
-        entropy_loss = - policy_entropy
+        policy_entropy_loss = - policy_entropy
 
         # project the sampled-based improved policy back onto the space of representable policies
         # calculate KL loss
@@ -441,7 +441,7 @@ class SampledEfficientZeroPolicy(Policy):
             target_sampled_actions = child_sampled_actions_batch[:, step_i + 1].squeeze(-1)
 
             policy_entropy = dist.entropy().mean()
-            entropy_loss = - policy_entropy
+            policy_entropy_loss += - policy_entropy
 
             # project the sampled-based improved policy back onto the space of representable policies
 
@@ -467,8 +467,8 @@ class SampledEfficientZeroPolicy(Policy):
             # (batch_size, num_of_sampled_actions) e.g. (4,20)
             log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
 
-            # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)  # KL divergence
-            policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+            # policy_loss += (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)  # KL divergence
+            policy_loss += (torch.exp(target_log_prob_sampled_actions.detach()) * (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
 
             #############################
             # calculate policy loss: KL loss
@@ -539,7 +539,7 @@ class SampledEfficientZeroPolicy(Policy):
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
                 self._cfg.consistency_coeff * consistency_loss + self._cfg.policy_loss_coeff * policy_loss +
-                self._cfg.value_loss_coeff * value_loss + self._cfg.reward_loss_coeff * value_prefix_loss
+                self._cfg.value_loss_coeff * value_loss + self._cfg.reward_loss_coeff * value_prefix_loss +  self._cfg.policy_entropy_loss_coeff * policy_entropy_loss
         )
         weighted_loss = (weights * loss).mean()
 
@@ -654,12 +654,17 @@ class SampledEfficientZeroPolicy(Policy):
                 # sampled related code
                 ######################
                 'policy_entropy':  policy_entropy.item(),
-                'policy_mu_max': mu.max().item(),
-                'policy_mu_min': mu.min().item(),
-                'policy_mu_mean': mu.mean().item(),
+                'policy_mu_max': mu[:, 0].max().item(),
+                'policy_mu_min': mu[:, 0].min().item(),
+                'policy_mu_mean': mu[:, 0].mean().item(),
                 'policy_sigma_max': sigma.max().item(),
                 'policy_sigma_min': sigma.min().item(),
                 'policy_sigma_mean': sigma.mean().item(),
+                # take the fist dim in action space
+                'target_sampled_actions_max':  target_sampled_actions[:,:,0].max().item(),
+                'target_sampled_actions_min': target_sampled_actions[:,:,0].min().item(),
+                'target_sampled_actions_mean': target_sampled_actions[:,:,0].mean().item(),
+
                 # 'target_policy':td_data[9],
                 # 'predicted_policies':td_data[10]
                 # 'td_data': td_data,
@@ -688,12 +693,16 @@ class SampledEfficientZeroPolicy(Policy):
                 # sampled related code
                 ######################
                 'policy_entropy': policy_entropy.item(),
-                'policy_mu_max': mu.max().item(),
-                'policy_mu_min': mu.min().item(),
-                'policy_mu_mean': mu.mean().item(),
+                'policy_mu_max': mu[:, 0].max().item(),
+                'policy_mu_min': mu[:, 0].min().item(),
+                'policy_mu_mean': mu[:, 0].mean().item(),
                 'policy_sigma_max': sigma.max().item(),
                 'policy_sigma_min': sigma.min().item(),
                 'policy_sigma_mean': sigma.mean().item(),
+                # take the fist dim in action space
+                'target_sampled_actions_max': target_sampled_actions[:, :, 0].max().item(),
+                'target_sampled_actions_min': target_sampled_actions[:, :, 0].min().item(),
+                'target_sampled_actions_mean': target_sampled_actions[:, :, 0].mean().item(),
 
                 # 'target_policy':td_data[9],
                 # 'predicted_policies':td_data[10]
@@ -811,7 +820,6 @@ class SampledEfficientZeroPolicy(Policy):
 
             roots_distributions = roots.get_distributions()  # {list: 1}->{list:6}
             roots_sampled_actions = roots.get_sampled_actions()  # {list: 1}->{list:6}
-
 
             roots_values = roots.get_values()  # {list: 1}
             data_id = [i for i in range(active_collect_env_num)]
@@ -1025,6 +1033,10 @@ class SampledEfficientZeroPolicy(Policy):
             'policy_sigma_max',
             'policy_sigma_min',
             'policy_sigma_mean',
+            # take the fist dim in action space
+            'target_sampled_actions_max',
+            'target_sampled_actions_min',
+            'target_sampled_actions_mean',
             # 'visit_count_distribution_entropy',
             # 'target_policy',
             # 'predicted_policies'

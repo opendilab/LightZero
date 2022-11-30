@@ -22,37 +22,41 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# batch_size = 256
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+batch_size = 256
 # K = 5  # action_space_size=1
 # num_simulations = 25  # action_space_size=1
-# update_per_collect = 200
+K = 20  # action_space_size=1
+num_simulations = 50  # action_space_size=1
+update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
 
 # for debug
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-batch_size = 32
-K = 3  # action_space_size=1
-num_simulations = 10  # action_space_size=1
-update_per_collect = 50
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# batch_size = 32
+# K = 3  # action_space_size=1
+# num_simulations = 10  # action_space_size=1
+# update_per_collect = 10
 
 
 categorical_distribution = True
 
-# TODO(pu):
+# TODO(pu):   ignore_done=True,
 # The key hyper-para to tune, for different env, we have different episode_length
-# e.g. reuse_factor = 0.5
+# e.g. reuse_factor = 0.1
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
 
-game_history_length = 50
+game_history_length = 200
 observation_dim = 3
 action_dim = 1
 
 pendulum_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_halfmodel_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_tanh-fs03',
+    # exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_halfmodel_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_tanh-fs03',
+    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_halfmodel_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_tanh_con-sigma-ew5e-3',
+
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -73,7 +77,8 @@ pendulum_sampled_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            sigma_type='fixed',  # conditioned
+            # sigma_type='fixed',  # option list: ['fixed', 'conditioned']
+            sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
             fixed_sigma_value=0.3,
             bound_type=None,
             # activation=torch.nn.ReLU(inplace=True),
@@ -168,8 +173,8 @@ pendulum_sampled_efficientzero_config = dict(
         ######################################
         env_type='no_board_games',
         device=device,
-        mcts_ctree=False,
-        # mcts_ctree=True,
+        # mcts_ctree=False,
+        mcts_ctree=True,
         battle_mode='one_player_mode',
         game_history_length=game_history_length,
         action_space_size=action_dim,  # 4**2
@@ -294,6 +299,7 @@ pendulum_sampled_efficientzero_config = dict(
         reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
+        policy_entropy_loss_coeff=5e-3,
         # consistency_coeff=2,
         consistency_coeff=0,
 
