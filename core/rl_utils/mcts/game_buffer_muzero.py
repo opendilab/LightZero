@@ -670,18 +670,13 @@ class MuZeroGameBuffer(Buffer):
                     m_output.value = inverse_scalar_transform(m_output.value,
                                                               self.config.support_size).detach().cpu().numpy()
                     m_output.policy_logits = m_output.policy_logits.detach().cpu().numpy()
-                    m_output.reward_hidden_state = (
-                        m_output.reward_hidden_state[0].detach().cpu().numpy(),
-                        m_output.reward_hidden_state[1].detach().cpu().numpy()
-                    )
-
                 network_output.append(m_output)
 
             # concat the output slices after model inference
             if self.config.use_root_value:
                 # use the root values from MCTS
                 # the root values have limited improvement but require much more GPU actors;
-                _, reward_pool, policy_logits_pool, hidden_state_roots, reward_hidden_state_roots = concat_output(
+                _, reward_pool, policy_logits_pool, hidden_state_roots = concat_output(
                     network_output
                 )
                 reward_pool = reward_pool.squeeze().tolist()
@@ -717,7 +712,7 @@ class MuZeroGameBuffer(Buffer):
                         to_play
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ctree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                    MCTS_ctree(self.config).search(roots, model, hidden_state_roots, to_play)
                 else:
                     """
                     python mcts
@@ -747,7 +742,7 @@ class MuZeroGameBuffer(Buffer):
                         )
                         # do MCTS for a new policy with the recent target model
                         MCTS_ptree(self.config).search(
-                            roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=None
+                            roots, model, hidden_state_roots, to_play=None
                         )
                     else:
                         roots.prepare(
@@ -759,7 +754,7 @@ class MuZeroGameBuffer(Buffer):
                         )
                         # do MCTS for a new policy with the recent target model
                         MCTS_ptree(self.config).search(
-                            roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play
+                            roots, model, hidden_state_roots, to_play=to_play
                         )
 
                 roots_values = roots.get_values()
@@ -789,10 +784,10 @@ class MuZeroGameBuffer(Buffer):
                     for i, reward in enumerate(reward_lst[current_index:bootstrap_index]):
                         value_lst[value_index] += reward * self.config.discount ** i
 
-                    # reset every lstm_horizon_len
-                    if horizon_id % self.config.lstm_horizon_len == 0:
-                        reward = 0.0
-                        base_index = current_index
+                    # # reset every lstm_horizon_len
+                    # if horizon_id % self.config.lstm_horizon_len == 0:
+                    #     reward = 0.0
+                    #     base_index = current_index
                     horizon_id += 1
 
                     if current_index < traj_len_non_re:
@@ -893,13 +888,10 @@ class MuZeroGameBuffer(Buffer):
                     m_output.value = inverse_scalar_transform(m_output.value,
                                                               self.config.support_size).detach().cpu().numpy()
                     m_output.policy_logits = m_output.policy_logits.detach().cpu().numpy()
-                    m_output.reward_hidden_state = (
-                        m_output.reward_hidden_state[0].detach().cpu().numpy(),
-                        m_output.reward_hidden_state[1].detach().cpu().numpy()
-                    )
+
                 network_output.append(m_output)
 
-            _, reward_pool, policy_logits_pool, hidden_state_roots, reward_hidden_state_roots = concat_output(
+            _, reward_pool, policy_logits_pool, hidden_state_roots = concat_output(
                 network_output
             )
             reward_pool = reward_pool.squeeze().tolist()
@@ -934,7 +926,7 @@ class MuZeroGameBuffer(Buffer):
                     to_play
                 )
                 # do MCTS for a new policy with the recent target model
-                MCTS_ctree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                MCTS_ctree(self.config).search(roots, model, hidden_state_roots, to_play)
 
                 # TODO(pu)
                 # roots_legal_actions_list = roots.legal_actions_list
@@ -965,7 +957,7 @@ class MuZeroGameBuffer(Buffer):
                     )
                     # do MCTS for a new policy with the recent target model
                     MCTS_ptree(self.config).search(
-                        roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=None
+                        roots, model, hidden_state_roots, to_play=None
                     )
                 else:
                     roots.prepare(
@@ -977,7 +969,7 @@ class MuZeroGameBuffer(Buffer):
                     )
                     # do MCTS for a new policy with the recent target model
                     MCTS_ptree(self.config).search(
-                        roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play
+                        roots, model, hidden_state_roots, to_play=to_play
                     )
                 roots_legal_actions_list = roots.legal_actions_list
 

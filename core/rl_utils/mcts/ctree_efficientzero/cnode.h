@@ -62,7 +62,7 @@ namespace tree {
             std::vector<std::vector<int> > get_trajectories();
             std::vector<std::vector<int> > get_distributions();
             std::vector<float> get_values();
-
+            CNode* get_root(int index);
     };
 
     class CSearchResults{

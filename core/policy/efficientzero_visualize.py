@@ -15,8 +15,8 @@ from torch.nn import L1Loss
 
 # python mcts
 import core.rl_utils.mcts.ptree_efficientzero as ptree
-from core.rl_utils import EfficientZeroMCTSCtree as MCTS_ctree
-from core.rl_utils import EfficientZeroVisualizeMCTSPtree as MCTSPtree
+from core.rl_utils import EfficientZeroVisualizeMCTSCtree as MCTS_ctree
+from core.rl_utils import EfficientZeroVisualizeMCTSPtree as MCTS_ptree
 from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
 from core.rl_utils import scalar_transform, inverse_scalar_transform
@@ -577,7 +577,7 @@ class EfficientZeroVisualizePolicy(Policy):
         if self._cfg.mcts_ctree:
             self._mcts_collect = MCTS_ctree(self._cfg)
         else:
-            self._mcts_collect = MCTSPtree(self._cfg)
+            self._mcts_collect = MCTS_ptree(self._cfg)
 
         # set temperature for distributions
         self.collect_temperature = np.array(
@@ -633,15 +633,19 @@ class EfficientZeroVisualizePolicy(Policy):
                 ]
                 roots = ctree.Roots(active_collect_env_num, self._cfg.num_simulations, legal_actions)
                 # noises = [
-                #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * action_num
+                #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                 #                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 # ]
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                        ).astype(np.float32).tolist() for j in range(active_collect_env_num)
-                ]
-                roots.prepare(self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool,
-                              to_play)
+                # roots.prepare(self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool,
+                #               to_play)
+
+                #################################################
+                # visualize related code
+                # NOTE: collect trained expert agent data, we don't add noise
+                #################################################
+
+                roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
             else:
@@ -691,19 +695,33 @@ class EfficientZeroVisualizePolicy(Policy):
                 # action, _ = select_action(distributions, temperature=1, deterministic=True)
                 # TODO(pu): transform to the real action index in legal action set
                 action = np.where(action_mask[i] == 1.0)[0][action]
-                output[env_id] = {
-                    'leaf_node': results.nodes[i],  # the leaf node
-                    'leaf_hidden_state': leaf_hidden_states[i],  # the leaf hidden state
-                    'search_path': results.search_paths[i],
-                    # list of node in search_path, the node has best_action attribute
-                    'action': action,
-                    'distributions': distributions,
-                    'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'value': value,
-                    'pred_value': pred_values_pool[i],
-                    'policy_logits': policy_logits_pool[i],
-                }
-                # print('collect:', output[i])
+                if self._cfg.mcts_ctree:
+                    output[env_id] = {
+                        # 'leaf_node': results.nodes[i],  # the leaf node
+                        # 'leaf_hidden_state': leaf_hidden_states[i],  # the leaf hidden state
+                        # 'search_path': results.search_paths[i],
+                        # list of node in search_path, the node has best_action attribute
+                        'action': action,
+                        'distributions': distributions,
+                        'visit_count_distribution_entropy': visit_count_distribution_entropy,
+                        'value': value,
+                        'pred_value': pred_values_pool[i],
+                        'policy_logits': policy_logits_pool[i],
+                    }
+                else:
+                    output[env_id] = {
+                        'leaf_node': results.nodes[i],  # the leaf node
+                        'leaf_hidden_state': leaf_hidden_states[i],  # the leaf hidden state
+                        'search_path': results.search_paths[i],
+                        # list of node in search_path, the node has best_action attribute
+                        'action': action,
+                        'distributions': distributions,
+                        'visit_count_distribution_entropy': visit_count_distribution_entropy,
+                        'value': value,
+                        'pred_value': pred_values_pool[i],
+                        'policy_logits': policy_logits_pool[i],
+                    }
+                    # print('collect:', output[i])
 
         return output
 
@@ -720,7 +738,7 @@ class EfficientZeroVisualizePolicy(Policy):
         if self._cfg.mcts_ctree:
             self._mcts_eval = MCTS_ctree(self._cfg)
         else:
-            self._mcts_eval = MCTSPtree(self._cfg)
+            self._mcts_eval = MCTS_ptree(self._cfg)
 
     # @profile
     def _forward_eval(self, data: ttorch.Tensor, action_mask: list, to_play: None, ready_env_id=None):

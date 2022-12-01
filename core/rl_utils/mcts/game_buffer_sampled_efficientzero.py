@@ -414,9 +414,13 @@ class SampledGameBuffer(Buffer):
                 np.random.randn(self.config.action_space_size)
                 for _ in range(self.config.num_unroll_steps - len(_actions))
             ]
+            # _child_actions += [
+            #     np.random.randn(self.config.num_of_sampled_actions, self.config.action_space_size)
+            #     for _ in range(self.config.num_unroll_steps+1 - len(_child_actions))
+            # ]
             _child_actions += [
-                np.random.randn(self.config.num_of_sampled_actions, self.config.action_space_size)
-                for _ in range(self.config.num_unroll_steps+1 - len(_child_actions))
+                np.random.rand(self.config.num_of_sampled_actions, self.config.action_space_size)
+                for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))
             ]
 
             # obtain the input observations

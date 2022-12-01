@@ -59,6 +59,8 @@ cdef extern from "cnode.h" namespace "tree":
         vector[vector[int]] get_trajectories()
         vector[vector[int]] get_distributions()
         vector[float] get_values()
+        # visualize related code
+        # CNode* get_root(int index)
 
     cdef cppclass CSearchResults:
         CSearchResults() except +

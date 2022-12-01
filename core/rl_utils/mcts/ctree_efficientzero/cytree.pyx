@@ -61,6 +61,10 @@ cdef class Roots:
     def get_values(self):
         return self.roots[0].get_values()
 
+    # visualize related code
+    #def get_root(self, int index):
+    #    return self.roots[index]
+
     def clear(self):
         self.roots[0].clear()
 

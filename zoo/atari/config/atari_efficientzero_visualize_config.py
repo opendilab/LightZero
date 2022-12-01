@@ -1,7 +1,7 @@
 import sys
-sys.path.append('/Users/puyuan/code/LightZero')
+# sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
-# sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 
@@ -14,13 +14,7 @@ if torch.cuda.is_available():
     device = 'cuda'
 else:
     device = 'cpu'
-representation_model = RepresentationNetwork(
-    observation_shape=(12, 96, 96),
-    num_blocks=1,
-    num_channels=64,
-    downsample=True,
-    momentum=0.1,
-)
+
 
 # collector_env_num = 8
 # n_episode = 8
@@ -33,7 +27,7 @@ evaluator_env_num = 1
 
 atari_efficientzero_config = dict(
     # exp_name='data_ez_ctree/breakout_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883',
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub111_lr0.2_ns50_ftv025_upc1000_urv-false_fix',
+    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub111_lr0.2_ns50_ftv025_upc1000',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -62,7 +56,7 @@ atari_efficientzero_config = dict(
     ),
     policy=dict(
         # model_path=None,
-        model_path='/Users/puyuan/code/LightZero/data_ez_ctree/pc_mcts/pong_efficientzero_seed0_lr0.2_ns50_ftv025_upc1000_sub883/ckpt/ckpt_best.pth.tar',
+        model_path='/Users/puyuan/code/LightZero/data_ez_ctree/pc_mcts/pong_efficientzero_seed0_sub883_lr0.2_ns50_ftv025_upc1000/ckpt/ckpt_best.pth.tar',
         env_name='PongNoFrameskip-v4',
         # env_name='BreakoutNoFrameskip-v4',
         # Whether to use cuda for network.
@@ -71,7 +65,6 @@ atari_efficientzero_config = dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',
-            # representation_model=representation_model,
             observation_shape=(12, 96, 96),  # 3,96,96 stack=4
             action_space_size=6,  # for pong
             # action_space_size=4,  # for breakout
@@ -98,7 +91,8 @@ atari_efficientzero_config = dict(
             pred_out=1024,
             last_linear_layer_init_zero=True,
             state_norm=False,
-        ),        # learn_mode config
+        ),
+        # learn_mode config
         learn=dict(
             # for debug
             # update_per_collect=2,
@@ -133,6 +127,7 @@ atari_efficientzero_config = dict(
         device=device,
         # if mcts_ctree=True, using cpp mcts code
         # mcts_ctree=True,
+        graph_directory='./data_visualize_ez_pong/',
         mcts_ctree=False,
         image_based=True,
         # cvt_string=True,
@@ -170,8 +165,7 @@ atari_efficientzero_config = dict(
         collector_env_num=1,
         evaluator_env_num=1,
         # TODO(pu): how to set proper num_simulations automatically?
-        # num_simulations=50,
-        num_simulations=5,
+        num_simulations=50,
 
         batch_size=256,
         game_history_length=400,

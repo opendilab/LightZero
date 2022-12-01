@@ -19,8 +19,9 @@ def conv3x3(in_channels, out_channels, stride=1):
 
 class DownSample(nn.Module):
 
-    def __init__(self, in_channels, out_channels, momentum=0.1):
+    def __init__(self, in_channels, out_channels, momentum=0.1, norm_type='BN'):
         super().__init__()
+        self.norm_type = norm_type
         self.conv1 = nn.Conv2d(
             in_channels,
             out_channels // 2,
@@ -35,7 +36,7 @@ class DownSample(nn.Module):
                 ResBlock(
                     in_channels=out_channels // 2,
                     activation=torch.nn.ReLU(inplace=True),
-                    norm_type='BN',
+                    norm_type=self.norm_type,
                     res_type='basic',
                     bias=False
                 ) for _ in range(1)
@@ -53,7 +54,7 @@ class DownSample(nn.Module):
             in_channels=out_channels // 2,
             out_channels=out_channels,
             activation=torch.nn.ReLU(inplace=True),
-            norm_type='BN',
+            norm_type=self.norm_type,
             res_type='downsample',
             bias=False
         )
@@ -62,7 +63,7 @@ class DownSample(nn.Module):
                 ResBlock(
                     in_channels=out_channels,
                     activation=torch.nn.ReLU(inplace=True),
-                    norm_type='BN',
+                    norm_type=self.norm_type,
                     res_type='basic',
                     bias=False
                 ) for _ in range(1)
@@ -74,7 +75,7 @@ class DownSample(nn.Module):
                 ResBlock(
                     in_channels=out_channels,
                     activation=torch.nn.ReLU(inplace=True),
-                    norm_type='BN',
+                    norm_type=self.norm_type,
                     res_type='basic',
                     bias=False
                 ) for _ in range(1)
@@ -110,6 +111,7 @@ class RepresentationNetwork(nn.Module):
             num_channels,
             downsample,
             momentum=0.1,
+            norm_type='BN',
     ):
         """
         Overview: Representation network
@@ -120,6 +122,7 @@ class RepresentationNetwork(nn.Module):
             - downsample (:obj:`bool`): True -> do downsampling for observations. (For board games, do not need)
         """
         super().__init__()
+        self.norm_type = norm_type
         self.downsample = downsample
         if self.downsample:
             self.downsample_net = DownSample(
@@ -135,7 +138,7 @@ class RepresentationNetwork(nn.Module):
                 ResBlock(
                     in_channels=num_channels,
                     activation=torch.nn.ReLU(inplace=True),
-                    norm_type='BN',
+                    norm_type=self.norm_type,
                     res_type='basic',
                     bias=False
                 ) for _ in range(num_blocks)
@@ -171,6 +174,7 @@ class DynamicsNetwork(nn.Module):
             lstm_hidden_size=64,
             momentum=0.1,
             last_linear_layer_init_zero=False,
+            norm_type='BN',
     ):
         """
         Overview:
@@ -185,6 +189,7 @@ class DynamicsNetwork(nn.Module):
             - last_linear_layer_init_zero (:obj:bool): if True -> zero initialization for the last layer of reward mlp
         """
         super().__init__()
+        self.norm_type = norm_type
         self.num_channels = num_channels
         self.lstm_hidden_size = lstm_hidden_size
         self.action_space_dim = action_space_size
@@ -197,7 +202,7 @@ class DynamicsNetwork(nn.Module):
                 ResBlock(
                     in_channels=num_channels - self.action_space_dim,
                     activation=torch.nn.ReLU(inplace=True),
-                    norm_type='BN',
+                    norm_type=self.norm_type,
                     res_type='basic',
                     bias=False
                 ) for _ in range(num_blocks)
@@ -209,7 +214,7 @@ class DynamicsNetwork(nn.Module):
                 ResBlock(
                     in_channels=num_channels - self.action_space_dim,
                     activation=torch.nn.ReLU(inplace=True),
-                    norm_type='BN',
+                    norm_type=self.norm_type,
                     res_type='basic',
                     bias=False
                 ) for _ in range(num_blocks)
@@ -228,7 +233,7 @@ class DynamicsNetwork(nn.Module):
             out_channels=full_support_size,
             layer_num=len(fc_reward_layers) + 1,
             activation=nn.ReLU(inplace=True),
-            norm_type='BN',
+            norm_type=self.norm_type,
             output_activation=nn.Identity(),
             output_norm_type=None,
             last_linear_layer_init_zero=last_linear_layer_init_zero
@@ -302,6 +307,8 @@ class PredictionNetwork(nn.Module):
             last_linear_layer_init_zero=False,
             sigma_type='fixed',
             fixed_sigma_value=0.3,
+            bound_type=None,
+            norm_type='BN',
     ):
         """Prediction network
         Parameters
@@ -332,8 +339,10 @@ class PredictionNetwork(nn.Module):
             True -> zero initialization for the last layer of value/policy mlp
         """
         super().__init__()
+        self.norm_type = norm_type
         self.sigma_type = sigma_type
         self.fixed_sigma_value = fixed_sigma_value
+        self.bound_type = bound_type
         self.in_channels = in_channels
         if self.in_channels is not None:
             self.conv_input = nn.Conv2d(in_channels, num_channels, 1)
@@ -343,7 +352,7 @@ class PredictionNetwork(nn.Module):
                 ResBlock(
                     in_channels=num_channels,
                     activation=torch.nn.ReLU(inplace=True),
-                    norm_type='BN',
+                    norm_type=self.norm_type,
                     res_type='basic',
                     bias=False
                 ) for _ in range(num_blocks)
@@ -363,7 +372,7 @@ class PredictionNetwork(nn.Module):
             out_channels=full_support_size,
             layer_num=len(fc_value_layers) + 1,
             activation=nn.ReLU(inplace=True),
-            norm_type='BN',
+            norm_type=self.norm_type,
             output_activation=nn.Identity(),
             output_norm_type=None,
             last_linear_layer_init_zero=last_linear_layer_init_zero
@@ -376,7 +385,7 @@ class PredictionNetwork(nn.Module):
         #     out_channels=action_space_size*2,
         #     layer_num=len(fc_policy_layers) + 1,
         #     activation=nn.ReLU(inplace=True),
-        #     norm_type='BN',
+        #     norm_type=self.norm_type,
         #     output_activation=nn.Identity(),
         #     output_norm_type=None,
         #     last_linear_layer_init_zero=last_linear_layer_init_zero
@@ -386,12 +395,11 @@ class PredictionNetwork(nn.Module):
             hidden_size=self.block_output_size_policy,  # 256,
             output_size=action_space_size,
             layer_num=len(fc_policy_layers) + 1,
-            # sigma_type='conditioned',
             sigma_type=self.sigma_type,
             fixed_sigma_value=self.fixed_sigma_value,
             activation=nn.ReLU(),
             norm_type=None,
-            bound_type='tanh'  # TODO(pu)
+            bound_type=self.bound_type  # TODO(pu)
         )
 
         self.activation = nn.ReLU(inplace=True)
@@ -460,6 +468,8 @@ class SampledEfficientZeroNet(BaseNet):
             categorical_distribution=True,
             sigma_type='fixed',
             fixed_sigma_value=0.3,
+            bound_type=None,
+            norm_type='BN',
     ):
         """
         Overview:
@@ -492,6 +502,9 @@ class SampledEfficientZeroNet(BaseNet):
         super(SampledEfficientZeroNet, self).__init__(lstm_hidden_size)
         self.sigma_type = sigma_type
         self.fixed_sigma_value = fixed_sigma_value
+        self.bound_type = bound_type
+        self.norm_type = norm_type
+
         self.categorical_distribution = categorical_distribution
         if not self.categorical_distribution:
             self.reward_support_size = 1
@@ -541,6 +554,7 @@ class SampledEfficientZeroNet(BaseNet):
                     num_channels,
                     downsample,
                     momentum=bn_mt,
+                    norm_type=self.norm_type,
                 )
         else:
             self.representation_network = self.representation_model
@@ -557,6 +571,7 @@ class SampledEfficientZeroNet(BaseNet):
                 lstm_hidden_size=lstm_hidden_size,
                 momentum=bn_mt,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                norm_type=self.norm_type,
             )
             self.prediction_network = PredictionNetwork(
                 action_space_size,
@@ -574,6 +589,8 @@ class SampledEfficientZeroNet(BaseNet):
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                 sigma_type=self.sigma_type,
                 fixed_sigma_value=self.fixed_sigma_value,
+                bound_type=self.bound_type,
+                norm_type=self.norm_type,
             )
         else:
             if self.continuous_action_space:
@@ -588,6 +605,7 @@ class SampledEfficientZeroNet(BaseNet):
                     lstm_hidden_size=lstm_hidden_size,
                     momentum=bn_mt,
                     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                    norm_type=self.norm_type,
                 )
             else:
                 self.dynamics_network = DynamicsNetwork(
@@ -601,6 +619,7 @@ class SampledEfficientZeroNet(BaseNet):
                     lstm_hidden_size=lstm_hidden_size,
                     momentum=bn_mt,
                     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                    norm_type=self.norm_type,
                 )
             self.prediction_network = PredictionNetwork(
                 action_space_size,
@@ -618,6 +637,8 @@ class SampledEfficientZeroNet(BaseNet):
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                 sigma_type=self.sigma_type,
                 fixed_sigma_value=self.fixed_sigma_value,
+                bound_type=self.bound_type,
+                norm_type=self.norm_type,
             )
 
         # projection

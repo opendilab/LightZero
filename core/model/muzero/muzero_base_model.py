@@ -16,7 +16,6 @@ class NetworkOutput:
     reward: float
     policy_logits: List[float]
     hidden_state: List[float]
-    reward_hidden_state: object
 
 
 def renormalize(input, first_dim=1):
@@ -33,7 +32,7 @@ def renormalize(input, first_dim=1):
 
 class BaseNet(nn.Module):
 
-    def __init__(self, lstm_hidden_size):
+    def __init__(self):
         """
         Overview:
             Base Network for EfficientZero.
@@ -41,7 +40,6 @@ class BaseNet(nn.Module):
             - lstm_hidden_size (:obj:`int`): dim of lstm hidden
         """
         super(BaseNet, self).__init__()
-        self.lstm_hidden_size = lstm_hidden_size
 
     def prediction(self, state):
         raise NotImplementedError
@@ -49,23 +47,21 @@ class BaseNet(nn.Module):
     def representation(self, obs_history):
         raise NotImplementedError
 
-    def dynamics(self, state, reward_hidden, action):
+    def dynamics(self, state, action):
         raise NotImplementedError
 
     def initial_inference(self, obs) -> NetworkOutput:
         num = obs.size(0)
         hidden_state = self.representation(obs)
         policy_logits, value = self.prediction(hidden_state)
-        # zero initialization for reward hidden states
-        reward_hidden = (torch.zeros(1, num, self.lstm_hidden_size), torch.zeros(1, num, self.lstm_hidden_size))
-        return NetworkOutput(value, [0. for _ in range(num)], policy_logits, hidden_state, reward_hidden)
+        return NetworkOutput(value, [0. for _ in range(num)], policy_logits, hidden_state, )
 
     def recurrent_inference(
-            self, hidden_state: torch.Tensor, reward_hidden: torch.Tensor, action: torch.Tensor
+            self, hidden_state: torch.Tensor, action: torch.Tensor
     ) -> NetworkOutput:
-        hidden_state, reward_hidden, reward = self.dynamics(hidden_state, reward_hidden, action)
+        hidden_state, reward = self.dynamics(hidden_state, action)
         policy_logits, value = self.prediction(hidden_state)
-        return NetworkOutput(value, reward, policy_logits, hidden_state, reward_hidden)
+        return NetworkOutput(value, reward, policy_logits, hidden_state)
 
     def get_gradients(self):
         grads = []

@@ -15,16 +15,21 @@ else:
 from easydict import EasyDict
 
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 5
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 5
+# batch_size = 256
+
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
 batch_size = 256
 
 categorical_distribution = True
 num_simulations = 25  # action_space_size=9
 
 # TODO(pu):
-# PER, stack1, lr
+# PER, stack1
 
 # The key hyper-para to tune, for different env, we have different episode_length
 # e.g. reuse_factor = 0.5
@@ -36,7 +41,7 @@ num_simulations = 25  # action_space_size=9
 # two_player_mode, board_size=3, episode_length=3**2=9
 # collector_env_num=8,  n_sample_per_collect=9*8=72
 
-update_per_collect = 100
+update_per_collect = 40
 
 # for debug
 # collector_env_num = 1
@@ -44,7 +49,7 @@ update_per_collect = 100
 # evaluator_env_num = 1
 
 tictactoe_muzero_config = dict(
-    exp_name=f'data_mz_ctree/tictactoe_2pm_muzero_seed0_sub885_ghl9_ftv1_rc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
+    exp_name=f'data_mz_ctree/tictactoe_1pm_muzero_seed0_sub885_ghl5_ftv1_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -52,7 +57,7 @@ tictactoe_muzero_config = dict(
         stop_value=1,
         # if battle_mode='two_player_mode',
         # automatically assign 'eval_mode' when eval, 'two_player_mode' when collect
-        battle_mode='two_player_mode',
+        battle_mode='one_player_mode',
         prob_random_agent=0.,
         prob_expert_agent=0.,
         max_episode_steps=int(1.08e5),
@@ -62,7 +67,6 @@ tictactoe_muzero_config = dict(
     ),
     policy=dict(
         model_path=None,
-        # model_path='/Users/puyuan/code/LightZero/data_mz_ctree/tictactoe_2pm_muzero_cc2_seed0_sub883/ckpt/iteration_100000.pth.tar',
         env_name='tictactoe',
         # Whether to use cuda for network.
         cuda=True,
@@ -74,8 +78,8 @@ tictactoe_muzero_config = dict(
             # [S, W, H, C] -> [S x C, W, H]
             # [4, 3, 3, 3] -> [12, 3, 3]
             # observation_shape=(12, 3, 3),  # if frame_stack_num=4
-            # observation_shape=(6, 3, 3),  # if frame_stack_num=2
-            observation_shape=(3, 3, 3),  # if frame_stack_num=1
+            observation_shape=(6, 3, 3),  # if frame_stack_num=2
+            # observation_shape=(3, 3, 3),  # if frame_stack_num=1
             action_space_size=9,
             downsample=False,
             num_blocks=1,
@@ -139,10 +143,10 @@ tictactoe_muzero_config = dict(
         device=device,
         mcts_ctree=True,
         # mcts_ctree=False,
-        battle_mode='two_player_mode',
-        game_history_length=9,
-        # battle_mode='one_player_mode',
-        # game_history_length=5,
+        # battle_mode='two_player_mode',
+        # game_history_length=9,
+        battle_mode='one_player_mode',
+        game_history_length=5,
         image_based=False,
         cvt_string=False,
         clip_reward=True,
@@ -153,10 +157,10 @@ tictactoe_muzero_config = dict(
         # [4, 3, 3, 3] -> [12, 3, 3]
         # obs_shape=(12, 3, 3),  # if frame_stack_num=4
         # frame_stack_num=4,
-        # obs_shape=(6, 3, 3),  # if frame_stack_num=4
-        # frame_stack_num=2,
-        obs_shape=(3, 3, 3),  # if frame_stack_num=4
-        frame_stack_num=1,
+        obs_shape=(6, 3, 3),  # if frame_stack_num=2
+        frame_stack_num=2,
+        # obs_shape=(3, 3, 3),  # if frame_stack_num=1
+        # frame_stack_num=1,
         image_channel=3,
         gray_scale=False,
         downsample=False,
@@ -244,8 +248,8 @@ tictactoe_muzero_config = dict(
         # TODO(pu): EfficientZero -> MuZero
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
-        # reward_loss_coeff=1,
-        reward_loss_coeff=0,
+        reward_loss_coeff=1,
+
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
 
@@ -293,5 +297,26 @@ tictactoe_muzero_create_config = EasyDict(tictactoe_muzero_create_config)
 create_config = tictactoe_muzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_muzero
-    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(1e5))
+    from core.entry import serial_pipeline_muzero_eval
+    import numpy as np
+    # serial_pipeline_muzero_eval([main_config, create_config], seed=0, max_env_step=int(1e5))
+
+    test_seeds = 5
+    test_episodes_each_seed = 2
+    test_episodes = test_seeds * test_episodes_each_seed
+    reward_all_seeds = []
+    reward_mean_all_seeds = []
+    for seed in range(test_seeds):
+        reward_mean, reward_lst = serial_pipeline_muzero_eval([main_config, create_config], seed=seed, test_episodes=test_episodes_each_seed, max_env_step=int(1e5))
+        reward_mean_all_seeds.append(reward_mean)
+        reward_all_seeds.append(reward_lst)
+
+    reward_all_seeds = np.array(reward_all_seeds)
+    reward_mean_all_seeds = np.array(reward_mean_all_seeds)
+
+    print("=" * 20)
+    print(f'we eval total {test_seeds} seed. In each seed, we test {test_episodes_each_seed} episodes.')
+    print('reward_all_seeds:', reward_all_seeds)
+    print('reward_mean_all_seeds:', reward_mean_all_seeds.mean())
+    print(f'win rate: {len(np.where(reward_all_seeds == 1.)[0]) / test_episodes}, draw rate: {len(np.where(reward_all_seeds == 0.)[0]) / test_episodes}, lose rate: {len(np.where(reward_all_seeds == -1.)[0]) / test_episodes}')
+    print("=" * 20)

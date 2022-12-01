@@ -14,7 +14,8 @@
 *.pkl
 data_*
 *.so
-*seed*
+*.gv
+cytree.cpp
 
 pkg/
 src/

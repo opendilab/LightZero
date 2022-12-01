@@ -10,8 +10,8 @@ os.environ['DISABLE_MUJOCO_RENDERING'] = '1'
 import sys
 
 # sys.path.append('/Users/puyuan/code/LightZero')
-# sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/home/puyuan/LightZero')
+# sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 import torch
@@ -26,59 +26,49 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 batch_size = 256
-K = 5  # action_space_size=1
-num_simulations = 25  # action_space_size=1
-
+# action_space_size=1
+K = 5
+num_simulations = 25
+# K = 20
+# num_simulations = 50
+update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
 
 # for debug
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
-# batch_size = 4
-# K = 5  # action_space_size=1
-# num_simulations = 6  # action_space_size=1
+# batch_size = 32
+# K = 3  # action_space_size=1
+# num_simulations = 10  # action_space_size=1
+# update_per_collect = 10
+
+norm_type = 'BN'  # 'LN'
+
+
+# TODO(pu): ignore_done=True,
+# The key hyper-para to tune, for different env, we have different episode_length
+# e.g. reuse_factor = 0.1
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+
+game_history_length = 50  # we should ignore done in pendulum env which have fixed episode length 200
+# game_history_length = 200
 
 categorical_distribution = True
-
-# TODO(pu):
-# The key hyper-para to tune, for different env, we have different episode_length
-# e.g. reuse_factor = 0.5
-# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 250
-# game_history_length = 200
-game_history_length = 50
-observation_dim = 5
+observation_dim = 3
 action_dim = 1
 
-dmc2gym_disc_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/dmc2gym_cartpole-balance_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_halfmodel_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_tanh-fs03',
+pendulum_sampled_efficientzero_config = dict(
+    # exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_halfmodel_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_tanh-fs03',
+    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_halfmodel_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_tanh_cond-sigma-ew5e-3',
+
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        env_id='dmc2gym_cartpole_balance',
-        stop_value=900,
-
-        domain_name='cartpole',  # obs shape: 5, action shape: 1
-        task_name="balance",
-        # task_name="swingup",
-        # stop_value=850,
-
-        # domain_name="acrobot",  # obs shape: 6, action shape: 1
-        # task_name="swingup",
-
-        # domain_name="hopper",  # obs shape: 15, action shape: 4
-        # task_name="hop",
-
-        # domain_name="manipulator",  # obs shape: 44, action shape: 5
-        # task_name="bring_ball",
-        from_pixels=False,
-        channels_first=False,
-        frame_skip=8,
-        frame_stack=1,
+        env_id='pendulum',
+        stop_value=-200,
         norm_obs=dict(use_norm=False, ),
-        norm_reward=dict(use_norm=False, ),
-        use_act_scale=True,
+        act_scale=True,
         battle_mode='one_player_mode',
         prob_random_agent=0.,
         collect_max_episode_steps=int(1.08e4),
@@ -87,12 +77,16 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model_path=None,
-        env_name='dmc2gym',
+        env_name='pendulum',
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            sigma_type='fixed',  # conditioned
+            # sigma_type='fixed',  # option list: ['fixed', 'conditioned']
+            sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
             fixed_sigma_value=0.3,
+            bound_type=None,
+            # norm_type='LN',
+            norm_type=norm_type,
             # activation=torch.nn.ReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=categorical_distribution,
@@ -311,6 +305,7 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
         reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
+        policy_entropy_loss_coeff=5e-3,
         # consistency_coeff=2,
         consistency_coeff=0,
 
@@ -337,13 +332,13 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
         ######################################
     ),
 )
-dmc2gym_disc_sampled_efficientzero_config = EasyDict(dmc2gym_disc_sampled_efficientzero_config)
-main_config = dmc2gym_disc_sampled_efficientzero_config
+pendulum_sampled_efficientzero_config = EasyDict(pendulum_sampled_efficientzero_config)
+main_config = pendulum_sampled_efficientzero_config
 
-dmc2gym_disc_sampled_efficientzero_create_config = dict(
+pendulum_sampled_efficientzero_create_config = dict(
     env=dict(
-        type='dmc2gym',
-        import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
+        type='pendulum',
+        import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
     ),
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
@@ -357,10 +352,10 @@ dmc2gym_disc_sampled_efficientzero_create_config = dict(
         import_names=['core.worker.collector.sampled_efficientzero_collector'],
     )
 )
-dmc2gym_disc_sampled_efficientzero_create_config = EasyDict(dmc2gym_disc_sampled_efficientzero_create_config)
-create_config = dmc2gym_disc_sampled_efficientzero_create_config
+pendulum_sampled_efficientzero_create_config = EasyDict(pendulum_sampled_efficientzero_create_config)
+create_config = pendulum_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_sampled_efficientzero
 
-    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e6))
+    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))

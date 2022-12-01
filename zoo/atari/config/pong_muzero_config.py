@@ -1,47 +1,47 @@
 import sys
+
 # sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
 sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
-
 import torch
 from easydict import EasyDict
-
-from core.model import RepresentationNetwork
 
 if torch.cuda.is_available():
     device = 'cuda'
 else:
     device = 'cpu'
-representation_model = RepresentationNetwork(
-    observation_shape=(12, 96, 96),
-    num_blocks=1,
-    num_channels=64,
-    downsample=True,
-    momentum=0.1,
-)
 
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
+update_per_collect = 1000
+batch_size = 256
+collect_max_episode_steps = int(1.08e4)
+eval_max_episode_steps = int(1.08e5)
 
 # debug
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
+# num_simulations = 4
+# update_per_collect = 10
+# batch_size = 16
+# collect_max_episode_steps = 20
+# eval_max_episode_steps = 20
 
 atari_efficientzero_config = dict(
-    exp_name='data_mz_ctree/pong_muzero_cc2_seed0_sub883',
+    exp_name='data_mz_ctree/pong_muzero_seed0_sub883',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         env_name='PongNoFrameskip-v4',
         stop_value=int(20),
-        collect_max_episode_steps=int(1.08e4),
-        eval_max_episode_steps=int(1.08e5),
+        collect_max_episode_steps=collect_max_episode_steps,
+        eval_max_episode_steps=eval_max_episode_steps,
         # for debug
         # collect_max_episode_steps=int(100),
         # eval_max_episode_steps=int(100),
@@ -65,17 +65,14 @@ atari_efficientzero_config = dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',
-            # representation_model=representation_model,
             observation_shape=(12, 96, 96),  # 3,96,96 stack=4
             action_space_size=6,  # for pong
             downsample=True,
             num_blocks=1,
             # default config in EZ original repo
             num_channels=64,
-            lstm_hidden_size=512,
             # The env step is twice as large as the original size model when converging
             # num_channels=32,
-            # lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -94,16 +91,11 @@ atari_efficientzero_config = dict(
         ),
         # learn_mode config
         learn=dict(
-            # for debug
-            # update_per_collect=2,
-            # batch_size=4,
-
-            update_per_collect=1000,
-            batch_size=256,
+            update_per_collect=update_per_collect,
+            batch_size=batch_size,
 
             learning_rate=0.2,  # set lr manually: 0.2->0.02->0.002
             # Frequency of target network update.
-            # target_update_freq=400,
             target_update_freq=100,
         ),
         # collect_mode config
@@ -127,8 +119,8 @@ atari_efficientzero_config = dict(
         env_type='no_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
-        mcts_ctree=True,
-        # mcts_ctree=False,
+        # mcts_ctree=True,
+        mcts_ctree=False,
         image_based=True,
         # cvt_string=True,
         # trade memory for speed
@@ -150,34 +142,19 @@ atari_efficientzero_config = dict(
         # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
         augmentation=['shift', 'intensity'],
 
-        # for debug
-        # collector_env_num=1,
-        # evaluator_env_num=1,
-        # num_simulations=2,
-        # batch_size=4,
-        # game_history_length=10,
-        # total_transitions=int(1e2),
-        # lstm_hidden_size=32,
-        # td_steps=5,
-        # num_unroll_steps=5,
-        # lstm_horizon_len=5,
-
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         # TODO(pu): how to set proper num_simulations automatically?
         num_simulations=num_simulations,
-        batch_size=256,
+        batch_size=batch_size,
         game_history_length=400,
         total_transitions=int(1e5),
         # default config in EZ original repo
         channels=64,
-        lstm_hidden_size=512,
         # The env step is twice as large as the original size model when converging
         # channels=32,
-        # lstm_hidden_size=256,
         td_steps=5,
         num_unroll_steps=5,
-        lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
         reanalyze_ratio=0.99,
@@ -246,8 +223,6 @@ atari_efficientzero_config = dict(
         reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-        consistency_coeff=2,
-        # consistency_coeff=0,
 
         # siamese
         proj_hid=1024,
@@ -292,4 +267,5 @@ create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_muzero
+
     serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(5e5))

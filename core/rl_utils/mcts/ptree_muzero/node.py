@@ -21,7 +21,6 @@ class Node:
         self.legal_actions = legal_actions
         self.action_space_size = action_space_size
 
-        self.is_reset = 0
         self.visit_count = 0
         self.value_sum = 0
         self.best_action = -1
@@ -105,10 +104,6 @@ class Node:
             child = self.get_child(a)
             if child.visit_count > 0:
                 true_reward = child.reward
-                # true_reward = child.value_prefix - parent_value_prefix
-                # if self.is_reset == 1:
-                #     # TODO(pu)
-                #     true_reward = child.value_prefix
                 # TODO(pu): only one step bootstrap?
                 q_of_s_a = true_reward + discount * child.value
                 total_unsigned_q += q_of_s_a
@@ -121,35 +116,6 @@ class Node:
             mean_q = (parent_q + total_unsigned_q) / (total_visits + 1)
         return mean_q
 
-
-    # def get_mean_q(self, is_root: int, parent_q: float, discount: float):
-    #     """
-    #     Overview:
-    #         get mean q
-    #     Arguments:
-    #         - is_root (:obj:`int`):
-    #     """
-    #     total_unsigned_q = 0.0
-    #     total_visits = 0
-    #     parent_value_prefix = self.value_prefix
-    #     for a in self.legal_actions:
-    #         child = self.get_child(a)
-    #         if child.visit_count > 0:
-    #             true_reward = child.value_prefix - parent_value_prefix
-    #             if self.is_reset == 1:
-    #                 # TODO(pu)
-    #                 true_reward = child.value_prefix
-    #             # TODO(pu): only one step bootstrap?
-    #             q_of_s_a = true_reward + discount * child.value
-    #             total_unsigned_q += q_of_s_a
-    #             total_visits += 1
-    #     if is_root and total_visits > 0:
-    #         mean_q = total_unsigned_q / total_visits
-    #     else:
-    #         # if is not root node,
-    #         # TODO(pu): why parent_q?
-    #         mean_q = (parent_q + total_unsigned_q) / (total_visits + 1)
-    #     return mean_q
 
     def print_out(self):
         pass
@@ -309,17 +275,12 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
     # root.parent_value_prefix = 0
     node_stack = []
     node_stack.append(root)
-    is_reset = 0
     while len(node_stack) > 0:
         node = node_stack[-1]
         node_stack.pop()
 
         if node != root:
-            # true_reward = node.value_prefix - node.parent_value_prefix
             true_reward = node.reward
-
-            # if is_reset == 1:
-            #     true_reward = node.value_prefix
             if players == 1:
                 q_of_s_a = true_reward + discount * node.value
             elif players == 2:
@@ -327,7 +288,6 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
 
             min_max_stats.update(q_of_s_a)
 
-        is_reset = node.is_reset
 
         for a in node.legal_actions:
             child = node.get_child(a)
@@ -345,21 +305,11 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
             node.value_sum += bootstrap_value
             node.visit_count += 1
 
-            # # parent_value_prefix = 0.0
-            # is_reset = 0
-            # if i >= 1:
-            #     parent = search_path[i - 1]
-            #     parent_value_prefix = parent.value_prefix
-            #     is_reset = parent.is_reset
-
-            # true_reward = node.value_prefix - parent_value_prefix
             true_reward = node.reward
 
             # TODO(pu): the effect of different ways to update min_max_stats
             min_max_stats.update(true_reward + discount * node.value)
 
-            # if is_reset == 1:
-            #     true_reward = node.value_prefix
 
             bootstrap_value = true_reward + discount * bootstrap_value
 
@@ -378,20 +328,13 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
 
             node.visit_count += 1
 
-            # parent_value_prefix = 0.0
-            # is_reset = 0
-            # if i >= 1:
-            #     parent = search_path[i - 1]
-            #     parent_value_prefix = parent.value_prefix
-            #     is_reset = parent.is_reset
+
 
             # NOTE: in two player mode,
             # we should calculate the true_reward according to the perspective of current player of node
             # true_reward = node.value_prefix - (- parent_value_prefix)
             true_reward = node.reward
 
-            # if is_reset == 1:
-            #     true_reward = node.value_prefix
 
             # min_max_stats.update(true_reward + discount * node.value)
             # TODO(pu): why in muzero-general is - node.value
@@ -417,7 +360,6 @@ def batch_back_propagate(
         policies: List[float],
         min_max_stats_lst,
         results,
-        is_reset_lst: List,
         to_play: list = None
 ) -> None:
     for i in range(results.num):
@@ -430,8 +372,6 @@ def batch_back_propagate(
         else:
             results.nodes[i].expand(to_play[i], hidden_state_index_x, i, value_prefixs[i], policies[i])
 
-        # reset
-        results.nodes[i].is_reset = is_reset_lst[i]
         if to_play is None:
             back_propagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], 0, values[i], discount)
         else:
@@ -446,10 +386,6 @@ def select_child(
     max_index_lst = []
     for a in root.legal_actions:
         child = root.get_child(a)
-        # temp_score = compute_ucb_score(
-        #     child, min_max_stats, mean_q, root.is_reset, root.visit_count - 1, root.value_prefix, pb_c_base, pb_c_int,
-        #     discount, players
-        # )
         temp_score = compute_ucb_score(
             child, min_max_stats, mean_q, root.visit_count - 1, pb_c_base, pb_c_int,
             discount, players
@@ -472,7 +408,6 @@ def compute_ucb_score(
     child: Node,
     min_max_stats,
     parent_mean_q,
-    # is_reset: int,
     total_children_visit_counts: float,
     # parent_value_prefix: float,
     pb_c_base: float,
@@ -494,10 +429,7 @@ def compute_ucb_score(
     if child.visit_count == 0:
         value_score = parent_mean_q
     else:
-        # true_reward = child.value_prefix - parent_value_prefix
         true_reward = child.reward
-        # if is_reset == 1:
-        #     true_reward = child.value_prefix
         if players == 1:
             value_score = true_reward + discount * child.value
         elif players == 2:

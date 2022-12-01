@@ -17,14 +17,14 @@ from core.rl_utils.mcts.utils import prepare_observation_lst
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
 class MuZeroCollector(ISerialCollector):
-    # """
-    # Overview:
-    #     EfficientZero collector(n_episode)
-    # Interfaces:
-    #     __init__, reset, reset_env, reset_policy, collect, close
-    # Property:
-    #     envstep
-    # """
+    """
+    Overview:
+        MuZero collector(n_episode)
+    Interfaces:
+        __init__, reset, reset_env, reset_policy, collect, close
+    Property:
+        envstep
+    """
 
     config = dict(deepcopy_obs=False, transform_obs=False, collect_print_freq=100, get_train_sample=False)
 
@@ -39,15 +39,15 @@ class MuZeroCollector(ISerialCollector):
             replay_buffer: 'replay_buffer' = None,  # noqa
             game_config: 'game_config' = None,  # noqa
     ) -> None:
-        # """
-        # Overview:
-        #     Initialization method.
-        # Arguments:
-        #     - cfg (:obj:`EasyDict`): Config dict
-        #     - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
-        #     - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
-        #     - tb_logger (:obj:`SummaryWriter`): tensorboard handle
-        # """
+        """
+        Overview:
+            Initialization method.
+        Arguments:
+            - cfg (:obj:`EasyDict`): Config dict
+            - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
+            - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
+            - tb_logger (:obj:`SummaryWriter`): tensorboard handle
+        """
         self._exp_name = exp_name
         self._instance_name = instance_name
         self._collect_print_freq = cfg.collect_print_freq

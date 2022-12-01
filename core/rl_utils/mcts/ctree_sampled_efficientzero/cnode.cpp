@@ -137,36 +137,94 @@ namespace tree{
         // 从epoch（1970年1月1日00:00:00 UTC）开始经过的纳秒数，unsigned类型会截断这个值
         unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
 
-        std::vector<std::vector<float> > sampled_actions;
-        float sampled_action_one_dim;
-        std::vector<float> sampled_actions_log_probs;
-        std::default_random_engine generator(seed);
+         // way 1: no tanh
+//        std::vector<std::vector<float> > sampled_actions;
+//        float sampled_action_one_dim;
+//        std::vector<float> sampled_actions_log_probs;
+//        std::default_random_engine generator(seed);
       // 第一个参数为高斯分布的平均值，第二个参数为标准差
       //      std::normal_distribution<double> distribution(mu, sigma);
-        for (int i = 0; i < this->num_of_sampled_actions; ++i){
+
+//        for (int i = 0; i < this->num_of_sampled_actions; ++i){
+////            std::cout << "-------------------------" <<std::endl;
+////            std::cout << "num_of_sampled_actions index:" << i <<std::endl;
+////            std::cout << "-------------------------" <<std::endl;
+//            float sampled_action_prob = 1;
+//            // TODO(pu): why here
+//            std::vector<float> sampled_action;
+//
+//            for (int j = 0; j < this->action_space_size; ++j){
+////                 std::cout << "sampled_action_prob: " << sampled_action_prob <<std::endl;
+////                 std::cout << "mu[j], sigma[j]: " << mu[j] << sigma[j]<<std::endl;
+//
+//                std::normal_distribution<float> distribution(mu[j], sigma[j]);
+//                sampled_action_one_dim = distribution(generator);
+//                // refer to python normal log_prob method
+//                sampled_action_prob *= exp(- pow((sampled_action_one_dim - mu[j]), 2) / (2 * pow(sigma[j], 2)) -  log(sigma[j]) - log(sqrt(2 * M_PI)));
+////                std::cout << "sampled_action_one_dim:" << sampled_action_one_dim <<std::endl;
+//
+//                sampled_action.push_back(sampled_action_one_dim);
+//
+//            }
+//            sampled_actions.push_back(sampled_action);
+//            sampled_actions_log_probs.push_back(log(sampled_action_prob));
+//           }
+
+           // way 2: sac-like tanh
+                   std::vector<std::vector<float> > sampled_actions_before_tanh;
+                std::vector<std::vector<float> > sampled_actions_after_tanh;
+
+        float sampled_action_one_dim_before_tanh;
+        std::vector<float> sampled_actions_log_probs_before_tanh;
+         std::vector<float> sampled_actions_log_probs_after_tanh;
+
+        std::default_random_engine generator(seed);
+         for (int i = 0; i < this->num_of_sampled_actions; ++i){
 //            std::cout << "-------------------------" <<std::endl;
 //            std::cout << "num_of_sampled_actions index:" << i <<std::endl;
 //            std::cout << "-------------------------" <<std::endl;
-            float sampled_action_prob = 1;
+            float sampled_action_prob_before_tanh = 1;
             // TODO(pu): why here
-            std::vector<float> sampled_action;
+            std::vector<float> sampled_action_before_tanh;
+            std::vector<float> sampled_action_after_tanh;
+
+                        std::vector<float> y;
+
+
 
             for (int j = 0; j < this->action_space_size; ++j){
 //                 std::cout << "sampled_action_prob: " << sampled_action_prob <<std::endl;
 //                 std::cout << "mu[j], sigma[j]: " << mu[j] << sigma[j]<<std::endl;
 
                 std::normal_distribution<float> distribution(mu[j], sigma[j]);
-                sampled_action_one_dim = distribution(generator);
+                sampled_action_one_dim_before_tanh = distribution(generator);
                 // refer to python normal log_prob method
-                sampled_action_prob *= exp(- pow((sampled_action_one_dim - mu[j]), 2) / (2 * pow(sigma[j], 2)) -  log(sigma[j]) - log(sqrt(2 * M_PI)));
+                sampled_action_prob_before_tanh *= exp(- pow((sampled_action_one_dim_before_tanh - mu[j]), 2) / (2 * pow(sigma[j], 2)) -  log(sigma[j]) - log(sqrt(2 * M_PI)));
 //                std::cout << "sampled_action_one_dim:" << sampled_action_one_dim <<std::endl;
 
-                sampled_action.push_back(sampled_action_one_dim);
+                sampled_action_before_tanh.push_back(sampled_action_one_dim_before_tanh);
+                sampled_action_after_tanh.push_back(tanh(sampled_action_one_dim_before_tanh));
+               // y = 1 - pow(sampled_actions, 2) + 1e-6;
+                y.push_back( 1 - pow(tanh(sampled_action_one_dim_before_tanh), 2) + 1e-6);
 
             }
-            sampled_actions.push_back(sampled_action);
-            sampled_actions_log_probs.push_back(log(sampled_action_prob));
-        }
+            sampled_actions_before_tanh.push_back(sampled_action_before_tanh);
+            sampled_actions_after_tanh.push_back(sampled_action_after_tanh);
+            sampled_actions_log_probs_before_tanh.push_back(log(sampled_action_prob_before_tanh));
+
+            float y_sum = std::accumulate(y.begin(), y.end(), 0.);
+
+            sampled_actions_log_probs_after_tanh.push_back( log(sampled_action_prob_before_tanh) -  log(y_sum)       );
+
+           }
+
+// way2 of python version
+//        sampled_actions = torch.tanh(sampled_actions_before_tanh)
+//        y = 1 - sampled_actions.pow(2) + 1e-6
+//        # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
+//        log_prob = dist.log_prob(sampled_actions_before_tanh).unsqueeze(-1)
+//        log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
+
 
 
 //         std::cout << "sampled_actions_log_probs[0]: " << sampled_actions_log_probs[0] <<std::endl;
@@ -180,7 +238,7 @@ namespace tree{
         float prior;
         for (int i = 0; i < this->num_of_sampled_actions; ++i){
 //            prior = policy[a] / policy_sum;
-            CAction action = CAction(sampled_actions[i], 0);
+            CAction action = CAction(sampled_actions_after_tanh[i], 0);
             std::vector<CAction> legal_actions;
             // backup: segment fault
 //            std::cout << "legal_actions[0]: " << legal_actions[0] << std::endl;
@@ -192,7 +250,7 @@ namespace tree{
 //            std::cout << "position 6" << std::endl;
 //            std::cout << "action.get_combined_hash()" << action.get_combined_hash() << std::endl;
 
-            this->children[action.get_combined_hash()] = CNode(sampled_actions_log_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions); // only for muzero/efficient zero, not support alphazero
+            this->children[action.get_combined_hash()] = CNode(sampled_actions_log_probs_after_tanh[i], legal_actions, this->action_space_size, this->num_of_sampled_actions); // only for muzero/efficient zero, not support alphazero
 
 //            std::cout << "position 7" << std::endl;
             this->legal_actions.push_back(action);
@@ -667,11 +725,16 @@ namespace tree{
         // TODO(pu): empirical distribution
         std::string empirical_distribution_type = "density";
         if (empirical_distribution_type.compare("density")){
-             float empirical_logprob_sum=0;
+//             float empirical_logprob_sum=0;
+//            for (int i = 0; i < parent->children.size(); ++i){
+//                empirical_logprob_sum += parent->get_child(parent->legal_actions[i])->prior;
+//            }
+//            prior_score = pb_c * child->prior / (empirical_logprob_sum + 1e-9);
+             float empirical_prob_sum=0;
             for (int i = 0; i < parent->children.size(); ++i){
-                empirical_logprob_sum += parent->get_child(parent->legal_actions[i])->prior;
+                empirical_prob_sum += exp(parent->get_child(parent->legal_actions[i])->prior);
             }
-            prior_score = pb_c * child->prior / (empirical_logprob_sum + 1e-9);
+            prior_score = pb_c * exp(child->prior) / (empirical_prob_sum + 1e-9);
         }
         else if(empirical_distribution_type.compare("uniform")){
             prior_score = pb_c * 1 / parent->children.size();

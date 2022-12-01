@@ -167,7 +167,6 @@ class DynamicsNetwork(nn.Module):
             fc_reward_layers,
             full_support_size,
             block_output_size_reward,
-            lstm_hidden_size=64,
             momentum=0.1,
             last_linear_layer_init_zero=False,
     ):
@@ -180,12 +179,10 @@ class DynamicsNetwork(nn.Module):
             - fc_reward_layers (:obj:list):  hidden layers of the reward prediction head (MLP head)
             - full_support_size (:obj:int): dim of reward output
             - block_output_size_reward (:obj:int): dim of flatten hidden states
-            - lstm_hidden_size (:obj:int): dim of lstm hidden
             - last_linear_layer_init_zero (:obj:bool): if True -> zero initialization for the last layer of reward mlp
         """
         super().__init__()
         self.num_channels = num_channels
-        # self.lstm_hidden_size = lstm_hidden_size
 
         self.conv = nn.Conv2d(num_channels, num_channels - 1, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn = nn.BatchNorm2d(num_channels - 1, momentum=momentum)
@@ -201,35 +198,10 @@ class DynamicsNetwork(nn.Module):
             ]
         )
 
-        # self.reward_resblocks = nn.ModuleList(
-        #     [
-        #         ResBlock(
-        #             in_channels=num_channels - 1,
-        #             activation=torch.nn.ReLU(inplace=True),
-        #             norm_type='BN',
-        #             res_type='basic',
-        #             bias=False
-        #         ) for _ in range(num_blocks)
-        #     ]
-        # )
-
         self.conv1x1_reward = nn.Conv2d(num_channels - 1, reduced_channels_reward, 1)
         self.bn_reward = nn.BatchNorm2d(reduced_channels_reward, momentum=momentum)
         self.block_output_size_reward = block_output_size_reward
-        # self.lstm = nn.LSTM(input_size=self.block_output_size_reward, hidden_size=self.lstm_hidden_size)
-        # self.bn_reward = nn.BatchNorm1d(self.lstm_hidden_size, momentum=momentum)
         # TODO(pu)
-        # self.fc = MLP(
-        #     in_channels=self.lstm_hidden_size,
-        #     hidden_channels=fc_reward_layers[0],
-        #     out_channels=full_support_size,
-        #     layer_num=len(fc_reward_layers) + 1,
-        #     activation=nn.ReLU(inplace=True),
-        #     norm_type='BN',
-        #     output_activation=nn.Identity(),
-        #     output_norm_type=None,
-        #     last_linear_layer_init_zero=last_linear_layer_init_zero
-        # )
         self.fc = MLP(
             self.block_output_size_reward,
             hidden_channels=fc_reward_layers[0],
@@ -239,16 +211,17 @@ class DynamicsNetwork(nn.Module):
             norm_type='BN',
             output_activation=nn.Identity(),
             output_norm_type=None,
-        #     last_linear_layer_init_zero=last_linear_layer_init_zero
+            last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.activation = nn.ReLU(inplace=True)
 
-    def forward(self, x, reward_hidden_state):
-        # state = x[:, :-1, :, :]
+    def forward(self, x):
+        # take the state encoding,  x[:, -1, :, :] is action encoding
+        state = x[:, :-1, :, :]
         x = self.conv(x)
         x = self.bn(x)
 
-        # x += state
+        x += state
         x = self.activation(x)
 
         for block in self.resblocks:
@@ -256,23 +229,13 @@ class DynamicsNetwork(nn.Module):
         state = x
 
         x = self.conv1x1_reward(x)
-        # x = self.bn_reward(x)
-        # x = self.activation(x)
+        x = self.bn_reward(x)
+        x = self.activation(x)
 
         x = x.view(-1, self.block_output_size_reward)
         reward = self.fc(x)
 
-        # # RuntimeError: view size is not compatible with input tensor size and stride (at least one dimension spans
-        # # across two contiguous subspaces)
-        # x = x.contiguous().view(-1, self.block_output_size_reward).unsqueeze(0)
-        # reward, reward_hidden_state = self.lstm(x, reward_hidden_state)
-        # reward = reward.squeeze(0)
-        # reward = self.bn_reward(reward)
-        # reward = self.activation(reward)
-        # reward = self.fc(reward)
-
-        # return state, reward_hidden_state, reward
-        return state, reward_hidden_state, reward
+        return state, reward
 
     def get_dynamic_mean(self):
         dynamic_mean = np.abs(self.conv.weight.detach().cpu().numpy().reshape(-1)).tolist()
@@ -431,7 +394,6 @@ class MuZeroNet(BaseNet):
             downsample,
             representation_model_type: str = 'conv_res_blocks',
             representation_model: nn.Module = None,
-            lstm_hidden_size=512,
             bn_mt=0.1,
             proj_hid=256,
             proj_out=256,
@@ -459,7 +421,6 @@ class MuZeroNet(BaseNet):
             - reward_support_size (:obj:`int`): dim of reward output
             - value_support_size (:obj:`int`): dim of value output
             - downsample (:obj:`bool`): True -> do downsampling for observations. (For board games, do not need)
-            - lstm_hidden_size (:obj:`int`):  dim of lstm hidden
             - bn_mt (:obj:`float`):  Momentum of BN
             - proj_hid (:obj:`int`): dim of projection hidden layer
             - proj_out (:obj:`int`): dim of projection output layer
@@ -469,7 +430,7 @@ class MuZeroNet(BaseNet):
             - state_norm (:obj:`bool`):  True -> normalization for hidden states
             - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/reward
         """
-        super(MuZeroNet, self).__init__(lstm_hidden_size)
+        super(MuZeroNet, self).__init__()
         self.categorical_distribution = categorical_distribution
         if not self.categorical_distribution:
             self.reward_support_size = 1
@@ -529,7 +490,6 @@ class MuZeroNet(BaseNet):
                 fc_reward_layers,
                 self.reward_support_size,
                 block_output_size_reward,
-                lstm_hidden_size=lstm_hidden_size,
                 momentum=bn_mt,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             )
@@ -556,7 +516,6 @@ class MuZeroNet(BaseNet):
                 fc_reward_layers,
                 self.reward_support_size,
                 block_output_size_reward,
-                lstm_hidden_size=lstm_hidden_size,
                 momentum=bn_mt,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             )
@@ -576,31 +535,6 @@ class MuZeroNet(BaseNet):
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             )
 
-        # projection
-        if self.representation_model_type == 'identity':
-            self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
-        else:
-            if self.downsample:
-                # for atari, due to downsample
-                # observation_shape=(12, 96, 96),  # stack=4
-                # 3 * 96/16 * 96/16 = 3*6*6 = 108
-                self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
-                                                                 ) * math.ceil(observation_shape[2] / 16)
-            else:
-                self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
-
-        self.projection = nn.Sequential(
-            nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), nn.ReLU(inplace=True),
-            nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), nn.ReLU(inplace=True),
-            nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
-        )
-        self.projection_head = nn.Sequential(
-            nn.Linear(self.proj_out, self.pred_hid),
-            nn.BatchNorm1d(self.pred_hid),
-            nn.ReLU(inplace=True),
-            nn.Linear(self.pred_hid, self.pred_out),
-        )
-
     def prediction(self, encoded_state):
         policy, value = self.prediction_network(encoded_state)
         return policy, value
@@ -613,7 +547,7 @@ class MuZeroNet(BaseNet):
             encoded_state_normalized = renormalize(encoded_state)
             return encoded_state_normalized
 
-    def dynamics(self, encoded_state, reward_hidden_state, action):
+    def dynamics(self, encoded_state, action):
         # Stack encoded_state with a game specific one hot encoded action
         action_one_hot = (
             torch.ones((
@@ -626,12 +560,12 @@ class MuZeroNet(BaseNet):
         action_one_hot = (action[:, :, None, None] * action_one_hot / self.action_space_size)
 
         x = torch.cat((encoded_state, action_one_hot), dim=1)
-        next_encoded_state, reward_hidden_state, reward = self.dynamics_network(x, reward_hidden_state)
+        next_encoded_state, reward = self.dynamics_network(x)
         if not self.state_norm:
-            return next_encoded_state, reward_hidden_state, reward
+            return next_encoded_state, reward
         else:
             next_encoded_state_normalized = renormalize(next_encoded_state)
-            return next_encoded_state_normalized, reward_hidden_state, reward
+            return next_encoded_state_normalized,reward
 
     def get_params_mean(self):
         representation_mean = self.representation_network.get_param_mean()
@@ -640,28 +574,3 @@ class MuZeroNet(BaseNet):
 
         return reward_w_dist, representation_mean, dynamic_mean, reward_mean
 
-    def project(self, hidden_state, with_grad=True):
-        # only the branch of proj + pred can share the gradients
-
-        # for lunarlander:
-        # observation_shape = (4, 8, 1),  # stack=4
-        # self.projection_input_dim = 64*8*1
-        # hidden_state.shape: (batch_size, num_channel, obs_shape[1], obs_shape[2])  256,64,8,1
-        # 256,64,8,1 -> 256,64*8*1
-
-        # for atari:
-        # observation_shape = (12, 96, 96),  # 3,96,96 stack=4
-        # self.projection_input_dim = 3*6*6 = 108
-        # hidden_state.shape: (batch_size, num_channel, obs_shape[1]/16, obs_shape[2]/16)  256,64,96/16,96/16 = 256,64,6,6
-        # 256, 64, 6, 6 -> 256,64*6*6
-
-        # hidden_state.shape[0] = batch_size
-        hidden_state = hidden_state.reshape(hidden_state.shape[0], -1)
-
-        proj = self.projection(hidden_state)
-
-        # with grad, use proj_head
-        if with_grad:
-            return self.projection_head(proj)
-        else:
-            return proj.detach()

@@ -1,9 +1,11 @@
 from .mcts_ptree_sampled_efficientzero import SampledEfficientZeroMCTSPtree
-from .mcts_ptree import MuZeroRNNMCTSPtree, MuZeroMCTSPtree, EfficientZeroMCTSPtree
+from .mcts_ptree import MuZeroMCTSPtree, EfficientZeroMCTSPtree
 from .mcts_ptree_visualize import EfficientZeroVisualizeMCTSPtree
 
-from .mcts_ctree import MuZeroRNNMCTSCtree, MuZeroMCTSCtree, EfficientZeroMCTSCtree
+from .mcts_ctree import MuZeroMCTSCtree, EfficientZeroMCTSCtree
 from .mcts_ctree_sampled_efficientzero import SampledEfficientZeroMCTSCtree
+from .mcts_ctree_visualize import MuZeroVisualizeMCTSCtree, EfficientZeroVisualizeMCTSCtree
+
 
 from .game import Game, GameHistory
 from .game_buffer import GameBuffer

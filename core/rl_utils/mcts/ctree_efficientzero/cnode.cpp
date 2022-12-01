@@ -243,6 +243,11 @@ namespace tree{
         return values;
     }
 
+      // visualize related code
+//     CNode* CRoots::get_root(int index){
+//        return &(this->roots[index]);
+//     }
+
     //*********************************************************
     //
     void update_tree_q(CNode* root, tools::CMinMaxStats &min_max_stats, float discount, int players){
@@ -482,5 +487,6 @@ namespace tree{
 
         }
     }
+
 
 }
