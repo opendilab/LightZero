@@ -1,15 +1,3 @@
-import sys
-
-sys.path.append('/mnt/lustre/yangzhenjie/code/LightZero/')
-# sys.path.append('/Users/puyuan/code/LightZero/')
-
-import torch
-
-if torch.cuda.is_available():
-    device = 'cuda'
-else:
-    device = 'cpu'
-
 from easydict import EasyDict
 
 board_size = 3  # fixed
@@ -38,7 +26,7 @@ tictactoe_alphazero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        model_path='/mnt/lustre/yangzhenjie/code/LightZero/zoo/board_games/tictactoe/experiment/tictactoe_bs256_base323216_up100/data_ez_ptree/tictactoe_2pm_alphazero/ckpt/iteration_19300.pth.tar',
+        model_path='',
         type='alphazero',
         env_name='tictactoe',
         cuda=True,
