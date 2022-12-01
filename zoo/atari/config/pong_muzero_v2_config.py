@@ -1,4 +1,5 @@
 import sys
+
 # sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
 sys.path.append('/mnt/nfs/puyuan/LightZero')
@@ -8,43 +9,43 @@ sys.path.append('/mnt/nfs/puyuan/LightZero')
 import torch
 from easydict import EasyDict
 
-from core.model import RepresentationNetwork
-
 if torch.cuda.is_available():
     device = 'cuda'
 else:
     device = 'cpu'
-representation_model = RepresentationNetwork(
-    observation_shape=(12, 96, 96),
-    num_blocks=1,
-    num_channels=64,
-    downsample=True,
-    momentum=0.1,
-)
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-num_simulations = 50
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# num_simulations = 50
+# update_per_collect = 1000
+# batch_size = 256
+# collect_max_episode_steps = int(1.08e4)
+# eval_max_episode_steps = int(1.08e5)
 
 # debug
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 4
+update_per_collect = 10
+batch_size = 16
+collect_max_episode_steps = 20
+eval_max_episode_steps = 20
 
+"""
+NOTE: the only difference between muzero and muzero_v2 is the consistency loss in policy and model.
+"""
 atari_efficientzero_config = dict(
-    exp_name='data_mz_ctree/pong_muzero_rnn_cc2_seed0_sub883',
+    exp_name='data_mz_ctree/pong_muzero_v2_cc2_seed0_sub883',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         env_name='PongNoFrameskip-v4',
         stop_value=int(20),
-        collect_max_episode_steps=int(1.08e4),
-        eval_max_episode_steps=int(1.08e5),
-        # for debug
-        # collect_max_episode_steps=int(100),
-        # eval_max_episode_steps=int(100),
+        collect_max_episode_steps=collect_max_episode_steps,
+        eval_max_episode_steps=eval_max_episode_steps,
         frame_skip=4,
         obs_shape=(12, 96, 96),
         episode_life=True,
@@ -65,17 +66,14 @@ atari_efficientzero_config = dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',
-            # representation_model=representation_model,
             observation_shape=(12, 96, 96),  # 3,96,96 stack=4
             action_space_size=6,  # for pong
             downsample=True,
             num_blocks=1,
             # default config in EZ original repo
             num_channels=64,
-            lstm_hidden_size=512,
             # The env step is twice as large as the original size model when converging
             # num_channels=32,
-            # lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -94,12 +92,9 @@ atari_efficientzero_config = dict(
         ),
         # learn_mode config
         learn=dict(
-            # for debug
-            # update_per_collect=2,
-            # batch_size=4,
 
-            update_per_collect=1000,
-            batch_size=256,
+            update_per_collect=update_per_collect,
+            batch_size=batch_size,
 
             learning_rate=0.2,  # set lr manually: 0.2->0.02->0.002
             # Frequency of target network update.
@@ -119,7 +114,7 @@ atari_efficientzero_config = dict(
         # command_mode config
         other=dict(
             # NOTE: the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game_buffer_muzero_rnn')
+            replay_buffer=dict(type='game_buffer_muzero')
         ),
         ######################################
         # game_config begin
@@ -150,31 +145,17 @@ atari_efficientzero_config = dict(
         # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
         augmentation=['shift', 'intensity'],
 
-        # for debug
-        # collector_env_num=1,
-        # evaluator_env_num=1,
-        # num_simulations=2,
-        # batch_size=4,
-        # game_history_length=10,
-        # total_transitions=int(1e2),
-        # lstm_hidden_size=32,
-        # td_steps=5,
-        # num_unroll_steps=5,
-        # lstm_horizon_len=5,
-
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         # TODO(pu): how to set proper num_simulations automatically?
         num_simulations=num_simulations,
-        batch_size=256,
+        batch_size=batch_size,
         game_history_length=400,
         total_transitions=int(1e5),
         # default config in EZ original repo
         channels=64,
-        lstm_hidden_size=512,
         # The env step is twice as large as the original size model when converging
         # channels=32,
-        # lstm_hidden_size=256,
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
@@ -278,8 +259,8 @@ atari_efficientzero_create_config = dict(
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_rnn',
-        import_names=['core.policy.muzero_rnn'],
+        type='muzero_v2',
+        import_names=['core.policy.muzero_v2'],
     ),
     collector=dict(
         type='episode_muzero',
@@ -292,4 +273,5 @@ create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_muzero
+
     serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(5e5))

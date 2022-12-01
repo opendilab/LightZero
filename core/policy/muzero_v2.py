@@ -15,24 +15,24 @@ from torch.nn import L1Loss
 
 # python mcts
 import core.rl_utils.mcts.ptree_muzero as ptree
-from core.rl_utils import MuZeroRNNMCTSPtree as MCTSPtree
+from core.rl_utils import MuZeroMCTSPtree as MCTSPtree
 from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
 from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
 # cpp mcts
 from core.rl_utils.mcts.ctree_muzero import cytree as ctree
-from core.rl_utils import MuZeroRNNMCTSCtree as MCTSCtree
+from core.rl_utils import MuZeroMCTSCtree as MCTSCtree
 
 
-@POLICY_REGISTRY.register('muzero_rnn')
-class MuZeroRNNPolicy(Policy):
+@POLICY_REGISTRY.register('muzero_v2')
+class MuZeroV2Policy(Policy):
     """
     Overview:
         The policy class for EfficientZero
     """
     config = dict(
-        type='muzero_rnn',
+        type='muzero_v2',
         # (bool) Whether use cuda in policy
         cuda=False,
         # (bool) Whether learning policy is the same as collecting data policy(on-policy)
@@ -59,7 +59,6 @@ class MuZeroRNNPolicy(Policy):
             reward_support_size=601,
             value_support_size=601,
             downsample=True,
-            lstm_hidden_size=512,
             bn_mt=0.1,
             proj_hid=1024,
             proj_out=1024,
@@ -122,7 +121,7 @@ class MuZeroRNNPolicy(Policy):
             The user can define and use customized network model but must obey the same inferface definition indicated \
             by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
         """
-        return 'MuZeroNet', ['core.model.muzero_rnn.muzero_model']
+        return 'MuZeroNetV2', ['core.model.muzero_v2.muzero_model']
 
     def _init_learn(self) -> None:
         if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
@@ -256,11 +255,9 @@ class MuZeroRNNPolicy(Policy):
         value = network_output.value
         reward = network_output.reward
         hidden_state = network_output.hidden_state  # （2, 64, 6, 6）
-        reward_hidden_state = network_output.reward_hidden_state  # {tuple:2} (1,2,512)
         policy_logits = network_output.policy_logits  # {list: 2} {list:6}
 
-        reward_hidden_state = to_device(reward_hidden_state, self._cfg.device)
-        
+
         # transform categorical representation to original_value
         original_value = inverse_scalar_transform(value, self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution)
 
@@ -269,9 +266,7 @@ class MuZeroRNNPolicy(Policy):
             # if not in training, obtain the scalars of the value/reward
             original_value = original_value.detach().cpu().numpy()
             hidden_state = hidden_state.detach().cpu().numpy()
-            reward_hidden_state = (
-                reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
-            )
+
             policy_logits = policy_logits.detach().cpu().numpy()
 
         if self._cfg.vis_result:
@@ -305,13 +300,12 @@ class MuZeroRNNPolicy(Policy):
         for step_i in range(self._cfg.num_unroll_steps):
             # unroll with the dynamics function
             network_output = self._learn_model.recurrent_inference(
-                hidden_state, reward_hidden_state, action_batch[:, step_i]
+                hidden_state, action_batch[:, step_i]
             )
             value = network_output.value
             reward = network_output.reward
             policy_logits = network_output.policy_logits  # {list: 2} {list:6}
             hidden_state = network_output.hidden_state  # （2, 64, 6, 6）
-            reward_hidden_state = network_output.reward_hidden_state  # {tuple:2} (1,2,512)
 
             # first transform categorical representation to scalar, then transform to original_value
             original_value = inverse_scalar_transform(value, self._cfg.support_size,
@@ -325,9 +319,7 @@ class MuZeroRNNPolicy(Policy):
                 original_value = original_value.detach().cpu().numpy()
                 original_reward = original_reward.detach().cpu().numpy()
                 hidden_state = hidden_state.detach().cpu().numpy()
-                reward_hidden_state = (
-                    reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
-                )
+
                 policy_logits = policy_logits.detach().cpu().numpy()
 
             beg_index = self._cfg.image_channel * step_i
@@ -371,14 +363,7 @@ class MuZeroRNNPolicy(Policy):
             # Follow MuZero, set half gradient
             # hidden_state.register_hook(lambda grad: grad * 0.5)
 
-            # reset hidden states
-            if (step_i + 1) % self._cfg.lstm_horizon_len == 0:
-                reward_hidden_state = (
-                    torch.zeros(1, self._cfg.batch_size,
-                                self._cfg.lstm_hidden_size).to(self._cfg.device),
-                    torch.zeros(1, self._cfg.batch_size,
-                                self._cfg.lstm_hidden_size).to(self._cfg.device)
-                )
+
 
             if self._cfg.vis_result:
                 original_rewards = inverse_scalar_transform(reward.detach(), self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution)
@@ -585,7 +570,6 @@ class MuZeroRNNPolicy(Policy):
             pred_values_pool = network_output.value  # {list: 2}
             policy_logits_pool = network_output.policy_logits  # {list: 2} {list:6}
             reward_pool = network_output.reward  # {list: 2}
-            reward_hidden_roots = network_output.reward_hidden_state  # {tuple:2} (1,2,512)
 
             # TODO(pu)
             if not self._learn_model.training:
@@ -593,9 +577,6 @@ class MuZeroRNNPolicy(Policy):
                 pred_values_pool = inverse_scalar_transform(pred_values_pool,
                                                             self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution).detach().cpu().numpy()
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
-                reward_hidden_roots = (
-                    reward_hidden_roots[0].detach().cpu().numpy(), reward_hidden_roots[1].detach().cpu().numpy()
-                )
                 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
             # TODO(pu): for board games, when action_num is a list, adapt the Roots method
@@ -620,7 +601,7 @@ class MuZeroRNNPolicy(Policy):
                 roots.prepare(self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool,
                               to_play)
                 # do MCTS for a policy (argmax in testing)
-                self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
+                self._mcts_collect.search(roots, self._collect_model, hidden_state_roots,  to_play)
 
             else:
                 # python mcts
@@ -637,7 +618,7 @@ class MuZeroRNNPolicy(Policy):
                     self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play
                 )
                 # do MCTS for a policy (argmax in testing)
-                self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
+                self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, to_play)
 
             roots_distributions = roots.get_distributions()  # {list: 1}->{list:6}
             roots_values = roots.get_values()  # {list: 1}
@@ -706,7 +687,6 @@ class MuZeroRNNPolicy(Policy):
             network_output = self._eval_model.initial_inference(stack_obs)
             hidden_state_roots = network_output.hidden_state  # for atari, shape（B, 64, 6, 6）
             pred_values_pool = network_output.value  # for atari, shape（B, 601）
-            reward_hidden_roots = network_output.reward_hidden_state  # {tuple:2} each element (1,2,512)
             reward_pool = network_output.reward  # shape（B, 1）
             policy_logits_pool = network_output.policy_logits  # shape（B, A）
 
@@ -716,9 +696,7 @@ class MuZeroRNNPolicy(Policy):
                 pred_values_pool = inverse_scalar_transform(pred_values_pool, self._cfg.support_size, categorical_distribution= self._cfg.categorical_distribution
                                                             ).detach().cpu().numpy()  # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
-                reward_hidden_roots = (
-                    reward_hidden_roots[0].detach().cpu().numpy(), reward_hidden_roots[1].detach().cpu().numpy()
-                )
+
                 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()  # list shape（B, A）
 
             if self._cfg.mcts_ctree:
@@ -733,7 +711,7 @@ class MuZeroRNNPolicy(Policy):
                 roots = ctree.Roots(active_eval_env_num, self._cfg.num_simulations, legal_actions)
                 roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
-                self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
+                self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, to_play)
             else:
                 # python mcts
                 legal_actions = [
@@ -743,7 +721,7 @@ class MuZeroRNNPolicy(Policy):
 
                 roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
-                self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
+                self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, to_play)
 
             # root visit count
             roots_distributions = roots.get_distributions()  # {list: 1} each element {list:6}

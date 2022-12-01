@@ -44,7 +44,7 @@ update_per_collect = 100
 # evaluator_env_num = 1
 
 tictactoe_muzero_config = dict(
-    exp_name=f'data_mz_ctree/tictactoe_2pm_muzero_seed0_sub885_ghl9_ftv1_cc0_fs2_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
+    exp_name=f'data_mz_ctree/tictactoe_2pm_muzero_seed0_sub885_ghl9_ftv1_rc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -74,13 +74,12 @@ tictactoe_muzero_config = dict(
             # [S, W, H, C] -> [S x C, W, H]
             # [4, 3, 3, 3] -> [12, 3, 3]
             # observation_shape=(12, 3, 3),  # if frame_stack_num=4
-            observation_shape=(6, 3, 3),  # if frame_stack_num=2
-            # observation_shape=(3, 3, 3),  # if frame_stack_num=1
+            # observation_shape=(6, 3, 3),  # if frame_stack_num=2
+            observation_shape=(3, 3, 3),  # if frame_stack_num=1
             action_space_size=9,
             downsample=False,
             num_blocks=1,
             num_channels=16,   # TODO
-            lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -154,10 +153,10 @@ tictactoe_muzero_config = dict(
         # [4, 3, 3, 3] -> [12, 3, 3]
         # obs_shape=(12, 3, 3),  # if frame_stack_num=4
         # frame_stack_num=4,
-        obs_shape=(6, 3, 3),  # if frame_stack_num=4
-        frame_stack_num=2,
-        # obs_shape=(3, 3, 3),  # if frame_stack_num=4
-        # frame_stack_num=1,
+        # obs_shape=(6, 3, 3),  # if frame_stack_num=4
+        # frame_stack_num=2,
+        obs_shape=(3, 3, 3),  # if frame_stack_num=4
+        frame_stack_num=1,
         image_channel=3,
         gray_scale=False,
         downsample=False,
@@ -169,29 +168,15 @@ tictactoe_muzero_config = dict(
         # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
         augmentation=['shift', 'intensity'],
 
-        # debug
-        # collector_env_num=2,
-        # evaluator_env_num=2,
-        # num_simulations=9,
-        # batch_size=4,
-        # total_transitions=int(3e3),
-        # lstm_hidden_size=32,
-        # # # to make sure the value target is the final outcome
-        # td_steps=9,
-        # num_unroll_steps=3,
-        # lstm_horizon_len=3,
-
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         num_simulations=num_simulations,
         batch_size=batch_size,
         # total_transitions=int(3e3),
         total_transitions=int(1e5),
-        lstm_hidden_size=256,
         # to make sure the value target is the final outcome
         td_steps=9,
         num_unroll_steps=3,
-        lstm_horizon_len=3,
 
         # TODO(pu): why 0.99?
         reanalyze_ratio=0.99,
@@ -259,10 +244,8 @@ tictactoe_muzero_config = dict(
         # TODO(pu): EfficientZero -> MuZero
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
-        reward_loss_coeff=1,
-        consistency_coeff=0,
-        # consistency_coeff=2,
-
+        # reward_loss_coeff=1,
+        reward_loss_coeff=0,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
 

@@ -48,8 +48,8 @@ update_per_collect = 40
 # n_episode = 1
 # evaluator_env_num = 1
 
-tictactoe_muzero_rnn_config = dict(
-    exp_name=f'data_mz_ctree/tictactoe_1pm_muzero_rnn_seed0_sub885_ghl5_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
+tictactoe_muzero_config = dict(
+    exp_name=f'data_mz_ctree/tictactoe_1pm_muzero_seed0_sub885_ghl5_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -85,7 +85,6 @@ tictactoe_muzero_rnn_config = dict(
             downsample=False,
             num_blocks=1,
             num_channels=16,   # TODO
-            lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -136,7 +135,7 @@ tictactoe_muzero_rnn_config = dict(
         # command_mode config
         other=dict(
             # the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game_buffer_muzero_rnn')
+            replay_buffer=dict(type='game_buffer_muzero')
         ),
         ######################################
         # game_config begin
@@ -174,29 +173,15 @@ tictactoe_muzero_rnn_config = dict(
         # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
         augmentation=['shift', 'intensity'],
 
-        # debug
-        # collector_env_num=2,
-        # evaluator_env_num=2,
-        # num_simulations=9,
-        # batch_size=4,
-        # total_transitions=int(3e3),
-        # lstm_hidden_size=32,
-        # # # to make sure the value target is the final outcome
-        # td_steps=9,
-        # num_unroll_steps=3,
-        # lstm_horizon_len=3,
-
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         num_simulations=num_simulations,
         batch_size=batch_size,
         # total_transitions=int(3e3),
         total_transitions=int(1e5),
-        lstm_hidden_size=256,
         # to make sure the value target is the final outcome
         td_steps=9,
         num_unroll_steps=3,
-        lstm_horizon_len=3,
 
         # TODO(pu): why 0.99?
         reanalyze_ratio=0.99,
@@ -291,10 +276,10 @@ tictactoe_muzero_rnn_config = dict(
         ######################################
     ),
 )
-tictactoe_muzero_rnn_config = EasyDict(tictactoe_muzero_rnn_config)
-main_config = tictactoe_muzero_rnn_config
+tictactoe_muzero_config = EasyDict(tictactoe_muzero_config)
+main_config = tictactoe_muzero_config
 
-tictactoe_muzero_rnn_create_config = dict(
+tictactoe_muzero_create_config = dict(
     env=dict(
         type='tictactoe',
         import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
@@ -302,8 +287,8 @@ tictactoe_muzero_rnn_create_config = dict(
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_rnn',
-        import_names=['core.policy.muzero_rnn'],
+        type='muzero_v2',
+        import_names=['core.policy.muzero_v2'],
     ),
     collector=dict(
         type='episode_muzero',
@@ -311,8 +296,8 @@ tictactoe_muzero_rnn_create_config = dict(
         import_names=['core.worker.collector.muzero_collector'],
     )
 )
-tictactoe_muzero_rnn_create_config = EasyDict(tictactoe_muzero_rnn_create_config)
-create_config = tictactoe_muzero_rnn_create_config
+tictactoe_muzero_create_config = EasyDict(tictactoe_muzero_create_config)
+create_config = tictactoe_muzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_muzero_eval

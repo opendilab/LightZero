@@ -10,8 +10,8 @@ os.environ['DISABLE_MUJOCO_RENDERING'] = '1'
 import sys
 
 # sys.path.append('/Users/puyuan/code/LightZero')
-sys.path.append('/home/puyuan/LightZero')
-# sys.path.append('/mnt/nfs/puyuan/LightZero')
+# sys.path.append('/home/puyuan/LightZero')
+sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 import torch
@@ -27,10 +27,10 @@ n_episode = 8
 evaluator_env_num = 3
 batch_size = 256
 # action_space_size=1
-K = 5
-num_simulations = 25
-# K = 20
-# num_simulations = 50
+# K = 5
+# num_simulations = 25
+K = 20
+num_simulations = 50
 update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
 
 # for debug
@@ -59,8 +59,8 @@ observation_dim = 3
 action_dim = 1
 
 pendulum_sampled_efficientzero_config = dict(
-    # exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_tanh-fs03',
-    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn05_tanh_cond-sigma-ew5e-3',
+    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn05_tanh_fs03-ew5e-3',
+    # exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn05_tanh_cond-sigma-ew5e-3',
 
     env=dict(
         collector_env_num=collector_env_num,
@@ -82,8 +82,8 @@ pendulum_sampled_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            # sigma_type='fixed',  # option list: ['fixed', 'conditioned']
-            sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
+            sigma_type='fixed',  # option list: ['fixed', 'conditioned']
+            # sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
             fixed_sigma_value=0.3,
             bound_type=None,  # if bound_type='tanh', the policy mu is bouded in [-1,1]
             # norm_type='LN',

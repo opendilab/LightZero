@@ -136,7 +136,8 @@ class SampledEfficientZeroPolicy(Policy):
                 # clip_value=self._cfg.learn.grad_clip_value,
             )
         elif self._cfg.learn.optim_type == 'Adam':
-            self._optimizer = optim.Adam(self._model.parameters(), lr=self._cfg.learn.learning_rate, weight_decay=self._cfg.learn.weight_decay)
+            self._optimizer = optim.Adam(self._model.parameters(), lr=self._cfg.learn.learning_rate,
+                                         weight_decay=self._cfg.learn.weight_decay)
 
         if self._cfg.learn.cos_lr_scheduler is True:
             from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -342,7 +343,7 @@ class SampledEfficientZeroPolicy(Policy):
             # way 1:
             # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
 
-            # way 2:
+            # way 2: SAC-like
             y = 1 - target_sampled_actions[:, k, :].pow(2) + 1e-9
             target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions[:, k, :])
             # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
@@ -358,7 +359,7 @@ class SampledEfficientZeroPolicy(Policy):
             # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
             # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
             policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
-                        target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+                    target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
         elif self._cfg.learn.policy_loss_type == 'cross_entropy':
             # cross_entropy loss: - sum(p * log (q) )
             policy_loss = - torch.mean(
@@ -467,7 +468,6 @@ class SampledEfficientZeroPolicy(Policy):
                 # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
                 log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
 
-
                 log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
                 log_prob = log_prob.squeeze(-1)
 
@@ -554,7 +554,7 @@ class SampledEfficientZeroPolicy(Policy):
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
                 self._cfg.consistency_coeff * consistency_loss + self._cfg.policy_loss_coeff * policy_loss +
-                self._cfg.value_loss_coeff * value_loss + self._cfg.reward_loss_coeff * value_prefix_loss +  self._cfg.policy_entropy_loss_coeff * policy_entropy_loss
+                self._cfg.value_loss_coeff * value_loss + self._cfg.reward_loss_coeff * value_prefix_loss + self._cfg.policy_entropy_loss_coeff * policy_entropy_loss
         )
         weighted_loss = (weights * loss).mean()
 
@@ -672,7 +672,7 @@ class SampledEfficientZeroPolicy(Policy):
                 ######################
                 # sampled related code
                 ######################
-                'policy_entropy':  policy_entropy.item(),
+                'policy_entropy': policy_entropy.item(),
                 'policy_mu_max': mu[:, 0].max().item(),
                 'policy_mu_min': mu[:, 0].min().item(),
                 'policy_mu_mean': mu[:, 0].mean().item(),
@@ -680,9 +680,9 @@ class SampledEfficientZeroPolicy(Policy):
                 'policy_sigma_min': sigma.min().item(),
                 'policy_sigma_mean': sigma.mean().item(),
                 # take the fist dim in action space
-                'target_sampled_actions_max':  target_sampled_actions[:,:,0].max().item(),
-                'target_sampled_actions_min': target_sampled_actions[:,:,0].min().item(),
-                'target_sampled_actions_mean': target_sampled_actions[:,:,0].mean().item(),
+                'target_sampled_actions_max': target_sampled_actions[:, :, 0].max().item(),
+                'target_sampled_actions_min': target_sampled_actions[:, :, 0].min().item(),
+                'target_sampled_actions_mean': target_sampled_actions[:, :, 0].mean().item(),
 
                 # 'target_policy':td_data[9],
                 # 'predicted_policies':td_data[10]
@@ -857,7 +857,7 @@ class SampledEfficientZeroPolicy(Policy):
                     # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                     child_actions = np.array([action for action in roots_sampled_actions[i]])
 
-                if child_actions.max()>1 or child_actions.min()<-1:
+                if child_actions.max() > 1 or child_actions.min() < -1:
                     print('here')
 
                 # select the argmax, not sampling

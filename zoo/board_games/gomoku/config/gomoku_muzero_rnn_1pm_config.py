@@ -45,8 +45,8 @@ num_simulations = 50
 # evaluator_env_num = 2
 
 
-gomoku_muzero_rnn_config = dict(
-    exp_name=f'data_ez_ctree/gomoku_bs6_1pm_ghl18_muzero_rnn_seed0_sub883_halfmodel_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
+gomoku_muzero_v2_config = dict(
+    exp_name=f'data_ez_ctree/gomoku_bs6_1pm_ghl18_muzero_v2_seed0_sub883_halfmodel_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -140,7 +140,7 @@ gomoku_muzero_rnn_config = dict(
         # command_mode config
         other=dict(
             # the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game_buffer_muzero_rnn')
+            replay_buffer=dict(type='game_buffer_muzero_v2')
         ),
         ######################################
         # game_config begin
@@ -302,10 +302,10 @@ gomoku_muzero_rnn_config = dict(
         ######################################
     ),
 )
-gomoku_muzero_rnn_config = EasyDict(gomoku_muzero_rnn_config)
-main_config = gomoku_muzero_rnn_config
+gomoku_muzero_v2_config = EasyDict(gomoku_muzero_v2_config)
+main_config = gomoku_muzero_v2_config
 
-gomoku_muzero_rnn_create_config = dict(
+gomoku_muzero_v2_create_config = dict(
     env=dict(
         type='gomoku',
         import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
@@ -313,8 +313,8 @@ gomoku_muzero_rnn_create_config = dict(
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_rnn',
-        import_names=['core.policy.muzero_rnn'],
+        type='muzero_v2',
+        import_names=['core.policy.muzero_v2'],
     ),
     collector=dict(
         type='episode_muzero',
@@ -322,8 +322,8 @@ gomoku_muzero_rnn_create_config = dict(
         import_names=['core.worker.collector.muzero_collector'],
     )
 )
-gomoku_muzero_rnn_create_config = EasyDict(gomoku_muzero_rnn_create_config)
-create_config = gomoku_muzero_rnn_create_config
+gomoku_muzero_v2_create_config = EasyDict(gomoku_muzero_v2_create_config)
+create_config = gomoku_muzero_v2_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_muzero
