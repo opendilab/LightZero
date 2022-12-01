@@ -67,8 +67,6 @@ def serial_pipeline_alphazero_eval(
 
     # load pretrained model
     if cfg.policy.model_path is not None:
-        policy.learn_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
-        policy.collect_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
         policy.eval_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.

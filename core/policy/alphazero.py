@@ -239,7 +239,7 @@ class AlphaZeroPolicy(Policy):
         Returns:
             - output (:obj:`dict`): Dict type data, including at least inferred action according to input obs.
         """
-        ready_env_id = list(envs.keys())
+        ready_env_id = list(obs.keys())
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
         output = {}
@@ -271,7 +271,7 @@ class AlphaZeroPolicy(Policy):
         current_state = current_state.reshape(-1, 3, self._cfg.board_size, self._cfg.board_size)
         with torch.no_grad():
             action_probs, value = self._collect_model.compute_prob_value(current_state)
-        action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().numpy()))
+        action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
         value = value.item()
         return action_probs_dict, value
     
@@ -289,7 +289,7 @@ class AlphaZeroPolicy(Policy):
         current_state = current_state.reshape(-1, 3, self._cfg.board_size, self._cfg.board_size)
         with torch.no_grad():
             action_probs, value = self._eval_model.compute_prob_value(current_state)
-        action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().numpy()))
+        action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
         value = value.item()
         return action_probs_dict, value
 

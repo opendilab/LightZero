@@ -23,6 +23,7 @@ class TicTacToeEnv(BaseGameEnv):
         prob_random_agent=0,
         prob_expert_agent=0,
         battle_mode='one_player_mode',
+        agent_vs_human=False,
     )
 
     @classmethod
@@ -41,6 +42,7 @@ class TicTacToeEnv(BaseGameEnv):
         assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
             f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
         self._env = self
+        self.agent_vs_human = cfg.agent_vs_human
 
     @property
     def current_player(self):
@@ -129,7 +131,10 @@ class TicTacToeEnv(BaseGameEnv):
                 return timestep_player1
 
             # player 2's turn
-            expert_action = self.expert_action()
+            if self.agent_vs_human:
+                expert_action = self.human_to_action()
+            else:
+                expert_action = self.expert_action()
             # print('player 2 (computer player): ' + self.action_to_string(expert_action))
             timestep_player2 = self._player_step(expert_action)
             # the final_eval_reward is calculated from Player 1's perspective
@@ -138,6 +143,7 @@ class TicTacToeEnv(BaseGameEnv):
 
             timestep = timestep_player2
             return timestep
+        
 
     def _player_step(self, action):
         if action in self.legal_actions:
@@ -299,6 +305,7 @@ class TicTacToeEnv(BaseGameEnv):
         Returns:
             An integer from the action space.
         """
+        print(self.board)
         while True:
             try:
                 row = int(

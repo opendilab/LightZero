@@ -173,13 +173,12 @@ class AlphazeroEvaluator(ISerialEvaluator):
         eval_monitor = VectorEvalMonitor(self._env.env_num, n_episode)
         self._env.reset()
         self._policy.reset()
-        env_nums = self._env.env_num
 
         with self._timer:
             while not eval_monitor.is_finished():
                 obs = self._env.ready_obs
                 simulation_envs = {}
-                for env_id in range(env_nums):
+                for env_id in list(obs.keys()):
                     simulation_envs[env_id] = ENV_REGISTRY.build(self._cfg.env.type, self._env_config)
                 policy_output = self._policy.forward(simulation_envs, obs)
                 actions = {env_id: output['action'] for env_id, output in policy_output.items()}

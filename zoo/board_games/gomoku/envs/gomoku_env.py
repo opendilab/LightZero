@@ -21,6 +21,7 @@ class GomokuEnv(BaseGameEnv):
         board_size=15,
         battle_mode='one_player_mode',
         channel_last=True,
+        agent_vs_human=False,
     )
 
     @classmethod
@@ -41,6 +42,7 @@ class GomokuEnv(BaseGameEnv):
         self.total_num_actions = self.board_size * self.board_size
         self.expert = GomokuExpert()
         self._env = self
+        self.agent_vs_human = cfg.agent_vs_human
 
     @property
     def current_player(self):
@@ -98,7 +100,10 @@ class GomokuEnv(BaseGameEnv):
                 return timestep_player1
 
             # player 2's turn
-            expert_action = self.expert_action()
+            if self.agent_vs_human:
+                expert_action = self.human_to_action()
+            else:
+                expert_action = self.expert_action()
             # print('player 2 (expert player): ' + self.action_to_string(expert_action))  # TODO(pu): visualize
             timestep_player2 = self._player_step(expert_action)
             # self.render()  # TODO(pu): visualize
@@ -254,6 +259,7 @@ class GomokuEnv(BaseGameEnv):
         Returns:
             An integer from the action space.
         """
+        print(self.board)
         while True:
             try:
                 row = int(
