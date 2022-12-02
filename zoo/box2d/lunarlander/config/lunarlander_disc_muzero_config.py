@@ -38,8 +38,8 @@ update_per_collect = 250
 # n_episode = 1
 # evaluator_env_num = 1
 
-lunarlander_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_ghl200_halfmodel_fs1_atv_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn10',
+lunarlander_disc_muzero_config = dict(
+    exp_name=f'data_ez_ctree/lunarlander_disc_muzero_seed0_sub885_ghl200_halfmodel_fs1_atv_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn10',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -58,8 +58,7 @@ lunarlander_disc_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            activation=torch.nn.ReLU(inplace=True),
-            # activation=torch.nn.LeakyReLU(inplace=True),
+            # activation=torch.nn.ReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=categorical_distribution,
 
@@ -76,10 +75,8 @@ lunarlander_disc_efficientzero_config = dict(
             downsample=False,
             num_blocks=1,
             # num_channels=64,
-            # lstm_hidden_size=512,
             # half size model
             num_channels=32,
-            lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -133,7 +130,7 @@ lunarlander_disc_efficientzero_config = dict(
         # command_mode config
         other=dict(
             # the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game_buffer_efficientzero')
+            replay_buffer=dict(type='game_buffer_muzero')
         ),
         ######################################
         # game_config begin
@@ -184,11 +181,9 @@ lunarlander_disc_efficientzero_config = dict(
         # num_simulations=9,
         # batch_size=4,
         # total_transitions=int(1e5),
-        # lstm_hidden_size=256,
         # # # to make sure the value target is the final outcome
         # td_steps=5,
         # num_unroll_steps=3,
-        # lstm_horizon_len=3,
 
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -196,13 +191,10 @@ lunarlander_disc_efficientzero_config = dict(
         num_simulations=num_simulations,
         batch_size=256,
         total_transitions=int(1e5),
-        # lstm_hidden_size=512,
-        # half size model
-        lstm_hidden_size=256,
+
 
         td_steps=5,
         num_unroll_steps=5,
-        lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
         reanalyze_ratio=0.99,
@@ -219,8 +211,8 @@ lunarlander_disc_efficientzero_config = dict(
         # TODO(pu): only used for adjust temperature manually
         # max_training_steps=int(1e5),
         max_training_steps=int(5e4),
-        # auto_temperature=False,
         auto_temperature=True,
+        # auto_temperature=False,
         # only effective when auto_temperature=False
         # fixed_temperature_value=0.25,
         fixed_temperature_value=1,
@@ -274,8 +266,6 @@ lunarlander_disc_efficientzero_config = dict(
         reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-        consistency_coeff=0,
-        # consistency_coeff=2,
 
         # siamese
         # proj_hid=1024,
@@ -300,10 +290,10 @@ lunarlander_disc_efficientzero_config = dict(
         ######################################
     ),
 )
-lunarlander_disc_efficientzero_config = EasyDict(lunarlander_disc_efficientzero_config)
-main_config = lunarlander_disc_efficientzero_config
+lunarlander_disc_muzero_config = EasyDict(lunarlander_disc_muzero_config)
+main_config = lunarlander_disc_muzero_config
 
-lunarlander_disc_efficientzero_create_config = dict(
+lunarlander_disc_muzero_create_config = dict(
     env=dict(
         type='lunarlander',
         import_names=['zoo.box2d.lunarlander.envs.lunarlander_env'],
@@ -311,19 +301,18 @@ lunarlander_disc_efficientzero_create_config = dict(
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='efficientzero',
-        import_names=['core.policy.efficientzero'],
+        type='muzero',
+        import_names=['core.policy.muzero'],
     ),
     collector=dict(
-        type='episode_efficientzero',
+        type='episode_muzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.efficientzero_collector'],
+        import_names=['core.worker.collector.muzero_collector'],
     )
 )
-lunarlander_disc_efficientzero_create_config = EasyDict(lunarlander_disc_efficientzero_create_config)
-create_config = lunarlander_disc_efficientzero_create_config
+lunarlander_disc_muzero_create_config = EasyDict(lunarlander_disc_muzero_create_config)
+create_config = lunarlander_disc_muzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero
-
-    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    from core.entry import serial_pipeline_muzero
+    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(1e6))

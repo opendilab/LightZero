@@ -1,11 +1,6 @@
-# import glfw
-# assert glfw.init()
-# import os
-# os.environ['MUJOCO_GL']="egl"
-
 import os
-
-os.environ['DISABLE_MUJOCO_RENDERING'] = '1'
+os.environ['MUJOCO_GL'] = "glfw"
+# os.environ['DISABLE_MUJOCO_RENDERING'] = '1'
 
 import sys
 
@@ -139,6 +134,8 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
         ),
         # learn_mode config
         learn=dict(
+            policy_loss_type='KL',
+            # policy_loss_type='cross_entropy',
             # for debug
             # update_per_collect=2,
             # batch_size=4,
@@ -311,6 +308,7 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
         reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
+        policy_entropy_loss_coeff=5e-3,
         # consistency_coeff=2,
         consistency_coeff=0,
 

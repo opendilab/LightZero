@@ -8,19 +8,12 @@ sys.path.append('/mnt/nfs/puyuan/LightZero')
 import torch
 from easydict import EasyDict
 
-from core.model import RepresentationNetwork
 
 if torch.cuda.is_available():
     device = 'cuda'
 else:
     device = 'cpu'
-representation_model = RepresentationNetwork(
-    observation_shape=(12, 96, 96),
-    num_blocks=1,
-    num_channels=64,
-    downsample=True,
-    momentum=0.1,
-)
+
 
 collector_env_num = 8
 n_episode = 8

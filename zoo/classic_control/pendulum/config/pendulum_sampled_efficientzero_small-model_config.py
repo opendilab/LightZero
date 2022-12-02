@@ -130,8 +130,8 @@ pendulum_sampled_efficientzero_config = dict(
         ),
         # learn_mode config
         learn=dict(
-            # policy_loss_type='KL',
-            policy_loss_type='cross_entropy',
+            policy_loss_type='KL',
+            # policy_loss_type='cross_entropy',
             # for debug
             # update_per_collect=2,
             # batch_size=4,

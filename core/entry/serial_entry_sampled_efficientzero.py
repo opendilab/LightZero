@@ -129,6 +129,8 @@ def serial_pipeline_sampled_efficientzero(
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
+        # import pdb; pdb.set_trace()
+
         # TODO(pu): collector return data
         replay_buffer.push_games(new_data[0], new_data[1])
 

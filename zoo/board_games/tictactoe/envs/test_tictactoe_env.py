@@ -62,5 +62,5 @@ class TestTicTacToeEnv:
                     print('draw')
                 break
 
-# test = TestTicTacToeEnv()
-# test.test_one_player_mode()
+test = TestTicTacToeEnv()
+test.test_one_player_mode()
