@@ -13,70 +13,56 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
+action_space_size = 9  # for mspacman
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 5
-categorical_distribution = True
-num_simulations = 50  # action_space_size=6
-# num_simulations = 33  # action_space_size=4
-
+evaluator_env_num = 3
+batch_size = 256
+num_simulations = 50
 # TODO(pu):
 # The key hyper-para to tune, for different env, we have different episode_length
 # e.g. reuse_factor = 0.5
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+update_per_collect = 1000
 
-# episode_length=200, 200*8=1600
-# dqn: n_sample 64 -> update_per_collect 10
-# mcts: 1600 -> 250
-
-# update_per_collect = 500
-update_per_collect = 250
-
-
-# for debug
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-
-lunarlander_disc_muzero_config = dict(
-    exp_name=f'data_mz_ctree/lunarlander_disc_muzero_seed0_sub885_ghl200_halfmodel_fs1_atv_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn10',
+mspacman_efficientzero_config = dict(
+    exp_name=f'data_mz_ctree/mspacman_muzero_seed0_sub883_upc{update_per_collect}',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        env_id='LunarLander-v2',
-        stop_value=300,
-        battle_mode='one_player_mode',
-        prob_random_agent=0.,
-        collect_max_episode_steps=int(1.08e4),
+        env_name='MsPacmanNoFrameskip-v4',
+        stop_value=int(1e6),
+        collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
+        frame_skip=4,
+        obs_shape=(12, 96, 96),
+        episode_life=True,
+        gray_scale=False,
+        # cvt_string=True,
+        # trade memory for speed
+        cvt_string=False,
+        game_wrapper=True,
+        dqn_expert_data=False,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
         model_path=None,
-        env_name='lunarlander_disc',
+        env_name='PongNoFrameskip-v4',
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            # activation=torch.nn.ReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=categorical_distribution,
-
-            # representation_model_type='identity',
+            categorical_distribution=True,
             representation_model_type='conv_res_blocks',
-
-            # [S, W, H, C] -> [S x C, W, H]
-            # [4,8,1,1] -> [4*1, 8, 1]
-            # observation_shape=(4, 8, 1),  # if frame_stack_nums=4
-            observation_shape=(1, 8, 1),  # if frame_stack_nums=1
-
-            action_space_size=4,
-
-            downsample=False,
+            observation_shape=(12, 96, 96),  # 3,96,96 stack=4
+            action_space_size=action_space_size,
+            downsample=True,
             num_blocks=1,
-            # num_channels=64,
-            # half size model
-            num_channels=32,
+            # default config in EZ original repo
+            num_channels=64,
+            # The env step is twice as large as the original size model when converging
+            # num_channels=32,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -86,33 +72,21 @@ lunarlander_disc_muzero_config = dict(
             reward_support_size=601,
             value_support_size=601,
             bn_mt=0.1,
-            # proj_hid=1024,
-            # proj_out=1024,
-            # pred_hid=512,
-            # pred_out=1024,
-            # half size model
-            proj_hid=512,
-            proj_out=512,
-            pred_hid=256,
-            pred_out=512,
+            proj_hid=1024,
+            proj_out=1024,
+            pred_hid=512,
+            pred_out=1024,
             last_linear_layer_init_zero=True,
             state_norm=False,
         ),
         # learn_mode config
         learn=dict(
-            # for debug
-            # update_per_collect=2,
-            # batch_size=4,
-
             update_per_collect=update_per_collect,
+            batch_size=batch_size,
+
+            learning_rate=0.2,  # set lr manually: 0.2->0.02->0.002
+            # Frequency of target network update.
             target_update_freq=100,
-            batch_size=256,
-
-            # optim_type='SGD',
-            # learning_rate=0.2,  # lr_manually
-
-            optim_type='Adam',
-            learning_rate=0.003,  # adam lr
         ),
         # collect_mode config
         collect=dict(
@@ -121,15 +95,12 @@ lunarlander_disc_muzero_config = dict(
             n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
-        # eval=dict(evaluator=dict(eval_freq=int(5e3), )),
-        # eval=dict(evaluator=dict(eval_freq=int(2e3), )),
-        eval=dict(evaluator=dict(eval_freq=int(1e3), )),
-
+        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
         # for debug
         # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
         other=dict(
-            # the replay_buffer_size is ineffective, we specify it in game config
+            # NOTE: the replay_buffer_size is ineffective, we specify it in game config
             replay_buffer=dict(type='game_buffer_muzero')
         ),
         ######################################
@@ -137,62 +108,41 @@ lunarlander_disc_muzero_config = dict(
         ######################################
         env_type='no_board_games',
         device=device,
-        mcts_ctree=True,
-        battle_mode='one_player_mode',
-        game_history_length=200,
-        # game_history_length=50,
-
-        image_based=False,
+        # if mcts_ctree=True, using cpp mcts code
+        # mcts_ctree=True,
+        mcts_ctree=False,
+        image_based=True,
+        # cvt_string=True,
+        # trade memory for speed
         cvt_string=False,
-
-        # clip_reward=True,
-        # TODO(pu)
-        clip_reward=False,
-        normalize_reward=False,
-        # normalize_reward=True,
-        normalize_reward_scale=100,
-
+        clip_reward=True,
         game_wrapper=True,
-        action_space_size=4,
+        # NOTE: different env have different action_space_size
+        action_space_size=action_space_size,
+        # action_space_size=4,
         amp_type='none',
-
-        # [S, W, H, C] -> [S x C, W, H]
-        # [4,8,1,1] -> [4*1, 8, 1]
-        image_channel=1,
-        # obs_shape=(4, 8, 1),  # if frame_stack_nums=4
-        # frame_stack_num=4,
-
-        obs_shape=(1, 8, 1),  # if frame_stack_num=1
-        frame_stack_num=1,
-
+        obs_shape=(12, 96, 96),
+        image_channel=3,
         gray_scale=False,
-        downsample=False,
+        downsample=True,
         vis_result=True,
-        # TODO(pu): test the effect of augmentation,
-        # use_augmentation=True,  # only for atari image obs
-        use_augmentation=False,
+        # TODO(pu): test the effect of augmentation
+        use_augmentation=True,
         # Style of augmentation
         # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
         augmentation=['shift', 'intensity'],
 
-        # debug
-        # collector_env_num=1,
-        # evaluator_env_num=1,
-        # num_simulations=9,
-        # batch_size=4,
-        # total_transitions=int(1e5),
-        # # # to make sure the value target is the final outcome
-        # td_steps=5,
-        # num_unroll_steps=3,
-
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
-
+        # TODO(pu): how to set proper num_simulations automatically?
         num_simulations=num_simulations,
-        batch_size=256,
+        batch_size=batch_size,
+        game_history_length=400,
         total_transitions=int(1e5),
-
-
+        # default config in EZ original repo
+        channels=64,
+        # The env step is twice as large as the original size model when converging
+        # channels=32,
         td_steps=5,
         num_unroll_steps=5,
 
@@ -200,8 +150,7 @@ lunarlander_disc_muzero_config = dict(
         reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
-        # lr_manually=True,
-        lr_manually=False,
+        lr_manually=True,  # set lr manually: 0.2->0.02->0.002
 
         # TODO(pu): if true, no priority to sample
         use_max_priority=True,  # if true, sample without priority
@@ -209,16 +158,13 @@ lunarlander_disc_muzero_config = dict(
         use_priority=True,
 
         # TODO(pu): only used for adjust temperature manually
-        # max_training_steps=int(1e5),
-        max_training_steps=int(5e4),
-        auto_temperature=True,
-        # auto_temperature=False,
+        max_training_steps=int(1e5),
+        auto_temperature=False,
         # only effective when auto_temperature=False
-        # fixed_temperature_value=0.25,
-        fixed_temperature_value=1,
-
+        fixed_temperature_value=0.25,
         # TODO(pu): whether to use root value in reanalyzing?
         use_root_value=False,
+        # use_root_value=True,
 
         # TODO(pu): test the effect
         last_linear_layer_init_zero=True,
@@ -239,11 +185,11 @@ lunarlander_disc_muzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=categorical_distribution,
+        categorical_distribution=True,
         support_size=300,
+        # value_support=DiscreteSupport(-300, 300, delta=1),
+        # reward_support=DiscreteSupport(-300, 300, delta=1),
         max_grad_norm=10,
-        # max_grad_norm=0.5,
-
         test_interval=10000,
         log_interval=1000,
         vis_interval=1000,
@@ -261,6 +207,7 @@ lunarlander_disc_muzero_config = dict(
         transition_num=1,
         # frame skip & stack observation
         frame_skip=4,
+        frame_stack_num=4,
         # TODO(pu): EfficientZero -> MuZero
         # coefficient
         reward_loss_coeff=1,
@@ -268,15 +215,10 @@ lunarlander_disc_muzero_config = dict(
         policy_loss_coeff=1,
 
         # siamese
-        # proj_hid=1024,
-        # proj_out=1024,
-        # pred_hid=512,
-        # pred_out=1024,
-        # half size model
-        proj_hid=512,
-        proj_out=512,
-        pred_hid=256,
-        pred_out=512,
+        proj_hid=1024,
+        proj_out=1024,
+        pred_hid=512,
+        pred_out=1024,
         bn_mt=0.1,
         blocks=1,  # Number of blocks in the ResNet
         reduced_channels_reward=16,  # x36 Number of channels in reward head
@@ -290,13 +232,13 @@ lunarlander_disc_muzero_config = dict(
         ######################################
     ),
 )
-lunarlander_disc_muzero_config = EasyDict(lunarlander_disc_muzero_config)
-main_config = lunarlander_disc_muzero_config
+mspacman_efficientzero_config = EasyDict(mspacman_efficientzero_config)
+main_config = mspacman_efficientzero_config
 
-lunarlander_disc_muzero_create_config = dict(
+mspacman_efficientzero_create_config = dict(
     env=dict(
-        type='lunarlander',
-        import_names=['zoo.box2d.lunarlander.envs.lunarlander_env'],
+        type='atari_lightzero',
+        import_names=['zoo.atari.envs.atari_lightzero_env'],
     ),
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
@@ -310,9 +252,9 @@ lunarlander_disc_muzero_create_config = dict(
         import_names=['core.worker.collector.muzero_collector'],
     )
 )
-lunarlander_disc_muzero_create_config = EasyDict(lunarlander_disc_muzero_create_config)
-create_config = lunarlander_disc_muzero_create_config
+mspacman_efficientzero_create_config = EasyDict(mspacman_efficientzero_create_config)
+create_config = mspacman_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_muzero
-    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(5e5))

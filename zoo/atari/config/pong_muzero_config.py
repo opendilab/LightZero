@@ -16,11 +16,10 @@ else:
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
+batch_size = 256
+
 num_simulations = 50
 update_per_collect = 1000
-batch_size = 256
-collect_max_episode_steps = int(1.08e4)
-eval_max_episode_steps = int(1.08e5)
 
 # debug
 # collector_env_num = 1
@@ -40,8 +39,8 @@ atari_efficientzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         env_name='PongNoFrameskip-v4',
         stop_value=int(20),
-        collect_max_episode_steps=collect_max_episode_steps,
-        eval_max_episode_steps=eval_max_episode_steps,
+        collect_max_episode_steps=int(1.08e5),
+        eval_max_episode_steps=int(1.08e5),
         # for debug
         # collect_max_episode_steps=int(100),
         # eval_max_episode_steps=int(100),

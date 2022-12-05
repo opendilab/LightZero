@@ -533,7 +533,7 @@ class EfficientZeroPolicy(Policy):
                 'policy_loss': loss_data[4],
                 'value_prefix_loss': loss_data[5],
                 'value_loss': loss_data[6],
-                'consistency_loss': loss_data[7],
+                'consistency_loss': loss_data[7]/self._cfg.num_unroll_steps,
                 'value_priority': td_data[0].flatten().mean().item(),
                 'target_value_prefix': td_data[1].flatten().mean().item(),
                 'target_value': td_data[2].flatten().mean().item(),
@@ -556,7 +556,7 @@ class EfficientZeroPolicy(Policy):
             'policy_loss': loss_data[4],
             'value_prefix_loss': loss_data[5],
             'value_loss': loss_data[6],
-            'consistency_loss': loss_data[7],
+            'consistency_loss': loss_data[7]/self._cfg.num_unroll_steps,
             'value_priority': td_data[0].flatten().mean().item(),
             'target_value_prefix': td_data[1].flatten().mean().item(),
             'target_value': td_data[2].flatten().mean().item(),
@@ -882,7 +882,20 @@ class EfficientZeroPolicy(Policy):
     @staticmethod
     def _consist_loss_func(f1, f2):
         """
-        Consistency loss function: similarity loss
+        Overview:
+            consistency loss function: the negative cosine similarity.
+        Arguments:
+            f1 (:obj:`torch.Tensor`): shape (batch_size, dim), e.g. (256, 512)
+            f2 (:obj:`torch.Tensor`): shape (batch_size, dim), e.g. (256, 512)
+        Returns:
+            (f1 * f2).sum(dim=1) is the cosine similarity between vector f1 and f2.
+            The cosine similarity always belongs to the interval [-1, 1].
+            For example, two proportional vectors have a cosine similarity of 1,
+            two orthogonal vectors have a similarity of 0,
+            and two opposite vectors have a similarity of -1.
+             -(f1 * f2).sum(dim=1) is consistency loss, i.e. the negative cosine similarity.
+        Reference:
+            https://en.wikipedia.org/wiki/Cosine_similarity
         """
         f1 = F.normalize(f1, p=2., dim=-1, eps=1e-5)
         f2 = F.normalize(f2, p=2., dim=-1, eps=1e-5)

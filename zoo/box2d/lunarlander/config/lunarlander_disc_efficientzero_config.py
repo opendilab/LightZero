@@ -39,7 +39,7 @@ update_per_collect = 250
 # evaluator_env_num = 1
 
 lunarlander_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_ghl200_halfmodel_fs1_atv_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn10',
+    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_ghl200_halfmodel_fs1_atv_ns{num_simulations}_upc{update_per_collect}_cdt_cc2_adam3e-3_mgn10',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -274,8 +274,8 @@ lunarlander_disc_efficientzero_config = dict(
         reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-        consistency_coeff=0,
-        # consistency_coeff=2,
+        # consistency_coeff=0,
+        consistency_coeff=2,
 
         # siamese
         # proj_hid=1024,

@@ -10,7 +10,7 @@ import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY
 from ding.model.common import ReparameterizationHead
-from .sampled_efficientzero_base_model import BaseNet, renormalize
+from .sampled_muzero_base_model import BaseNet, renormalize
 
 
 def conv3x3(in_channels, out_channels, stride=1):
@@ -159,7 +159,7 @@ class RepresentationNetwork(nn.Module):
         return x
 
 
-# Predict next hidden states, reward_hidden_state, and value_prefix given current states and actions
+# Predict next hidden states and reward given current states and actions
 class DynamicsNetwork(nn.Module):
 
     def __init__(
@@ -171,7 +171,6 @@ class DynamicsNetwork(nn.Module):
             fc_reward_layers,
             full_support_size,
             block_output_size_reward,
-            lstm_hidden_size=64,
             momentum=0.1,
             last_linear_layer_init_zero=False,
             norm_type='BN',
@@ -185,23 +184,20 @@ class DynamicsNetwork(nn.Module):
             - fc_reward_layers (:obj:list):  hidden layers of the reward prediction head (MLP head)
             - full_support_size (:obj:int): dim of reward output
             - block_output_size_reward (:obj:int): dim of flatten hidden states
-            - lstm_hidden_size (:obj:int): dim of lstm hidden
             - last_linear_layer_init_zero (:obj:bool): if True -> zero initialization for the last layer of reward mlp
         """
         super().__init__()
         self.num_channels = num_channels
 
         self.norm_type = norm_type
-        self.lstm_hidden_size = lstm_hidden_size
         self.action_space_dim = action_space_size
 
-        self.conv = nn.Conv2d(num_channels, num_channels - self.action_space_dim, kernel_size=3, stride=1, padding=1,
-                              bias=False)
-        self.bn = nn.BatchNorm2d(num_channels - self.action_space_dim, momentum=momentum)
+        self.conv = nn.Conv2d(num_channels, num_channels - 1, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn = nn.BatchNorm2d(num_channels - 1, momentum=momentum)
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - self.action_space_dim,
+                    in_channels=num_channels - 1,
                     activation=torch.nn.ReLU(inplace=True),
                     norm_type=self.norm_type,
                     res_type='basic',
@@ -210,29 +206,15 @@ class DynamicsNetwork(nn.Module):
             ]
         )
 
-        self.reward_resblocks = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=num_channels - self.action_space_dim,
-                    activation=torch.nn.ReLU(inplace=True),
-                    norm_type=self.norm_type,
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(num_blocks)
-            ]
-        )
-
-        self.conv1x1_reward = nn.Conv2d(num_channels - self.action_space_dim, reduced_channels_reward, 1)
+        self.conv1x1_reward = nn.Conv2d(num_channels - 1, reduced_channels_reward, 1)
         self.bn_reward = nn.BatchNorm2d(reduced_channels_reward, momentum=momentum)
         self.block_output_size_reward = block_output_size_reward
-        self.lstm = nn.LSTM(input_size=self.block_output_size_reward, hidden_size=self.lstm_hidden_size)
-        self.bn_value_prefix = nn.BatchNorm1d(self.lstm_hidden_size, momentum=momentum)
         # TODO(pu)
         self.fc = MLP(
-            in_channels=self.lstm_hidden_size,
+            self.block_output_size_reward,
             hidden_channels=fc_reward_layers[0],
-            out_channels=full_support_size,
             layer_num=len(fc_reward_layers) + 1,
+            out_channels=full_support_size,
             activation=nn.ReLU(inplace=True),
             norm_type=self.norm_type,
             output_activation=nn.Identity(),
@@ -241,9 +223,9 @@ class DynamicsNetwork(nn.Module):
         )
         self.activation = nn.ReLU(inplace=True)
 
-    def forward(self, x, reward_hidden_state):
-        # take the state encoding
-        state = x[:, :-self.action_space_dim, :, :]
+    def forward(self, x):
+        # take the state encoding,  x[:, -1, :, :] is action encoding
+        state = x[:, :-1, :, :]
         x = self.conv(x)
         x = self.bn(x)
 
@@ -258,16 +240,10 @@ class DynamicsNetwork(nn.Module):
         x = self.bn_reward(x)
         x = self.activation(x)
 
-        # RuntimeError: view size is not compatible with input tensor size and stride (at least one dimension spans
-        # across two contiguous subspaces)
-        x = x.contiguous().view(-1, self.block_output_size_reward).unsqueeze(0)
-        value_prefix, reward_hidden_state = self.lstm(x, reward_hidden_state)
-        value_prefix = value_prefix.squeeze(0)
-        value_prefix = self.bn_value_prefix(value_prefix)
-        value_prefix = self.activation(value_prefix)
-        value_prefix = self.fc(value_prefix)
+        x = x.view(-1, self.block_output_size_reward)
+        reward = self.fc(x)
 
-        return state, reward_hidden_state, value_prefix
+        return state, reward
 
     def get_dynamic_mean(self):
         dynamic_mean = np.abs(self.conv.weight.detach().cpu().numpy().reshape(-1)).tolist()
@@ -425,14 +401,11 @@ class PredictionNetwork(nn.Module):
         policy = self.bn_policy(policy)
         policy = self.activation(policy)
 
-        # print(value.shape, value)
-        value = value.view(-1, self.block_output_size_value)
-        policy = policy.view(-1, self.block_output_size_policy)
-        # value = value.reshape(-1, self.block_output_size_value)
-        # policy = policy.reshape(-1, self.block_output_size_policy)
+        value = value.reshape(-1,  self.block_output_size_value)
+        policy = policy.reshape(-1, self.block_output_size_policy)
+
         value = self.fc_value(value)
         # policy = self.fc_policy(policy)
-
 
         ######################
         # sampled related code
@@ -449,8 +422,8 @@ class PredictionNetwork(nn.Module):
         return policy, value
 
 
-@MODEL_REGISTRY.register('SampledEfficientZeroNet')
-class SampledEfficientZeroNet(BaseNet):
+@MODEL_REGISTRY.register('SampledMuZeroNet')
+class SampledMuZeroNet(BaseNet):
 
     def __init__(
             self,
@@ -471,7 +444,6 @@ class SampledEfficientZeroNet(BaseNet):
             downsample,
             representation_model_type: str = 'conv_res_blocks',
             representation_model: nn.Module = None,
-            lstm_hidden_size=512,
             bn_mt=0.1,
             proj_hid=256,
             proj_out=256,
@@ -503,7 +475,6 @@ class SampledEfficientZeroNet(BaseNet):
             - reward_support_size (:obj:`int`): dim of reward output
             - value_support_size (:obj:`int`): dim of value output
             - downsample (:obj:`bool`): True -> do downsampling for observations. (For board games, do not need)
-            - lstm_hidden_size (:obj:`int`):  dim of lstm hidden
             - bn_mt (:obj:`float`):  Momentum of BN
             - proj_hid (:obj:`int`): dim of projection hidden layer
             - proj_out (:obj:`int`): dim of projection output layer
@@ -511,9 +482,9 @@ class SampledEfficientZeroNet(BaseNet):
             - pred_out (:obj:`int`): dim of projection head (prediction) output layer
             - last_linear_layer_init_zero (:obj:`bool`): True -> zero initialization for the last layer of value/policy mlp
             - state_norm (:obj:`bool`):  True -> normalization for hidden states
-            - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/value_prefix
+            - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/reward
         """
-        super(SampledEfficientZeroNet, self).__init__(lstm_hidden_size)
+        super(SampledMuZeroNet, self).__init__()
         self.sigma_type = sigma_type
         self.fixed_sigma_value = fixed_sigma_value
         self.bound_type = bound_type
@@ -541,7 +512,7 @@ class SampledEfficientZeroNet(BaseNet):
         self.representation_model = representation_model
         self.downsample = downsample
 
-
+        self.action_space_size = action_space_size
         block_output_size_reward = (
             (reduced_channels_reward * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else
@@ -579,15 +550,12 @@ class SampledEfficientZeroNet(BaseNet):
             self.dynamics_network = DynamicsNetwork(
                 num_blocks,
                 observation_shape[0] + 1,  # in_channels=observation_shape[0]
-                1,
                 reduced_channels_reward,
                 fc_reward_layers,
                 self.reward_support_size,
                 block_output_size_reward,
-                lstm_hidden_size=lstm_hidden_size,
                 momentum=bn_mt,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-                norm_type=self.norm_type,
             )
             self.prediction_network = PredictionNetwork(
                 action_space_size,
@@ -609,34 +577,18 @@ class SampledEfficientZeroNet(BaseNet):
                 norm_type=self.norm_type,
             )
         else:
-            if self.continuous_action_space:
-                self.dynamics_network = DynamicsNetwork(
-                    num_blocks,
-                    num_channels + self.action_space_dim,
-                    self.action_space_dim,
-                    reduced_channels_reward,
-                    fc_reward_layers,
-                    self.reward_support_size,
-                    block_output_size_reward,
-                    lstm_hidden_size=lstm_hidden_size,
-                    momentum=bn_mt,
-                    last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-                    norm_type=self.norm_type,
-                )
-            else:
-                self.dynamics_network = DynamicsNetwork(
-                    num_blocks,
-                    num_channels + 1,
-                    1,
-                    reduced_channels_reward,
-                    fc_reward_layers,
-                    self.reward_support_size,
-                    block_output_size_reward,
-                    lstm_hidden_size=lstm_hidden_size,
-                    momentum=bn_mt,
-                    last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-                    norm_type=self.norm_type,
-                )
+            self.dynamics_network = DynamicsNetwork(
+                num_blocks,
+                # num_channels + 1,
+                num_channels + self.action_space_dim,
+                self.action_space_dim,
+                reduced_channels_reward,
+                fc_reward_layers,
+                self.reward_support_size,
+                block_output_size_reward,
+                momentum=bn_mt,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            )
             self.prediction_network = PredictionNetwork(
                 action_space_size,
                 num_blocks,
@@ -657,31 +609,6 @@ class SampledEfficientZeroNet(BaseNet):
                 norm_type=self.norm_type,
             )
 
-        # projection
-        if self.representation_model_type == 'identity':
-            self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
-        else:
-            if self.downsample:
-                # for atari, due to downsample
-                # observation_shape=(12, 96, 96),  # stack=4
-                # 3 * 96/16 * 96/16 = 3*6*6 = 108
-                self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
-                                                                     ) * math.ceil(observation_shape[2] / 16)
-            else:
-                self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
-
-        self.projection = nn.Sequential(
-            nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), nn.ReLU(inplace=True),
-            nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), nn.ReLU(inplace=True),
-            nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
-        )
-        self.projection_head = nn.Sequential(
-            nn.Linear(self.proj_out, self.pred_hid),
-            nn.BatchNorm1d(self.pred_hid),
-            nn.ReLU(inplace=True),
-            nn.Linear(self.pred_hid, self.pred_out),
-        )
-
     def prediction(self, encoded_state):
         policy, value = self.prediction_network(encoded_state)
         return policy, value
@@ -694,56 +621,25 @@ class SampledEfficientZeroNet(BaseNet):
             encoded_state_normalized = renormalize(encoded_state)
             return encoded_state_normalized
 
-    def dynamics(self, encoded_state, reward_hidden_state, action):
-        if not self.continuous_action_space:
-            # Stack encoded_state with a game specific one hot encoded action
-            action_one_hot = (
-                torch.ones((
-                    encoded_state.shape[0],
-                    1,
-                    encoded_state.shape[2],
-                    encoded_state.shape[3],
-                )).to(action.device).float()
-            )
-            action_one_hot = (action[:, :, None, None] * action_one_hot / self.action_space_dim)
-            x = torch.cat((encoded_state, action_one_hot), dim=1)
-        else:
-            action_one_hot = (
-                torch.ones((
-                    encoded_state.shape[0],
-                    1,
-                    encoded_state.shape[2],
-                    encoded_state.shape[3],
-                )).to(action.device).float()
-            )
-            # TODO
-            if len(action.shape) == 2:
-                # e.g.,  torch.Size([2, 1]) ->  torch.Size([1, 2, 1])
-                action = action.reshape(-1, self.action_space_dim, 1)
-            elif len(action.shape) == 3 and action.shape[2] == self.action_space_dim:
-                # e.g.,  torch.Size([8, 1, 2]) ->  torch.Size([8, 2, 1])
-                # action = action.reshape(-1, self.action_space_dim, 1)  # wrong
-                action = action.permute(0, 2, 1)
-            # if len(action.shape)==3:
-            # action: 8,2,1   action_one_hot: 8,1,8,1
-            # action[:, 0, None, None]: 8,1,1,1
-            # action_embedding: 8,2,8,1
-            try:
-                action_embedding = torch.cat(
-                    [action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_dim)], dim=1)
-                # action_embedding = torch.cat([action[:, 0, None, None] * action_one_hot, action[:, 1, None, None] * action_one_hot], dim=1)
-            except Exception as error:
-                print(error)
-                print(action.shape, action_one_hot.shape)
+    def dynamics(self, encoded_state, action):
+        # Stack encoded_state with a game specific one hot encoded action
+        action_one_hot = (
+            torch.ones((
+                encoded_state.shape[0],
+                1,
+                encoded_state.shape[2],
+                encoded_state.shape[3],
+            )).to(action.device).float()
+        )
+        action_one_hot = (action[:, :, None, None] * action_one_hot / self.action_space_size)
 
-            x = torch.cat((encoded_state, action_embedding), dim=1)
-
-        next_encoded_state, reward_hidden_state, value_prefix = self.dynamics_network(x, reward_hidden_state)
+        x = torch.cat((encoded_state, action_one_hot), dim=1)
+        next_encoded_state, reward = self.dynamics_network(x)
         if not self.state_norm:
-            return next_encoded_state, reward_hidden_state, value_prefix
+            return next_encoded_state, reward
         else:
             next_encoded_state_normalized = renormalize(next_encoded_state)
-            return next_encoded_state_normalized, reward_hidden_state, value_prefix
+            return next_encoded_state_normalized,reward
 
     def get_params_mean(self):
         representation_mean = self.representation_network.get_param_mean()
@@ -752,28 +648,3 @@ class SampledEfficientZeroNet(BaseNet):
 
         return reward_w_dist, representation_mean, dynamic_mean, reward_mean
 
-    def project(self, hidden_state, with_grad=True):
-        # only the branch of proj + pred can share the gradients
-
-        # for lunarlander:
-        # observation_shape = (4, 8, 1),  # stack=4
-        # self.projection_input_dim = 64*8*1
-        # hidden_state.shape: (batch_size, num_channel, obs_shape[1], obs_shape[2])  256,64,8,1
-        # 256,64,8,1 -> 256,64*8*1
-
-        # for atari:
-        # observation_shape = (12, 96, 96),  # 3,96,96 stack=4
-        # self.projection_input_dim = 3*6*6 = 108
-        # hidden_state.shape: (batch_size, num_channel, obs_shape[1]/16, obs_shape[2]/16)  256,64,96/16,96/16 = 256,64,6,6
-        # 256, 64, 6, 6 -> 256,64*6*6
-
-        # hidden_state.shape[0] = batch_size
-        hidden_state = hidden_state.reshape(hidden_state.shape[0], -1)
-
-        proj = self.projection(hidden_state)
-
-        # with grad, use proj_head
-        if with_grad:
-            return self.projection_head(proj)
-        else:
-            return proj.detach()

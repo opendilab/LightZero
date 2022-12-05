@@ -34,10 +34,11 @@ categorical_distribution = True
 # two_player_mode, board_size=6, episode_length=6**2=36
 # n_episode=8,  update_per_collect=36*8=268
 
-data_reuse_factor = 1
+data_reuse_factor = 0.5
 update_per_collect = int(144 * data_reuse_factor)
 
-num_simulations = 50
+# num_simulations = 50
+num_simulations = 25
 
 # debug
 # collector_env_num = 2
@@ -86,10 +87,8 @@ gomoku_muzero_config = dict(
             downsample=False,
             num_blocks=1,
             # num_channels=64,
-            # lstm_hidden_size=512,
             # half size model
             num_channels=32,
-            lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -186,25 +185,20 @@ gomoku_muzero_config = dict(
         # total_transitions=int(1e5),
         # num_simulations=2,
         # batch_size=4,
-        # lstm_hidden_size=64,
         # # to make sure the value target is the final outcome
         # td_steps=5,
         # # td_steps=int(board_size * board_size),
         # num_unroll_steps=5,
-        # lstm_horizon_len=5,
 
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         total_transitions=int(1e5),
         num_simulations=num_simulations,
         batch_size=256,
-        # lstm_hidden_size=512,
         # half size model
-        lstm_hidden_size=256,
         # to make sure the value target is the final outcome
         td_steps=int(board_size * board_size),
         num_unroll_steps=5,
-        lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
         reanalyze_ratio=0.99,

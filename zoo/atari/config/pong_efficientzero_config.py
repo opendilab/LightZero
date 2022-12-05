@@ -14,12 +14,12 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-
+action_space_size = 6  # for pong
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
+batch_size = 256
 num_simulations = 50
-categorical_distribution = False
 # TODO(pu):
 # The key hyper-para to tune, for different env, we have different episode_length
 # e.g. reuse_factor = 0.5
@@ -32,14 +32,14 @@ update_per_collect = 1000
 # evaluator_env_num = 1
 
 pong_efficientzero_config = dict(
-    exp_name='data_ez_ctree/pong_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc1000_cdf_fix',
+    exp_name=f'data_ez_ctree/pong_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         env_name='PongNoFrameskip-v4',
         stop_value=int(20),
-        collect_max_episode_steps=int(1.08e4),
+        collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
         # for debug
         # collect_max_episode_steps=int(100),
@@ -62,11 +62,10 @@ pong_efficientzero_config = dict(
         cuda=True,
         model=dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=categorical_distribution,
+            categorical_distribution=True,
             representation_model_type='conv_res_blocks',
             observation_shape=(12, 96, 96),  # if frame_stack_num=4, the original obs shape is（3,96,96）
-            action_space_size=6,  # for pong
-            # action_space_size=4,  # for breakout
+            action_space_size=action_space_size,
             downsample=True,
             num_blocks=1,
             # default config in EfficientZero original repo
@@ -93,16 +92,12 @@ pong_efficientzero_config = dict(
         ),        
         # learn_mode config
         learn=dict(
-            # for debug
-            # update_per_collect=2,
-            # batch_size=4,
-
-            update_per_collect=1000,
-            batch_size=256,
+            update_per_collect=update_per_collect,
+            batch_size=batch_size,
 
             learning_rate=0.2,
             # Frequency of target network update.
-            target_update_freq=400,
+            target_update_freq=100,
         ),
         # collect_mode config
         collect=dict(
@@ -133,7 +128,7 @@ pong_efficientzero_config = dict(
         clip_reward=True,
         game_wrapper=True,
         # NOTE: different env have different action_space_size
-        action_space_size=6,  # for pong
+        action_space_size=action_space_size,
         amp_type='none',
         obs_shape=(12, 96, 96),
         image_channel=3,
@@ -146,23 +141,11 @@ pong_efficientzero_config = dict(
         # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
         augmentation=['shift', 'intensity'],
 
-        # for debug
-        # collector_env_num=1,
-        # evaluator_env_num=1,
-        # num_simulations=2,
-        # batch_size=4,
-        # game_history_length=20,
-        # total_transitions=int(1e2),
-        # lstm_hidden_size=32,
-        # td_steps=5,
-        # num_unroll_steps=5,
-        # lstm_horizon_len=5,
-
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         # TODO(pu): how to set proper num_simulations automatically?
         num_simulations=num_simulations,
-        batch_size=256,
+        batch_size=batch_size,
         game_history_length=400,
         total_transitions=int(1e5),
         # default config in EfficientZero original repo
@@ -214,7 +197,7 @@ pong_efficientzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=categorical_distribution,
+        categorical_distribution=True,
 
         support_size=300,
         # value_support=DiscreteSupport(-300, 300, delta=1),
