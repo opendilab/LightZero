@@ -30,7 +30,7 @@ from core.rl_utils import select_action
 class SampledEfficientZeroPolicy(Policy):
     """
     Overview:
-        The policy class for sampled EfficientZero
+        The policy class for Sampled EfficientZero.
     """
     config = dict(
         type='sampled_efficientzero',
@@ -170,7 +170,9 @@ class SampledEfficientZeroPolicy(Policy):
 
         # TODO(pu): priority
         inputs_batch, targets_batch, replay_buffer = data
-
+        ######################
+        # sampled related code
+        ######################
         obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
         target_value_prefix, target_value, target_policy = targets_batch
 
@@ -992,6 +994,9 @@ class SampledEfficientZeroPolicy(Policy):
 
             # root visit count
             roots_distributions = roots.get_distributions()  # {list: 1} each element {list:6}
+            ######################
+            # sampled related code
+            ######################
             roots_sampled_actions = roots.get_sampled_actions()  # {list: 1}->{list:6}
 
             roots_values = roots.get_values()  # {list: 1}
@@ -1014,6 +1019,9 @@ class SampledEfficientZeroPolicy(Policy):
                 action, visit_count_distribution_entropy = select_action(
                     distributions, temperature=1, deterministic=True
                 )
+                ######################
+                # sampled related code
+                ######################
                 # TODO(pu): transform to the real action index in legal action set
                 if action_mask[0] is not None:
                     action = np.where(action_mask[i] == 1.0)[0][action]

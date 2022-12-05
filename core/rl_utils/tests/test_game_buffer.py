@@ -7,7 +7,7 @@ from ding.data.buffer.buffer import BufferedData
 from ding.torch_utils import to_list
 from easydict import EasyDict
 
-from core.rl_utils.mcts.game_buffer import GameBuffer
+from core.rl_utils.mcts.game_buffer_efficientzero import GameBuffer
 
 
 class RateLimit:

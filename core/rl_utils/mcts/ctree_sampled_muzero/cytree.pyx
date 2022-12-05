@@ -72,6 +72,9 @@ cdef class Roots:
     def get_distributions(self):
         return self.roots[0].get_distributions()
 
+    def get_sampled_actions(self):
+        return self.roots[0].get_sampled_actions()
+
     def get_values(self):
         return self.roots[0].get_values()
 

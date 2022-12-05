@@ -11,7 +11,7 @@ from .ctree_sampled_efficientzero import cytree as tree
 from ..scaling_transform import inverse_scalar_transform
 
 ###########################################################
-# EfficientZero
+# Sampled EfficientZero
 ###########################################################
 
 
@@ -145,7 +145,7 @@ class SampledEfficientZeroMCTSCtree(object):
 
 
 ###########################################################
-# MutZero
+# Sampled MuZero
 ###########################################################
 
 from core.rl_utils.mcts.ctree_sampled_muzero import cytree as tree_muzero

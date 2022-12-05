@@ -19,8 +19,8 @@ from ding.utils import BUFFER_REGISTRY
 import core.rl_utils.mcts.ptree_sampled_efficientzero as ptree
 # cpp mcts
 from .ctree_sampled_efficientzero import cytree as ctree
-from .mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTSCtree
-from .mcts_ptree_sampled_efficientzero import SampledEfficientZeroMCTSPtree as MCTS_ptree
+from .mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTS_ctree
+from .mcts_ptree_sampled import SampledEfficientZeroMCTSPtree as MCTS_ptree
 from .utils import prepare_observation_lst, concat_output, concat_output_value
 from ..scaling_transform import inverse_scalar_transform
 
@@ -33,7 +33,7 @@ class BufferedData:
 
 
 @BUFFER_REGISTRY.register('game_buffer_sampled_efficientzero')
-class SampledGameBuffer(Buffer):
+class SampledEfficientZeroGameBuffer(Buffer):
     """
     Overview:
         The specific game buffer for MuZero-based policy.
@@ -396,9 +396,10 @@ class SampledGameBuffer(Buffer):
         for i in range(batch_size):
             game = game_lst[i]
             game_history_pos = game_history_pos_lst[i]
-
+            ######################
+            # sampled related code
+            ######################
             _actions = game.action_history[game_history_pos:game_history_pos + self.config.num_unroll_steps].tolist()
-
             # _actions = game.action_history[game_history_pos:game_history_pos + self.config.num_unroll_steps]
 
             # NOTE: self.config.num_unroll_steps + 1
@@ -439,7 +440,9 @@ class SampledGameBuffer(Buffer):
         re_num = int(batch_size * ratio)
         # formalize the input observations
         obs_lst = prepare_observation_lst(obs_lst)
-
+        ######################
+        # sampled related code
+        ######################
         # formalize the inputs of a batch
         inputs_batch = [obs_lst, action_lst, child_actions_lst, mask_lst, indices_lst, weights_lst, make_time_lst]
 
@@ -740,7 +743,7 @@ class SampledGameBuffer(Buffer):
                         to_play
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTSCtree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                    MCTS_ctree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 else:
                     """
                     python mcts
@@ -937,6 +940,9 @@ class SampledGameBuffer(Buffer):
             value_prefix_pool = value_prefix_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
             if self.config.mcts_ctree:
+                ######################
+                # sampled related code
+                ######################
                 """
                 cpp mcts
                 """
@@ -964,7 +970,7 @@ class SampledGameBuffer(Buffer):
                     to_play
                 )
                 # do MCTS for a new policy with the recent target model
-                MCTSCtree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                MCTS_ctree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
             else:
                 """
                 python mcts
@@ -1031,7 +1037,9 @@ class SampledGameBuffer(Buffer):
 
                 for current_index in range(state_index, state_index + self.config.num_unroll_steps + 1):
                     distributions = roots_distributions[policy_index]
-
+                    ######################
+                    # sampled related code
+                    ######################
                     if policy_mask[policy_index] == 0:
                         # the null target policy
                         if self.config.continuous_action_space:
@@ -1199,6 +1207,9 @@ class SampledGameBuffer(Buffer):
                                 target_policies.append(policy_tmp)
 
                     else:
+                        ######################
+                        # sampled related code
+                        ######################
                         if self.config.continuous_action_space:
                             # for continuous action space games
                             # the invalid target policy

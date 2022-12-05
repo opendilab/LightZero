@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from easydict import EasyDict
 
-from core.rl_utils.mcts.ctree_efficientzero import cytree as tree
+from core.rl_utils.mcts.ctree_efficientzero import cytree as tree_efficientzero
 from ..scaling_transform import inverse_scalar_transform
 
 
@@ -65,7 +65,7 @@ class EfficientZeroMCTSCtree(object):
             # the index of each layer in the tree
             hidden_state_index_x = 0
             # minimax value storage
-            min_max_stats_lst = tree.MinMaxStatsList(num)
+            min_max_stats_lst = tree_efficientzero.MinMaxStatsList(num)
             min_max_stats_lst.set_delta(self.config.value_delta_max)
 
             for index_simulation in range(self.config.num_simulations):
@@ -74,13 +74,13 @@ class EfficientZeroMCTSCtree(object):
                 hidden_states_h_reward = []
 
                 # prepare a result wrapper to transport results between python and c++ parts
-                results = tree.ResultsWrapper(num=num)
+                results = tree_efficientzero.ResultsWrapper(num=num)
 
                 # traverse to select actions for each root
                 # hidden_state_index_x_lst: the first index of leaf node states in hidden_state_pool
                 # hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool
                 # the hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
-                hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play_batch = tree.batch_traverse(
+                hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play_batch)
                 )
                 # obtain the search horizon for leaf nodes
@@ -141,7 +141,7 @@ class EfficientZeroMCTSCtree(object):
                 hidden_state_index_x += 1
 
                 # backpropagation along the search path to update the attributes
-                tree.batch_back_propagate(
+                tree_efficientzero.batch_back_propagate(
                     hidden_state_index_x, discount, value_prefix_pool, value_pool, policy_logits_pool,
                     min_max_stats_lst, results, is_reset_lst, virtual_to_play_batch
                 )

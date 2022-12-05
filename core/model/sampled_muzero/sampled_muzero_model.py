@@ -622,18 +622,48 @@ class SampledMuZeroNet(BaseNet):
             return encoded_state_normalized
 
     def dynamics(self, encoded_state, action):
-        # Stack encoded_state with a game specific one hot encoded action
-        action_one_hot = (
-            torch.ones((
-                encoded_state.shape[0],
-                1,
-                encoded_state.shape[2],
-                encoded_state.shape[3],
-            )).to(action.device).float()
-        )
-        action_one_hot = (action[:, :, None, None] * action_one_hot / self.action_space_size)
+        if not self.continuous_action_space:
+            # Stack encoded_state with a game specific one hot encoded action
+            action_one_hot = (
+                torch.ones((
+                    encoded_state.shape[0],
+                    1,
+                    encoded_state.shape[2],
+                    encoded_state.shape[3],
+                )).to(action.device).float()
+            )
+            action_one_hot = (action[:, :, None, None] * action_one_hot / self.action_space_dim)
+            x = torch.cat((encoded_state, action_one_hot), dim=1)
+        else:
+            action_one_hot = (
+                torch.ones((
+                    encoded_state.shape[0],
+                    1,
+                    encoded_state.shape[2],
+                    encoded_state.shape[3],
+                )).to(action.device).float()
+            )
+            # TODO
+            if len(action.shape) == 2:
+                # e.g.,  torch.Size([2, 1]) ->  torch.Size([1, 2, 1])
+                action = action.reshape(-1, self.action_space_dim, 1)
+            elif len(action.shape) == 3 and action.shape[2] == self.action_space_dim:
+                # e.g.,  torch.Size([8, 1, 2]) ->  torch.Size([8, 2, 1])
+                # action = action.reshape(-1, self.action_space_dim, 1)  # wrong
+                action = action.permute(0, 2, 1)
+            # if len(action.shape)==3:
+            # action: 8,2,1   action_one_hot: 8,1,8,1
+            # action[:, 0, None, None]: 8,1,1,1
+            # action_embedding: 8,2,8,1
+            try:
+                action_embedding = torch.cat(
+                    [action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_dim)], dim=1)
+                # action_embedding = torch.cat([action[:, 0, None, None] * action_one_hot, action[:, 1, None, None] * action_one_hot], dim=1)
+            except Exception as error:
+                print(error)
+                print(action.shape, action_one_hot.shape)
 
-        x = torch.cat((encoded_state, action_one_hot), dim=1)
+            x = torch.cat((encoded_state, action_embedding), dim=1)
         next_encoded_state, reward = self.dynamics_network(x)
         if not self.state_norm:
             return next_encoded_state, reward

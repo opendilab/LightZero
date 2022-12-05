@@ -14,24 +14,23 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 50
-# update_per_collect = 1000
-# batch_size = 256
-# collect_max_episode_steps = int(1.08e4)
-# eval_max_episode_steps = int(1.08e5)
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 50
+update_per_collect = 1000
+batch_size = 256
+
 
 # debug
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 4
-update_per_collect = 10
-batch_size = 16
-collect_max_episode_steps = 20
-eval_max_episode_steps = 20
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 4
+# update_per_collect = 10
+# batch_size = 16
+# collect_max_episode_steps = 20
+# eval_max_episode_steps = 20
 
 """
 NOTE: the only difference between muzero and muzero_v2 is the consistency loss in policy and model.
@@ -44,8 +43,8 @@ atari_efficientzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         env_name='PongNoFrameskip-v4',
         stop_value=int(20),
-        collect_max_episode_steps=collect_max_episode_steps,
-        eval_max_episode_steps=eval_max_episode_steps,
+        collect_max_episode_steps=int(1.08e4),
+        eval_max_episode_steps=int(1.08e5),
         frame_skip=4,
         obs_shape=(12, 96, 96),
         episode_life=True,

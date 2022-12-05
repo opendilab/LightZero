@@ -17,10 +17,10 @@ from ding.utils import BUFFER_REGISTRY
 
 # python mcts
 import core.rl_utils.mcts.ptree_muzero as ptree
-from .mcts_ptree import MuZeroMCTSPtree as MCTS_ptree
+from .mcts_ptree_sampled import SampledMuZeroMCTSPtree as MCTS_ptree
 # cpp mcts
-from core.rl_utils.mcts.ctree_muzero import cytree as ctree
-from .mcts_ctree import MuZeroMCTSCtree as MCTS_ctree
+from core.rl_utils.mcts.ctree_sampled_muzero import cytree as ctree
+from .mcts_ctree_sampled import SampledMuZeroMCTSCtree as MCTS_ctree
 from .utils import prepare_observation_lst, concat_output, concat_output_value
 from ..scaling_transform import inverse_scalar_transform
 
@@ -376,27 +376,35 @@ class SampledMuZeroGameBuffer(Buffer):
 
     # @profile
     def make_batch(self, batch_context, ratio):
-        # """
-        # Overview:
-        #     prepare the context of a batch
-        #     reward_value_context:        the context of reanalyzed value targets
-        #     policy_re_context:           the context of reanalyzed policy targets
-        #     policy_non_re_context:       the context of non-reanalyzed policy targets
-        #     inputs_batch:                the inputs of batch
-        # Arguments:
-        #     batch_context: Any batch context from replay buffer
-        #     ratio: float ratio of reanalyzed policy (value is 100% reanalyzed)
-        # """
+        """
+        Overview:
+            prepare the context of a batch
+            reward_value_context:        the context of reanalyzed value targets
+            policy_re_context:           the context of reanalyzed policy targets
+            policy_non_re_context:       the context of non-reanalyzed policy targets
+            inputs_batch:                the inputs of batch
+        Arguments:
+            batch_context: Any batch context from replay buffer
+            ratio: float ratio of reanalyzed policy (value is 100% reanalyzed)
+        """
         # obtain the batch context from replay buffer
         game_lst, game_history_pos_lst, indices_lst, weights_lst, make_time_lst = batch_context
         batch_size = len(indices_lst)
         obs_lst, action_lst, mask_lst = [], [], []
+        child_actions_lst = []
         # prepare the inputs of a batch
         for i in range(batch_size):
             game = game_lst[i]
             game_history_pos = game_history_pos_lst[i]
-
+            ######################
+            # sampled related code
+            ######################
             _actions = game.action_history[game_history_pos:game_history_pos + self.config.num_unroll_steps].tolist()
+            # _actions = game.action_history[game_history_pos:game_history_pos + self.config.num_unroll_steps].tolist()
+
+            # NOTE: self.config.num_unroll_steps + 1
+            _child_actions = game.child_actions[game_history_pos:game_history_pos + self.config.num_unroll_steps + 1]
+
             # add mask for invalid actions (out of trajectory)
             _mask = [1. for i in range(len(_actions))]
             _mask += [0. for _ in range(self.config.num_unroll_steps - len(_mask))]
@@ -425,14 +433,20 @@ class SampledMuZeroGameBuffer(Buffer):
                 game_lst[i].obs(game_history_pos_lst[i], extra_len=self.config.num_unroll_steps, padding=True)
             )
             action_lst.append(_actions)
+            child_actions_lst.append(_child_actions)
+
             mask_lst.append(_mask)
 
         re_num = int(batch_size * ratio)
         # formalize the input observations
         obs_lst = prepare_observation_lst(obs_lst)
-
+        ######################
+        # sampled related code
+        ######################
         # formalize the inputs of a batch
-        inputs_batch = [obs_lst, action_lst, mask_lst, indices_lst, weights_lst, make_time_lst]
+        inputs_batch = [obs_lst, action_lst, child_actions_lst, mask_lst, indices_lst, weights_lst, make_time_lst]
+        child_actions_lst = np.concatenate([child_actions_lst])
+
         for i in range(len(inputs_batch)):
             inputs_batch[i] = np.asarray(inputs_batch[i])
 
@@ -911,22 +925,23 @@ class SampledMuZeroGameBuffer(Buffer):
                 """
                 cpp mcts
                 """
+                ######################
+                # sampled related code
+                ######################
                 if to_play_history[0][0] is None:
-                    # for one_player atari games
-                    action_mask = [
-                        list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
-                    ]
+                    # we use to_play=0 means one_player_mode game
                     to_play = [0 for i in range(batch_size)]
+                    # if action_mask_history[0][0] is None:
+                    # continuous action space env: all -1
+                    legal_actions = [[-1 for i in range(self.config.action_space_size)] for _ in range(batch_size)]
+                else:
+                    legal_actions = [
+                        [i for i, x in enumerate(action_mask[j]) if x == 1]
+                        for j in range(batch_size)]
 
-                legal_actions = [
-                    [i for i, x in enumerate(action_mask[j]) if x == 1]
-                    for j in range(batch_size)
-                ]
-                # roots = ctree_efficientzero.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
-                roots = ctree.Roots(batch_size, self.config.num_simulations, legal_actions)
-
+                roots = ctree.Roots(batch_size,  legal_actions, self.config.action_space_size, self.config.num_of_sampled_actions)
                 noises = [
-                    np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.action_space_size
+                    np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for _ in range(batch_size)
                 ]
                 roots.prepare(
@@ -941,17 +956,38 @@ class SampledMuZeroGameBuffer(Buffer):
 
                 # TODO(pu)
                 # roots_legal_actions_list = roots.legal_actions_list
-                roots_legal_actions_list = legal_actions
+                # roots_legal_actions_list = legal_actions
             else:
                 """
                 python mcts
                 """
-                if to_play_history[0][0] is None:
+                if self.config.continuous_action_space:
+                    # for continuous action space games
+                    legal_actions = None
+                    # continuous action space
+                    roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations,
+                                        action_space_size=self.config.action_space_size,
+                                        num_of_sampled_actions=self.config.num_of_sampled_actions)
+                    # the only difference between collect and eval is the dirichlet noise
+                    # TODO(pu):  int(self.game_config.action_space_size)
+                    noises = [
+                        np.random.dirichlet(
+                            [self.config.root_dirichlet_alpha] * int(self.config.num_of_sampled_actions)
+                        ).astype(np.float32).tolist() for j in range(batch_size)
+                    ]
+                else:
                     # for one_player atari games
                     action_mask = [
                         list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                     ]
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
+
+                    roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations,
+                                        num_of_sampled_actions=self.config.num_of_sampled_actions)
+                    noises = [
+                        np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                                            ).astype(np.float32).tolist() for j in range(batch_size)
+                    ]
 
                 roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations)
                 noises = [
@@ -992,15 +1028,29 @@ class SampledMuZeroGameBuffer(Buffer):
 
                 for current_index in range(state_index, state_index + self.config.num_unroll_steps + 1):
                     distributions = roots_distributions[policy_index]
-
+                    ######################
+                    # sampled related code
+                    ######################
                     if policy_mask[policy_index] == 0:
-                        target_policies.append([0 for _ in range(self.config.action_space_size)])
+                        # the null target policy
+                        if self.config.continuous_action_space:
+                            # for continuous action space games
+                            # the invalid target policy
+                            target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                        else:
+                            target_policies.append([0 for _ in range(self.config.action_space_size)])
                     else:
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
-                            target_policies.append(
-                                list(np.ones(self.config.action_space_size) / self.config.action_space_size)
-                            )
+                            if self.config.continuous_action_space:
+                                target_policies.append(
+                                    list(np.ones(
+                                        self.config.num_of_sampled_actions) / self.config.num_of_sampled_actions)
+                                )
+                            else:
+                                target_policies.append(
+                                    list(np.ones(self.config.action_space_size) / self.config.action_space_size)
+                                )
                         else:
                             if self.config.mcts_ctree:
                                 """
@@ -1050,6 +1100,8 @@ class SampledMuZeroGameBuffer(Buffer):
                 batch_target_policies_re.append(target_policies)
 
         batch_target_policies_re = np.array(batch_target_policies_re)
+        # print(f"batch_target_policies_re.shape:{batch_target_policies_re.shape}")
+        # print(f"batch_target_policies_re:{batch_target_policies_re}")
 
         return batch_target_policies_re
 
@@ -1159,14 +1211,27 @@ class SampledMuZeroGameBuffer(Buffer):
                                 target_policies.append(policy_tmp)
 
                     else:
-                        # the invalid target policy
-                        target_policies.append([0 for _ in range(self.config.action_space_size)])
-                        policy_mask.append(0)
+                        ######################
+                        # sampled related code
+                        ######################
+                        if self.config.continuous_action_space:
+                            # for continuous action space games
+                            # the invalid target policy
+                            target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                            policy_mask.append(0)
+
+                        else:
+                            # for discrete action space games
+                            # the invalid target policy
+                            target_policies.append([0 for _ in range(self.config.action_space_size)])
+                            policy_mask.append(0)
 
                     policy_index += 1
 
                 batch_target_policies_non_re.append(target_policies)
         batch_target_policies_non_re = np.asarray(batch_target_policies_non_re)
+        # print(f"batch_target_policies_non_re.shape:{batch_target_policies_non_re.shape}")
+        # print(f"batch_target_policies_non_re:{batch_target_policies_non_re}")
         return batch_target_policies_non_re
 
     # @profile
@@ -1188,7 +1253,11 @@ class SampledMuZeroGameBuffer(Buffer):
         batch_target_policies_re = self.compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
         batch_target_policies_non_re = self.compute_target_policy_non_reanalyzed(policy_non_re_context)
         if self.config.reanalyze_ratio < 1:
-            batch_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
+            try:
+                batch_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
+            except Exception as error:
+                print(error)
+            # batch_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
         else:
             batch_policies = batch_target_policies_re
         targets_batch = [batch_rewards, batch_values, batch_policies]

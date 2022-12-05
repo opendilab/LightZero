@@ -11,17 +11,18 @@ from ding.policy.base_policy import Policy
 from ding.rl_utils import get_nstep_return_data, get_train_sample
 from ding.torch_utils import to_tensor, to_device
 from ding.utils import POLICY_REGISTRY
+from torch.distributions import Normal, Independent
 from torch.nn import L1Loss
 
 # python mcts
-import core.rl_utils.mcts.ptree_muzero as ptree
+import core.rl_utils.mcts.ptree_sampled_muzero as ptree
 from core.rl_utils import SampledMuZeroMCTSPtree as MCTSPtree
 from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
 from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
 # cpp mcts
-from core.rl_utils.mcts.ctree_muzero import cytree as ctree
+from core.rl_utils.mcts.ctree_sampled_muzero import cytree as ctree
 from core.rl_utils import SampledMuZeroMCTSCtree as MCTSCtree
 
 
@@ -29,7 +30,7 @@ from core.rl_utils import SampledMuZeroMCTSCtree as MCTSCtree
 class SampledMuZeroPolicy(Policy):
     """
     Overview:
-        The policy class for EfficientZero
+        The policy class for Sampled MuZero
     """
     config = dict(
         type='sampled_muzero',
@@ -165,7 +166,11 @@ class SampledMuZeroPolicy(Policy):
         # TODO(pu): priority
         inputs_batch, targets_batch, replay_buffer = data
 
-        obs_batch_ori, action_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
+        ######################
+        # sampled related code
+        ######################
+        obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
+
         target_reward, target_value, target_policy = targets_batch
 
         # [:, 0: config.frame_stack_num * 3,:,:]
@@ -200,6 +205,7 @@ class SampledMuZeroPolicy(Policy):
             obs_batch = self.transforms.transform(obs_batch)
 
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
+        child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device).unsqueeze(-1)
         mask_batch = torch.from_numpy(mask_batch).to(self._cfg.device).float()
         target_reward = torch.from_numpy(target_reward.astype('float64')).to(self._cfg.device
                                                                              ).float()
@@ -756,6 +762,11 @@ class SampledMuZeroPolicy(Policy):
                 self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, to_play)
 
             roots_distributions = roots.get_distributions()  # {list: 1}->{list:6}
+            ######################
+            # sampled related code
+            ######################
+            roots_sampled_actions = roots.get_sampled_actions()  # {list: 1}->{list:6}
+
             roots_values = roots.get_values()  # {list: 1}
             data_id = [i for i in range(active_collect_env_num)]
             output = {i: None for i in data_id}
@@ -766,18 +777,40 @@ class SampledMuZeroPolicy(Policy):
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_distributions[i], roots_values[i]
+                ######################
+                # sampled related code
+                ######################
+                try:
+                    child_actions = np.array([action.value for action in roots_sampled_actions[i]])
+                except Exception as error:
+                    # print(error)
+                    # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                    child_actions = np.array([action for action in roots_sampled_actions[i]])
+
                 # select the argmax, not sampling
                 # TODO(pu):
                 # only legal actions have visit counts
                 action, visit_count_distribution_entropy = select_action(
                     distributions, temperature=temperature[i], deterministic=False
                 )
+                ######################
+                # sampled related code
+                ######################
                 # action, _ = select_action(distributions, temperature=1, deterministic=True)
                 # TODO(pu): transform to the real action index in legal action set
-                action = np.where(action_mask[i] == 1.0)[0][action]
+                if action_mask[0] is not None:
+                    action = np.where(action_mask[i] == 1.0)[0][action]
+                else:
+                    try:
+                        action = roots_sampled_actions[i][action].value
+                    except Exception as error:
+                        # print(error)
+                        # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                        action = np.array(roots_sampled_actions[i][action])
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,
+                    'child_actions': child_actions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
                     'value': value,
                     'pred_value': pred_values_pool[i],
@@ -871,6 +904,11 @@ class SampledMuZeroPolicy(Policy):
 
             # root visit count
             roots_distributions = roots.get_distributions()  # {list: 1} each element {list:6}
+            ######################
+            # sampled related code
+            ######################
+            roots_sampled_actions = roots.get_sampled_actions()  # {list: 1}->{list:6}
+
             roots_values = roots.get_values()  # {list: 1}
             data_id = [i for i in range(active_eval_env_num)]
             output = {i: None for i in data_id}
@@ -880,15 +918,35 @@ class SampledMuZeroPolicy(Policy):
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_distributions[i], roots_values[i]
+
+                try:
+                    child_actions = np.array([action.value for action in roots_sampled_actions[i]])
+                except Exception as error:
+                    # print(error)
+                    # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                    child_actions = np.array([action for action in roots_sampled_actions[i]])
+
                 # select the argmax, not sampling
                 action, visit_count_distribution_entropy = select_action(
                     distributions, temperature=1, deterministic=True
                 )
+                ######################
+                # sampled related code
+                ######################
                 # TODO(pu): transform to the real action index in legal action set
-                action = np.where(action_mask[i] == 1.0)[0][action]
+                if action_mask[0] is not None:
+                    action = np.where(action_mask[i] == 1.0)[0][action]
+                else:
+                    try:
+                        action = roots_sampled_actions[i][action].value
+                    except Exception as error:
+                        # print(error)
+                        # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                        action = np.array(roots_sampled_actions[i][action])
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,
+                    'child_actions': child_actions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
                     'value': value,
                     'pred_value': pred_values_pool[i],

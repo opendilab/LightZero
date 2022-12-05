@@ -1,8 +1,3 @@
-# import glfw
-# assert glfw.init()
-# import os
-# os.environ['MUJOCO_GL']="egl"
-
 import os
 
 os.environ['DISABLE_MUJOCO_RENDERING'] = '1'
@@ -22,40 +17,31 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
+observation_dim = 3
+action_dim = 1
+categorical_distribution = True
+game_history_length = 50  # we should ignore done in pendulum env which have fixed episode length 200
+norm_type = 'BN'  # 'LN' # TODO: res_blocks LN
+
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 batch_size = 256
-# action_space_size=1
-K = 5
-num_simulations = 25
-# K = 20
-# num_simulations = 50
+
+# K = 5
+# num_simulations = 25
+K = 20
+num_simulations = 50
 update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
 
 # for debug
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
-# batch_size = 32
-# K = 3  # action_space_size=1
-# num_simulations = 10  # action_space_size=1
+# batch_size = 8
+# K = 3
+# num_simulations = 10
 # update_per_collect = 10
-
-norm_type = 'BN'  # 'LN'
-
-
-# TODO(pu): ignore_done=True,
-# The key hyper-para to tune, for different env, we have different episode_length
-# e.g. reuse_factor = 0.1
-# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-
-game_history_length = 50  # we should ignore done in pendulum env which have fixed episode length 200
-# game_history_length = 200
-
-categorical_distribution = True
-observation_dim = 3
-action_dim = 1
 
 pendulum_sampled_efficientzero_config = dict(
     # exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_halfmodel_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_tanh-fs03',
@@ -81,8 +67,8 @@ pendulum_sampled_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            # sigma_type='fixed',  # option list: ['fixed', 'conditioned']
-            sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
+            sigma_type='fixed',  # option list: ['fixed', 'conditioned']
+            # sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
             fixed_sigma_value=0.3,
             bound_type=None,
             # norm_type='LN',

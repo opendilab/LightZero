@@ -14,7 +14,7 @@ from ding.worker import BaseLearner
 from ding.worker import create_serial_collector
 from tensorboardX import SummaryWriter
 
-from core.rl_utils import GameBuffer, visit_count_temperature
+from core.rl_utils import EfficientZeroGameBuffer as GameBuffer, visit_count_temperature
 from core.worker import EfficientZeroEvaluator as BaseSerialEvaluator
 
 

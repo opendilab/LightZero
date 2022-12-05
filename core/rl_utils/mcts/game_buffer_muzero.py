@@ -63,23 +63,23 @@ class MuZeroGameBuffer(Buffer):
         self.clear_time = 0
 
     def push(self, data: Any, meta: Optional[dict] = None):
-        # """
-        # Overview:
-        #     Push data and it's meta information in buffer.
-        #     Save a game history block
-        # Arguments:
-        #     - data (:obj:`Any`): The data which will be pushed into buffer.
-        #                          i.e. a game history block
-        #     - meta (:obj:`dict`): Meta information, e.g. priority, count, staleness.
-        #         - end_tag: bool
-        #             True -> the game is finished. (always True)
-        #         - gap_steps: int
-        #             if the game is not finished, we only save the transitions that can be computed
-        #         - priorities: list
-        #             the priorities corresponding to the transitions in the game history
-        # Returns:
-        #     - buffered_data (:obj:`BufferedData`): The pushed data.
-        # """
+        """
+        Overview:
+            Push data and it's meta information in buffer.
+            Save a game history block
+        Arguments:
+            - data (:obj:`Any`): The data which will be pushed into buffer.
+                                 i.e. a game history block
+            - meta (:obj:`dict`): Meta information, e.g. priority, count, staleness.
+                - end_tag: bool
+                    True -> the game is finished. (always True)
+                - gap_steps: int
+                    if the game is not finished, we only save the transitions that can be computed
+                - priorities: list
+                    the priorities corresponding to the transitions in the game history
+        Returns:
+            - buffered_data (:obj:`BufferedData`): The pushed data.
+        """
         # TODO(pu)
         # if self.get_num_of_transitions() >= self.config.total_transitions:
         #     return
@@ -123,22 +123,22 @@ class MuZeroGameBuffer(Buffer):
             groupby: str = None,
             rolling_window: int = None
     ) -> Union[List[BufferedData], List[List[BufferedData]]]:
-        # """
-        # Overview:
-        #     Sample data with length ``size``.
-        # Arguments:
-        #     - size (:obj:`Optional[int]`): The number of the data that will be sampled.
-        #     - indices (:obj:`Optional[List[str]]`): Sample with multiple indices.
-        #     - replace (:obj:`bool`): If use replace is true, you may receive duplicated data from the buffer.
-        #     - sample_range (:obj:`slice`): Sample range slice.
-        #     - ignore_insufficient (:obj:`bool`): If ignore_insufficient is true, sampling more than buffer size
-        #         with no repetition will not cause an exception.
-        #     - groupby (:obj:`str`): Groupby key in meta.
-        #     - rolling_window (:obj:`int`): Return batches of window size.
-        # Returns:
-        #     - sample_data (:obj:`Union[List[BufferedData], List[List[BufferedData]]]`):
-        #         A list of data with length ``size``, may be nested if groupby or rolling_window is set.
-        # """
+        """
+        Overview:
+            Sample data with length ``size``.
+        Arguments:
+            - size (:obj:`Optional[int]`): The number of the data that will be sampled.
+            - indices (:obj:`Optional[List[str]]`): Sample with multiple indices.
+            - replace (:obj:`bool`): If use replace is true, you may receive duplicated data from the buffer.
+            - sample_range (:obj:`slice`): Sample range slice.
+            - ignore_insufficient (:obj:`bool`): If ignore_insufficient is true, sampling more than buffer size
+                with no repetition will not cause an exception.
+            - groupby (:obj:`str`): Groupby key in meta.
+            - rolling_window (:obj:`int`): Return batches of window size.
+        Returns:
+            - sample_data (:obj:`Union[List[BufferedData], List[List[BufferedData]]]`):
+                A list of data with length ``size``, may be nested if groupby or rolling_window is set.
+        """
         storage = self.buffer
         if sample_range:
             storage = list(itertools.islice(self.storage, sample_range.start, sample_range.stop, sample_range.step))
@@ -200,15 +200,15 @@ class MuZeroGameBuffer(Buffer):
         return self.get_game(idx)
 
     def get_game(self, idx):
-        # """
-        # Overview:
-        #     sample one game history according to the idx
-        # Arguments:
-        #     - idx: transition index
-        #     - return the game history including this transition
-        #     - game_history_idx is the index of this game history in the self.buffer list
-        #     - game_history_pos is the relative position of this transition in this game history
-        # """
+        """
+        Overview:
+            sample one game history according to the idx
+        Arguments:
+            - idx: transition index
+            - return the game history including this transition
+            - game_history_idx is the index of this game history in the self.buffer list
+            - game_history_pos is the relative position of this transition in this game history
+        """
 
         game_history_idx, game_history_pos = self.game_history_look_up[idx]
         game_history_idx -= self.base_idx
@@ -216,16 +216,16 @@ class MuZeroGameBuffer(Buffer):
         return game
 
     def update(self, index, data: Optional[Any] = None, meta: Optional[dict] = None) -> bool:
-        # """
-        # Overview:
-        #     Update data and meta by index
-        # Arguments:
-        #     - index (:obj:`str`): Index of one transition to be updated.
-        #     - data (:obj:`any`): Pure data.  one transition.
-        #     - meta (:obj:`dict`): Meta information.
-        # Returns:
-        #     - success (:obj:`bool`): Success or not, if data with the index not exist in buffer, return false.
-        # """
+        """
+        Overview:
+            Update data and meta by index
+        Arguments:
+            - index (:obj:`str`): Index of one transition to be updated.
+            - data (:obj:`any`): Pure data.  one transition.
+            - meta (:obj:`dict`): Meta information.
+        Returns:
+            - success (:obj:`bool`): Success or not, if data with the index not exist in buffer, return false.
+        """
 
         success = False
         if index < self.get_num_of_transitions():
@@ -240,13 +240,13 @@ class MuZeroGameBuffer(Buffer):
         return success
 
     def batch_update(self, indices: List[str], metas: Optional[List[Optional[dict]]] = None) -> None:
-        # """
-        # Overview:
-        #     Batch update meta by indices, maybe useful in some data architectures.
-        # Arguments:
-        #     - indices (:obj:`List[str]`): Index of data.
-        #     - metas (:obj:`Optional[List[Optional[dict]]]`): Meta information.
-        # """
+        """
+        Overview:
+            Batch update meta by indices, maybe useful in some data architectures.
+        Arguments:
+            - indices (:obj:`List[str]`): Index of data.
+            - metas (:obj:`Optional[List[Optional[dict]]]`): Meta information.
+        """
         # only update the priorities for data still in replay buffer
         for i in range(len(indices)):
             if metas['make_time'][i] > self.clear_time:
@@ -254,10 +254,10 @@ class MuZeroGameBuffer(Buffer):
                 self.priorities[idx] = prio
 
     def remove_oldest_data_to_fit(self):
-        # """
-        # Overview:
-        #     remove some oldest data if the replay buffer is full.
-        # """
+        """
+        Overview:
+            remove some oldest data if the replay buffer is full.
+        """
         nums_of_game_histoty = self.get_num_of_game_histories()
         total_transition = self.get_num_of_transitions()
         if total_transition > self.transition_top:
@@ -272,10 +272,10 @@ class MuZeroGameBuffer(Buffer):
                 self._remove(index + 1)
 
     def _remove(self, num_excess_games):
-        # """
-        # Overview:
-        #     delete game histories in index [0: num_excess_games]
-        # """
+        """
+        Overview:
+            delete game histories in index [0: num_excess_games]
+        """
         excess_games_steps = sum([len(game) for game in self.buffer[:num_excess_games]])
         del self.buffer[:num_excess_games]
         self.priorities = self.priorities[excess_games_steps:]
@@ -324,19 +324,19 @@ class MuZeroGameBuffer(Buffer):
         return buffer
 
     def prepare_batch_context(self, batch_size, beta):
-        # """
-        # Overview:
-        #     Prepare a batch context that contains:
-        #     game_lst: a list of game histories
-        #     game_history_pos_lst: transition index in game (relative index)
-        #     indices_lst: transition index in replay buffer
-        #     weights_lst: the weight concerning the priority
-        #     make_time: the time the batch is made (for correctly updating replay buffer
-        #         when data is deleted)
-        # Arguments:
-        #     - batch_size: int batch size
-        #     - beta: float the parameter in PER for calculating the priority
-        # """
+        """
+        Overview:
+            Prepare a batch context that contains:
+            game_lst: a list of game histories
+            game_history_pos_lst: transition index in game (relative index)
+            indices_lst: transition index in replay buffer
+            weights_lst: the weight concerning the priority
+            make_time: the time the batch is made (for correctly updating replay buffer
+                when data is deleted)
+        Arguments:
+            - batch_size: int batch size
+            - beta: float the parameter in PER for calculating the priority
+        """
         assert beta > 0
 
         # total number of transitions
@@ -376,17 +376,17 @@ class MuZeroGameBuffer(Buffer):
 
     # @profile
     def make_batch(self, batch_context, ratio):
-        # """
-        # Overview:
-        #     prepare the context of a batch
-        #     reward_value_context:        the context of reanalyzed value targets
-        #     policy_re_context:           the context of reanalyzed policy targets
-        #     policy_non_re_context:       the context of non-reanalyzed policy targets
-        #     inputs_batch:                the inputs of batch
-        # Arguments:
-        #     batch_context: Any batch context from replay buffer
-        #     ratio: float ratio of reanalyzed policy (value is 100% reanalyzed)
-        # """
+        """
+        Overview:
+            prepare the context of a batch
+            reward_value_context:        the context of reanalyzed value targets
+            policy_re_context:           the context of reanalyzed policy targets
+            policy_non_re_context:       the context of non-reanalyzed policy targets
+            inputs_batch:                the inputs of batch
+        Arguments:
+            batch_context: Any batch context from replay buffer
+            ratio: float ratio of reanalyzed policy (value is 100% reanalyzed)
+        """
         # obtain the batch context from replay buffer
         game_lst, game_history_pos_lst, indices_lst, weights_lst, make_time_lst = batch_context
         batch_size = len(indices_lst)
@@ -455,15 +455,15 @@ class MuZeroGameBuffer(Buffer):
         return context
 
     def prepare_reward_value_context(self, indices, games, state_index_lst, total_transitions):
-        # """
-        # Overview:
-        #     prepare the context of rewards and values for calculating TD value target in reanalyzing part.
-        # Arguments:
-        #     - indices (:obj:`list`): transition index in replay buffer
-        #     - games (:obj:`list`): list of game histories
-        #     - state_index_lst (:obj:`list`): list of transition index in game_history
-        #     - total_transitions (:obj:`int`): number of collected transitions
-        # """
+        """
+        Overview:
+            prepare the context of rewards and values for calculating TD value target in reanalyzing part.
+        Arguments:
+            - indices (:obj:`list`): transition index in replay buffer
+            - games (:obj:`list`): list of game histories
+            - state_index_lst (:obj:`list`): list of transition index in game_history
+            - total_transitions (:obj:`int`): number of collected transitions
+        """
         zero_obs = games[0].zero_obs()
         config = self.config
         value_obs_lst = []
@@ -525,14 +525,14 @@ class MuZeroGameBuffer(Buffer):
         return reward_value_context
 
     def prepare_policy_non_reanalyzed_context(self, indices, games, state_index_lst):
-        # """
-        # Overview:
-        #     prepare the context of policies for calculating policy target in non-reanalyzing part, just return the policy in self-play
-        # Arguments:
-        #     - indices (:obj:`list`): transition index in replay buffer
-        #     - games (:obj:`list`): list of game histories
-        #     - state_index_lst (:obj:`list`): list transition index in game
-        # """
+        """
+        Overview:
+            prepare the context of policies for calculating policy target in non-reanalyzing part, just return the policy in self-play
+        Arguments:
+            - indices (:obj:`list`): transition index in replay buffer
+            - games (:obj:`list`): list of game histories
+            - state_index_lst (:obj:`list`): list transition index in game
+        """
         child_visits = []
         traj_lens = []
         # for two_player board games
@@ -551,14 +551,14 @@ class MuZeroGameBuffer(Buffer):
         return policy_non_re_context
 
     def prepare_policy_reanalyzed_context(self, indices, games, state_index_lst):
-        # """
-        # Overview:
-        #     prepare the context of policies for calculating policy target in reanalyzing part.
-        # Arguments:
-        #     - indices (:obj:'list'):transition index in replay buffer
-        #     - games (:obj:'list'):list of game histories
-        #     - state_index_lst (:obj:'list'): transition index in game
-        # """
+        """
+        Overview:
+            prepare the context of policies for calculating policy target in reanalyzing part.
+        Arguments:
+            - indices (:obj:'list'):transition index in replay buffer
+            - games (:obj:'list'):list of game histories
+            - state_index_lst (:obj:'list'): transition index in game
+        """
         zero_obs = games[0].zero_obs()
         config = self.config
 

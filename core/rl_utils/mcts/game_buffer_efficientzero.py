@@ -33,7 +33,7 @@ class BufferedData:
 
 
 @BUFFER_REGISTRY.register('game_buffer_efficientzero')
-class GameBuffer(Buffer):
+class EfficientZeroGameBuffer(Buffer):
     """
     Overview:
         The specific game buffer for MuZero-based policy.

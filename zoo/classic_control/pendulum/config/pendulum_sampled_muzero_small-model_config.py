@@ -22,11 +22,17 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
+observation_dim = 3
+action_dim = 1
+categorical_distribution = True
+game_history_length = 50  # we should ignore done in pendulum env which have fixed episode length 200
+norm_type = 'BN'  # 'LN' # TODO: res_blocks LN
+
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 batch_size = 256
-# action_space_size=1
+
 # K = 5
 # num_simulations = 25
 K = 20
@@ -37,31 +43,14 @@ update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
-# batch_size = 32
-# K = 3  # action_space_size=1
-# num_simulations = 10  # action_space_size=1
+# batch_size = 8
+# K = 3
+# num_simulations = 10
 # update_per_collect = 10
 
-norm_type = 'BN'  # 'LN'
-# norm_type = 'LN'  # TODO: res_blocks LN
-
-
-# TODO(pu): ignore_done=True,
-# The key hyper-para to tune, for different env, we have different episode_length
-# e.g. reuse_factor = 0.1
-# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-
-game_history_length = 50  # we should ignore done in pendulum env which have fixed episode length 200
-# game_history_length = 200
-
-categorical_distribution = True
-observation_dim = 3
-action_dim = 1
 
 pendulum_sampled_muzero_config = dict(
-    exp_name=f'data_sez_ctree/pendulum_sampled_muzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn05_tanh_fs03-ew5e-3',
-    # exp_name=f'data_sez_ctree/pendulum_sampled_muzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn05_tanh_cond-sigma-ew5e-3',
-
+    exp_name=f'data_sez_ctree/pendulum_sampled_muzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_adam3e-3_mgn10_tanh_fs03-ew5e-3',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -276,8 +265,8 @@ pendulum_sampled_muzero_config = dict(
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         categorical_distribution=categorical_distribution,
         support_size=10,
-        # max_grad_norm=10,
-        max_grad_norm=0.5,
+        max_grad_norm=10,
+        # max_grad_norm=0.5,
         test_interval=10000,
         log_interval=1000,
         vis_interval=1000,
@@ -330,8 +319,8 @@ pendulum_sampled_muzero_create_config = dict(
         type='pendulum',
         import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
     ),
-    # env_manager=dict(type='base'),
-    env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
+    # env_manager=dict(type='subprocess'),
     policy=dict(
         type='sampled_muzero',
         import_names=['core.policy.sampled_muzero'],
