@@ -1,16 +1,46 @@
 # LightZero
 ![pipeline](assets/lightzero_overview.png)
 
-LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of Monte Carlo tree search (MCTS) algorithms such as:
+LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of Monte Carlo Tree Search (MCTS) algorithms, including:
+- [AlphaZero](https://www.science.org/doi/10.1126/science.aar6404)
 - [MuZero](https://arxiv.org/abs/1911.08265)
 - [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Sampled MuZero](https://arxiv.org/abs/2104.06303)
+- [Gumbel MuZero](https://openreview.net/pdf?id=bERaNdoegnO)
+
 
 [comment]: <> (- [AlphaGo Zero]&#40;https://www.nature.com/articles/nature24270&#41; )
 
-[comment]: <> (- [AlphaZero]&#40;https://www.science.org/doi/10.1126/science.aar6404&#41; )
 
 Our implementation is mainly based on [DI-engine](https://github.com/opendilab/DI-engie).
+
+The following are the overview MCTS principle diagrams of the above algorithms:
+
+<details open>
+<summary>(Click to Collapse)</summary>
+
+![muzero](assets/alg_overview/muzero.png)
+
+![efficientzero](assets/alg_overview/efficientzero.png)
+
+![sampled muzero](assets/alg_overview/sampled_muzero.png)
+
+![gumbel muzero](assets/alg_overview/gumbel_muzero.png)
+
+</details>
+
+## Installation
+
+You can install latest LightZero in development from the Github source codes with the following command:
+
+```bash
+git clone https://github.com/opendilab/LightZero.git
+cd LightZero
+pip install .
+```
+
+
+
 
 [comment]: <> (The paper has been accepted by CoRL 2022 and we will release the code soon.)
 
@@ -38,12 +68,12 @@ Our implementation is mainly based on [DI-engine](https://github.com/opendilab/D
 
 ## Citation
 ```latex
-@misc{ding,
-    title={{DI-engine: OpenDILab} Decision Intelligence Engine},
-    author={DI-engine Contributors},
+@misc{lightzero,
+    title={{LightZero: OpenDILab} A lightweight MCTS series algorithm library},
+    author={LightZero Contributors},
     publisher = {GitHub},
-    howpublished = {\url{https://github.com/opendilab/DI-engine}},
-    year={2021},
+    howpublished = {\url{https://github.com/opendilab/LightZero}},
+    year={2022},
 }
 ```
 
