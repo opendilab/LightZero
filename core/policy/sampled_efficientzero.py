@@ -1,8 +1,5 @@
 import copy
 from typing import List, Dict, Any, Tuple, Union
-
-# cpp mcts
-import core.rl_utils.mcts.ctree_sampled_efficientzero.cytree as ctree
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -13,17 +10,21 @@ from ding.policy.base_policy import Policy
 from ding.rl_utils import get_nstep_return_data, get_train_sample
 from ding.torch_utils import to_tensor, to_device
 from ding.utils import POLICY_REGISTRY
-from torch.distributions import Normal, Independent
+from torch.distributions import Categorical, Independent, Normal
 from torch.nn import L1Loss
 
-# python mcts
-import core.rl_utils.mcts.ptree_sampled_efficientzero as ptree
-from core.rl_utils import SampledEfficientZeroMCTSCtree as MCTSCtree
-from core.rl_utils import SampledEfficientZeroMCTSPtree as MCTSPtree
 from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
 from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
+
+# python mcts
+import core.rl_utils.mcts.ptree_sampled_efficientzero as ptree
+from core.rl_utils import SampledEfficientZeroMCTSPtree as MCTSPtree
+
+# cpp mcts
+import core.rl_utils.mcts.ctree_sampled_efficientzero.cytree as ctree
+from core.rl_utils import SampledEfficientZeroMCTSCtree as MCTSCtree
 
 
 @POLICY_REGISTRY.register('sampled_efficientzero')
@@ -90,6 +91,7 @@ class SampledEfficientZeroPolicy(Policy):
             ignore_done=False,
             weight_decay=1e-4,
             momentum=0.9,
+            cos_lr_scheduler=False,
         ),
         # collect_mode config
         collect=dict(
@@ -318,54 +320,99 @@ class SampledEfficientZeroPolicy(Policy):
         #############################
         # calculate policy loss: KL loss
         #############################
-        (mu, sigma) = policy_logits[:, : self._cfg.action_space_size], policy_logits[:,
+        if self._cfg.continuous_action_space:
+            (mu, sigma) = policy_logits[:, : self._cfg.action_space_size], policy_logits[:,
                                                                        - self._cfg.action_space_size:]
-        dist = Independent(Normal(mu, sigma), 1)
+            dist = Independent(Normal(mu, sigma), 1)
 
-        # take the init hypothetical step k=0
-        target_normalized_visit_count_init_step = target_policy[:, 0]
-        # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
-        # e.g. 4, 6, 20, 2, 1 ->  4, 20, 2
-        target_sampled_actions = child_sampled_actions_batch[:, 0].squeeze(-1)
 
-        policy_entropy = dist.entropy().mean()
-        policy_entropy_loss = - policy_entropy
+            # take the init hypothetical step k=0
+            target_normalized_visit_count_init_step = target_policy[:, 0]
+            # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
+            # e.g. 4, 6, 20, 2, 1 ->  4, 20, 2
+            target_sampled_actions = child_sampled_actions_batch[:, 0].squeeze(-1)
 
-        # project the sampled-based improved policy back onto the space of representable policies
-        # calculate KL loss
-        # batch_size, num_of_sampled_actions -> 4,20
-        # target_normalized_visit_count_init_step is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
-        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step + 1e-9)
-        log_prob_sampled_actions = []
-        for k in range(self._cfg.num_of_sampled_actions):
-            # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
-            # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
-            # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
+            policy_entropy = dist.entropy().mean()
+            policy_entropy_loss = - policy_entropy
 
-            # way 1:
-            # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
+            # project the sampled-based improved policy back onto the space of representable policies
+            # calculate KL loss
+            # batch_size, num_of_sampled_actions -> 4,20
+            # target_normalized_visit_count_init_step is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
+            target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step + 1e-9)
+            log_prob_sampled_actions = []
+            for k in range(self._cfg.num_of_sampled_actions):
+                # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
+                # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
+                # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
 
-            # way 2: SAC-like
-            y = 1 - target_sampled_actions[:, k, :].pow(2) + 1e-9
-            target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions[:, k, :])
-            # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
-            log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
-            log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
-            log_prob = log_prob.squeeze(-1)
+                # way 1:
+                # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
 
-            log_prob_sampled_actions.append(log_prob)
-        # batch_size, num_of_sampled_actions -> 4,20
-        log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
+                # way 2: SAC-like
+                y = 1 - target_sampled_actions[:, k, :].pow(2) + 1e-9
+                target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions[:, k, :])
+                # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
+                log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
+                log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
+                log_prob = log_prob.squeeze(-1)
 
-        if self._cfg.learn.policy_loss_type == 'KL':
-            # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
-            # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
-            policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
-                    target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
-        elif self._cfg.learn.policy_loss_type == 'cross_entropy':
-            # cross_entropy loss: - sum(p * log (q) )
-            policy_loss = - torch.mean(
-                torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
+                log_prob_sampled_actions.append(log_prob)
+            # batch_size, num_of_sampled_actions -> 4,20
+            log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
+
+            if self._cfg.learn.policy_loss_type == 'KL':
+                # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
+                # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
+                policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
+                        target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+            elif self._cfg.learn.policy_loss_type == 'cross_entropy':
+                # cross_entropy loss: - sum(p * log (q) )
+                policy_loss = - torch.mean(
+                    torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
+        else:
+            # (mu, sigma) = policy_logits[:, : self._cfg.action_space_size]
+            # dist = Independent(Normal(mu, sigma), 1)
+
+            prob = torch.softmax(policy_logits, dim=-1)
+            dist = Categorical(prob)
+
+            # take the init hypothetical step k=0
+            target_normalized_visit_count_init_step = target_policy[:, 0]
+            # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
+            # e.g. 4, 6, 20, 2, 1 ->  4, 20, 2
+            target_sampled_actions = child_sampled_actions_batch[:, 0].squeeze(-1)
+
+            policy_entropy = dist.entropy().mean()
+            policy_entropy_loss = - policy_entropy
+
+            # project the sampled-based improved policy back onto the space of representable policies
+            # calculate KL loss
+            # batch_size, num_of_sampled_actions -> 4,20
+            # target_normalized_visit_count_init_step is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
+            target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step + 1e-9)
+            log_prob_sampled_actions = []
+            for k in range(self._cfg.num_of_sampled_actions):
+                # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
+                # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
+                # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
+
+                # way 1:
+                log_prob = dist.log_prob(target_sampled_actions[:, k, :])
+
+                log_prob_sampled_actions.append(log_prob)
+            # batch_size, num_of_sampled_actions -> 4,20
+            log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
+
+            if self._cfg.learn.policy_loss_type == 'KL':
+                # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
+                # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
+                policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
+                        target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+            elif self._cfg.learn.policy_loss_type == 'cross_entropy':
+                # cross_entropy loss: - sum(p * log (q) )
+                policy_loss = - torch.mean(
+                    torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
 
         #############################
         # calculate policy loss: KL loss
@@ -801,7 +848,7 @@ class SampledEfficientZeroPolicy(Policy):
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                     ]
                 roots = ctree.Roots(active_collect_env_num, legal_actions, self._cfg.action_space_size,
-                                    self._cfg.num_of_sampled_actions)
+                                    self._cfg.num_of_sampled_actions, self._cfg.continuous_action_space)
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
@@ -819,7 +866,7 @@ class SampledEfficientZeroPolicy(Policy):
                     # continuous action space
                     roots = ptree.Roots(active_collect_env_num, None, self._cfg.num_simulations,
                                         action_space_size=self._cfg.action_space_size,
-                                        num_of_sampled_actions=self._cfg.num_of_sampled_actions)
+                                        num_of_sampled_actions=self._cfg.num_of_sampled_actions, continuous_action_space=self._cfg.continuous_action_space)
                     # the only difference between collect and eval is the dirichlet noise
                     # TODO(pu):  int(self._cfg.action_space_size)
                     noises = [
@@ -833,7 +880,7 @@ class SampledEfficientZeroPolicy(Policy):
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                     ]
                     roots = ptree.Roots(active_collect_env_num, legal_actions, self._cfg.num_simulations,
-                                        num_of_sampled_actions=self._cfg.num_of_sampled_actions)
+                                        num_of_sampled_actions=self._cfg.num_of_sampled_actions, continuous_action_space=self._cfg.continuous_action_space)
                     # the only difference between collect and eval is the dirichlet noise
                     noises = [
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -865,8 +912,8 @@ class SampledEfficientZeroPolicy(Policy):
                     # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                     child_actions = np.array([action for action in roots_sampled_actions[i]])
 
-                if child_actions.max() > 1 or child_actions.min() < -1:
-                    print('here')
+                # if child_actions.max() > 1 or child_actions.min() < -1:
+                #     print('here')
 
                 # select the argmax, not sampling
                 # TODO(pu):
@@ -966,7 +1013,7 @@ class SampledEfficientZeroPolicy(Policy):
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                     ]
                 roots = ctree.Roots(active_eval_env_num, legal_actions, self._cfg.action_space_size,
-                                    self._cfg.num_of_sampled_actions)
+                                    self._cfg.num_of_sampled_actions, continuous_action_space=self._cfg.continuous_action_space)
 
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
@@ -977,7 +1024,7 @@ class SampledEfficientZeroPolicy(Policy):
                     # continuous action space
                     roots = ptree.Roots(active_eval_env_num, None, self._cfg.num_simulations,
                                         action_space_size=self._cfg.action_space_size,
-                                        num_of_sampled_actions=self._cfg.num_of_sampled_actions)
+                                        num_of_sampled_actions=self._cfg.num_of_sampled_actions, continuous_action_space=self._cfg.continuous_action_space)
                     # the only difference between collect and eval is the dirichlet noise
                 else:
                     # discrete action space
@@ -985,7 +1032,7 @@ class SampledEfficientZeroPolicy(Policy):
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                     ]
                     roots = ptree.Roots(active_eval_env_num, legal_actions, self._cfg.num_simulations,
-                                        num_of_sampled_actions=self._cfg.num_of_sampled_actions)
+                                        num_of_sampled_actions=self._cfg.num_of_sampled_actions, continuous_action_space=self._cfg.continuous_action_space)
                     # the only difference between collect and eval is the dirichlet noise
 
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)

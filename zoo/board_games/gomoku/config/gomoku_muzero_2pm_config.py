@@ -146,7 +146,6 @@ gomoku_muzero_config = dict(
         env_type='board_games',
         device=device,
         mcts_ctree=True,
-        # mcts_ctree=False,
         battle_mode='two_player_mode',
         game_history_length=36,
         # battle_mode='one_player_mode',

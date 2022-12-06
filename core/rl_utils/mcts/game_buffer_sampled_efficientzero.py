@@ -413,18 +413,24 @@ class SampledEfficientZeroGameBuffer(Buffer):
             # sampled related code
             ######################
             # pad random action
-            _actions += [
-                np.random.randn(self.config.action_space_size)
-                for _ in range(self.config.num_unroll_steps - len(_actions))
-            ]
-            # _child_actions += [
-            #     np.random.randn(self.config.num_of_sampled_actions, self.config.action_space_size)
-            #     for _ in range(self.config.num_unroll_steps+1 - len(_child_actions))
-            # ]
-            _child_actions += [
-                np.random.rand(self.config.num_of_sampled_actions, self.config.action_space_size)
-                for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))
-            ]
+
+            if self.config.continuous_action_space:
+                _actions += [
+                    np.random.randn(self.config.action_space_size)
+                    for _ in range(self.config.num_unroll_steps - len(_actions))
+                ]
+                _child_actions += [
+                    np.random.rand(self.config.num_of_sampled_actions, self.config.action_space_size)
+                    for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))
+                ]
+            else:
+                _actions += [
+                    np.random.randint(0, self.config.action_space_size, 1)
+                    for _ in range(self.config.num_unroll_steps - len(_actions))
+                ]
+                _child_actions += [
+                    np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions)
+                    for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))]
 
             # obtain the input observations
             # stack+num_unroll_steps  4+5
@@ -1041,36 +1047,54 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     # sampled related code
                     ######################
                     if policy_mask[policy_index] == 0:
-                        # the null target policy
-                        if self.config.continuous_action_space:
-                            # for continuous action space games
-                            # the invalid target policy
-                            target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
-                        else:
-                            target_policies.append([0 for _ in range(self.config.action_space_size)])
+                        # # the null target policy
+                        # if self.config.continuous_action_space:
+                        #     # for continuous action space games
+                        #     # the invalid target policy
+                        #     target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                        # else:
+                        #     target_policies.append([0 for _ in range(self.config.action_space_size)])
+
+                        # for sampled
+                        # the invalid target policy
+                        target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
 
                     else:
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
-                            if self.config.continuous_action_space:
-                                target_policies.append(
-                                    list(np.ones(self.config.num_of_sampled_actions) / self.config.num_of_sampled_actions)
-                                )
-                            else:
-                                target_policies.append(
-                                    list(np.ones(self.config.action_space_size) / self.config.action_space_size)
-                                )
+                            # if self.config.continuous_action_space:
+                            #     target_policies.append(
+                            #         list(np.ones(self.config.num_of_sampled_actions) / self.config.num_of_sampled_actions)
+                            #     )
+                            # else:
+                            #     target_policies.append(
+                            #         list(np.ones(self.config.action_space_size) / self.config.action_space_size)
+                            #     )
+                            target_policies.append(
+                                list(np.ones(self.config.num_of_sampled_actions) / self.config.num_of_sampled_actions)
+                            )
                         else:
                             if self.config.mcts_ctree:
                                 """
                                 cpp mcts
                                 """
-                                # for one_player atari games
-                                # TODO(pu): very important
-                                sum_visits = sum(distributions)
-                                policy = [visit_count / sum_visits for visit_count in distributions]
-                                target_policies.append(policy)
-                                # target_policies.append(distributions)
+                                if to_play_history[0][0] is None:
+                                    # for one_player atari games
+                                    # TODO(pu): very important
+                                    sum_visits = sum(distributions)
+                                    policy = [visit_count / sum_visits for visit_count in distributions]
+                                    target_policies.append(policy)
+                                    # target_policies.append(distributions)
+                                else:
+                                    # for two_player board games
+                                    policy_tmp = [0 for _ in range(self.config.action_space_size)]
+                                    # to make sure target_policies have the same dimension
+                                    # target_policy = torch.from_numpy(target_policy) be correct
+                                    sum_visits = sum(distributions)
+                                    policy = [visit_count / sum_visits for visit_count in distributions]
+                                    for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
+                                        policy_tmp[legal_action] = policy[index]
+                                    target_policies.append(policy_tmp)
                             else:
                                 """
                                 python mcts
@@ -1210,17 +1234,22 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         ######################
                         # sampled related code
                         ######################
-                        if self.config.continuous_action_space:
-                            # for continuous action space games
-                            # the invalid target policy
-                            target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
-                            policy_mask.append(0)
+                        # if self.config.continuous_action_space:
+                        #     # for continuous action space games
+                        #     # the invalid target policy
+                        #     target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                        #     policy_mask.append(0)
+                        #
+                        # else:
+                        #     # for discrete action space games
+                        #     # the invalid target policy
+                        #     target_policies.append([0 for _ in range(self.config.action_space_size)])
+                        #     policy_mask.append(0)
 
-                        else:
-                            # for discrete action space games
-                            # the invalid target policy
-                            target_policies.append([0 for _ in range(self.config.action_space_size)])
-                            policy_mask.append(0)
+                        # the invalid target policy
+                        target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                        policy_mask.append(0)
+
 
                     policy_index += 1
 

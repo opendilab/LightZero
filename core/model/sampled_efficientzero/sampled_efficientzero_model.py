@@ -293,6 +293,7 @@ class PredictionNetwork(nn.Module):
 
     def __init__(
             self,
+            continuous_action_space,
             action_space_size,
             num_blocks,
             in_channels,
@@ -342,6 +343,7 @@ class PredictionNetwork(nn.Module):
         super().__init__()
         self.in_channels = in_channels
 
+        self.continuous_action_space = continuous_action_space
         self.norm_type = norm_type
         self.sigma_type = sigma_type
         self.fixed_sigma_value = fixed_sigma_value
@@ -385,29 +387,29 @@ class PredictionNetwork(nn.Module):
         # sampled related code
         ######################
 
-        # self.sampled_fc_policy = MLP(
-        #     in_channels=self.block_output_size_policy,
-        #     hidden_channels=fc_policy_layers[0],
-        #
-        #     out_channels=action_space_size*2,
-        #     layer_num=len(fc_policy_layers) + 1,
-        #     activation=nn.ReLU(inplace=True),
-        #     norm_type=self.norm_type,
-        #     output_activation=nn.Identity(),
-        #     output_norm_type=None,
-        #     last_linear_layer_init_zero=last_linear_layer_init_zero
-        # )
-
-        self.sampled_fc_policy = ReparameterizationHead(
-            hidden_size=self.block_output_size_policy,  # 256,
-            output_size=action_space_size,
-            layer_num=len(fc_policy_layers) + 1,
-            sigma_type=self.sigma_type,
-            fixed_sigma_value=self.fixed_sigma_value,
-            activation=nn.ReLU(),
-            norm_type=None,
-            bound_type=self.bound_type  # TODO(pu)
-        )
+        if self.continuous_action_space:
+            self.sampled_fc_policy = ReparameterizationHead(
+                hidden_size=self.block_output_size_policy,  # 256,
+                output_size=action_space_size,
+                layer_num=len(fc_policy_layers) + 1,
+                sigma_type=self.sigma_type,
+                fixed_sigma_value=self.fixed_sigma_value,
+                activation=nn.ReLU(),
+                norm_type=None,
+                bound_type=self.bound_type  # TODO(pu)
+            )
+        else:
+            self.sampled_fc_policy = MLP(
+                in_channels=self.block_output_size_policy,
+                hidden_channels=fc_policy_layers[0],
+                out_channels=action_space_size,
+                layer_num=len(fc_policy_layers) + 1,
+                activation=nn.ReLU(inplace=True),
+                norm_type=self.norm_type,
+                output_activation=nn.Identity(),
+                output_norm_type=None,
+                last_linear_layer_init_zero=last_linear_layer_init_zero
+            )
 
         self.activation = nn.ReLU(inplace=True)
 
@@ -443,8 +445,8 @@ class PredictionNetwork(nn.Module):
 
         # print("policy['mu']", policy['mu'].max(), policy['mu'].min(), policy['mu'].std())
         # print("policy['sigma']", policy['sigma'].max(), policy['sigma'].min(), policy['sigma'].std())
-
-        policy = torch.cat([policy['mu'], policy['sigma']], dim=-1)
+        if self.continuous_action_space:
+            policy = torch.cat([policy['mu'], policy['sigma']], dim=-1)
 
         return policy, value
 
@@ -590,6 +592,7 @@ class SampledEfficientZeroNet(BaseNet):
                 norm_type=self.norm_type,
             )
             self.prediction_network = PredictionNetwork(
+                self.continuous_action_space,
                 action_space_size,
                 num_blocks,
                 observation_shape[0],  # in_channels
@@ -638,6 +641,7 @@ class SampledEfficientZeroNet(BaseNet):
                     norm_type=self.norm_type,
                 )
             self.prediction_network = PredictionNetwork(
+                self.continuous_action_space,
                 action_space_size,
                 num_blocks,
                 None,  # in_channels

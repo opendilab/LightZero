@@ -91,8 +91,6 @@ pendulum_sampled_efficientzero_config = dict(
 
             action_space_size=action_dim,  # 4**2
             num_of_sampled_actions=K,
-            # for debug
-            # num_of_sampled_actions=5,
             continuous_action_space=True,
 
             downsample=False,
@@ -122,28 +120,21 @@ pendulum_sampled_efficientzero_config = dict(
         learn=dict(
             policy_loss_type='KL',
             # policy_loss_type='cross_entropy',
-            # for debug
-            # update_per_collect=2,
-            # batch_size=4,
-
-            # episode_length=200, 200*8=1600
-            # update_per_collect=int(500),
 
             update_per_collect=update_per_collect,
             target_update_freq=100,
             batch_size=batch_size,
 
+            # for atari same as in muzero
             # optim_type='SGD',
-            # learning_rate=0.2,  # lr_manually
+            # learning_rate=0.2,  # lr_manually:0.2->0.02->0.002
 
             # sampled paper
-            cos_lr_scheduler=True,
-            learning_rate=1e-4,
-
-            # cos_lr_scheduler=False,
-            weight_decay=2e-5,
             optim_type='Adam',
-            # learning_rate=0.003,  # adam lr
+            # cos_lr_scheduler=True,
+            cos_lr_scheduler=False,
+            learning_rate=1e-4,  # adam lr
+            weight_decay=2e-5,
         ),
         # collect_mode config
         collect=dict(

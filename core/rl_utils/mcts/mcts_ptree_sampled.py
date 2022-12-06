@@ -13,7 +13,8 @@ from ..scaling_transform import inverse_scalar_transform
 # Sampled EfficientZero
 ###########################################################
 
-import core.rl_utils.mcts.ptree_sampled_efficientzero as tree
+import core.rl_utils.mcts.ptree_sampled_efficientzero as tree_sez
+
 
 class SampledEfficientZeroMCTSPtree(object):
     config = dict(
@@ -68,7 +69,7 @@ class SampledEfficientZeroMCTSPtree(object):
             # the index of each layer in the tree
             hidden_state_index_x = 0
             # minimax value storage
-            min_max_stats_lst = tree.MinMaxStatsList(num)
+            min_max_stats_lst = tree_sez.MinMaxStatsList(num)
 
             # virtual_to_play = copy.deepcopy(to_play)
             for index_simulation in range(self.config.num_simulations):
@@ -81,7 +82,7 @@ class SampledEfficientZeroMCTSPtree(object):
                 hidden_states_h_reward = []
 
                 # prepare a result wrapper to transport results between python and c++ parts
-                results = tree.SearchResults(num=num)
+                results = tree_sez.SearchResults(num=num)
 
                 # traverse to select actions for each root hidden_state_index_x_lst: the first index of leaf node
                 # states in hidden_state_pool, i.e. the search deepth; index hidden_state_index_y_lst: the second
@@ -90,7 +91,7 @@ class SampledEfficientZeroMCTSPtree(object):
 
                 # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
                 # simulation reaches a leaf node s_l.
-                hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play = tree.batch_traverse(
+                hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play = tree_sez.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play)
                 )
                 # obtain the search horizon for leaf nodes (not expanded)
@@ -112,8 +113,15 @@ class SampledEfficientZeroMCTSPtree(object):
                                                           ).to(device).unsqueeze(0)  # shape (1,1, 64)
                 hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)
                                                           ).to(device).unsqueeze(0)  # shape (1,1, 64)
+
                 last_actions = last_actions[0].value
-                last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).long()
+                try:
+                    # continuous action
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).long()
+                except:
+                    # discrete action
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(-1).unsqueeze(1).long()
+
 
                 # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are
                 # computed by the dynamics function
@@ -170,7 +178,7 @@ class SampledEfficientZeroMCTSPtree(object):
                 # Backup: At the end of the simulation, the statistics along the trajectory are updated.
 
                 # backpropagation along the search path to update the attributes
-                tree.batch_back_propagate(
+                tree_sez.batch_back_propagate(
                     hidden_state_index_x, discount, value_prefix_pool, value_pool, policy_logits_pool,
                     min_max_stats_lst, results, is_reset_lst, virtual_to_play
                 )
@@ -179,7 +187,7 @@ class SampledEfficientZeroMCTSPtree(object):
 # Sampled MuZero
 ###########################################################
 
-import core.rl_utils.mcts.ptree_sampled_muzero as tree
+import core.rl_utils.mcts.ptree_sampled_muzero as tree_smz
 
 class SampledMuZeroMCTSPtree(object):
     config = dict(
@@ -234,7 +242,7 @@ class SampledMuZeroMCTSPtree(object):
             # the index of each layer in the tree
             hidden_state_index_x = 0
             # minimax value storage
-            min_max_stats_lst = tree.MinMaxStatsList(num)
+            min_max_stats_lst = tree_smz.MinMaxStatsList(num)
 
             # virtual_to_play = copy.deepcopy(to_play)
             for index_simulation in range(self.config.num_simulations):
@@ -256,7 +264,7 @@ class SampledMuZeroMCTSPtree(object):
 
                 # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
                 # simulation reaches a leaf node s_l.
-                hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play = tree.batch_traverse(
+                hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play = tree_smz.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play)
                 )
                 # obtain the search horizon for leaf nodes (not expanded)
@@ -336,7 +344,7 @@ class SampledMuZeroMCTSPtree(object):
                 # Backup: At the end of the simulation, the statistics along the trajectory are updated.
 
                 # backpropagation along the search path to update the attributes
-                tree.batch_back_propagate(
+                tree_smz.batch_back_propagate(
                     hidden_state_index_x, discount, value_prefix_pool, value_pool, policy_logits_pool,
                     min_max_stats_lst, results, is_reset_lst, virtual_to_play
                 )

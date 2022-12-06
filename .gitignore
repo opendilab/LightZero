@@ -16,6 +16,7 @@ data_*
 *.so
 *.gv
 cytree.cpp
+*.png
 
 pkg/
 src/
@@ -136,7 +137,7 @@ local.properties
 *.webp
 
 # Portable Network Graphics
-*.png
+#*.png
 
 # Animated Portable Network Graphics
 *.apng
