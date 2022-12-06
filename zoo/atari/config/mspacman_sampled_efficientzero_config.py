@@ -5,6 +5,7 @@ import sys
 sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
+
 import torch
 from easydict import EasyDict
 
@@ -13,25 +14,31 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-action_space_size = 6  # for qbert
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-batch_size = 256
-num_simulations = 50
-# TODO(pu):
-# The key hyper-para to tune, for different env, we have different episode_length
-# e.g. reuse_factor = 0.5
-# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 1000
+action_space_size = 9  # for mspacman
+K = 3
 
-qbert_efficientzero_config = dict(
-    exp_name=f'data_mz_ctree/qbert_muzero_seed0_sub883_upc{update_per_collect}',
+# num_simulations = 50
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# batch_size = 256
+# update_per_collect = 1000
+
+num_simulations = 50
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+batch_size = 4
+update_per_collect = 2
+
+
+mspacman_sampled_efficientzero_config = dict(
+    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        env_name='QbertNoFrameskip-v4',
+        env_name='MsPacmanNoFrameskip-v4',
         stop_value=int(1e6),
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
@@ -48,21 +55,23 @@ qbert_efficientzero_config = dict(
     ),
     policy=dict(
         model_path=None,
-        env_name='PongNoFrameskip-v4',
+        env_name='MsPacmanNoFrameskip-v4',
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',
-            observation_shape=(12, 96, 96),  # 3,96,96 stack=4
+            observation_shape=(12, 96, 96),  # if frame_stack_num=4, the original obs shape is（3,96,96）
             action_space_size=action_space_size,
+            continuous_action_space=False,
+            num_of_sampled_actions=K,
+
             downsample=True,
             num_blocks=1,
-            # default config in EZ original repo
+            # default config in EfficientZero original repo
             num_channels=64,
-            # The env step is twice as large as the original size model when converging
-            # num_channels=32,
+            lstm_hidden_size=512,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -82,11 +91,19 @@ qbert_efficientzero_config = dict(
         # learn_mode config
         learn=dict(
             update_per_collect=update_per_collect,
+            target_update_freq=100,
             batch_size=batch_size,
 
-            learning_rate=0.2,  # set lr manually: 0.2->0.02->0.002
-            # Frequency of target network update.
-            target_update_freq=100,
+            # for atari same as in muzero
+            optim_type='SGD',
+            learning_rate=0.2,  # lr_manually:0.2->0.02->0.002
+
+            # sampled paper
+            # optim_type='Adam',
+            # # cos_lr_scheduler=True,
+            # cos_lr_scheduler=False,
+            # learning_rate=1e-4,  # adam lr
+            # weight_decay=2e-5,
         ),
         # collect_mode config
         collect=dict(
@@ -101,7 +118,7 @@ qbert_efficientzero_config = dict(
         # command_mode config
         other=dict(
             # NOTE: the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game_buffer_muzero')
+            replay_buffer=dict(type='game_buffer_sampled_efficientzero')
         ),
         ######################################
         # game_config begin
@@ -109,7 +126,8 @@ qbert_efficientzero_config = dict(
         env_type='no_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
-        mcts_ctree=True,
+        # mcts_ctree=True,
+        mcts_ctree=False,
         image_based=True,
         # cvt_string=True,
         # trade memory for speed
@@ -118,7 +136,9 @@ qbert_efficientzero_config = dict(
         game_wrapper=True,
         # NOTE: different env have different action_space_size
         action_space_size=action_space_size,
-        # action_space_size=4,
+        num_of_sampled_actions=K,
+        continuous_action_space=False,
+
         amp_type='none',
         obs_shape=(12, 96, 96),
         image_channel=3,
@@ -138,21 +158,22 @@ qbert_efficientzero_config = dict(
         batch_size=batch_size,
         game_history_length=400,
         total_transitions=int(1e5),
-        # default config in EZ original repo
+        # default config in EfficientZero original repo
         channels=64,
-        # The env step is twice as large as the original size model when converging
-        # channels=32,
+        lstm_hidden_size=512,
         td_steps=5,
         num_unroll_steps=5,
+        lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
         reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
-        lr_manually=True,  # set lr manually: 0.2->0.02->0.002
+        lr_manually=True,
+        # lr_manually=False,
 
-        # TODO(pu): if true, no priority to sample
-        use_max_priority=True,  # if true, sample without priority
+        # if true, sample without priority
+        use_max_priority=True,
         # use_max_priority=False,
         use_priority=True,
 
@@ -186,8 +207,6 @@ qbert_efficientzero_config = dict(
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         categorical_distribution=True,
         support_size=300,
-        # value_support=DiscreteSupport(-300, 300, delta=1),
-        # reward_support=DiscreteSupport(-300, 300, delta=1),
         max_grad_norm=10,
         test_interval=10000,
         log_interval=1000,
@@ -212,6 +231,7 @@ qbert_efficientzero_config = dict(
         reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
+        consistency_coeff=2,
 
         # siamese
         proj_hid=1024,
@@ -231,10 +251,10 @@ qbert_efficientzero_config = dict(
         ######################################
     ),
 )
-qbert_efficientzero_config = EasyDict(qbert_efficientzero_config)
-main_config = qbert_efficientzero_config
+mspacman_sampled_efficientzero_config = EasyDict(mspacman_sampled_efficientzero_config)
+main_config = mspacman_sampled_efficientzero_config
 
-qbert_efficientzero_create_config = dict(
+mspacman_sampled_efficientzero_create_config = dict(
     env=dict(
         type='atari_lightzero',
         import_names=['zoo.atari.envs.atari_lightzero_env'],
@@ -242,18 +262,18 @@ qbert_efficientzero_create_config = dict(
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero',
-        import_names=['core.policy.muzero'],
+        type='sampled_efficientzero',
+        import_names=['core.policy.sampled_efficientzero'],
     ),
     collector=dict(
-        type='episode_muzero',
+        type='episode_sampled_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.muzero_collector'],
+        import_names=['core.worker.collector.sampled_efficientzero_collector'],
     )
 )
-qbert_efficientzero_create_config = EasyDict(qbert_efficientzero_create_config)
-create_config = qbert_efficientzero_create_config
+mspacman_sampled_efficientzero_create_config = EasyDict(mspacman_sampled_efficientzero_create_config)
+create_config = mspacman_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_muzero
-    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(5e5))
+    from core.entry import serial_pipeline_sampled_efficientzero
+    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e5))

@@ -575,7 +575,6 @@ def batch_traverse(
         # Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
         # the leaf node is not expanded
         while node.expanded:
-
             mean_q = node.get_mean_q(is_root, parent_q, discount)
             is_root = 0
             parent_q = mean_q

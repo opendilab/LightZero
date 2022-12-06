@@ -1057,7 +1057,6 @@ class SampledMuZeroGameBuffer(Buffer):
                                 cpp mcts
                                 """
                                 if to_play_history[0][0] is None:
-
                                     # for one_player atari games
                                     # TODO(pu): very important
                                     sum_visits = sum(distributions)

@@ -109,8 +109,7 @@ breakout_efficientzero_config = dict(
         env_type='no_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
-        # mcts_ctree=True,
-        mcts_ctree=False,
+        mcts_ctree=True,
         image_based=True,
         # cvt_string=True,
         # trade memory for speed

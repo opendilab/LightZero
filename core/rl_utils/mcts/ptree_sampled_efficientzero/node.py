@@ -7,7 +7,7 @@ from typing import List, Any, Optional, Union
 
 import numpy as np
 import torch
-from torch.distributions import Normal, Independent
+from torch.distributions import Normal, Independent, Categorical
 
 
 class Node:
@@ -18,18 +18,20 @@ class Node:
      """
 
     def __init__(self, prior: Union[list, float], legal_actions: Any = None, action_space_size=9,
-                 num_of_sampled_actions=20):
-        # pi, beta
-        if isinstance(prior, list):
-            self.prior = prior[0]
-            self.prior_beta = prior[1]
-        elif isinstance(prior, float):
-            self.prior = prior
+                 num_of_sampled_actions=20, continuous_action_space=False):
+        # # pi, beta
+        # if isinstance(prior, list):
+        #     self.prior = prior[0]
+        #     self.prior_beta = prior[1]
+        # elif isinstance(prior, float):
+        #     self.prior = prior
+        self.prior = prior
         self.mu = None
         self.sigma = None
         self.legal_actions = legal_actions
         self.action_space_size = action_space_size
         self.num_of_sampled_actions = num_of_sampled_actions
+        self.continuous_action_space = continuous_action_space
 
         self.is_reset = 0
         self.visit_count = 0
@@ -60,11 +62,8 @@ class Node:
         dist.log_prob(sampled_actions)
         """
         self.to_play = to_play
-        if self.legal_actions is None:
-            self.legal_actions = []
-        #     # TODO
-        #     self.legal_actions = np.arange(len(policy_logits))
-        # self.action_space_size = int(len(policy_logits)/2)
+        # if self.legal_actions is None:
+        #     self.legal_actions = []
 
         self.hidden_state_index_x = hidden_state_index_x
         self.hidden_state_index_y = hidden_state_index_y
@@ -78,34 +77,49 @@ class Node:
         ######################
         # sampled related code
         ######################
-        # policy_logits = {'mu': torch.randn([1, 2]), 'sigma': torch.zeros([1, 2]) + 1e-7}
-        # (mu, sigma) = policy_logits['mu'], policy_logits['sigma']
-        # (mu, sigma) = policy_logits[:,: self.action_space_size ], policy_logits[:,- self.action_space_size:]
-        (mu, sigma) = torch.tensor(policy_logits[: self.action_space_size]), torch.tensor(
-            policy_logits[- self.action_space_size:])
-        self.mu = mu
-        self.sigma = sigma
-        dist = Independent(Normal(mu, sigma), 1)
-        # print(dist.batch_shape, dist.event_shape)
-        sampled_actions_before_tanh = dist.sample(torch.tensor([self.num_of_sampled_actions]))
+        if self.continuous_action_space:
+            # policy_logits = {'mu': torch.randn([1, 2]), 'sigma': torch.zeros([1, 2]) + 1e-7}
+            # (mu, sigma) = policy_logits['mu'], policy_logits['sigma']
+            # (mu, sigma) = policy_logits[:,: self.action_space_size ], policy_logits[:,- self.action_space_size:]
+            (mu, sigma) = torch.tensor(policy_logits[: self.action_space_size]), torch.tensor(
+                policy_logits[- self.action_space_size:])
+            self.mu = mu
+            self.sigma = sigma
+            dist = Independent(Normal(mu, sigma), 1)
+            # print(dist.batch_shape, dist.event_shape)
+            sampled_actions_before_tanh = dist.sample(torch.tensor([self.num_of_sampled_actions]))
 
-        # way 1:
-        # log_prob = dist.log_prob(sampled_actions_before_tanh)
+            # way 1:
+            # log_prob = dist.log_prob(sampled_actions_before_tanh)
 
-        # way 2:
-        sampled_actions = torch.tanh(sampled_actions_before_tanh)
-        y = 1 - sampled_actions.pow(2) + 1e-6
-        # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
-        log_prob = dist.log_prob(sampled_actions_before_tanh).unsqueeze(-1)
-        log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
+            # way 2:
+            sampled_actions = torch.tanh(sampled_actions_before_tanh)
+            y = 1 - sampled_actions.pow(2) + 1e-6
+            # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
+            log_prob = dist.log_prob(sampled_actions_before_tanh).unsqueeze(-1)
+            log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
+        else:
+            if self.legal_actions is not None:
+                # fisrt use theself.legal_actions to exclude the illegal actions
+                policy_tmp = [0. for _ in range(self.action_space_size)]
+                for index, legal_action in enumerate(self.legal_actions):
+                    policy_tmp[legal_action] = policy_logits[index]
+                policy_logits = policy_tmp
+            # then empty the self.legal_actions
+            self.legal_actions = []
+            prob = torch.softmax(torch.tensor(policy_logits), dim=-1)
+            dist = Categorical(prob)
+            sampled_actions = dist.sample(torch.tensor([self.num_of_sampled_actions]))
+            log_prob = dist.log_prob(sampled_actions)
 
         # TODO: factored policy representation
         # empirical_distribution = [1/self.num_of_sampled_actions]
         for action_index in range(self.num_of_sampled_actions):
             self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
-                log_prob[action_index].item(),
+                # log_prob[action_index].item(),
+                log_prob[action_index],
                 action_space_size=self.action_space_size,
-                num_of_sampled_actions=self.num_of_sampled_actions)
+                num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space)
             self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
 
     def add_exploration_noise(self, exploration_fraction: float, noises: List[float]):
@@ -208,12 +222,13 @@ class Node:
 class Roots:
 
     def __init__(self, root_num: int, legal_actions_list: Any, pool_size: int, action_space_size: Optional = None,
-                 num_of_sampled_actions=20):
+                 num_of_sampled_actions=20, continuous_action_space=False):
         self.num = root_num
         self.root_num = root_num
         self.legal_actions_list = legal_actions_list  # list of list
         self.pool_size = pool_size
         self.num_of_sampled_actions = num_of_sampled_actions
+        self.continuous_action_space = continuous_action_space
 
         self.roots = []
 
@@ -222,15 +237,18 @@ class Roots:
         ##################
         for i in range(self.root_num):
             if isinstance(legal_actions_list, list):
-                self.roots.append(Node(0, legal_actions_list[i], num_of_sampled_actions=self.num_of_sampled_actions))
+                # TODO(pu): sampled in board_games
+                self.roots.append(Node(0, legal_actions_list[i], num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space))
             elif isinstance(legal_actions_list, int):
                 # if legal_actions_list is int
                 self.roots.append(
-                    Node(0, np.arange(legal_actions_list), num_of_sampled_actions=self.num_of_sampled_actions))
+                    Node(0, None, num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space))
+                # self.roots.append(
+                #     Node(0, np.arange(legal_actions_list), num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space))
             elif legal_actions_list is None:
                 # continuous action space
                 self.roots.append(Node(0, None, action_space_size=action_space_size,
-                                       num_of_sampled_actions=self.num_of_sampled_actions))
+                                       num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space))
 
     def prepare(self, root_exploration_fraction, noises, value_prefixs, policies, to_play=None):
         for i in range(self.root_num):
@@ -539,9 +557,16 @@ def compute_ucb_score(
         prior_score = pb_c * (1 / len(parent.children))
     elif node_prior == "density":
         # TODO(pu): empirical distribution
-        prior_score = pb_c * (
-                torch.exp(child.prior) / (sum([torch.exp(node.prior) for node in parent.children.values()]) + 1e-9)
-        )
+        if continuous_action_space:
+            # prior is log_prob
+            prior_score = pb_c * (
+                    torch.exp(child.prior) / (sum([torch.exp(node.prior) for node in parent.children.values()]) + 1e-9)
+            )
+        else:
+            # prior is prob
+            prior_score = pb_c * (
+                    child.prior / (sum([node.prior for node in parent.children.values()]) + 1e-9)
+            )
     else:
         raise ValueError("{} is unknown prior option, choose uniform or density")
 

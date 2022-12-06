@@ -118,8 +118,7 @@ atari_efficientzero_config = dict(
         env_type='no_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
-        # mcts_ctree=True,
-        mcts_ctree=False,
+        mcts_ctree=True,
         image_based=True,
         # cvt_string=True,
         # trade memory for speed
@@ -196,8 +195,6 @@ atari_efficientzero_config = dict(
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         categorical_distribution=True,
         support_size=300,
-        # value_support=DiscreteSupport(-300, 300, delta=1),
-        # reward_support=DiscreteSupport(-300, 300, delta=1),
         max_grad_norm=10,
         test_interval=10000,
         log_interval=1000,

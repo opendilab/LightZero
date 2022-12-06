@@ -130,17 +130,16 @@ pendulum_sampled_efficientzero_config = dict(
             target_update_freq=100,
             batch_size=batch_size,
 
+            # for atari same as in muzero
             # optim_type='SGD',
-            # learning_rate=0.2,  # lr_manually
+            # learning_rate=0.2,  # lr_manually:0.2->0.02->0.002
 
             # sampled paper
-            # cos_lr_scheduler=True,
-            # learning_rate=1e-4,
-
-            cos_lr_scheduler=False,
-            weight_decay=2e-5,
             optim_type='Adam',
-            learning_rate=0.003,  # adam lr
+            # cos_lr_scheduler=True,
+            cos_lr_scheduler=False,
+            learning_rate=1e-4,  # adam lr
+            weight_decay=2e-5,
         ),
         # collect_mode config
         collect=dict(
