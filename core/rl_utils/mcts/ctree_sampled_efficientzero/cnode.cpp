@@ -294,10 +294,11 @@ namespace tree
             // }
             // std::cout << "position 3" << std::endl;
 
+            // python version code: legal_actions = []
             std::vector<CAction> legal_actions;
-
             std::vector<float> probs;
 
+            // probs = softmax(policy_logits)
             float logits_exp_sum = 0;
             for (int i = 0; i < policy_logits.size(); ++i)
             {
@@ -337,53 +338,50 @@ namespace tree
             //     std::cout << "sampled_actions_log_probs" << '[' << i << ']' << sampled_actions_log_probs[i] << std::endl;
             // }
 
-            // 无放回抽样
-            std::uniform_real_distribution<double> u(0.0, 1.0); //均匀分布
-            std::vector<double> vals;
-            std::vector<std::pair<int, double> > valsWithIndices;
+            // 每个节点的legal_actions应该为一个固定离散集合，所以采用无放回抽样
+            std::uniform_real_distribution<double> uniform_distribution(0.0, 1.0); //均匀分布
+            std::vector<double> disturbed_probs;
+            std::vector<std::pair<int, double> > disc_action_with_probs;
 
-            //把权重值作为指数，均匀分布随机数作为底
-            //相当于给权重增加了均匀随机扰动
-            for (auto iter : probs)
+            // 把概率值作为指数，从均匀分布采样的随机数作为底数：
+            // 相当于给原始概率值增加了均匀的随机扰动
+            for (auto prob : probs)
             {
-                vals.push_back(std::pow(u(generator), 1. / iter));
+                disturbed_probs.push_back(std::pow(uniform_distribution(generator), 1. / prob));
             }
 
             // std::cout << "position 4" << std::endl;
 
-            //按照扰动后的权重值从大到小排序，并扩展到索引
-            for (size_t iter = 0; iter < vals.size(); iter++)
+            // 按照扰动后的概率值从大到小排序:
+            // 排序后第一个向量为索引，第二个向量为从大到小排序的扰动后的概率值
+            for (size_t iter = 0; iter < disturbed_probs.size(); iter++)
             {
-                // valsWithIndices.emplace_back(iter, vals[iter]);
-                // valsWithIndices.__emplace_back(std::make_pair(iter, vals[iter]));
-                valsWithIndices.emplace_back(std::make_pair(iter, vals[iter]));
-
-                // valsWithIndices.push_back(iter, vals[iter]);
+                // disc_action_with_probs.__emplace_back(std::make_pair(iter, disturbed_probs[iter]));
+                disc_action_with_probs.emplace_back(std::make_pair(iter, disturbed_probs[iter]));
             }
-
-            // std::sort(valsWithIndices.begin(), valsWithIndices.end(), [](auto x, auto y)
+            // std::sort(disc_action_with_probs.begin(), disc_action_with_probs.end(), [](auto x, auto y)
             //           { return x.second > y.second; });
 
-            std::sort(valsWithIndices.begin(), valsWithIndices.end(), cmp);
+            std::sort(disc_action_with_probs.begin(), disc_action_with_probs.end(), cmp);
 
             // for (int j = 0; j < policy_logits.size(); ++j)
             // {
-            //     std::cout << "valsWithIndices[i].first " << valsWithIndices[j].first << " "
-            //               << "valsWithIndices[j].second " << valsWithIndices[j].second << std::endl;
+            //     std::cout << "disc_action_with_probs[i].first " << disc_action_with_probs[j].first << " "
+            //               << "disc_action_with_probs[j].second " << disc_action_with_probs[j].second << std::endl;
             // }
 
-            //样本大小sampleSize设置为1
+            // 取前num_of_sampled_actions个动作
             for (int k = 0; k < num_of_sampled_actions; ++k)
             {
-                sampled_actions.push_back(valsWithIndices[k].first);
-                sampled_actions_probs.push_back(valsWithIndices[k].second);
+                sampled_actions.push_back(disc_action_with_probs[k].first);
+                sampled_actions_probs.push_back(disc_action_with_probs[k].second);
 
-                // TODO(pu): logging
-                // std::cout << "sampled_actions[k]： " << sampled_actions[k] << std::endl;
-                // std::cout << "sampled_actions_probs[k]： " << sampled_actions_probs[k] << std::endl;
+            // TODO(pu): logging
+            // std::cout << "sampled_actions[k]： " << sampled_actions[k] << std::endl;
+            // std::cout << "sampled_actions_probs[k]： " << sampled_actions_probs[k] << std::endl;
             }
-            vals.clear();            //清空集合，为下次抽样做准备
-            valsWithIndices.clear(); //清空集合，为下次抽样做准备
+            disturbed_probs.clear();        // 清空集合，为下次抽样做准备
+            disc_action_with_probs.clear(); // 清空集合，为下次抽样做准备
             // std::cout << "position 5" << std::endl;
         }
 
@@ -669,7 +667,7 @@ namespace tree
         for (int i = 0; i < this->root_num; ++i)
         {
             this->roots[i].expand(to_play_batch[i], 0, i, value_prefixs[i], policies[i]);
-            
+
             // std::cout << "position expand done!" << std::endl;
 
             this->roots[i].add_exploration_noise(root_exploration_fraction, noises[i]);
