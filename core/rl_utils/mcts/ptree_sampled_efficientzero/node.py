@@ -100,6 +100,16 @@ class Node:
             log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
             # if self.legal_actions is None:
             self.legal_actions = []
+
+            # TODO: factored policy representation
+            # empirical_distribution = [1/self.num_of_sampled_actions]
+            for action_index in range(self.num_of_sampled_actions):
+                self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
+                    log_prob[action_index],
+                    action_space_size=self.action_space_size,
+                    num_of_sampled_actions=self.num_of_sampled_actions,
+                    continuous_action_space=self.continuous_action_space)
+                self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
         else:
             if self.legal_actions is not None:
                 # fisrt use theself.legal_actions to exclude the illegal actions
@@ -109,19 +119,23 @@ class Node:
                 policy_logits = policy_tmp
             # then empty the self.legal_actions
             self.legal_actions = []
-            prob = torch.softmax(torch.tensor(policy_logits), dim=-1)
-            dist = Categorical(prob)
-            sampled_actions = dist.sample(torch.tensor([self.num_of_sampled_actions]))
-            log_prob = dist.log_prob(sampled_actions)
 
-        # TODO: factored policy representation
-        # empirical_distribution = [1/self.num_of_sampled_actions]
-        for action_index in range(self.num_of_sampled_actions):
-            self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
-                log_prob[action_index],
-                action_space_size=self.action_space_size,
-                num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space)
-            self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
+            # prob = torch.softmax(torch.tensor(policy_logits), dim=-1)
+            # dist = Categorical(prob)
+            # sampled_actions = dist.sample(torch.tensor([self.num_of_sampled_actions]))
+            # log_prob = dist.log_prob(sampled_actions)
+
+            prob = torch.softmax(torch.tensor(policy_logits), dim=-1)
+            sampled_actions = torch.multinomial(prob, self.num_of_sampled_actions, replacement=False)
+
+            # TODO: factored policy representation
+            # empirical_distribution = [1/self.num_of_sampled_actions]
+            for action_index in range(self.num_of_sampled_actions):
+                self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
+                    prob[action_index],
+                    action_space_size=self.action_space_size,
+                    num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space)
+                self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
 
     def add_exploration_noise(self, exploration_fraction: float, noises: List[float]):
         """
@@ -223,7 +237,7 @@ class Node:
 
 class Roots:
 
-    def __init__(self, root_num: int, legal_actions_list: Any, action_space_size: Optional = None,
+    def __init__(self, root_num: int, legal_actions_list: Any, action_space_size: int = 9,
                  num_of_sampled_actions=20, continuous_action_space=False):
         self.num = root_num
         self.root_num = root_num
@@ -463,7 +477,8 @@ def batch_back_propagate(
 
 
 def select_child(
-        root: Node, min_max_stats, pb_c_base: int, pb_c_int: float, discount: float, mean_q: float, players: int
+        root: Node, min_max_stats, pb_c_base: int, pb_c_int: float, discount: float, mean_q: float, players: int,
+        continuous_action_space=False,
 ) -> int:
     ##################
     # sampled related code
@@ -505,7 +520,7 @@ def select_child(
         temp_score = compute_ucb_score(
             root, child, min_max_stats, mean_q, root.is_reset, root.visit_count, root.value_prefix, pb_c_base,
             pb_c_int,
-            discount, players
+            discount, players, continuous_action_space
         )
         if max_score < temp_score:
             max_score = temp_score
@@ -596,7 +611,7 @@ def compute_ucb_score(
 
 def batch_traverse(
         roots, pb_c_base: int, pb_c_init: float, discount: float, min_max_stats_lst, results: SearchResults,
-        virtual_to_play
+        virtual_to_play, continuous_action_space=False
 ):
     """
     Overview:
@@ -640,7 +655,8 @@ def batch_traverse(
             parent_q = mean_q
 
             # select action according to the pUCT rule
-            action = select_child(node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players)
+            action = select_child(node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players, continuous_action_space)
+
             if virtual_to_play is not None and virtual_to_play[i] is not None:
                 # Players play turn by turn
                 if virtual_to_play[i] == 1:

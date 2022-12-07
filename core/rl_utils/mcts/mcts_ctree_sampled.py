@@ -8,7 +8,8 @@ import torch
 from easydict import EasyDict
 
 from ..scaling_transform import inverse_scalar_transform
-from .ctree_sampled_efficientzero import cytree as tree_efficientzero
+
+from core.rl_utils.mcts.ctree_sampled_efficientzero import cytree as tree_efficientzero
 
 
 ###########################################################
@@ -82,7 +83,7 @@ class SampledEfficientZeroMCTSCtree(object):
                 # hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool
                 # the hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play_batch)
+                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play_batch),self.config.continuous_action_space
                 )
                 # obtain the search horizon for leaf nodes
                 search_lens = results.get_search_len()
@@ -218,7 +219,7 @@ class SampledMuZeroMCTSCtree(object):
                 # hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool
                 # the hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play_batch)
+                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play_batch),self.config.continuous_action_space
                 )
                 # obtain the search horizon for leaf nodes
                 search_lens = results.get_search_len()

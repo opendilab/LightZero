@@ -425,12 +425,17 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 ]
             else:
                 _actions += [
-                    np.random.randint(0, self.config.action_space_size, 1)
+                    np.random.randint(0, self.config.action_space_size, 1).item()
                     for _ in range(self.config.num_unroll_steps - len(_actions))
                 ]
-                _child_actions += [
-                    np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions)
-                    for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))]
+                if len(_child_actions[0].shape)==1:
+                    _child_actions += [
+                        np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions)  # TODO(pu)
+                        for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))]
+                else:
+                    _child_actions += [
+                        np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions).reshape(self.config.num_of_sampled_actions, 1) # TODO(pu)
+                        for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))]
 
             # obtain the input observations
             # stack+num_unroll_steps  4+5
@@ -452,7 +457,10 @@ class SampledEfficientZeroGameBuffer(Buffer):
         # formalize the inputs of a batch
         inputs_batch = [obs_lst, action_lst, child_actions_lst, mask_lst, indices_lst, weights_lst, make_time_lst]
 
-        child_actions_lst = np.concatenate([child_actions_lst])
+        try:
+            child_actions_lst = np.concatenate([child_actions_lst])
+        except Exception as error:
+            print(error)
 
         for i in range(len(inputs_batch)):
             inputs_batch[i] = np.asarray(inputs_batch[i])
@@ -736,7 +744,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         ]
 
                     roots = ctree.Roots(batch_size, legal_actions, self.config.action_space_size,
-                                        self.config.num_of_sampled_actions)
+                                        self.config.num_of_sampled_actions, self.config.continuous_action_space)
                     noises = [
                         np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.num_of_sampled_actions
                                             ).astype(np.float32).tolist() for _ in range(batch_size)
@@ -964,7 +972,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         [i for i, x in enumerate(action_mask[j]) if x == 1]
                         for j in range(batch_size)]
 
-                roots = ctree.Roots(batch_size,  legal_actions, self.config.action_space_size, self.config.num_of_sampled_actions)
+                roots = ctree.Roots(batch_size,  legal_actions, self.config.action_space_size, self.config.num_of_sampled_actions,self.config.continuous_action_space)
                 noises = [
                     np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for _ in range(batch_size)
@@ -997,6 +1005,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)
                     ]
+
                 roots = ptree.Roots(batch_size, legal_actions, action_space_size=self.config.action_space_size,
                                     num_of_sampled_actions=self.config.num_of_sampled_actions, continuous_action_space=self.config.continuous_action_space)
                 # noises = [

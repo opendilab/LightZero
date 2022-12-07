@@ -193,15 +193,15 @@ class DynamicsNetwork(nn.Module):
 
         self.norm_type = norm_type
         self.lstm_hidden_size = lstm_hidden_size
-        self.action_space_dim = action_space_size
+        self.action_space_size = action_space_size
 
-        self.conv = nn.Conv2d(num_channels, num_channels - self.action_space_dim, kernel_size=3, stride=1, padding=1,
+        self.conv = nn.Conv2d(num_channels, num_channels - self.action_space_size, kernel_size=3, stride=1, padding=1,
                               bias=False)
-        self.bn = nn.BatchNorm2d(num_channels - self.action_space_dim, momentum=momentum)
+        self.bn = nn.BatchNorm2d(num_channels - self.action_space_size, momentum=momentum)
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - self.action_space_dim,
+                    in_channels=num_channels - self.action_space_size,
                     activation=torch.nn.ReLU(inplace=True),
                     norm_type=self.norm_type,
                     res_type='basic',
@@ -213,7 +213,7 @@ class DynamicsNetwork(nn.Module):
         self.reward_resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - self.action_space_dim,
+                    in_channels=num_channels - self.action_space_size,
                     activation=torch.nn.ReLU(inplace=True),
                     norm_type=self.norm_type,
                     res_type='basic',
@@ -222,7 +222,7 @@ class DynamicsNetwork(nn.Module):
             ]
         )
 
-        self.conv1x1_reward = nn.Conv2d(num_channels - self.action_space_dim, reduced_channels_reward, 1)
+        self.conv1x1_reward = nn.Conv2d(num_channels - self.action_space_size, reduced_channels_reward, 1)
         self.bn_reward = nn.BatchNorm2d(reduced_channels_reward, momentum=momentum)
         self.block_output_size_reward = block_output_size_reward
         self.lstm = nn.LSTM(input_size=self.block_output_size_reward, hidden_size=self.lstm_hidden_size)
@@ -243,7 +243,7 @@ class DynamicsNetwork(nn.Module):
 
     def forward(self, x, reward_hidden_state):
         # take the state encoding
-        state = x[:, :-self.action_space_dim, :, :]
+        state = x[:, :-self.action_space_size, :, :]
         x = self.conv(x)
         x = self.bn(x)
 
@@ -523,7 +523,7 @@ class SampledEfficientZeroNet(BaseNet):
 
         self.continuous_action_space = continuous_action_space
         self.num_of_sampled_actions = num_of_sampled_actions
-        self.action_space_dim = action_space_size
+        self.action_space_size = action_space_size
 
         self.categorical_distribution = categorical_distribution
         if not self.categorical_distribution:
@@ -615,8 +615,8 @@ class SampledEfficientZeroNet(BaseNet):
             if self.continuous_action_space:
                 self.dynamics_network = DynamicsNetwork(
                     num_blocks,
-                    num_channels + self.action_space_dim,
-                    self.action_space_dim,
+                    num_channels + self.action_space_size,
+                    self.action_space_size,
                     reduced_channels_reward,
                     fc_reward_layers,
                     self.reward_support_size,
@@ -699,8 +699,17 @@ class SampledEfficientZeroNet(BaseNet):
             return encoded_state_normalized
 
     def dynamics(self, encoded_state, reward_hidden_state, action):
+        """
+        Overview:
+        :param encoded_state: (batch_siize, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6)
+        :param reward_hidden_state: (batch_siize, 1, 1) e.g. (1, 1, 1)
+        :param action:
+        :return:
+        """
         if not self.continuous_action_space:
-            # Stack encoded_state with a game specific one hot encoded action
+            # discrete action space
+            # stack encoded_state with a game specific one hot encoded action
+            #  action_one_hot (batch_siize, 1, obs_shape[1], obs_shape[2]), e.g. (4,1,6,6)
             action_one_hot = (
                 torch.ones((
                     encoded_state.shape[0],
@@ -709,8 +718,14 @@ class SampledEfficientZeroNet(BaseNet):
                     encoded_state.shape[3],
                 )).to(action.device).float()
             )
-            action_one_hot = (action[:, :, None, None] * action_one_hot / self.action_space_dim)
-            x = torch.cat((encoded_state, action_one_hot), dim=1)
+            if len(action.shape) == 2:
+                # e.g.,  torch.Size([4, 1]) ->  torch.Size([4, 1, 1])
+                action = action.reshape(-1, 1, 1)
+
+            # action[:, 0, None, None] shape: (4, 1, 1, 1)
+            action_one_hot = (action[:, 0, None, None] * action_one_hot / self.action_space_size)
+
+            state_action_encoding = torch.cat((encoded_state, action_one_hot), dim=1)
         else:
             action_one_hot = (
                 torch.ones((
@@ -723,26 +738,29 @@ class SampledEfficientZeroNet(BaseNet):
             # TODO
             if len(action.shape) == 2:
                 # e.g.,  torch.Size([2, 1]) ->  torch.Size([1, 2, 1])
-                action = action.reshape(-1, self.action_space_dim, 1)
-            elif len(action.shape) == 3 and action.shape[2] == self.action_space_dim:
+                action = action.reshape(-1, self.action_space_size, 1)
+            elif len(action.shape) == 3 and action.shape[2] == self.action_space_size:
                 # e.g.,  torch.Size([8, 1, 2]) ->  torch.Size([8, 2, 1])
-                # action = action.reshape(-1, self.action_space_dim, 1)  # wrong
+                # action = action.reshape(-1, self.action_space_size, 1)  # wrong
                 action = action.permute(0, 2, 1)
             # if len(action.shape)==3:
-            # action: 8,2,1   action_one_hot: 8,1,8,1
+            # action: (8,2,1)   action_one_hot: (8,1,8,1)
             # action[:, 0, None, None]: 8,1,1,1
             # action_embedding: 8,2,8,1
             try:
                 action_embedding = torch.cat(
-                    [action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_dim)], dim=1)
+                    [action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_size)], dim=1)
                 # action_embedding = torch.cat([action[:, 0, None, None] * action_one_hot, action[:, 1, None, None] * action_one_hot], dim=1)
             except Exception as error:
                 print(error)
                 print(action.shape, action_one_hot.shape)
 
-            x = torch.cat((encoded_state, action_embedding), dim=1)
+            state_action_encoding = torch.cat((encoded_state, action_embedding), dim=1)
+        try:
+            next_encoded_state, reward_hidden_state, value_prefix = self.dynamics_network(state_action_encoding, reward_hidden_state)
+        except Exception as error:
+            print(error)
 
-        next_encoded_state, reward_hidden_state, value_prefix = self.dynamics_network(x, reward_hidden_state)
         if not self.state_norm:
             return next_encoded_state, reward_hidden_state, value_prefix
         else:

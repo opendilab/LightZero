@@ -92,7 +92,7 @@ class SampledEfficientZeroMCTSPtree(object):
                 # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
                 # simulation reaches a leaf node s_l.
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play = tree_sez.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play)
+                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play), self.config.continuous_action_space
                 )
                 # obtain the search horizon for leaf nodes (not expanded)
                 # TODO(pu)

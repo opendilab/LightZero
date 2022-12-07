@@ -15,25 +15,26 @@ else:
     device = 'cpu'
 
 action_space_size = 9  # for mspacman
-K = 3
-
-# num_simulations = 50
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# batch_size = 256
-# update_per_collect = 1000
+K = 5
 
 num_simulations = 50
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-batch_size = 4
-update_per_collect = 2
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+batch_size = 256
+update_per_collect = 1000
+
+# num_simulations = 3
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# batch_size = 4
+# update_per_collect = 2
 
 
 mspacman_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
+    # exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
+    exp_name=f'data_sez_ptree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -90,6 +91,8 @@ mspacman_sampled_efficientzero_config = dict(
         ),
         # learn_mode config
         learn=dict(
+            policy_loss_type='KL',
+
             update_per_collect=update_per_collect,
             target_update_freq=100,
             batch_size=batch_size,
@@ -231,6 +234,7 @@ mspacman_sampled_efficientzero_config = dict(
         reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
+        policy_entropy_loss_coeff=5e-3,
         consistency_coeff=2,
 
         # siamese
