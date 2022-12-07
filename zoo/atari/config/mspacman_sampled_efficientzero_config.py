@@ -33,8 +33,8 @@ update_per_collect = 1000
 
 
 mspacman_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
-    # exp_name=f'data_sez_ptree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
+    # exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
+    exp_name=f'data_sez_ptree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -129,8 +129,8 @@ mspacman_sampled_efficientzero_config = dict(
         env_type='no_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
-        mcts_ctree=True,
-        # mcts_ctree=False,
+        # mcts_ctree=True,
+        mcts_ctree=False,
         image_based=True,
         # cvt_string=True,
         # trade memory for speed

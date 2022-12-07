@@ -406,9 +406,12 @@ class SampledEfficientZeroPolicy(Policy):
                 # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
                 # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
 
+                if len(target_sampled_actions.shape)==2:
+                    target_sampled_actions = target_sampled_actions.unsqueeze(-1)
+
                 # way 1:
                 # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
-                log_prob = torch.log(prob.gather(-1, target_sampled_actions[:, k].long()).squeeze(-1))
+                log_prob = torch.log(prob.gather(-1, target_sampled_actions[:, k].long() ).squeeze(-1))
 
                 log_prob_sampled_actions.append(log_prob)
 
@@ -570,6 +573,9 @@ class SampledEfficientZeroPolicy(Policy):
                     # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
                     # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
                     # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
+
+                    if len(target_sampled_actions.shape) == 2:
+                        target_sampled_actions = target_sampled_actions.unsqueeze(-1)
 
                     # way 1:
                     # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
@@ -1028,7 +1034,7 @@ class SampledEfficientZeroPolicy(Policy):
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                     ]
-                    roots = ptree.Roots(active_collect_env_num, legal_actions,
+                    roots = ptree.Roots(active_collect_env_num, legal_actions, action_space_size=self._cfg.action_space_size,
                                         num_of_sampled_actions=self._cfg.num_of_sampled_actions, continuous_action_space=self._cfg.continuous_action_space)
                     # the only difference between collect and eval is the dirichlet noise
                     noises = [
@@ -1186,6 +1192,7 @@ class SampledEfficientZeroPolicy(Policy):
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                     ]
                     roots = ptree.Roots(active_eval_env_num, legal_actions,
+                                        action_space_size=self._cfg.action_space_size,
                                         num_of_sampled_actions=self._cfg.num_of_sampled_actions, continuous_action_space=self._cfg.continuous_action_space)
                     # the only difference between collect and eval is the dirichlet noise
 

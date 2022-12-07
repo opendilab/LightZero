@@ -355,8 +355,8 @@ namespace tree
             for (size_t iter = 0; iter < vals.size(); iter++)
             {
                 // valsWithIndices.emplace_back(iter, vals[iter]);
-                valsWithIndices.__emplace_back(std::make_pair(iter, vals[iter]));
-                // valsWithIndices.emplace_back(std::make_pair(iter, vals[iter]));
+                // valsWithIndices.__emplace_back(std::make_pair(iter, vals[iter]));
+                valsWithIndices.emplace_back(std::make_pair(iter, vals[iter]));
 
                 // valsWithIndices.push_back(iter, vals[iter]);
             }

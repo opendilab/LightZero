@@ -8,7 +8,8 @@ import torch
 from easydict import EasyDict
 
 from ..scaling_transform import inverse_scalar_transform
-from .ctree_sampled_efficientzero import cytree as tree_efficientzero
+
+from core.rl_utils.mcts.ctree_sampled_efficientzero import cytree as tree_efficientzero
 
 
 ###########################################################
