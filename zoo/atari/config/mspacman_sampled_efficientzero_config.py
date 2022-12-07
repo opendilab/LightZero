@@ -24,7 +24,7 @@ K = 3
 # batch_size = 256
 # update_per_collect = 1000
 
-num_simulations = 50
+num_simulations = 5
 collector_env_num = 1
 n_episode = 1
 evaluator_env_num = 1
@@ -90,6 +90,8 @@ mspacman_sampled_efficientzero_config = dict(
         ),
         # learn_mode config
         learn=dict(
+            policy_loss_type='KL',
+
             update_per_collect=update_per_collect,
             target_update_freq=100,
             batch_size=batch_size,
@@ -126,8 +128,8 @@ mspacman_sampled_efficientzero_config = dict(
         env_type='no_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
-        # mcts_ctree=True,
-        mcts_ctree=False,
+        mcts_ctree=True,
+        # mcts_ctree=False,
         image_based=True,
         # cvt_string=True,
         # trade memory for speed
@@ -231,6 +233,7 @@ mspacman_sampled_efficientzero_config = dict(
         reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
+        policy_entropy_loss_coeff=5e-3,
         consistency_coeff=2,
 
         # siamese

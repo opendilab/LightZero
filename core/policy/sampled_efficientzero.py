@@ -72,6 +72,7 @@ class SampledEfficientZeroPolicy(Policy):
         ),
         # learn_mode config
         learn=dict(
+            policy_loss_type='KL',
             # (bool) Whether to use multi gpu
             multi_gpu=False,
             # How many updates(iterations) to train after collector's one collection.
@@ -398,9 +399,11 @@ class SampledEfficientZeroPolicy(Policy):
                 # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
 
                 # way 1:
-                log_prob = dist.log_prob(target_sampled_actions[:, k, :])
+                # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
+                log_prob = torch.log(prob.gather(-1, target_sampled_actions[:, k].unsqueeze(-1)).squeeze(-1))
 
                 log_prob_sampled_actions.append(log_prob)
+
             # batch_size, num_of_sampled_actions -> 4,20
             log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
 
@@ -486,53 +489,98 @@ class SampledEfficientZeroPolicy(Policy):
             #############################
             # calculate policy loss: KL loss
             #############################
-            (mu, sigma) = policy_logits[:, : self._cfg.action_space_size], policy_logits[:,
-                                                                           - self._cfg.action_space_size:]
-            dist = Independent(Normal(mu, sigma), 1)
+            if self._cfg.continuous_action_space:
 
-            # take the hypothetical step k>0
-            target_normalized_visit_count = target_policy[:, step_i + 1]
-            # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
-            # e.g. 4, 3, 20, 2, 1 ->  4, 20, 2
-            target_sampled_actions = child_sampled_actions_batch[:, step_i + 1].squeeze(-1)
+                (mu, sigma) = policy_logits[:, : self._cfg.action_space_size], policy_logits[:,
+                                                                               - self._cfg.action_space_size:]
+                dist = Independent(Normal(mu, sigma), 1)
 
-            policy_entropy = dist.entropy().mean()
-            policy_entropy_loss += - policy_entropy
+                # take the hypothetical step k>0
+                target_normalized_visit_count = target_policy[:, step_i + 1]
+                # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
+                # e.g. 4, 3, 20, 2, 1 ->  4, 20, 2
+                target_sampled_actions = child_sampled_actions_batch[:, step_i + 1].squeeze(-1)
 
-            # project the sampled-based improved policy back onto the space of representable policies
+                policy_entropy = dist.entropy().mean()
+                policy_entropy_loss += - policy_entropy
 
-            # batch_size, num_of_sampled_actions -> 4,20
-            target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-9)
-            log_prob_sampled_actions = []
-            for k in range(self._cfg.num_of_sampled_actions):
-                # target_sampled_actions[:,k,:].shape: (batch_size, action_dim) e.g. (4,2)
-                # dist.log_prob(target_sampled_actions[:,k,:]).shape: (batch_size,) e.g. (4,)
+                # project the sampled-based improved policy back onto the space of representable policies
 
-                # way 1:
-                # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
+                # batch_size, num_of_sampled_actions -> 4,20
+                target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-9)
+                log_prob_sampled_actions = []
+                for k in range(self._cfg.num_of_sampled_actions):
+                    # target_sampled_actions[:,k,:].shape: (batch_size, action_dim) e.g. (4,2)
+                    # dist.log_prob(target_sampled_actions[:,k,:]).shape: (batch_size,) e.g. (4,)
 
-                # way 2:
-                y = 1 - target_sampled_actions[:, k, :].pow(2) + 1e-9
-                target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions[:, k, :])
-                # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
-                log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
+                    # way 1:
+                    # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
 
-                log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
-                log_prob = log_prob.squeeze(-1)
+                    # way 2:
+                    y = 1 - target_sampled_actions[:, k, :].pow(2) + 1e-9
+                    target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions[:, k, :])
+                    # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
+                    log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
 
-                log_prob_sampled_actions.append(log_prob)
-            # (batch_size, num_of_sampled_actions) e.g. (4,20)
-            log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
+                    log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
+                    log_prob = log_prob.squeeze(-1)
 
-            if self._cfg.learn.policy_loss_type == 'KL':
-                # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
-                # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
-                policy_loss += (torch.exp(target_log_prob_sampled_actions.detach()) * (
-                        target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
-            elif self._cfg.learn.policy_loss_type == 'cross_entropy':
-                # cross_entropy loss: - sum(p * log (q) )
-                policy_loss += - torch.mean(
-                    torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
+                    log_prob_sampled_actions.append(log_prob)
+                # (batch_size, num_of_sampled_actions) e.g. (4,20)
+                log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
+
+                if self._cfg.learn.policy_loss_type == 'KL':
+                    # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
+                    # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
+                    policy_loss += (torch.exp(target_log_prob_sampled_actions.detach()) * (
+                            target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+                elif self._cfg.learn.policy_loss_type == 'cross_entropy':
+                    # cross_entropy loss: - sum(p * log (q) )
+                    policy_loss += - torch.mean(
+                        torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
+
+            else:
+                prob = torch.softmax(policy_logits, dim=-1)
+                dist = Categorical(prob)
+
+                # take the init hypothetical step k=0
+                target_normalized_visit_count_init_step = target_policy[:, step_i + 1]
+                # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
+                # e.g. 4, 6, 20, 2, 1 ->  4, 20, 2
+                target_sampled_actions = child_sampled_actions_batch[:, step_i + 1].squeeze(-1)
+
+                policy_entropy = dist.entropy().mean()
+                policy_entropy_loss = - policy_entropy
+
+                # project the sampled-based improved policy back onto the space of representable policies
+                # calculate KL loss
+                # batch_size, num_of_sampled_actions -> 4,20
+                # target_normalized_visit_count_init_step is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
+                target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step + 1e-9)
+                log_prob_sampled_actions = []
+                for k in range(self._cfg.num_of_sampled_actions):
+                    # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
+                    # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
+                    # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
+
+                    # way 1:
+                    # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
+                    log_prob = torch.log(prob.gather(-1, target_sampled_actions[:, k].unsqueeze(-1)).squeeze(-1))
+
+                    log_prob_sampled_actions.append(log_prob)
+
+                # batch_size, num_of_sampled_actions -> 4,20
+                log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
+
+                if self._cfg.learn.policy_loss_type == 'KL':
+                    # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
+                    # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
+                    policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
+                            target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+                elif self._cfg.learn.policy_loss_type == 'cross_entropy':
+                    # cross_entropy loss: - sum(p * log (q) )
+                    policy_loss = - torch.mean(
+                        torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
 
             #############################
             # calculate policy loss: KL loss
@@ -697,87 +745,151 @@ class SampledEfficientZeroPolicy(Policy):
             td_data, priority_data = None, None
 
         if self._cfg.categorical_distribution:
-            # loss_data = (
-            #     total_loss.item(), weighted_loss.item(), loss.mean().item(), 0, policy_loss.mean().item(),
-            #     value_prefix_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
-            # )
-            return {
-                # 'priority':priority_info,
-                'total_loss': loss_data[0],
-                'weighted_loss': loss_data[1],
-                'loss_mean': loss_data[2],
-                'policy_loss': loss_data[4],
-                'value_prefix_loss': loss_data[5],
-                'value_loss': loss_data[6],
-                'consistency_loss': loss_data[7],
-                'value_priority': td_data[0].flatten().mean().item(),
-                'target_value_prefix': td_data[1].flatten().mean().item(),
-                'target_value': td_data[2].flatten().mean().item(),
-                'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
-                'transformed_target_value': td_data[4].flatten().mean().item(),
-                'predicted_value_prefixs': td_data[7].flatten().mean().item(),
-                'predicted_values': td_data[8].flatten().mean().item(),
+            if self._cfg.continuous_action_space:
+                return {
+                    # 'priority':priority_info,
+                    'total_loss': loss_data[0],
+                    'weighted_loss': loss_data[1],
+                    'loss_mean': loss_data[2],
+                    'policy_loss': loss_data[4],
+                    'value_prefix_loss': loss_data[5],
+                    'value_loss': loss_data[6],
+                    'consistency_loss': loss_data[7],
+                    'value_priority': td_data[0].flatten().mean().item(),
+                    'target_value_prefix': td_data[1].flatten().mean().item(),
+                    'target_value': td_data[2].flatten().mean().item(),
+                    'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
+                    'transformed_target_value': td_data[4].flatten().mean().item(),
+                    'predicted_value_prefixs': td_data[7].flatten().mean().item(),
+                    'predicted_values': td_data[8].flatten().mean().item(),
 
-                ######################
-                # sampled related code
-                ######################
-                'policy_entropy': policy_entropy.item(),
-                'policy_mu_max': mu[:, 0].max().item(),
-                'policy_mu_min': mu[:, 0].min().item(),
-                'policy_mu_mean': mu[:, 0].mean().item(),
-                'policy_sigma_max': sigma.max().item(),
-                'policy_sigma_min': sigma.min().item(),
-                'policy_sigma_mean': sigma.mean().item(),
-                # take the fist dim in action space
-                'target_sampled_actions_max': target_sampled_actions[:, :, 0].max().item(),
-                'target_sampled_actions_min': target_sampled_actions[:, :, 0].min().item(),
-                'target_sampled_actions_mean': target_sampled_actions[:, :, 0].mean().item(),
+                    ######################
+                    # sampled related code
+                    ######################
+                    'policy_entropy': policy_entropy.item(),
+                    'policy_mu_max': mu[:, 0].max().item(),
+                    'policy_mu_min': mu[:, 0].min().item(),
+                    'policy_mu_mean': mu[:, 0].mean().item(),
+                    'policy_sigma_max': sigma.max().item(),
+                    'policy_sigma_min': sigma.min().item(),
+                    'policy_sigma_mean': sigma.mean().item(),
+                    # take the fist dim in action space
+                    'target_sampled_actions_max': target_sampled_actions[:, :, 0].max().item(),
+                    'target_sampled_actions_min': target_sampled_actions[:, :, 0].min().item(),
+                    'target_sampled_actions_mean': target_sampled_actions[:, :, 0].mean().item(),
 
-                # 'target_policy':td_data[9],
-                # 'predicted_policies':td_data[10]
-                # 'td_data': td_data,
-                # 'priority_data_weights': priority_data[0],
-                # 'priority_data_indices': priority_data[1]
-            }
+                    # 'target_policy':td_data[9],
+                    # 'predicted_policies':td_data[10]
+                    # 'td_data': td_data,
+                    # 'priority_data_weights': priority_data[0],
+                    # 'priority_data_indices': priority_data[1]
+                }
+            else:
+                return {
+                    # 'priority':priority_info,
+                    'total_loss': loss_data[0],
+                    'weighted_loss': loss_data[1],
+                    'loss_mean': loss_data[2],
+                    'policy_loss': loss_data[4],
+                    'value_prefix_loss': loss_data[5],
+                    'value_loss': loss_data[6],
+                    'consistency_loss': loss_data[7],
+                    'value_priority': td_data[0].flatten().mean().item(),
+                    'target_value_prefix': td_data[1].flatten().mean().item(),
+                    'target_value': td_data[2].flatten().mean().item(),
+                    'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
+                    'transformed_target_value': td_data[4].flatten().mean().item(),
+                    'predicted_value_prefixs': td_data[7].flatten().mean().item(),
+                    'predicted_values': td_data[8].flatten().mean().item(),
+
+                    ######################
+                    # sampled related code
+                    ######################
+                    'policy_entropy': policy_entropy.item(),
+                    # take the fist dim in action space
+                    'target_sampled_actions_max': target_sampled_actions[:, :].float().max().item(),
+                    'target_sampled_actions_min': target_sampled_actions[:, :].float().min().item(),
+                    'target_sampled_actions_mean': target_sampled_actions[:, :].float().mean().item(),
+
+                    # 'target_policy':td_data[9],
+                    # 'predicted_policies':td_data[10]
+                    # 'td_data': td_data,
+                    # 'priority_data_weights': priority_data[0],
+                    # 'priority_data_indices': priority_data[1]
+                }
         else:
-            return {
-                # 'priority':priority_info,
-                'total_loss': loss_data[0],
-                'weighted_loss': loss_data[1],
-                'loss_mean': loss_data[2],
-                'policy_loss': loss_data[4],
-                'value_prefix_loss': loss_data[5],
-                'value_loss': loss_data[6],
-                'consistency_loss': loss_data[7],
-                'value_priority': td_data[0].flatten().mean().item(),
-                'target_value_prefix': td_data[1].flatten().mean().item(),
-                'target_value': td_data[2].flatten().mean().item(),
-                'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
-                'transformed_target_value': td_data[4].flatten().mean().item(),
-                'predicted_value_prefixs': td_data[5].flatten().mean().item(),
-                'predicted_values': td_data[6].flatten().mean().item(),
+            if self._cfg.continuous_action_space:
+                return {
+                    # 'priority':priority_info,
+                    'total_loss': loss_data[0],
+                    'weighted_loss': loss_data[1],
+                    'loss_mean': loss_data[2],
+                    'policy_loss': loss_data[4],
+                    'value_prefix_loss': loss_data[5],
+                    'value_loss': loss_data[6],
+                    'consistency_loss': loss_data[7],
+                    'value_priority': td_data[0].flatten().mean().item(),
+                    'target_value_prefix': td_data[1].flatten().mean().item(),
+                    'target_value': td_data[2].flatten().mean().item(),
+                    'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
+                    'transformed_target_value': td_data[4].flatten().mean().item(),
+                    'predicted_value_prefixs': td_data[5].flatten().mean().item(),
+                    'predicted_values': td_data[6].flatten().mean().item(),
 
-                ######################
-                # sampled related code
-                ######################
-                'policy_entropy': policy_entropy.item(),
-                'policy_mu_max': mu[:, 0].max().item(),
-                'policy_mu_min': mu[:, 0].min().item(),
-                'policy_mu_mean': mu[:, 0].mean().item(),
-                'policy_sigma_max': sigma.max().item(),
-                'policy_sigma_min': sigma.min().item(),
-                'policy_sigma_mean': sigma.mean().item(),
-                # take the fist dim in action space
-                'target_sampled_actions_max': target_sampled_actions[:, :, 0].max().item(),
-                'target_sampled_actions_min': target_sampled_actions[:, :, 0].min().item(),
-                'target_sampled_actions_mean': target_sampled_actions[:, :, 0].mean().item(),
+                    ######################
+                    # sampled related code
+                    ######################
+                    'policy_entropy': policy_entropy.item(),
+                    'policy_mu_max': mu[:, 0].max().item(),
+                    'policy_mu_min': mu[:, 0].min().item(),
+                    'policy_mu_mean': mu[:, 0].mean().item(),
+                    'policy_sigma_max': sigma.max().item(),
+                    'policy_sigma_min': sigma.min().item(),
+                    'policy_sigma_mean': sigma.mean().item(),
+                    # take the fist dim in action space
+                    'target_sampled_actions_max': target_sampled_actions[:, :, 0].max().item(),
+                    'target_sampled_actions_min': target_sampled_actions[:, :, 0].min().item(),
+                    'target_sampled_actions_mean': target_sampled_actions[:, :, 0].mean().item(),
 
-                # 'target_policy':td_data[9],
-                # 'predicted_policies':td_data[10]
-                # 'td_data': td_data,
-                # 'priority_data_weights': priority_data[0],
-                # 'priority_data_indices': priority_data[1]
-            }
+                    # 'target_policy':td_data[9],
+                    # 'predicted_policies':td_data[10]
+                    # 'td_data': td_data,
+                    # 'priority_data_weights': priority_data[0],
+                    # 'priority_data_indices': priority_data[1]
+                }
+            else:
+                return {
+                    # 'priority':priority_info,
+                    'total_loss': loss_data[0],
+                    'weighted_loss': loss_data[1],
+                    'loss_mean': loss_data[2],
+                    'policy_loss': loss_data[4],
+                    'value_prefix_loss': loss_data[5],
+                    'value_loss': loss_data[6],
+                    'consistency_loss': loss_data[7],
+                    'value_priority': td_data[0].flatten().mean().item(),
+                    'target_value_prefix': td_data[1].flatten().mean().item(),
+                    'target_value': td_data[2].flatten().mean().item(),
+                    'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
+                    'transformed_target_value': td_data[4].flatten().mean().item(),
+                    'predicted_value_prefixs': td_data[5].flatten().mean().item(),
+                    'predicted_values': td_data[6].flatten().mean().item(),
+
+                    ######################
+                    # sampled related code
+                    ######################
+                    'policy_entropy': policy_entropy.item(),
+                    # take the fist dim in action space
+                    'target_sampled_actions_max': target_sampled_actions[:, :].float().max().item(),
+                    'target_sampled_actions_min': target_sampled_actions[:, :].float().min().item(),
+                    'target_sampled_actions_mean': target_sampled_actions[:, :].float().mean().item(),
+
+                    # 'target_policy':td_data[9],
+                    # 'predicted_policies':td_data[10]
+                    # 'td_data': td_data,
+                    # 'priority_data_weights': priority_data[0],
+                    # 'priority_data_indices': priority_data[1]
+                }
 
     def _init_collect(self) -> None:
         self._unroll_len = self._cfg.collect.unroll_len
@@ -1092,46 +1204,82 @@ class SampledEfficientZeroPolicy(Policy):
         return output
 
     def _monitor_vars_learn(self) -> List[str]:
-        return [
-            'total_loss',
-            'weighted_loss',
-            'loss_mean',
-            'policy_loss',
-            'value_prefix_loss',
-            'value_loss',
-            'consistency_loss',
-            #
-            'value_priority',
-            'target_value_prefix',
-            'target_value',
-            'predicted_value_prefixs',
-            'predicted_values',
+        if self._cfg.continuous_action_space:
+            return [
+                'total_loss',
+                'weighted_loss',
+                'loss_mean',
+                'policy_loss',
+                'value_prefix_loss',
+                'value_loss',
+                'consistency_loss',
+                #
+                'value_priority',
+                'target_value_prefix',
+                'target_value',
+                'predicted_value_prefixs',
+                'predicted_values',
 
-            'transformed_target_value_prefix',
-            'transformed_target_value',
+                'transformed_target_value_prefix',
+                'transformed_target_value',
 
-            ######################
-            # sampled related code
-            ######################
-            'policy_entropy',
-            'policy_mu_max',
-            'policy_mu_min',
-            'policy_mu_mean',
-            'policy_sigma_max',
-            'policy_sigma_min',
-            'policy_sigma_mean',
-            # take the fist dim in action space
-            'target_sampled_actions_max',
-            'target_sampled_actions_min',
-            'target_sampled_actions_mean',
+                ######################
+                # sampled related code
+                ######################
+                'policy_entropy',
+                'policy_mu_max',
+                'policy_mu_min',
+                'policy_mu_mean',
+                'policy_sigma_max',
+                'policy_sigma_min',
+                'policy_sigma_mean',
+                # take the fist dim in action space
+                'target_sampled_actions_max',
+                'target_sampled_actions_min',
+                'target_sampled_actions_mean',
 
-            # 'visit_count_distribution_entropy',
-            # 'target_policy',
-            # 'predicted_policies'
-            # 'td_data',
-            # 'priority_data_weights',
-            # 'priority_data_indices'
-        ]
+                # 'visit_count_distribution_entropy',
+                # 'target_policy',
+                # 'predicted_policies'
+                # 'td_data',
+                # 'priority_data_weights',
+                # 'priority_data_indices'
+            ]
+        else:
+            return [
+                'total_loss',
+                'weighted_loss',
+                'loss_mean',
+                'policy_loss',
+                'value_prefix_loss',
+                'value_loss',
+                'consistency_loss',
+                #
+                'value_priority',
+                'target_value_prefix',
+                'target_value',
+                'predicted_value_prefixs',
+                'predicted_values',
+
+                'transformed_target_value_prefix',
+                'transformed_target_value',
+
+                ######################
+                # sampled related code
+                ######################
+                'policy_entropy',
+                # take the fist dim in action space
+                'target_sampled_actions_max',
+                'target_sampled_actions_min',
+                'target_sampled_actions_mean',
+
+                # 'visit_count_distribution_entropy',
+                # 'target_policy',
+                # 'predicted_policies'
+                # 'td_data',
+                # 'priority_data_weights',
+                # 'priority_data_indices'
+            ]
 
     def _state_dict_learn(self) -> Dict[str, Any]:
         """
