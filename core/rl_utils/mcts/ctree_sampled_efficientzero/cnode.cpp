@@ -366,11 +366,11 @@ namespace tree
 
             std::sort(valsWithIndices.begin(), valsWithIndices.end(), cmp);
 
-            for (int j = 0; j < policy_logits.size(); ++j)
-            {
-                std::cout << "valsWithIndices[i].first " << valsWithIndices[j].first << " "
-                          << "valsWithIndices[j].second " << valsWithIndices[j].second << std::endl;
-            }
+            // for (int j = 0; j < policy_logits.size(); ++j)
+            // {
+            //     std::cout << "valsWithIndices[i].first " << valsWithIndices[j].first << " "
+            //               << "valsWithIndices[j].second " << valsWithIndices[j].second << std::endl;
+            // }
 
             //样本大小sampleSize设置为1
             for (int k = 0; k < num_of_sampled_actions; ++k)
@@ -378,8 +378,9 @@ namespace tree
                 sampled_actions.push_back(valsWithIndices[k].first);
                 sampled_actions_probs.push_back(valsWithIndices[k].second);
 
-                std::cout << "sampled_actions[k]： " << sampled_actions[k] << std::endl;
-                std::cout << "sampled_actions_probs[k]： " << sampled_actions_probs[k] << std::endl;
+                // TODO(pu): logging
+                // std::cout << "sampled_actions[k]： " << sampled_actions[k] << std::endl;
+                // std::cout << "sampled_actions_probs[k]： " << sampled_actions_probs[k] << std::endl;
             }
             vals.clear();            //清空集合，为下次抽样做准备
             valsWithIndices.clear(); //清空集合，为下次抽样做准备

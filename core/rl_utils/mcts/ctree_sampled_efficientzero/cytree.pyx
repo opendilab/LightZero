@@ -67,7 +67,6 @@ cdef class Roots:
 
     def __cinit__(self, int root_num, list legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space):
     #def __cinit__(self, int root_num, list legal_actions_list, int action_space_size, int num_of_sampled_actions):
-
        self.root_num = root_num
        self.action_space_size = action_space_size
        self.num_of_sampled_actions = num_of_sampled_actions

@@ -424,12 +424,19 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))
                 ]
             else:
+                # _actions += [
+                #     np.random.randint(0, self.config.action_space_size, 1)
+                #     for _ in range(self.config.num_unroll_steps - len(_actions))
+                # ]
+                # _child_actions += [
+                #     np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions)
+                #     for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))]
                 _actions += [
-                    np.random.randint(0, self.config.action_space_size, 1)
+                    np.random.randint(0, self.config.action_space_size, 1).item()
                     for _ in range(self.config.num_unroll_steps - len(_actions))
                 ]
                 _child_actions += [
-                    np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions)
+                    np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions).reshape(self.config.num_of_sampled_actions, 1) # TODO(pu)
                     for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))]
 
             # obtain the input observations
@@ -452,7 +459,10 @@ class SampledEfficientZeroGameBuffer(Buffer):
         # formalize the inputs of a batch
         inputs_batch = [obs_lst, action_lst, child_actions_lst, mask_lst, indices_lst, weights_lst, make_time_lst]
 
-        child_actions_lst = np.concatenate([child_actions_lst])
+        try:
+            child_actions_lst = np.concatenate([child_actions_lst])
+        except Exception as error:
+            print(error)
 
         for i in range(len(inputs_batch)):
             inputs_batch[i] = np.asarray(inputs_batch[i])

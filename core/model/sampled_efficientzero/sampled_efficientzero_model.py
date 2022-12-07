@@ -707,8 +707,9 @@ class SampledEfficientZeroNet(BaseNet):
         :return:
         """
         if not self.continuous_action_space:
-            # Stack encoded_state with a game specific one hot encoded action
-            #  (batch_siize, 1, obs_shape[1], obs_shape[2]), e.g. (1,1,6,6)
+            # discrete action space
+            # stack encoded_state with a game specific one hot encoded action
+            #  action_one_hot (batch_siize, 1, obs_shape[1], obs_shape[2]), e.g. (4,1,6,6)
             action_one_hot = (
                 torch.ones((
                     encoded_state.shape[0],
@@ -717,8 +718,12 @@ class SampledEfficientZeroNet(BaseNet):
                     encoded_state.shape[3],
                 )).to(action.device).float()
             )
+            if len(action.shape) == 2:
+                # e.g.,  torch.Size([4, 1]) ->  torch.Size([4, 1, 1])
+                action = action.reshape(-1, 1, 1)
 
-            action_one_hot = (action * action_one_hot / self.action_space_size)
+            # action[:, 0, None, None] shape: (4, 1, 1, 1)
+            action_one_hot = (action[:, 0, None, None] * action_one_hot / self.action_space_size)
 
             state_action_encoding = torch.cat((encoded_state, action_one_hot), dim=1)
         else:
@@ -751,8 +756,11 @@ class SampledEfficientZeroNet(BaseNet):
                 print(action.shape, action_one_hot.shape)
 
             state_action_encoding = torch.cat((encoded_state, action_embedding), dim=1)
+        try:
+            next_encoded_state, reward_hidden_state, value_prefix = self.dynamics_network(state_action_encoding, reward_hidden_state)
+        except Exception as error:
+            print(error)
 
-        next_encoded_state, reward_hidden_state, value_prefix = self.dynamics_network(state_action_encoding, reward_hidden_state)
         if not self.state_norm:
             return next_encoded_state, reward_hidden_state, value_prefix
         else:

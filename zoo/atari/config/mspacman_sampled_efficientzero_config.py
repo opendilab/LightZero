@@ -15,21 +15,21 @@ else:
     device = 'cpu'
 
 action_space_size = 9  # for mspacman
-K = 3
+K = 5
 
-# num_simulations = 50
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# batch_size = 256
-# update_per_collect = 1000
+num_simulations = 50
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+batch_size = 256
+update_per_collect = 1000
 
-num_simulations = 5
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-batch_size = 4
-update_per_collect = 2
+# num_simulations = 3
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# batch_size = 4
+# update_per_collect = 2
 
 
 mspacman_sampled_efficientzero_config = dict(
