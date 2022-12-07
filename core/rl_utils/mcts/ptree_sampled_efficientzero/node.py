@@ -63,7 +63,7 @@ class Node:
         """
         self.to_play = to_play
         # if self.legal_actions is None:
-        #     self.legal_actions = []
+        # self.legal_actions = []
 
         self.hidden_state_index_x = hidden_state_index_x
         self.hidden_state_index_y = hidden_state_index_y
@@ -98,6 +98,8 @@ class Node:
             # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
             log_prob = dist.log_prob(sampled_actions_before_tanh).unsqueeze(-1)
             log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
+            # if self.legal_actions is None:
+            self.legal_actions = []
         else:
             if self.legal_actions is not None:
                 # fisrt use theself.legal_actions to exclude the illegal actions
@@ -116,7 +118,6 @@ class Node:
         # empirical_distribution = [1/self.num_of_sampled_actions]
         for action_index in range(self.num_of_sampled_actions):
             self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
-                # log_prob[action_index].item(),
                 log_prob[action_index],
                 action_space_size=self.action_space_size,
                 num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space)
@@ -187,7 +188,8 @@ class Node:
     def get_children_distribution(self):
         if self.legal_actions == []:
             return None
-        distribution = {a: 0 for a in self.legal_actions}
+        # distribution = {a: 0 for a in self.legal_actions}
+        distribution = {}
         if self.expanded:
             for a in self.legal_actions:
                 child = self.get_child(a)
@@ -221,12 +223,11 @@ class Node:
 
 class Roots:
 
-    def __init__(self, root_num: int, legal_actions_list: Any, pool_size: int, action_space_size: Optional = None,
+    def __init__(self, root_num: int, legal_actions_list: Any, action_space_size: Optional = None,
                  num_of_sampled_actions=20, continuous_action_space=False):
         self.num = root_num
         self.root_num = root_num
         self.legal_actions_list = legal_actions_list  # list of list
-        self.pool_size = pool_size
         self.num_of_sampled_actions = num_of_sampled_actions
         self.continuous_action_space = continuous_action_space
 
@@ -238,11 +239,11 @@ class Roots:
         for i in range(self.root_num):
             if isinstance(legal_actions_list, list):
                 # TODO(pu): sampled in board_games
-                self.roots.append(Node(0, legal_actions_list[i], num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space))
+                self.roots.append(Node(0, legal_actions_list[i], action_space_size=action_space_size, num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space))
             elif isinstance(legal_actions_list, int):
                 # if legal_actions_list is int
                 self.roots.append(
-                    Node(0, None, num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space))
+                    Node(0, None, action_space_size=action_space_size, num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space))
                 # self.roots.append(
                 #     Node(0, np.arange(legal_actions_list), num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space))
             elif legal_actions_list is None:

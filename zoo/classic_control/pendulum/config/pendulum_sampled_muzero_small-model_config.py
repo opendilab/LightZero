@@ -32,7 +32,6 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 batch_size = 256
-
 # K = 5
 # num_simulations = 25
 K = 20
@@ -43,10 +42,10 @@ update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
-# batch_size = 8
+# batch_size = 4
 # K = 3
-# num_simulations = 10
-# update_per_collect = 10
+# num_simulations = 7
+# update_per_collect = 5
 
 
 pendulum_sampled_muzero_config = dict(

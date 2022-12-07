@@ -763,7 +763,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         [i for i, x in enumerate(action_mask[j]) if x == 1]
                         for j in range(batch_size)
                     ]
-                    roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations,num_of_sampled_actions=self.config.num_of_sampled_actions)
+                    roots = ptree.Roots(batch_size, legal_actions,
+                                        num_of_sampled_actions=self.config.num_of_sampled_actions)
                     noises = [
                         np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(batch_size)
@@ -982,57 +983,42 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 python mcts
                 """
                 if to_play_history[0][0] is None:
-                    if self.config. continuous_action_space:
-                        # for continuous action space games
-                        legal_actions = None
-                        # continuous action space
-                        roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations,
-                                            action_space_size=self.config.action_space_size,
-                                            num_of_sampled_actions=self.config.num_of_sampled_actions)
-                        # the only difference between collect and eval is the dirichlet noise
-                        # TODO(pu):  int(self.game_config.action_space_size)
-                        noises = [
-                            np.random.dirichlet(
-                                [self.config.root_dirichlet_alpha] * int(self.config.num_of_sampled_actions)
-                                ).astype(np.float32).tolist() for j in range(batch_size)
-                        ]
-                    else:
-                        # for one_player atari games
-                        action_mask = [
-                            list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
-                        ]
-                        legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
+                    # we use to_play=None means one_player_mode game in mcts_ptree
+                    to_play = [None for i in range(batch_size)]
+                    # continuous action space env: all -1
+                    legal_actions = [[-1 for i in range(self.config.num_of_sampled_actions)] for _ in
+                                     range(batch_size)]
+                    # action_mask = [
+                    #     list(np.ones(self.config.num_of_sampled_actions, dtype=np.int8)) for _ in range(batch_size)
+                    # ]
 
-                        roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations,num_of_sampled_actions=self.config.num_of_sampled_actions)
-                        noises = [
-                            np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                                ).astype(np.float32).tolist() for j in range(batch_size)
-                        ]
-
-                if to_play_history[0][0] is None:
-                    roots.prepare(
-                        self.config.root_exploration_fraction,
-                        noises,
-                        value_prefix_pool,
-                        policy_logits_pool,
-                        to_play=None
-                    )
-                    # do MCTS for a new policy with the recent target model
-                    MCTS_ptree(self.config).search(
-                        roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=None
-                    )
                 else:
-                    roots.prepare(
-                        self.config.root_exploration_fraction,
-                        noises,
-                        value_prefix_pool,
-                        policy_logits_pool,
-                        to_play=to_play
-                    )
-                    # do MCTS for a new policy with the recent target model
-                    MCTS_ptree(self.config).search(
-                        roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play
-                    )
+                    # if board_games, we have action_mask
+                    legal_actions = [
+                        [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)
+                    ]
+                roots = ptree.Roots(batch_size, legal_actions, action_space_size=self.config.action_space_size,
+                                    num_of_sampled_actions=self.config.num_of_sampled_actions, continuous_action_space=self.config.continuous_action_space)
+                # noises = [
+                #     np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                #                         ).astype(np.float32).tolist() for j in range(batch_size)
+                # ]
+                noises = [
+                    np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.num_of_sampled_actions
+                                        ).astype(np.float32).tolist() for _ in range(batch_size)
+                ]
+                roots.prepare(
+                    self.config.root_exploration_fraction,
+                    noises,
+                    value_prefix_pool,
+                    policy_logits_pool,
+                    to_play
+                )
+                # do MCTS for a new policy with the recent target model
+                MCTS_ptree(self.config).search(
+                    roots, model, hidden_state_roots, reward_hidden_state_roots, to_play
+                )
+
                 roots_legal_actions_list = roots.legal_actions_list
 
             roots_distributions = roots.get_distributions()

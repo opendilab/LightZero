@@ -19,10 +19,12 @@ class Node:
      Arguments:
      """
 
-    def __init__(self, prior: float, legal_actions: Any = None, action_space_size=9):
+    def __init__(self, prior: float, legal_actions: Any = None, action_space_size=9, num_of_sampled_actions=20, continuous_action_space=False):
         self.prior = prior
         self.legal_actions = legal_actions
         self.action_space_size = action_space_size
+        self.num_of_sampled_actions = num_of_sampled_actions
+        self.continuous_action_space = continuous_action_space
 
         self.visit_count = 0
         self.value_sum = 0
@@ -43,9 +45,10 @@ class Node:
         policy_logits: List[float]
     ):
         self.to_play = to_play
-        if self.legal_actions is None:
-            # TODO
-            self.legal_actions = np.arange(len(policy_logits))
+        # if self.legal_actions is None:
+        #     self.legal_actions = np.arange(len(policy_logits))
+
+        self.legal_actions = []
 
         self.hidden_state_index_x = hidden_state_index_x
         self.hidden_state_index_y = hidden_state_index_y
@@ -79,7 +82,7 @@ class Node:
         # empirical_distribution = [1/self.num_of_sampled_actions]
         for action_index in range(self.num_of_sampled_actions):
             self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
-                log_prob[action_index].item(),
+                log_prob[action_index],
                 action_space_size=self.action_space_size,
                 num_of_sampled_actions=self.num_of_sampled_actions)
             self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
@@ -161,7 +164,8 @@ class Node:
     def get_children_distribution(self):
         if self.legal_actions == []:
             return None
-        distribution = {a: 0 for a in self.legal_actions}
+        # distribution = {a: 0 for a in self.legal_actions}
+        distribution = {}
         if self.expanded:
             for a in self.legal_actions:
                 child = self.get_child(a)
@@ -175,7 +179,8 @@ class Node:
         Overview:
             get children node according to action.
         """
-        # assert isinstance(action, int)
+        if isinstance(action, Action):
+            return self.children[action]
         if not isinstance(action, np.int64):
             action = int(action)
         return self.children[action]
@@ -197,12 +202,10 @@ class Node:
 
 class Roots:
 
-    def __init__(self, root_num: int, legal_actions_list: Any, pool_size: int, action_space_size: Optional = None,
-                 num_of_sampled_actions=20):
+    def __init__(self, root_num: int, legal_actions_list: Any, action_space_size: Optional = None, num_of_sampled_actions=20):
         self.num = root_num
         self.root_num = root_num
         self.legal_actions_list = legal_actions_list  # list of list
-        self.pool_size = pool_size
         self.num_of_sampled_actions = num_of_sampled_actions
 
         self.roots = []
@@ -211,11 +214,11 @@ class Roots:
         ##################
         for i in range(self.root_num):
             if isinstance(legal_actions_list, list):
-                self.roots.append(Node(0, legal_actions_list[i], num_of_sampled_actions=self.num_of_sampled_actions))
+                self.roots.append(Node(0, legal_actions_list[i], action_space_size=action_space_size, num_of_sampled_actions=self.num_of_sampled_actions))
             elif isinstance(legal_actions_list, int):
                 # if legal_actions_list is int
                 self.roots.append(
-                    Node(0, np.arange(legal_actions_list), num_of_sampled_actions=self.num_of_sampled_actions))
+                    Node(0, np.arange(legal_actions_list), action_space_size=action_space_size, num_of_sampled_actions=self.num_of_sampled_actions))
             elif legal_actions_list is None:
                 # continuous action space
                 self.roots.append(Node(0, None, action_space_size=action_space_size,
@@ -460,7 +463,7 @@ def select_child(
         ##################
         # use root as input argument
         temp_score = compute_ucb_score(
-            root, child, min_max_stats, mean_q, root.is_reset, root.visit_count, root.value_prefix, pb_c_base,
+            root, child, min_max_stats, mean_q, root.visit_count, pb_c_base,
             pb_c_int,
             discount, players
         )
