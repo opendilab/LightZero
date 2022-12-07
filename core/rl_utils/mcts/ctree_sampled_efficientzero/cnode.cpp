@@ -58,12 +58,22 @@ namespace tree
     }
     size_t CAction::get_combined_hash(void)
     {
+
         std::vector<size_t> hash = this->get_hash();
+
+        // std::cout << "position get_hash() done " << std::endl;
+
         size_t combined_hash = hash[0];
-        for (int i = 1; i < hash.size(); ++i)
-        {
-            combined_hash = hash_combine(combined_hash, hash[i]);
+
+        if (hash.size()>=1){
+            for (int i = 1; i < hash.size(); ++i)
+            {
+                combined_hash = hash_combine(combined_hash, hash[i]);
+            }
         }
+
+        // std::cout << "position: get_combined_hash done" << std::endl;
+
         return combined_hash;
     }
 
@@ -112,6 +122,7 @@ namespace tree
     CNode::CNode(float prior, std::vector<CAction> &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space)
     // CNode::CNode(float prior, std::vector<int> legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space)
     {
+        // std::cout << "position cnode init" << std::endl;
         this->prior = prior;
         this->legal_actions = legal_actions;
 
@@ -128,15 +139,14 @@ namespace tree
         this->parent_value_prefix = 0.0;
         this->hidden_state_index_x = -1;
         this->hidden_state_index_y = -1;
-                std::cout << "position 0" << std::endl;
-
+        // std::cout << "position cnode init done" << std::endl;
     }
 
     CNode::~CNode() {}
 
     void CNode::expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix, const std::vector<float> &policy_logits)
     {
-        std::cout << "position 1" << std::endl;
+        // std::cout << "position 1" << std::endl;
 
         this->to_play = to_play;
         this->hidden_state_index_x = hidden_state_index_x;
@@ -161,7 +171,7 @@ namespace tree
         std::vector<int> sampled_actions;
         std::vector<float> sampled_actions_log_probs;
         std::vector<float> sampled_actions_probs;
-        std::cout << "position 2" << std::endl;
+        // std::cout << "position 2" << std::endl;
 
         if (this->continuous_action_space == true)
         {
@@ -251,8 +261,9 @@ namespace tree
         {
             // discrete action space for sampled ez
 
+            //###############
             // python version code
-
+            //###############
             // if self.legal_actions is not None:
             //     # fisrt use the self.legal_actions to exclude the illegal actions
             //     policy_tmp = [0. for _ in range(self.action_space_size)]
@@ -265,7 +276,9 @@ namespace tree
             //            prob = torch.softmax(torch.tensor(policy_logits), dim=-1)
             //            sampled_actions = torch.multinomial(prob, self.num_of_sampled_actions, replacement=False)
 
-            //TODO
+            //###############
+            // TODO(pu): legal actions
+            //###############
             // std::vector<float> policy_tmp;
             // for (int i = 0; i < this->action_space_size; ++i)
             // {
@@ -279,7 +292,7 @@ namespace tree
             // {
             //     policy_logits[i] = policy_tmp[i];
             // }
-            std::cout << "position 3" << std::endl;
+            // std::cout << "position 3" << std::endl;
 
             std::vector<CAction> legal_actions;
 
@@ -336,7 +349,7 @@ namespace tree
                 vals.push_back(std::pow(u(generator), 1. / iter));
             }
 
-            std::cout << "position 4" << std::endl;
+            // std::cout << "position 4" << std::endl;
 
             //按照扰动后的权重值从大到小排序，并扩展到索引
             for (size_t iter = 0; iter < vals.size(); iter++)
@@ -363,12 +376,14 @@ namespace tree
             for (int k = 0; k < num_of_sampled_actions; ++k)
             {
                 sampled_actions.push_back(valsWithIndices[k].first);
+                sampled_actions_probs.push_back(valsWithIndices[k].second);
+
                 std::cout << "sampled_actions[k]： " << sampled_actions[k] << std::endl;
+                std::cout << "sampled_actions_probs[k]： " << sampled_actions_probs[k] << std::endl;
             }
             vals.clear();            //清空集合，为下次抽样做准备
             valsWithIndices.clear(); //清空集合，为下次抽样做准备
-            std::cout << "position 5" << std::endl;
-
+            // std::cout << "position 5" << std::endl;
         }
 
         float prior;
@@ -397,12 +412,25 @@ namespace tree
                 std::vector<float> sampled_action_tmp;
                 for (size_t iter = 0; iter < 1; iter++)
                 {
-                    sampled_action_tmp.push_back(sampled_actions[i]);
+                    // std::cout << "sampled_actions[i]: " << sampled_actions[i] <<std::endl;
+
+                    sampled_action_tmp.push_back(float(sampled_actions[i]));
+                    // std::cout << "float(sampled_actions[i]): " << float(sampled_actions[i]) <<std::endl;
+
+
                 }
                 // float sampled_action_tmp = static_cast<float>(sampled_actions[i]);
                 CAction action = CAction(sampled_action_tmp, 0);
+
                 // CAction action = CAction(static_cast<float>(sampled_actions[i]), 0);
                 std::vector<CAction> legal_actions;
+                // std::cout << "position 8" << std::endl;
+                // std::cout << "action.get_combined_hash()" << action.get_combined_hash() << std::endl;
+                // std::cout << " this->action_space_size:  " << this->action_space_size << std::endl;
+                // std::cout << " this->num_of_sampled_actions:  " << this->num_of_sampled_actions << std::endl;
+                // std::cout << " this->continuous_action_space :  " << this->continuous_action_space  << std::endl;
+
+                CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space);
                 this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
                 this->legal_actions.push_back(action);
             }
@@ -412,6 +440,7 @@ namespace tree
             //                std::cout << "action.value[j]： " << action.value[j] << std::endl;
             // }
         }
+
     }
 
     void CNode::add_exploration_noise(float exploration_fraction, const std::vector<float> &noises)
@@ -584,10 +613,10 @@ namespace tree
         this->num_of_sampled_actions = num_of_sampled_actions;
         this->action_space_size = action_space_size;
 
-                std::cout << "position here" << std::endl;
+        // std::cout << "position here" << std::endl;
 
 
-        for (int i = 0; i < root_num; ++i)
+        for (int i = 0; i < this->root_num; ++i)
         {
             //            this->roots.push_back(CNode(0, this->legal_actions_list[i], this->num_of_sampled_actions));
             if (this->continuous_action_space == true and this->legal_actions_list[0][0] == -1)
@@ -595,14 +624,13 @@ namespace tree
                 //  continous action space
                 std::vector<CAction> legal_actions;
                 this->roots.push_back(CNode(0, legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space));
-                std::cout << "position -110" << std::endl;
+                // std::cout << "position -110" << std::endl;
 
             }
             else if (this->continuous_action_space == false or this->legal_actions_list[0][0] == -1)
             {
                 //  sampled
                 // discrete action space without action mask
-                std::cout << "position -111" << std::endl;
 
                 std::vector<CAction> legal_actions;
                 this->roots.push_back(CNode(0, legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space));
@@ -623,7 +651,6 @@ namespace tree
                 //                  std::cout << "action_space_size:" << action_space_size << std::endl;
                 //                  std::cout << "num_of_sampled_actions:" << num_of_sampled_actions <<std::endl;
                 this->roots.push_back(CNode(0, c_legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space));
-                std::cout << "position -112" << std::endl;
 
             }
             // TODO
@@ -637,15 +664,12 @@ namespace tree
     {
         //    void CRoots::prepare(float root_exploration_fraction, const std::vector<std::vector<float> > noises, const std::vector<float> value_prefixs, const std::vector<std::vector<float> > policies, std::vector<int> to_play_batch){
         // sampled related code
-        std::cout << "position -1" << std::endl;
 
         for (int i = 0; i < this->root_num; ++i)
         {
-            std::cout << "position -11" << std::endl;
-
             this->roots[i].expand(to_play_batch[i], 0, i, value_prefixs[i], policies[i]);
             
-            std::cout << "position expand done!" << std::endl;
+            // std::cout << "position expand done!" << std::endl;
 
             this->roots[i].add_exploration_noise(root_exploration_fraction, noises[i]);
 

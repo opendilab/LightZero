@@ -736,7 +736,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         ]
 
                     roots = ctree.Roots(batch_size, legal_actions, self.config.action_space_size,
-                                        self.config.num_of_sampled_actions)
+                                        self.config.num_of_sampled_actions, self.config.continuous_action_space)
                     noises = [
                         np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.num_of_sampled_actions
                                             ).astype(np.float32).tolist() for _ in range(batch_size)
@@ -763,7 +763,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         [i for i, x in enumerate(action_mask[j]) if x == 1]
                         for j in range(batch_size)
                     ]
-                    roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations,num_of_sampled_actions=self.config.num_of_sampled_actions)
+                    roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations, self.config.num_of_sampled_actions, self.config.continuous_action_space)
                     noises = [
                         np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(batch_size)
@@ -963,7 +963,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         [i for i, x in enumerate(action_mask[j]) if x == 1]
                         for j in range(batch_size)]
 
-                roots = ctree.Roots(batch_size,  legal_actions, self.config.action_space_size, self.config.num_of_sampled_actions)
+                roots = ctree.Roots(batch_size,  legal_actions, self.config.action_space_size, self.config.num_of_sampled_actions,self.config.continuous_action_space)
                 noises = [
                     np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for _ in range(batch_size)
@@ -1003,7 +1003,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         ]
                         legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
-                        roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations,num_of_sampled_actions=self.config.num_of_sampled_actions)
+                        roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations, self.config.num_of_sampled_actions, self.config.continuous_action_space)
                         noises = [
                             np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                                 ).astype(np.float32).tolist() for j in range(batch_size)

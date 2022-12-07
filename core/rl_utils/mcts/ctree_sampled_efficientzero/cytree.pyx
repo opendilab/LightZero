@@ -62,13 +62,16 @@ cdef class Roots:
     cdef CRoots *roots
     cdef bool continuous_action_space
 
-    #def __cinit__(self, int root_num, list legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space):
+    def __cinit__(self):
+        pass
+
+    def __cinit__(self, int root_num, list legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space):
     #def __cinit__(self, int root_num, list legal_actions_list, int action_space_size, int num_of_sampled_actions):
 
-    #    self.root_num = root_num
-    #    self.action_space_size = action_space_size
-    #    self.num_of_sampled_actions = num_of_sampled_actions
-    #   self.roots = new CRoots(root_num, legal_actions_list, action_space_size, num_of_sampled_actions, continuous_action_space)
+       self.root_num = root_num
+       self.action_space_size = action_space_size
+       self.num_of_sampled_actions = num_of_sampled_actions
+       self.roots = new CRoots(root_num, legal_actions_list, action_space_size, num_of_sampled_actions, continuous_action_space)
 
     def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):
         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
@@ -107,8 +110,8 @@ cdef class Node:
         pass
 
     #def __cinit__(self, float prior, vector[int] &legal_actions, int action_space_size, int num_of_sampled_actions):
-    #def __cinit__(self, float prior, vector[int] &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space):
-     #   pass
+    def __cinit__(self, float prior, vector[int] &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space):
+       pass
 
     def expand(self, int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix, list policy_logits):
         cdef vector[float] cpolicy = policy_logits

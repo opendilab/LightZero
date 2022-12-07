@@ -34,6 +34,7 @@ update_per_collect = 2
 
 mspacman_sampled_efficientzero_config = dict(
     exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
+    # exp_name=f'data_sez_ptree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
