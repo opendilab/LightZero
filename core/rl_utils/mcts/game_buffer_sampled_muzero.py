@@ -16,7 +16,7 @@ from ding.torch_utils.data_helper import to_ndarray
 from ding.utils import BUFFER_REGISTRY
 
 # python mcts
-import core.rl_utils.mcts.ptree_muzero as ptree
+import core.rl_utils.mcts.ptree_sampled_muzero as ptree
 from .mcts_ptree_sampled import SampledMuZeroMCTSPtree as MCTS_ptree
 # cpp mcts
 from core.rl_utils.mcts.ctree_sampled_muzero import cytree as ctree
@@ -417,10 +417,6 @@ class SampledMuZeroGameBuffer(Buffer):
                 np.random.randn(self.config.action_space_size)
                 for _ in range(self.config.num_unroll_steps - len(_actions))
             ]
-            # _child_actions += [
-            #     np.random.randn(self.config.num_of_sampled_actions, self.config.action_space_size)
-            #     for _ in range(self.config.num_unroll_steps+1 - len(_child_actions))
-            # ]
             _child_actions += [
                 np.random.rand(self.config.num_of_sampled_actions, self.config.action_space_size)
                 for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))
@@ -712,21 +708,21 @@ class SampledMuZeroGameBuffer(Buffer):
                     cpp mcts
                     """
                     if to_play_history[0][0] is None:
-                        # for one_player atari games
-                        action_mask = [
-                            list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
-                        ]
+                        # we use to_play=0 means one_player_mode game
                         to_play = [0 for i in range(batch_size)]
+                    # if action_mask_history[0][0] is None:
+                        # continuous action space env: all -1
+                        legal_actions = [[-1 for i in range(self.config.action_space_size)] for _ in range(batch_size)]
+                    else:
+                        legal_actions = [
+                            [i for i, x in enumerate(action_mask[j]) if x == 1]
+                            for j in range(batch_size)
+                        ]
 
-                    legal_actions = [
-                        [i for i, x in enumerate(action_mask[j]) if x == 1]
-                        for j in range(batch_size)
-                    ]
-                    # roots = ctree_efficientzero.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
-                    roots = ctree.Roots(batch_size, self.config.num_simulations, legal_actions)
-
+                    roots = ctree.Roots(batch_size, legal_actions, self.config.action_space_size,
+                                        self.config.num_of_sampled_actions)
                     noises = [
-                        np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.action_space_size
+                        np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.num_of_sampled_actions
                                             ).astype(np.float32).tolist() for _ in range(batch_size)
                     ]
                     roots.prepare(
@@ -751,7 +747,7 @@ class SampledMuZeroGameBuffer(Buffer):
                         [i for i, x in enumerate(action_mask[j]) if x == 1]
                         for j in range(batch_size)
                     ]
-                    roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations)
+                    roots = ptree.Roots(batch_size, legal_actions, num_of_sampled_actions=self.config.num_of_sampled_actions)
                     noises = [
                         np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(batch_size)
@@ -961,39 +957,34 @@ class SampledMuZeroGameBuffer(Buffer):
                 """
                 python mcts
                 """
-                if self.config.continuous_action_space:
-                    # for continuous action space games
-                    legal_actions = None
-                    # continuous action space
-                    roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations,
-                                        action_space_size=self.config.action_space_size,
-                                        num_of_sampled_actions=self.config.num_of_sampled_actions)
-                    # the only difference between collect and eval is the dirichlet noise
-                    # TODO(pu):  int(self.game_config.action_space_size)
-                    noises = [
-                        np.random.dirichlet(
-                            [self.config.root_dirichlet_alpha] * int(self.config.num_of_sampled_actions)
-                        ).astype(np.float32).tolist() for j in range(batch_size)
-                    ]
-                else:
-                    # for one_player atari games
-                    action_mask = [
-                        list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
-                    ]
-                    legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
+                if to_play_history[0][0] is None:
+                    if self.config.continuous_action_space:
+                        # for continuous action space games
+                        legal_actions = None
+                        # continuous action space
+                        roots = ptree.Roots(batch_size, legal_actions,
+                                            action_space_size=self.config.action_space_size,
+                                            num_of_sampled_actions=self.config.num_of_sampled_actions)
+                        # the only difference between collect and eval is the dirichlet noise
+                        # TODO(pu):  int(self.game_config.action_space_size)
+                        noises = [
+                            np.random.dirichlet(
+                                [self.config.root_dirichlet_alpha] * int(self.config.num_of_sampled_actions)
+                                ).astype(np.float32).tolist() for j in range(batch_size)
+                        ]
+                    else:
+                        # for one_player atari games
+                        action_mask = [
+                            list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
+                        ]
+                        legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
-                    roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations,
-                                        num_of_sampled_actions=self.config.num_of_sampled_actions)
-                    noises = [
-                        np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                            ).astype(np.float32).tolist() for j in range(batch_size)
-                    ]
+                        roots = ptree.Roots(batch_size, legal_actions, action_space_size=self.config.action_space_size, num_of_sampled_actions=self.config.num_of_sampled_actions)
+                        noises = [
+                            np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                                                ).astype(np.float32).tolist() for j in range(batch_size)
+                        ]
 
-                roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations)
-                noises = [
-                    np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                        ).astype(np.float32).tolist() for j in range(batch_size)
-                ]
                 if to_play_history[0][0] is None:
                     roots.prepare(
                         self.config.root_exploration_fraction,
@@ -1032,25 +1023,31 @@ class SampledMuZeroGameBuffer(Buffer):
                     # sampled related code
                     ######################
                     if policy_mask[policy_index] == 0:
-                        # the null target policy
-                        if self.config.continuous_action_space:
-                            # for continuous action space games
-                            # the invalid target policy
-                            target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
-                        else:
-                            target_policies.append([0 for _ in range(self.config.action_space_size)])
+                        # # the null target policy
+                        # if self.config.continuous_action_space:
+                        #     # for continuous action space games
+                        #     # the invalid target policy
+                        #     target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                        # else:
+                        #     target_policies.append([0 for _ in range(self.config.action_space_size)])
+
+                        # for sampled
+                        # the invalid target policy
+                        target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
                     else:
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
-                            if self.config.continuous_action_space:
-                                target_policies.append(
-                                    list(np.ones(
-                                        self.config.num_of_sampled_actions) / self.config.num_of_sampled_actions)
-                                )
-                            else:
-                                target_policies.append(
-                                    list(np.ones(self.config.action_space_size) / self.config.action_space_size)
-                                )
+                            # if self.config.continuous_action_space:
+                            #     target_policies.append(
+                            #         list(np.ones(self.config.num_of_sampled_actions) / self.config.num_of_sampled_actions)
+                            #     )
+                            # else:
+                            #     target_policies.append(
+                            #         list(np.ones(self.config.action_space_size) / self.config.action_space_size)
+                            #     )
+                            target_policies.append(
+                                list(np.ones(self.config.num_of_sampled_actions) / self.config.num_of_sampled_actions)
+                            )
                         else:
                             if self.config.mcts_ctree:
                                 """
@@ -1213,17 +1210,21 @@ class SampledMuZeroGameBuffer(Buffer):
                         ######################
                         # sampled related code
                         ######################
-                        if self.config.continuous_action_space:
-                            # for continuous action space games
-                            # the invalid target policy
-                            target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
-                            policy_mask.append(0)
+                        # if self.config.continuous_action_space:
+                        #     # for continuous action space games
+                        #     # the invalid target policy
+                        #     target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                        #     policy_mask.append(0)
+                        #
+                        # else:
+                        #     # for discrete action space games
+                        #     # the invalid target policy
+                        #     target_policies.append([0 for _ in range(self.config.action_space_size)])
+                        #     policy_mask.append(0)
 
-                        else:
-                            # for discrete action space games
-                            # the invalid target policy
-                            target_policies.append([0 for _ in range(self.config.action_space_size)])
-                            policy_mask.append(0)
+                        # the invalid target policy
+                        target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                        policy_mask.append(0)
 
                     policy_index += 1
 

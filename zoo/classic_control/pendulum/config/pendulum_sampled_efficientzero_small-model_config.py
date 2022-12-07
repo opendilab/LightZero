@@ -32,7 +32,6 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 batch_size = 256
-
 # K = 5
 # num_simulations = 25
 K = 20
@@ -43,14 +42,14 @@ update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
-# batch_size = 8
-# K = 3
-# num_simulations = 10
-# update_per_collect = 10
+# batch_size = 3
+# K = 2
+# num_simulations = 3
+# update_per_collect = 1
 
 pendulum_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn10_tanh_fs03-ew5e-3',
-    # exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn10_tanh_cond-sigma-ew5e-3',
+    # exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn10_tanh_fs03-ew5e-3',
+    exp_name=f'data_sez_ptree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn10_tanh_cond-sigma-ew5e-3',
 
     env=dict(
         collector_env_num=collector_env_num,
@@ -159,8 +158,8 @@ pendulum_sampled_efficientzero_config = dict(
         ######################################
         env_type='no_board_games',
         device=device,
-        # mcts_ctree=False,
-        mcts_ctree=True,
+        mcts_ctree=False,
+        # mcts_ctree=True,
         battle_mode='one_player_mode',
         game_history_length=game_history_length,
         action_space_size=action_dim,  # 4**2

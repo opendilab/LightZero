@@ -12,11 +12,13 @@ from ding.torch_utils import to_tensor, to_device
 from ding.utils import POLICY_REGISTRY
 from torch.distributions import Categorical, Independent, Normal
 from torch.nn import L1Loss
-
 from core.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
 from core.rl_utils import scalar_transform, inverse_scalar_transform
 from core.rl_utils import select_action
+from ding.utils import POLICY_REGISTRY
+from torch.distributions import Categorical, Independent, Normal
+from torch.nn import L1Loss
 
 # python mcts
 import core.rl_utils.mcts.ptree_sampled_efficientzero as ptree
@@ -945,17 +947,17 @@ class SampledEfficientZeroPolicy(Policy):
             # TODO(pu): for board games, when action_num is a list, adapt the Roots method
             # cpp mcts
             if self._cfg.mcts_ctree:
-                if to_play[0] is None:
-                    # we use to_play=0 means one_player_mode game
-                    to_play = [0 for i in range(active_collect_env_num)]
                 ######################
                 # sampled related code
                 ######################
+                if to_play[0] is None:
+                    # we use to_play=0 means one_player_mode game in mcts_ctree
+                    to_play = [0 for i in range(active_collect_env_num)]
                 if action_mask[0] is None:
                     # continuous action space env: all -1
-                    legal_actions = [[-1 for i in range(5)] for _ in range(active_collect_env_num)]
+                    legal_actions = [[-1 for i in range(self._cfg.num_of_sampled_actions)] for _ in
+                                     range(active_collect_env_num)]
                 else:
-                    action_num = int(action_mask[0].sum())
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                     ]
@@ -974,6 +976,36 @@ class SampledEfficientZeroPolicy(Policy):
                 self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
             else:
                 # python mcts
+                # if action_mask[0] is None:
+                #     # continuous action space
+                #     roots = ptree.Roots(active_collect_env_num, None,
+                #                         action_space_size=self._cfg.action_space_size,
+                #                         num_of_sampled_actions=self._cfg.num_of_sampled_actions, continuous_action_space=self._cfg.continuous_action_space)
+                #     # the only difference between collect and eval is the dirichlet noise
+                #     noises = [
+                #         np.random.dirichlet(
+                #             [self._cfg.root_dirichlet_alpha] * int(self._cfg.num_of_sampled_actions)
+                #         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
+                #     ]
+                # else:
+                #     # discrete action space
+                #     legal_actions = [
+                #         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
+                #     ]
+                #     roots = ptree.Roots(active_collect_env_num, legal_actions,
+                #                         num_of_sampled_actions=self._cfg.num_of_sampled_actions, continuous_action_space=self._cfg.continuous_action_space)
+                #     # the only difference between collect and eval is the dirichlet noise
+                #     noises = [
+                #         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                #                             ).astype(np.float32).tolist() for j in range(active_collect_env_num)
+                #     ]
+
+                ######################
+                # sampled related code
+                ######################
+                if to_play[0] is None:
+                    # we use to_play=None means one_player_mode game in mcts_ptree
+                    to_play = [None for i in range(active_collect_env_num)]
                 if action_mask[0] is None:
                     # continuous action space
                     roots = ptree.Roots(active_collect_env_num, None, self._cfg.num_simulations,
@@ -987,7 +1019,6 @@ class SampledEfficientZeroPolicy(Policy):
                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                     ]
                 else:
-                    # discrete action space
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                     ]
@@ -1110,17 +1141,17 @@ class SampledEfficientZeroPolicy(Policy):
 
             if self._cfg.mcts_ctree:
                 # cpp mcts
-                if to_play[0] is None:
-                    # we use to_play=0 means one_player_mode game
-                    to_play = [0 for i in range(active_eval_env_num)]
                 ######################
                 # sampled related code
                 ######################
+                if to_play[0] is None:
+                    # we use to_play=0 means one_player_mode game in mcts_ctree
+                    to_play = [0 for i in range(active_eval_env_num)]
                 if action_mask[0] is None:
                     # continuous action space env: all -1
-                    legal_actions = [[-1 for i in range(5)] for _ in range(active_eval_env_num)]
+                    legal_actions = [[-1 for i in range(self._cfg.num_of_sampled_actions)] for _ in
+                                     range(active_eval_env_num)]
                 else:
-                    action_num = int(action_mask[0].sum())
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                     ]
@@ -1132,6 +1163,12 @@ class SampledEfficientZeroPolicy(Policy):
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
             else:
                 # python mcts
+                ######################
+                # sampled related code
+                ######################
+                if to_play[0] is None:
+                    # we use to_play=None means one_player_mode game
+                    to_play = [None for i in range(active_eval_env_num)]
                 if action_mask[0] is None:
                     # continuous action space
                     roots = ptree.Roots(active_eval_env_num, None, self._cfg.num_simulations,
@@ -1139,7 +1176,6 @@ class SampledEfficientZeroPolicy(Policy):
                                         num_of_sampled_actions=self._cfg.num_of_sampled_actions, continuous_action_space=self._cfg.continuous_action_space)
                     # the only difference between collect and eval is the dirichlet noise
                 else:
-                    # discrete action space
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                     ]
