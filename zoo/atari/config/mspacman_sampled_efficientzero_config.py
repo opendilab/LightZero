@@ -17,13 +17,27 @@ else:
 action_space_size = 9  # for mspacman
 K = 5
 
+# obs_shape = (12, 96, 96)  # if frame_stack_num=4, image_channel=3, gray_scale=False
+# image_channel=3
+# gray_scale=False
+
+obs_shape = (4, 96, 96)  # if frame_stack_num=4, image_channel=1, gray_scale=True
+image_channel=1
+gray_scale = True
+
 num_simulations = 50
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 batch_size = 256
 update_per_collect = 1000
+# for continuous action space, gaussian distribution
+# policy_entropy_loss_coeff=5e-3
+# for discrete action space
+policy_entropy_loss_coeff = 0
 
+
+# debug config
 # num_simulations = 3
 # collector_env_num = 1
 # n_episode = 1
@@ -33,8 +47,8 @@ update_per_collect = 1000
 
 
 mspacman_sampled_efficientzero_config = dict(
-    # exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
-    exp_name=f'data_sez_ptree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
+    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ic{image_channel}_pelc0',
+    # exp_name=f'data_sez_ptree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -44,9 +58,9 @@ mspacman_sampled_efficientzero_config = dict(
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
         frame_skip=4,
-        obs_shape=(12, 96, 96),
+        obs_shape=obs_shape,
+        gray_scale=gray_scale,
         episode_life=True,
-        gray_scale=False,
         # cvt_string=True,
         # trade memory for speed
         cvt_string=False,
@@ -63,7 +77,8 @@ mspacman_sampled_efficientzero_config = dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',
-            observation_shape=(12, 96, 96),  # if frame_stack_num=4, the original obs shape is（3,96,96）
+            # the gym original obs shape is（3,96,96）
+            observation_shape=obs_shape,
             action_space_size=action_space_size,
             continuous_action_space=False,
             num_of_sampled_actions=K,
@@ -129,8 +144,8 @@ mspacman_sampled_efficientzero_config = dict(
         env_type='no_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
-        # mcts_ctree=True,
-        mcts_ctree=False,
+        mcts_ctree=True,
+        # mcts_ctree=False,
         image_based=True,
         # cvt_string=True,
         # trade memory for speed
@@ -143,8 +158,8 @@ mspacman_sampled_efficientzero_config = dict(
         continuous_action_space=False,
 
         amp_type='none',
-        obs_shape=(12, 96, 96),
-        image_channel=3,
+        obs_shape=obs_shape,
+        image_channel=image_channel,
         gray_scale=False,
         downsample=True,
         vis_result=True,
@@ -234,7 +249,7 @@ mspacman_sampled_efficientzero_config = dict(
         reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-        policy_entropy_loss_coeff=5e-3,
+        policy_entropy_loss_coeff=policy_entropy_loss_coeff,
         consistency_coeff=2,
 
         # siamese
@@ -280,4 +295,4 @@ create_config = mspacman_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_sampled_efficientzero
-    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e5))
+    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e5))

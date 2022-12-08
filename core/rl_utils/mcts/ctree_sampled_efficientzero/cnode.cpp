@@ -146,8 +146,7 @@ namespace tree
 
     void CNode::expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix, const std::vector<float> &policy_logits)
     {
-        // std::cout << "position 1" << std::endl;
-
+        // std::cout << "position expand init" << std::endl;
         this->to_play = to_play;
         this->hidden_state_index_x = hidden_state_index_x;
         this->hidden_state_index_y = hidden_state_index_y;
@@ -171,8 +170,10 @@ namespace tree
         std::vector<int> sampled_actions;
         std::vector<float> sampled_actions_log_probs;
         std::vector<float> sampled_actions_probs;
-        // std::cout << "position 2" << std::endl;
+        // std::cout << "position sampled_actions_probs;" << std::endl;
 
+        // sampled from gaussia distribution in continuous action space
+        // sampled from categirical distribution in discrete action space
         if (this->continuous_action_space == true)
         {
             // continuous action space for sampled ez
@@ -223,11 +224,11 @@ namespace tree
 
             // way 2: sac-like tanh
             std::vector<std::vector<float> > sampled_actions_before_tanh;
-            std::vector<std::vector<float> > sampled_actions_after_tanh;
+            // std::vector<std::vector<float> > sampled_actions_after_tanh;
 
             float sampled_action_one_dim_before_tanh;
             std::vector<float> sampled_actions_log_probs_before_tanh;
-            std::vector<float> sampled_actions_log_probs_after_tanh;
+            // std::vector<float> sampled_actions_log_probs_after_tanh;
 
             std::default_random_engine generator(seed);
             for (int i = 0; i < this->num_of_sampled_actions; ++i)
@@ -339,7 +340,9 @@ namespace tree
             // }
 
             // 每个节点的legal_actions应该为一个固定离散集合，所以采用无放回抽样
+            std::cout << "position uniform_distribution init" << std::endl;
             std::uniform_real_distribution<double> uniform_distribution(0.0, 1.0); //均匀分布
+            std::cout << "position uniform_distribution done" << std::endl;
             std::vector<double> disturbed_probs;
             std::vector<std::pair<int, double> > disc_action_with_probs;
 
@@ -382,7 +385,7 @@ namespace tree
             }
             disturbed_probs.clear();        // 清空集合，为下次抽样做准备
             disc_action_with_probs.clear(); // 清空集合，为下次抽样做准备
-            // std::cout << "position 5" << std::endl;
+            // std::cout << "position sampled doe" << std::endl;
         }
 
         float prior;
@@ -391,8 +394,10 @@ namespace tree
 
             if (this->continuous_action_space == true)
             {
+                // std::cout << "position this->continuous_action_space == true done" << std::endl;
                 //            prior = policy[a] / policy_sum;
                 CAction action = CAction(sampled_actions_after_tanh[i], 0);
+                // std::cout << "position done: CAction action = CAction(sampled_actions_after_tanh[i], 0);" << std::endl;
                 std::vector<CAction> legal_actions;
                 // backup: segment fault
                 //            std::cout << "legal_actions[0]: " << legal_actions[0] << std::endl;
@@ -403,6 +408,18 @@ namespace tree
                 //            this->children[action] = CNode(sampled_actions_log_prob[i], legal_actions, this->action_space_size, this->num_of_sampled_actions); // only for muzero/efficient zero, not support alphazero
                 //            std::cout << "position 6" << std::endl;
                 //            std::cout << "action.get_combined_hash()" << action.get_combined_hash() << std::endl;
+                
+                // std::cout << "position 8" << std::endl;
+
+                // cpp debug
+                // std::cout << "action.get_combined_hash()" << action.get_combined_hash() << std::endl;
+                // std::cout << " sampled_actions_log_probs_after_tanh[i]: " << sampled_actions_log_probs_after_tanh[i] << std::endl;
+                // std::cout << " this->action_space_size:  " << this->action_space_size << std::endl;
+                // std::cout << " this->num_of_sampled_actions:  " << this->num_of_sampled_actions << std::endl;
+                // std::cout << " this->continuous_action_space :  " << this->continuous_action_space  << std::endl;
+                // CNode(sampled_actions_log_probs_after_tanh[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space);
+                // cpp debug
+
                 this->children[action.get_combined_hash()] = CNode(sampled_actions_log_probs_after_tanh[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
                 this->legal_actions.push_back(action);
             }
@@ -423,17 +440,19 @@ namespace tree
 
                 // CAction action = CAction(static_cast<float>(sampled_actions[i]), 0);
                 std::vector<CAction> legal_actions;
+                // cpp debug
                 // std::cout << "position 8" << std::endl;
                 // std::cout << "action.get_combined_hash()" << action.get_combined_hash() << std::endl;
                 // std::cout << " this->action_space_size:  " << this->action_space_size << std::endl;
                 // std::cout << " this->num_of_sampled_actions:  " << this->num_of_sampled_actions << std::endl;
                 // std::cout << " this->continuous_action_space :  " << this->continuous_action_space  << std::endl;
+                // CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space);
+                // cpp debug
 
-                CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space);
                 this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
                 this->legal_actions.push_back(action);
             }
-            //            std::cout << "position 7" << std::endl;
+            // std::cout << "position 7" << std::endl;
             // for (int j = 0; j < this->action_space_size; ++j)
             // {
             //                std::cout << "action.value[j]： " << action.value[j] << std::endl;
@@ -451,9 +470,15 @@ namespace tree
             noise = noises[i];
             CNode *child = this->get_child(this->legal_actions[i]);
             //             std::cout << "get_child done!" << std::endl;
-
             prior = child->prior;
-            child->prior = prior * (1 - exploration_fraction) + noise * exploration_fraction;
+            if (this->continuous_action_space == true){
+                // prior is log_prob
+                child->prior = log(exp(prior) * (1 - exploration_fraction) + noise * exploration_fraction + 1e-9);
+            }
+            else{
+                // prior is prob
+                child->prior = prior * (1 - exploration_fraction) + noise * exploration_fraction;
+            }
         }
         //        std::cout << "add_exploration_noise done!" << std::endl;
     }
@@ -666,8 +691,8 @@ namespace tree
 
         for (int i = 0; i < this->root_num; ++i)
         {
+            // std::cout << "position prepare init!" << std::endl;
             this->roots[i].expand(to_play_batch[i], 0, i, value_prefixs[i], policies[i]);
-
             // std::cout << "position expand done!" << std::endl;
 
             this->roots[i].add_exploration_noise(root_exploration_fraction, noises[i]);
@@ -956,19 +981,16 @@ namespace tree
         std::string empirical_distribution_type = "density";
         if (empirical_distribution_type.compare("density"))
         {
-            //             float empirical_logprob_sum=0;
-            //            for (int i = 0; i < parent->children.size(); ++i){
-            //                empirical_logprob_sum += parent->get_child(parent->legal_actions[i])->prior;
-            //            }
-            //            prior_score = pb_c * child->prior / (empirical_logprob_sum + 1e-9);
             if (continuous_action_space == true)
             {
+                // std::cout << "position float empirical_prob_sum = 0;" << std::endl;
                 float empirical_prob_sum = 0;
                 for (int i = 0; i < parent->children.size(); ++i)
                 {
                     empirical_prob_sum += exp(parent->get_child(parent->legal_actions[i])->prior);
                 }
                 prior_score = pb_c * exp(child->prior) / (empirical_prob_sum + 1e-9);
+                // std::cout << "position prior_score = pb_c * exp(child->prior) / (empirical_prob_sum + 1e-9);" << std::endl;
             }
             else
             {

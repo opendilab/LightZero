@@ -3,11 +3,11 @@ The Node and Roots class for MCTS in board games in which we must consider legal
 """
 import math
 import random
-from typing import List, Any, Optional, Union
+from typing import List, Any, Union
 
 import numpy as np
 import torch
-from torch.distributions import Normal, Independent, Categorical
+from torch.distributions import Normal, Independent
 
 
 class Node:
@@ -134,7 +134,8 @@ class Node:
                 self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
                     prob[action_index],
                     action_space_size=self.action_space_size,
-                    num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space)
+                    num_of_sampled_actions=self.num_of_sampled_actions,
+                    continuous_action_space=self.continuous_action_space)
                 self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
 
     def add_exploration_noise(self, exploration_fraction: float, noises: List[float]):
@@ -149,7 +150,13 @@ class Node:
         ######################
         actions = list(self.children.keys())
         for a, n in zip(actions, noises):
-            self.children[a].prior = self.children[a].prior * (1 - exploration_fraction) + n * exploration_fraction
+            if self.continuous_action_space:
+                # prior is log_prob
+                self.children[a].prior = np.log(
+                    np.exp(self.children[a].prior) * (1 - exploration_fraction) + n * exploration_fraction)
+            else:
+                # prior is prob
+                self.children[a].prior = self.children[a].prior * (1 - exploration_fraction) + n * exploration_fraction
 
     def get_mean_q(self, is_root: int, parent_q: float, discount: float):
         """
@@ -253,17 +260,22 @@ class Roots:
         for i in range(self.root_num):
             if isinstance(legal_actions_list, list):
                 # TODO(pu): sampled in board_games
-                self.roots.append(Node(0, legal_actions_list[i], action_space_size=action_space_size, num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space))
+                self.roots.append(Node(0, legal_actions_list[i], action_space_size=action_space_size,
+                                       num_of_sampled_actions=self.num_of_sampled_actions,
+                                       continuous_action_space=self.continuous_action_space))
             elif isinstance(legal_actions_list, int):
                 # if legal_actions_list is int
                 self.roots.append(
-                    Node(0, None, action_space_size=action_space_size, num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space))
+                    Node(0, None, action_space_size=action_space_size,
+                         num_of_sampled_actions=self.num_of_sampled_actions,
+                         continuous_action_space=self.continuous_action_space))
                 # self.roots.append(
                 #     Node(0, np.arange(legal_actions_list), num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space))
             elif legal_actions_list is None:
                 # continuous action space
                 self.roots.append(Node(0, None, action_space_size=action_space_size,
-                                       num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space))
+                                       num_of_sampled_actions=self.num_of_sampled_actions,
+                                       continuous_action_space=self.continuous_action_space))
 
     def prepare(self, root_exploration_fraction, noises, value_prefixs, policies, to_play=None):
         for i in range(self.root_num):
@@ -306,6 +318,7 @@ class Roots:
             distributions.append(self.roots[i].get_children_distribution())
 
         return distributions
+
     ##################
     # sampled related code
     ##################
@@ -655,7 +668,8 @@ def batch_traverse(
             parent_q = mean_q
 
             # select action according to the pUCT rule
-            action = select_child(node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players, continuous_action_space)
+            action = select_child(node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players,
+                                  continuous_action_space)
 
             if virtual_to_play is not None and virtual_to_play[i] is not None:
                 # Players play turn by turn

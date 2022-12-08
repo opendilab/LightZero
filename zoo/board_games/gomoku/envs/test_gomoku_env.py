@@ -62,5 +62,5 @@ class TestGomokuEnv:
                     print('draw')
                 break
 
-# test = TestGomokuEnv()
-# test.test_one_player_mode()
+test = TestGomokuEnv()
+test.test_one_player_mode()

@@ -1,12 +1,3 @@
-# import glfw
-# assert glfw.init()
-# import os
-# os.environ['MUJOCO_GL']="egl"
-
-import os
-
-os.environ['DISABLE_MUJOCO_RENDERING'] = '1'
-
 import sys
 
 # sys.path.append('/Users/puyuan/code/LightZero')
@@ -32,11 +23,11 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 batch_size = 256
+update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
 # K = 5
 # num_simulations = 25
 K = 20
 num_simulations = 50
-update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
 
 # for debug
 # collector_env_num = 1
@@ -49,7 +40,7 @@ update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
 
 pendulum_sampled_efficientzero_config = dict(
     # exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn10_tanh_fs03-ew5e-3',
-    exp_name=f'data_sez_ptree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn10_tanh_cond-sigma-ew5e-3',
+    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn10_tanh_cond-sigma-ew5e-3',
 
     env=dict(
         collector_env_num=collector_env_num,
@@ -71,8 +62,8 @@ pendulum_sampled_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            sigma_type='fixed',  # option list: ['fixed', 'conditioned']
-            # sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
+            # sigma_type='fixed',  # option list: ['fixed', 'conditioned']
+            sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
             fixed_sigma_value=0.3,
             bound_type=None,  # if bound_type='tanh', the policy mu is bouded in [-1,1]
             # norm_type='LN',
@@ -104,8 +95,8 @@ pendulum_sampled_efficientzero_config = dict(
             fc_reward_layers=[8],
             fc_value_layers=[8],
             fc_policy_layers=[8],
-            reward_support_size=21,
-            value_support_size=21,
+            reward_support_size=51,
+            value_support_size=51,
             bn_mt=0.1,
             # small size model
             proj_hid=128,
@@ -130,9 +121,11 @@ pendulum_sampled_efficientzero_config = dict(
 
             # sampled paper
             optim_type='Adam',
-            # cos_lr_scheduler=True,
+            learning_rate=3e-3,  # adam lr
             cos_lr_scheduler=False,
-            learning_rate=1e-4,  # adam lr
+
+            # cos_lr_scheduler=True,
+            # learning_rate=1e-4,  # adam lr
             weight_decay=2e-5,
         ),
         # collect_mode config
@@ -158,8 +151,8 @@ pendulum_sampled_efficientzero_config = dict(
         ######################################
         env_type='no_board_games',
         device=device,
-        mcts_ctree=False,
-        # mcts_ctree=True,
+        # mcts_ctree=False,
+        mcts_ctree=True,
         battle_mode='one_player_mode',
         game_history_length=game_history_length,
         action_space_size=action_dim,  # 4**2
@@ -260,7 +253,7 @@ pendulum_sampled_efficientzero_config = dict(
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         categorical_distribution=categorical_distribution,
-        support_size=10,
+        support_size=25,
         max_grad_norm=10,
         # max_grad_norm=0.5,
         test_interval=10000,
@@ -332,5 +325,4 @@ create_config = pendulum_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_sampled_efficientzero
-
-    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e5))
