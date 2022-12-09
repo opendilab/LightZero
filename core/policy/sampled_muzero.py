@@ -338,6 +338,14 @@ class SampledMuZeroPolicy(Policy):
         if self._cfg.learn.policy_loss_type == 'KL':
             # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
             # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
+
+            if self._cfg.learn.normalize_prob_of_sampled_actions:
+                # normalize the prob of sampled actions
+                # prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
+                #     1, log_prob_sampled_actions.shape[-1])
+                prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-9)
+                log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
+
             policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
                     target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
         elif self._cfg.learn.policy_loss_type == 'cross_entropy':
@@ -432,6 +440,14 @@ class SampledMuZeroPolicy(Policy):
             if self._cfg.learn.policy_loss_type == 'KL':
                 # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
                 # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
+
+                if self._cfg.learn.normalize_prob_of_sampled_actions:
+                    # normalize the prob of sampled actions
+                    # prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
+                    #     1, log_prob_sampled_actions.shape[-1])
+                    prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-9)
+                    log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
+
                 policy_loss += (torch.exp(target_log_prob_sampled_actions.detach()) * (
                         target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
             elif self._cfg.learn.policy_loss_type == 'cross_entropy':
@@ -731,7 +747,7 @@ class SampledMuZeroPolicy(Policy):
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                     ]
                 roots = ctree.Roots(active_collect_env_num, legal_actions, self._cfg.action_space_size,
-                                    self._cfg.num_of_sampled_actions)
+                                    self._cfg.num_of_sampled_actions, self._cfg.continuous_action_space)
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
@@ -763,7 +779,7 @@ class SampledMuZeroPolicy(Policy):
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                     ]
-                roots = ptree.Roots(active_collect_env_num, legal_actions, self._cfg.action_space_size, self._cfg.num_of_sampled_actions)
+                roots = ptree.Roots(active_collect_env_num, legal_actions, self._cfg.action_space_size, self._cfg.num_of_sampled_actions, self._cfg.continuous_action_space)
                 # the only difference between collect and eval is the dirichlet noise
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.num_of_sampled_actions
@@ -898,7 +914,7 @@ class SampledMuZeroPolicy(Policy):
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                     ]
                 roots = ctree.Roots(active_eval_env_num, legal_actions, self._cfg.action_space_size,
-                                    self._cfg.num_of_sampled_actions)
+                                    self._cfg.num_of_sampled_actions, self._cfg.continuous_action_space)
                 ######################
                 # sampled related code
                 ######################
@@ -910,7 +926,7 @@ class SampledMuZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ptree.Roots(active_eval_env_num, legal_actions, self._cfg.action_space_size, num_of_sampled_actions=self._cfg.num_of_sampled_actions)
+                roots = ptree.Roots(active_eval_env_num, legal_actions, self._cfg.action_space_size, self._cfg.num_of_sampled_actions, self._cfg.continuous_action_space)
 
                 roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)

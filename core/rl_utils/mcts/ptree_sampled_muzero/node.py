@@ -3,13 +3,11 @@ The Node and Roots class for MCTS in board games in which we must consider legal
 """
 import math
 import random
-from typing import List, Any, Optional, Union
-
+from typing import List, Any, Optional
 
 import numpy as np
 import torch
 from torch.distributions import Normal, Independent
-
 
 
 class Node:
@@ -19,7 +17,8 @@ class Node:
      Arguments:
      """
 
-    def __init__(self, prior: float, legal_actions: Any = None, action_space_size=9, num_of_sampled_actions=20, continuous_action_space=False):
+    def __init__(self, prior: float, legal_actions: Any = None, action_space_size=9, num_of_sampled_actions=20,
+                 continuous_action_space=False):
         self.prior = prior
         self.legal_actions = legal_actions
         self.action_space_size = action_space_size
@@ -41,8 +40,8 @@ class Node:
         self.parent_value_prefix = 0  # only used in update_tree_q method
 
     def expand(
-        self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, reward: float,
-        policy_logits: List[float]
+            self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, reward: float,
+            policy_logits: List[float]
     ):
         self.to_play = to_play
         # if self.legal_actions is None:
@@ -57,36 +56,66 @@ class Node:
         ######################
         # sampled related code
         ######################
-        # policy_logits = {'mu': torch.randn([1, 2]), 'sigma': torch.zeros([1, 2]) + 1e-7}
-        # (mu, sigma) = policy_logits['mu'], policy_logits['sigma']
-        # (mu, sigma) = policy_logits[:,: self.action_space_size ], policy_logits[:,- self.action_space_size:]
-        (mu, sigma) = torch.tensor(policy_logits[: self.action_space_size]), torch.tensor(
-            policy_logits[- self.action_space_size:])
-        self.mu = mu
-        self.sigma = sigma
-        dist = Independent(Normal(mu, sigma), 1)
-        # print(dist.batch_shape, dist.event_shape)
-        sampled_actions_before_tanh = dist.sample(torch.tensor([self.num_of_sampled_actions]))
+        if self.continuous_action_space:
+            # policy_logits = {'mu': torch.randn([1, 2]), 'sigma': torch.zeros([1, 2]) + 1e-7}
+            # (mu, sigma) = policy_logits['mu'], policy_logits['sigma']
+            # (mu, sigma) = policy_logits[:,: self.action_space_size ], policy_logits[:,- self.action_space_size:]
+            (mu, sigma) = torch.tensor(policy_logits[: self.action_space_size]), torch.tensor(
+                policy_logits[- self.action_space_size:])
+            self.mu = mu
+            self.sigma = sigma
+            dist = Independent(Normal(mu, sigma), 1)
+            # print(dist.batch_shape, dist.event_shape)
+            sampled_actions_before_tanh = dist.sample(torch.tensor([self.num_of_sampled_actions]))
 
-        # way 1:
-        # log_prob = dist.log_prob(sampled_actions_before_tanh)
+            # way 1:
+            # log_prob = dist.log_prob(sampled_actions_before_tanh)
 
-        # way 2:
-        sampled_actions = torch.tanh(sampled_actions_before_tanh)
-        y = 1 - sampled_actions.pow(2) + 1e-6
-        # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
-        log_prob = dist.log_prob(sampled_actions_before_tanh).unsqueeze(-1)
-        log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
+            # way 2:
+            sampled_actions = torch.tanh(sampled_actions_before_tanh)
+            y = 1 - sampled_actions.pow(2) + 1e-6
+            # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
+            log_prob = dist.log_prob(sampled_actions_before_tanh).unsqueeze(-1)
+            log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
+            # if self.legal_actions is None:
+            self.legal_actions = []
 
-        # TODO: factored policy representation
-        # empirical_distribution = [1/self.num_of_sampled_actions]
-        for action_index in range(self.num_of_sampled_actions):
-            self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
-                log_prob[action_index],
-                action_space_size=self.action_space_size,
-                num_of_sampled_actions=self.num_of_sampled_actions)
-            self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
+            # TODO: factored policy representation
+            # empirical_distribution = [1/self.num_of_sampled_actions]
+            for action_index in range(self.num_of_sampled_actions):
+                self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
+                    log_prob[action_index],
+                    action_space_size=self.action_space_size,
+                    num_of_sampled_actions=self.num_of_sampled_actions,
+                    continuous_action_space=self.continuous_action_space)
+                self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
+        else:
+            if self.legal_actions is not None:
+                # fisrt use theself.legal_actions to exclude the illegal actions
+                policy_tmp = [0. for _ in range(self.action_space_size)]
+                for index, legal_action in enumerate(self.legal_actions):
+                    policy_tmp[legal_action] = policy_logits[index]
+                policy_logits = policy_tmp
+            # then empty the self.legal_actions
+            self.legal_actions = []
 
+            # prob = torch.softmax(torch.tensor(policy_logits), dim=-1)
+            # dist = Categorical(prob)
+            # sampled_actions = dist.sample(torch.tensor([self.num_of_sampled_actions]))
+            # log_prob = dist.log_prob(sampled_actions)
+
+            prob = torch.softmax(torch.tensor(policy_logits), dim=-1)
+            sampled_actions = torch.multinomial(prob, self.num_of_sampled_actions, replacement=False)
+
+            # TODO: factored policy representation
+            # empirical_distribution = [1/self.num_of_sampled_actions]
+            for action_index in range(self.num_of_sampled_actions):
+                self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
+                    prob[action_index],
+                    action_space_size=self.action_space_size,
+                    num_of_sampled_actions=self.num_of_sampled_actions,
+                    continuous_action_space=self.continuous_action_space)
+                self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
 
     def add_exploration_noise(self, exploration_fraction: float, noises: List[float]):
         """
@@ -100,8 +129,13 @@ class Node:
         ######################
         actions = list(self.children.keys())
         for a, n in zip(actions, noises):
-            self.children[a].prior = self.children[a].prior * (1 - exploration_fraction) + n * exploration_fraction
-
+            if self.continuous_action_space:
+                # prior is log_prob
+                self.children[a].prior = np.log(
+                    np.exp(self.children[a].prior) * (1 - exploration_fraction) + n * exploration_fraction)
+            else:
+                # prior is prob
+                self.children[a].prior = self.children[a].prior * (1 - exploration_fraction) + n * exploration_fraction
 
         # for i, a in enumerate(self.legal_actions):
         #     """
@@ -140,7 +174,6 @@ class Node:
             # TODO(pu): why parent_q?
             mean_q = (parent_q + total_unsigned_q) / (total_visits + 1)
         return mean_q
-
 
     def print_out(self):
         pass
@@ -202,11 +235,13 @@ class Node:
 
 class Roots:
 
-    def __init__(self, root_num: int, legal_actions_list: Any, action_space_size: Optional = None, num_of_sampled_actions=20):
+    def __init__(self, root_num: int, legal_actions_list: Any, action_space_size: Optional = None,
+                 num_of_sampled_actions=20, continuous_action_space=False):
         self.num = root_num
         self.root_num = root_num
         self.legal_actions_list = legal_actions_list  # list of list
         self.num_of_sampled_actions = num_of_sampled_actions
+        self.continuous_action_space = continuous_action_space
 
         self.roots = []
         ##################
@@ -214,15 +249,23 @@ class Roots:
         ##################
         for i in range(self.root_num):
             if isinstance(legal_actions_list, list):
-                self.roots.append(Node(0, legal_actions_list[i], action_space_size=action_space_size, num_of_sampled_actions=self.num_of_sampled_actions))
+                self.roots.append(Node(0, legal_actions_list[i], action_space_size=action_space_size,
+                                       num_of_sampled_actions=self.num_of_sampled_actions,
+                                       continuous_action_space=self.continuous_action_space))
             elif isinstance(legal_actions_list, int):
                 # if legal_actions_list is int
                 self.roots.append(
-                    Node(0, np.arange(legal_actions_list), action_space_size=action_space_size, num_of_sampled_actions=self.num_of_sampled_actions))
+                    Node(0, None, action_space_size=action_space_size,
+                         num_of_sampled_actions=self.num_of_sampled_actions,
+                         continuous_action_space=self.continuous_action_space))
+                # self.roots.append(
+                #     Node(0, np.arange(legal_actions_list), action_space_size=action_space_size, num_of_sampled_actions=self.num_of_sampled_actions,
+                #                        continuous_action_space=self.continuous_action_space))
             elif legal_actions_list is None:
                 # continuous action space
                 self.roots.append(Node(0, None, action_space_size=action_space_size,
-                                       num_of_sampled_actions=self.num_of_sampled_actions))
+                                       num_of_sampled_actions=self.num_of_sampled_actions,
+                                       continuous_action_space=self.continuous_action_space))
 
     def prepare(self, root_exploration_fraction, noises, rewards, policies, to_play=None):
         for i in range(self.root_num):
@@ -238,21 +281,6 @@ class Roots:
             self.roots[i].add_exploration_noise(root_exploration_fraction, noises[i])
             self.roots[i].visit_count += 1
 
-    # def prepare(self, root_exploration_fraction, noises, value_prefixs, policies, to_play=None):
-    #     for i in range(self.root_num):
-    #         #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
-    #         # TODO(pu): why hidden_state_index_x=0, hidden_state_index_y=i?
-    #         if to_play is None:
-    #             self.roots[i].expand(0, 0, i, value_prefixs[i], policies[i])
-    #         elif to_play is [None]:
-    #             print('debug')
-    #         else:
-    #             self.roots[i].expand(to_play[i], 0, i, value_prefixs[i], policies[i])
-
-    #         self.roots[i].add_exploration_noise(root_exploration_fraction, noises[i])
-    #         self.roots[i].visit_count += 1
-
-
     def prepare_no_noise(self, rewards, policies, to_play=None):
         for i in range(self.root_num):
             if to_play is None:
@@ -261,15 +289,6 @@ class Roots:
                 self.roots[i].expand(to_play[i], 0, i, rewards[i], policies[i])
 
             self.roots[i].visit_count += 1
-
-    # def prepare_no_noise(self, value_prefixs, policies, to_play=None):
-    #     for i in range(self.root_num):
-    #         if to_play is None:
-    #             self.roots[i].expand(0, 0, i, value_prefixs[i], policies[i])
-    #         else:
-    #             self.roots[i].expand(to_play[i], 0, i, value_prefixs[i], policies[i])
-
-    #         self.roots[i].visit_count += 1
 
     def clear(self):
         self.roots.clear()
@@ -286,6 +305,7 @@ class Roots:
             distributions.append(self.roots[i].get_children_distribution())
 
         return distributions
+
     ##################
     # sampled related code
     ##################
@@ -315,7 +335,7 @@ class SearchResults:
         self.search_lens = []
 
 
-def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
+def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play=0):
     # root.parent_value_prefix = 0
     node_stack = []
     node_stack.append(root)
@@ -332,12 +352,12 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
 
             min_max_stats.update(q_of_s_a)
 
-
         for a in node.legal_actions:
             child = node.get_child(a)
             if child.expanded:
                 # child.parent_value_prefix = node.value_prefix
                 node_stack.append(child)
+
 
 def back_propagate(search_path, min_max_stats, to_play, value: float, discount: float):
     if to_play is None or to_play == 0:
@@ -353,7 +373,6 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
 
             # TODO(pu): the effect of different ways to update min_max_stats
             min_max_stats.update(true_reward + discount * node.value)
-
 
             bootstrap_value = true_reward + discount * bootstrap_value
 
@@ -372,13 +391,10 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
 
             node.visit_count += 1
 
-
-
             # NOTE: in two player mode,
             # we should calculate the true_reward according to the perspective of current player of node
             # true_reward = node.value_prefix - (- parent_value_prefix)
             true_reward = node.reward
-
 
             # min_max_stats.update(true_reward + discount * node.value)
             # TODO(pu): why in muzero-general is - node.value
@@ -423,7 +439,8 @@ def batch_back_propagate(
 
 
 def select_child(
-        root: Node, min_max_stats, pb_c_base: int, pb_c_int: float, discount: float, mean_q: float, players: int
+        root: Node, min_max_stats, pb_c_base: int, pb_c_int: float, discount: float, mean_q: float, players: int,
+        continuous_action_space=False,
 ) -> int:
     ##################
     # sampled related code
@@ -465,7 +482,7 @@ def select_child(
         temp_score = compute_ucb_score(
             root, child, min_max_stats, mean_q, root.visit_count, pb_c_base,
             pb_c_int,
-            discount, players
+            discount, players, continuous_action_space
         )
         if max_score < temp_score:
             max_score = temp_score
@@ -482,16 +499,17 @@ def select_child(
 
 
 def compute_ucb_score(
-    parent: Node,
-    child: Node,
-    min_max_stats,
-    parent_mean_q,
-    total_children_visit_counts: float,
-    # parent_value_prefix: float,
-    pb_c_base: float,
-    pb_c_init: float,
-    discount: float,
-    players=1
+        parent: Node,
+        child: Node,
+        min_max_stats,
+        parent_mean_q,
+        total_children_visit_counts: float,
+        # parent_value_prefix: float,
+        pb_c_base: float,
+        pb_c_init: float,
+        discount: float,
+        players=1,
+        continuous_action_space=False,
 ):
     """
     Overview:
@@ -515,9 +533,16 @@ def compute_ucb_score(
         prior_score = pb_c * (1 / len(parent.children))
     elif node_prior == "density":
         # TODO(pu): empirical distribution
-        prior_score = pb_c * (
-                torch.exp(child.prior) / (sum([torch.exp(node.prior) for node in parent.children.values()]) + 1e-9)
-        )
+        if continuous_action_space:
+            # prior is log_prob
+            prior_score = pb_c * (
+                    torch.exp(child.prior) / (sum([torch.exp(node.prior) for node in parent.children.values()]) + 1e-9)
+            )
+        else:
+            # prior is prob
+            prior_score = pb_c * (
+                    child.prior / (sum([node.prior for node in parent.children.values()]) + 1e-9)
+            )
     else:
         raise ValueError("{} is unknown prior option, choose uniform or density")
     if child.visit_count == 0:
@@ -540,7 +565,8 @@ def compute_ucb_score(
 
 
 def batch_traverse(
-    roots, pb_c_base: int, pb_c_init: float, discount: float, min_max_stats_lst, results: SearchResults, virtual_to_play
+        roots, pb_c_base: int, pb_c_init: float, discount: float, min_max_stats_lst, results: SearchResults,
+        virtual_to_play, continuous_action_space=False
 ):
     """
     Overview:
@@ -583,7 +609,8 @@ def batch_traverse(
             parent_q = mean_q
 
             # select action according to the pUCT rule
-            action = select_child(node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players)
+            action = select_child(node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players,
+                                  continuous_action_space)
             if virtual_to_play is not None and virtual_to_play[i] is not None:
                 # Players play turn by turn
                 if virtual_to_play[i] == 1:

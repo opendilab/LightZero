@@ -248,8 +248,8 @@ namespace tree
                     //                std::cout << "sampled_action_one_dim:" << sampled_action_one_dim <<std::endl;
                     sampled_action_before_tanh.push_back(sampled_action_one_dim_before_tanh);
                     sampled_action_after_tanh.push_back(tanh(sampled_action_one_dim_before_tanh));
-                    // y = 1 - pow(sampled_actions, 2) + 1e-6;
-                    y.push_back(1 - pow(tanh(sampled_action_one_dim_before_tanh), 2) + 1e-6);
+                    // y = 1 - pow(sampled_actions, 2) + 1e-9;
+                    y.push_back(1 - pow(tanh(sampled_action_one_dim_before_tanh), 2) + 1e-9);
                 }
                 sampled_actions_before_tanh.push_back(sampled_action_before_tanh);
                 sampled_actions_after_tanh.push_back(sampled_action_after_tanh);
@@ -340,9 +340,9 @@ namespace tree
             // }
 
             // 每个节点的legal_actions应该为一个固定离散集合，所以采用无放回抽样
-            std::cout << "position uniform_distribution init" << std::endl;
+            // std::cout << "position uniform_distribution init" << std::endl;
             std::uniform_real_distribution<double> uniform_distribution(0.0, 1.0); //均匀分布
-            std::cout << "position uniform_distribution done" << std::endl;
+            // std::cout << "position uniform_distribution done" << std::endl;
             std::vector<double> disturbed_probs;
             std::vector<std::pair<int, double> > disc_action_with_probs;
 

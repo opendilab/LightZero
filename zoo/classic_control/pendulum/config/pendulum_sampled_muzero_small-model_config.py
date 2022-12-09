@@ -117,6 +117,7 @@ pendulum_sampled_muzero_config = dict(
         ),
         # learn_mode config
         learn=dict(
+            normalize_prob_of_sampled_actions=True,
             policy_loss_type='KL',
             # policy_loss_type='cross_entropy',
             # for debug
@@ -336,4 +337,4 @@ create_config = pendulum_sampled_muzero_create_config
 if __name__ == "__main__":
     from core.entry import serial_pipeline_sampled_muzero
 
-    serial_pipeline_sampled_muzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    serial_pipeline_sampled_muzero([main_config, create_config], seed=0, max_env_step=int(5e5))

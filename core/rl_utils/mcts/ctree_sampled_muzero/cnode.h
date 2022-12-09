@@ -43,6 +43,8 @@ namespace tree {
             int num_of_sampled_actions;
 
             float reward, prior, value_sum;
+            bool continuous_action_space;
+
 //            float parent_value_prefix;
             std::vector<int> children_index;
             // std::vector<CNode>* ptr_node_pool;
@@ -56,7 +58,7 @@ namespace tree {
             CNode();
 //            CNode(float prior, std::vector<int> &legal_actions);
             // sampled related
-            CNode(float prior, std::vector<CAction> &legal_actions, int action_space_size, int num_of_sampled_actions);
+            CNode(float prior, std::vector<CAction> &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space);
             ~CNode();
 
             void expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float reward, const std::vector<float> &policy_logits);
@@ -87,11 +89,13 @@ namespace tree {
             std::vector<CNode> roots;
             // std::vector<std::vector<CNode> > node_pools;
             std::vector<std::vector<float> > legal_actions_list;
+            bool continuous_action_space;
+
 
 
             CRoots();
 //            CRoots(int root_num, int pool_size, std::vector<std::vector<int> > &legal_actions_list);
-            CRoots(int root_num, std::vector<std::vector<float> > legal_actions_list, int action_space_size, int num_of_sampled_actions);
+            CRoots(int root_num, std::vector<std::vector<float> > legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space);
             ~CRoots();
 
             void prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &rewards, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch);
@@ -137,10 +141,10 @@ namespace tree {
 //    int cselect_child(CNode* root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount, float mean_q, int players);
 //       float cucb_score(CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, float total_children_visit_counts, float pb_c_base, float pb_c_init, float discount, int players);
 
-    CAction cselect_child(CNode* root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount, float mean_q, int players);
-        float cucb_score(CNode *parent, CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q,  float total_children_visit_counts, float parent_reward, float pb_c_base, float pb_c_init, float discount, int players);
+    CAction cselect_child(CNode* root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount, float mean_q, int players, bool continuous_action_space);
+        float cucb_score(CNode *parent, CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q,  float total_children_visit_counts, float parent_reward, float pb_c_base, float pb_c_init, float discount, int players, bool continuous_action_space);
 
-    void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &virtual_to_play_batch);
+    void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &virtual_to_play_batch, bool continuous_action_space);
 }
 
 #endif

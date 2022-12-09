@@ -17,10 +17,10 @@ from ding.utils import BUFFER_REGISTRY
 
 # python mcts
 import core.rl_utils.mcts.ptree_sampled_muzero as ptree
-from .mcts_ptree_sampled import SampledMuZeroMCTSPtree as MCTS_ptree
 # cpp mcts
 from core.rl_utils.mcts.ctree_sampled_muzero import cytree as ctree
 from .mcts_ctree_sampled import SampledMuZeroMCTSCtree as MCTS_ctree
+from .mcts_ptree_sampled import SampledMuZeroMCTSPtree as MCTS_ptree
 from .utils import prepare_observation_lst, concat_output, concat_output_value
 from ..scaling_transform import inverse_scalar_transform
 
@@ -710,7 +710,7 @@ class SampledMuZeroGameBuffer(Buffer):
                     if to_play_history[0][0] is None:
                         # we use to_play=0 means one_player_mode game
                         to_play = [0 for i in range(batch_size)]
-                    # if action_mask_history[0][0] is None:
+                        # if action_mask_history[0][0] is None:
                         # continuous action space env: all -1
                         legal_actions = [[-1 for i in range(self.config.action_space_size)] for _ in range(batch_size)]
                     else:
@@ -720,7 +720,7 @@ class SampledMuZeroGameBuffer(Buffer):
                         ]
 
                     roots = ctree.Roots(batch_size, legal_actions, self.config.action_space_size,
-                                        self.config.num_of_sampled_actions)
+                                        self.config.num_of_sampled_actions, self.config.continuous_action_space)
                     noises = [
                         np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.num_of_sampled_actions
                                             ).astype(np.float32).tolist() for _ in range(batch_size)
@@ -747,7 +747,8 @@ class SampledMuZeroGameBuffer(Buffer):
                         [i for i, x in enumerate(action_mask[j]) if x == 1]
                         for j in range(batch_size)
                     ]
-                    roots = ptree.Roots(batch_size, legal_actions, num_of_sampled_actions=self.config.num_of_sampled_actions)
+                    roots = ptree.Roots(batch_size, legal_actions,
+                                        num_of_sampled_actions=self.config.num_of_sampled_actions)
                     noises = [
                         np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(batch_size)
@@ -935,7 +936,8 @@ class SampledMuZeroGameBuffer(Buffer):
                         [i for i, x in enumerate(action_mask[j]) if x == 1]
                         for j in range(batch_size)]
 
-                roots = ctree.Roots(batch_size,  legal_actions, self.config.action_space_size, self.config.num_of_sampled_actions)
+                roots = ctree.Roots(batch_size, legal_actions, self.config.action_space_size,
+                                    self.config.num_of_sampled_actions, self.config.continuous_action_space)
                 noises = [
                     np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for _ in range(batch_size)
@@ -964,13 +966,14 @@ class SampledMuZeroGameBuffer(Buffer):
                         # continuous action space
                         roots = ptree.Roots(batch_size, legal_actions,
                                             action_space_size=self.config.action_space_size,
-                                            num_of_sampled_actions=self.config.num_of_sampled_actions)
+                                            num_of_sampled_actions=self.config.num_of_sampled_actions,
+                                            continuous_action_space=self.config.continuous_action_space)
                         # the only difference between collect and eval is the dirichlet noise
                         # TODO(pu):  int(self.game_config.action_space_size)
                         noises = [
                             np.random.dirichlet(
                                 [self.config.root_dirichlet_alpha] * int(self.config.num_of_sampled_actions)
-                                ).astype(np.float32).tolist() for j in range(batch_size)
+                            ).astype(np.float32).tolist() for j in range(batch_size)
                         ]
                     else:
                         # for one_player atari games
@@ -979,7 +982,9 @@ class SampledMuZeroGameBuffer(Buffer):
                         ]
                         legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
-                        roots = ptree.Roots(batch_size, legal_actions, action_space_size=self.config.action_space_size, num_of_sampled_actions=self.config.num_of_sampled_actions)
+                        roots = ptree.Roots(batch_size, legal_actions, action_space_size=self.config.action_space_size,
+                                            num_of_sampled_actions=self.config.num_of_sampled_actions,
+                                            continuous_action_space=self.config.continuous_action_space)
                         noises = [
                             np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                                 ).astype(np.float32).tolist() for j in range(batch_size)
