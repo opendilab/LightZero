@@ -89,6 +89,9 @@ class EfficientZeroPolicy(Policy):
             ignore_done=False,
             weight_decay=1e-4,
             momentum=0.9,
+            grad_clip_type='clip_norm',
+            grad_clip_value=10,
+            # grad_clip_value=0.5,
         ),
         # collect_mode config
         collect=dict(
@@ -131,11 +134,11 @@ class EfficientZeroPolicy(Policy):
                 lr=self._cfg.learn.learning_rate,
                 momentum=self._cfg.learn.momentum,
                 weight_decay=self._cfg.learn.weight_decay,
-                # grad_clip_type=self._cfg.learn.grad_clip_type,
-                # clip_value=self._cfg.learn.grad_clip_value,
             )
+
         elif self._cfg.learn.optim_type == 'Adam':
-            self._optimizer = optim.Adam(self._model.parameters(), lr=self._cfg.learn.learning_rate, weight_decay=self._cfg.learn.weight_decay)
+            self._optimizer = optim.Adam(self._model.parameters(), lr=self._cfg.learn.learning_rate,
+                                         weight_decay=self._cfg.learn.weight_decay,)
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)

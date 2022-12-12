@@ -9,7 +9,6 @@ import treetensor.torch as ttorch
 from ding.model import model_wrap
 from ding.policy.base_policy import Policy
 from ding.rl_utils import get_nstep_return_data, get_train_sample
-from ding.torch_utils import to_tensor, to_device
 from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
 
@@ -88,6 +87,9 @@ class MuZeroPolicy(Policy):
             ignore_done=False,
             weight_decay=1e-4,
             momentum=0.9,
+            grad_clip_type='clip_norm',
+            grad_clip_value=10,
+            # grad_clip_value=0.5,
         ),
         # collect_mode config
         collect=dict(
@@ -130,9 +132,8 @@ class MuZeroPolicy(Policy):
                 lr=self._cfg.learn.learning_rate,
                 momentum=self._cfg.learn.momentum,
                 weight_decay=self._cfg.learn.weight_decay,
-                # grad_clip_type=self._cfg.learn.grad_clip_type,
-                # clip_value=self._cfg.learn.grad_clip_value,
             )
+
         elif self._cfg.learn.optim_type == 'Adam':
             self._optimizer = optim.Adam(self._model.parameters(), lr=self._cfg.learn.learning_rate,
                                          weight_decay=self._cfg.learn.weight_decay)
@@ -246,7 +247,6 @@ class MuZeroPolicy(Policy):
         reward = network_output.reward
         hidden_state = network_output.hidden_state  # （2, 64, 6, 6）
         policy_logits = network_output.policy_logits  # {list: 2} {list:6}
-
 
         # transform categorical representation to original_value
         original_value = inverse_scalar_transform(value, self._cfg.support_size,
@@ -373,9 +373,9 @@ class MuZeroPolicy(Policy):
                     )
         # ----------------------------------------------------------------------------------
         # weighted loss with masks (some invalid states which are out of trajectory.)
-        loss = ( self._cfg.policy_loss_coeff * policy_loss +
+        loss = (self._cfg.policy_loss_coeff * policy_loss +
                 self._cfg.value_loss_coeff * value_loss + self._cfg.reward_loss_coeff * reward_loss
-        )
+                )
         weighted_loss = (weights * loss).mean()
 
         # backward

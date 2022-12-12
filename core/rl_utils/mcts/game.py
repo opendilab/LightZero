@@ -135,10 +135,11 @@ class GameHistory:
             - next_block_child_visits (:obj:`list`): list root visit count distributions of MCTS from
             the next history block
         """
-        assert len(next_block_observations) <= self.config.num_unroll_steps
-        assert len(next_block_child_visits) <= self.config.num_unroll_steps
-        assert len(next_block_root_values) <= self.config.num_unroll_steps + self.config.td_steps
-        assert len(next_block_rewards) <= self.config.num_unroll_steps + self.config.td_steps - 1
+        # TODO(pu): to save time
+        # assert len(next_block_observations) <= self.config.num_unroll_steps
+        # assert len(next_block_child_visits) <= self.config.num_unroll_steps
+        # assert len(next_block_root_values) <= self.config.num_unroll_steps + self.config.td_steps
+        # assert len(next_block_rewards) <= self.config.num_unroll_steps + self.config.td_steps - 1
 
         # NOTE: next block observation should start from (stacked_observation - 1) in next trajectory
         for observation in next_block_observations:

@@ -557,6 +557,13 @@ class MuZeroNet(BaseNet):
                 encoded_state.shape[3],
             )).to(action.device).float()
         )
+        if len(action.shape) == 1:
+            # (batch_size, ) -> (batch_size, 1)
+            # e.g.,  torch.Size([4]) ->  torch.Size([4, 1])
+            action = action.unsqueeze(-1)
+
+        # action shape: (batch_size, 1)
+        # action[:, :, None, None] shape:  (batch_size, 1, 1, 1)
         action_one_hot = (action[:, :, None, None] * action_one_hot / self.action_space_size)
 
         x = torch.cat((encoded_state, action_one_hot), dim=1)

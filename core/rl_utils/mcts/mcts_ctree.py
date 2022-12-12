@@ -17,7 +17,7 @@ from ..scaling_transform import inverse_scalar_transform
 
 class EfficientZeroMCTSCtree(object):
     config = dict(
-        device='cpu',
+        device='gpu',
         pb_c_base=19652,
         pb_c_init=1.25,
         support_size=300,
@@ -95,7 +95,8 @@ class EfficientZeroMCTSCtree(object):
                 hidden_states = torch.from_numpy(np.asarray(hidden_states)).to(device).float()
                 hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(device).unsqueeze(0)
                 hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(device).unsqueeze(0)
-                last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).long()
+                # only for discrete action
+                last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
 
                 # evaluation for leaf nodes
                 network_output = model.recurrent_inference(
@@ -156,7 +157,7 @@ from core.rl_utils.mcts.ctree_muzero import cytree as tree_muzero
 
 class MuZeroMCTSCtree(object):
     config = dict(
-        device='cpu',
+        device='gpu',
         pb_c_base=19652,
         pb_c_init=1.25,
         support_size=300,
@@ -225,7 +226,8 @@ class MuZeroMCTSCtree(object):
                     hidden_states.append(hidden_state_pool[ix][iy])
 
                 hidden_states = torch.from_numpy(np.asarray(hidden_states)).to(device).float()
-                last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).long()
+                # only for discrete action
+                last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
 
                 # evaluation for leaf nodes
                 network_output = model.recurrent_inference(hidden_states, last_actions)

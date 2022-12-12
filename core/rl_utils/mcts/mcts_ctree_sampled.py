@@ -100,10 +100,12 @@ class SampledEfficientZeroMCTSCtree(object):
 
                 if self.config.continuous_action_space is True:
                     # continuous action
-                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).float()
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).float()
+
                 else:
                     # discrete action
-                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(-1).unsqueeze(1).long()
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
+
 
                 # evaluation for leaf nodes
                 network_output = model.recurrent_inference(
@@ -233,10 +235,11 @@ class SampledMuZeroMCTSCtree(object):
 
                 if self.config.continuous_action_space is True:
                     # continuous action
-                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).float()
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).float()
+
                 else:
                     # discrete action
-                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(-1).unsqueeze(1).long()
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
 
                 # evaluation for leaf nodes
                 network_output = model.recurrent_inference(hidden_states, last_actions)

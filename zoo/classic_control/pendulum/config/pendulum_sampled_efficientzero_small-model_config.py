@@ -19,24 +19,24 @@ categorical_distribution = True
 game_history_length = 50  # we should ignore done in pendulum env which have fixed episode length 200
 norm_type = 'BN'  # 'LN' # TODO: res_blocks LN
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-batch_size = 256
-update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
-# K = 5
-# num_simulations = 25
-K = 20
-num_simulations = 50
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# batch_size = 256
+# update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
+# # K = 5
+# # num_simulations = 25
+# K = 20
+# num_simulations = 50
 
 # for debug
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# batch_size = 3
-# K = 2
-# num_simulations = 3
-# update_per_collect = 1
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+batch_size = 3
+K = 2
+num_simulations = 3
+update_per_collect = 1
 
 pendulum_sampled_efficientzero_config = dict(
     # exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn10_tanh_fs03-ew5e-3',
@@ -152,8 +152,8 @@ pendulum_sampled_efficientzero_config = dict(
         ######################################
         env_type='no_board_games',
         device=device,
-        mcts_ctree=False,
-        # mcts_ctree=True,
+        # mcts_ctree=False,
+        mcts_ctree=True,
         battle_mode='one_player_mode',
         game_history_length=game_history_length,
         action_space_size=action_dim,  # 4**2

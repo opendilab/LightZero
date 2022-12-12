@@ -60,7 +60,8 @@ def inverse_scalar_transform(logits, support_size, epsilon=0.001, categorical_di
             ((torch.sqrt(1 + 4 * epsilon * (torch.abs(value) + 1 + epsilon)) - 1) / (2 * epsilon)) ** 2 - 1
     )
 
-    output[torch.abs(output) < epsilon] = 0.
+    # TODO(pu): save time
+    # output[torch.abs(output) < epsilon] = 0.
 
     return output
 

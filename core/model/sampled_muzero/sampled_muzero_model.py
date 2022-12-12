@@ -622,8 +622,17 @@ class SampledMuZeroNet(BaseNet):
             return encoded_state_normalized
 
     def dynamics(self, encoded_state, action):
+        """
+        Overview:
+        :param encoded_state: (batch_siize, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6)
+        :param reward_hidden_state: (batch_siize, 1, 1) e.g. (1, 1, 1)
+        :param action: (batch_siize, action_dim)
+        :return:
+        """
         if not self.continuous_action_space:
-            # Stack encoded_state with a game specific one hot encoded action
+            # discrete action space
+            # stack encoded_state with a game specific one hot encoded action
+            #  action_one_hot (batch_siize, 1, obs_shape[1], obs_shape[2]), e.g. (4,1,6,6)
             action_one_hot = (
                 torch.ones((
                     encoded_state.shape[0],
@@ -632,32 +641,38 @@ class SampledMuZeroNet(BaseNet):
                     encoded_state.shape[3],
                 )).to(action.device).float()
             )
-            action_one_hot = (action[:, :, None, None] * action_one_hot / self.action_space_dim)
-            x = torch.cat((encoded_state, action_one_hot), dim=1)
-        else:
-            action_one_hot = (
-                torch.ones((
-                    encoded_state.shape[0],
-                    1,
-                    encoded_state.shape[2],
-                    encoded_state.shape[3],
-                )).to(action.device).float()
-            )
-            # TODO
             if len(action.shape) == 2:
-                # e.g.,  torch.Size([2, 1]) ->  torch.Size([1, 2, 1])
-                action = action.reshape(-1, self.action_space_dim, 1)
-            elif len(action.shape) == 3 and action.shape[2] == self.action_space_dim:
-                # e.g.,  torch.Size([8, 1, 2]) ->  torch.Size([8, 2, 1])
-                # action = action.reshape(-1, self.action_space_dim, 1)  # wrong
-                action = action.permute(0, 2, 1)
-            # if len(action.shape)==3:
-            # action: 8,2,1   action_one_hot: 8,1,8,1
+                # (batch_size, action_dim) -> (batch_size, action_dim, 1)
+                # e.g.,  torch.Size([4, 1]) ->  torch.Size([4, 1, 1])
+                action = action.unsqueeze(-1)
+
+            # action[:, 0, None, None] shape: (4, 1, 1, 1)
+            action_one_hot = (action[:, 0, None, None] * action_one_hot / self.action_space_size)
+
+            state_action_encoding = torch.cat((encoded_state, action_one_hot), dim=1)
+        else:             # continuous action space
+            action_one_hot = (
+                torch.ones((
+                    encoded_state.shape[0],
+                    1,
+                    encoded_state.shape[2],
+                    encoded_state.shape[3],
+                )).to(action.device).float()
+            )
+
+
+            if len(action.shape) == 2:
+                # (batch_size, action_dim) -> (batch_size, action_dim, 1)
+                action = action.unsqueeze(-1)
+
+            # len(action.shape)==3:
+            # action: (8,2,1)
+            # action_one_hot (batch_siize, 1, obs_shape[1], obs_shape[2]) : (8,1,8,1)
             # action[:, 0, None, None]: 8,1,1,1
             # action_embedding: 8,2,8,1
             try:
                 action_embedding = torch.cat(
-                    [action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_dim)], dim=1)
+                    [action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_size)], dim=1)
                 # action_embedding = torch.cat([action[:, 0, None, None] * action_one_hot, action[:, 1, None, None] * action_one_hot], dim=1)
             except Exception as error:
                 print(error)

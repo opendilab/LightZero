@@ -111,7 +111,9 @@ class EfficientZeroMCTSPtree(object):
                                                           ).to(device).unsqueeze(0)  # shape (1,1, 64)
                 hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)
                                                           ).to(device).unsqueeze(0)  # shape (1,1, 64)
-                last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).long()
+                # only for discrete action
+                last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
+
 
                 # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are
                 # computed by the dynamics function
@@ -262,7 +264,8 @@ class MuZeroMCTSPtree(object):
                     hidden_states.append(hidden_state_pool[ix][iy])  # hidden_state_pool[ix][iy] shape (12,3,3)
 
                 hidden_states = torch.from_numpy(np.asarray(hidden_states)).to(device).float()
-                last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).long()
+                # only for discrete action
+                last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
 
                 # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are
                 # computed by the dynamics function

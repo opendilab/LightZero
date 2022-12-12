@@ -25,30 +25,30 @@ obs_shape = (4, 96, 96)  # if frame_stack_num=4, image_channel=1, gray_scale=Tru
 image_channel=1
 gray_scale = True
 
-# num_simulations = 50
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# batch_size = 256
-# update_per_collect = 1000
-# # for continuous action space, gaussian distribution
-# # policy_entropy_loss_coeff=5e-3
-# # for discrete action space
-# policy_entropy_loss_coeff = 0
-
-
-# debug config
-num_simulations = 3
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-batch_size = 4
-update_per_collect = 2
+num_simulations = 50
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+batch_size = 256
+update_per_collect = 1000
+# for continuous action space, gaussian distribution
+# policy_entropy_loss_coeff=5e-3
+# for discrete action space
 policy_entropy_loss_coeff = 0
 
 
+# debug config
+# num_simulations = 3
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# batch_size = 4
+# update_per_collect = 2
+# policy_entropy_loss_coeff = 0
+
+
 mspacman_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ic{image_channel}_pelc0',
+    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0',
     # exp_name=f'data_sez_ptree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
     env=dict(
         collector_env_num=collector_env_num,

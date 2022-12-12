@@ -116,10 +116,11 @@ class SampledEfficientZeroMCTSPtree(object):
 
                 if self.config.continuous_action_space is True:
                     # continuous action
-                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).float()
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).float()
+
                 else:
                     # discrete action
-                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(-1).unsqueeze(1).long()
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
 
 
                 # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are
@@ -269,10 +270,11 @@ class SampledMuZeroMCTSPtree(object):
 
                 if self.config.continuous_action_space is True:
                     # continuous action
-                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).float()
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).float()
+
                 else:
                     # discrete action
-                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(-1).unsqueeze(1).long()
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
 
 
                 # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are

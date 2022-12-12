@@ -27,6 +27,14 @@ num_simulations = 50
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
 update_per_collect = 1000
 
+# debug
+# action_space_size = 9  # for mspacman
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# batch_size = 5
+# num_simulations = 5
+# update_per_collect = 1
 
 mspacman_efficientzero_config = dict(
     exp_name=f'data_ez_ctree/mspacman_efficientzero_seed0_sub883_upc{update_per_collect}',
