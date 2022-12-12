@@ -30,9 +30,9 @@ K = 20
 num_simulations = 50
 
 # for debug
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
 # batch_size = 3
 # K = 2
 # num_simulations = 3
@@ -108,6 +108,7 @@ pendulum_sampled_efficientzero_config = dict(
         ),
         # learn_mode config
         learn=dict(
+            normalize_prob_of_sampled_actions=True,
             policy_loss_type='KL',
             # policy_loss_type='cross_entropy',
 
@@ -151,8 +152,8 @@ pendulum_sampled_efficientzero_config = dict(
         ######################################
         env_type='no_board_games',
         device=device,
-        # mcts_ctree=False,
-        mcts_ctree=True,
+        mcts_ctree=False,
+        # mcts_ctree=True,
         battle_mode='one_player_mode',
         game_history_length=game_history_length,
         action_space_size=action_dim,  # 4**2

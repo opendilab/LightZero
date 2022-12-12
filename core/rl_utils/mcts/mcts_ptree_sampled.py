@@ -114,11 +114,10 @@ class SampledEfficientZeroMCTSPtree(object):
                 hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)
                                                           ).to(device).unsqueeze(0)  # shape (1,1, 64)
 
-                last_actions = last_actions[0].value
-                try:
+                if self.config.continuous_action_space is True:
                     # continuous action
-                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).long()
-                except:
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).float()
+                else:
                     # discrete action
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(-1).unsqueeze(1).long()
 
@@ -268,11 +267,10 @@ class SampledMuZeroMCTSPtree(object):
 
                 hidden_states = torch.from_numpy(np.asarray(hidden_states)).to(device).float()
 
-                last_actions = last_actions[0].value
-                try:
+                if self.config.continuous_action_space is True:
                     # continuous action
-                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).long()
-                except:
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).float()
+                else:
                     # discrete action
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(-1).unsqueeze(1).long()
 

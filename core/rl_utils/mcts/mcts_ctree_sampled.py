@@ -97,10 +97,11 @@ class SampledEfficientZeroMCTSCtree(object):
                 hidden_states = torch.from_numpy(np.asarray(hidden_states)).to(device).float()
                 hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(device).unsqueeze(0)
                 hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(device).unsqueeze(0)
-                try:
+
+                if self.config.continuous_action_space is True:
                     # continuous action
-                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).long()
-                except:
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).float()
+                else:
                     # discrete action
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(-1).unsqueeze(1).long()
 
@@ -229,7 +230,13 @@ class SampledMuZeroMCTSCtree(object):
                     hidden_states.append(hidden_state_pool[ix][iy])
 
                 hidden_states = torch.from_numpy(np.asarray(hidden_states)).to(device).float()
-                last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).long()
+
+                if self.config.continuous_action_space is True:
+                    # continuous action
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).float()
+                else:
+                    # discrete action
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(-1).unsqueeze(1).long()
 
                 # evaluation for leaf nodes
                 network_output = model.recurrent_inference(hidden_states, last_actions)

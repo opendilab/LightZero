@@ -726,7 +726,7 @@ class SampledEfficientZeroNet(BaseNet):
             action_one_hot = (action[:, 0, None, None] * action_one_hot / self.action_space_size)
 
             state_action_encoding = torch.cat((encoded_state, action_one_hot), dim=1)
-        else:
+        else:             # continuous action space
             action_one_hot = (
                 torch.ones((
                     encoded_state.shape[0],

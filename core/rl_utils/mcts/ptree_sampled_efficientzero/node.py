@@ -690,7 +690,8 @@ def batch_traverse(
 
             results.hidden_state_index_x_lst[i] = parent.hidden_state_index_x
             results.hidden_state_index_y_lst[i] = parent.hidden_state_index_y
-            results.last_actions[i] = last_action
+            # results.last_actions[i] = last_action
+            results.last_actions[i] = last_action.value
             results.search_lens[i] = search_len
             # the leaf node
             results.nodes[i] = node
