@@ -39,7 +39,7 @@ update_per_collect = 250
 # evaluator_env_num = 1
 
 lunarlander_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_ghl200_halfmodel_fs1_atv_ns{num_simulations}_upc{update_per_collect}_cdt_cc2_adam3e-3_mgn10',
+    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_seed0_sub885_ghl200_halfmodel_fs1_atv_ns{num_simulations}_upc{update_per_collect}_cdt_cc2_adam3e-3_mgn10_fixpolicyobs',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

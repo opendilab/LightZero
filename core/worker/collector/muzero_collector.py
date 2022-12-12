@@ -306,17 +306,17 @@ class MuZeroCollector(ISerialCollector):
                 n_episode: Optional[int] = None,
                 train_iter: int = 0,
                 policy_kwargs: Optional[dict] = None) -> List[Any]:
-        # """
-        # Overview:
-        #     Collect `n_episode` data with policy_kwargs, which is already trained `train_iter` iterations
-        # Arguments:
-        #     - n_episode (:obj:`int`): the number of collecting data episode
-        #     - train_iter (:obj:`int`): the number of training iteration
-        #     - policy_kwargs (:obj:`dict`): the keyword args for policy forward
-        # Returns:
-        #     - return_data (:obj:`List`): A list containing collected episodes if not get_train_sample, otherwise, \
-        #         return train_samples split by unroll_len.
-        # """
+        """
+        Overview:
+            Collect `n_episode` data with policy_kwargs, which is already trained `train_iter` iterations
+        Arguments:
+            - n_episode (:obj:`int`): the number of collecting data episode
+            - train_iter (:obj:`int`): the number of training iteration
+            - policy_kwargs (:obj:`dict`): the keyword args for policy forward
+        Returns:
+            - return_data (:obj:`List`): A list containing collected episodes if not get_train_sample, otherwise, \
+                return train_samples split by unroll_len.
+        """
         if n_episode is None:
             if self._default_n_episode is None:
                 raise RuntimeError("Please specify collect n_episode")

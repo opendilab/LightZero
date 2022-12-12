@@ -14,8 +14,7 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-action_space_size = 9  # for mspacman
-K = 5
+
 
 # obs_shape = (12, 96, 96)  # if frame_stack_num=4, image_channel=3, gray_scale=False
 # image_channel=3
@@ -25,6 +24,8 @@ obs_shape = (4, 96, 96)  # if frame_stack_num=4, image_channel=1, gray_scale=Tru
 image_channel=1
 gray_scale = True
 
+action_space_size = 9  # for mspacman
+K = 5
 num_simulations = 50
 collector_env_num = 8
 n_episode = 8
@@ -38,6 +39,8 @@ policy_entropy_loss_coeff = 0
 
 
 # debug config
+# action_space_size = 9
+# K = 9
 # num_simulations = 3
 # collector_env_num = 1
 # n_episode = 1

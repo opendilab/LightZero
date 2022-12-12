@@ -332,14 +332,63 @@ class MuZeroV2Policy(Policy):
             if self._cfg.consistency_coeff > 0:
                 # obtain the oracle hidden states from representation function
                 network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
-                presentation_state = network_output.hidden_state
+                representation_state = network_output.hidden_state
 
                 hidden_state = to_tensor(hidden_state)
-                presentation_state = to_tensor(presentation_state)
+                representation_state = to_tensor(representation_state)
 
-                # no grad for the presentation_state branch
+                # no grad for the representation_state branch
                 dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
-                observation_proj = self._learn_model.project(presentation_state, with_grad=False)
+                observation_proj = self._learn_model.project(representation_state, with_grad=False)
+
+                """
+                ##########
+                test how the consistece loss change with the board state
+                ##########
+
+                ##########
+                # take a minibatch state
+                ##########
+                # obs_target_batch[:, :, :, :].shape  == (5, 9, 3, 3)
+                # obs_target_batch[:, beg_index:end_index, :, :].shape  == (5, 3, 3, 3)
+
+                for state_index in range(5):
+                    obs_target_batch_copy = copy.deepcopy(obs_target_batch)
+                    # obs_target_batch[:, beg_index:end_index, :, :][0] shape: (3,3,3)
+                    # print(obs_target_batch_copy[:, beg_index:end_index, :, :][state_index])
+
+                    network_output_change1bit = self._learn_model.initial_inference(
+                        obs_target_batch_copy[:, beg_index:end_index, :, :])
+                    representation_state_change1bit = network_output_change1bit.hidden_state
+                    representation_state_change1bit = to_tensor(representation_state_change1bit)
+                    observation_proj_change1bit = self._learn_model.project(representation_state_change1bit,
+                                                                            with_grad=False)
+                    # the similarity in state <state_index>
+                    print(f'======the cos similarity in state {state_index}=====')
+                    print(f'the cos similarity after change 0 bits in state {state_index}:',
+                          -self._consist_loss_func(observation_proj_change1bit, observation_proj)[state_index])
+
+                    for i in range(3):
+                        # change one bit in timestep 1
+                        if (obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] == torch.tensor(0)).item() is True:
+                            obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] = torch.tensor(1)
+                            # obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] += torch.tensor(0.1)
+                            # print(obs_target_batch_copy[:, beg_index:end_index, :, :][state_index])
+
+                        elif (obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] == torch.tensor(1)).item() is True:
+                            obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] = torch.tensor(0)
+                            # obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] -= torch.tensor(0.1)
+                            # print(obs_target_batch_copy[:, beg_index:end_index, :, :][state_index])
+
+                        network_output_change1bit = self._learn_model.initial_inference(obs_target_batch_copy[:, beg_index:end_index, :, :])
+                        representation_state_change1bit = network_output_change1bit.hidden_state
+                        representation_state_change1bit = to_tensor(representation_state_change1bit)
+                        observation_proj_change1bit = self._learn_model.project(representation_state_change1bit, with_grad=False)
+                        # the similarity in state <state_index>
+                        print(f'the cos similarity after change {i+1} bits in state {state_index}:', -self._consist_loss_func(observation_proj_change1bit, observation_proj)[state_index])
+
+                """
+
                 temp_loss = self._consist_loss_func(dynamic_proj, observation_proj) * mask_batch[:, step_i]
 
                 other_loss['consist_' + str(step_i + 1)] = temp_loss.mean().item()
@@ -836,7 +885,20 @@ class MuZeroV2Policy(Policy):
     @staticmethod
     def _consist_loss_func(f1, f2):
         """
-        Consistency loss function: similarity loss
+        Overview:
+            consistency loss function: the negative cosine similarity.
+        Arguments:
+            f1 (:obj:`torch.Tensor`): shape (batch_size, dim), e.g. (256, 512)
+            f2 (:obj:`torch.Tensor`): shape (batch_size, dim), e.g. (256, 512)
+        Returns:
+            (f1 * f2).sum(dim=1) is the cosine similarity between vector f1 and f2.
+            The cosine similarity always belongs to the interval [-1, 1].
+            For example, two proportional vectors have a cosine similarity of 1,
+            two orthogonal vectors have a similarity of 0,
+            and two opposite vectors have a similarity of -1.
+             -(f1 * f2).sum(dim=1) is consistency loss, i.e. the negative cosine similarity.
+        Reference:
+            https://en.wikipedia.org/wiki/Cosine_similarity
         """
         f1 = F.normalize(f1, p=2., dim=-1, eps=1e-5)
         f2 = F.normalize(f2, p=2., dim=-1, eps=1e-5)

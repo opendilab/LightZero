@@ -1,1 +1,0 @@
-git+http://github.com/opendilab/DI-engine@main

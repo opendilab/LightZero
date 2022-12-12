@@ -901,7 +901,11 @@ class SampledMuZeroGameBuffer(Buffer):
                 beg_index = m_batch * i
                 end_index = m_batch * (i + 1)
 
-                m_obs = torch.from_numpy(policy_obs_lst[beg_index:end_index]).to(device).float() / 255.0
+                if self.config.image_based:
+                    m_obs = torch.from_numpy(policy_obs_lst[beg_index:end_index]).to(device).float() / 255.0
+                else:
+                    m_obs = torch.from_numpy(policy_obs_lst[beg_index:end_index]).to(device).float()
+
                 m_output = model.initial_inference(m_obs)
                 # TODO(pu)
                 if not model.training:

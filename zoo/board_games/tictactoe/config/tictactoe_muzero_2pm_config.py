@@ -44,7 +44,7 @@ update_per_collect = 100
 # evaluator_env_num = 1
 
 tictactoe_muzero_config = dict(
-    exp_name=f'data_mz_ctree/tictactoe_2pm_muzero_seed0_sub885_ghl9_ftv1_rc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
+    exp_name=f'data_mz_ctree/tictactoe_2pm_muzero_seed0_sub885_ghl9_ftv1_rc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05_fixpolicyobs',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

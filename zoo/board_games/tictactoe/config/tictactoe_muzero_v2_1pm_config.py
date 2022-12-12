@@ -14,13 +14,13 @@ else:
 
 from easydict import EasyDict
 
-
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 5
-batch_size = 256
-categorical_distribution = True
-num_simulations = 25  # action_space_size=9
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 5
+# batch_size = 256
+# categorical_distribution = True
+# num_simulations = 25  # action_space_size=9
+# update_per_collect = 40
 
 # TODO(pu):
 # PER, stack1
@@ -35,15 +35,19 @@ num_simulations = 25  # action_space_size=9
 # two_player_mode, board_size=3, episode_length=3**2=9
 # collector_env_num=8,  n_sample_per_collect=9*8=72
 
-update_per_collect = 40
 
 # for debug
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+batch_size = 5
+categorical_distribution = True
+num_simulations = 2
+update_per_collect = 4
 
-tictactoe_muzero_config = dict(
-    exp_name=f'data_mz_ctree/tictactoe_1pm_muzero_seed0_sub885_ghl5_ftv1_rc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05_fixpolicyobs',
+tictactoe_muzero_v2_config = dict(
+    exp_name=f'data_mz_ctree/debug',
+    # exp_name=f'data_mz_ctree/tictactoe_1pm_muzero_v2_seed0_sub885_ghl5_ftv1_rc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -60,8 +64,8 @@ tictactoe_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        model_path=None,
-        # model_path='/Users/puyuan/code/LightZero/data_mz_ctree/tictactoe_2pm_muzero_cc2_seed0_sub883/ckpt/iteration_100000.pth.tar',
+        # model_path=None,
+        model_path='/Users/puyuan/code/LightZero/data_mz_ctree/tictactoe_1pm_muzero_seed0_sub885_ghl5_ftv1_cc2_fs1_ns25_upc40_cdt_adam3e-3_mgn05_221128_134825/ckpt/ckpt_best.pth.tar',
         env_name='tictactoe',
         # Whether to use cuda for network.
         cuda=True,
@@ -247,6 +251,7 @@ tictactoe_muzero_config = dict(
         # reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
+        consistency_coeff=2,
 
         bn_mt=0.1,
 
@@ -268,19 +273,19 @@ tictactoe_muzero_config = dict(
         ######################################
     ),
 )
-tictactoe_muzero_config = EasyDict(tictactoe_muzero_config)
-main_config = tictactoe_muzero_config
+tictactoe_muzero_v2_config = EasyDict(tictactoe_muzero_v2_config)
+main_config = tictactoe_muzero_v2_config
 
-tictactoe_muzero_create_config = dict(
+tictactoe_muzero_v2_create_config = dict(
     env=dict(
         type='tictactoe',
         import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
     ),
-    # env_manager=dict(type='base'),
-    env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
+    # env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero',
-        import_names=['core.policy.muzero'],
+        type='muzero_v2',
+        import_names=['core.policy.muzero_v2'],
     ),
     collector=dict(
         type='episode_muzero',
@@ -288,8 +293,8 @@ tictactoe_muzero_create_config = dict(
         import_names=['core.worker.collector.muzero_collector'],
     )
 )
-tictactoe_muzero_create_config = EasyDict(tictactoe_muzero_create_config)
-create_config = tictactoe_muzero_create_config
+tictactoe_muzero_v2_create_config = EasyDict(tictactoe_muzero_v2_create_config)
+create_config = tictactoe_muzero_v2_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_muzero

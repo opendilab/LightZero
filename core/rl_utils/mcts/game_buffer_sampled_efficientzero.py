@@ -933,8 +933,11 @@ class SampledEfficientZeroGameBuffer(Buffer):
             for i in range(slices):
                 beg_index = m_batch * i
                 end_index = m_batch * (i + 1)
+                if self.config.image_based:
+                    m_obs = torch.from_numpy(policy_obs_lst[beg_index:end_index]).to(device).float() / 255.0
+                else:
+                    m_obs = torch.from_numpy(policy_obs_lst[beg_index:end_index]).to(device).float()
 
-                m_obs = torch.from_numpy(policy_obs_lst[beg_index:end_index]).to(device).float() / 255.0
                 m_output = model.initial_inference(m_obs)
                 # TODO(pu)
                 if not model.training:
