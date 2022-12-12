@@ -161,7 +161,6 @@ class TwoPlayersMCTSNode(MCTSNode):
         if self.parent:
             self.parent.backpropagate(result)
 
-
 class MCTSSearchNode(object):
 
     def __init__(self, node):
@@ -226,7 +225,6 @@ class MCTSBot:
         self.num_simulation = num_simulation
         self.ENV = ENV
         self.cfg = cfg
-
     def get_actions(self, state, player_index):
         simulator_env = self.ENV(EasyDict(self.cfg))
         simulator_env.reset(start_player_index=player_index, init_state=state)
