@@ -132,8 +132,8 @@ class Node:
             # empirical_distribution = [1/self.num_of_sampled_actions]
             for action_index in range(self.num_of_sampled_actions):
                 self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
-                    # prob[action_index],
-                    prob[sampled_actions[action_index]],  # NOTE
+                    # prob[action_index], # this is a bug
+                    prob[sampled_actions[action_index]],  # NOTE:
                     action_space_size=self.action_space_size,
                     num_of_sampled_actions=self.num_of_sampled_actions,
                     continuous_action_space=self.continuous_action_space)

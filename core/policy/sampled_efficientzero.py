@@ -340,6 +340,10 @@ class SampledEfficientZeroPolicy(Policy):
 
             # take the init hypothetical step k=0
             target_normalized_visit_count_init_step = target_policy[:, 0]
+            # only for debug
+            target_dist = Categorical(target_normalized_visit_count_init_step)
+            target_policy_entropy = target_dist.entropy().mean()
+
             # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
             # e.g. 4, 6, 20, 2, 1 ->  4, 20, 2
             target_sampled_actions = child_sampled_actions_batch[:, 0].squeeze(-1)
@@ -397,6 +401,10 @@ class SampledEfficientZeroPolicy(Policy):
 
             # take the init hypothetical step k=0
             target_normalized_visit_count_init_step = target_policy[:, 0]
+            # only for debug
+            target_dist = Categorical(target_normalized_visit_count_init_step)
+            target_policy_entropy = target_dist.entropy().mean()
+
             # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
             # e.g. 4, 6, 20, 2, 1 ->  4, 20, 2
             target_sampled_actions = child_sampled_actions_batch[:, 0].squeeze(-1)
@@ -413,8 +421,6 @@ class SampledEfficientZeroPolicy(Policy):
             # batch_size, num_of_sampled_actions -> 4,20
             # target_normalized_visit_count_init_step is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
             target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step + 1e-9)
-
-
 
             log_prob_sampled_actions = []
             for k in range(self._cfg.num_of_sampled_actions):
@@ -548,6 +554,10 @@ class SampledEfficientZeroPolicy(Policy):
 
                 # take the hypothetical step k>0
                 target_normalized_visit_count = target_policy[:, step_i + 1]
+                # only for debug
+                target_dist = Categorical(target_normalized_visit_count_init_step)
+                target_policy_entropy = target_dist.entropy().mean()
+
                 # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
                 # e.g. 4, 3, 20, 2, 1 ->  4, 20, 2
                 target_sampled_actions = child_sampled_actions_batch[:, step_i + 1].squeeze(-1)
@@ -607,6 +617,10 @@ class SampledEfficientZeroPolicy(Policy):
 
                 # take the init hypothetical step k=0
                 target_normalized_visit_count = target_policy[:, step_i + 1]
+                # only for debug
+                target_dist = Categorical(target_normalized_visit_count_init_step)
+                target_policy_entropy = target_dist.entropy().mean()
+
                 # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
                 # e.g. 4, 6, 20, 2, 1 ->  4, 20, 2
                 target_sampled_actions = child_sampled_actions_batch[:, step_i + 1].squeeze(-1)
@@ -855,6 +869,8 @@ class SampledEfficientZeroPolicy(Policy):
                     # sampled related code
                     ######################
                     'policy_entropy': policy_entropy.item(),
+                    'target_policy_entropy': target_policy_entropy.item(),
+
                     'policy_mu_max': mu[:, 0].max().item(),
                     'policy_mu_min': mu[:, 0].min().item(),
                     'policy_mu_mean': mu[:, 0].mean().item(),
@@ -894,6 +910,8 @@ class SampledEfficientZeroPolicy(Policy):
                     # sampled related code
                     ######################
                     'policy_entropy': policy_entropy.item(),
+                    'target_policy_entropy': target_policy_entropy.item(),
+
                     # take the fist dim in action space
                     'target_sampled_actions_max': target_sampled_actions[:, :].float().max().item(),
                     'target_sampled_actions_min': target_sampled_actions[:, :].float().min().item(),
@@ -928,6 +946,8 @@ class SampledEfficientZeroPolicy(Policy):
                     # sampled related code
                     ######################
                     'policy_entropy': policy_entropy.item(),
+                    'target_policy_entropy': target_policy_entropy.item(),
+
                     'policy_mu_max': mu[:, 0].max().item(),
                     'policy_mu_min': mu[:, 0].min().item(),
                     'policy_mu_mean': mu[:, 0].mean().item(),
@@ -967,6 +987,8 @@ class SampledEfficientZeroPolicy(Policy):
                     # sampled related code
                     ######################
                     'policy_entropy': policy_entropy.item(),
+                    'target_policy_entropy': target_policy_entropy.item(),
+
                     # take the fist dim in action space
                     'target_sampled_actions_max': target_sampled_actions[:, :].float().max().item(),
                     'target_sampled_actions_min': target_sampled_actions[:, :].float().min().item(),
@@ -1350,6 +1372,8 @@ class SampledEfficientZeroPolicy(Policy):
                 # sampled related code
                 ######################
                 'policy_entropy',
+                'target_policy_entropy',
+
                 'policy_mu_max',
                 'policy_mu_min',
                 'policy_mu_mean',
@@ -1391,6 +1415,8 @@ class SampledEfficientZeroPolicy(Policy):
                 # sampled related code
                 ######################
                 'policy_entropy',
+                'target_policy_entropy',
+
                 # take the fist dim in action space
                 'target_sampled_actions_max',
                 'target_sampled_actions_min',

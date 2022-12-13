@@ -358,7 +358,10 @@ namespace tree
             for (int k = 0; k < num_of_sampled_actions; ++k)
             {
                 sampled_actions.push_back(disc_action_with_probs[k].first);
-                sampled_actions_probs.push_back(disc_action_with_probs[k].second);
+                // disc_action_with_probs[k].second is disturbed_probs
+                // sampled_actions_probs.push_back(disc_action_with_probs[k].second);
+                sampled_actions_probs.push_back(probs[disc_action_with_probs[k].first]);
+
 
             // TODO(pu): logging
             // std::cout << "sampled_actions[k]： " << sampled_actions[k] << std::endl;
@@ -430,8 +433,8 @@ namespace tree
                 // CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space);
                 // cpp debug
 
-                // NOTE: sampled_actions[i]
-                this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[sampled_actions[i]], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
+                // NOTE: 
+                this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
                 this->legal_actions.push_back(action);
             }
             // std::cout << "position 7" << std::endl;
