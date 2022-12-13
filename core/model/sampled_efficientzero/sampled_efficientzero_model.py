@@ -722,6 +722,10 @@ class SampledEfficientZeroNet(BaseNet):
                 # (batch_size, action_dim) -> (batch_size, action_dim, 1)
                 # e.g.,  torch.Size([4, 1]) ->  torch.Size([4, 1, 1])
                 action = action.unsqueeze(-1)
+            elif  len(action.shape) == 1:
+                # (action_dim) -> (1, action_dim, 1)
+                # e.g.,  torch.Size([4, 1]) ->  torch.Size([4, 1, 1])
+                action = action.unsqueeze(0).unsqueeze(-1)
 
             # action[:, 0, None, None] shape: (4, 1, 1, 1)
             action_one_hot = (action[:, 0, None, None] * action_one_hot / self.action_space_size)

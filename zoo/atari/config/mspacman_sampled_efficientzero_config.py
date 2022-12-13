@@ -33,14 +33,26 @@ evaluator_env_num = 3
 batch_size = 256
 # update_per_collect = 1000
 update_per_collect = 200
-
 # for continuous action space, gaussian distribution
 # policy_entropy_loss_coeff=5e-3
 # for discrete action space
 policy_entropy_loss_coeff = 0
+normalize_prob_of_sampled_actions = True
+
+# debug config 1
+# action_space_size = 9  # for mspacman
+# K = 9
+# num_simulations = 20
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# batch_size = 16
+# update_per_collect = 20
+# policy_entropy_loss_coeff = 0
+# normalize_prob_of_sampled_actions = True
 
 
-# debug config
+# debug config 2
 # action_space_size = 9
 # K = 9
 # num_simulations = 10
@@ -50,10 +62,10 @@ policy_entropy_loss_coeff = 0
 # batch_size = 4
 # update_per_collect = 2
 # policy_entropy_loss_coeff = 0
-
+# normalize_prob_of_sampled_actions = False
 
 mspacman_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0',
+    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_normprob',
     # exp_name=f'data_sez_ptree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
     env=dict(
         collector_env_num=collector_env_num,
@@ -112,7 +124,8 @@ mspacman_sampled_efficientzero_config = dict(
         ),
         # learn_mode config
         learn=dict(
-            normalize_prob_of_sampled_actions=True,
+            normalize_prob_of_sampled_actions=normalize_prob_of_sampled_actions,
+
             # policy_loss_type='KL',
             policy_loss_type='cross_entropy',
 

@@ -132,11 +132,31 @@ class Node:
             # empirical_distribution = [1/self.num_of_sampled_actions]
             for action_index in range(self.num_of_sampled_actions):
                 self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
-                    prob[action_index],
+                    # prob[action_index],
+                    prob[sampled_actions[action_index]],  # NOTE
                     action_space_size=self.action_space_size,
                     num_of_sampled_actions=self.num_of_sampled_actions,
                     continuous_action_space=self.continuous_action_space)
                 self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
+
+    def add_exploration_noise_to_sample_distribution(self, exploration_fraction: float, noises: List[float], policy_logits: List[float]):
+        """
+        Overview:
+            add exploration noise to priors
+        Arguments:
+            - noises (:obj: list): length is len(self.legal_actions)
+        """
+        ######################
+        # sampled related code
+        ######################
+        # TODO(pu): add noise to sample distribution \beta logits
+        for i in range(len(policy_logits)):
+            if self.continuous_action_space:
+                # probs is log_prob
+                pass
+            else:
+                # probs is prob
+                policy_logits[i] = policy_logits[i] * (1 - exploration_fraction) + noises[i] * exploration_fraction
 
     def add_exploration_noise(self, exploration_fraction: float, noises: List[float]):
         """
@@ -279,6 +299,10 @@ class Roots:
 
     def prepare(self, root_exploration_fraction, noises, value_prefixs, policies, to_play=None):
         for i in range(self.root_num):
+            # if self.continuous_action_space is not True:
+            #     # TODO(pu): add noise to sample distribution \beta logits
+            #     self.roots[i].add_exploration_noise_to_sample_distribution(root_exploration_fraction, noises[i], policies[i])
+
             #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
             # TODO(pu): why hidden_state_index_x=0, hidden_state_index_y=i?
             if to_play is None:
@@ -291,7 +315,12 @@ class Roots:
             else:
                 self.roots[i].expand(to_play[i], 0, i, value_prefixs[i], policies[i])
 
+            # if self.continuous_action_space is True:
+            #     # TODO(pu): add noise to policy distribution \pi
+            #     self.roots[i].add_exploration_noise(root_exploration_fraction, noises[i])
+
             self.roots[i].add_exploration_noise(root_exploration_fraction, noises[i])
+
             self.roots[i].visit_count += 1
 
     def prepare_no_noise(self, value_prefixs, policies, to_play=None):

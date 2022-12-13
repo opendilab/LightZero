@@ -404,11 +404,18 @@ class SampledEfficientZeroPolicy(Policy):
             policy_entropy = dist.entropy().mean()
             policy_entropy_loss = - policy_entropy
 
+            # discrete fake target prob
+            # target_normalized_visit_count_init_step = torch.zeros_like(target_normalized_visit_count_init_step)
+            # target_normalized_visit_count_init_step[:,0] = 1
+
             # project the sampled-based improved policy back onto the space of representable policies
             # calculate KL loss
             # batch_size, num_of_sampled_actions -> 4,20
             # target_normalized_visit_count_init_step is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
             target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step + 1e-9)
+
+
+
             log_prob_sampled_actions = []
             for k in range(self._cfg.num_of_sampled_actions):
                 # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
@@ -607,6 +614,10 @@ class SampledEfficientZeroPolicy(Policy):
                 policy_entropy = dist.entropy().mean()
                 policy_entropy_loss = - policy_entropy
 
+                # discrete fake target prob
+                # target_normalized_visit_count = torch.zeros_like(target_normalized_visit_count)
+                # target_normalized_visit_count[:, 0] = 1
+
                 # project the sampled-based improved policy back onto the space of representable policies
                 # calculate KL loss
                 # batch_size, num_of_sampled_actions -> 4,20
@@ -734,7 +745,15 @@ class SampledEfficientZeroPolicy(Policy):
         total_loss.backward()
 
         # debug
+        # continuous
         # self._learn_model.state_dict()['prediction_network.sampled_fc_policy.main.0.weight']
+        # discrete
+        # len(self._learn_model.state_dict()) = 197
+        # self._learn_model.state_dict()['prediction_network.sampled_fc_policy.0.weight']
+        # self._learn_model.state_dict()['prediction_network.sampled_fc_policy.0.bias']
+        # self._learn_model.state_dict()['prediction_network.fc_value.0.weight'],
+        # self._learn_model.state_dict()['prediction_network.fc_value.0.bias']
+
 
         torch.nn.utils.clip_grad_norm_(parameters, self._cfg.max_grad_norm)
         self._optimizer.step()
