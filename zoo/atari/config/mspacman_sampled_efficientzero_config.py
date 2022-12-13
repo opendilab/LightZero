@@ -21,17 +21,19 @@ else:
 # gray_scale=False
 
 obs_shape = (4, 96, 96)  # if frame_stack_num=4, image_channel=1, gray_scale=True
-image_channel=1
+image_channel = 1
 gray_scale = True
 
 action_space_size = 9  # for mspacman
-K = 5
+K = 9
 num_simulations = 50
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 batch_size = 256
-update_per_collect = 1000
+# update_per_collect = 1000
+update_per_collect = 200
+
 # for continuous action space, gaussian distribution
 # policy_entropy_loss_coeff=5e-3
 # for discrete action space
@@ -41,7 +43,7 @@ policy_entropy_loss_coeff = 0
 # debug config
 # action_space_size = 9
 # K = 9
-# num_simulations = 3
+# num_simulations = 10
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
@@ -111,7 +113,8 @@ mspacman_sampled_efficientzero_config = dict(
         # learn_mode config
         learn=dict(
             normalize_prob_of_sampled_actions=True,
-            policy_loss_type='KL',
+            # policy_loss_type='KL',
+            policy_loss_type='cross_entropy',
 
             update_per_collect=update_per_collect,
             target_update_freq=100,

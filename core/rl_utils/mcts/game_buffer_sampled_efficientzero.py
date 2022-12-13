@@ -9,14 +9,14 @@ import time
 from dataclasses import dataclass
 from typing import Any, List, Optional, Union
 
+# python mcts
+import core.rl_utils.mcts.ptree_sampled_efficientzero as ptree
 import numpy as np
 import torch
 from ding.data.buffer import Buffer
 from ding.torch_utils.data_helper import to_ndarray
 from ding.utils import BUFFER_REGISTRY
 
-# python mcts
-import core.rl_utils.mcts.ptree_sampled_efficientzero as ptree
 # cpp mcts
 from .ctree_sampled_efficientzero import cytree as ctree
 from .mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTS_ctree
@@ -428,13 +428,15 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     np.random.randint(0, self.config.action_space_size, 1).item()
                     for _ in range(self.config.num_unroll_steps - len(_actions))
                 ]
-                if len(_child_actions[0].shape)==1:
+                if len(_child_actions[0].shape) == 1:
                     _child_actions += [
-                        np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions)  # TODO(pu)
+                        np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions)
+                        # TODO(pu)
                         for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))]
                 else:
                     _child_actions += [
-                        np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions).reshape(self.config.num_of_sampled_actions, 1) # TODO(pu)
+                        np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions).reshape(
+                            self.config.num_of_sampled_actions, 1)  # TODO(pu)
                         for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))]
 
             # obtain the input observations
@@ -734,7 +736,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     if to_play_history[0][0] is None:
                         # we use to_play=0 means one_player_mode game
                         to_play = [0 for i in range(batch_size)]
-                    # if action_mask_history[0][0] is None:
+                        # if action_mask_history[0][0] is None:
                         # continuous action space env: all -1
                         legal_actions = [[-1 for i in range(self.config.action_space_size)] for _ in range(batch_size)]
                     else:
@@ -812,17 +814,20 @@ class SampledEfficientZeroGameBuffer(Buffer):
             # get last state value
             if to_play_history[0][0] is not None:
                 # TODO(pu): board_games
-                value_lst = value_lst.reshape(-1) * np.array([self.config.discount ** td_steps_lst[i] if int(td_steps_lst[i])%2==0 else - self.config.discount ** td_steps_lst[i] for i in range(batch_size)])
+                value_lst = value_lst.reshape(-1) * np.array([self.config.discount ** td_steps_lst[i] if int(
+                    td_steps_lst[i]) % 2 == 0 else - self.config.discount ** td_steps_lst[i] for i in
+                                                              range(batch_size)])
 
             else:
                 value_lst = value_lst.reshape(-1) * (
-                    np.array([self.config.discount for _ in range(batch_size)]) ** td_steps_lst
-            )
+                        np.array([self.config.discount for _ in range(batch_size)]) ** td_steps_lst
+                )
             value_lst = value_lst * np.array(value_mask)
             value_lst = value_lst.tolist()
 
             horizon_id, value_index = 0, 0
-            for traj_len_non_re, reward_lst, state_index, to_play_list in zip(traj_lens, rewards_lst, state_index_lst, to_play_history):
+            for traj_len_non_re, reward_lst, state_index, to_play_list in zip(traj_lens, rewards_lst, state_index_lst,
+                                                                              to_play_history):
                 # traj_len = len(game)
                 target_values = []
                 target_value_prefixs = []
@@ -975,7 +980,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         [i for i, x in enumerate(action_mask[j]) if x == 1]
                         for j in range(batch_size)]
 
-                roots = ctree.Roots(batch_size,  legal_actions, self.config.action_space_size, self.config.num_of_sampled_actions,self.config.continuous_action_space)
+                roots = ctree.Roots(batch_size, legal_actions, self.config.action_space_size,
+                                    self.config.num_of_sampled_actions, self.config.continuous_action_space)
                 noises = [
                     np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for _ in range(batch_size)
@@ -1010,7 +1016,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     ]
 
                 roots = ptree.Roots(batch_size, legal_actions, action_space_size=self.config.action_space_size,
-                                    num_of_sampled_actions=self.config.num_of_sampled_actions, continuous_action_space=self.config.continuous_action_space)
+                                    num_of_sampled_actions=self.config.num_of_sampled_actions,
+                                    continuous_action_space=self.config.continuous_action_space)
                 # noises = [
                 #     np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                 #                         ).astype(np.float32).tolist() for j in range(batch_size)
@@ -1247,7 +1254,6 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         # the invalid target policy
                         target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
                         policy_mask.append(0)
-
 
                     policy_index += 1
 

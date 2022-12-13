@@ -225,7 +225,7 @@ class SampledEfficientZeroPolicy(Policy):
 
         # batch_size, num_unroll_steps, action_dim
         # e.g. 4, 5, 1
-        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
+        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1)
         # batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim, 1
         # e.g. 4, 6, 5, 1, 1
         child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device).unsqueeze(-1)
@@ -332,6 +332,7 @@ class SampledEfficientZeroPolicy(Policy):
         # calculate policy loss: KL loss
         #############################
         if self._cfg.continuous_action_space:
+            """continuous action space"""
             (mu, sigma) = policy_logits[:, : self._cfg.action_space_size], policy_logits[:,
                                                                        - self._cfg.action_space_size:]
             dist = Independent(Normal(mu, sigma), 1)
@@ -372,16 +373,16 @@ class SampledEfficientZeroPolicy(Policy):
             # batch_size, num_of_sampled_actions -> 4,20
             log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
 
+            if self._cfg.learn.normalize_prob_of_sampled_actions:
+                # normalize the prob of sampled actions
+                # prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
+                #     1, log_prob_sampled_actions.shape[-1])
+                prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-9)
+                log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
+
             if self._cfg.learn.policy_loss_type == 'KL':
                 # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
                 # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
-
-                if self._cfg.learn.normalize_prob_of_sampled_actions:
-                    # normalize the prob of sampled actions
-                    # prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
-                    #     1, log_prob_sampled_actions.shape[-1])
-                    prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-9)
-                    log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
 
                 policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
                         target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
@@ -390,9 +391,7 @@ class SampledEfficientZeroPolicy(Policy):
                 policy_loss = - torch.mean(
                     torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
         else:
-            # (mu, sigma) = policy_logits[:, : self._cfg.action_space_size]
-            # dist = Independent(Normal(mu, sigma), 1)
-
+            """discrete action space"""
             prob = torch.softmax(policy_logits, dim=-1)
             dist = Categorical(prob)
 
@@ -428,16 +427,16 @@ class SampledEfficientZeroPolicy(Policy):
             # batch_size, num_of_sampled_actions -> 4,20
             log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
 
+            if self._cfg.learn.normalize_prob_of_sampled_actions:
+                # normalize the prob of sampled actions
+                # prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
+                #     1, log_prob_sampled_actions.shape[-1])
+                prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-9)
+                log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
+
             if self._cfg.learn.policy_loss_type == 'KL':
                 # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
                 # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
-
-                if self._cfg.learn.normalize_prob_of_sampled_actions:
-                    # normalize the prob of sampled actions
-                    # prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
-                    #     1, log_prob_sampled_actions.shape[-1])
-                    prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-9)
-                    log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
 
                 policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
                         target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
@@ -450,6 +449,17 @@ class SampledEfficientZeroPolicy(Policy):
                 # cross_entropy loss: - sum(p * log (q) )
                 policy_loss = - torch.mean(
                     torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
+
+                # verify the correctness of policy loss
+                # def modified_cross_entropy_loss_v2(target, prediction):
+                #     return -(target * torch.log_softmax(prediction, dim=1)).sum(1)
+                # - sum_p_dot_logq = modified_cross_entropy_loss_v2(target_normalized_visit_count_init_step, policy_logits)
+                #
+                # sum_p_dot_logp = torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) *
+                #           target_log_prob_sampled_actions.detach(), dim=-1)
+
+
+
 
         #############################
         # calculate policy loss: KL loss
@@ -563,23 +573,24 @@ class SampledEfficientZeroPolicy(Policy):
                 # (batch_size, num_of_sampled_actions) e.g. (4,20)
                 log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
 
+                if self._cfg.learn.normalize_prob_of_sampled_actions:
+                    # normalize the prob of sampled actions
+                    # prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
+                    #     1, log_prob_sampled_actions.shape[-1])
+                    prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1,
+                                                            eps=1e-9)
+                    log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
+
                 if self._cfg.learn.policy_loss_type == 'KL':
                     # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
                     # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
 
-                    if self._cfg.learn.normalize_prob_of_sampled_actions:
-                        # normalize the prob of sampled actions
-                        # prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
-                        #     1, log_prob_sampled_actions.shape[-1])
-                        prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1,
-                                                                eps=1e-9)
-                        log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
-
-
+                    # NOTE: accumulate policy loss!!! should be +=
                     policy_loss += (torch.exp(target_log_prob_sampled_actions.detach()) * (
                             target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
                 elif self._cfg.learn.policy_loss_type == 'cross_entropy':
                     # cross_entropy loss: - sum(p * log (q) )
+                    # NOTE: accumulate policy loss!!! should be +=
                     policy_loss += - torch.mean(
                         torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
 
@@ -588,7 +599,7 @@ class SampledEfficientZeroPolicy(Policy):
                 dist = Categorical(prob)
 
                 # take the init hypothetical step k=0
-                target_normalized_visit_count_init_step = target_policy[:, step_i + 1]
+                target_normalized_visit_count = target_policy[:, step_i + 1]
                 # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
                 # e.g. 4, 6, 20, 2, 1 ->  4, 20, 2
                 target_sampled_actions = child_sampled_actions_batch[:, step_i + 1].squeeze(-1)
@@ -599,8 +610,8 @@ class SampledEfficientZeroPolicy(Policy):
                 # project the sampled-based improved policy back onto the space of representable policies
                 # calculate KL loss
                 # batch_size, num_of_sampled_actions -> 4,20
-                # target_normalized_visit_count_init_step is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
-                target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step + 1e-9)
+                # target_normalized_visit_count is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
+                target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-9)
                 log_prob_sampled_actions = []
                 for k in range(self._cfg.num_of_sampled_actions):
                     # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
@@ -619,23 +630,25 @@ class SampledEfficientZeroPolicy(Policy):
                 # batch_size, num_of_sampled_actions -> 4,20
                 log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
 
+                if self._cfg.learn.normalize_prob_of_sampled_actions:
+                    # normalize the prob of sampled actions
+                    # prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
+                    #     1, log_prob_sampled_actions.shape[-1])
+                    prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1,
+                                                            eps=1e-9)
+                    log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
+
                 if self._cfg.learn.policy_loss_type == 'KL':
                     # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
                     # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
 
-                    if self._cfg.learn.normalize_prob_of_sampled_actions:
-                        # normalize the prob of sampled actions
-                        # prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
-                        #     1, log_prob_sampled_actions.shape[-1])
-                        prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1,
-                                                                eps=1e-9)
-                        log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
-
-                    policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
+                    # NOTE: accumulate policy loss!!! should be +=
+                    policy_loss += (torch.exp(target_log_prob_sampled_actions.detach()) * (
                             target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
                 elif self._cfg.learn.policy_loss_type == 'cross_entropy':
                     # cross_entropy loss: - sum(p * log (q) )
-                    policy_loss = - torch.mean(
+                    # NOTE: accumulate policy loss!!! should be +=
+                    policy_loss += - torch.mean(
                         torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
 
             #############################
