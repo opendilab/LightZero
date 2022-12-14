@@ -118,6 +118,10 @@ def serial_pipeline_sampled_efficientzero(
             ]
         )
 
+        # stop, reward = evaluator.eval(
+        #     learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
+        # )
+
         # Evaluate policy performance
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(

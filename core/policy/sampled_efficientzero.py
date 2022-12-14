@@ -401,6 +401,11 @@ class SampledEfficientZeroPolicy(Policy):
 
             # take the init hypothetical step k=0
             target_normalized_visit_count_init_step = target_policy[:, 0]
+
+            # discrete fake target prob
+            # target_normalized_visit_count_init_step = torch.zeros_like(target_normalized_visit_count_init_step)
+            # target_normalized_visit_count_init_step[:,0] = 1
+
             # only for debug
             target_dist = Categorical(target_normalized_visit_count_init_step)
             target_policy_entropy = target_dist.entropy().mean()
@@ -412,9 +417,7 @@ class SampledEfficientZeroPolicy(Policy):
             policy_entropy = dist.entropy().mean()
             policy_entropy_loss = - policy_entropy
 
-            # discrete fake target prob
-            # target_normalized_visit_count_init_step = torch.zeros_like(target_normalized_visit_count_init_step)
-            # target_normalized_visit_count_init_step[:,0] = 1
+
 
             # project the sampled-based improved policy back onto the space of representable policies
             # calculate KL loss
@@ -470,8 +473,6 @@ class SampledEfficientZeroPolicy(Policy):
                 #
                 # sum_p_dot_logp = torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) *
                 #           target_log_prob_sampled_actions.detach(), dim=-1)
-
-
 
 
         #############################
@@ -612,11 +613,17 @@ class SampledEfficientZeroPolicy(Policy):
                         torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
 
             else:
+                """discrete action space"""
                 prob = torch.softmax(policy_logits, dim=-1)
                 dist = Categorical(prob)
 
                 # take th hypothetical step k= step_i + 1
                 target_normalized_visit_count = target_policy[:, step_i + 1]
+
+                # discrete fake target prob
+                # target_normalized_visit_count = torch.zeros_like(target_normalized_visit_count)
+                # target_normalized_visit_count[:, 0] = 1
+
                 # only for debug
                 try:
                     target_dist = Categorical(target_normalized_visit_count)
@@ -631,14 +638,11 @@ class SampledEfficientZeroPolicy(Policy):
                 policy_entropy += dist.entropy().mean()
                 policy_entropy_loss += - policy_entropy
 
-                # discrete fake target prob
-                # target_normalized_visit_count = torch.zeros_like(target_normalized_visit_count)
-                # target_normalized_visit_count[:, 0] = 1
+
 
                 # project the sampled-based improved policy back onto the space of representable policies
-                # calculate KL loss
-                # batch_size, num_of_sampled_actions -> 4,20
-                # target_normalized_visit_count is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
+                # shape: (batch_size, num_of_sampled_actions) -> 4,20
+                # target_normalized_visit_count is categorical distribution [0,1], the range of target_log_prob_sampled_actions is (-inf,0)
                 target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-9)
                 log_prob_sampled_actions = []
                 for k in range(self._cfg.num_of_sampled_actions):
