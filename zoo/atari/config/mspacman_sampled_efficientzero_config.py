@@ -26,9 +26,9 @@ gray_scale = True
 
 action_space_size = 9  # for mspacman
 K = 9
-num_simulations = 50
 # K = 5
-# num_simulations = 25
+# num_simulations = 50
+num_simulations = 25
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
@@ -44,7 +44,7 @@ normalize_prob_of_sampled_actions = True
 # debug config 1
 # action_space_size = 9  # for mspacman
 # K = 9
-# num_simulations = 20
+# num_simulations = 25
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1

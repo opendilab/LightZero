@@ -615,18 +615,21 @@ class SampledEfficientZeroPolicy(Policy):
                 prob = torch.softmax(policy_logits, dim=-1)
                 dist = Categorical(prob)
 
-                # take the init hypothetical step k=0
+                # take th hypothetical step k= step_i + 1
                 target_normalized_visit_count = target_policy[:, step_i + 1]
                 # only for debug
-                target_dist = Categorical(target_normalized_visit_count_init_step)
-                target_policy_entropy = target_dist.entropy().mean()
+                try:
+                    target_dist = Categorical(target_normalized_visit_count)
+                except Exception as error:
+                    print(error)
+                target_policy_entropy += target_dist.entropy().mean()
 
                 # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
                 # e.g. 4, 6, 20, 2, 1 ->  4, 20, 2
                 target_sampled_actions = child_sampled_actions_batch[:, step_i + 1].squeeze(-1)
 
-                policy_entropy = dist.entropy().mean()
-                policy_entropy_loss = - policy_entropy
+                policy_entropy += dist.entropy().mean()
+                policy_entropy_loss += - policy_entropy
 
                 # discrete fake target prob
                 # target_normalized_visit_count = torch.zeros_like(target_normalized_visit_count)
@@ -868,8 +871,8 @@ class SampledEfficientZeroPolicy(Policy):
                     ######################
                     # sampled related code
                     ######################
-                    'policy_entropy': policy_entropy.item(),
-                    'target_policy_entropy': target_policy_entropy.item(),
+                    'policy_entropy': policy_entropy.item()/(self._cfg.num_unroll_steps+1),
+                    'target_policy_entropy': target_policy_entropy.item()/(self._cfg.num_unroll_steps+1),
 
                     'policy_mu_max': mu[:, 0].max().item(),
                     'policy_mu_min': mu[:, 0].min().item(),
@@ -909,8 +912,8 @@ class SampledEfficientZeroPolicy(Policy):
                     ######################
                     # sampled related code
                     ######################
-                    'policy_entropy': policy_entropy.item(),
-                    'target_policy_entropy': target_policy_entropy.item(),
+                    'policy_entropy': policy_entropy.item()/(self._cfg.num_unroll_steps+1),
+                    'target_policy_entropy': target_policy_entropy.item()/(self._cfg.num_unroll_steps+1),
 
                     # take the fist dim in action space
                     'target_sampled_actions_max': target_sampled_actions[:, :].float().max().item(),
@@ -945,8 +948,8 @@ class SampledEfficientZeroPolicy(Policy):
                     ######################
                     # sampled related code
                     ######################
-                    'policy_entropy': policy_entropy.item(),
-                    'target_policy_entropy': target_policy_entropy.item(),
+                    'policy_entropy': policy_entropy.item()/(self._cfg.num_unroll_steps+1),
+                    'target_policy_entropy': target_policy_entropy.item()/(self._cfg.num_unroll_steps+1),
 
                     'policy_mu_max': mu[:, 0].max().item(),
                     'policy_mu_min': mu[:, 0].min().item(),
@@ -986,8 +989,8 @@ class SampledEfficientZeroPolicy(Policy):
                     ######################
                     # sampled related code
                     ######################
-                    'policy_entropy': policy_entropy.item(),
-                    'target_policy_entropy': target_policy_entropy.item(),
+                    'policy_entropy': policy_entropy.item()/(self._cfg.num_unroll_steps+1),
+                    'target_policy_entropy': target_policy_entropy.item()/(self._cfg.num_unroll_steps+1),
 
                     # take the fist dim in action space
                     'target_sampled_actions_max': target_sampled_actions[:, :].float().max().item(),
@@ -1173,16 +1176,33 @@ class SampledEfficientZeroPolicy(Policy):
                     distributions, temperature=temperature[i], deterministic=False
                 )
                 # action, _ = select_action(distributions, temperature=1, deterministic=True)
-                # TODO(pu): transform to the real action index in legal action set
-                if action_mask[0] is not None:
-                    action = np.where(action_mask[i] == 1.0)[0][action]
-                else:
+                if action_mask[0] is not None and not self._cfg.continuous_action_space:
+                    # only discrete action space have action mask
                     try:
                         action = roots_sampled_actions[i][action].value
+                        # print('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
                     except Exception as error:
                         # print(error)
                         # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                         action = np.array(roots_sampled_actions[i][action])
+
+                    # TODO(pu): transform to the real action index in legal action set
+                    # sampled action is in legal actions
+                    # action = np.where(action_mask[i] == 1.0)[0][int(action)]
+                else:
+                    try:
+                        action = roots_sampled_actions[i][action].value
+                        # print('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
+                    except Exception as error:
+                        # print(error)
+                        # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                        action = np.array(roots_sampled_actions[i][action])
+
+                if not self._cfg.continuous_action_space:
+                    if len(action.shape) == 0:
+                        action = int(action)
+                    elif len(action.shape) == 1:
+                        action = int(action[0])
 
                 output[env_id] = {
                     'action': action,
@@ -1326,16 +1346,33 @@ class SampledEfficientZeroPolicy(Policy):
                 ######################
                 # sampled related code
                 ######################
-                # TODO(pu): transform to the real action index in legal action set
-                if action_mask[0] is not None:
-                    action = np.where(action_mask[i] == 1.0)[0][action]
-                else:
+                if action_mask[0] is not None and not self._cfg.continuous_action_space:
+                    # only discrete action space have action mask
                     try:
                         action = roots_sampled_actions[i][action].value
+                        # print('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
                     except Exception as error:
                         # print(error)
                         # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                         action = np.array(roots_sampled_actions[i][action])
+                    # TODO(pu): transform to the real action index in legal action set
+                    # sampled action is in legal actions
+                    # action = np.where(action_mask[i] == 1.0)[0][int(action)]
+                else:
+                    try:
+                        action = roots_sampled_actions[i][action].value
+                        # print('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
+                    except Exception as error:
+                        # print(error)
+                        # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                        action = np.array(roots_sampled_actions[i][action])
+
+                if not self._cfg.continuous_action_space:
+                    if len(action.shape) == 0:
+                        action = int(action)
+                    elif len(action.shape) == 1:
+                        action = int(action[0])
+
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,

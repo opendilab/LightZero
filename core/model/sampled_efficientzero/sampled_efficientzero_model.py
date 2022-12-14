@@ -741,7 +741,6 @@ class SampledEfficientZeroNet(BaseNet):
                 )).to(action.device).float()
             )
 
-
             if len(action.shape) == 2:
                 # (batch_size, action_dim) -> (batch_size, action_dim, 1)
                 action = action.unsqueeze(-1)

@@ -170,6 +170,8 @@ namespace tree
         std::vector<int> sampled_actions;
         std::vector<float> sampled_actions_log_probs;
         std::vector<float> sampled_actions_probs;
+        std::vector<float> probs;
+
         // std::cout << "position sampled_actions_probs;" << std::endl;
 
         // sampled from gaussia distribution in continuous action space
@@ -297,7 +299,7 @@ namespace tree
 
             // python version code: legal_actions = []
             std::vector<CAction> legal_actions;
-            std::vector<float> probs;
+            // std::vector<float> probs;
 
             // probs = softmax(policy_logits)
             float logits_exp_sum = 0;
@@ -455,6 +457,9 @@ namespace tree
                 // cpp debug
 
                 // NOTE: sampled_actions[i]
+                // std::cout << "sampled_actions_probs[i]: " << sampled_actions_probs[i] << std::endl;
+                // std::cout << "probs[sampled_actions[i]] : " << probs[ sampled_actions[i] ] << std::endl;
+
                 this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
                 // this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[ sampled_actions[i] ], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
                 this->legal_actions.push_back(action);

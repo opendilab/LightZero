@@ -949,16 +949,33 @@ class SampledMuZeroPolicy(Policy):
                 # sampled related code
                 ######################
                 # action, _ = select_action(distributions, temperature=1, deterministic=True)
-                # TODO(pu): transform to the real action index in legal action set
-                if action_mask[0] is not None:
-                    action = np.where(action_mask[i] == 1.0)[0][action]
-                else:
+                if action_mask[0] is not None and not self._cfg.continuous_action_space:
+                    # only discrete action space have action mask
                     try:
                         action = roots_sampled_actions[i][action].value
+                        # print('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
                     except Exception as error:
                         # print(error)
                         # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                         action = np.array(roots_sampled_actions[i][action])
+                    # TODO(pu): transform to the real action index in legal action set
+                    # sampled action is in legal_actions
+                    # action = np.where(action_mask[i] == 1.0)[0][int(action)]
+                else:
+                    try:
+                        action = roots_sampled_actions[i][action].value
+                        if not self._cfg.continuous_action_space:
+                            action = int(action[0])
+                    except Exception as error:
+                        # print(error)
+                        # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                        action = np.array(roots_sampled_actions[i][action])
+                if not self._cfg.continuous_action_space:
+                    if len(action.shape) == 0:
+                        action = int(action)
+                    elif len(action.shape) == 1:
+                        action = int(action[0])
+
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,
@@ -1085,16 +1102,33 @@ class SampledMuZeroPolicy(Policy):
                 ######################
                 # sampled related code
                 ######################
-                # TODO(pu): transform to the real action index in legal action set
-                if action_mask[0] is not None:
-                    action = np.where(action_mask[i] == 1.0)[0][action]
-                else:
+                if action_mask[0] is not None and not self._cfg.continuous_action_space:
+                    # only discrete action space have action mask
                     try:
                         action = roots_sampled_actions[i][action].value
+                        # print('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
                     except Exception as error:
                         # print(error)
                         # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                         action = np.array(roots_sampled_actions[i][action])
+                    # TODO(pu): transform to the real action index in legal action set
+                    # sampled action is in legal_actions
+                    # action = np.where(action_mask[i] == 1.0)[0][int(action)]
+                else:
+                    try:
+                        action = roots_sampled_actions[i][action].value
+                        # print('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
+                    except Exception as error:
+                        # print(error)
+                        # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                        action = np.array(roots_sampled_actions[i][action])
+
+                if not self._cfg.continuous_action_space:
+                    if len(action.shape) == 0:
+                        action = int(action)
+                    elif len(action.shape) == 1:
+                        action = int(action[0])
+
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,

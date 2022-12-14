@@ -402,7 +402,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             _actions = game.action_history[game_history_pos:game_history_pos + self.config.num_unroll_steps].tolist()
             # _actions = game.action_history[game_history_pos:game_history_pos + self.config.num_unroll_steps]
 
-            # NOTE: self.config.num_unroll_steps + 1
+            # NOTE: self.config.num_unroll_steps + 1, TODO why +1
             _child_actions = game.child_actions[game_history_pos:game_history_pos + self.config.num_unroll_steps + 1]
 
             # add mask for invalid actions (out of trajectory)
@@ -1060,9 +1060,11 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         # else:
                         #     target_policies.append([0 for _ in range(self.config.action_space_size)])
 
-                        # for sampled
-                        # the invalid target policy
-                        target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                        # for sampled the invalid target policy TODO
+                        # target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                        target_policies.append(
+                            list(np.ones(self.config.num_of_sampled_actions) / self.config.num_of_sampled_actions)
+                        )
 
                     else:
                         if distributions is None:
@@ -1252,7 +1254,10 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         #     policy_mask.append(0)
 
                         # the invalid target policy
-                        target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                        # target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                        target_policies.append(
+                            list(np.ones(self.config.num_of_sampled_actions) / self.config.num_of_sampled_actions)
+                        )
                         policy_mask.append(0)
 
                     policy_index += 1
