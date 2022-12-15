@@ -19,7 +19,6 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 batch_size = 256
-
 num_simulations = 50
 # TODO(pu):
 # The key hyper-para to tune, for different env, we have different episode_length
@@ -29,9 +28,9 @@ update_per_collect = 1000
 
 # debug
 # action_space_size = 9  # for mspacman
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
 # batch_size = 5
 # num_simulations = 5
 # update_per_collect = 1

@@ -44,12 +44,12 @@ normalize_prob_of_sampled_actions = True
 # debug config 1
 # action_space_size = 9  # for mspacman
 # K = 9
-# num_simulations = 25
+# num_simulations = 20
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
 # batch_size = 5
-# update_per_collect = 20
+# update_per_collect = 10
 # policy_entropy_loss_coeff = 0
 # normalize_prob_of_sampled_actions = True
 
@@ -90,6 +90,7 @@ mspacman_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model_path=None,
+        # model_path='/Users/puyuan/code/LightZero/data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc200_k9_ns50_ic1_pelc0_normprob_221214_114502/ckpt/ckpt_best.pth.tar',
         env_name='MsPacmanNoFrameskip-v4',
         # Whether to use cuda for network.
         cuda=True,

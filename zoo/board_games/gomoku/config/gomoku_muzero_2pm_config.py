@@ -46,7 +46,7 @@ num_simulations = 50
 
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_ez_ctree/gomoku_bs6_2pm_ghl36_muzero_seed0_sub883_halfmodel_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
+    exp_name=f'data_mz_ctree/gomoku_bs6_2pm_ghl36_muzero_seed0_sub883_halfmodel_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

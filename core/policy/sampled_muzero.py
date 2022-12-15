@@ -11,7 +11,7 @@ from ding.policy.base_policy import Policy
 from ding.rl_utils import get_nstep_return_data, get_train_sample
 from ding.torch_utils import to_tensor, to_device
 from ding.utils import POLICY_REGISTRY
-from torch.distributions import Normal, Independent
+from torch.distributions import Categorical, Independent, Normal
 from torch.nn import L1Loss
 
 # python mcts
@@ -311,7 +311,7 @@ class SampledMuZeroPolicy(Policy):
             target_sampled_actions = child_sampled_actions_batch[:, 0].squeeze(-1)
 
             policy_entropy = dist.entropy().mean()
-            policy_entropy_loss = - policy_entropy
+            policy_entropy_loss = - dist.entropy()
 
             # project the sampled-based improved policy back onto the space of representable policies
             # calculate KL loss
@@ -350,11 +350,10 @@ class SampledMuZeroPolicy(Policy):
                 # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
 
                 policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
-                        target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+                        target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1)
             elif self._cfg.learn.policy_loss_type == 'cross_entropy':
                 # cross_entropy loss: - sum(p * log (q) )
-                policy_loss = - torch.mean(
-                    torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
+                policy_loss = - torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1)
         else:
             """discrete action space"""
             prob = torch.softmax(policy_logits, dim=-1)
@@ -367,7 +366,7 @@ class SampledMuZeroPolicy(Policy):
             target_sampled_actions = child_sampled_actions_batch[:, 0].squeeze(-1)
 
             policy_entropy = dist.entropy().mean()
-            policy_entropy_loss = - policy_entropy
+            policy_entropy_loss = - dist.entropy()
 
             # project the sampled-based improved policy back onto the space of representable policies
             # calculate KL loss
@@ -404,7 +403,7 @@ class SampledMuZeroPolicy(Policy):
                 # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
 
                 policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
-                        target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+                        target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1)
 
                 # import torch.nn as nn
                 # kl_loss = nn.KLDivLoss(reduction="batchmean")
@@ -412,8 +411,7 @@ class SampledMuZeroPolicy(Policy):
 
             elif self._cfg.learn.policy_loss_type == 'cross_entropy':
                 # cross_entropy loss: - sum(p * log (q) )
-                policy_loss = - torch.mean(
-                    torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
+                policy_loss = - torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1)
 
         #############################
         # calculate policy loss: KL loss
@@ -513,12 +511,11 @@ class SampledMuZeroPolicy(Policy):
 
                     # NOTE: accumulate policy loss!!! should be +=
                     policy_loss += (torch.exp(target_log_prob_sampled_actions.detach()) * (
-                            target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+                            target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1)
                 elif self._cfg.learn.policy_loss_type == 'cross_entropy':
                     # cross_entropy loss: - sum(p * log (q) )
                     # NOTE: accumulate policy loss!!! should be +=
-                    policy_loss += - torch.mean(
-                        torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
+                    policy_loss += -  torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1)
 
             else:
                 prob = torch.softmax(policy_logits, dim=-1)
@@ -570,12 +567,11 @@ class SampledMuZeroPolicy(Policy):
 
                     # NOTE: accumulate policy loss!!! should be +=
                     policy_loss += (torch.exp(target_log_prob_sampled_actions.detach()) * (
-                            target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
+                            target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1)
                 elif self._cfg.learn.policy_loss_type == 'cross_entropy':
                     # cross_entropy loss: - sum(p * log (q) )
                     # NOTE: accumulate policy loss!!! should be +=
-                    policy_loss += - torch.mean(
-                        torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
+                    policy_loss += - torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1)
 
             #############################
             # calculate policy loss: KL loss
