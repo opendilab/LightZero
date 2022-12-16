@@ -72,10 +72,11 @@ game_config = EasyDict(
         # lr_manually=True,
         lr_manually=False,  # use fixed lr
 
-        # TODO(pu): if true, no priority to sample
-        use_max_priority=True,  # if true, sample without priority
-        # use_max_priority=False,
+        # use_priority=False,
+        # use_max_priority_for_new_data=True,
+
         use_priority=True,
+        use_max_priority_for_new_data=True,
 
         # TODO(pu): only used for adjust temperature manually
         max_training_steps=int(1e5),

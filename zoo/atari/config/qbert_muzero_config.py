@@ -151,10 +151,11 @@ qbert_efficientzero_config = dict(
         # TODO(pu): why not use adam?
         lr_manually=True,  # set lr manually: 0.2->0.02->0.002
 
-        # TODO(pu): if true, no priority to sample
-        use_max_priority=True,  # if true, sample without priority
-        # use_max_priority=False,
+        # use_priority=False,
+        # use_max_priority_for_new_data=True,
+
         use_priority=True,
+        use_max_priority_for_new_data=True,
 
         # TODO(pu): only used for adjust temperature manually
         max_training_steps=int(1e5),

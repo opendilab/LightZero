@@ -342,6 +342,9 @@ class EfficientZeroGameBuffer(Buffer):
         # total number of transitions
         total = self.get_num_of_transitions()
 
+        if self.config.use_priority is False:
+            self.priorities = np.ones_like(self.priorities)
+
         # +1e-11 for numerical stability
         probs = self.priorities ** self._alpha + 1e-11
 

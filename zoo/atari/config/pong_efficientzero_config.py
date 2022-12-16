@@ -27,12 +27,16 @@ num_simulations = 50
 update_per_collect = 1000
 
 # debug
+# action_space_size = 6  # for pong
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
+# batch_size = 4
+# num_simulations = 5
+# update_per_collect = 10
 
 pong_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/pong_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}',
+    exp_name=f'data_ez_ctree/pong_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}_prio-false',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -164,10 +168,11 @@ pong_efficientzero_config = dict(
         # TODO(pu): why not use adam?
         lr_manually=True,
 
-        # TODO(pu): if true, no priority to sample
-        use_max_priority=True,  # if true, sample without priority
-        # use_max_priority=False,
-        use_priority=True,
+        use_priority=False,
+        use_max_priority_for_new_data=True,
+
+        # use_priority=True,
+        # use_max_priority_for_new_data=True,
 
         # TODO(pu): only used for adjust temperature manually
         max_training_steps=int(1e5),

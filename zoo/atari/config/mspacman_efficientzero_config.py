@@ -160,10 +160,11 @@ mspacman_efficientzero_config = dict(
         # TODO(pu): why not use adam?
         lr_manually=True,
 
-        # if true, sample without priority
-        use_max_priority=True,
-        # use_max_priority=False,
+        # use_priority=False,
+        # use_max_priority_for_new_data=True,
+
         use_priority=True,
+        use_max_priority_for_new_data=True,
 
         # TODO(pu): only used for adjust temperature manually
         max_training_steps=int(1e5),

@@ -204,7 +204,7 @@ class SampledEfficientZeroCollector(ISerialCollector):
         Overview:
             obtain the priorities at index i.
         """
-        if self.game_config.use_priority and not self.game_config.use_max_priority:
+        if self.game_config.use_priority and not self.game_config.use_max_priority_for_new_data:
             pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.game_config.device).float().view(-1)
             search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.game_config.device
                                                                                 ).float().view(-1)
@@ -525,7 +525,7 @@ class SampledEfficientZeroCollector(ISerialCollector):
                     eps_steps_lst[env_id] += 1
                     total_transitions += 1
 
-                    if self.game_config.use_priority and not self.game_config.use_max_priority:
+                    if self.game_config.use_priority and not self.game_config.use_max_priority_for_new_data:
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
 
