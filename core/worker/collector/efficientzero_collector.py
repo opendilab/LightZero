@@ -533,9 +533,13 @@ class EfficientZeroCollector(ISerialCollector):
                     del stack_obs_windows[env_id][0]
                     stack_obs_windows[env_id].append(to_ndarray(obs['observation']))
 
+                    #########
                     # we will save a game history if it is the end of the game or the next game history is finished.
+                    #########
 
-                    # if game history is full, we will save the game history
+                    #########
+                    # if game history is full, we will save the last game history
+                    #########
                     if game_histories[env_id].is_full():
                         # pad over last block trajectory
                         if last_game_histories[env_id] is not None:
@@ -549,11 +553,11 @@ class EfficientZeroCollector(ISerialCollector):
                         pred_values_lst[env_id] = []
                         search_values_lst[env_id] = []
 
-                        # the game_histories become last_game_history
+                        # the current game_histories become last_game_history
                         last_game_histories[env_id] = game_histories[env_id]
                         last_game_priorities[env_id] = priorities
 
-                        # new GameHistory
+                        # create new GameHistory
                         game_histories[env_id] = GameHistory(
                             self._env.action_space,
                             game_history_length=self.game_config.game_history_length,
@@ -581,7 +585,9 @@ class EfficientZeroCollector(ISerialCollector):
                     collected_episode += 1
                     self._episode_info.append(info)
 
+                    #########
                     # if it is the end of the game, we will save the game history
+                    #########
 
                     # NOTE: put the penultimate game history in one episode into the trajectory_pool
                     # pad over 2th last game_history using the last game_history

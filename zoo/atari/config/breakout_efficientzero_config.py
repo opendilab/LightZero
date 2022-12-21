@@ -25,6 +25,7 @@ num_simulations = 50
 # e.g. reuse_factor = 0.5
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
 update_per_collect = 1000
+categorical_distribution = True
 
 # debug
 # collector_env_num = 1
@@ -32,7 +33,7 @@ update_per_collect = 1000
 # evaluator_env_num = 1
 
 breakout_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/breakout_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}',
+    exp_name=f'data_ez_ctree/breakout_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}_prio-false',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -59,10 +60,9 @@ breakout_efficientzero_config = dict(
         cuda=True,
         model=dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=True,
+            categorical_distribution=categorical_distribution,
             representation_model_type='conv_res_blocks',
             observation_shape=(12, 96, 96),  # if frame_stack_num=4, the original obs shape is（3,96,96）
-            batch_size=batch_size,
             downsample=True,
             num_blocks=1,
             # default config in EfficientZero original repo
@@ -141,7 +141,7 @@ breakout_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         # TODO(pu): how to set proper num_simulations automatically?
         num_simulations=num_simulations,
-        batch_size=batch_size,
+        # batch_size=batch_size,
         game_history_length=400,
         total_transitions=int(1e5),
         # default config in EfficientZero original repo
@@ -157,11 +157,12 @@ breakout_efficientzero_config = dict(
         # TODO(pu): why not use adam?
         lr_manually=True,
 
-        # use_priority=False,
+        use_priority=False,
+        use_max_priority_for_new_data=True,
+
+        # use_priority=True,
         # use_max_priority_for_new_data=True,
 
-        use_priority=True,
-        use_max_priority_for_new_data=True,
         # TODO(pu): only used for adjust temperature manually
         max_training_steps=int(1e5),
         auto_temperature=False,

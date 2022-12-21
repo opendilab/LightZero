@@ -104,7 +104,7 @@ class GameHistory:
         Overview:
             check whether current game history block is full, i.e. larger than self.game_history_length
         """
-        return self.__len__() >= self.game_history_length
+        return len(self.action_history) >= self.game_history_length
 
     def legal_actions(self):
         return [_ for _ in range(self.action_space.n)]

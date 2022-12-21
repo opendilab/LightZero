@@ -14,6 +14,7 @@ class PendulumEnv(BaseEnv):
     def __init__(self, cfg: dict) -> None:
         self._cfg = cfg
         self._act_scale = cfg.act_scale
+        # self._ignore_done = cfg.ignore_done
         self._env = gym.make('Pendulum-v1')
         self._init_flag = False
         self._replay_path = None
@@ -76,6 +77,8 @@ class PendulumEnv(BaseEnv):
         np.random.seed(self._seed)
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
+        if isinstance(action, int):
+            action = np.array(action)
         assert isinstance(action, np.ndarray), type(action)
         # if require discrete env, convert actions to [-1 ~ 1] float actions
         if not self._continuous:
@@ -92,6 +95,8 @@ class PendulumEnv(BaseEnv):
         rew = to_ndarray([rew]).astype(np.float32)
         if done:
             info['final_eval_reward'] = self._final_eval_reward
+            # if self._ignore_done:
+            #     done = False
 
         # lightzero related code
         # to be compatible with muzero/efficientzero

@@ -5,7 +5,6 @@ import sys
 sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
-
 import torch
 from easydict import EasyDict
 
@@ -14,114 +13,98 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
+observation_dim = 3
 
+continuous_action_space = False
+action_dim = 11
+K = 5
 
-# obs_shape = (12, 96, 96)  # if frame_stack_num=4, image_channel=3, gray_scale=False
-# image_channel=3
-# gray_scale=False
+categorical_distribution = True
+game_history_length = 50  # we should ignore done in pendulum env which have fixed episode length 200
+norm_type = 'BN'  # 'LN' # TODO: res_blocks LN
+policy_entropy_loss_coeff = 0
+normalize_prob_of_sampled_actions = True
 
-obs_shape = (4, 96, 96)  # if frame_stack_num=4, image_channel=1, gray_scale=True
-image_channel = 1
-gray_scale = True
-
-action_space_size = 9  # for mspacman
-K = 9
-# K = 5
-num_simulations = 50
-# num_simulations = 25
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 batch_size = 256
-# update_per_collect = 1000
-update_per_collect = 200
-# for continuous action space, gaussian distribution
-# policy_entropy_loss_coeff=5e-3
-# for discrete action space
-policy_entropy_loss_coeff = 0
-normalize_prob_of_sampled_actions = True
+update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
+num_simulations = 50
 
-# debug config 1
-# action_space_size = 9  # for mspacman
-# K = 9
-# num_simulations = 20
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# batch_size = 5
-# update_per_collect = 10
-# policy_entropy_loss_coeff = 0
-# normalize_prob_of_sampled_actions = True
+# for debug
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# batch_size = 3
+# update_per_collect = 1
+# num_simulations = 3
 
-
-# debug config 2
-# action_space_size = 9
-# K = 9
-# num_simulations = 10
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# batch_size = 4
-# update_per_collect = 2
-# policy_entropy_loss_coeff = 0
-# normalize_prob_of_sampled_actions = False
-
-mspacman_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_normprob',
-    # exp_name=f'data_sez_ptree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
+pendulum_sampled_efficientzero_config = dict(
+    exp_name=f'data_sez_ctree/pendulum_disc11_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_pelc0_normprob',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        env_name='MsPacmanNoFrameskip-v4',
-        stop_value=int(1e6),
-        collect_max_episode_steps=int(1.08e5),
+        env_id='pendulum',
+        continuous=False,
+        stop_value=-200,
+        norm_obs=dict(use_norm=False, ),
+        act_scale=True,
+        # ignore_done=True,
+        battle_mode='one_player_mode',
+        prob_random_agent=0.,
+        collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
-        frame_skip=4,
-        obs_shape=obs_shape,
-        gray_scale=gray_scale,
-        episode_life=True,
-        # cvt_string=True,
-        # trade memory for speed
-        cvt_string=False,
-        game_wrapper=True,
-        dqn_expert_data=False,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
         model_path=None,
-        # model_path='/Users/puyuan/code/LightZero/data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc200_k9_ns50_ic1_pelc0_normprob_221214_114502/ckpt/ckpt_best.pth.tar',
-        env_name='MsPacmanNoFrameskip-v4',
+        env_name='pendulum',
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=True,
-            representation_model_type='conv_res_blocks',
-            # the gym original obs shape is（3,96,96）
-            observation_shape=obs_shape,
-            action_space_size=action_space_size,
-            continuous_action_space=False,
-            num_of_sampled_actions=K,
+            # # sigma_type='fixed',  # option list: ['fixed', 'conditioned']
+            # sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
+            # fixed_sigma_value=0.3,
+            # bound_type=None,  # if bound_type='tanh', the policy mu is bouded in [-1,1]
+            # # norm_type='LN',
+            # norm_type=norm_type,
 
-            downsample=True,
+            # activation=torch.nn.ReLU(inplace=True),
+            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
+            categorical_distribution=categorical_distribution,
+            # representation_model_type='identity',
+            representation_model_type='conv_res_blocks',
+            # [S, W, H, C] -> [S x C, W, H]
+            # [4,8,1,1] -> [4*1, 8, 1]
+            # observation_shape=(4,  observation_dim, 1),  # if frame_stack_nums=4
+            observation_shape=(1, observation_dim, 1),  # if frame_stack_nums=1
+
+            action_space_size=action_dim,  # 4**2
+            num_of_sampled_actions=K,
+            continuous_action_space=continuous_action_space,
+
+            downsample=False,
             num_blocks=1,
-            # default config in EfficientZero original repo
-            num_channels=64,
-            lstm_hidden_size=512,
+            # small size model
+            num_channels=16,
+            lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
-            fc_reward_layers=[32],
-            fc_value_layers=[32],
-            fc_policy_layers=[32],
-            reward_support_size=601,
-            value_support_size=601,
+            # small size model
+            fc_reward_layers=[8],
+            fc_value_layers=[8],
+            fc_policy_layers=[8],
+            reward_support_size=51,
+            value_support_size=51,
             bn_mt=0.1,
-            proj_hid=1024,
-            proj_out=1024,
-            pred_hid=512,
-            pred_out=1024,
+            # small size model
+            proj_hid=128,
+            proj_out=128,
+            pred_hid=64,
+            pred_out=128,
             last_linear_layer_init_zero=True,
             state_norm=False,
         ),
@@ -137,15 +120,17 @@ mspacman_sampled_efficientzero_config = dict(
             batch_size=batch_size,
 
             # for atari same as in muzero
-            optim_type='SGD',
-            learning_rate=0.2,  # lr_manually:0.2->0.02->0.002
+            # optim_type='SGD',
+            # learning_rate=0.2,  # lr_manually:0.2->0.02->0.002
 
             # sampled paper
-            # optim_type='Adam',
-            # # cos_lr_scheduler=True,
-            # cos_lr_scheduler=False,
+            optim_type='Adam',
+            learning_rate=3e-3,  # adam lr
+            cos_lr_scheduler=False,
+
+            # cos_lr_scheduler=True,
             # learning_rate=1e-4,  # adam lr
-            # weight_decay=2e-5,
+            weight_decay=2e-5,
         ),
         # collect_mode config
         collect=dict(
@@ -154,12 +139,15 @@ mspacman_sampled_efficientzero_config = dict(
             n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        # eval=dict(evaluator=dict(eval_freq=int(5e3), )),
+        # eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        eval=dict(evaluator=dict(eval_freq=int(1e3), )),
+
         # for debug
         # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
         other=dict(
-            # NOTE: the replay_buffer_size is ineffective, we specify it in game config
+            # the replay_buffer_size is ineffective, we specify it in game config
             replay_buffer=dict(type='game_buffer_sampled_efficientzero')
         ),
         ######################################
@@ -167,42 +155,51 @@ mspacman_sampled_efficientzero_config = dict(
         ######################################
         env_type='no_board_games',
         device=device,
-        # if mcts_ctree=True, using cpp mcts code
-        mcts_ctree=True,
         # mcts_ctree=False,
-        image_based=True,
-        # cvt_string=True,
-        # trade memory for speed
-        cvt_string=False,
-        clip_reward=True,
-        game_wrapper=True,
-        # NOTE: different env have different action_space_size
-        action_space_size=action_space_size,
+        mcts_ctree=True,
+        battle_mode='one_player_mode',
+        game_history_length=game_history_length,
+        action_space_size=action_dim,  # 4**2
+        continuous_action_space=continuous_action_space,
         num_of_sampled_actions=K,
-        continuous_action_space=False,
+        # clip_reward=True,
+        # TODO(pu)
+        clip_reward=False,
+        # normalize_reward=False,
+        normalize_reward=True,
+        normalize_reward_scale=100,
 
+        image_based=False,
+        cvt_string=False,
+        game_wrapper=True,
         amp_type='none',
-        obs_shape=obs_shape,
-        image_channel=image_channel,
+        # [S, W, H, C] -> [S x C, W, H]
+        # [4, 4, 1, 1] -> [4*1, 4, 1]
+        image_channel=1,
+        # obs_shape=(4, observation_dim, 1),  # if frame_stack_nums=4
+        # frame_stack_num=4,
+
+        obs_shape=(1, observation_dim, 1),  # if frame_stack_num=1
+        frame_stack_num=1,
+        # frame skip & stack observation
+        frame_skip=4,
+
         gray_scale=False,
-        downsample=True,
+        downsample=False,
         vis_result=True,
-        # TODO(pu): test the effect of augmentation
-        use_augmentation=True,
+        # TODO(pu): test the effect of augmentation,
+        # use_augmentation=True,  # only for atari image obs
+        use_augmentation=False,
         # Style of augmentation
         # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
         augmentation=['shift', 'intensity'],
 
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
-        # TODO(pu): how to set proper num_simulations automatically?
         num_simulations=num_simulations,
         batch_size=batch_size,
-        game_history_length=400,
         total_transitions=int(1e5),
-        # default config in EfficientZero original repo
-        channels=64,
-        lstm_hidden_size=512,
+        lstm_hidden_size=256,
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
@@ -211,23 +208,23 @@ mspacman_sampled_efficientzero_config = dict(
         reanalyze_ratio=0.99,
 
         # TODO(pu): why not use adam?
-        lr_manually=True,
-        # lr_manually=False,
+        # lr_manually=True,
+        lr_manually=False,
 
-        # use_priority=False,
-        # use_max_priority_for_new_data=True,
-
-        use_priority=True,
+        use_priority=False,
         use_max_priority_for_new_data=True,
+
+        # use_priority=True,
+        # use_max_priority_for_new_data=True,
 
         # TODO(pu): only used for adjust temperature manually
         max_training_steps=int(1e5),
         auto_temperature=False,
         # only effective when auto_temperature=False
-        fixed_temperature_value=0.25,
+        # fixed_temperature_value=0.25,
+        fixed_temperature_value=1,
         # TODO(pu): whether to use root value in reanalyzing?
         use_root_value=False,
-        # use_root_value=True,
 
         # TODO(pu): test the effect
         last_linear_layer_init_zero=True,
@@ -248,9 +245,10 @@ mspacman_sampled_efficientzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=True,
-        support_size=300,
+        categorical_distribution=categorical_distribution,
+        support_size=25,
         max_grad_norm=10,
+        # max_grad_norm=0.5,
         test_interval=10000,
         log_interval=1000,
         vis_interval=1000,
@@ -266,42 +264,42 @@ mspacman_sampled_efficientzero_config = dict(
         # replay window
         start_transitions=8,
         transition_num=1,
-        # frame skip & stack observation
-        frame_skip=4,
-        frame_stack_num=4,
+
         # TODO(pu): EfficientZero -> MuZero
         # coefficient
-        reward_loss_coeff=1,
+        reward_loss_coeff=1,  # value_prefix loss
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
         policy_entropy_loss_coeff=policy_entropy_loss_coeff,
-        consistency_coeff=2,
+        # consistency_coeff=2,
+        consistency_coeff=0,
 
         # siamese
-        proj_hid=1024,
-        proj_out=1024,
-        pred_hid=512,
-        pred_out=1024,
+        # small size model
+        proj_hid=128,
+        proj_out=128,
+        pred_hid=64,
+        pred_out=128,
         bn_mt=0.1,
         blocks=1,  # Number of blocks in the ResNet
         reduced_channels_reward=16,  # x36 Number of channels in reward head
         reduced_channels_value=16,  # x36 Number of channels in value head
         reduced_channels_policy=16,  # x36 Number of channels in policy head
-        resnet_fc_reward_layers=[32],  # Define the hidden layers in the reward head of the dynamic network
-        resnet_fc_value_layers=[32],  # Define the hidden layers in the value head of the prediction network
-        resnet_fc_policy_layers=[32],  # Define the hidden layers in the policy head of the prediction network
+        resnet_fc_reward_layers=[8],  # Define the hidden layers in the reward head of the dynamic network
+        resnet_fc_value_layers=[8],  # Define the hidden layers in the value head of the prediction network
+        resnet_fc_policy_layers=[8],  # Define the hidden layers in the policy head of the prediction network
         ######################################
         # game_config end
         ######################################
     ),
 )
-mspacman_sampled_efficientzero_config = EasyDict(mspacman_sampled_efficientzero_config)
-main_config = mspacman_sampled_efficientzero_config
+pendulum_sampled_efficientzero_config = EasyDict(pendulum_sampled_efficientzero_config)
+main_config = pendulum_sampled_efficientzero_config
 
-mspacman_sampled_efficientzero_create_config = dict(
+pendulum_sampled_efficientzero_create_config = dict(
     env=dict(
-        type='atari_lightzero',
-        import_names=['zoo.atari.envs.atari_lightzero_env'],
+        type='pendulum',
+        import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
     ),
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
@@ -315,9 +313,9 @@ mspacman_sampled_efficientzero_create_config = dict(
         import_names=['core.worker.collector.sampled_efficientzero_collector'],
     )
 )
-mspacman_sampled_efficientzero_create_config = EasyDict(mspacman_sampled_efficientzero_create_config)
-create_config = mspacman_sampled_efficientzero_create_config
+pendulum_sampled_efficientzero_create_config = EasyDict(pendulum_sampled_efficientzero_create_config)
+create_config = pendulum_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_sampled_efficientzero
-    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e5))
