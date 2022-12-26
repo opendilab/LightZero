@@ -147,6 +147,14 @@ class RepresentationNetwork(nn.Module):
         if self.downsample:
             x = self.downsample_net(x)
         else:
+            from ding.utils import EasyTimer
+            import copy
+            timer = EasyTimer(cuda=True)
+            state = copy.deepcopy(x)
+            with timer:
+                x = self.conv(state)
+            print(f"self.conv time: {timer.value}")
+
             x = self.conv(x)
             x = self.bn(x)
             x = self.activation(x)

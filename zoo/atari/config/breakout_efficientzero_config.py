@@ -15,22 +15,26 @@ else:
     device = 'cpu'
 
 action_space_size = 4  # for breakout
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-batch_size = 256
-num_simulations = 50
-# TODO(pu):
-# The key hyper-para to tune, for different env, we have different episode_length
-# e.g. reuse_factor = 0.5
-# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 1000
 categorical_distribution = True
 
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# batch_size = 256
+# num_simulations = 50
+# # TODO(pu):
+# # The key hyper-para to tune, for different env, we have different episode_length
+# # e.g. reuse_factor = 0.5
+# # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+# update_per_collect = 1000
+
 # debug
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+batch_size = 4
+num_simulations = 5
+update_per_collect = 10
 
 breakout_efficientzero_config = dict(
     exp_name=f'data_ez_ctree/breakout_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}_prio-false',
@@ -63,6 +67,7 @@ breakout_efficientzero_config = dict(
             categorical_distribution=categorical_distribution,
             representation_model_type='conv_res_blocks',
             observation_shape=(12, 96, 96),  # if frame_stack_num=4, the original obs shape is（3,96,96）
+            action_space_size=action_space_size,
             downsample=True,
             num_blocks=1,
             # default config in EfficientZero original repo
@@ -141,7 +146,7 @@ breakout_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         # TODO(pu): how to set proper num_simulations automatically?
         num_simulations=num_simulations,
-        # batch_size=batch_size,
+        batch_size=batch_size,
         game_history_length=400,
         total_transitions=int(1e5),
         # default config in EfficientZero original repo

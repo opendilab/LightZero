@@ -378,9 +378,9 @@ class SampledEfficientZeroPolicy(Policy):
 
             if self._cfg.learn.normalize_prob_of_sampled_actions:
                 # normalize the prob of sampled actions
-                # prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
-                #     1, log_prob_sampled_actions.shape[-1])
-                prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-9)
+                prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
+                    1, log_prob_sampled_actions.shape[-1]).detach()
+                # prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-9)
                 log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
 
             if self._cfg.learn.policy_loss_type == 'KL':
@@ -448,9 +448,9 @@ class SampledEfficientZeroPolicy(Policy):
 
             if self._cfg.learn.normalize_prob_of_sampled_actions:
                 # normalize the prob of sampled actions
-                # prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
-                #     1, log_prob_sampled_actions.shape[-1])
-                prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-9)
+                prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
+                    1, log_prob_sampled_actions.shape[-1]).detach()
+                # prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-9)
                 log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
 
             if self._cfg.learn.policy_loss_type == 'KL':
@@ -599,10 +599,10 @@ class SampledEfficientZeroPolicy(Policy):
 
                 if self._cfg.learn.normalize_prob_of_sampled_actions:
                     # normalize the prob of sampled actions
-                    # prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
-                    #     1, log_prob_sampled_actions.shape[-1])
-                    prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1,
-                                                            eps=1e-9)
+                    prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
+                        1, log_prob_sampled_actions.shape[-1]).detach()
+                    # prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1,
+                    #                                         eps=1e-9)
                     log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
 
                 if self._cfg.learn.policy_loss_type == 'KL':
@@ -674,10 +674,10 @@ class SampledEfficientZeroPolicy(Policy):
 
                 if self._cfg.learn.normalize_prob_of_sampled_actions:
                     # normalize the prob of sampled actions
-                    # prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
-                    #     1, log_prob_sampled_actions.shape[-1])
-                    prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1,
-                                                            eps=1e-9)
+                    prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(-1).unsqueeze(-1).repeat(
+                        1, log_prob_sampled_actions.shape[-1]).detach()
+                    # prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1,
+                    #                                         eps=1e-9)
                     log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
 
                 if self._cfg.learn.policy_loss_type == 'KL':
