@@ -43,7 +43,7 @@ update_per_collect = 40
 # evaluator_env_num = 1
 
 tictactoe_muzero_config = dict(
-    exp_name=f'data_mz_ctree/tictactoe_1pm_muzero_seed0_sub885_ghl5_ftv1_rc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05_fixpolicyobs',
+    exp_name=f'data_mz_ctree/tictactoe_1pm_muzero_seed0_sub885_ghl5_ftv1_fs1_cdt_adam3e-3_mgn05_ns{num_simulations}_upc{update_per_collect}_mis256_rr05_tt3e3',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -171,23 +171,29 @@ tictactoe_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         num_simulations=num_simulations,
         batch_size=batch_size,
-        # total_transitions=int(3e3),
-        total_transitions=int(1e5),
+        total_transitions=int(3e3),
+        # TODO(pu)
+        # total_transitions=int(1e5),
         # to make sure the value target is the final outcome
         td_steps=9,
         num_unroll_steps=3,
 
         # TODO(pu): why 0.99?
-        reanalyze_ratio=0.99,
+        # reanalyze_ratio=0.99,
+        # reanalyze_outdated=False,
+
+        reanalyze_ratio=0.5,
+        reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?
         # lr_manually=True,  # use manually lr
         lr_manually=False,  # use fixed lr
 
-        # TODO(pu): if true, no priority to sample
-        use_max_priority=True,  # if true, sample without priority
-        # use_max_priority=False,
-        use_priority=False,
+        # use_priority=False,
+        # use_max_priority_for_new_data=True,
+
+        use_priority=True,
+        use_max_priority_for_new_data=True,
 
         # TODO(pu): only used for adjust temperature manually
         max_training_steps=int(1e5),
@@ -203,7 +209,9 @@ tictactoe_muzero_config = dict(
         # TODO(pu): test the effect
         last_linear_layer_init_zero=True,
         state_norm=False,
-        mini_infer_size=2,
+        # mini_infer_size=2,
+        # TODO
+        mini_infer_size=256,
         # (Float type) How much prioritization is used: 0 means no prioritization while 1 means full prioritization
         priority_prob_alpha=0.6,
         # (Float type)  How much correction is used: 0 means no correction while 1 means full correction
@@ -243,8 +251,8 @@ tictactoe_muzero_config = dict(
         # TODO(pu): EfficientZero -> MuZero
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
-        reward_loss_coeff=0,
-        # reward_loss_coeff=1,
+        # reward_loss_coeff=0,
+        reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
 

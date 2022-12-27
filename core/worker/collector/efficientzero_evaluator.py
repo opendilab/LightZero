@@ -12,7 +12,7 @@ from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, Vector
 from easydict import EasyDict
 
 from core.rl_utils.mcts.game import GameHistory
-from core.rl_utils.mcts.utils import prepare_observation_lst
+from core.rl_utils.mcts.utils import prepare_observation_list
 
 
 class EfficientZeroEvaluator(ISerialEvaluator):
@@ -270,7 +270,7 @@ class EfficientZeroEvaluator(ISerialEvaluator):
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
 
                 stack_obs = to_ndarray(stack_obs)
-                stack_obs = prepare_observation_lst(stack_obs)
+                stack_obs = prepare_observation_list(stack_obs)
 
                 if self.game_config.image_based:
                     stack_obs = torch.from_numpy(stack_obs).to(self.game_config.device).float() / 255.0

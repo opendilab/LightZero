@@ -21,7 +21,7 @@ import core.rl_utils.mcts.ptree_efficientzero as ptree
 from .ctree_efficientzero import cytree as ctree
 from .mcts_ctree import EfficientZeroMCTSCtree as MCTS_ctree
 from .mcts_ptree import EfficientZeroMCTSPtree as MCTS_ptree
-from .utils import prepare_observation_lst, concat_output, concat_output_value
+from .utils import prepare_observation_list, concat_output, concat_output_value
 from ..scaling_transform import inverse_scalar_transform
 
 
@@ -421,7 +421,7 @@ class EfficientZeroGameBuffer(Buffer):
 
         re_num = int(batch_size * reanalyze_ratio)
         # formalize the input observations
-        obs_lst = prepare_observation_lst(obs_lst)
+        obs_lst = prepare_observation_list(obs_lst)
 
         # formalize the inputs of a batch
         inputs_batch = [obs_lst, action_lst, mask_lst, indices_lst, weights_lst, make_time_lst]
@@ -650,7 +650,7 @@ class EfficientZeroGameBuffer(Buffer):
 
         batch_values, batch_value_prefixs = [], []
         with torch.no_grad():
-            value_obs_lst = prepare_observation_lst(value_obs_lst)
+            value_obs_lst = prepare_observation_list(value_obs_lst)
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
             m_batch = self.config.mini_infer_size
             slices = np.ceil(batch_size / m_batch).astype(np.int_)
@@ -895,7 +895,7 @@ class EfficientZeroGameBuffer(Buffer):
             ]
 
         with torch.no_grad():
-            policy_obs_lst = prepare_observation_lst(policy_obs_lst)
+            policy_obs_lst = prepare_observation_list(policy_obs_lst)
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
             m_batch = self.config.mini_infer_size
             slices = np.ceil(batch_size / m_batch).astype(np.int_)

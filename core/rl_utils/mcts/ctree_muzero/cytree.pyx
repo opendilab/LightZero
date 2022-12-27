@@ -38,13 +38,11 @@ cdef class ResultsWrapper:
 
 cdef class Roots:
     cdef int root_num
-    cdef int pool_size
     cdef CRoots *roots
 
-    def __cinit__(self, int root_num, int pool_size, vector[vector[int]] legal_actions_list):
+    def __cinit__(self, int root_num, vector[vector[int]] legal_actions_list):
         self.root_num = root_num
-        self.pool_size = pool_size
-        self.roots = new CRoots(root_num, self.pool_size, legal_actions_list)
+        self.roots = new CRoots(root_num, legal_actions_list)
 
     def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):
         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)

@@ -10,7 +10,7 @@ from torch.cuda.amp import autocast as autocast
 from core.rl_utils.mcts.game import GameHistory
 # from core.rl_utils.mcts.mcts_ptree import EfficientZeroMCTSPtree as MCTS
 from core.rl_utils.mcts.mcts_ctree import MCTSCtree as MCTS
-from core.rl_utils.mcts.utils import select_action, prepare_observation_lst
+from core.rl_utils.mcts.utils import select_action, prepare_observation_list
 
 args = ['PongNoFrameskip-v4', 'tictactoe']
 
@@ -64,7 +64,7 @@ def test_game_history(env_name):
                 for i in range(config.evaluator_env_num):
                     envs[i].render()
             stack_obs = [game_history.step_obs() for game_history in game_histories]
-            stack_obs = prepare_observation_lst(stack_obs)
+            stack_obs = prepare_observation_list(stack_obs)
             if config.image_based:
                 stack_obs = torch.from_numpy(stack_obs).to(config.device).float() / 255.0
             else:

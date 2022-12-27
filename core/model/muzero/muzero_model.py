@@ -147,13 +147,35 @@ class RepresentationNetwork(nn.Module):
         if self.downsample:
             x = self.downsample_net(x)
         else:
-            from ding.utils import EasyTimer
-            import copy
-            timer = EasyTimer(cuda=True)
-            state = copy.deepcopy(x)
-            with timer:
-                x = self.conv(state)
-            print(f"self.conv time: {timer.value}")
+            # for debug
+            # import copy
+            # state = copy.deepcopy(x)
+            # from ding.utils import EasyTimer
+            # timer = EasyTimer(cuda=True)
+            #
+            # time_list = []
+            # for i in range(100000):
+            #     state = torch.randint(0, 2, [8, 3, 3, 3]).float()
+            #     with timer:
+            #         x = self.conv(state)
+            #     # print(f"self.conv time: {timer.value}")
+            #     time_list.append(timer.value)
+            # print('mean: ', np.array(time_list).mean(), 'std: ', np.array(time_list).std(), 'max: ', max(time_list), 'min: ',min(time_list))
+            #
+            # time_list = []
+            # time_list_div_255 = []
+            # for i in range(100000):
+            #     state_atari = torch.randint(0, 255, [8, 3, 3, 3]).float()
+            #     state_atari_div_255 = state_atari / 255.
+            #     with timer:
+            #         x = self.conv(state_atari)
+            #     time_list.append(timer.value)
+            #
+            #     with timer:
+            #         x = self.conv(state_atari_div_255)
+            #     time_list_div_255.append(timer.value)
+            # print('mean: ', np.array(time_list).mean(), 'std: ', np.array(time_list).std(), 'max: ', max(time_list), 'min: ', min(time_list))
+            # print('mean: ', np.array(time_list_div_255).mean(), 'std: ', np.array(time_list_div_255).std(), 'max: ', max(time_list_div_255), 'min: ', min(time_list_div_255))
 
             x = self.conv(x)
             x = self.bn(x)

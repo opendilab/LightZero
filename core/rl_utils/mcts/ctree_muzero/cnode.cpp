@@ -208,13 +208,11 @@ namespace tree
     CRoots::CRoots()
     {
         this->root_num = 0;
-        this->pool_size = 0;
     }
 
-    CRoots::CRoots(int root_num, int pool_size, std::vector<std::vector<int> > &legal_actions_list)
+    CRoots::CRoots(int root_num, std::vector<std::vector<int> > &legal_actions_list)
     {
         this->root_num = root_num;
-        this->pool_size = pool_size;
         this->legal_actions_list = legal_actions_list;
 
         for (int i = 0; i < root_num; ++i)

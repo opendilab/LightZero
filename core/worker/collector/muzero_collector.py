@@ -12,7 +12,7 @@ from easydict import EasyDict
 from torch.nn import L1Loss
 
 from core.rl_utils.mcts.game import GameHistory
-from core.rl_utils.mcts.utils import prepare_observation_lst
+from core.rl_utils.mcts.utils import prepare_observation_list
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
@@ -204,7 +204,7 @@ class MuZeroCollector(ISerialCollector):
         # Overview:
         #     obtain the priorities at index i.
         # """
-        if self.game_config.use_priority and not self.game_config.use_max_priority_for_new_datay:
+        if self.game_config.use_priority and not self.game_config.use_max_priority_for_new_data:
             pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.game_config.device).float().view(-1)
             search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.game_config.device
                                                                                 ).float().view(-1)
@@ -437,7 +437,7 @@ class MuZeroCollector(ISerialCollector):
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
 
                 stack_obs = to_ndarray(stack_obs)
-                stack_obs = prepare_observation_lst(stack_obs)
+                stack_obs = prepare_observation_list(stack_obs)
 
                 if self.game_config.image_based:
                     stack_obs = torch.from_numpy(stack_obs).to(self.game_config.device).float() / 255.0
@@ -523,7 +523,7 @@ class MuZeroCollector(ISerialCollector):
                     eps_steps_lst[env_id] += 1
                     total_transitions += 1
 
-                    if self.game_config.use_priority and not self.game_config.use_max_priority_for_new_datay:
+                    if self.game_config.use_priority and not self.game_config.use_max_priority_for_new_data:
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
 

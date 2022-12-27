@@ -562,7 +562,7 @@ class MuZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = ctree.Roots(active_collect_env_num, self._cfg.num_simulations, legal_actions)
+                roots = ctree.Roots(active_collect_env_num, legal_actions)
                 # noises = [
                 #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * action_num
                 #                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
@@ -681,7 +681,7 @@ class MuZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ctree.Roots(active_eval_env_num, self._cfg.num_simulations, legal_actions)
+                roots = ctree.Roots(active_eval_env_num, legal_actions)
                 roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, to_play)

@@ -118,7 +118,7 @@ def select_action(visit_counts, temperature=1, deterministic=True):
     return action_pos, visit_count_distribution_entropy
 
 
-def prepare_observation_lst(observation_lst):
+def prepare_observation_list(observation_lst):
     """
     Overview:
         Prepare the observations to satisfy the input format of torch

@@ -18,7 +18,7 @@ board_size = 6  # default_size is 15
 
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 3
+evaluator_env_num = 2
 
 categorical_distribution = True
 # categorical_distribution = False
@@ -34,11 +34,11 @@ categorical_distribution = True
 # two_player_mode, board_size=6, episode_length=6**2=36
 # n_episode=8,  update_per_collect=36*8=268
 
-data_reuse_factor = 0.5
-update_per_collect = int(144 * data_reuse_factor)
+# data_reuse_factor = 0.5
+# update_per_collect = int(144 * data_reuse_factor)
 
-# num_simulations = 50
 num_simulations = 25
+update_per_collect = 50
 
 # debug
 # collector_env_num = 2
@@ -47,7 +47,7 @@ num_simulations = 25
 
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_bs6_1pm_ghl18_muzero_seed0_sub883_halfmodel_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
+    exp_name=f'data_mz_ctree/gomoku_bs6_1pm_ghl18_muzero_seed0_sub883_halfmodel_ftv1_cc0_fs1_cdt_adam3e-3_mgn05_ns{num_simulations}_upc{update_per_collect}_mis256_rr05_tt1e4',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -178,20 +178,10 @@ gomoku_muzero_config = dict(
         # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
         augmentation=['shift', 'intensity'],
 
-        # debug
-        # collector_env_num=3,
-        # evaluator_env_num=3,
-        # total_transitions=int(1e5),
-        # num_simulations=2,
-        # batch_size=4,
-        # # to make sure the value target is the final outcome
-        # td_steps=5,
-        # # td_steps=int(board_size * board_size),
-        # num_unroll_steps=5,
-
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
-        total_transitions=int(1e5),
+        total_transitions=int(1e4),
+        # total_transitions=int(1e5),
         num_simulations=num_simulations,
         batch_size=256,
         # half size model
@@ -200,7 +190,11 @@ gomoku_muzero_config = dict(
         num_unroll_steps=5,
 
         # TODO(pu): why 0.99?
-        reanalyze_ratio=0.99,
+        # reanalyze_ratio=0.99,
+        # reanalyze_outdated=False,
+
+        reanalyze_ratio=0.5,
+        reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?
         # lr_manually=True,  # use manually lr
@@ -225,7 +219,8 @@ gomoku_muzero_config = dict(
         # TODO(pu): test the effect
         init_zero=True,
         state_norm=False,
-        mini_infer_size=2,
+        # mini_infer_size=2,
+        mini_infer_size=256,
         # (Float type) How much prioritization is used: 0 means no prioritization while 1 means full prioritization
         priority_prob_alpha=0.6,
         # (Float type)  How much correction is used: 0 means no correction while 1 means full correction
@@ -264,12 +259,10 @@ gomoku_muzero_config = dict(
 
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
-        reward_loss_coeff=1,  # value_prefix_loss
-        # reward_loss_coeff=0,  # value_prefix_loss
+        reward_loss_coeff=1,
+        # reward_loss_coeff=0,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-        # consistency_coeff=2,
-        consistency_coeff=0,
 
         # siamese
         # proj_hid=1024,
