@@ -12,7 +12,7 @@
 import os
 import numpy as np
 
-from setuptools import find_packages
+from setuptools import find_packages, Extension
 from distutils.core import setup
 from Cython.Build import cythonize  # this line should be after 'from setuptools import find_packages'
 
@@ -29,6 +29,12 @@ def find_pyx(path=None):
     print(pyx_files)
     return pyx_files
 
+
+extensions = []
+for item in find_pyx():
+    name = 'core.' + item.split('.pyx')[0].split('core')[-1].replace('/', '.')
+    extensions.append(Extension(name, [item], include_dirs=[np.get_include()],))
+print(extensions)
 
 setup(
     name='LightZero',
@@ -60,11 +66,7 @@ setup(
         'numpy>=1.18.0',
         'kornia',
     ],
-    ext_modules=cythonize(
-        find_pyx(),
-        language_level=3,
-    ),
-    include_dirs=[np.get_include()],
+    ext_modules=cythonize(extensions),
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         "Intended Audience :: Science/Research",
