@@ -19,7 +19,7 @@ from ding.utils import BUFFER_REGISTRY
 import core.rl_utils.mcts.ptree_muzero as ptree
 from .mcts_ptree import MuZeroMCTSPtree as MCTS_ptree
 # cpp mcts
-from core.rl_utils.mcts.ctree_muzero import cytree as ctree
+from core.rl_utils.mcts.ctree_muzero import mz_tree as ctree
 from .mcts_ctree import MuZeroMCTSCtree as MCTS_ctree
 from .utils import prepare_observation_list, concat_output, concat_output_value
 from ..scaling_transform import inverse_scalar_transform

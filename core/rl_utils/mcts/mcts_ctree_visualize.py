@@ -7,9 +7,9 @@ import numpy as np
 import torch
 from easydict import EasyDict
 
-from core.rl_utils.mcts.ctree_efficientzero import cytree as tree
-from ..scaling_transform import inverse_scalar_transform
+from core.rl_utils.mcts.ctree_efficientzero import ez_tree as tree
 from core.rl_utils.mcts.utils import plot_simulation_graph
+from ..scaling_transform import inverse_scalar_transform
 
 ###########################################################
 # EfficientZero
@@ -165,7 +165,7 @@ class EfficientZeroVisualizeMCTSCtree(object):
 # MutZero
 ###########################################################
 
-from core.rl_utils.mcts.ctree_muzero import cytree as tree_muzero
+from core.rl_utils.mcts.ctree_muzero import mz_tree as tree_muzero
 
 
 class MuZeroVisualizeMCTSCtree(object):

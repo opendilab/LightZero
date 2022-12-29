@@ -9,30 +9,38 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Module setuptools script."""
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import os
+import numpy as np
 
-from setuptools import setup, find_packages
+from setuptools import find_packages
+from distutils.core import setup
+from Cython.Build import cythonize  # this line should be after 'from setuptools import find_packages'
 
 here = os.path.abspath(os.path.dirname(__file__))
+
+
+def find_pyx(path=None):
+    path = path or os.path.join(here, 'core')
+    pyx_files = []
+    for root, dirs, filenames in os.walk(path):
+        for fname in filenames:
+            if fname.endswith('.pyx'):
+                pyx_files.append(os.path.join(root, fname))
+    print(pyx_files)
+    return pyx_files
 
 
 setup(
     name='LightZero',
     version='0.0.1',
-    description='',
+    description='MCTS/MuZero Algorithm Toolkits',
     # long_description=readme,
     long_description_content_type='text/markdown',
     author='opendilab',
-    author_email='',
+    author_email='opendilab@pjlab.org.cn',
     url='https://github.com/opendilab/LightZero',
     license='Apache License, Version 2.0',
-    keywords='LightZero',
+    keywords='Reinforcement Learning, MCTS',
     packages=[
         # framework
         *find_packages(include=('core', "core.*")),
@@ -41,17 +49,22 @@ setup(
                                 'zoo.*')),
     ],
     package_data={
-        package_name: ['*.yaml', '*.xml', '*cfg', '*SC2Map']
+        package_name: ['*.yaml', '*cfg']
         for package_name in find_packages(include=('core.*'))
     },
     python_requires=">=3.7",
     install_requires=[
         'DI-engine>=0.4.4',
-        'gym==0.25.1',  # pypy incompatible; some environmrnt only support gym==0.22.0
-        'torch>=1.1.0, <=1.12.1',  # If encountering pytorch errors, you need to do something like https://github.com/opendilab/DI-engine/discussions/81
+        'gym==0.25.1',
+        'torch>=1.1.0, <=1.12.1',
         'numpy>=1.18.0',
+        'kornia',
     ],
-    entry_points={'console_scripts': ['core=core.entry.cli:cli', 'ditask=core.entry.cli_ditask:cli_ditask']},
+    ext_modules=cythonize(
+        find_pyx(),
+        language_level=3,
+    ),
+    include_dirs=[np.get_include()],
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         "Intended Audience :: Science/Research",

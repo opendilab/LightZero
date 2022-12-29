@@ -1,7 +1,7 @@
 # distutils: language=c++
 import ctypes
 cimport cython
-from ctree cimport CMinMaxStatsList, CNode, CRoots, CSearchResults, cbatch_back_propagate, cbatch_traverse
+from mz_tree cimport CMinMaxStatsList, CNode, CRoots, CSearchResults, cbatch_back_propagate, cbatch_traverse
 from libcpp.vector cimport vector
 from libc.stdlib cimport malloc, free
 from libcpp.list cimport list as cpplist

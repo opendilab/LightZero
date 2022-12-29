@@ -9,7 +9,7 @@ from easydict import EasyDict
 
 from ..scaling_transform import inverse_scalar_transform
 
-from core.rl_utils.mcts.ctree_sampled_efficientzero import cytree as tree_efficientzero
+from core.rl_utils.mcts.ctree_sampled_efficientzero import ezs_tree as tree_efficientzero
 
 
 ###########################################################
@@ -158,7 +158,7 @@ class SampledEfficientZeroMCTSCtree(object):
 # Sampled MuZero
 ###########################################################
 
-from core.rl_utils.mcts.ctree_sampled_muzero import cytree as tree_muzero
+from core.rl_utils.mcts.ctree_sampled_muzero import mzs_tree as tree_muzero
 
 
 class SampledMuZeroMCTSCtree(object):

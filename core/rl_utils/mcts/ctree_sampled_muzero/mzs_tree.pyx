@@ -1,14 +1,13 @@
 # distutils: language=c++
 import ctypes
 cimport cython
-from ctree cimport CMinMaxStatsList, CNode, CRoots, CSearchResults, cbatch_back_propagate, cbatch_traverse, CAction
+from mzs_tree cimport CMinMaxStatsList, CNode, CRoots, CSearchResults, cbatch_back_propagate, cbatch_traverse, CAction
 from libcpp.vector cimport vector
 from libc.stdlib cimport malloc, free
 from libcpp.list cimport list as cpplist
 
 import numpy as np
 cimport numpy as np
-ctypedef np.npy_bool bool
 
 ctypedef np.npy_float FLOAT
 ctypedef np.npy_intp INTP

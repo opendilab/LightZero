@@ -1,11 +1,9 @@
+from easydict import EasyDict
 import pytest
 import torch
-from easydict import EasyDict
-import sys
-sys.path.append('/YOUR/PATH/LightZero')
-from core.rl_utils import inverse_scalar_transform, select_action
-from core.rl_utils.mcts.ctree import cytree as tree
 import numpy as np
+from core.rl_utils import inverse_scalar_transform, select_action
+from core.rl_utils.mcts.ctree_efficientzero import ez_tree as tree
 from core.rl_utils.mcts.mcts_ctree import EfficientZeroMCTSCtree as EZMCTS
 
 class MuZeroModelFake(torch.nn.Module):
@@ -98,9 +96,9 @@ reward_hidden_state_state = (
 )
 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
-action_mask = [[0, 0, 0, 1, 0, 1, 1, 0, 0], [1, 0, 0, 1, 0, 0, 1, 0, 0], [1, 1, 0, 0, 1, 0, 1, 0, 1], [1, 0, 0, 1, 1, 1, 0, 0, 0], 
-               [0, 0, 1, 0, 0, 1, 0, 0, 1], [0, 1, 1, 0, 1, 0, 0, 0, 0], [1, 0, 1, 1, 1, 0, 0, 1, 1], [1, 1, 1, 1, 1, 0, 0, 0, 1], 
-               [0, 0, 0, 1, 0, 1, 1, 0, 0], [0, 1, 1, 0, 1, 1, 1, 1, 0], [1, 1, 1, 0, 0, 0, 1, 1, 1], [1, 1, 0, 1, 0, 1, 1, 0, 0], 
+action_mask = [[0, 0, 0, 1, 0, 1, 1, 0, 0], [1, 0, 0, 1, 0, 0, 1, 0, 0], [1, 1, 0, 0, 1, 0, 1, 0, 1], [1, 0, 0, 1, 1, 1, 0, 0, 0],
+               [0, 0, 1, 0, 0, 1, 0, 0, 1], [0, 1, 1, 0, 1, 0, 0, 0, 0], [1, 0, 1, 1, 1, 0, 0, 1, 1], [1, 1, 1, 1, 1, 0, 0, 0, 1],
+               [0, 0, 0, 1, 0, 1, 1, 0, 0], [0, 1, 1, 0, 1, 1, 1, 1, 0], [1, 1, 1, 0, 0, 0, 1, 1, 1], [1, 1, 0, 1, 0, 1, 1, 0, 0],
                [0, 0, 1, 0, 0, 1, 0, 0, 0], [1, 0, 1, 1, 0, 0, 1, 1, 0], [0, 1, 0, 0, 0, 0, 0, 0, 0], [1, 0, 0, 0, 1, 1, 0, 0, 1]]
 assert len(action_mask) == batch_size
 assert len(action_mask[0]) == action_space_size
@@ -109,9 +107,9 @@ assert len(action_mask[0]) == action_space_size
 action_num = [int(np.array(action_mask[i]).sum()) for i in range(env_nums)] # [3, 3, 5, 4, 3, 3, 6, 6, 3, 6, 6, 5, 2, 5, 1, 4]
 legal_actions_list = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(env_nums)]
 # legal_actions_list =
-# [[3, 5, 6], [0, 3, 6], [0, 1, 4, 6, 8], [0, 3, 4, 5], 
-# [2, 5, 8], [1, 2, 4], [0, 2, 3, 4, 7, 8], [0, 1, 2, 3, 4, 8], 
-# [3, 5, 6], [1, 2, 4, 5, 6, 7], [0, 1, 2, 6, 7, 8], [0, 1, 3, 5, 6], 
+# [[3, 5, 6], [0, 3, 6], [0, 1, 4, 6, 8], [0, 3, 4, 5],
+# [2, 5, 8], [1, 2, 4], [0, 2, 3, 4, 7, 8], [0, 1, 2, 3, 4, 8],
+# [3, 5, 6], [1, 2, 4, 5, 6, 7], [0, 1, 2, 6, 7, 8], [0, 1, 3, 5, 6],
 # [2, 5], [0, 2, 3, 6, 7], [1], [0, 4, 5, 8]]
 to_play = [2, 1, 2, 1, 1, 2, 2, 1, 1, 1, 2, 1, 2, 1, 1, 1]
 assert len(to_play) == batch_size

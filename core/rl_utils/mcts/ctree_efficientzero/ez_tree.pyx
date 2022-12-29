@@ -1,21 +1,16 @@
 # distutils: language=c++
 import ctypes
 cimport cython
-from ctree cimport CMinMaxStatsList, CNode, CRoots, CSearchResults, cbatch_back_propagate, cbatch_traverse, CAction
+from ez_tree cimport CMinMaxStatsList, CNode, CRoots, CSearchResults, cbatch_back_propagate, cbatch_traverse
 from libcpp.vector cimport vector
 from libc.stdlib cimport malloc, free
 from libcpp.list cimport list as cpplist
-#from libcpp cimport bool
-
 
 import numpy as np
 cimport numpy as np
 
-ctypedef np.npy_bool bool
-
 ctypedef np.npy_float FLOAT
 ctypedef np.npy_intp INTP
-
 
 
 cdef class MinMaxStatsList:
@@ -41,36 +36,15 @@ cdef class ResultsWrapper:
         return self.cresults.search_lens
 
 
-cdef class Action:
-    cdef int is_root_action
-    cdef vector[float] value
-    cdef CAction action
-
-    def __cinit__(self):
-        pass
-
-    def __cinit__(self, vector[float] value, int is_root_action):
-        self.is_root_action = is_root_action
-        self.value = value
-
-
-
 cdef class Roots:
     cdef int root_num
-    cdef int action_space_size
-    cdef int num_of_sampled_actions
+    cdef int pool_size
     cdef CRoots *roots
-    cdef bool continuous_action_space
 
-    def __cinit__(self):
-        pass
-
-    def __cinit__(self, int root_num, list legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space):
-    #def __cinit__(self, int root_num, list legal_actions_list, int action_space_size, int num_of_sampled_actions):
-       self.root_num = root_num
-       self.action_space_size = action_space_size
-       self.num_of_sampled_actions = num_of_sampled_actions
-       self.roots = new CRoots(root_num, legal_actions_list, action_space_size, num_of_sampled_actions, continuous_action_space)
+    def __cinit__(self, int root_num, int pool_size, vector[vector[int]] legal_actions_list):
+        self.root_num = root_num
+        self.pool_size = pool_size
+        self.roots = new CRoots(root_num, self.pool_size, legal_actions_list)
 
     def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):
         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
@@ -84,11 +58,12 @@ cdef class Roots:
     def get_distributions(self):
         return self.roots[0].get_distributions()
 
-    def get_sampled_actions(self):
-        return self.roots[0].get_sampled_actions()
-
     def get_values(self):
         return self.roots[0].get_values()
+
+    # visualize related code
+    #def get_root(self, int index):
+    #    return self.roots[index]
 
     def clear(self):
         self.roots[0].clear()
@@ -103,14 +78,12 @@ cdef class Roots:
 
 cdef class Node:
     cdef CNode cnode
-    cdef bool continuous_action_space
 
     def __cinit__(self):
         pass
 
-    #def __cinit__(self, float prior, vector[int] &legal_actions, int action_space_size, int num_of_sampled_actions):
-    def __cinit__(self, float prior, vector[int] &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space):
-       pass
+    def __cinit__(self, float prior, vector[int] &legal_actions):
+        pass
 
     def expand(self, int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix, list policy_logits):
         cdef vector[float] cpolicy = policy_logits
@@ -126,8 +99,8 @@ def batch_back_propagate(int hidden_state_index_x, float discount, list value_pr
                           min_max_stats_lst.cmin_max_stats_lst, results.cresults, is_reset_lst, to_play_batch)
 
 
-def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount, MinMaxStatsList min_max_stats_lst, ResultsWrapper results, list virtual_to_play_batch, bool continuous_action_space):
+def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount, MinMaxStatsList min_max_stats_lst, ResultsWrapper results, list virtual_to_play_batch):
 
-    cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount, min_max_stats_lst.cmin_max_stats_lst, results.cresults, virtual_to_play_batch, continuous_action_space)
+    cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount, min_max_stats_lst.cmin_max_stats_lst, results.cresults, virtual_to_play_batch)
 
     return results.cresults.hidden_state_index_x_lst, results.cresults.hidden_state_index_y_lst, results.cresults.last_actions, results.cresults.virtual_to_play_batchs

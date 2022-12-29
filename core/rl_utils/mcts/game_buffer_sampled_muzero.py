@@ -18,7 +18,7 @@ from ding.utils import BUFFER_REGISTRY
 # python mcts
 import core.rl_utils.mcts.ptree_sampled_muzero as ptree
 # cpp mcts
-from core.rl_utils.mcts.ctree_sampled_muzero import cytree as ctree
+from core.rl_utils.mcts.ctree_sampled_muzero import mzs_tree as ctree
 from .mcts_ctree_sampled import SampledMuZeroMCTSCtree as MCTS_ctree
 from .mcts_ptree_sampled import SampledMuZeroMCTSPtree as MCTS_ptree
 from .utils import prepare_observation_list, concat_output, concat_output_value

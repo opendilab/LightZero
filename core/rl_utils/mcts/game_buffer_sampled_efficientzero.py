@@ -18,7 +18,7 @@ from ding.torch_utils.data_helper import to_ndarray
 from ding.utils import BUFFER_REGISTRY
 
 # cpp mcts
-from .ctree_sampled_efficientzero import cytree as ctree
+from .ctree_sampled_efficientzero import ezs_tree as ctree
 from .mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTS_ctree
 from .mcts_ptree_sampled import SampledEfficientZeroMCTSPtree as MCTS_ptree
 from .utils import prepare_observation_list, concat_output, concat_output_value

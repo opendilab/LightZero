@@ -15,10 +15,7 @@ from ding.data.buffer import Buffer
 from ding.torch_utils.data_helper import to_ndarray
 from ding.utils import BUFFER_REGISTRY
 
-# python mcts
-import core.rl_utils.mcts.ptree_efficientzero as ptree
-# cpp mcts
-from .ctree_efficientzero import cytree as ctree
+from .ctree_efficientzero import ez_tree as ctree
 from .mcts_ctree import EfficientZeroMCTSCtree as MCTS_ctree
 from .mcts_ptree import EfficientZeroMCTSPtree as MCTS_ptree
 from .utils import prepare_observation_list, concat_output, concat_output_value

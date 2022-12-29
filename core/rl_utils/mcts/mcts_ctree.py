@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from easydict import EasyDict
 
-from core.rl_utils.mcts.ctree_efficientzero import cytree as tree_efficientzero
+from core.rl_utils.mcts.ctree_efficientzero import ez_tree as tree_efficientzero
 from ..scaling_transform import inverse_scalar_transform
 
 
@@ -24,6 +24,7 @@ class EfficientZeroMCTSCtree(object):
         discount=0.997,
         num_simulations=50,
         lstm_horizon_len=5,
+        categorical_distribution=True,
     )
 
     @classmethod
@@ -107,11 +108,9 @@ class EfficientZeroMCTSCtree(object):
                     # if not in training, obtain the scalars of the value/reward
                     network_output.value = inverse_scalar_transform(network_output.value,
                                                                     self.config.support_size,
-                                                                    categorical_distribution=self.config.categorical_distribution
                                                                     ).detach().cpu().numpy()
                     network_output.value_prefix = inverse_scalar_transform(
                         network_output.value_prefix, self.config.support_size,
-                        categorical_distribution=self.config.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()
                     network_output.reward_hidden_state = (
@@ -149,10 +148,10 @@ class EfficientZeroMCTSCtree(object):
 
 
 ###########################################################
-# MutZero
+# MuZero
 ###########################################################
 
-from core.rl_utils.mcts.ctree_muzero import cytree as tree_muzero
+from core.rl_utils.mcts.ctree_muzero import mz_tree as tree_muzero
 
 
 class MuZeroMCTSCtree(object):
