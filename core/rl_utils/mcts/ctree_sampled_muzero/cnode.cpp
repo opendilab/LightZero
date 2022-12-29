@@ -340,8 +340,11 @@ namespace tree
             // 排序后第一个向量为索引，第二个向量为从大到小排序的扰动后的概率值
             for (size_t iter = 0; iter < disturbed_probs.size(); iter++)
             {
-                disc_action_with_probs.__emplace_back(std::make_pair(iter, disturbed_probs[iter]));
-                // disc_action_with_probs.emplace_back(std::make_pair(iter, disturbed_probs[iter]));
+                #ifdef __APPLE__
+                    disc_action_with_probs.__emplace_back(std::make_pair(iter, disturbed_probs[iter]));
+                #else
+                    disc_action_with_probs.emplace_back(std::make_pair(iter, disturbed_probs[iter]));
+                #endif
             }
             // std::sort(disc_action_with_probs.begin(), disc_action_with_probs.end(), [](auto x, auto y)
             //           { return x.second > y.second; });

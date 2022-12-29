@@ -32,9 +32,8 @@ def find_pyx(path=None):
 
 extensions = []
 for item in find_pyx():
-    name = 'core.' + item.split('.pyx')[0].split('core')[-1].replace('/', '.')
+    name = 'core' + item.split('.pyx')[0].split('core')[-1].replace('/', '.')
     extensions.append(Extension(name, [item], include_dirs=[np.get_include()],))
-print(extensions)
 
 setup(
     name='LightZero',
@@ -66,7 +65,7 @@ setup(
         'numpy>=1.18.0',
         'kornia',
     ],
-    ext_modules=cythonize(extensions),
+    ext_modules=cythonize(extensions, language_level=3),
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         "Intended Audience :: Science/Research",
