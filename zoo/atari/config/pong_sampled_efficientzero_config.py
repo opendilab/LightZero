@@ -15,64 +15,53 @@ else:
     device = 'cpu'
 
 
-# obs_shape = (12, 96, 96)  # if frame_stack_num=4, image_channel=3, gray_scale=False
-# image_channel=3
-# gray_scale=False
+obs_shape = (12, 96, 96)  # if frame_stack_num=4, image_channel=3, gray_scale=False
+image_channel = 3
+gray_scale = False
 
-obs_shape = (4, 96, 96)  # if frame_stack_num=4, image_channel=1, gray_scale=True
-image_channel = 1
-gray_scale = True
+# obs_shape = (4, 96, 96)  # if frame_stack_num=4, image_channel=1, gray_scale=True
+# image_channel = 1
+# gray_scale = True
 
-action_space_size = 9  # for mspacman
-K = 9
-# K = 5
-num_simulations = 50
-# num_simulations = 25
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-batch_size = 256
+# action_space_size = 6  # for pong
+# K = 6
+# num_simulations = 50
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# batch_size = 256
 # update_per_collect = 1000
-update_per_collect = 200
-# for continuous action space, gaussian distribution
-# policy_entropy_loss_coeff=5e-3
-# for discrete action space
-policy_entropy_loss_coeff = 0
-normalize_prob_of_sampled_actions = True
-
-# debug config 1
-# action_space_size = 9  # for mspacman
-# K = 9
-# num_simulations = 20
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# batch_size = 5
-# update_per_collect = 10
-# policy_entropy_loss_coeff = 0
-# normalize_prob_of_sampled_actions = True
-
-
-# debug config 2
-# action_space_size = 9
-# K = 5
-# num_simulations = 10
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# batch_size = 4
-# update_per_collect = 2
+# # update_per_collect = 200
+# # for continuous action space, gaussian distribution
+# # policy_entropy_loss_coeff=5e-3
+# # for discrete action space
 # policy_entropy_loss_coeff = 0
 # normalize_prob_of_sampled_actions = False
+# # normalize_prob_of_sampled_actions = True
 
-mspacman_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_normprob',
-    # exp_name=f'data_sez_ptree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
+
+# debug config 1
+action_space_size = 6  # for pong
+K = 6
+num_simulations = 5
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+batch_size = 8
+update_per_collect = 10
+policy_entropy_loss_coeff = 0
+normalize_prob_of_sampled_actions = False
+
+
+
+pong_sampled_efficientzero_config = dict(
+    exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_mis256',
+    # exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_normprob',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        env_name='MsPacmanNoFrameskip-v4',
+        env_name='PongNoFrameskip-v4',
         stop_value=int(1e6),
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
@@ -89,8 +78,8 @@ mspacman_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         # model_path=None,
-        model_path='/Users/puyuan/code/LightZero/data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc200_k9_ns50_ic1_pelc0_normprob-detach/ckpt/ckpt_best.pth.tar',
-        env_name='MsPacmanNoFrameskip-v4',
+        model_path='/Users/puyuan/code/LightZero/data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc1000_k6_ns50_ic3_pelc0_mis256/ckpt/ckpt_best.pth.tar',
+        env_name='PongNoFrameskip-v4',
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
@@ -295,10 +284,10 @@ mspacman_sampled_efficientzero_config = dict(
         ######################################
     ),
 )
-mspacman_sampled_efficientzero_config = EasyDict(mspacman_sampled_efficientzero_config)
-main_config = mspacman_sampled_efficientzero_config
+pong_sampled_efficientzero_config = EasyDict(pong_sampled_efficientzero_config)
+main_config = pong_sampled_efficientzero_config
 
-mspacman_sampled_efficientzero_create_config = dict(
+pong_sampled_efficientzero_create_config = dict(
     env=dict(
         type='atari_lightzero',
         import_names=['zoo.atari.envs.atari_lightzero_env'],
@@ -315,9 +304,9 @@ mspacman_sampled_efficientzero_create_config = dict(
         import_names=['core.worker.collector.sampled_efficientzero_collector'],
     )
 )
-mspacman_sampled_efficientzero_create_config = EasyDict(mspacman_sampled_efficientzero_create_config)
-create_config = mspacman_sampled_efficientzero_create_config
+pong_sampled_efficientzero_create_config = EasyDict(pong_sampled_efficientzero_create_config)
+create_config = pong_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_sampled_efficientzero
-    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e5))

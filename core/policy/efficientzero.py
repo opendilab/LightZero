@@ -12,6 +12,8 @@ from ding.rl_utils import get_nstep_return_data, get_train_sample
 from ding.torch_utils import to_tensor, to_device
 from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
+from torch.distributions import Categorical, Independent, Normal
+
 
 # python mcts
 import core.rl_utils.mcts.ptree_efficientzero as ptree
@@ -297,6 +299,10 @@ class EfficientZeroPolicy(Policy):
         value_priority = L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0])
         value_priority = value_priority.data.cpu().numpy() + self._cfg.prioritized_replay_eps
 
+        prob = torch.softmax(policy_logits, dim=-1)
+        dist = Categorical(prob)
+        policy_entropy = dist.entropy().mean()
+
         # calculate loss for the first step
         policy_loss = modified_cross_entropy_loss(policy_logits, target_policy[:, 0])
         if self._cfg.categorical_distribution:
@@ -361,6 +367,11 @@ class EfficientZeroPolicy(Policy):
 
                 other_loss['consist_' + str(step_i + 1)] = temp_loss.mean().item()
                 consistency_loss += temp_loss
+
+            prob = torch.softmax(policy_logits, dim=-1)
+            dist = Categorical(prob)
+            policy_entropy += dist.entropy().mean()
+
 
             # the target policy, target_value_phi, target_value_prefix_phi is calculated in game buffer now
             policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
@@ -534,6 +545,8 @@ class EfficientZeroPolicy(Policy):
                 'weighted_loss': loss_data[1],
                 'loss_mean': loss_data[2],
                 'policy_loss': loss_data[4],
+                'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+
                 'value_prefix_loss': loss_data[5],
                 'value_loss': loss_data[6],
                 'consistency_loss': loss_data[7]/self._cfg.num_unroll_steps,
@@ -557,6 +570,7 @@ class EfficientZeroPolicy(Policy):
             'weighted_loss': loss_data[1],
             'loss_mean': loss_data[2],
             'policy_loss': loss_data[4],
+            'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
             'value_prefix_loss': loss_data[5],
             'value_loss': loss_data[6],
             'consistency_loss': loss_data[7]/self._cfg.num_unroll_steps,
@@ -809,6 +823,7 @@ class EfficientZeroPolicy(Policy):
             'weighted_loss',
             'loss_mean',
             'policy_loss',
+            'policy_entropy',
             'value_prefix_loss',
             'value_loss',
             'consistency_loss',

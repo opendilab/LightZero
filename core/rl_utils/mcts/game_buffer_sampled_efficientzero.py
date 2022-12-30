@@ -532,7 +532,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             # TODO(pu):
             td_steps = np.clip(config.td_steps, 1, max(1, traj_len - state_index)).astype(np.int32)
 
-            # prepare the corresponding observations for bootstrapped values o_{t+k}
+            # NOTE: prepare the corresponding observations for bootstrapped values o_{t+k}
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
             # t=2+3 -> o[2+3, 2+3+4+5] -> o[5, 14]
             game_obs = game.obs(state_index + td_steps, config.num_unroll_steps)
@@ -849,6 +849,9 @@ class SampledEfficientZeroGameBuffer(Buffer):
                                 value_lst[value_index] += - reward * self.config.discount ** i
                         else:
                             value_lst[value_index] += reward * self.config.discount ** i
+                            """
+                            TODO(pu): why value don't use discount factor
+                            """
 
                     # reset every lstm_horizon_len
                     if horizon_id % self.config.lstm_horizon_len == 0:
@@ -865,6 +868,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     else:
                         target_values.append(0)
                         target_value_prefixs.append(value_prefix)
+                    # NOTE:
                     value_index += 1
 
                 batch_value_prefixs.append(target_value_prefixs)
