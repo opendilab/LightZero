@@ -1,13 +1,9 @@
 # distutils: language=c++
-import ctypes
-cimport cython
-from mz_tree cimport CMinMaxStatsList, CNode, CRoots, CSearchResults, cbatch_back_propagate, cbatch_traverse
 from libcpp.vector cimport vector
-from libc.stdlib cimport malloc, free
-from libcpp.list cimport list as cpplist
-
-import numpy as np
 cimport numpy as np
+
+from mz_tree cimport CMinMaxStatsList, CNode, CRoots, CSearchResults, cbatch_back_propagate, cbatch_traverse
+
 
 ctypedef np.npy_float FLOAT
 ctypedef np.npy_intp INTP

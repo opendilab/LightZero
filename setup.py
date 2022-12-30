@@ -10,13 +10,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-import numpy as np
-
-from setuptools import find_packages, Extension
+import re
 from distutils.core import setup
+
+import numpy as np
+from setuptools import find_packages, Extension
 from Cython.Build import cythonize  # this line should be after 'from setuptools import find_packages'
 
 here = os.path.abspath(os.path.dirname(__file__))
+
+
+def _load_req(file: str):
+    with open(file, 'r', encoding='utf-8') as f:
+        return [line.strip() for line in f.readlines() if line.strip()]
+
+
+requirements = _load_req('requirements.txt')
+
+_REQ_PATTERN = re.compile('^requirements-([a-zA-Z0-9_]+)\\.txt$')
+group_requirements = {
+    item.group(1): _load_req(item.group(0))
+    for item in [_REQ_PATTERN.fullmatch(reqpath) for reqpath in os.listdir()] if item
+}
 
 
 def find_pyx(path=None):
@@ -33,7 +48,7 @@ def find_pyx(path=None):
 extensions = []
 for item in find_pyx():
     name = 'core' + item.split('.pyx')[0].split('core')[-1].replace('/', '.')
-    extensions.append(Extension(name, [item], include_dirs=[np.get_include()],))
+    extensions.append(Extension(name, [item], include_dirs=[np.get_include()], ))
 
 setup(
     name='LightZero',
@@ -50,21 +65,16 @@ setup(
         # framework
         *find_packages(include=('core', "core.*")),
         # application
-        *find_packages(include=('zoo'
-                                'zoo.*')),
+        *find_packages(include=('zoo', 'zoo.*')),
     ],
     package_data={
         package_name: ['*.yaml', '*cfg']
         for package_name in find_packages(include=('core.*'))
     },
     python_requires=">=3.7",
-    install_requires=[
-        'DI-engine>=0.4.4',
-        'gym==0.25.1',
-        'torch>=1.1.0, <=1.12.1',
-        'numpy>=1.18.0',
-        'kornia',
-    ],
+    install_requires=requirements,
+    tests_require=group_requirements['test'],
+    extras_require=group_requirements,
     ext_modules=cythonize(extensions, language_level=3),
     classifiers=[
         'Development Status :: 5 - Production/Stable',
