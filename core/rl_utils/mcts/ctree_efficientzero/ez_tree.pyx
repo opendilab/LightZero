@@ -1,8 +1,6 @@
 # distutils: language=c++
-from libcpp.vector cimport vector
 cimport numpy as np
-
-from ez_tree cimport CMinMaxStatsList, CNode, CRoots, CSearchResults, cbatch_back_propagate, cbatch_traverse
+from libcpp.vector cimport vector
 
 ctypedef np.npy_float FLOAT
 ctypedef np.npy_intp INTP

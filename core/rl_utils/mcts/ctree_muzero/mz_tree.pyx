@@ -1,13 +1,9 @@
 # distutils: language=c++
-from libcpp.vector cimport vector
 cimport numpy as np
-
-from mz_tree cimport CMinMaxStatsList, CNode, CRoots, CSearchResults, cbatch_back_propagate, cbatch_traverse
-
+from libcpp.vector cimport vector
 
 ctypedef np.npy_float FLOAT
 ctypedef np.npy_intp INTP
-
 
 cdef class MinMaxStatsList:
     cdef CMinMaxStatsList *cmin_max_stats_lst
@@ -21,7 +17,6 @@ cdef class MinMaxStatsList:
     def __dealloc__(self):
         del self.cmin_max_stats_lst
 
-
 cdef class ResultsWrapper:
     cdef CSearchResults cresults
 
@@ -31,7 +26,6 @@ cdef class ResultsWrapper:
     def get_search_len(self):
         return self.cresults.search_lens
 
-
 cdef class Roots:
     cdef int root_num
     cdef CRoots *roots
@@ -40,10 +34,11 @@ cdef class Roots:
         self.root_num = root_num
         self.roots = new CRoots(root_num, legal_actions_list)
 
-    def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):
+    def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool, list policy_logits_pool,
+                vector[int] & to_play_batch):
         self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
 
-    def prepare_no_noise(self, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):
+    def prepare_no_noise(self, list value_prefix_pool, list policy_logits_pool, vector[int] & to_play_batch):
         self.roots[0].prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play_batch)
 
     def get_trajectories(self):
@@ -65,21 +60,22 @@ cdef class Roots:
     def num(self):
         return self.root_num
 
-
 cdef class Node:
     cdef CNode cnode
 
     def __cinit__(self):
         pass
 
-    def __cinit__(self, float prior, vector[int] &legal_actions):
+    def __cinit__(self, float prior, vector[int] & legal_actions):
         pass
 
-    def expand(self, int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix, list policy_logits):
+    def expand(self, int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix,
+               list policy_logits):
         cdef vector[float] cpolicy = policy_logits
         self.cnode.expand(to_play, hidden_state_index_x, hidden_state_index_y, value_prefix, cpolicy)
 
-def batch_back_propagate(int hidden_state_index_x, float discount, list value_prefixs, list values, list policies, MinMaxStatsList min_max_stats_lst, ResultsWrapper results, list to_play_batch):
+def batch_back_propagate(int hidden_state_index_x, float discount, list value_prefixs, list values, list policies,
+                         MinMaxStatsList min_max_stats_lst, ResultsWrapper results, list to_play_batch):
     cdef int i
     cdef vector[float] cvalue_prefixs = value_prefixs
     cdef vector[float] cvalues = values
@@ -88,9 +84,9 @@ def batch_back_propagate(int hidden_state_index_x, float discount, list value_pr
     cbatch_back_propagate(hidden_state_index_x, discount, cvalue_prefixs, cvalues, cpolicies,
                           min_max_stats_lst.cmin_max_stats_lst, results.cresults, to_play_batch)
 
-
-def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount, MinMaxStatsList min_max_stats_lst, ResultsWrapper results, list virtual_to_play_batch):
-
-    cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount, min_max_stats_lst.cmin_max_stats_lst, results.cresults, virtual_to_play_batch)
+def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount, MinMaxStatsList min_max_stats_lst,
+                   ResultsWrapper results, list virtual_to_play_batch):
+    cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount, min_max_stats_lst.cmin_max_stats_lst, results.cresults,
+                    virtual_to_play_batch)
 
     return results.cresults.hidden_state_index_x_lst, results.cresults.hidden_state_index_y_lst, results.cresults.last_actions, results.cresults.virtual_to_play_batchs

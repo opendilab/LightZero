@@ -2,9 +2,6 @@
 cimport numpy as np
 from libcpp.vector cimport vector
 
-from mzs_tree cimport CMinMaxStatsList, CNode, CRoots, CSearchResults, cbatch_back_propagate, cbatch_traverse, CAction
-
-ctypedef np.npy_bool bool
 ctypedef np.npy_float FLOAT
 ctypedef np.npy_intp INTP
 
