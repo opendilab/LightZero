@@ -41,14 +41,25 @@ def find_pyx(path=None):
         for fname in filenames:
             if fname.endswith('.pyx'):
                 pyx_files.append(os.path.join(root, fname))
-    print(pyx_files)
+
     return pyx_files
 
 
-extensions = []
-for item in find_pyx():
-    name = 'core' + item.split('.pyx')[0].split('core')[-1].replace('/', '.')
-    extensions.append(Extension(name, [item], include_dirs=[np.get_include()], ))
+def find_cython_extensions(path=None):
+    extensions = []
+    for item in find_pyx(path):
+        relpath = os.path.relpath(os.path.abspath(item), start=here)
+        rpath, _ = os.path.splitext(relpath)
+        extname = '.'.join(rpath.split(os.path.sep))
+        extensions.append(Extension(
+            extname, [item],
+            include_dirs=[np.get_include()],
+        ))
+
+    return extensions
+
+
+_LINETRACE = not not os.environ.get('LINETRACE', None)
 
 setup(
     name='LightZero',
@@ -69,13 +80,19 @@ setup(
     ],
     package_data={
         package_name: ['*.yaml', '*cfg']
-        for package_name in find_packages(include=('core.*'))
+        for package_name in find_packages(include=('core.*',))
     },
     python_requires=">=3.7",
     install_requires=requirements,
     tests_require=group_requirements['test'],
     extras_require=group_requirements,
-    ext_modules=cythonize(extensions, language_level=3),
+    ext_modules=cythonize(
+        find_cython_extensions(),
+        language_level=3,
+        compiler_directives=dict(
+            linetrace=_LINETRACE,
+        ),
+    ),
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         "Intended Audience :: Science/Research",

@@ -50,8 +50,16 @@ test: unittest benchmark
 
 unittest:
 	$(PYTHON) -m pytest "${RANGE_TEST_DIR}" \
-		-sv -m cunittest \
+		-sv -m unittest \
 		$(shell for type in ${COV_TYPES}; do echo "--cov-report=$$type"; done) \
 		--cov="${RANGE_SRC_DIR}" \
+		$(if ${MIN_COVERAGE},--cov-fail-under=${MIN_COVERAGE},) \
+		$(if ${WORKERS},-n ${WORKERS},)
+
+minitest:
+	$(PYTHON) -m pytest "${SRC_DIR}/rl_utils/tests/test_mcts_ctree.py" \
+		-sv -m unittest \
+		$(shell for type in ${COV_TYPES}; do echo "--cov-report=$$type"; done) \
+		--cov="${SRC_DIR}/rl_utils/mcts" \
 		$(if ${MIN_COVERAGE},--cov-fail-under=${MIN_COVERAGE},) \
 		$(if ${WORKERS},-n ${WORKERS},)
