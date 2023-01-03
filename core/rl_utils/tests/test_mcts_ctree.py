@@ -54,34 +54,27 @@ class MuZeroModelFake(torch.nn.Module):
 
 
 game_config = EasyDict(
-    dict(
-        lstm_horizon_len=5,
-        support_size=300,
-        action_space_size=9,
-        num_simulations=8,
-        batch_size=16,
-        pb_c_base=1,
-        pb_c_init=1,
-        discount=0.9,
-        root_dirichlet_alpha=0.3,
-        root_exploration_fraction=0.2,
-        dirichlet_alpha=0.3,
-        exploration_fraction=1,
-        device='cpu',
-        value_delta_max=0.01,
-    )
+    lstm_horizon_len=5,
+    support_size=300,
+    action_space_size=9,
+    num_simulations=8,
+    batch_size=16,
+    pb_c_base=1,
+    pb_c_init=1,
+    discount=0.9,
+    root_dirichlet_alpha=0.3,
+    root_exploration_fraction=0.2,
+    dirichlet_alpha=0.3,
+    exploration_fraction=1,
+    device='cpu',
+    value_delta_max=0.01,
 )
 
 batch_size = env_nums = game_config.batch_size
 action_space_size = game_config.action_space_size
 
 model = MuZeroModelFake(action_num=9)
-stack_obs = torch.zeros(
-    size=(
-        batch_size,
-        8,
-    ), dtype=torch.float
-)
+stack_obs = torch.zeros(size=(batch_size, 8), dtype=torch.float)
 
 network_output = model.initial_inference(stack_obs.float())
 
@@ -95,24 +88,38 @@ policy_logits_pool = network_output['policy_logits']
 pred_values_pool = inverse_scalar_transform(pred_values_pool, game_config.support_size).detach().cpu().numpy()
 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
 reward_hidden_state_state = (
-    reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
+    reward_hidden_state_state[0].detach().cpu().numpy(),
+    reward_hidden_state_state[1].detach().cpu().numpy()
 )
 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
-action_mask = [[0, 0, 0, 1, 0, 1, 1, 0, 0], [1, 0, 0, 1, 0, 0, 1, 0, 0], [1, 1, 0, 0, 1, 0, 1, 0, 1],
-               [1, 0, 0, 1, 1, 1, 0, 0, 0],
-               [0, 0, 1, 0, 0, 1, 0, 0, 1], [0, 1, 1, 0, 1, 0, 0, 0, 0], [1, 0, 1, 1, 1, 0, 0, 1, 1],
-               [1, 1, 1, 1, 1, 0, 0, 0, 1],
-               [0, 0, 0, 1, 0, 1, 1, 0, 0], [0, 1, 1, 0, 1, 1, 1, 1, 0], [1, 1, 1, 0, 0, 0, 1, 1, 1],
-               [1, 1, 0, 1, 0, 1, 1, 0, 0],
-               [0, 0, 1, 0, 0, 1, 0, 0, 0], [1, 0, 1, 1, 0, 0, 1, 1, 0], [0, 1, 0, 0, 0, 0, 0, 0, 0],
-               [1, 0, 0, 0, 1, 1, 0, 0, 1]]
+action_mask = [
+    [0, 0, 0, 1, 0, 1, 1, 0, 0],
+    [1, 0, 0, 1, 0, 0, 1, 0, 0],
+    [1, 1, 0, 0, 1, 0, 1, 0, 1],
+    [1, 0, 0, 1, 1, 1, 0, 0, 0],
+    [0, 0, 1, 0, 0, 1, 0, 0, 1],
+    [0, 1, 1, 0, 1, 0, 0, 0, 0],
+    [1, 0, 1, 1, 1, 0, 0, 1, 1],
+    [1, 1, 1, 1, 1, 0, 0, 0, 1],
+    [0, 0, 0, 1, 0, 1, 1, 0, 0],
+    [0, 1, 1, 0, 1, 1, 1, 1, 0],
+    [1, 1, 1, 0, 0, 0, 1, 1, 1],
+    [1, 1, 0, 1, 0, 1, 1, 0, 0],
+    [0, 0, 1, 0, 0, 1, 0, 0, 0],
+    [1, 0, 1, 1, 0, 0, 1, 1, 0],
+    [0, 1, 0, 0, 0, 0, 0, 0, 0],
+    [1, 0, 0, 0, 1, 1, 0, 0, 1],
+]
 assert len(action_mask) == batch_size
 assert len(action_mask[0]) == action_space_size
 
 action_num = [int(np.array(action_mask[i]).sum()) for i in
               range(env_nums)]  # [3, 3, 5, 4, 3, 3, 6, 6, 3, 6, 6, 5, 2, 5, 1, 4]
-legal_actions_list = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(env_nums)]
+legal_actions_list = [
+    [i for i, x in enumerate(action_mask[j]) if x == 1]
+    for j in range(env_nums)
+]
 # legal_actions_list =
 # [[3, 5, 6], [0, 3, 6], [0, 1, 4, 6, 8], [0, 3, 4, 5],
 # [2, 5, 8], [1, 2, 4], [0, 2, 3, 4, 7, 8], [0, 1, 2, 3, 4, 8],
@@ -148,8 +155,9 @@ def test_mcts_1pm_to_play_legal_action():
 
     roots = tree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
     noises = [
-        np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                            ).astype(np.float32).tolist() for j in range(env_nums)
+        np.random.dirichlet(
+            [game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
+        ).astype(np.float32).tolist() for j in range(env_nums)
     ]
 
     # In ctree, to_play must be list, not None
@@ -200,8 +208,9 @@ def test_mcts_2pm_legal_action():
 
     roots = tree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
     noises = [
-        np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                            ).astype(np.float32).tolist() for j in range(env_nums)
+        np.random.dirichlet(
+            [game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
+        ).astype(np.float32).tolist() for j in range(env_nums)
     ]
     # In ctree, to_play must be list, not None
     roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)

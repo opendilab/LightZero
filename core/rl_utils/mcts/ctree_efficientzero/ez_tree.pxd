@@ -83,3 +83,17 @@ cdef extern from "lib/cnode.h" namespace "tree":
     void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount,
                          CMinMaxStatsList *min_max_stats_lst, CSearchResults & results,
                          vector[int] & virtual_to_play_batch)
+
+cdef class MinMaxStatsList:
+    cdef CMinMaxStatsList *cmin_max_stats_lst
+
+cdef class ResultsWrapper:
+    cdef CSearchResults cresults
+
+cdef class Roots:
+    cdef readonly int root_num
+    cdef readonly int pool_size
+    cdef CRoots *roots
+
+cdef class Node:
+    cdef CNode cnode
