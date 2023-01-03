@@ -23,39 +23,52 @@ gray_scale = False
 # image_channel = 1
 # gray_scale = True
 
-# action_space_size = 6  # for pong
+action_space_size = 6  # for pong
+K = 3
 # K = 6
-# num_simulations = 50
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# batch_size = 256
-# update_per_collect = 1000
-# # update_per_collect = 200
-# # for continuous action space, gaussian distribution
-# # policy_entropy_loss_coeff=5e-3
-# # for discrete action space
-# policy_entropy_loss_coeff = 0
-# normalize_prob_of_sampled_actions = False
-# # normalize_prob_of_sampled_actions = True
+
+num_simulations = 50
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+batch_size = 256
+update_per_collect = 1000
+# update_per_collect = 200
+# for continuous action space, gaussian distribution
+# policy_entropy_loss_coeff=5e-3
+# for discrete action space
+policy_entropy_loss_coeff = 0
+normalize_prob_of_sampled_actions = False
+# normalize_prob_of_sampled_actions = True
 
 
 # debug config 1
-action_space_size = 6  # for pong
-K = 6
-num_simulations = 5
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-batch_size = 8
-update_per_collect = 10
-policy_entropy_loss_coeff = 0
-normalize_prob_of_sampled_actions = False
+# action_space_size = 9  # for pong
+# K = 9
+# num_simulations = 20
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# batch_size = 5
+# update_per_collect = 10
+# policy_entropy_loss_coeff = 0
+# normalize_prob_of_sampled_actions = True
 
 
+# debug config 2
+# action_space_size = 9
+# K = 5
+# num_simulations = 10
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# batch_size = 4
+# update_per_collect = 2
+# policy_entropy_loss_coeff = 0
+# normalize_prob_of_sampled_actions = False
 
 pong_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_mis256',
+    exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_mis256_fake',
     # exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_normprob',
     env=dict(
         collector_env_num=collector_env_num,
@@ -77,8 +90,7 @@ pong_sampled_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        # model_path=None,
-        model_path='/Users/puyuan/code/LightZero/data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc1000_k6_ns50_ic3_pelc0_mis256/ckpt/ckpt_best.pth.tar',
+        model_path=None,
         env_name='PongNoFrameskip-v4',
         # Whether to use cuda for network.
         cuda=True,
