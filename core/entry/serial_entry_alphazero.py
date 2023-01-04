@@ -8,10 +8,6 @@ from ding.config import read_config, compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
-# from ding.envs import get_env_cls
-# from core.policy.alphazero import AlphaZeroPolicy
-# from core.worker.collector.alphazero_collector import AlphazeroCollector
-# from core.worker.collector.alphazero_evaluator import AlphazeroEvaluator
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner, create_buffer
 from ding.worker import create_serial_collector, create_serial_evaluator

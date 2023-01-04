@@ -8,7 +8,10 @@ import torch.nn as nn
 
 
 class Node(object):
-
+    """
+    Overview:
+        the node base class for mcts.
+    """
     def __init__(self, parent, prior_p: float):
         # Tree Structure
         self._parent = parent
@@ -20,7 +23,10 @@ class Node(object):
 
     @property
     def value(self):
-        """return current value, used to compute ucb score"""
+        """
+        Overview:
+            return current value, used to compute ucb score.
+        """
         if self._visit_count == 0:
             return 0
         return self._value_sum / self._visit_count
@@ -35,11 +41,17 @@ class Node(object):
         self.update(leaf_value)
 
     def is_leaf(self):
-        """Check if the current node is a leaf node or not."""
+        """
+        Overview:
+            Check if the current node is a leaf node or not.
+        """
         return self._children == {}
 
     def is_root(self):
-        """Check if the current node is a root node or not."""
+        """
+        Overview:
+            Check if the current node is a root node or not.
+        """
         return self._parent is None
 
     @property
@@ -58,16 +70,6 @@ class Node(object):
 class MCTS(object):
 
     def __init__(self, cfg):
-        """
-        policy_value_fn: a function that takes in a board state and outputs
-            a list of (action, probability) tuples and also a score in [-1, 1]
-            (i.e. the expected value of the end game score from the current
-            player's perspective) for the current player.
-        c_puct: a number in (0, inf) that controls how quickly exploration
-            converges to the maximum-value policy. A higher value means
-            relying on the prior more.
-        n_playout: number of simulations, default to 10000
-        """
         self._cfg = cfg
 
         self._max_moves = self._cfg.get('max_moves', 512)  # for chess and shogi, 722 for Go.
@@ -84,6 +86,10 @@ class MCTS(object):
         self._root_exploration_fraction = self._cfg.get('root_exploration_fraction', 0.25)  # 0.25
 
     def get_next_action(self, state, policy_forward_fn, temperature=1.0, sample=True):
+        """
+        Overview:
+            calc the move probabilities based on visit counts at the root node
+        """
         root = Node(None, 1.0)
         self._expand_leaf_node(root, state, policy_forward_fn)
         if sample:
@@ -92,9 +98,7 @@ class MCTS(object):
             state_copy = copy.deepcopy(state)
             self._simulate(root, state_copy, policy_forward_fn)
 
-        # calc the move probabilities based on visit counts at the root node
         action_visits = []
-        # for action in range(state.num_actions):
         for action in range(state.action_space.n):
             if action in root.children:
                 action_visits.append((action, root.children[action].visit_count))
@@ -111,9 +115,9 @@ class MCTS(object):
 
     def _simulate(self, node, state, policy_forward_fn):
         """
-            Run a single playout from the root to the leaf, getting a value at
-        the leaf and propagating it back through its parents.
-        State is modified in-place, so a copy must be provided.
+        Overview:
+            Run a single playout from the root to the leaf, getting a value at the leaf and propagating it back through its parents.
+            State is modified in-place, so a copy must be provided.
         """
         while not node.is_leaf():
             action, node = self._select_child(node)

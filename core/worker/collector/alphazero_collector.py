@@ -13,16 +13,15 @@ from ding.torch_utils import to_tensor, to_ndarray
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_alphazero')
-class AlphazeroCollector(ISerialCollector):
-    # """
-    # Overview:
-    #     EfficientZero collector(n_episode)
-    # Interfaces:
-    #     __init__, reset, reset_env, reset_policy, collect, close
-    # Property:
-    #     envstep
-    # """
-
+class AlphaZeroCollector(ISerialCollector):
+    """
+    Overview:
+        Alphazero collector(n_episode)
+    Interfaces:
+        __init__, reset, reset_env, reset_policy, collect, close
+    Property:
+        envstep
+    """
     config = dict(deepcopy_obs=False, transform_obs=False, collect_print_freq=100, get_train_sample=False, reward_shaping=True)
 
     def __init__(
@@ -59,16 +58,16 @@ class AlphazeroCollector(ISerialCollector):
         self.reset(policy, env)
     
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
-        # """
-        # Overview:
-        #     Reset the environment.
-        #     If _env is None, reset the old environment.
-        #     If _env is not None, replace the old environment in the collector with the new passed \
-        #         in environment and launch.
-        # Arguments:
-        #     - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-        #         env_manager(BaseEnvManager)
-        # """
+        """
+        Overview:
+            Reset the environment.
+            If _env is None, reset the old environment.
+            If _env is not None, replace the old environment in the collector with the new passed \
+                in environment and launch.
+        Arguments:
+            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
+                env_manager(BaseEnvManager)
+        """
         if _env is not None:
             self._env = _env
             self._env.launch()
@@ -77,14 +76,14 @@ class AlphazeroCollector(ISerialCollector):
             self._env.reset()
 
     def reset_policy(self, _policy: Optional[namedtuple] = None) -> None:
-        # """
-        # Overview:
-        #     Reset the policy.
-        #     If _policy is None, reset the old policy.
-        #     If _policy is not None, replace the old policy in the collector with the new passed in policy.
-        # Arguments:
-        #     - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy
-        # """
+        """
+        Overview:
+            Reset the policy.
+            If _policy is None, reset the old policy.
+            If _policy is not None, replace the old policy in the collector with the new passed in policy.
+        Arguments:
+            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy
+        """
         assert hasattr(self, '_env'), "please set env first"
         if _policy is not None:
             self._policy = _policy
@@ -100,19 +99,19 @@ class AlphazeroCollector(ISerialCollector):
         self._policy.reset()
 
     def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
-        # """
-        # Overview:
-        #     Reset the environment and policy.
-        #     If _env is None, reset the old environment.
-        #     If _env is not None, replace the old environment in the collector with the new passed \
-        #         in environment and launch.
-        #     If _policy is None, reset the old policy.
-        #     If _policy is not None, replace the old policy in the collector with the new passed in policy.
-        # Arguments:
-        #     - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy
-        #     - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-        #         env_manager(BaseEnvManager)
-        # """
+        """
+        Overview:
+            Reset the environment and policy.
+            If _env is None, reset the old environment.
+            If _env is not None, replace the old environment in the collector with the new passed \
+                in environment and launch.
+            If _policy is None, reset the old policy.
+            If _policy is not None, replace the old policy in the collector with the new passed in policy.
+        Arguments:
+            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy
+            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
+                env_manager(BaseEnvManager)
+        """
         if _env is not None:
             self.reset_env(_env)
         if _policy is not None:
@@ -132,14 +131,14 @@ class AlphazeroCollector(ISerialCollector):
         self._end_flag = False
     
     def _reset_stat(self, env_id: int) -> None:
-        # """
-        # Overview:
-        #     Reset the collector's state. Including reset the traj_buffer, obs_pool, policy_output_pool\
-        #         and env_info. Reset these states according to env_id. You can refer to base_serial_collector\
-        #         to get more messages.
-        # Arguments:
-        #     - env_id (:obj:`int`): the id where we need to reset the collector's state
-        # """
+        """
+        Overview:
+            Reset the collector's state. Including reset the traj_buffer, obs_pool, policy_output_pool\
+                and env_info. Reset these states according to env_id. You can refer to base_serial_collector\
+                to get more messages.
+        Arguments:
+            - env_id (:obj:`int`): the id where we need to reset the collector's state
+        """
         self._traj_buffer[env_id].clear()
         self._obs_pool.reset(env_id)
         self._policy_output_pool.reset(env_id)
@@ -299,7 +298,6 @@ class AlphazeroCollector(ISerialCollector):
                 'total_envstep_count': self._total_envstep_count,
                 'total_episode_count': self._total_episode_count,
                 'total_duration': self._total_duration,
-                # 'each_reward': episode_reward,
             }
             self._episode_info.clear()
             self._logger.info("collect end:\n{}".format('\n'.join(['{}: {}'.format(k, v) for k, v in info.items()])))
@@ -313,9 +311,9 @@ class AlphazeroCollector(ISerialCollector):
         
     def reward_shaping(self, transitions):
         reward = transitions[-1]['reward']
-        winner = transitions[-1]['obs']['to_play']
+        to_play = transitions[-1]['obs']['to_play']
         for t in transitions:
-            if t['obs']['to_play'] == winner:
+            if t['obs']['to_play'] == to_play:
                 t['reward'] = int(reward)
             else:
                 t['reward'] = int(-reward)

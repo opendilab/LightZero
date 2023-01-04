@@ -13,7 +13,7 @@ from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, Vector
 
 
 @SERIAL_EVALUATOR_REGISTRY.register('alphazero')
-class AlphazeroEvaluator(ISerialEvaluator):
+class AlphaZeroEvaluator(ISerialEvaluator):
     """
     Overview:
         Alphazero Evaluator.

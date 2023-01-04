@@ -182,12 +182,13 @@ class AlphaZeroPolicy(Policy):
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
         output = {}
+        self._policy_model = self._collect_model
         for env_id in ready_env_id:
             # print('[collect] start_player_index={}'.format(start_player_index[env_id]))
             # print('[collect] init_state=\n{}'.format(init_state[env_id]))
             envs[env_id].reset(start_player_index=start_player_index[env_id], init_state=init_state[env_id],)
             action, mcts_probs = self._collect_mcts.get_next_action(
-                envs[env_id], policy_forward_fn=self._policy_collect_value_fn, temperature=1.0, sample=True
+                envs[env_id], policy_forward_fn=self._policy_value_fn, temperature=1.0, sample=True
             )
             output[env_id] = {
                 'action': action, 
@@ -243,40 +244,22 @@ class AlphaZeroPolicy(Policy):
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
         output = {}
+        self._policy_model = self._eval_model
         for env_id in ready_env_id:
             # print('[eval] start_player_index={}'.format(start_player_index[env_id]))
             # print('[eval] init_state=\n {}'.format(init_state[env_id]))
             envs[env_id].reset(start_player_index=start_player_index[env_id], init_state=init_state[env_id],)
             action, mcts_probs = self._collect_mcts.get_next_action(
-                envs[env_id], policy_forward_fn=self._policy_eval_value_fn, temperature=1.0, sample=False
+                envs[env_id], policy_forward_fn=self._policy_value_fn, temperature=1.0, sample=False
             )
             output[env_id] = {
                 'action': action, 
                 'probs': mcts_probs,
             }
-
         return output
-
-    @torch.no_grad()
-    def _policy_collect_value_fn(self, env):
-        """
-        input: env
-        output: a list of (action, probability) tuples for each available
-        action and the score of the env state
-        """
-        legal_actions = env.legal_actions
-        current_state = env.current_state()
-        current_state = torch.from_numpy(current_state).to(device=self._device, dtype=torch.float).unsqueeze(0)
-        # TODO
-        current_state = current_state.reshape(-1, 3, self._cfg.board_size, self._cfg.board_size)
-        with torch.no_grad():
-            action_probs, value = self._collect_model.compute_prob_value(current_state)
-        action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
-        value = value.item()
-        return action_probs_dict, value
     
     @torch.no_grad()
-    def _policy_eval_value_fn(self, env):
+    def _policy_value_fn(self, env):
         """
         input: env
         output: a list of (action, probability) tuples for each available
@@ -288,7 +271,7 @@ class AlphaZeroPolicy(Policy):
         # TODO
         current_state = current_state.reshape(-1, 3, self._cfg.board_size, self._cfg.board_size)
         with torch.no_grad():
-            action_probs, value = self._eval_model.compute_prob_value(current_state)
+            action_probs, value = self._policy_model.compute_prob_value(current_state)
         action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
         value = value.item()
         return action_probs_dict, value

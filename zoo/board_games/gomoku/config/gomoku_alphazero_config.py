@@ -1,15 +1,3 @@
-import sys
-
-sys.path.append('/Users/yangzhenjie/code/jayyoung0802/LightZero/')
-# sys.path.append('/Users/puyuan/code/LightZero/')
-
-import torch
-
-if torch.cuda.is_available():
-    device = 'cuda'
-else:
-    device = 'cpu'
-
 from easydict import EasyDict
 
 board_size = 6  # default_size is 15
