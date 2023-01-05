@@ -20,6 +20,8 @@ class GomokuEnv(BaseGameEnv):
         prob_random_agent=0,
         board_size=15,
         battle_mode='one_player_mode',
+        channel_last=True,
+        agent_vs_human=False,
     )
 
     @classmethod
@@ -33,11 +35,14 @@ class GomokuEnv(BaseGameEnv):
         self.battle_mode = cfg.battle_mode
         self.board_size = cfg.board_size
         self.prob_random_agent = cfg.prob_random_agent
+        self.channel_last = cfg.channel_last
 
         self.players = [1, 2]
         self.board_markers = [str(i + 1) for i in range(self.board_size)]
         self.total_num_actions = self.board_size * self.board_size
         self.expert = GomokuExpert()
+        self._env = self
+        self.agent_vs_human = cfg.agent_vs_human
 
     @property
     def current_player(self):
@@ -71,9 +76,9 @@ class GomokuEnv(BaseGameEnv):
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
         if self.battle_mode == 'two_player_mode' or self.battle_mode == 'eval_mode':
-            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'to_play': self.current_player}
+            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': self.current_player}
         else:
-            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'to_play': None}
+            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': None}
         return obs
 
     def step(self, action):
@@ -95,7 +100,10 @@ class GomokuEnv(BaseGameEnv):
                 return timestep_player1
 
             # player 2's turn
-            expert_action = self.expert_action()
+            if self.agent_vs_human:
+                expert_action = self.human_to_action()
+            else:
+                expert_action = self.expert_action()
             # print('player 2 (expert player): ' + self.action_to_string(expert_action))  # TODO(pu): visualize
             timestep_player2 = self._player_step(expert_action)
             # self.render()  # TODO(pu): visualize
@@ -159,7 +167,7 @@ class GomokuEnv(BaseGameEnv):
 
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
-        obs = {'observation': self.current_state(), 'action_mask': action_mask, 'to_play': self.current_player}
+        obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.players.index(self.current_player), 'to_play': self.current_player}
         return BaseEnvTimestep(obs, reward, done, info)
 
     def current_state(self):
@@ -177,8 +185,13 @@ class GomokuEnv(BaseGameEnv):
         board_opponent_player = np.where(self.board == self.to_play, 1, 0)
         board_to_play = np.full((self.board_size, self.board_size), self.current_player)
         raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
-        # move channel dim to last axis to be compatible with EfficientZero
-        return np.moveaxis(raw_obs, 0, 2)
+        if self.channel_last:
+            # move channel dim to last axis to be compatible with EfficientZero
+            # (3,6,6) -> (6,6,3)
+            return np.moveaxis(raw_obs, 0, 2)
+        else:
+            # (3,6,6)
+            return raw_obs
 
     def coord_to_action(self, i, j):
         """
@@ -246,6 +259,7 @@ class GomokuEnv(BaseGameEnv):
         Returns:
             An integer from the action space.
         """
+        print(self.board)
         while True:
             try:
                 row = int(
