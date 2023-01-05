@@ -23,6 +23,7 @@ class TicTacToeEnv(BaseGameEnv):
         prob_random_agent=0,
         prob_expert_agent=0,
         battle_mode='one_player_mode',
+        agent_vs_human=False,
     )
 
     @classmethod
@@ -40,6 +41,8 @@ class TicTacToeEnv(BaseGameEnv):
         self.prob_expert_agent = cfg.prob_expert_agent
         assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
             f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
+        self._env = self
+        self.agent_vs_human = cfg.agent_vs_human
 
     @property
     def current_player(self):
@@ -78,9 +81,9 @@ class TicTacToeEnv(BaseGameEnv):
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
         if self.battle_mode == 'two_player_mode' or self.battle_mode == 'eval_mode':
-            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'to_play': self.current_player}
+            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': self.current_player}
         else:
-            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'to_play': None}
+            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': None}
         return obs
 
     def step(self, action):
@@ -128,7 +131,10 @@ class TicTacToeEnv(BaseGameEnv):
                 return timestep_player1
 
             # player 2's turn
-            expert_action = self.expert_action()
+            if self.agent_vs_human:
+                expert_action = self.human_to_action()
+            else:
+                expert_action = self.expert_action()
             # print('player 2 (computer player): ' + self.action_to_string(expert_action))
             timestep_player2 = self._player_step(expert_action)
             # the final_eval_reward is calculated from Player 1's perspective
@@ -137,6 +143,7 @@ class TicTacToeEnv(BaseGameEnv):
 
             timestep = timestep_player2
             return timestep
+        
 
     def _player_step(self, action):
         if action in self.legal_actions:
@@ -176,7 +183,7 @@ class TicTacToeEnv(BaseGameEnv):
 
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
-        obs = {'observation': self.current_state(), 'action_mask': action_mask, 'to_play': self.current_player}
+        obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.players.index(self.current_player), 'to_play': self.current_player}
         return BaseEnvTimestep(obs, reward, done, info)
 
     def current_state(self):
@@ -298,6 +305,7 @@ class TicTacToeEnv(BaseGameEnv):
         Returns:
             An integer from the action space.
         """
+        print(self.board)
         while True:
             try:
                 row = int(
