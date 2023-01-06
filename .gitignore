@@ -1401,6 +1401,7 @@ log/
 htmlcov
 *.lock
 .coverage*
+!.coveragerc
 #/test_*
 .python-version
 /name.txt
@@ -1429,3 +1430,11 @@ eval_config.py
 collect_demo_data_config.py
 !ding/**/*.py
 events.*
+/test_*
+/core/rl_utils/**/*.cpp
+/core/rl_utils/**/*.so
+/core/rl_utils/**/*.h
+!/core/rl_utils/**/lib
+!/core/rl_utils/**/lib/*.cpp
+!/core/rl_utils/**/lib/*.hpp
+!/core/rl_utils/**/lib/*.h

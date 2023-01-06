@@ -26,7 +26,7 @@ num_simulations = 50
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
 update_per_collect = 1000
 
-# debug
+# debug config
 # action_space_size = 6  # for pong
 # collector_env_num = 1
 # n_episode = 1

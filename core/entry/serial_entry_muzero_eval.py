@@ -109,8 +109,12 @@ def serial_pipeline_muzero_eval(
         # please refer to Appendix A.1 in EfficientZero for details
         collect_kwargs['temperature'] = np.array(
             [
-                visit_count_temperature(game_config.auto_temperature, game_config.fixed_temperature_value, game_config.max_training_steps, trained_steps=learner.train_iter)
-                for _ in range(game_config.collector_env_num)
+                visit_count_temperature(
+                    game_config.auto_temperature,
+                    game_config.fixed_temperature_value,
+                    game_config.max_training_steps,
+                    trained_steps=learner.train_iter
+                ) for _ in range(game_config.collector_env_num)
             ]
         )
 

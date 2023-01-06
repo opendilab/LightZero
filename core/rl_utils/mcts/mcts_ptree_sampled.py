@@ -92,7 +92,8 @@ class SampledEfficientZeroMCTSPtree(object):
                 # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
                 # simulation reaches a leaf node s_l.
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play = tree_sez.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play), self.config.continuous_action_space
+                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play),
+                    self.config.continuous_action_space
                 )
                 # obtain the search horizon for leaf nodes (not expanded)
                 # TODO(pu)
@@ -121,7 +122,6 @@ class SampledEfficientZeroMCTSPtree(object):
                 else:
                     # discrete action
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
-
 
                 # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are
                 # computed by the dynamics function
@@ -183,11 +183,13 @@ class SampledEfficientZeroMCTSPtree(object):
                     min_max_stats_lst, results, is_reset_lst, virtual_to_play
                 )
 
+
 ###########################################################
 # Sampled MuZero
 ###########################################################
 
 import core.rl_utils.mcts.ptree_sampled_muzero as tree_smz
+
 
 class SampledMuZeroMCTSPtree(object):
     config = dict(
@@ -256,7 +258,8 @@ class SampledMuZeroMCTSPtree(object):
                 # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
                 # simulation reaches a leaf node s_l.
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play = tree_smz.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play), self.config.continuous_action_space
+                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play),
+                    self.config.continuous_action_space
                 )
                 # obtain the search horizon for leaf nodes (not expanded)
                 # TODO(pu)
@@ -276,7 +279,6 @@ class SampledMuZeroMCTSPtree(object):
                     # discrete action
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
 
-
                 # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are
                 # computed by the dynamics function
 
@@ -284,20 +286,20 @@ class SampledMuZeroMCTSPtree(object):
 
                 # Inside the search tree we use the dynamics function to obtain the next hidden
                 # state given an action and the previous hidden state
-                network_output = model.recurrent_inference(
-                    hidden_states, last_actions
-                )
+                network_output = model.recurrent_inference(hidden_states, last_actions)
 
                 # TODO(pu)
                 if not model.training:
                     network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()
                     # if not in training, obtain the scalars of the value/reward
-                    network_output.value = inverse_scalar_transform(network_output.value,
-                                                                    self.config.support_size,
-                                                                    categorical_distribution=self.config.categorical_distribution
-                                                                    ).detach().cpu().numpy()
+                    network_output.value = inverse_scalar_transform(
+                        network_output.value,
+                        self.config.support_size,
+                        categorical_distribution=self.config.categorical_distribution
+                    ).detach().cpu().numpy()
                     network_output.reward = inverse_scalar_transform(
-                        network_output.reward, self.config.support_size,
+                        network_output.reward,
+                        self.config.support_size,
                         categorical_distribution=self.config.categorical_distribution
                     ).detach().cpu().numpy()
 
@@ -319,7 +321,6 @@ class SampledMuZeroMCTSPtree(object):
 
                 # backpropagation along the search path to update the attributes
                 tree_smz.batch_back_propagate(
-                    hidden_state_index_x, discount, reward_pool, value_pool, policy_logits_pool,
-                    min_max_stats_lst, results, virtual_to_play
+                    hidden_state_index_x, discount, reward_pool, value_pool, policy_logits_pool, min_max_stats_lst,
+                    results, virtual_to_play
                 )
-

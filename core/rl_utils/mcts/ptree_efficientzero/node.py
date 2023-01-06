@@ -234,6 +234,7 @@ class SearchResults:
         self.last_actions = []
         self.search_lens = []
 
+
 """if node don't have parent_value_prefix property"""
 # def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
 #     node_stack = []
@@ -274,6 +275,7 @@ class SearchResults:
 #         # if len(node_stack) >= 3:
 #         #     print('len(node_stack)>=3')
 
+
 def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play=0):
     root.parent_value_prefix = 0
     node_stack = []
@@ -298,7 +300,7 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play
                 q_of_s_a = true_reward + discount * node.value
             elif players == 2:
                 # TODO
-                q_of_s_a = true_reward + discount * - node.value
+                q_of_s_a = true_reward + discount * -node.value
 
             min_max_stats.update(q_of_s_a)
 
@@ -351,7 +353,7 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
         for i in range(path_len - 1, -1, -1):
             node = search_path[i]
             # to_play related
-            node.value_sum += bootstrap_value if node.to_play == to_play else - bootstrap_value
+            node.value_sum += bootstrap_value if node.to_play == to_play else -bootstrap_value
 
             node.visit_count += 1
 
@@ -372,13 +374,13 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
 
             # min_max_stats.update(true_reward + discount * node.value)
             # TODO(pu): why in muzero-general is - node.value
-            min_max_stats.update(true_reward + discount * - node.value)
+            min_max_stats.update(true_reward + discount * -node.value)
 
             # to_play related
             # true_reward is in the perspective of current player of node
             # bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount * bootstrap_value
             # TODO(pu): why in muzero-general is - true_reward
-            bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
+            bootstrap_value = (-true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
 
         # TODO(pu): the effect of different ways to update min_max_stats
         # min_max_stats.clear()

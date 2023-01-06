@@ -75,7 +75,6 @@ class GameHistory:
 
         self.child_actions = []
 
-
     def __len__(self):
         return len(self.action_history)
 

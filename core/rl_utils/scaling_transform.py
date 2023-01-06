@@ -57,7 +57,7 @@ def inverse_scalar_transform(logits, support_size, epsilon=0.001, categorical_di
 
     # h^(-1)(.) function
     output = torch.sign(value) * (
-            ((torch.sqrt(1 + 4 * epsilon * (torch.abs(value) + 1 + epsilon)) - 1) / (2 * epsilon)) ** 2 - 1
+        ((torch.sqrt(1 + 4 * epsilon * (torch.abs(value) + 1 + epsilon)) - 1) / (2 * epsilon)) ** 2 - 1
     )
 
     # TODO(pu): save time
@@ -120,6 +120,7 @@ def inverse_scalar_transform_old(logits, support_size, epsilon=0.001, categorica
 #
 # print('new_time:', new_time)
 # print('old_time:', old_time)
+
 
 def visit_count_temperature(auto_temperature, fixed_temperature_value, max_training_steps, trained_steps):
     if auto_temperature:

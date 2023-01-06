@@ -71,7 +71,6 @@ def serial_pipeline_efficientzero_eval(
         policy.collect_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
         policy.eval_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
 
-
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
@@ -114,8 +113,12 @@ def serial_pipeline_efficientzero_eval(
         # please refer to Appendix A.1 in EfficientZero for details
         collect_kwargs['temperature'] = np.array(
             [
-                visit_count_temperature(game_config.auto_temperature, game_config.fixed_temperature_value, game_config.max_training_steps, trained_steps=learner.train_iter * cfg.policy.learn.update_per_collect)
-                for _ in range(game_config.collector_env_num)
+                visit_count_temperature(
+                    game_config.auto_temperature,
+                    game_config.fixed_temperature_value,
+                    game_config.max_training_steps,
+                    trained_steps=learner.train_iter * cfg.policy.learn.update_per_collect
+                ) for _ in range(game_config.collector_env_num)
             ]
         )
 
@@ -137,4 +140,3 @@ def serial_pipeline_efficientzero_eval(
         #     stop, reward = evaluator.eval(
         #             learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
         #         )
-

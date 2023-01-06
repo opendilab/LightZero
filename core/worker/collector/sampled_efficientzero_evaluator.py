@@ -322,7 +322,9 @@ class SampledEfficientZeroEvaluator(ISerialEvaluator):
                         clip_reward = ori_reward / self.game_config.normalize_reward_scale
                     else:
                         clip_reward = ori_reward
-                    game_histories[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id], child_actions_dict[env_id])
+                    game_histories[env_id].store_search_stats(
+                        distributions_dict[env_id], value_dict[env_id], child_actions_dict[env_id]
+                    )
                     if two_player_game:
                         # for two_player board games
                         # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
