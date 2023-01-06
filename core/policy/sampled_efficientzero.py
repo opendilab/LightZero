@@ -228,8 +228,6 @@ class SampledEfficientZeroPolicy(Policy):
         # batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim, 1
         # e.g. 4, 6, 5, 1, 1
         child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device).unsqueeze(-1)
-
-        # child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device).unsqueeze(-1)
         mask_batch = torch.from_numpy(mask_batch).to(self._cfg.device).float()
         target_value_prefix = torch.from_numpy(target_value_prefix.astype('float64')).to(self._cfg.device).float()
         target_value = torch.from_numpy(target_value.astype('float64')).to(self._cfg.device).float()
@@ -484,6 +482,7 @@ class SampledEfficientZeroPolicy(Policy):
                 # verify the correctness of policy loss
                 # def modified_cross_entropy_loss_v2(target, prediction):
                 #     return -(target * torch.log_softmax(prediction, dim=1)).sum(1)
+                #
                 # - sum_p_dot_logq = modified_cross_entropy_loss_v2(target_normalized_visit_count_init_step, policy_logits)
                 #
                 # sum_p_dot_logp = torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) *

@@ -1,3 +1,5 @@
+from .serial_entry_alphazero import serial_pipeline_alphazero
+from .serial_entry_alphazero_eval import serial_pipeline_alphazero_eval
 from .serial_entry_muzero import serial_pipeline_muzero
 from .serial_entry_sampled_muzero import serial_pipeline_sampled_muzero
 
