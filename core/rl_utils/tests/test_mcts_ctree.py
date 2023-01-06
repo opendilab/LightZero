@@ -5,8 +5,7 @@ from easydict import EasyDict
 
 from core.rl_utils import inverse_scalar_transform, select_action
 from core.rl_utils.mcts.ctree_efficientzero import ez_tree as tree
-
-from core.rl_utils.mcts.mcts_ctree import EfficientZeroMCTSCtree as EZMCTS
+from core.rl_utils.mcts.mcts_ctree import EfficientZeroMCTSCtree as EZ_MCTS
 
 
 class MuZeroModelFake(torch.nn.Module):
@@ -23,14 +22,14 @@ class MuZeroModelFake(torch.nn.Module):
         value_prefix = [0. for _ in range(batch_size)]
         policy_logits = torch.zeros(size=(batch_size, self.action_num))
         hidden_state = torch.zeros(size=(batch_size, 12, 3, 3))
-        reward_hidden_state_state = (torch.zeros(size=(1, batch_size, 16)), torch.zeros(size=(1, batch_size, 16)))
+        reward_hidden_state_roots = (torch.zeros(size=(1, batch_size, 16)), torch.zeros(size=(1, batch_size, 16)))
 
         output = {
             'value': value,
             'value_prefix': value_prefix,
             'policy_logits': policy_logits,
             'hidden_state': hidden_state,
-            'reward_hidden_state': reward_hidden_state_state
+            'reward_hidden_state': reward_hidden_state_roots
         }
 
         return EasyDict(output)
@@ -38,7 +37,7 @@ class MuZeroModelFake(torch.nn.Module):
     def recurrent_inference(self, hidden_states, reward_hidden_states, actions):
         batch_size = hidden_states.shape[0]
         hidden_state = torch.zeros(size=(batch_size, 12, 3, 3))
-        reward_hidden_state_state = (torch.zeros(size=(1, batch_size, 16)), torch.zeros(size=(1, batch_size, 16)))
+        reward_hidden_state_roots = (torch.zeros(size=(1, batch_size, 16)), torch.zeros(size=(1, batch_size, 16)))
         value = torch.zeros(size=(batch_size, 601))
         value_prefix = torch.zeros(size=(batch_size, 601))
         policy_logits = torch.zeros(size=(batch_size, self.action_num))
@@ -48,7 +47,7 @@ class MuZeroModelFake(torch.nn.Module):
             'value_prefix': value_prefix,
             'policy_logits': policy_logits,
             'hidden_state': hidden_state,
-            'reward_hidden_state': reward_hidden_state_state
+            'reward_hidden_state': reward_hidden_state_roots
         }
 
         return EasyDict(output)
@@ -80,7 +79,7 @@ stack_obs = torch.zeros(size=(batch_size, 8), dtype=torch.float)
 network_output = model.initial_inference(stack_obs.float())
 
 hidden_state_roots = network_output['hidden_state']
-reward_hidden_state_state = network_output['reward_hidden_state']
+reward_hidden_state_roots = network_output['reward_hidden_state']
 pred_values_pool = network_output['value']
 value_prefix_pool = network_output['value_prefix']
 policy_logits_pool = network_output['policy_logits']
@@ -88,8 +87,8 @@ policy_logits_pool = network_output['policy_logits']
 # network output process
 pred_values_pool = inverse_scalar_transform(pred_values_pool, game_config.support_size).detach().cpu().numpy()
 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
-reward_hidden_state_state = (
-    reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
+reward_hidden_state_roots = (
+    reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()
 )
 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
@@ -140,17 +139,46 @@ def test_mcts_1pm_to_play():
         game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool,
         [0 for _ in range(env_nums)]
     )
-    EZMCTS(game_config
-           ).search(roots, model, hidden_state_roots, reward_hidden_state_state, [0 for _ in range(env_nums)])
+    EZ_MCTS(game_config
+            ).search(roots, model, hidden_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert np.array(roots_distributions).shape == (batch_size, action_space_size)
-    assert np.array(roots_values).shape == (batch_size, )
+    assert np.array(roots_values).shape == (batch_size,)
 
 
 @pytest.mark.unittest
-def test_mcts_1pm_to_play():
-    legal_actions_list = [[i for i in range(action_space_size)] for _ in range(env_nums)]  # all action
+def test_mcts_1pm_to_play_large():
+    game_config.obs_space_size = 100
+    game_config.action_space_size = 20
+
+    game_config.num_simulations = 500
+    game_config.batch_size = 256
+    env_nums = game_config.batch_size
+
+    model = MuZeroModelFake(action_num=game_config.action_space_size)
+    # stack_obs = torch.zeros(size=(game_config.batch_size, game_config.obs_space_size), dtype=torch.float)
+    stack_obs = torch.randn(size=(game_config.batch_size, game_config.obs_space_size), dtype=torch.float)
+
+    network_output = model.initial_inference(stack_obs.float())
+
+    hidden_state_roots = network_output['hidden_state']
+    reward_hidden_state_roots = network_output['reward_hidden_state']
+    pred_values_pool = network_output['value']
+    value_prefix_pool = network_output['value_prefix']
+    policy_logits_pool = network_output['policy_logits']
+
+    # network output process
+    pred_values_pool = inverse_scalar_transform(pred_values_pool, game_config.support_size).detach().cpu().numpy()
+    hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
+    reward_hidden_state_roots = (
+        reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()
+    )
+    policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
+
+    # all actions are legal
+    legal_actions_list = [[i for i in range(game_config.action_space_size)] for _ in range(env_nums)]
+
     roots = tree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
     noises = [
         np.random.dirichlet([game_config.root_dirichlet_alpha] * game_config.action_space_size
@@ -161,12 +189,12 @@ def test_mcts_1pm_to_play():
         game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool,
         [0 for _ in range(env_nums)]
     )
-    EZMCTS(game_config
-           ).search(roots, model, hidden_state_roots, reward_hidden_state_state, [0 for _ in range(env_nums)])
+    EZ_MCTS(game_config
+            ).search(roots, model, hidden_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
-    assert np.array(roots_distributions).shape == (batch_size, action_space_size)
-    assert np.array(roots_values).shape == (batch_size, )
+    assert np.array(roots_distributions).shape == (game_config.batch_size, game_config.action_space_size)
+    assert np.array(roots_values).shape == (game_config.batch_size,)
 
 
 @pytest.mark.unittest
@@ -185,8 +213,8 @@ def test_mcts_1pm_to_play_legal_action():
         game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool,
         [0 for _ in range(env_nums)]
     )
-    EZMCTS(game_config
-           ).search(roots, model, hidden_state_roots, reward_hidden_state_state, [0 for _ in range(env_nums)])
+    EZ_MCTS(game_config
+            ).search(roots, model, hidden_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert len(roots_values) == env_nums
@@ -216,11 +244,11 @@ def test_mcts_2pm():
     ]
     # In ctree, to_play must be list, not None
     roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
-    EZMCTS(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
+    EZ_MCTS(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert np.array(roots_distributions).shape == (batch_size, action_space_size)
-    assert np.array(roots_values).shape == (batch_size, )
+    assert np.array(roots_values).shape == (batch_size,)
 
 
 @pytest.mark.unittest
@@ -235,7 +263,7 @@ def test_mcts_2pm_legal_action():
     ]
     # In ctree, to_play must be list, not None
     roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
-    EZMCTS(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
+    EZ_MCTS(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert len(roots_values) == env_nums
@@ -253,3 +281,6 @@ def test_mcts_2pm_legal_action():
         assert action_index < action_num[i]
         assert action == legal_actions_list[i][action_index]
         print('\n action_index={}, legal_action={}, action={}'.format(action_index, legal_actions_list[i], action))
+
+# debug
+test_mcts_1pm_to_play_large()

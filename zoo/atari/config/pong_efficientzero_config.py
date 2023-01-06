@@ -43,8 +43,10 @@ pong_efficientzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         env_name='PongNoFrameskip-v4',
         stop_value=int(20),
+        render_mode_human=False,
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
+        max_episode_steps=int(1.08e5),
         # for debug
         # collect_max_episode_steps=int(100),
         # eval_max_episode_steps=int(100),

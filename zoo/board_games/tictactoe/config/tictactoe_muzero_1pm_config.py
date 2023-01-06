@@ -52,6 +52,7 @@ tictactoe_muzero_config = dict(
         # if battle_mode='two_player_mode',
         # automatically assign 'eval_mode' when eval, 'two_player_mode' when collect
         battle_mode='one_player_mode',
+        agent_vs_human=False,
         prob_random_agent=0.,
         prob_expert_agent=0.,
         max_episode_steps=int(1.08e5),
