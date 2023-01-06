@@ -1,11 +1,7 @@
-from pandas import to_pickle
-import pytest
 import torch
 from easydict import EasyDict
 import sys
-# sys.path.append('/Users/yangzhenjie/code/jayyoung0802/LightZero/')
 sys.path.append('/Users/puyuan/code/LightZero')
-
 
 from core.rl_utils import inverse_scalar_transform
 
@@ -23,7 +19,7 @@ class MuZeroModelFake(torch.nn.Module):
         value = torch.zeros(size=(batch_size, 601))
         value_prefix = [0. for _ in range(batch_size)]
         # policy_logits = torch.zeros(size=(batch_size, self.action_num))
-        policy_logits = 0.1*torch.ones(size=(batch_size, self.action_num))
+        policy_logits = 0.1 * torch.ones(size=(batch_size, self.action_num))
 
         hidden_state = torch.zeros(size=(batch_size, 12, 3, 3))
         reward_hidden_state_state = (torch.zeros(size=(1, batch_size, 16)), torch.zeros(size=(1, batch_size, 16)))
@@ -44,7 +40,7 @@ class MuZeroModelFake(torch.nn.Module):
         reward_hidden_state_state = (torch.zeros(size=(1, batch_size, 16)), torch.zeros(size=(1, batch_size, 16)))
         value = torch.zeros(size=(batch_size, 601))
         value_prefix = torch.zeros(size=(batch_size, 601))
-        policy_logits = 0.1*torch.ones(size=(batch_size, self.action_num))
+        policy_logits = 0.1 * torch.ones(size=(batch_size, self.action_num))
 
         # policy_logits = torch.zeros(size=(batch_size, self.action_num))
 
@@ -63,7 +59,7 @@ class MuZeroModelFake(torch.nn.Module):
 def test_mcts():
     import core.rl_utils.mcts.ctree_sampled_efficientzero.cytree as ctree
     import numpy as np
-    from core.rl_utils.mcts.mcts_ctree_sampled import MCTSSampledCtree as MCTS
+    from core.rl_utils.mcts.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTS
 
     game_config = EasyDict(
         dict(
@@ -88,11 +84,11 @@ def test_mcts():
     batch_size = env_nums = game_config.batch_size
     action_space_size = game_config.action_space_size
 
-    model = MuZeroModelFake(action_num=game_config.action_space_size*2)
+    model = MuZeroModelFake(action_num=game_config.action_space_size * 2)
     stack_obs = torch.zeros(
         size=(
             batch_size,
-            game_config.action_space_size*2,
+            game_config.action_space_size * 2,
         ), dtype=torch.float
     )
 

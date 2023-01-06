@@ -1,10 +1,8 @@
 from torch.distributions import Normal, Independent
 import torch
 
-
 # policy_logits = {'mu': torch.randn([1, 2]), 'sigma': abs(torch.randn([1, 2]))}
-policy_logits = {'mu': torch.randn([1, 2]), 'sigma': torch.zeros([1, 2])+1e-7}
-
+policy_logits = {'mu': torch.randn([1, 2]), 'sigma': torch.zeros([1, 2]) + 1e-7}
 
 num_of_sampled_actions = 20
 

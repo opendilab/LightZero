@@ -182,7 +182,6 @@ class EfficientZeroVisualizeMCTSPtree(object):
                 # env_root = results.search_paths[0][0]
                 env_root = roots.roots[0]
 
-
             #################################################
             # visualize related code
             #################################################

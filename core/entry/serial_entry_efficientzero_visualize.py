@@ -113,8 +113,12 @@ def serial_pipeline_efficientzero_visualize(
         # please refer to Appendix A.1 in EfficientZero for details
         collect_kwargs['temperature'] = np.array(
             [
-                visit_count_temperature(game_config.auto_temperature, game_config.fixed_temperature_value, game_config.max_training_steps, trained_steps=learner.train_iter * cfg.policy.learn.update_per_collect)
-                for _ in range(game_config.collector_env_num)
+                visit_count_temperature(
+                    game_config.auto_temperature,
+                    game_config.fixed_temperature_value,
+                    game_config.max_training_steps,
+                    trained_steps=learner.train_iter * cfg.policy.learn.update_per_collect
+                ) for _ in range(game_config.collector_env_num)
             ]
         )
 
@@ -129,7 +133,6 @@ def serial_pipeline_efficientzero_visualize(
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         break
-
 
         # # TODO(pu): save returned data collected by the collector
         # replay_buffer.push_games(new_data[0], new_data[1])

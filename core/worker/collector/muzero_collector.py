@@ -265,7 +265,6 @@ class MuZeroCollector(ISerialCollector):
         # EfficientZero bug?
         # pad_child_visits_lst = game_histories[i].child_visit_history[beg_index:end_index]
 
-
         beg_index = 0
         # self.gap_step = self.game_config.num_unroll_steps + self.game_config.td_steps
         end_index = beg_index + self.gap_step - 1
@@ -584,8 +583,9 @@ class MuZeroCollector(ISerialCollector):
                     # NOTE: put the penultimate game history in one episode into the trajectory_pool
                     # pad over 2th last game_history using the last game_history
                     if last_game_histories[env_id] is not None:
-                        self.pad_and_save_last_trajectory(i, last_game_histories, last_game_priorities, game_histories,
-                                                          dones)
+                        self.pad_and_save_last_trajectory(
+                            i, last_game_histories, last_game_priorities, game_histories, dones
+                        )
 
                     # store current block trajectory
                     priorities = self.get_priorities(i, pred_values_lst, search_values_lst)
@@ -661,7 +661,6 @@ class MuZeroCollector(ISerialCollector):
                         'gap_steps': self.gap_step
                     } for i in range(self.len_pool())
                 ]
-
                 """
                 for i in range(len(self.trajectory_pool)):
                     print(self.trajectory_pool[i][0].obs_history.__len__())

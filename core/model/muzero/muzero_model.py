@@ -104,12 +104,12 @@ class DownSample(nn.Module):
 class RepresentationNetwork(nn.Module):
 
     def __init__(
-            self,
-            observation_shape,
-            num_blocks,
-            num_channels,
-            downsample,
-            momentum=0.1,
+        self,
+        observation_shape,
+        num_blocks,
+        num_channels,
+        downsample,
+        momentum=0.1,
     ):
         """
         Overview: Representation network
@@ -190,15 +190,15 @@ class RepresentationNetwork(nn.Module):
 class DynamicsNetwork(nn.Module):
 
     def __init__(
-            self,
-            num_blocks,
-            num_channels,
-            reduced_channels_reward,
-            fc_reward_layers,
-            full_support_size,
-            block_output_size_reward,
-            momentum=0.1,
-            last_linear_layer_init_zero=False,
+        self,
+        num_blocks,
+        num_channels,
+        reduced_channels_reward,
+        fc_reward_layers,
+        full_support_size,
+        block_output_size_reward,
+        momentum=0.1,
+        last_linear_layer_init_zero=False,
     ):
         """
         Overview:
@@ -290,20 +290,20 @@ class DynamicsNetwork(nn.Module):
 class PredictionNetwork(nn.Module):
 
     def __init__(
-            self,
-            action_space_size,
-            num_blocks,
-            in_channels,
-            num_channels,
-            reduced_channels_value,
-            reduced_channels_policy,
-            fc_value_layers,
-            fc_policy_layers,
-            full_support_size,
-            block_output_size_value,
-            block_output_size_policy,
-            momentum=0.1,
-            last_linear_layer_init_zero=False,
+        self,
+        action_space_size,
+        num_blocks,
+        in_channels,
+        num_channels,
+        reduced_channels_value,
+        reduced_channels_policy,
+        fc_value_layers,
+        fc_policy_layers,
+        full_support_size,
+        block_output_size_value,
+        block_output_size_policy,
+        momentum=0.1,
+        last_linear_layer_init_zero=False,
     ):
         """Prediction network
         Parameters
@@ -396,7 +396,7 @@ class PredictionNetwork(nn.Module):
         policy = self.bn_policy(policy)
         policy = self.activation(policy)
 
-        value = value.reshape(-1,  self.block_output_size_value)
+        value = value.reshape(-1, self.block_output_size_value)
         policy = policy.reshape(-1, self.block_output_size_policy)
 
         value = self.fc_value(value)
@@ -408,30 +408,30 @@ class PredictionNetwork(nn.Module):
 class MuZeroNet(BaseNet):
 
     def __init__(
-            self,
-            observation_shape,
-            action_space_size,
-            num_blocks,
-            num_channels,
-            reduced_channels_reward,
-            reduced_channels_value,
-            reduced_channels_policy,
-            fc_reward_layers,
-            fc_value_layers,
-            fc_policy_layers,
-            reward_support_size,
-            value_support_size,
-            downsample,
-            representation_model_type: str = 'conv_res_blocks',
-            representation_model: nn.Module = None,
-            bn_mt=0.1,
-            proj_hid=256,
-            proj_out=256,
-            pred_hid=64,
-            pred_out=256,
-            last_linear_layer_init_zero=False,
-            state_norm=False,
-            categorical_distribution=True,
+        self,
+        observation_shape,
+        action_space_size,
+        num_blocks,
+        num_channels,
+        reduced_channels_reward,
+        reduced_channels_value,
+        reduced_channels_policy,
+        fc_reward_layers,
+        fc_value_layers,
+        fc_policy_layers,
+        reward_support_size,
+        value_support_size,
+        downsample,
+        representation_model_type: str = 'conv_res_blocks',
+        representation_model: nn.Module = None,
+        bn_mt=0.1,
+        proj_hid=256,
+        proj_out=256,
+        pred_hid=64,
+        pred_out=256,
+        last_linear_layer_init_zero=False,
+        state_norm=False,
+        categorical_distribution=True,
     ):
         """
         Overview:
@@ -602,7 +602,7 @@ class MuZeroNet(BaseNet):
             return next_encoded_state, reward
         else:
             next_encoded_state_normalized = renormalize(next_encoded_state)
-            return next_encoded_state_normalized,reward
+            return next_encoded_state_normalized, reward
 
     def get_params_mean(self):
         representation_mean = self.representation_network.get_param_mean()
@@ -610,4 +610,3 @@ class MuZeroNet(BaseNet):
         reward_w_dist, reward_mean = self.dynamics_network.get_reward_mean()
 
         return reward_w_dist, representation_mean, dynamic_mean, reward_mean
-

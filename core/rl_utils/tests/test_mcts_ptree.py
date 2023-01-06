@@ -8,6 +8,7 @@ import core.rl_utils.mcts.ptree as tree
 import numpy as np
 from core.rl_utils.mcts.mcts_ptree import EfficientZeroMCTSPtree as MCTS
 
+
 class MuZeroModelFake(torch.nn.Module):
 
     def __init__(self, action_num):
@@ -51,6 +52,7 @@ class MuZeroModelFake(torch.nn.Module):
         }
 
         return EasyDict(output)
+
 
 game_config = EasyDict(
     dict(
@@ -98,27 +100,31 @@ reward_hidden_state_state = (
 )
 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
-action_mask = [[0, 0, 0, 1, 0, 1, 1, 0, 0], [1, 0, 0, 1, 0, 0, 1, 0, 0], [1, 1, 0, 0, 1, 0, 1, 0, 1], [1, 0, 0, 1, 1, 1, 0, 0, 0], 
-               [0, 0, 1, 0, 0, 1, 0, 0, 1], [0, 1, 1, 0, 1, 0, 0, 0, 0], [1, 0, 1, 1, 1, 0, 0, 1, 1], [1, 1, 1, 1, 1, 0, 0, 0, 1], 
-               [0, 0, 0, 1, 0, 1, 1, 0, 0], [0, 1, 1, 0, 1, 1, 1, 1, 0], [1, 1, 1, 0, 0, 0, 1, 1, 1], [1, 1, 0, 1, 0, 1, 1, 0, 0], 
-               [0, 0, 1, 0, 0, 1, 0, 0, 0], [1, 0, 1, 1, 0, 0, 1, 1, 0], [0, 1, 0, 0, 0, 0, 0, 0, 0], [1, 0, 0, 0, 1, 1, 0, 0, 1]]
+action_mask = [
+    [0, 0, 0, 1, 0, 1, 1, 0, 0], [1, 0, 0, 1, 0, 0, 1, 0, 0], [1, 1, 0, 0, 1, 0, 1, 0, 1], [1, 0, 0, 1, 1, 1, 0, 0, 0],
+    [0, 0, 1, 0, 0, 1, 0, 0, 1], [0, 1, 1, 0, 1, 0, 0, 0, 0], [1, 0, 1, 1, 1, 0, 0, 1, 1], [1, 1, 1, 1, 1, 0, 0, 0, 1],
+    [0, 0, 0, 1, 0, 1, 1, 0, 0], [0, 1, 1, 0, 1, 1, 1, 1, 0], [1, 1, 1, 0, 0, 0, 1, 1, 1], [1, 1, 0, 1, 0, 1, 1, 0, 0],
+    [0, 0, 1, 0, 0, 1, 0, 0, 0], [1, 0, 1, 1, 0, 0, 1, 1, 0], [0, 1, 0, 0, 0, 0, 0, 0, 0], [1, 0, 0, 0, 1, 1, 0, 0, 1]
+]
 assert len(action_mask) == batch_size
 assert len(action_mask[0]) == action_space_size
 
-
-action_num = [int(np.array(action_mask[i]).sum()) for i in range(env_nums)] # [3, 3, 5, 4, 3, 3, 6, 6, 3, 6, 6, 5, 2, 5, 1, 4]
+action_num = [
+    int(np.array(action_mask[i]).sum()) for i in range(env_nums)
+]  # [3, 3, 5, 4, 3, 3, 6, 6, 3, 6, 6, 5, 2, 5, 1, 4]
 legal_actions_list = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(env_nums)]
 # legal_actions_list =
-# [[3, 5, 6], [0, 3, 6], [0, 1, 4, 6, 8], [0, 3, 4, 5], 
-# [2, 5, 8], [1, 2, 4], [0, 2, 3, 4, 7, 8], [0, 1, 2, 3, 4, 8], 
-# [3, 5, 6], [1, 2, 4, 5, 6, 7], [0, 1, 2, 6, 7, 8], [0, 1, 3, 5, 6], 
+# [[3, 5, 6], [0, 3, 6], [0, 1, 4, 6, 8], [0, 3, 4, 5],
+# [2, 5, 8], [1, 2, 4], [0, 2, 3, 4, 7, 8], [0, 1, 2, 3, 4, 8],
+# [3, 5, 6], [1, 2, 4, 5, 6, 7], [0, 1, 2, 6, 7, 8], [0, 1, 3, 5, 6],
 # [2, 5], [0, 2, 3, 6, 7], [1], [0, 4, 5, 8]]
 to_play = [2, 1, 2, 1, 1, 2, 2, 1, 1, 1, 2, 1, 2, 1, 1, 1]
 assert len(to_play) == batch_size
 
+
 @pytest.mark.unittest
 def test_mcts_1pm():
-    legal_actions_list = [[i for i in range(action_space_size)] for _ in range(env_nums)] # all action
+    legal_actions_list = [[i for i in range(action_space_size)] for _ in range(env_nums)]  # all action
     roots = tree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
     noises = [
         np.random.dirichlet([game_config.root_dirichlet_alpha] * game_config.action_space_size
@@ -131,9 +137,10 @@ def test_mcts_1pm():
     assert np.array(roots_distributions).shape == (batch_size, action_space_size)
     assert np.array(roots_values).shape == (batch_size, )
 
+
 @pytest.mark.unittest
 def test_mcts_to_play_1pm():
-    legal_actions_list = [[i for i in range(action_space_size)] for _ in range(env_nums)] # all action
+    legal_actions_list = [[i for i in range(action_space_size)] for _ in range(env_nums)]  # all action
     roots = tree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
     to_play = [0 for i in range(env_nums)]
     noises = [
@@ -146,16 +153,17 @@ def test_mcts_to_play_1pm():
     roots_values = roots.get_values()
     assert np.array(roots_distributions).shape == (batch_size, action_space_size)
     assert np.array(roots_values).shape == (batch_size, )
+
 
 @pytest.mark.unittest
 def test_mcts_legal_action_1pm():
     for i in range(env_nums):
         assert action_num[i] == len(legal_actions_list[i])
 
-    roots = tree.Roots(env_nums,  game_config.num_simulations, legal_actions_list)
+    roots = tree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
     noises = [
-        np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                            ).astype(np.float32).tolist() for j in range(env_nums)
+        np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))).astype(np.float32).tolist()
+        for j in range(env_nums)
     ]
 
     roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
@@ -176,17 +184,18 @@ def test_mcts_legal_action_1pm():
         action = np.where(np.array(action_mask[i]) == 1.0)[0][action_index]
         assert action_index < action_num[i]
         assert action == legal_actions_list[i][action_index]
-        print('\n action_index={}, legal_action={}, action={}'.format(action_index,legal_actions_list[i],action))
+        print('\n action_index={}, legal_action={}, action={}'.format(action_index, legal_actions_list[i], action))
+
 
 @pytest.mark.unittest
 def test_mcts_legal_action_to_play_1pm():
     for i in range(env_nums):
         assert action_num[i] == len(legal_actions_list[i])
 
-    roots = tree.Roots(env_nums,  game_config.num_simulations, legal_actions_list)
+    roots = tree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
     noises = [
-        np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                            ).astype(np.float32).tolist() for j in range(env_nums)
+        np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))).astype(np.float32).tolist()
+        for j in range(env_nums)
     ]
 
     to_play = [0 for i in range(env_nums)]
@@ -208,12 +217,12 @@ def test_mcts_legal_action_to_play_1pm():
         action = np.where(np.array(action_mask[i]) == 1.0)[0][action_index]
         assert action_index < action_num[i]
         assert action == legal_actions_list[i][action_index]
-        print('\n action_index={}, legal_action={}, action={}'.format(action_index,legal_actions_list[i],action))
+        print('\n action_index={}, legal_action={}, action={}'.format(action_index, legal_actions_list[i], action))
 
 
 @pytest.mark.unittest
 def test_mcts_2pm():
-    legal_actions_list = [[i for i in range(action_space_size)] for _ in range(env_nums)] # all action
+    legal_actions_list = [[i for i in range(action_space_size)] for _ in range(env_nums)]  # all action
     roots = tree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
     noises = [
         np.random.dirichlet([game_config.root_dirichlet_alpha] * game_config.action_space_size
@@ -226,15 +235,16 @@ def test_mcts_2pm():
     assert np.array(roots_distributions).shape == (batch_size, action_space_size)
     assert np.array(roots_values).shape == (batch_size, )
 
+
 @pytest.mark.unittest
 def test_mcts_legal_action_2pm():
     for i in range(env_nums):
         assert action_num[i] == len(legal_actions_list[i])
 
-    roots = tree.Roots(env_nums,  game_config.num_simulations, legal_actions_list)
+    roots = tree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
     noises = [
-        np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                            ).astype(np.float32).tolist() for j in range(env_nums)
+        np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))).astype(np.float32).tolist()
+        for j in range(env_nums)
     ]
 
     roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
@@ -255,4 +265,4 @@ def test_mcts_legal_action_2pm():
         action = np.where(np.array(action_mask[i]) == 1.0)[0][action_index]
         assert action_index < action_num[i]
         assert action == legal_actions_list[i][action_index]
-        print('\n action_index={}, legal_action={}, action={}'.format(action_index,legal_actions_list[i],action))
+        print('\n action_index={}, legal_action={}, action={}'.format(action_index, legal_actions_list[i], action))

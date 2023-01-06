@@ -17,8 +17,14 @@ class Node:
      Arguments:
      """
 
-    def __init__(self, prior: Union[list, float], legal_actions: Any = None, action_space_size=9,
-                 num_of_sampled_actions=20, continuous_action_space=False):
+    def __init__(
+        self,
+        prior: Union[list, float],
+        legal_actions: Any = None,
+        action_space_size=9,
+        num_of_sampled_actions=20,
+        continuous_action_space=False
+    ):
         # # pi, beta
         # if isinstance(prior, list):
         #     self.prior = prior[0]
@@ -47,8 +53,8 @@ class Node:
         self.hidden_state_index_y = 0
 
     def expand(
-            self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, value_prefix: float,
-            policy_logits: List[float]
+        self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, value_prefix: float,
+        policy_logits: List[float]
     ):
         """
         # to varify ctree_efficientzero
@@ -81,8 +87,8 @@ class Node:
             # policy_logits = {'mu': torch.randn([1, 2]), 'sigma': torch.zeros([1, 2]) + 1e-7}
             # (mu, sigma) = policy_logits['mu'], policy_logits['sigma']
             # (mu, sigma) = policy_logits[:,: self.action_space_size ], policy_logits[:,- self.action_space_size:]
-            (mu, sigma) = torch.tensor(policy_logits[: self.action_space_size]), torch.tensor(
-                policy_logits[- self.action_space_size:])
+            (mu, sigma) = torch.tensor(policy_logits[:self.action_space_size]
+                                       ), torch.tensor(policy_logits[-self.action_space_size:])
             self.mu = mu
             self.sigma = sigma
             dist = Independent(Normal(mu, sigma), 1)
@@ -108,7 +114,8 @@ class Node:
                     log_prob[action_index],
                     action_space_size=self.action_space_size,
                     num_of_sampled_actions=self.num_of_sampled_actions,
-                    continuous_action_space=self.continuous_action_space)
+                    continuous_action_space=self.continuous_action_space
+                )
                 self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
         else:
             if self.legal_actions is not None:
@@ -136,10 +143,13 @@ class Node:
                     prob[sampled_actions[action_index]],  # NOTE:
                     action_space_size=self.action_space_size,
                     num_of_sampled_actions=self.num_of_sampled_actions,
-                    continuous_action_space=self.continuous_action_space)
+                    continuous_action_space=self.continuous_action_space
+                )
                 self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
 
-    def add_exploration_noise_to_sample_distribution(self, exploration_fraction: float, noises: List[float], policy_logits: List[float]):
+    def add_exploration_noise_to_sample_distribution(
+        self, exploration_fraction: float, noises: List[float], policy_logits: List[float]
+    ):
         """
         Overview:
             add exploration noise to priors
@@ -173,7 +183,8 @@ class Node:
             if self.continuous_action_space:
                 # prior is log_prob
                 self.children[a].prior = np.log(
-                    np.exp(self.children[a].prior) * (1 - exploration_fraction) + n * exploration_fraction)
+                    np.exp(self.children[a].prior) * (1 - exploration_fraction) + n * exploration_fraction
+                )
             else:
                 # prior is prob
                 self.children[a].prior = self.children[a].prior * (1 - exploration_fraction) + n * exploration_fraction
@@ -264,8 +275,14 @@ class Node:
 
 class Roots:
 
-    def __init__(self, root_num: int, legal_actions_list: Any, action_space_size: int = 9,
-                 num_of_sampled_actions=20, continuous_action_space=False):
+    def __init__(
+        self,
+        root_num: int,
+        legal_actions_list: Any,
+        action_space_size: int = 9,
+        num_of_sampled_actions=20,
+        continuous_action_space=False
+    ):
         self.num = root_num
         self.root_num = root_num
         self.legal_actions_list = legal_actions_list  # list of list
@@ -280,22 +297,39 @@ class Roots:
         for i in range(self.root_num):
             if isinstance(legal_actions_list, list):
                 # TODO(pu): sampled in board_games
-                self.roots.append(Node(0, legal_actions_list[i], action_space_size=action_space_size,
-                                       num_of_sampled_actions=self.num_of_sampled_actions,
-                                       continuous_action_space=self.continuous_action_space))
+                self.roots.append(
+                    Node(
+                        0,
+                        legal_actions_list[i],
+                        action_space_size=action_space_size,
+                        num_of_sampled_actions=self.num_of_sampled_actions,
+                        continuous_action_space=self.continuous_action_space
+                    )
+                )
             elif isinstance(legal_actions_list, int):
                 # if legal_actions_list is int
                 self.roots.append(
-                    Node(0, None, action_space_size=action_space_size,
-                         num_of_sampled_actions=self.num_of_sampled_actions,
-                         continuous_action_space=self.continuous_action_space))
+                    Node(
+                        0,
+                        None,
+                        action_space_size=action_space_size,
+                        num_of_sampled_actions=self.num_of_sampled_actions,
+                        continuous_action_space=self.continuous_action_space
+                    )
+                )
                 # self.roots.append(
                 #     Node(0, np.arange(legal_actions_list), num_of_sampled_actions=self.num_of_sampled_actions, continuous_action_space=self.continuous_action_space))
             elif legal_actions_list is None:
                 # continuous action space
-                self.roots.append(Node(0, None, action_space_size=action_space_size,
-                                       num_of_sampled_actions=self.num_of_sampled_actions,
-                                       continuous_action_space=self.continuous_action_space))
+                self.roots.append(
+                    Node(
+                        0,
+                        None,
+                        action_space_size=action_space_size,
+                        num_of_sampled_actions=self.num_of_sampled_actions,
+                        continuous_action_space=self.continuous_action_space
+                    )
+                )
 
     def prepare(self, root_exploration_fraction, noises, value_prefixs, policies, to_play=None):
         for i in range(self.root_num):
@@ -391,7 +425,7 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play
             if players == 1:
                 true_reward = node.value_prefix - node.parent_value_prefix
             else:
-                # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node, 
+                # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
                 # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
                 # true_reward = node.value_prefix - (- parent_value_prefix)
                 true_reward = node.value_prefix - node.parent_value_prefix
@@ -402,7 +436,7 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play
                 q_of_s_a = true_reward + discount * node.value
             elif players == 2:
                 # TODO
-                q_of_s_a = true_reward + discount * - node.value
+                q_of_s_a = true_reward + discount * -node.value
 
             min_max_stats.update(q_of_s_a)
 
@@ -411,7 +445,7 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play
         for a in node.legal_actions:
             child = node.get_child(a)
             if child.expanded:
-                # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node, 
+                # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
                 # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
                 child.parent_value_prefix = node.value_prefix
                 node_stack.append(child)
@@ -455,7 +489,7 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
         for i in range(path_len - 1, -1, -1):
             node = search_path[i]
             # to_play related
-            node.value_sum += bootstrap_value if node.to_play == to_play else - bootstrap_value
+            node.value_sum += bootstrap_value if node.to_play == to_play else -bootstrap_value
 
             node.visit_count += 1
 
@@ -466,7 +500,7 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
                 parent_value_prefix = parent.value_prefix
                 is_reset = parent.is_reset
 
-            # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node, 
+            # NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
             # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
             # true_reward = node.value_prefix - (- parent_value_prefix)
             true_reward = node.value_prefix - parent_value_prefix
@@ -475,13 +509,13 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
 
             # min_max_stats.update(true_reward + discount * node.value)
             # TODO(pu): why in muzero-general is - node.value
-            min_max_stats.update(true_reward + discount * - node.value)
+            min_max_stats.update(true_reward + discount * -node.value)
 
             # to_play related
             # true_reward is in the perspective of current player of node
             # bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount * bootstrap_value
             # TODO(pu): why in muzero-general is - node.value
-            bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
+            bootstrap_value = (-true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
 
         # TODO(pu): the effect of different ways to update min_max_stats
         # min_max_stats.clear()
@@ -519,7 +553,13 @@ def batch_back_propagate(
 
 
 def select_child(
-        root: Node, min_max_stats, pb_c_base: int, pb_c_int: float, discount: float, mean_q: float, players: int,
+        root: Node,
+        min_max_stats,
+        pb_c_base: int,
+        pb_c_int: float,
+        discount: float,
+        mean_q: float,
+        players: int,
         continuous_action_space=False,
 ) -> int:
     ##################
@@ -560,8 +600,7 @@ def select_child(
         ##################
         # use root as input argument
         temp_score = compute_ucb_score(
-            root, child, min_max_stats, mean_q, root.is_reset, root.visit_count, root.value_prefix, pb_c_base,
-            pb_c_int,
+            root, child, min_max_stats, mean_q, root.is_reset, root.visit_count, root.value_prefix, pb_c_base, pb_c_int,
             discount, players, continuous_action_space
         )
         if max_score < temp_score:
@@ -579,18 +618,18 @@ def select_child(
 
 
 def compute_ucb_score(
-        parent: Node,
-        child: Node,
-        min_max_stats,
-        parent_mean_q,
-        is_reset: int,
-        total_children_visit_counts: float,
-        parent_value_prefix: float,
-        pb_c_base: float,
-        pb_c_init: float,
-        discount: float,
-        players=1,
-        continuous_action_space=False,
+    parent: Node,
+    child: Node,
+    min_max_stats,
+    parent_mean_q,
+    is_reset: int,
+    total_children_visit_counts: float,
+    parent_value_prefix: float,
+    pb_c_base: float,
+    pb_c_init: float,
+    discount: float,
+    players=1,
+    continuous_action_space=False,
 ):
     """
     Overview:
@@ -618,13 +657,11 @@ def compute_ucb_score(
         if continuous_action_space:
             # prior is log_prob
             prior_score = pb_c * (
-                    torch.exp(child.prior) / (sum([torch.exp(node.prior) for node in parent.children.values()]) + 1e-9)
+                torch.exp(child.prior) / (sum([torch.exp(node.prior) for node in parent.children.values()]) + 1e-9)
             )
         else:
             # prior is prob
-            prior_score = pb_c * (
-                    child.prior / (sum([node.prior for node in parent.children.values()]) + 1e-9)
-            )
+            prior_score = pb_c * (child.prior / (sum([node.prior for node in parent.children.values()]) + 1e-9))
     else:
         raise ValueError("{} is unknown prior option, choose uniform or density")
 
@@ -652,8 +689,14 @@ def compute_ucb_score(
 
 
 def batch_traverse(
-        roots, pb_c_base: int, pb_c_init: float, discount: float, min_max_stats_lst, results: SearchResults,
-        virtual_to_play, continuous_action_space=False
+    roots,
+    pb_c_base: int,
+    pb_c_init: float,
+    discount: float,
+    min_max_stats_lst,
+    results: SearchResults,
+    virtual_to_play,
+    continuous_action_space=False
 ):
     """
     Overview:
@@ -697,8 +740,10 @@ def batch_traverse(
             parent_q = mean_q
 
             # select action according to the pUCT rule
-            action = select_child(node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players,
-                                  continuous_action_space)
+            action = select_child(
+                node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players,
+                continuous_action_space
+            )
 
             if virtual_to_play is not None and virtual_to_play[i] is not None:
                 # Players play turn by turn
@@ -747,6 +792,7 @@ class Action:
 
     def __repr__(self):
         return str(self.value)
+
 
 # class Action:
 #     def __init__(self, value):

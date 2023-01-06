@@ -148,12 +148,10 @@ class EfficientZeroExertDataPolicy(Policy):
         self._target_model.reset()
         if self._cfg.use_augmentation:
             self.transforms = Transforms(
-                self._cfg.augmentation,
-                image_shape=(self._cfg.obs_shape[1], self._cfg.obs_shape[2])
+                self._cfg.augmentation, image_shape=(self._cfg.obs_shape[1], self._cfg.obs_shape[2])
             )
         self.value_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
         self.reward_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
-
 
     # @profile
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
@@ -172,7 +170,6 @@ class EfficientZeroExertDataPolicy(Policy):
         # obs_target_batch is the observations for s_t (hidden states from representation function)
 
         # to save GPU memory usage, obs_batch_ori contains (stack + unroll steps) frames
-
 
         if self._cfg.image_based:
             obs_batch_ori = torch.from_numpy(obs_batch_ori / 255.0).to(self._cfg.device).float()
@@ -209,8 +206,7 @@ class EfficientZeroExertDataPolicy(Policy):
 
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
         mask_batch = torch.from_numpy(mask_batch).to(self._cfg.device).float()
-        target_value_prefix = torch.from_numpy(target_value_prefix.astype('float64')).to(self._cfg.device
-                                                                                         ).float()
+        target_value_prefix = torch.from_numpy(target_value_prefix.astype('float64')).to(self._cfg.device).float()
         target_value = torch.from_numpy(target_value.astype('float64')).to(self._cfg.device).float()
         target_policy = torch.from_numpy(target_policy).to(self._cfg.device).float()
         weights = torch.from_numpy(weights_lst).to(self._cfg.device).float()
@@ -262,8 +258,7 @@ class EfficientZeroExertDataPolicy(Policy):
         if not self._learn_model.training:
             # if not in training, obtain the scalars of the value/reward
             scaled_value = scaled_value.detach().cpu().numpy()
-            scaled_value_prefix = inverse_scalar_transform(value_prefix,
-                                                           self._cfg.support_size).detach().cpu().numpy()
+            scaled_value_prefix = inverse_scalar_transform(value_prefix, self._cfg.support_size).detach().cpu().numpy()
             hidden_state = hidden_state.detach().cpu().numpy()
             reward_hidden_state = (
                 reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -309,8 +304,7 @@ class EfficientZeroExertDataPolicy(Policy):
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
                 value = inverse_scalar_transform(value, self._cfg.support_size).detach().cpu().numpy()
-                value_prefix = inverse_scalar_transform(value_prefix,
-                                                        self._cfg.support_size).detach().cpu().numpy()
+                value_prefix = inverse_scalar_transform(value_prefix, self._cfg.support_size).detach().cpu().numpy()
                 hidden_state = hidden_state.detach().cpu().numpy()
                 reward_hidden_state = (
                     reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -340,9 +334,7 @@ class EfficientZeroExertDataPolicy(Policy):
             # the target policy, target_value_phi, target_value_prefix_phi is calculated in game buffer now
             policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
             value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
-            value_prefix_loss += modified_cross_entropy_loss(
-                value_prefix, target_value_prefix_phi[:, step_i]
-            )
+            value_prefix_loss += modified_cross_entropy_loss(value_prefix, target_value_prefix_phi[:, step_i])
 
             # Follow MuZero, set half gradient
             # hidden_state.register_hook(lambda grad: grad * 0.5)
@@ -350,10 +342,8 @@ class EfficientZeroExertDataPolicy(Policy):
             # reset hidden states
             if (step_i + 1) % self._cfg.lstm_horizon_len == 0:
                 reward_hidden_state = (
-                    torch.zeros(1, self._cfg.batch_size,
-                                self._cfg.lstm_hidden_size).to(self._cfg.device),
-                    torch.zeros(1, self._cfg.batch_size,
-                                self._cfg.lstm_hidden_size).to(self._cfg.device)
+                    torch.zeros(1, self._cfg.batch_size, self._cfg.lstm_hidden_size).to(self._cfg.device),
+                    torch.zeros(1, self._cfg.batch_size, self._cfg.lstm_hidden_size).to(self._cfg.device)
                 )
 
             if self._cfg.vis_result:
@@ -438,8 +428,7 @@ class EfficientZeroExertDataPolicy(Policy):
                 target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 1
             )
 
-            target_value_prefix_base = target_value_prefix_cpu[:, :self._cfg.
-                                                               num_unroll_steps].reshape(-1).unsqueeze(-1)
+            target_value_prefix_base = target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1)
 
             predicted_value_prefixs = torch.stack(predicted_value_prefixs).transpose(1, 0).squeeze(-1)
             predicted_value_prefixs = predicted_value_prefixs.reshape(-1).unsqueeze(-1)
@@ -503,8 +492,12 @@ class EfficientZeroExertDataPolicy(Policy):
         # set temperature for distributions
         self.collect_temperature = np.array(
             [
-                visit_count_temperature(self._cfg.auto_temperature, self._cfg.fixed_temperature_value, self._cfg.max_training_steps, trained_steps=0)
-                for _ in range(self._cfg.collector_env_num)
+                visit_count_temperature(
+                    self._cfg.auto_temperature,
+                    self._cfg.fixed_temperature_value,
+                    self._cfg.max_training_steps,
+                    trained_steps=0
+                ) for _ in range(self._cfg.collector_env_num)
             ]
         )
 

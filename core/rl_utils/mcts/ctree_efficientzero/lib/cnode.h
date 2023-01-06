@@ -15,7 +15,6 @@
 const int DEBUG_MODE = 0;
 
 namespace tree {
-
     class CNode {
         public:
             int visit_count, to_play, hidden_state_index_x, hidden_state_index_y, best_action, is_reset;

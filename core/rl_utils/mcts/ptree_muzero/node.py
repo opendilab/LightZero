@@ -116,7 +116,6 @@ class Node:
             mean_q = (parent_q + total_unsigned_q) / (total_visits + 1)
         return mean_q
 
-
     def print_out(self):
         pass
 
@@ -217,7 +216,6 @@ class Roots:
     #         self.roots[i].add_exploration_noise(root_exploration_fraction, noises[i])
     #         self.roots[i].visit_count += 1
 
-
     def prepare_no_noise(self, rewards, policies, to_play=None):
         for i in range(self.root_num):
             if to_play is None:
@@ -288,12 +286,12 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
 
             min_max_stats.update(q_of_s_a)
 
-
         for a in node.legal_actions:
             child = node.get_child(a)
             if child.expanded:
                 # child.parent_value_prefix = node.value_prefix
                 node_stack.append(child)
+
 
 def back_propagate(search_path, min_max_stats, to_play, value: float, discount: float):
     if to_play is None or to_play == 0:
@@ -310,7 +308,6 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
             # TODO(pu): the effect of different ways to update min_max_stats
             min_max_stats.update(true_reward + discount * node.value)
 
-
             bootstrap_value = true_reward + discount * bootstrap_value
 
         # TODO(pu): the effect of different ways to update min_max_stats
@@ -324,27 +321,24 @@ def back_propagate(search_path, min_max_stats, to_play, value: float, discount: 
         for i in range(path_len - 1, -1, -1):
             node = search_path[i]
             # to_play related
-            node.value_sum += bootstrap_value if node.to_play == to_play else - bootstrap_value
+            node.value_sum += bootstrap_value if node.to_play == to_play else -bootstrap_value
 
             node.visit_count += 1
-
-
 
             # NOTE: in two player mode,
             # we should calculate the true_reward according to the perspective of current player of node
             # true_reward = node.value_prefix - (- parent_value_prefix)
             true_reward = node.reward
 
-
             # min_max_stats.update(true_reward + discount * node.value)
             # TODO(pu): why in muzero-general is - node.value
-            min_max_stats.update(true_reward + discount * - node.value)
+            min_max_stats.update(true_reward + discount * -node.value)
 
             # to_play related
             # true_reward is in the perspective of current player of node
             # bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount * bootstrap_value
             # TODO(pu): why in muzero-general is - true_reward
-            bootstrap_value = (- true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
+            bootstrap_value = (-true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
 
         # TODO(pu): the effect of different ways to update min_max_stats
         # min_max_stats.clear()
@@ -387,8 +381,7 @@ def select_child(
     for a in root.legal_actions:
         child = root.get_child(a)
         temp_score = compute_ucb_score(
-            child, min_max_stats, mean_q, root.visit_count - 1, pb_c_base, pb_c_int,
-            discount, players
+            child, min_max_stats, mean_q, root.visit_count - 1, pb_c_base, pb_c_int, discount, players
         )
         if max_score < temp_score:
             max_score = temp_score

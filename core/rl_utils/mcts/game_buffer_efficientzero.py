@@ -15,10 +15,7 @@ from ding.data.buffer import Buffer
 from ding.torch_utils.data_helper import to_ndarray
 from ding.utils import BUFFER_REGISTRY
 
-# python mcts
-import core.rl_utils.mcts.ptree_efficientzero as ptree
-# cpp mcts
-from .ctree_efficientzero import cytree as ctree
+from .ctree_efficientzero import ez_tree as ctree
 from .mcts_ctree import EfficientZeroMCTSCtree as MCTS_ctree
 from .mcts_ptree import EfficientZeroMCTSPtree as MCTS_ptree
 from .utils import prepare_observation_list, concat_output, concat_output_value
@@ -179,7 +176,7 @@ class EfficientZeroGameBuffer(Buffer):
             if ignore_insufficient:
                 logging.warning(
                     "Sample operation is ignored due to data insufficient, current buffer is {} while sample is {}".
-                        format(self.count(), size)
+                    format(self.count(), size)
                 )
             else:
                 raise ValueError("There are less than {} records/groups in buffer({})".format(size, self.count()))
@@ -701,10 +698,7 @@ class EfficientZeroGameBuffer(Buffer):
                         ]
                         to_play = [0 for i in range(batch_size)]
 
-                    legal_actions = [
-                        [i for i, x in enumerate(action_mask[j]) if x == 1]
-                        for j in range(batch_size)
-                    ]
+                    legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
                     # roots = ctree_efficientzero.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
                     roots = ctree.Roots(batch_size, self.config.num_simulations, legal_actions)
 
@@ -713,11 +707,7 @@ class EfficientZeroGameBuffer(Buffer):
                                             ).astype(np.float32).tolist() for _ in range(batch_size)
                     ]
                     roots.prepare(
-                        self.config.root_exploration_fraction,
-                        noises,
-                        value_prefix_pool,
-                        policy_logits_pool,
-                        to_play
+                        self.config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
                     )
                     # do MCTS for a new policy with the recent target model
                     MCTS_ctree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
@@ -730,10 +720,7 @@ class EfficientZeroGameBuffer(Buffer):
                         action_mask = [
                             list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                         ]
-                    legal_actions = [
-                        [i for i, x in enumerate(action_mask[j]) if x == 1]
-                        for j in range(batch_size)
-                    ]
+                    legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
                     roots = ptree_efficientzero.Roots(batch_size, self.config.num_simulations, legal_actions)
                     noises = [
                         np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -774,17 +761,23 @@ class EfficientZeroGameBuffer(Buffer):
             # get last state value
             if to_play_history[0][0] is not None:
                 # TODO(pu): board_games
-                value_lst = value_lst.reshape(-1) * np.array([self.config.discount ** td_steps_lst[i] if int(td_steps_lst[i])%2==0 else - self.config.discount ** td_steps_lst[i] for i in range(batch_size)])
+                value_lst = value_lst.reshape(-1) * np.array(
+                    [
+                        self.config.discount ** td_steps_lst[i] if int(td_steps_lst[i]) %
+                        2 == 0 else -self.config.discount ** td_steps_lst[i] for i in range(batch_size)
+                    ]
+                )
 
             else:
                 value_lst = value_lst.reshape(-1) * (
                     np.array([self.config.discount for _ in range(batch_size)]) ** td_steps_lst
-            )
+                )
             value_lst = value_lst * np.array(value_mask)
             value_lst = value_lst.tolist()
 
             horizon_id, value_index = 0, 0
-            for traj_len_non_re, reward_lst, state_index, to_play_list in zip(traj_lens, rewards_lst, state_index_lst, to_play_history):
+            for traj_len_non_re, reward_lst, state_index, to_play_list in zip(traj_lens, rewards_lst, state_index_lst,
+                                                                              to_play_history):
                 # traj_len = len(game)
                 target_values = []
                 target_value_prefixs = []
@@ -800,7 +793,7 @@ class EfficientZeroGameBuffer(Buffer):
                             if to_play_list[current_index] == to_play_list[i]:
                                 value_lst[value_index] += reward * self.config.discount ** i
                             else:
-                                value_lst[value_index] += - reward * self.config.discount ** i
+                                value_lst[value_index] += -reward * self.config.discount ** i
                         else:
                             value_lst[value_index] += reward * self.config.discount ** i
 
@@ -939,10 +932,7 @@ class EfficientZeroGameBuffer(Buffer):
                     ]
                     to_play = [0 for i in range(batch_size)]
 
-                legal_actions = [
-                    [i for i, x in enumerate(action_mask[j]) if x == 1]
-                    for j in range(batch_size)
-                ]
+                legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
                 # roots = ctree_efficientzero.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
                 roots = ctree.Roots(batch_size, self.config.num_simulations, legal_actions)
 
@@ -951,11 +941,7 @@ class EfficientZeroGameBuffer(Buffer):
                                         ).astype(np.float32).tolist() for _ in range(batch_size)
                 ]
                 roots.prepare(
-                    self.config.root_exploration_fraction,
-                    noises,
-                    value_prefix_pool,
-                    policy_logits_pool,
-                    to_play
+                    self.config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
                 )
                 # do MCTS for a new policy with the recent target model
                 MCTS_ctree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
