@@ -179,7 +179,7 @@ class SampledMuZeroGameBuffer(Buffer):
             if ignore_insufficient:
                 logging.warning(
                     "Sample operation is ignored due to data insufficient, current buffer is {} while sample is {}".
-                        format(self.count(), size)
+                    format(self.count(), size)
                 )
             else:
                 raise ValueError("There are less than {} records/groups in buffer({})".format(size, self.count()))
@@ -700,9 +700,7 @@ class SampledMuZeroGameBuffer(Buffer):
             if self.config.use_root_value:
                 # use the root values from MCTS
                 # the root values have limited improvement but require much more GPU actors;
-                _, reward_pool, policy_logits_pool, hidden_state_roots = concat_output(
-                    network_output
-                )
+                _, reward_pool, policy_logits_pool, hidden_state_roots = concat_output(network_output)
                 reward_pool = reward_pool.squeeze().tolist()
                 policy_logits_pool = policy_logits_pool.tolist()
 
@@ -717,23 +715,18 @@ class SampledMuZeroGameBuffer(Buffer):
                         # continuous action space env: all -1
                         legal_actions = [[-1 for i in range(self.config.action_space_size)] for _ in range(batch_size)]
                     else:
-                        legal_actions = [
-                            [i for i, x in enumerate(action_mask[j]) if x == 1]
-                            for j in range(batch_size)
-                        ]
+                        legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
-                    roots = ctree.Roots(batch_size, legal_actions, self.config.action_space_size,
-                                        self.config.num_of_sampled_actions, self.config.continuous_action_space)
+                    roots = ctree.Roots(
+                        batch_size, legal_actions, self.config.action_space_size, self.config.num_of_sampled_actions,
+                        self.config.continuous_action_space
+                    )
                     noises = [
                         np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.num_of_sampled_actions
                                             ).astype(np.float32).tolist() for _ in range(batch_size)
                     ]
                     roots.prepare(
-                        self.config.root_exploration_fraction,
-                        noises,
-                        reward_pool,
-                        policy_logits_pool,
-                        to_play
+                        self.config.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play
                     )
                     # do MCTS for a new policy with the recent target model
                     MCTS_ctree(self.config).search(roots, model, hidden_state_roots, to_play)
@@ -746,12 +739,10 @@ class SampledMuZeroGameBuffer(Buffer):
                         action_mask = [
                             list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                         ]
-                    legal_actions = [
-                        [i for i, x in enumerate(action_mask[j]) if x == 1]
-                        for j in range(batch_size)
-                    ]
-                    roots = ptree.Roots(batch_size, legal_actions,
-                                        num_of_sampled_actions=self.config.num_of_sampled_actions)
+                    legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
+                    roots = ptree.Roots(
+                        batch_size, legal_actions, num_of_sampled_actions=self.config.num_of_sampled_actions
+                    )
                     noises = [
                         np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(batch_size)
@@ -766,9 +757,7 @@ class SampledMuZeroGameBuffer(Buffer):
                             to_play=None
                         )
                         # do MCTS for a new policy with the recent target model
-                        MCTS_ptree(self.config).search(
-                            roots, model, hidden_state_roots, to_play=None
-                        )
+                        MCTS_ptree(self.config).search(roots, model, hidden_state_roots, to_play=None)
                     else:
                         roots.prepare(
                             self.config.root_exploration_fraction,
@@ -778,9 +767,7 @@ class SampledMuZeroGameBuffer(Buffer):
                             to_play=to_play
                         )
                         # do MCTS for a new policy with the recent target model
-                        MCTS_ptree(self.config).search(
-                            roots, model, hidden_state_roots, to_play=to_play
-                        )
+                        MCTS_ptree(self.config).search(roots, model, hidden_state_roots, to_play=to_play)
 
                 roots_values = roots.get_values()
                 value_lst = np.array(roots_values)
@@ -790,7 +777,7 @@ class SampledMuZeroGameBuffer(Buffer):
 
             # get last state value
             value_lst = value_lst.reshape(-1) * (
-                    np.array([self.config.discount for _ in range(batch_size)]) ** td_steps_lst
+                np.array([self.config.discount for _ in range(batch_size)]) ** td_steps_lst
             )
             value_lst = value_lst * np.array(value_mask)
             value_lst = value_lst.tolist()
@@ -920,9 +907,7 @@ class SampledMuZeroGameBuffer(Buffer):
 
                 network_output.append(m_output)
 
-            _, reward_pool, policy_logits_pool, hidden_state_roots = concat_output(
-                network_output
-            )
+            _, reward_pool, policy_logits_pool, hidden_state_roots = concat_output(network_output)
             reward_pool = reward_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
             if self.config.mcts_ctree:
@@ -939,23 +924,17 @@ class SampledMuZeroGameBuffer(Buffer):
                     # continuous action space env: all -1
                     legal_actions = [[-1 for i in range(self.config.action_space_size)] for _ in range(batch_size)]
                 else:
-                    legal_actions = [
-                        [i for i, x in enumerate(action_mask[j]) if x == 1]
-                        for j in range(batch_size)]
+                    legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
-                roots = ctree.Roots(batch_size, legal_actions, self.config.action_space_size,
-                                    self.config.num_of_sampled_actions, self.config.continuous_action_space)
+                roots = ctree.Roots(
+                    batch_size, legal_actions, self.config.action_space_size, self.config.num_of_sampled_actions,
+                    self.config.continuous_action_space
+                )
                 noises = [
                     np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for _ in range(batch_size)
                 ]
-                roots.prepare(
-                    self.config.root_exploration_fraction,
-                    noises,
-                    reward_pool,
-                    policy_logits_pool,
-                    to_play
-                )
+                roots.prepare(self.config.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTS_ctree(self.config).search(roots, model, hidden_state_roots, to_play)
 
@@ -971,10 +950,13 @@ class SampledMuZeroGameBuffer(Buffer):
                         # for continuous action space games
                         legal_actions = None
                         # continuous action space
-                        roots = ptree.Roots(batch_size, legal_actions,
-                                            action_space_size=self.config.action_space_size,
-                                            num_of_sampled_actions=self.config.num_of_sampled_actions,
-                                            continuous_action_space=self.config.continuous_action_space)
+                        roots = ptree.Roots(
+                            batch_size,
+                            legal_actions,
+                            action_space_size=self.config.action_space_size,
+                            num_of_sampled_actions=self.config.num_of_sampled_actions,
+                            continuous_action_space=self.config.continuous_action_space
+                        )
                         # the only difference between collect and eval is the dirichlet noise
                         # TODO(pu):  int(self.game_config.action_space_size)
                         noises = [
@@ -989,9 +971,13 @@ class SampledMuZeroGameBuffer(Buffer):
                         ]
                         legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
-                        roots = ptree.Roots(batch_size, legal_actions, action_space_size=self.config.action_space_size,
-                                            num_of_sampled_actions=self.config.num_of_sampled_actions,
-                                            continuous_action_space=self.config.continuous_action_space)
+                        roots = ptree.Roots(
+                            batch_size,
+                            legal_actions,
+                            action_space_size=self.config.action_space_size,
+                            num_of_sampled_actions=self.config.num_of_sampled_actions,
+                            continuous_action_space=self.config.continuous_action_space
+                        )
                         noises = [
                             np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                                 ).astype(np.float32).tolist() for j in range(batch_size)
@@ -999,28 +985,16 @@ class SampledMuZeroGameBuffer(Buffer):
 
                 if to_play_history[0][0] is None:
                     roots.prepare(
-                        self.config.root_exploration_fraction,
-                        noises,
-                        reward_pool,
-                        policy_logits_pool,
-                        to_play=None
+                        self.config.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play=None
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ptree(self.config).search(
-                        roots, model, hidden_state_roots, to_play=None
-                    )
+                    MCTS_ptree(self.config).search(roots, model, hidden_state_roots, to_play=None)
                 else:
                     roots.prepare(
-                        self.config.root_exploration_fraction,
-                        noises,
-                        reward_pool,
-                        policy_logits_pool,
-                        to_play=to_play
+                        self.config.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play=to_play
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ptree(self.config).search(
-                        roots, model, hidden_state_roots, to_play=to_play
-                    )
+                    MCTS_ptree(self.config).search(roots, model, hidden_state_roots, to_play=to_play)
                 roots_legal_actions_list = roots.legal_actions_list
 
             roots_distributions = roots.get_distributions()

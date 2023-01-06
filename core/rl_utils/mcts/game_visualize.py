@@ -62,7 +62,7 @@ class GameHistory:
         self.obs_history = []
         self.action_history = []
         self.leaf_node_history = []
-        self.leaf_hidden_state_history =[]
+        self.leaf_hidden_state_history = []
         self.search_path_history = []
 
         self.reward_history = []
@@ -252,7 +252,6 @@ class GameHistory:
         """
         self.obs_history = np.array(self.obs_history)
         self.action_history = np.array(self.action_history)
-
         """
         'leaf_node': results.nodes[i],  # the leaf node
         'leaf_hidden_state': leaf_hidden_states[i],  # the leaf hidden state

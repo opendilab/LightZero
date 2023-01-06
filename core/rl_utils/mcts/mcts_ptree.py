@@ -114,7 +114,6 @@ class EfficientZeroMCTSPtree(object):
                 # only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
 
-
                 # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are
                 # computed by the dynamics function
 
@@ -134,14 +133,15 @@ class EfficientZeroMCTSPtree(object):
                         network_output.reward_hidden_state[1].detach().cpu().numpy()
                     )
                     # if not in training, obtain the scalars of the value/reward
-                    network_output.value = inverse_scalar_transform(network_output.value,
-                                                                    self.config.support_size,
-                                                                    categorical_distribution=self.config.categorical_distribution
-                                                                    ).detach().cpu().numpy()
-                    network_output.value_prefix = inverse_scalar_transform(
-                        network_output.value_prefix, self.config.support_size,
+                    network_output.value = inverse_scalar_transform(
+                        network_output.value,
+                        self.config.support_size,
                         categorical_distribution=self.config.categorical_distribution
-
+                    ).detach().cpu().numpy()
+                    network_output.value_prefix = inverse_scalar_transform(
+                        network_output.value_prefix,
+                        self.config.support_size,
+                        categorical_distribution=self.config.categorical_distribution
                     ).detach().cpu().numpy()
 
                     network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()
@@ -274,20 +274,20 @@ class MuZeroMCTSPtree(object):
 
                 # Inside the search tree we use the dynamics function to obtain the next hidden
                 # state given an action and the previous hidden state
-                network_output = model.recurrent_inference(
-                    hidden_states, last_actions
-                )
+                network_output = model.recurrent_inference(hidden_states, last_actions)
 
                 # TODO(pu)
                 if not model.training:
                     network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()
                     # if not in training, obtain the scalars of the value/reward
-                    network_output.value = inverse_scalar_transform(network_output.value,
-                                                                    self.config.support_size,
-                                                                    categorical_distribution=self.config.categorical_distribution
-                                                                    ).detach().cpu().numpy()
+                    network_output.value = inverse_scalar_transform(
+                        network_output.value,
+                        self.config.support_size,
+                        categorical_distribution=self.config.categorical_distribution
+                    ).detach().cpu().numpy()
                     network_output.reward = inverse_scalar_transform(
-                        network_output.reward, self.config.support_size,
+                        network_output.reward,
+                        self.config.support_size,
                         categorical_distribution=self.config.categorical_distribution
                     ).detach().cpu().numpy()
 
@@ -309,7 +309,6 @@ class MuZeroMCTSPtree(object):
 
                 # backpropagation along the search path to update the attributes
                 tree_muzero.batch_back_propagate(
-                    hidden_state_index_x, discount, reward_pool, value_pool, policy_logits_pool,
-                    min_max_stats_lst, results, virtual_to_play
+                    hidden_state_index_x, discount, reward_pool, value_pool, policy_logits_pool, min_max_stats_lst,
+                    results, virtual_to_play
                 )
-

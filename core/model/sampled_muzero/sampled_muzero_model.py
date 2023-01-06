@@ -105,13 +105,13 @@ class DownSample(nn.Module):
 class RepresentationNetwork(nn.Module):
 
     def __init__(
-            self,
-            observation_shape,
-            num_blocks,
-            num_channels,
-            downsample,
-            momentum=0.1,
-            norm_type='BN',
+        self,
+        observation_shape,
+        num_blocks,
+        num_channels,
+        downsample,
+        momentum=0.1,
+        norm_type='BN',
     ):
         """
         Overview: Representation network
@@ -163,17 +163,17 @@ class RepresentationNetwork(nn.Module):
 class DynamicsNetwork(nn.Module):
 
     def __init__(
-            self,
-            num_blocks,
-            num_channels,
-            action_space_size,
-            reduced_channels_reward,
-            fc_reward_layers,
-            full_support_size,
-            block_output_size_reward,
-            momentum=0.1,
-            last_linear_layer_init_zero=False,
-            norm_type='BN',
+        self,
+        num_blocks,
+        num_channels,
+        action_space_size,
+        reduced_channels_reward,
+        fc_reward_layers,
+        full_support_size,
+        block_output_size_reward,
+        momentum=0.1,
+        last_linear_layer_init_zero=False,
+        norm_type='BN',
     ):
         """
         Overview:
@@ -268,24 +268,24 @@ class DynamicsNetwork(nn.Module):
 class PredictionNetwork(nn.Module):
 
     def __init__(
-            self,
-            action_space_size,
-            num_blocks,
-            in_channels,
-            num_channels,
-            reduced_channels_value,
-            reduced_channels_policy,
-            fc_value_layers,
-            fc_policy_layers,
-            full_support_size,
-            block_output_size_value,
-            block_output_size_policy,
-            momentum=0.1,
-            last_linear_layer_init_zero=False,
-            sigma_type='fixed',
-            fixed_sigma_value=0.3,
-            bound_type=None,
-            norm_type='BN',
+        self,
+        action_space_size,
+        num_blocks,
+        in_channels,
+        num_channels,
+        reduced_channels_value,
+        reduced_channels_policy,
+        fc_value_layers,
+        fc_policy_layers,
+        full_support_size,
+        block_output_size_value,
+        block_output_size_policy,
+        momentum=0.1,
+        last_linear_layer_init_zero=False,
+        sigma_type='fixed',
+        fixed_sigma_value=0.3,
+        bound_type=None,
+        norm_type='BN',
     ):
         """Prediction network
         Parameters
@@ -401,7 +401,7 @@ class PredictionNetwork(nn.Module):
         policy = self.bn_policy(policy)
         policy = self.activation(policy)
 
-        value = value.reshape(-1,  self.block_output_size_value)
+        value = value.reshape(-1, self.block_output_size_value)
         policy = policy.reshape(-1, self.block_output_size_policy)
 
         value = self.fc_value(value)
@@ -426,36 +426,36 @@ class PredictionNetwork(nn.Module):
 class SampledMuZeroNet(BaseNet):
 
     def __init__(
-            self,
-            observation_shape,
-            action_space_size,
-            num_of_sampled_actions,
-            continuous_action_space,
-            num_blocks,
-            num_channels,
-            reduced_channels_reward,
-            reduced_channels_value,
-            reduced_channels_policy,
-            fc_reward_layers,
-            fc_value_layers,
-            fc_policy_layers,
-            reward_support_size,
-            value_support_size,
-            downsample,
-            representation_model_type: str = 'conv_res_blocks',
-            representation_model: nn.Module = None,
-            bn_mt=0.1,
-            proj_hid=256,
-            proj_out=256,
-            pred_hid=64,
-            pred_out=256,
-            last_linear_layer_init_zero=False,
-            state_norm=False,
-            categorical_distribution=True,
-            sigma_type='fixed',
-            fixed_sigma_value=0.3,
-            bound_type=None,
-            norm_type='BN',
+        self,
+        observation_shape,
+        action_space_size,
+        num_of_sampled_actions,
+        continuous_action_space,
+        num_blocks,
+        num_channels,
+        reduced_channels_reward,
+        reduced_channels_value,
+        reduced_channels_policy,
+        fc_reward_layers,
+        fc_value_layers,
+        fc_policy_layers,
+        reward_support_size,
+        value_support_size,
+        downsample,
+        representation_model_type: str = 'conv_res_blocks',
+        representation_model: nn.Module = None,
+        bn_mt=0.1,
+        proj_hid=256,
+        proj_out=256,
+        pred_hid=64,
+        pred_out=256,
+        last_linear_layer_init_zero=False,
+        state_norm=False,
+        categorical_distribution=True,
+        sigma_type='fixed',
+        fixed_sigma_value=0.3,
+        bound_type=None,
+        norm_type='BN',
     ):
         """
         Overview:
@@ -650,7 +650,7 @@ class SampledMuZeroNet(BaseNet):
             action_one_hot = (action[:, 0, None, None] * action_one_hot / self.action_space_size)
 
             state_action_encoding = torch.cat((encoded_state, action_one_hot), dim=1)
-        else:             # continuous action space
+        else:  # continuous action space
             action_one_hot = (
                 torch.ones((
                     encoded_state.shape[0],
@@ -659,7 +659,6 @@ class SampledMuZeroNet(BaseNet):
                     encoded_state.shape[3],
                 )).to(action.device).float()
             )
-
 
             if len(action.shape) == 2:
                 # (batch_size, action_dim) -> (batch_size, action_dim, 1)
@@ -672,7 +671,8 @@ class SampledMuZeroNet(BaseNet):
             # action_embedding: 8,2,8,1
             try:
                 action_embedding = torch.cat(
-                    [action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_size)], dim=1)
+                    [action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_size)], dim=1
+                )
                 # action_embedding = torch.cat([action[:, 0, None, None] * action_one_hot, action[:, 1, None, None] * action_one_hot], dim=1)
             except Exception as error:
                 print(error)
@@ -684,7 +684,7 @@ class SampledMuZeroNet(BaseNet):
             return next_encoded_state, reward
         else:
             next_encoded_state_normalized = renormalize(next_encoded_state)
-            return next_encoded_state_normalized,reward
+            return next_encoded_state_normalized, reward
 
     def get_params_mean(self):
         representation_mean = self.representation_network.get_param_mean()
@@ -692,4 +692,3 @@ class SampledMuZeroNet(BaseNet):
         reward_w_dist, reward_mean = self.dynamics_network.get_reward_mean()
 
         return reward_w_dist, representation_mean, dynamic_mean, reward_mean
-

@@ -33,11 +33,7 @@ class DownSample(nn.Module):
         self.resblocks1 = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=out_channels // 2,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
+                    in_channels=out_channels // 2, activation=activation, norm_type='BN', res_type='basic', bias=False
                 ) for _ in range(1)
             ]
         )
@@ -59,25 +55,15 @@ class DownSample(nn.Module):
         )
         self.resblocks2 = nn.ModuleList(
             [
-                ResBlock(
-                    in_channels=out_channels,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(1)
+                ResBlock(in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                for _ in range(1)
             ]
         )
         self.pooling1 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
         self.resblocks3 = nn.ModuleList(
             [
-                ResBlock(
-                    in_channels=out_channels,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(1)
+                ResBlock(in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                for _ in range(1)
             ]
         )
         self.pooling2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
@@ -104,13 +90,13 @@ class DownSample(nn.Module):
 class RepresentationNetwork(nn.Module):
 
     def __init__(
-            self,
-            observation_shape,
-            num_blocks,
-            num_channels,
-            downsample,
-            momentum=0.1,
-            activation=nn.ReLU(inplace=True),
+        self,
+        observation_shape,
+        num_blocks,
+        num_channels,
+        downsample,
+        momentum=0.1,
+        activation=nn.ReLU(inplace=True),
     ):
         """
         Overview: Representation network
@@ -133,13 +119,8 @@ class RepresentationNetwork(nn.Module):
             self.bn = nn.BatchNorm2d(num_channels, momentum=momentum)
         self.resblocks = nn.ModuleList(
             [
-                ResBlock(
-                    in_channels=num_channels,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(num_blocks)
+                ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                for _ in range(num_blocks)
             ]
         )
         self.activation = activation
@@ -161,17 +142,17 @@ class RepresentationNetwork(nn.Module):
 class DynamicsNetwork(nn.Module):
 
     def __init__(
-            self,
-            num_blocks,
-            num_channels,
-            reduced_channels_reward,
-            fc_reward_layers,
-            full_support_size,
-            block_output_size_reward,
-            lstm_hidden_size=64,
-            momentum=0.1,
-            last_linear_layer_init_zero=False,
-            activation=nn.ReLU(inplace=True),
+        self,
+        num_blocks,
+        num_channels,
+        reduced_channels_reward,
+        fc_reward_layers,
+        full_support_size,
+        block_output_size_reward,
+        lstm_hidden_size=64,
+        momentum=0.1,
+        last_linear_layer_init_zero=False,
+        activation=nn.ReLU(inplace=True),
     ):
         """
         Overview:
@@ -194,11 +175,7 @@ class DynamicsNetwork(nn.Module):
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - 1,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
+                    in_channels=num_channels - 1, activation=activation, norm_type='BN', res_type='basic', bias=False
                 ) for _ in range(num_blocks)
             ]
         )
@@ -206,11 +183,7 @@ class DynamicsNetwork(nn.Module):
         self.reward_resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - 1,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
+                    in_channels=num_channels - 1, activation=activation, norm_type='BN', res_type='basic', bias=False
                 ) for _ in range(num_blocks)
             ]
         )
@@ -288,21 +261,21 @@ class DynamicsNetwork(nn.Module):
 class PredictionNetwork(nn.Module):
 
     def __init__(
-            self,
-            action_space_size,
-            num_blocks,
-            in_channels,
-            num_channels,
-            reduced_channels_value,
-            reduced_channels_policy,
-            fc_value_layers,
-            fc_policy_layers,
-            full_support_size,
-            block_output_size_value,
-            block_output_size_policy,
-            momentum=0.1,
-            last_linear_layer_init_zero=False,
-            activation=nn.ReLU(inplace=True),
+        self,
+        action_space_size,
+        num_blocks,
+        in_channels,
+        num_channels,
+        reduced_channels_value,
+        reduced_channels_policy,
+        fc_value_layers,
+        fc_policy_layers,
+        full_support_size,
+        block_output_size_value,
+        block_output_size_policy,
+        momentum=0.1,
+        last_linear_layer_init_zero=False,
+        activation=nn.ReLU(inplace=True),
     ):
         """Prediction network
         Parameters
@@ -339,13 +312,8 @@ class PredictionNetwork(nn.Module):
 
         self.resblocks = nn.ModuleList(
             [
-                ResBlock(
-                    in_channels=num_channels,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(num_blocks)
+                ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                for _ in range(num_blocks)
             ]
         )
 
@@ -396,7 +364,7 @@ class PredictionNetwork(nn.Module):
         policy = self.bn_policy(policy)
         policy = self.activation(policy)
 
-        value = value.reshape(-1,  self.block_output_size_value)
+        value = value.reshape(-1, self.block_output_size_value)
         policy = policy.reshape(-1, self.block_output_size_policy)
 
         value = self.fc_value(value)
@@ -408,32 +376,32 @@ class PredictionNetwork(nn.Module):
 class EfficientZeroNet(BaseNet):
 
     def __init__(
-            self,
-            observation_shape,
-            action_space_size,
-            num_blocks,
-            num_channels,
-            reduced_channels_reward,
-            reduced_channels_value,
-            reduced_channels_policy,
-            fc_reward_layers,
-            fc_value_layers,
-            fc_policy_layers,
-            reward_support_size,
-            value_support_size,
-            downsample,
-            representation_model_type: str = 'conv_res_blocks',
-            representation_model: nn.Module = None,
-            lstm_hidden_size=512,
-            bn_mt=0.1,
-            proj_hid=256,
-            proj_out=256,
-            pred_hid=64,
-            pred_out=256,
-            last_linear_layer_init_zero=False,
-            state_norm=False,
-            categorical_distribution=True,
-            activation=nn.ReLU(inplace=True),
+        self,
+        observation_shape,
+        action_space_size,
+        num_blocks,
+        num_channels,
+        reduced_channels_reward,
+        reduced_channels_value,
+        reduced_channels_policy,
+        fc_reward_layers,
+        fc_value_layers,
+        fc_policy_layers,
+        reward_support_size,
+        value_support_size,
+        downsample,
+        representation_model_type: str = 'conv_res_blocks',
+        representation_model: nn.Module = None,
+        lstm_hidden_size=512,
+        bn_mt=0.1,
+        proj_hid=256,
+        proj_out=256,
+        pred_hid=64,
+        pred_out=256,
+        last_linear_layer_init_zero=False,
+        state_norm=False,
+        categorical_distribution=True,
+        activation=nn.ReLU(inplace=True),
     ):
         """
         Overview:
@@ -585,7 +553,7 @@ class EfficientZeroNet(BaseNet):
                 # observation_shape=(12, 96, 96),  # stack=4
                 # 3 * 96/16 * 96/16 = 3*6*6 = 108
                 self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
-                                                                 ) * math.ceil(observation_shape[2] / 16)
+                                                                     ) * math.ceil(observation_shape[2] / 16)
             else:
                 self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 

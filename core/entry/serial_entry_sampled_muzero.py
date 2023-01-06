@@ -112,9 +112,12 @@ def serial_pipeline_sampled_muzero(
         # please refer to Appendix A.1 in Sampled EfficientZero for details
         collect_kwargs['temperature'] = np.array(
             [
-                visit_count_temperature(game_config.auto_temperature, game_config.fixed_temperature_value,
-                                        game_config.max_training_steps, trained_steps=learner.train_iter*cfg.policy.learn.update_per_collect)
-                for _ in range(game_config.collector_env_num)
+                visit_count_temperature(
+                    game_config.auto_temperature,
+                    game_config.fixed_temperature_value,
+                    game_config.max_training_steps,
+                    trained_steps=learner.train_iter * cfg.policy.learn.update_per_collect
+                ) for _ in range(game_config.collector_env_num)
             ]
         )
 
@@ -144,13 +147,13 @@ def serial_pipeline_sampled_muzero(
                 train_data = replay_buffer.sample_train_data(learner.policy.get_attribute('batch_size'), policy)
             else:
                 logging.warning(
-                        f'The data in replay_buffer is not sufficient to sample a minibatch: '
-                        f'batch_size: {replay_buffer.get_batch_size()},'
-                        f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
-                        f'num of game historys: {replay_buffer.get_num_of_game_histories()}, '
-                        f'number of transitions: {replay_buffer.get_num_of_transitions()}, '
-                        f'continue to collect now ....'
-                    )
+                    f'The data in replay_buffer is not sufficient to sample a minibatch: '
+                    f'batch_size: {replay_buffer.get_batch_size()},'
+                    f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
+                    f'num of game historys: {replay_buffer.get_num_of_game_histories()}, '
+                    f'number of transitions: {replay_buffer.get_num_of_transitions()}, '
+                    f'continue to collect now ....'
+                )
                 break
 
             learner.train(train_data, collector.envstep)

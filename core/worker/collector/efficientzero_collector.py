@@ -592,7 +592,9 @@ class EfficientZeroCollector(ISerialCollector):
                     # NOTE: put the penultimate game history in one episode into the trajectory_pool
                     # pad over 2th last game_history using the last game_history
                     if last_game_histories[env_id] is not None:
-                        self.pad_and_save_last_trajectory(i, last_game_histories, last_game_priorities, game_histories, dones)
+                        self.pad_and_save_last_trajectory(
+                            i, last_game_histories, last_game_priorities, game_histories, dones
+                        )
 
                     # store current block trajectory
                     priorities = self.get_priorities(i, pred_values_lst, search_values_lst)
@@ -668,7 +670,6 @@ class EfficientZeroCollector(ISerialCollector):
                         'gap_steps': self.gap_step
                     } for i in range(self.len_pool())
                 ]
-
                 """
                 for i in range(len(self.trajectory_pool)):
                     print(self.trajectory_pool[i][0].obs_history.__len__())
@@ -678,7 +679,6 @@ class EfficientZeroCollector(ISerialCollector):
                     print(return_data[0][i].reward_history)
     
                 """
-
 
                 # save the game histories and clear the pool
                 # self.trajectory_pool: list of (game_history, priority)

@@ -499,7 +499,9 @@ class SampledEfficientZeroCollector(ISerialCollector):
                         clip_reward = ori_reward / self.game_config.normalize_reward_scale
                     else:
                         clip_reward = ori_reward
-                    game_histories[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id], child_actions_dict[env_id])
+                    game_histories[env_id].store_search_stats(
+                        distributions_dict[env_id], value_dict[env_id], child_actions_dict[env_id]
+                    )
                     if two_player_game:
                         # for two_player board games
                         # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
@@ -586,7 +588,9 @@ class SampledEfficientZeroCollector(ISerialCollector):
                     # NOTE: put the penultimate game history in one episode into the trajectory_pool
                     # pad over 2th last game_history using the last game_history
                     if last_game_histories[env_id] is not None:
-                        self.pad_and_save_last_trajectory(i, last_game_histories, last_game_priorities, game_histories, dones)
+                        self.pad_and_save_last_trajectory(
+                            i, last_game_histories, last_game_priorities, game_histories, dones
+                        )
 
                     # store current block trajectory
                     priorities = self.get_priorities(i, pred_values_lst, search_values_lst)
@@ -662,7 +666,6 @@ class SampledEfficientZeroCollector(ISerialCollector):
                         'gap_steps': self.gap_step
                     } for i in range(self.len_pool())
                 ]
-
                 """
                 for i in range(len(self.trajectory_pool)):
                     print(self.trajectory_pool[i][0].obs_history.__len__())
@@ -672,7 +675,6 @@ class SampledEfficientZeroCollector(ISerialCollector):
                     print(return_data[0][i].reward_history)
     
                 """
-
 
                 # save the game histories and clear the pool
                 # self.trajectory_pool: list of (game_history, priority)

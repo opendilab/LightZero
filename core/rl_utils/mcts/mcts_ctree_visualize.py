@@ -15,6 +15,7 @@ from ..scaling_transform import inverse_scalar_transform
 # EfficientZero
 ###########################################################
 
+
 class EfficientZeroVisualizeMCTSCtree(object):
     config = dict(
         device='cpu',
@@ -105,12 +106,14 @@ class EfficientZeroVisualizeMCTSCtree(object):
                 # TODO(pu)
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    network_output.value = inverse_scalar_transform(network_output.value,
-                                                                    self.config.support_size,
-                                                                    categorical_distribution=self.config.categorical_distribution
-                                                                    ).detach().cpu().numpy()
+                    network_output.value = inverse_scalar_transform(
+                        network_output.value,
+                        self.config.support_size,
+                        categorical_distribution=self.config.categorical_distribution
+                    ).detach().cpu().numpy()
                     network_output.value_prefix = inverse_scalar_transform(
-                        network_output.value_prefix, self.config.support_size,
+                        network_output.value_prefix,
+                        self.config.support_size,
                         categorical_distribution=self.config.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()
@@ -257,12 +260,14 @@ class MuZeroVisualizeMCTSCtree(object):
                 # TODO(pu)
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    network_output.value = inverse_scalar_transform(network_output.value,
-                                                                    self.config.support_size,
-                                                                    categorical_distribution=self.config.categorical_distribution
-                                                                    ).detach().cpu().numpy()
+                    network_output.value = inverse_scalar_transform(
+                        network_output.value,
+                        self.config.support_size,
+                        categorical_distribution=self.config.categorical_distribution
+                    ).detach().cpu().numpy()
                     network_output.reward = inverse_scalar_transform(
-                        network_output.reward, self.config.support_size,
+                        network_output.reward,
+                        self.config.support_size,
                         categorical_distribution=self.config.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()
@@ -295,6 +300,6 @@ class MuZeroVisualizeMCTSCtree(object):
 
                 # backpropagation along the search path to update the attributes
                 tree_muzero.batch_back_propagate(
-                    hidden_state_index_x, discount, reward_pool, value_pool, policy_logits_pool,
-                    min_max_stats_lst, results, is_reset_lst, virtual_to_play_batch
+                    hidden_state_index_x, discount, reward_pool, value_pool, policy_logits_pool, min_max_stats_lst,
+                    results, is_reset_lst, virtual_to_play_batch
                 )

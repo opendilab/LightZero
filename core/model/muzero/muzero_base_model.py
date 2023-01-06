@@ -54,11 +54,14 @@ class BaseNet(nn.Module):
         num = obs.size(0)
         hidden_state = self.representation(obs)
         policy_logits, value = self.prediction(hidden_state)
-        return NetworkOutput(value, [0. for _ in range(num)], policy_logits, hidden_state, )
+        return NetworkOutput(
+            value,
+            [0. for _ in range(num)],
+            policy_logits,
+            hidden_state,
+        )
 
-    def recurrent_inference(
-            self, hidden_state: torch.Tensor, action: torch.Tensor
-    ) -> NetworkOutput:
+    def recurrent_inference(self, hidden_state: torch.Tensor, action: torch.Tensor) -> NetworkOutput:
         hidden_state, reward = self.dynamics(hidden_state, action)
         policy_logits, value = self.prediction(hidden_state)
         return NetworkOutput(value, reward, policy_logits, hidden_state)

@@ -11,7 +11,6 @@ from ..scaling_transform import inverse_scalar_transform
 
 from core.rl_utils.mcts.ctree_sampled_efficientzero import ezs_tree as tree_efficientzero
 
-
 ###########################################################
 # Sampled EfficientZero
 ###########################################################
@@ -83,7 +82,8 @@ class SampledEfficientZeroMCTSCtree(object):
                 # hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool
                 # the hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play_batch),self.config.continuous_action_space
+                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play_batch),
+                    self.config.continuous_action_space
                 )
                 # obtain the search horizon for leaf nodes
                 search_lens = results.get_search_len()
@@ -105,7 +105,6 @@ class SampledEfficientZeroMCTSCtree(object):
                 else:
                     # discrete action
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
-
 
                 # evaluation for leaf nodes
                 network_output = model.recurrent_inference(
@@ -222,7 +221,8 @@ class SampledMuZeroMCTSCtree(object):
                 # hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool
                 # the hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play_batch), self.config.continuous_action_space
+                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play_batch),
+                    self.config.continuous_action_space
                 )
                 # obtain the search horizon for leaf nodes
                 search_lens = results.get_search_len()
@@ -246,12 +246,14 @@ class SampledMuZeroMCTSCtree(object):
                 # TODO(pu)
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    network_output.value = inverse_scalar_transform(network_output.value,
-                                                                    self.config.support_size,
-                                                                    categorical_distribution=self.config.categorical_distribution
-                                                                    ).detach().cpu().numpy()
+                    network_output.value = inverse_scalar_transform(
+                        network_output.value,
+                        self.config.support_size,
+                        categorical_distribution=self.config.categorical_distribution
+                    ).detach().cpu().numpy()
                     network_output.reward = inverse_scalar_transform(
-                        network_output.reward, self.config.support_size,
+                        network_output.reward,
+                        self.config.support_size,
                         categorical_distribution=self.config.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()
@@ -267,6 +269,6 @@ class SampledMuZeroMCTSCtree(object):
 
                 # backpropagation along the search path to update the attributes
                 tree_muzero.batch_back_propagate(
-                    hidden_state_index_x, discount, reward_pool, value_pool, policy_logits_pool,
-                    min_max_stats_lst, results, virtual_to_play_batch
+                    hidden_state_index_x, discount, reward_pool, value_pool, policy_logits_pool, min_max_stats_lst,
+                    results, virtual_to_play_batch
                 )

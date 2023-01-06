@@ -5,7 +5,6 @@ import sys
 sys.path.append('/mnt/nfs/puyuan/LightZero')
 # sys.path.append('/mnt/lustre/puyuan/LightZero')
 
-
 import torch
 from easydict import EasyDict
 
@@ -13,7 +12,6 @@ if torch.cuda.is_available():
     device = 'cuda'
 else:
     device = 'cpu'
-
 
 
 # obs_shape = (12, 96, 96)  # if frame_stack_num=4, image_channel=3, gray_scale=False
@@ -89,8 +87,8 @@ mspacman_sampled_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        # model_path=None,
-        model_path='/Users/puyuan/code/LightZero/data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc200_k5_ns50_ic1_pelc0_normprob_221214_114652/ckpt/ckpt_best.pth.tar',
+        model_path=None,
+        # model_path='/Users/puyuan/code/LightZero/data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc200_k5_ns50_ic1_pelc0_normprob_221214_114652/ckpt/ckpt_best.pth.tar',
         env_name='MsPacmanNoFrameskip-v4',
         # Whether to use cuda for network.
         cuda=True,
