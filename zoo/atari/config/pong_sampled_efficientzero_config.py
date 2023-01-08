@@ -1,11 +1,3 @@
-import sys
-
-# sys.path.append('/Users/puyuan/code/LightZero')
-# sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
-# sys.path.append('/mnt/lustre/puyuan/LightZero')
-
-
 import torch
 from easydict import EasyDict
 
@@ -24,8 +16,8 @@ gray_scale = False
 # gray_scale = True
 
 action_space_size = 6  # for pong
-K = 3
-# K = 6
+# K = 3
+K = 6
 
 num_simulations = 50
 collector_env_num = 8
@@ -43,8 +35,6 @@ normalize_prob_of_sampled_actions = False
 
 
 # debug config 1
-# action_space_size = 9  # for pong
-# K = 9
 # num_simulations = 20
 # collector_env_num = 1
 # n_episode = 1
@@ -52,12 +42,11 @@ normalize_prob_of_sampled_actions = False
 # batch_size = 5
 # update_per_collect = 10
 # policy_entropy_loss_coeff = 0
-# normalize_prob_of_sampled_actions = True
+# normalize_prob_of_sampled_actions = False
+# # normalize_prob_of_sampled_actions = True
 
 
 # debug config 2
-# action_space_size = 9
-# K = 5
 # num_simulations = 10
 # collector_env_num = 1
 # n_episode = 1
@@ -68,7 +57,7 @@ normalize_prob_of_sampled_actions = False
 # normalize_prob_of_sampled_actions = False
 
 pong_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_mis256_fake',
+    exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_mis256_rr05',
     # exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_normprob',
     env=dict(
         collector_env_num=collector_env_num,
@@ -136,11 +125,11 @@ pong_sampled_efficientzero_config = dict(
             target_update_freq=100,
             batch_size=batch_size,
 
-            # for atari same as in muzero
+            # for atari same as in MuZero
             optim_type='SGD',
             learning_rate=0.2,  # lr_manually:0.2->0.02->0.002
 
-            # sampled paper
+            # Sampled MuZero paper config
             # optim_type='Adam',
             # # cos_lr_scheduler=True,
             # cos_lr_scheduler=False,
@@ -208,7 +197,11 @@ pong_sampled_efficientzero_config = dict(
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        reanalyze_ratio=0.99,
+        # reanalyze_ratio=0.99,
+        # reanalyze_outdated=False,
+
+        reanalyze_ratio=0.5,
+        reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?
         lr_manually=True,

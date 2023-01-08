@@ -1,10 +1,3 @@
-import sys
-# sys.path.append('/Users/puyuan/code/LightZero')
-# sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
-# sys.path.append('/mnt/lustre/puyuan/LightZero')
-
-
 import torch
 from easydict import EasyDict
 
@@ -36,7 +29,7 @@ update_per_collect = 1000
 # update_per_collect = 10
 
 pong_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/pong_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}_prio-false',
+    exp_name=f'data_ez_ctree/pong_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}_rr05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -165,16 +158,20 @@ pong_efficientzero_config = dict(
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        reanalyze_ratio=0.99,
+        # reanalyze_ratio=0.99,
+        # reanalyze_outdated=False,
+
+        reanalyze_ratio=0.5,
+        reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?
         lr_manually=True,
 
-        use_priority=False,
-        use_max_priority_for_new_data=True,
-
-        # use_priority=True,
+        # use_priority=False,
         # use_max_priority_for_new_data=True,
+
+        use_priority=True,
+        use_max_priority_for_new_data=True,
 
         # TODO(pu): only used for adjust temperature manually
         max_training_steps=int(1e5),

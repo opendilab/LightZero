@@ -228,7 +228,7 @@ class EfficientZeroPolicy(Policy):
 
         batch_size = obs_batch.size(0)
         assert batch_size == self._cfg.batch_size == target_value_prefix.size(0)
-        metric_loss = torch.nn.L1Loss()
+        l1_loss = torch.nn.L1Loss()
 
         # some logs preparation
         other_log = {}
@@ -307,6 +307,13 @@ class EfficientZeroPolicy(Policy):
 
         # calculate loss for the first step
         policy_loss = modified_cross_entropy_loss(policy_logits, target_policy[:, 0])
+
+        # only for debug
+        # take the init hypothetical step k=0
+        target_normalized_visit_count_init_step = target_policy[:, 0]
+        target_dist = Categorical(target_normalized_visit_count_init_step)
+        target_policy_entropy = target_dist.entropy().mean()
+
         if self._cfg.categorical_distribution:
             value_loss = modified_cross_entropy_loss(value, target_value_phi[:, 0])
         else:
@@ -378,6 +385,14 @@ class EfficientZeroPolicy(Policy):
 
             # the target policy, target_value_phi, target_value_prefix_phi is calculated in game buffer now
             policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
+
+
+            # only for debug
+            # take th hypothetical step k= step_i + 1
+            target_normalized_visit_count = target_policy[:, step_i + 1]
+            target_dist = Categorical(target_normalized_visit_count)
+            target_policy_entropy += target_dist.entropy().mean()
+
             if self._cfg.categorical_distribution:
                 value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
                 value_prefix_loss += modified_cross_entropy_loss(value_prefix, target_value_prefix_phi[:, step_i])
@@ -429,19 +444,19 @@ class EfficientZeroPolicy(Policy):
 
                 target_value_prefix_base = target_value_prefix_cpu[:, step_i].reshape(-1).unsqueeze(-1)
 
-                other_loss[key] = metric_loss(original_value_prefixs_cpu, target_value_prefix_base)
+                other_loss[key] = l1_loss(original_value_prefixs_cpu, target_value_prefix_base)
                 if value_prefix_indices_1.any():
-                    other_loss[key + '_1'] = metric_loss(
+                    other_loss[key + '_1'] = l1_loss(
                         original_value_prefixs_cpu[value_prefix_indices_1],
                         target_value_prefix_base[value_prefix_indices_1]
                     )
                 if value_prefix_indices_n1.any():
-                    other_loss[key + '_-1'] = metric_loss(
+                    other_loss[key + '_-1'] = l1_loss(
                         original_value_prefixs_cpu[value_prefix_indices_n1],
                         target_value_prefix_base[value_prefix_indices_n1]
                     )
                 if value_prefix_indices_0.any():
-                    other_loss[key + '_0'] = metric_loss(
+                    other_loss[key + '_0'] = l1_loss(
                         original_value_prefixs_cpu[value_prefix_indices_0],
                         target_value_prefix_base[value_prefix_indices_0]
                     )
@@ -498,17 +513,17 @@ class EfficientZeroPolicy(Policy):
 
             predicted_value_prefixs = torch.stack(predicted_value_prefixs).transpose(1, 0).squeeze(-1)
             predicted_value_prefixs = predicted_value_prefixs.reshape(-1).unsqueeze(-1)
-            other_loss['l1'] = metric_loss(predicted_value_prefixs, target_value_prefix_base)
+            other_loss['l1'] = l1_loss(predicted_value_prefixs, target_value_prefix_base)
             if value_prefix_indices_1.any():
-                other_loss['l1_1'] = metric_loss(
+                other_loss['l1_1'] = l1_loss(
                     predicted_value_prefixs[value_prefix_indices_1], target_value_prefix_base[value_prefix_indices_1]
                 )
             if value_prefix_indices_n1.any():
-                other_loss['l1_-1'] = metric_loss(
+                other_loss['l1_-1'] = l1_loss(
                     predicted_value_prefixs[value_prefix_indices_n1], target_value_prefix_base[value_prefix_indices_n1]
                 )
             if value_prefix_indices_0.any():
-                other_loss['l1_0'] = metric_loss(
+                other_loss['l1_0'] = l1_loss(
                     predicted_value_prefixs[value_prefix_indices_0], target_value_prefix_base[value_prefix_indices_0]
                 )
 
@@ -545,6 +560,7 @@ class EfficientZeroPolicy(Policy):
                 'loss_mean': loss_data[2],
                 'policy_loss': loss_data[4],
                 'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+                'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
 
                 'value_prefix_loss': loss_data[5],
                 'value_loss': loss_data[6],
@@ -570,6 +586,8 @@ class EfficientZeroPolicy(Policy):
             'loss_mean': loss_data[2],
             'policy_loss': loss_data[4],
             'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+            'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+
             'value_prefix_loss': loss_data[5],
             'value_loss': loss_data[6],
             'consistency_loss': loss_data[7]/self._cfg.num_unroll_steps,

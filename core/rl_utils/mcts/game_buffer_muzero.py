@@ -437,6 +437,7 @@ class MuZeroGameBuffer(Buffer):
         reward_value_context = self.prepare_reward_value_context(
             batch_index_list, game_history_list, pos_in_game_history_list, total_transitions
         )
+
         """
         only reanalyze recent ratio (e.g. 50%) data
         """

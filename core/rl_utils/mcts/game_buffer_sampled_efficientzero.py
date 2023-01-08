@@ -329,7 +329,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             Prepare a batch context that contains:
             game_lst: a list of game histories
             game_history_pos_lst: transition index in game (relative index)
-            indices_lst: transition index in replay buffer
+            batch_index_list: transition index in replay buffer
             weights_lst: the weight concerning the priority
             make_time: the time the batch is made (for correctly updating replay buffer
                 when data is deleted)
@@ -352,16 +352,20 @@ class SampledEfficientZeroGameBuffer(Buffer):
         # TODO(pu): sample data in PER way
         # sample according to transition index
         # TODO(pu): replace=True
-        # indices_lst = np.random.choice(total, batch_size, p=probs, replace=True)
-        indices_lst = np.random.choice(total, batch_size, p=probs, replace=False)
+        # batch_index_list = np.random.choice(total, batch_size, p=probs, replace=True)
+        batch_index_list = np.random.choice(total, batch_size, p=probs, replace=False)
 
-        weights_lst = (total * probs[indices_lst]) ** (-beta)
+        # TODO(pu): reanalyze the outdated data according to their generated time
+        if self.config.reanalyze_outdated is True:
+            batch_index_list.sort()
+            
+        weights_lst = (total * probs[batch_index_list]) ** (-beta)
         weights_lst /= weights_lst.max()
 
         game_lst = []
         game_history_pos_lst = []
 
-        for idx in indices_lst:
+        for idx in batch_index_list:
             try:
                 game_history_idx, game_history_pos = self.game_history_look_up[idx]
             except Exception as error:
@@ -372,13 +376,13 @@ class SampledEfficientZeroGameBuffer(Buffer):
             game_lst.append(game)
             game_history_pos_lst.append(game_history_pos)
 
-        make_time = [time.time() for _ in range(len(indices_lst))]
+        make_time = [time.time() for _ in range(len(batch_index_list))]
 
-        context = (game_lst, game_history_pos_lst, indices_lst, weights_lst, make_time)
+        context = (game_lst, game_history_pos_lst, batch_index_list, weights_lst, make_time)
         return context
 
     # @profile
-    def make_batch(self, batch_context, ratio):
+    def make_batch(self, batch_context,  reanalyze_ratio):
         """
         Overview:
             prepare the context of a batch
@@ -388,11 +392,11 @@ class SampledEfficientZeroGameBuffer(Buffer):
             inputs_batch:                the inputs of batch
         Arguments:
             batch_context: Any batch context from replay buffer
-            ratio: float ratio of reanalyzed policy (value is 100% reanalyzed)
+             reanalyze_ratio: float ratio of reanalyzed policy (value is 100% reanalyzed)
         """
         # obtain the batch context from replay buffer
-        game_lst, game_history_pos_lst, indices_lst, weights_lst, make_time_lst = batch_context
-        batch_size = len(indices_lst)
+        game_lst, game_history_pos_lst, batch_index_list, weights_lst, make_time_lst = batch_context
+        batch_size = len(batch_index_list)
         obs_lst, action_lst, mask_lst = [], [], []
         child_actions_lst = []
         # prepare the inputs of a batch
@@ -456,14 +460,13 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
             mask_lst.append(_mask)
 
-        re_num = int(batch_size * ratio)
         # formalize the input observations
         obs_lst = prepare_observation_list(obs_lst)
         ######################
         # sampled related code
         ######################
         # formalize the inputs of a batch
-        inputs_batch = [obs_lst, action_lst, child_actions_lst, mask_lst, indices_lst, weights_lst, make_time_lst]
+        inputs_batch = [obs_lst, action_lst, child_actions_lst, mask_lst, batch_index_list, weights_lst, make_time_lst]
 
         try:
             child_actions_lst = np.concatenate([child_actions_lst])
@@ -477,24 +480,31 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
         # obtain the context of value targets
         reward_value_context = self.prepare_reward_value_context(
-            indices_lst, game_lst, game_history_pos_lst, total_transitions
+            batch_index_list, game_lst, game_history_pos_lst, total_transitions
         )
 
-        # 0:re_num -> reanalyzed policy, re_num:end -> non reanalyzed policy
+        """
+        only reanalyze recent reanalyze_ratio (e.g. 50%) data
+        """
+        reanalyze_num = int(batch_size * reanalyze_ratio)
+        # if self.config.reanalyze_outdated is True:
+        # batch_index_list is sorted according to its generated env_steps
+        
+        # 0:reanalyze_num -> reanalyzed policy, reanalyze_num:end -> non reanalyzed policy
         # reanalyzed policy
-        if re_num > 0:
+        if reanalyze_num > 0:
             # obtain the context of reanalyzed policy targets
             policy_re_context = self.prepare_policy_reanalyzed_context(
-                indices_lst[:re_num], game_lst[:re_num], game_history_pos_lst[:re_num]
+                batch_index_list[:reanalyze_num], game_lst[:reanalyze_num], game_history_pos_lst[:reanalyze_num]
             )
         else:
             policy_re_context = None
 
         # non reanalyzed policy
-        if re_num < batch_size:
+        if reanalyze_num < batch_size:
             # obtain the context of non-reanalyzed policy targets
             policy_non_re_context = self.prepare_policy_non_reanalyzed_context(
-                indices_lst[re_num:], game_lst[re_num:], game_history_pos_lst[re_num:]
+                batch_index_list[reanalyze_num:], game_lst[reanalyze_num:], game_history_pos_lst[reanalyze_num:]
             )
         else:
             policy_non_re_context = None
