@@ -15,7 +15,6 @@
 data_*
 *.so
 *.gv
-cytree.cpp
 *.png
 
 pkg/
@@ -1431,6 +1430,10 @@ collect_demo_data_config.py
 !ding/**/*.py
 events.*
 /test_*
+
+/core/bonus/**/ucb_score_*.cpp
+
+
 /core/rl_utils/**/*.cpp
 /core/rl_utils/**/*.so
 /core/rl_utils/**/*.h

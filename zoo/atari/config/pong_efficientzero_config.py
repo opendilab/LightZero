@@ -1,7 +1,6 @@
 import torch
 from easydict import EasyDict
 
-
 if torch.cuda.is_available():
     device = 'cuda'
 else:
@@ -88,7 +87,7 @@ pong_efficientzero_config = dict(
             pred_out=1024,
             last_linear_layer_init_zero=True,
             state_norm=False,
-        ),        
+        ),
         # learn_mode config
         learn=dict(
             update_per_collect=update_per_collect,
@@ -185,7 +184,7 @@ pong_efficientzero_config = dict(
         # TODO(pu): test the effect
         last_linear_layer_init_zero=True,
         state_norm=False,
-        mini_infer_size=2,
+        mini_infer_size=256,
         # (Float type) How much prioritization is used: 0 means no prioritization while 1 means full prioritization
         priority_prob_alpha=0.6,
         # (Float type)  How much correction is used: 0 means no correction while 1 means full correction
@@ -276,4 +275,5 @@ create_config = pong_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_efficientzero
+
     serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))

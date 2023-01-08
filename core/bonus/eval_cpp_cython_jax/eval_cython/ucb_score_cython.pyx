@@ -2,7 +2,7 @@
 
 import ctypes
 cimport cython
-# from eval_cpp cimport CMinMaxStats, cpp_ucb_score
+
 from libcpp.vector cimport vector
 from libc.stdlib cimport malloc, free
 from libcpp.list cimport list as cpplist
