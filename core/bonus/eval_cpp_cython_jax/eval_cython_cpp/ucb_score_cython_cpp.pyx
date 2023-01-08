@@ -1,7 +1,8 @@
 # distutils: language=c++
 
 import ctypes
-cimport cython
+import cython
+# cimport cython
 # from ucb_score_cython_cpp cimport CMinMaxStats, cpp_ucb_score
 
 
@@ -16,18 +17,22 @@ ctypedef np.npy_float FLOAT
 ctypedef np.npy_intp INTP
 
 cdef class MinMaxStats:
-    cdef CMinMaxStats *cmin_max_stats
+    # cdef CMinMaxStats *cmin_max_stats
 
+    @cython.binding
     def __cinit__(self):
         self.cmin_max_stats = new CMinMaxStats()
 
+    @cython.binding
     def update(self, float value):
         self.cmin_max_stats.update(value)
 
+    @cython.binding
     def normalize(self, float value):
         return self.cmin_max_stats.normalize(value)
 
 
+@cython.binding
 def ucb_score(list child_visit_count, list child_prior, list child_reward, list child_value, MinMaxStats m, float total_children_visit_counts, float pb_c_base, float pb_c_init, float discount):
     cdef vector[float] cchild_visit_count = child_visit_count
     cdef vector[float] cchild_prior = child_prior

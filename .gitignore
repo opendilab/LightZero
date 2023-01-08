@@ -1430,10 +1430,6 @@ collect_demo_data_config.py
 !ding/**/*.py
 events.*
 /test_*
-
-/core/bonus/**/ucb_score_*.cpp
-
-
 /core/rl_utils/**/*.cpp
 /core/rl_utils/**/*.so
 /core/rl_utils/**/*.h
@@ -1441,3 +1437,7 @@ events.*
 !/core/rl_utils/**/lib/*.cpp
 !/core/rl_utils/**/lib/*.hpp
 !/core/rl_utils/**/lib/*.h
+
+/core/bonus/eval_cpp_cython_jax/eval_cython/ucb_score_cython.cpp
+/core/bonus/eval_cpp_cython_jax/eval_cython_cpp/ucb_score_cython_cpp.cpp
+/core/bonus/eval_cpp_cython_jax/eval_cython_cpp_openmp/ucb_score_cython_openmp_cpp.cpp

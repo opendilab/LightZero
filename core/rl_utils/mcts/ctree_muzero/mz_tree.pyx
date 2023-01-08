@@ -1,9 +1,5 @@
 # distutils: language=c++
-cimport numpy as np
 from libcpp.vector cimport vector
-
-ctypedef np.npy_float FLOAT
-ctypedef np.npy_intp INTP
 
 cdef class MinMaxStatsList:
     cdef CMinMaxStatsList *cmin_max_stats_lst

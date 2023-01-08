@@ -20,3 +20,6 @@ cdef extern from "ucb_score.cpp":
 
 cdef extern from "ucb_score.h" namespace "tree":
     cdef float cpp_ucb_score(vector[float] child_visit_count, vector[float] child_prior, vector[float] child_reward, vector[float] child_value, float maximum, float minimum, float total_children_visit_counts, float pb_c_base, float pb_c_init, float discount)
+
+cdef class MinMaxStats:
+   cdef CMinMaxStats *cmin_max_stats
