@@ -24,7 +24,7 @@ update_per_collect = 1000
 # n_episode = 1
 # evaluator_env_num = 1
 # batch_size = 4
-# num_simulations = 5
+# num_simulations = 10
 # update_per_collect = 10
 
 pong_efficientzero_config = dict(
