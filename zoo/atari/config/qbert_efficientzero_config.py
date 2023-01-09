@@ -14,6 +14,8 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
+categorical_distribution = True
+
 action_space_size = 6  # for qbert
 collector_env_num = 8
 n_episode = 8
@@ -32,7 +34,7 @@ update_per_collect = 2000
 # evaluator_env_num = 1
 
 qbert_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/qbert_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}',
+    exp_name=f'data_ez_ctree/qbert_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}_rr03',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -176,7 +178,11 @@ qbert_efficientzero_config = dict(
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        reanalyze_ratio=0.99,
+        # reanalyze_ratio=0.99,
+        # reanalyze_outdated=False,
+
+        reanalyze_ratio=0.3,
+        reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?
         lr_manually=True,

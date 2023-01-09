@@ -311,8 +311,14 @@ class EfficientZeroPolicy(Policy):
         # only for debug
         # take the init hypothetical step k=0
         target_normalized_visit_count_init_step = target_policy[:, 0]
-        target_dist = Categorical(target_normalized_visit_count_init_step)
-        target_policy_entropy = target_dist.entropy().mean()
+
+        try:
+            # if there is zero in target_normalized_visit_count_init_step
+            target_dist = Categorical(target_normalized_visit_count_init_step)
+            target_policy_entropy = target_dist.entropy().mean()
+        except Exception as error:
+            # print(error)
+            target_policy_entropy = 0
 
         if self._cfg.categorical_distribution:
             value_loss = modified_cross_entropy_loss(value, target_value_phi[:, 0])
@@ -390,8 +396,16 @@ class EfficientZeroPolicy(Policy):
             # only for debug
             # take th hypothetical step k= step_i + 1
             target_normalized_visit_count = target_policy[:, step_i + 1]
-            target_dist = Categorical(target_normalized_visit_count)
-            target_policy_entropy += target_dist.entropy().mean()
+
+            # target_dist = Categorical(target_normalized_visit_count)
+            # target_policy_entropy += target_dist.entropy().mean()
+            try:
+                # if there is zero in target_normalized_visit_count
+                target_dist = Categorical(target_normalized_visit_count)
+                target_policy_entropy += target_dist.entropy().mean()
+            except Exception as error:
+                # print(error)
+                target_policy_entropy += 0
 
             if self._cfg.categorical_distribution:
                 value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
@@ -848,6 +862,8 @@ class EfficientZeroPolicy(Policy):
             'loss_mean',
             'policy_loss',
             'policy_entropy',
+            'target_policy_entropy',
+
             'value_prefix_loss',
             'value_loss',
             'consistency_loss',

@@ -648,7 +648,8 @@ def compute_ucb_score(
     # sampled related code
     ##################
     # TODO
-    node_prior = "density"
+    # node_prior = "density"
+    node_prior = "uniform"
     # Uniform prior for continuous action space
     if node_prior == "uniform":
         prior_score = pb_c * (1 / len(parent.children))
@@ -662,6 +663,7 @@ def compute_ucb_score(
         else:
             # prior is prob
             prior_score = pb_c * (child.prior / (sum([node.prior for node in parent.children.values()]) + 1e-9))
+            # print('prior_score: ', prior_score)
     else:
         raise ValueError("{} is unknown prior option, choose uniform or density")
 

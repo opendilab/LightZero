@@ -6,29 +6,31 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-action_space_size = 6  # for pong
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-batch_size = 256
-num_simulations = 50
-# TODO(pu):
-# The key hyper-para to tune, for different env, we have different episode_length
-# e.g. reuse_factor = 0.5
-# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 1000
+categorical_distribution = True
+
+# action_space_size = 6  # for pong
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# batch_size = 256
+# num_simulations = 50
+# # TODO(pu):
+# # The key hyper-para to tune, for different env, we have different episode_length
+# # e.g. reuse_factor = 0.5
+# # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+# update_per_collect = 1000
 
 # debug config
-# action_space_size = 6  # for pong
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# batch_size = 4
-# num_simulations = 5
-# update_per_collect = 10
+action_space_size = 6  # for pong
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+batch_size = 4
+num_simulations = 10
+update_per_collect = 10
 
 pong_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/pong_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}_rr05',
+    exp_name=f'data_ez_ctree/pong_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}_rr03',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -60,7 +62,7 @@ pong_efficientzero_config = dict(
         cuda=True,
         model=dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=True,
+            categorical_distribution=categorical_distribution,
             representation_model_type='conv_res_blocks',
             observation_shape=(12, 96, 96),  # if frame_stack_num=4, the original obs shape is（3,96,96）
             action_space_size=action_space_size,
@@ -160,7 +162,7 @@ pong_efficientzero_config = dict(
         # reanalyze_ratio=0.99,
         # reanalyze_outdated=False,
 
-        reanalyze_ratio=0.5,
+        reanalyze_ratio=0.3,
         reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?
@@ -200,7 +202,7 @@ pong_efficientzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=True,
+        categorical_distribution=categorical_distribution,
 
         support_size=300,
         # value_support=DiscreteSupport(-300, 300, delta=1),

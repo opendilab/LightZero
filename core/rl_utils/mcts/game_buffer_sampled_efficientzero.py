@@ -1210,7 +1210,6 @@ class SampledEfficientZeroGameBuffer(Buffer):
                                 # for one_player atari games
                                 target_policies.append(distributions)
                             else:
-
                                 # for two_player board games
                                 policy_tmp = [0 for _ in range(self.config.action_space_size)]
                                 # to make sure target_policies have the same dimension <self.config.action_space_size>

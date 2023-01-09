@@ -14,6 +14,8 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
+categorical_distribution = True
+
 action_space_size = 9  # for mspacman
 collector_env_num = 8
 n_episode = 8
@@ -36,7 +38,7 @@ update_per_collect = 1000
 # update_per_collect = 1
 
 mspacman_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/mspacman_efficientzero_seed0_sub883_upc{update_per_collect}',
+    exp_name=f'data_ez_ctree/mspacman_efficientzero_seed0_sub883_upc{update_per_collect}_rr03',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -63,7 +65,7 @@ mspacman_efficientzero_config = dict(
         cuda=True,
         model=dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=True,
+            categorical_distribution=categorical_distribution,
             representation_model_type='conv_res_blocks',
             observation_shape=(12, 96, 96),  # if frame_stack_num=4, the original obs shape is（3,96,96）
             action_space_size=action_space_size,
@@ -155,7 +157,11 @@ mspacman_efficientzero_config = dict(
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        reanalyze_ratio=0.99,
+        # reanalyze_ratio=0.99,
+        # reanalyze_outdated=False,
+
+        reanalyze_ratio=0.3,
+        reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?
         lr_manually=True,
@@ -194,7 +200,7 @@ mspacman_efficientzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=True,
+        categorical_distribution=categorical_distribution,
         support_size=300,
         max_grad_norm=10,
         test_interval=10000,
