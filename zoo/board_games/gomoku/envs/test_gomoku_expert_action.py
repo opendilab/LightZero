@@ -8,7 +8,8 @@ from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 class TestExpertAction:
 
     def test_naive(self):
-        cfg = EasyDict(board_size=18, battle_mode='two_player_mode', prob_random_agent=0)
+        # cfg = EasyDict(board_size=18, battle_mode='two_player_mode', prob_random_agent=0)
+        cfg = EasyDict(board_size=6, battle_mode='two_player_mode', prob_random_agent=0, channel_last=True, agent_vs_human=False)
         env = GomokuEnv(cfg)
         test_episodes = 5
         for i in range(test_episodes):
@@ -16,10 +17,10 @@ class TestExpertAction:
             # print('init board state: ', obs)
             env.render()
             while True:
-                action = env.expert_action()
+                # action = env.expert_action()
                 # action = env.random_action()
-                # action = env.human_to_action()
-                print('original player 1: ', action)
+                action = env.human_to_action()
+                print('action index of player 1 is:', action)
                 print('player 1: ' + env.action_to_string(action))
                 obs, reward, done, info = env.step(action)
                 env.render()
@@ -32,7 +33,7 @@ class TestExpertAction:
 
                 action = env.expert_action()
                 # action = env.random_action()
-                print('original player 2: ', action)
+                print('action index of player 2 is:', action)
                 print('player 2: ' + env.action_to_string(action))
                 obs, reward, done, info = env.step(action)
                 env.render()
@@ -42,3 +43,6 @@ class TestExpertAction:
                     else:
                         print('draw')
                     break
+
+test = TestExpertAction()
+test.test_naive()

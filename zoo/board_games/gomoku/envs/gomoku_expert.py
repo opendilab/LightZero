@@ -9,9 +9,9 @@ import numpy as np
 class GomokuExpert(object):
     """
         Overview:
-            The ``GomokuExpert`` used to output rule-based gomoku expert actions. \
-            Input is gomoku board obs(:obj:`np,array`) of shape ``(board_w, board_h)`` and returns action (:obj:`Int`) \
-            The output action is the sequence number i*board_w+j of the placement position (i, j)
+            The ``GomokuExpert`` used to output rule-based expert actions for Gomoku.
+            Input: board obs(:obj:`dict`) containing 'observation' and 'action_mask'.
+            Returns: action (:obj:`Int`). The output action is the index number i*board_w+j corresponding to the placement position (i, j).
         Interfaces:
             ``__init__``, ``get_action``.
     """
@@ -21,21 +21,21 @@ class GomokuExpert(object):
         Overview:
             Init the ``GomokuExpert``.
         """
-        # The weight of pieces of the same color
-        self.grade = 100
-        # Indicates that it has already reached 5, reaching the maximum weight
-        self.max_value = 10012345
+        # The initial unit weight of pieces
+        self.unit_weight = 100
         self.init_board_flag = False
 
     def location_to_action(self, i, j):
         """
         Overview:
-            Convert coordinate to serial number.
+            Convert coordinate to serial action number.
         Arguments:
             - i (:obj:`Int`): X-axis.
             - j (:obj:`Int`): Y-axis.
         Returns:
-            - action (:obj:`Int`): The serial number of the entered coordinates on the chessboard.
+            - action (:obj:`Int`): The serial action number of the entered coordinates on the pieceboard.
+        Examples:
+            - board_size = 6, (i,j)=(2,3) , action=3+2*6=15
         """
         # location = (i,j), action=j+i*width
         return j + i * self.board_width
@@ -43,10 +43,9 @@ class GomokuExpert(object):
     def action_to_location(self, action):
         """
         Overview:
-            Convert serial number to coordinate.
+            Convert serial action number to coordinate.
         Arguments:
-            - action (:obj:`Int`): The serial number of the entered coordinates on the chessboard.
-
+            - action (:obj:`Int`): The serial number of the entered coordinates on the pieceboard.
         Returns:
             - [i, j].
         """
@@ -58,125 +57,124 @@ class GomokuExpert(object):
     def get_loc_player(self, i, j):
         """
         Overview:
-            Returns the state of the pawn at the given coordinates.
+            Returns the state of the piece at the given coordinates.
         Arguments:
-            - [i, j](:obj:`[Int, Int]`): The coordinate on the chessboard.
-
+            - [i, j](:obj:`[Int, Int]`): The coordinate on the pieceboard.
         Returns:
-            - board_status: \
-            0: no pawns, \
-            1: player 1, \
-            2: player 2.
+            - board_status:
+                0: no pieces,
+                1: player 1,
+                2: player 2.
         """
         action = self.location_to_action(i, j)
-        return self.board_status[action]
+        return self.board_state[action]
 
     def scan_leftright(self, i, j, player):
         """
         Overview:
-            Calculate the estimated value of the pawn from left to right when the player moves at (i,j)
+            Calculate the estimated score of the piece from left to right when the player moves at (i,j)
         Arguments:
             - i (:obj:`Int`): X-axis.
             - j (:obj:`Int`): Y-axis.
             - player (:obj:`Int`): Current player.
-
         Returns:
-            - value: Situation valuation in this direction.
+            - score: the evaluation score about the situation in this direction.
         """
-        # Count the number of consecutive pieces or empty pieces of the current player
-        # and get the value in this direction when moving pieces (i, j)
-        value = 0
+        # Count the number of consecutive pieces of the current player or empty pieces:
+        # and evaluate the score in this direction when moving pieces (i, j)
+        score = 0
         count = 0
-        grade = self.grade
+        unit_weight = self.unit_weight
         # scan left
         m, n = i, j - 1
         while n >= 0:
-            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
+            is_continue, score, unit_weight = self.evaluate_one_move(m, n, player, score, unit_weight)
             if is_continue:
                 # Continue to move one step to the left
                 n = n - 1
             else:
                 break
             count += 1
-        # Change the direction, the weights are returned to the initial values
-        grade = self.grade
+        # Change the direction to the right,
+        # the unit_weight are reset to the initial unit_weight
+        unit_weight = self.unit_weight
+        # scan right
         n = j + 1
         while n < self.board_width:
-            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
+            is_continue, score, unit_weight = self.evaluate_one_move(m, n, player, score, unit_weight)
             if is_continue:
                 # Continue to move one step to the right
                 n = n + 1
             else:
                 break
             count += 1
-        # Returns the value if there are four consecutive pawn in this direction, otherwise 0
-        return value if count >= 4 else 0
+        # Returns the score if there are four consecutive piece in this direction, otherwise 0
+        return score if count >= 4 else 0
 
     def scan_updown(self, i, j, player):
         """
         Overview:
-            Calculate the estimated value of the pawn from up to down when the player moves at (i,j)
+            Calculate the estimated score of the piece from up to down when the player moves at (i,j)
         Arguments:
             - i (:obj:`Int`): X-axis.
             - j (:obj:`Int`): Y-axis.
             - player (:obj:`Int`): Current player.
 
         Returns:
-            - value: Situation valuation in this direction.
+            - score: Situation valuation in this direction.
         """
-        value = 0
+        score = 0
         count = 0
         # Count the number of consecutive pieces or empty pieces of the current player
-        # and get the value in this direction when moving pieces (i, j)
-        grade = self.grade
+        # and get the score in this direction when moving pieces (i, j)
+        unit_weight = self.unit_weight
 
         m, n = i - 1, j
         # scan up
         while m >= 0:
-            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
+            is_continue, score, unit_weight = self.evaluate_one_move(m, n, player, score, unit_weight)
             if is_continue:
                 # Continue to move one step to the up
                 m = m - 1
             else:
                 break
             count += 1
-        # Change the direction and change the weight back to the initial value
-        grade = self.grade
+        # Change the direction and change the weight back to the initial score
+        unit_weight = self.unit_weight
         m = i + 1
         # scan down
         while m < self.board_height:
-            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
+            is_continue, score, unit_weight = self.evaluate_one_move(m, n, player, score, unit_weight)
             if is_continue:
                 # Continue to move one step to the down
                 m = m + 1
             else:
                 break
             count += 1
-        # Returns the value if there are four consecutive pawn in this direction, otherwise 0
-        return value if count >= 4 else 0
+        # Returns the score if there are four consecutive piece in this direction, otherwise 0
+        return score if count >= 4 else 0
 
     def scan_left_updown(self, i, j, player):
         """
         Overview:
-            Calculate the estimated value of the pawn from top left to bottom right when the player moves at (i,j)
+            Calculate the estimated score of the piece from top left to bottom right when the player moves at (i,j)
         Arguments:
             - i (:obj:`Int`): X-axis.
             - j (:obj:`Int`): Y-axis.
             - player (:obj:`Int`): Current player.
-
         Returns:
-            - value: Situation valuation in this direction.
+            - score: Situation valuation in this direction.
         """
         # Count the number of consecutive pieces or empty pieces of the current player
-        # and get the value in this direction when moving pieces (i, j)
-        value = 0
+        # and get the score in this direction when moving pieces (i, j)
+        score = 0
         count = 0
 
-        grade = self.grade
+        unit_weight = self.unit_weight
         m, n = i - 1, j - 1
-        # scan left up
+        # scan left_up
         while m >= 0 and n >= 0:
-            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
+            is_continue, score, unit_weight = self.evaluate_one_move(m, n, player, score, unit_weight)
             if is_continue:
                 # Continue to move one step to the left up
                 m, n = m - 1, n - 1
@@ -184,185 +182,190 @@ class GomokuExpert(object):
                 break
             count += 1
 
-        grade = self.grade
-        # right down
+        unit_weight = self.unit_weight
+        # scan right_down
         m, n = i + 1, j + 1
         while m < self.board_height and n < self.board_width:
-            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
+            is_continue, score, unit_weight = self.evaluate_one_move(m, n, player, score, unit_weight)
             if is_continue:
                 # Continue to move one step down to the right
                 m, n = m + 1, n + 1
             else:
                 break
             count += 1
-        # Returns the value if there are four consecutive pawn in this direction, otherwise 0
-        return value if count >= 4 else 0
+        # Returns the score if there are four consecutive piece in this direction, otherwise 0
+        return score if count >= 4 else 0
 
     def scan_right_updown(self, i, j, player):
         """
         Overview:
-            Calculate the estimated value of the pawn from top right to bottom left when the player moves at (i,j)
+            Calculate the estimated score of the piece from top right to bottom left when the player moves at (i,j)
         Arguments:
             - i (:obj:`Int`): X-axis.
             - j (:obj:`Int`): Y-axis.
             - player (:obj:`Int`): Current player.
-
         Returns:
-            - value: Situation valuation in this direction.
+            - score: Situation valuation in this direction.
         """
         # Count the number of consecutive pieces or empty pieces of the current player
-        # and get the value in this direction when moving pieces (i, j)
-        value = 0
+        # and get the score in this direction when moving pieces (i, j)
+        score = 0
         count = 0
-        grade = self.grade
-        # scan left down
+        unit_weight = self.unit_weight
+        # scan left_down
         m, n = i + 1, j - 1
         while m < self.board_height and n >= 0:
-            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
+            is_continue, score, unit_weight = self.evaluate_one_move(m, n, player, score, unit_weight)
             if is_continue:
                 m, n = m + 1, n - 1
             else:
                 break
             count += 1
-        grade = self.grade
-        # scan right up
+        unit_weight = self.unit_weight
+        # scan right_up
         m, n = i - 1, j + 1
         while m >= 0 and n < self.board_width:
-            is_continue, value, grade = self.caculate_once_value(m, n, player, value, grade)
+            is_continue, score, unit_weight = self.evaluate_one_move(m, n, player, score, unit_weight)
             if is_continue:
                 # Continue to move up one step to the right
                 m, n = m - 1, n + 1
             else:
                 break
             count += 1
-        # Returns the value if there are four consecutive pawn in this direction, otherwise 0
-        return value if count >= 4 else 0
+        # Returns the score if there are four consecutive piece in this direction, otherwise 0
+        return score if count >= 4 else 0
 
-    def caculate_once_value(self, m, n, player, value, grade):
+    def evaluate_one_move(self, m, n, player, score, unit_weight):
         """
         Overview:
-            Calculate the income brought by the pawns adjacent to the position (m,n) \
-            when the player places the pawn at the specified position (i,j) \
+            Calculate the income brought by the pieces adjacent to the position (m,n) \
+            when the player places the piece at the specified position (i,j) \
             in the current situation
         Arguments:
             - m (:obj:`Int`): x.
             - n (:obj:`Int`): y.
-            - player (:obj:`Int`): current chess player.
-            - value (:obj:`Int`): The current position (the pawn is at (i,j)) is evaluated.
-            - grade (:obj:`Int`): The weight of the pawn in the current position
+            - player (:obj:`Int`): current piece player.
+            - score (:obj:`Int`): The current position (the piece is at (i,j)) is evaluated.
+            - unit_weight (:obj:`Int`): The weight of the piece in the current position
 
         Returns:
-            - is_continue: Whether there is a pawn of current_player at the current position
-            - value: The evaluation value of the move to (i,j)
-            - grade: The weight of a single one of our chess pieces
+            - is_continue: Whether there is a piece of current_player at the current position
+            - score: The evaluation score of the move to (i,j)
+            - unit_weight: The weight of a single one of our piece pieces
         """
         loc_player = self.get_loc_player(m, n)
         if loc_player == player:
-            value += grade
+            # When encountering an current_player's piece, add unit_weight to the score
+            score += unit_weight
         elif loc_player == 0:
-            value += 1
-            # When encountering an empty chess, reduce the weight of subsequent black chess
-            grade = grade / 10
+            # When encountering an empty piece, add 1 to the score
+            score += 1
+            # When encountering an empty piece, reduce the unit_weight of subsequent piece
+            unit_weight = unit_weight / 10
         else:
-            # opponent's pawn
-            value -= 5
-            # When encountering an opponent's chess, return
-            return 0, value, grade
-        # 1 means 'is_continue'
-        return 1, value, grade
+            # When encountering an opponent_player's piece, minus 5 to the score
+            score -= 5
+            # When encountering an opponent_player's piece, return
+            # return is_continue = 0
+            return 0, score, unit_weight
+        # return is_continue = 1
+        return 1, score, unit_weight
 
-    def evaluate_all_value(self, player):
+    def evaluate_all_legal_moves(self, player):
         """
         Overview:
-            Calculate the estimates of all possible positions, \
-            and choose the most favorable position from them.
+            Calculate the scores of all legal moves and choose the most favorable move from them.
         Arguments:
-            - player (:obj:`Int`): current chess player.
-
+            - player (:obj:`Int`): current player.
         Returns:
             - action: the most favorable action
-            - self.action_value[action][4]: Situation valuation under this action
+            - self.action_score[action][4]: the evaluation score related to the situation under this action
         """
-        self.action_value = defaultdict(lambda: [0, 0, 0, 0, 0])
-        for action in self.available:
+        self.action_score = defaultdict(lambda: [0, 0, 0, 0, 0])
+        for action in self.legal_actions:
             i, j = self.action_to_location(action)
 
-            self.action_value[action][0] = self.scan_updown(i, j, player)
-            self.action_value[action][1] = self.scan_leftright(i, j, player)
-            self.action_value[action][2] = self.scan_left_updown(i, j, player)
-            self.action_value[action][3] = self.scan_right_updown(i, j, player)
+            self.action_score[action][0] = self.scan_updown(i, j, player)
+            self.action_score[action][1] = self.scan_leftright(i, j, player)
+            self.action_score[action][2] = self.scan_left_updown(i, j, player)
+            self.action_score[action][3] = self.scan_right_updown(i, j, player)
 
             # Indicates that one direction can already be rushed to 4
+            # TODO(pu): the meaning of the special number
             for k in range(4):
-                if self.action_value[action][k] >= 390:
-                    self.action_value[action][k] = 2000
-                elif self.action_value[action][k] >= 302:
-                    self.action_value[action][k] = 1000
+                if self.action_score[action][k] >= 390:
+                    self.action_score[action][k] = 2000
+                elif self.action_score[action][k] >= 302:
+                    self.action_score[action][k] = 1000
 
-            # Comprehensive score in all directions
-            self.action_value[action][4] = (
-                    self.action_value[action][0] + self.action_value[action][1] + self.action_value[action][2] +
-                    self.action_value[action][3]
+            # Combining the scores of each direction into a total action score
+            self.action_score[action][4] = (
+                    self.action_score[action][0] + self.action_score[action][1] + self.action_score[action][2] +
+                    self.action_score[action][3]
             )
 
-        action = max(self.available, key=lambda x: self.action_value[x][4])
+        action = max(self.legal_actions, key=lambda x: self.action_score[x][4])
 
-        return action, self.action_value[action][4]
+        return action, self.action_score[action][4]
 
     def get_action(self, obs):
         """
         Overview:
-            Returns a rule-based expert action.
+            Given the Gomoku obs, returns a rule-based expert action.
         Arguments:
             - obs (:obj:`np.array`)
 
         Returns:
             - expert_action
         """
-        self.board = obs
+        self.obs = obs
 
-        if self.board['observation'].shape[0] == self.board['observation'].shape[1]:
-            # reshape is wrong
-            # self.board['observation'] = self.board['observation'].reshape(
-            #     3, self.board['observation'].shape[0], self.board['observation'].shape[1]
+        if self.obs['observation'].shape[0] == self.obs['observation'].shape[1]:
+            # the following reshape is wrong implementation
+            # self.obs['observation'] = self.obs['observation'].reshape(
+            #     3, self.obs['observation'].shape[0], self.obs['observation'].shape[1]
             # )
+
             # shape: 6,6,3 -> 3,6,6
-            self.board['observation'] = self.board['observation'].transpose(2, 0, 1)
+            self.obs['observation'] = self.obs['observation'].transpose(2, 0, 1)
 
         if self.init_board_flag is False:
-            self.board_width = self.board['observation'][0].shape[0]
-            self.board_height = self.board['observation'][0].shape[1]
-            # the 2 dim indicates which player is the to_play player, 1 means player 1, 2 means player 2
+            # obtain the board_width and board_height from the self.obs['observation']
+            self.board_width = self.obs['observation'][0].shape[0]
+            self.board_height = self.obs['observation'][0].shape[1]
             self.init_board_flag = True
-        if self.board['observation'][2][0][0] == 1:
-            self.m_player_id = 1
-            self.s_player_id = 2
+        if self.obs['observation'][2][0][0] == 1:
+            # the 2th dim of self.obs['observation'] indicates which player is the to_play player,
+            # 1 means player 1, 2 means player 2
+            self.current_player_id = 1
+            self.opponent_player_id = 2
         else:
-            self.m_player_id = 2
-            self.s_player_id = 1
-        # transform observation,action_mask to self.available, self.board_status
-        self.available = []
-        self.board_status = np.zeros(self.board_width * self.board_height, 'int8')
+            self.current_player_id = 2
+            self.opponent_player_id = 1
+        # transform observation, action_mask to self.legal_actions, self.board_state
+
+        self.legal_actions = []
+        self.board_state = np.zeros(self.board_width * self.board_height, 'int8')
         for i in range(self.board_width):
             for j in range(self.board_height):
                 action = self.location_to_action(i, j)
-                if self.board['action_mask'][action] == 1:
-                    self.available.append(action)
-                if self.board['observation'][0][i][j] == 1:
-                    self.board_status[action] = self.m_player_id
-                elif self.board['observation'][1][i][j] == 1:
-                    self.board_status[action] = self.s_player_id
+                if self.obs['action_mask'][action] == 1:
+                    self.legal_actions.append(action)
+                if self.obs['observation'][0][i][j] == 1:
+                    self.board_state[action] = self.current_player_id
+                elif self.obs['observation'][1][i][j] == 1:
+                    self.board_state[action] = self.opponent_player_id
 
-        m_action, m_value = self.evaluate_all_value(self.m_player_id)
-        # TODO(pu)
-        # logging.info("location:{loc},value:{value}".format(loc=self.action_to_location(m_action), value=m_value))
+        current_best_action, current_score = self.evaluate_all_legal_moves(self.current_player_id)
+        # logging.info("location:{loc},score:{score}".format(loc=self.action_to_location(current_best_action), score=current_score))
 
-        s_action, s_value = self.evaluate_all_value(self.s_player_id)
-        # TODO(pu)
-        # logging.info("O_location:{loc},value:{value}".format(loc=self.action_to_location(s_action), value=s_value))
+        opponent_best_action, opponent_score = self.evaluate_all_legal_moves(self.opponent_player_id)
+        # logging.info("O_location:{loc},score:{score}".format(loc=self.action_to_location(opponent_best_action), score=opponent_score))
 
-        # Block this position if it is better for the opponent to play here
-        if m_value >= s_value:
-            return m_action
+        if current_score >= opponent_score:
+            # curent player should play current_best_action if the score that the current_player obtain when playing current_best_action
+            # is larger than the score that the opponent_player obtains when it playing opponent_best_action
+            return current_best_action
         else:
-            return s_action
+            # curent player should play (Block) this opponent_best_action position if current_score < opponent_score
+            return opponent_best_action
