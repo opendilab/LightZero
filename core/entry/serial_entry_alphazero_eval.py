@@ -16,7 +16,7 @@ import numpy as np
 
 
 def serial_pipeline_alphazero_eval(
-       input_cfg: Union[str, Tuple[dict, dict]],
+        input_cfg: Union[str, Tuple[dict, dict]],
         seed: int = 0,
         env_setting: Optional[List[Any]] = None,
         model: Optional[torch.nn.Module] = None,

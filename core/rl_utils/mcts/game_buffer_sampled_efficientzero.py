@@ -358,7 +358,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         # TODO(pu): reanalyze the outdated data according to their generated time
         if self.config.reanalyze_outdated is True:
             batch_index_list.sort()
-            
+
         weights_lst = (total * probs[batch_index_list]) ** (-beta)
         weights_lst /= weights_lst.max()
 
@@ -382,7 +382,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         return context
 
     # @profile
-    def make_batch(self, batch_context,  reanalyze_ratio):
+    def make_batch(self, batch_context, reanalyze_ratio):
         """
         Overview:
             prepare the context of a batch
@@ -482,14 +482,13 @@ class SampledEfficientZeroGameBuffer(Buffer):
         reward_value_context = self.prepare_reward_value_context(
             batch_index_list, game_lst, game_history_pos_lst, total_transitions
         )
-
         """
         only reanalyze recent reanalyze_ratio (e.g. 50%) data
         """
         reanalyze_num = int(batch_size * reanalyze_ratio)
         # if self.config.reanalyze_outdated is True:
         # batch_index_list is sorted according to its generated env_steps
-        
+
         # 0:reanalyze_num -> reanalyzed policy, reanalyze_num:end -> non reanalyzed policy
         # reanalyzed policy
         if reanalyze_num > 0:

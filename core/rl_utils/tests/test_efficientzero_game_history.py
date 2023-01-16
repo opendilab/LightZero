@@ -53,9 +53,9 @@ def test_game_history(env_name):
         init_obses = [env.reset() for env in envs]
         dones = np.array([False for _ in range(config.env.evaluator_env_num)])
         game_histories = [
-            GameHistory(envs[i].action_space, game_history_length=config.policy.game_history_length,
-                        config=config.policy)
-            for i in range(config.env.evaluator_env_num)
+            GameHistory(
+                envs[i].action_space, game_history_length=config.policy.game_history_length, config=config.policy
+            ) for i in range(config.env.evaluator_env_num)
         ]
         for i in range(config.env.evaluator_env_num):
             game_histories[i].init([init_obses[i]['observation'] for _ in range(config.policy.frame_stack_num)])
@@ -94,8 +94,9 @@ def test_game_history(env_name):
             )
             policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
-            legal_actions_list = [[i for i in range(config.policy.action_space_size)] for _ in
-                                  range(config.env.evaluator_env_num)]  # all action
+            legal_actions_list = [
+                [i for i in range(config.policy.action_space_size)] for _ in range(config.env.evaluator_env_num)
+            ]  # all action
             roots = ez_tree.Roots(config.env.evaluator_env_num, config.policy.action_space_size, legal_actions_list)
             to_play = [-1 for _ in range(config.env.evaluator_env_num)]
             roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
@@ -125,6 +126,7 @@ def test_game_history(env_name):
 
         for env in envs:
             env.close()
+
 
 # debug
 test_game_history('PongNoFrameskip-v4')

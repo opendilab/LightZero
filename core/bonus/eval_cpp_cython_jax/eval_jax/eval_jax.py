@@ -24,12 +24,11 @@ class MinMaxStats(object):
 
 
 @jit
-def ucb_score_jax_vmap_jit(child_visit_count: float, child_prior: float, child_reward: float, child_value: float,
-                           maximum: float, minimum: float, total_children_visit_counts: int, pb_c_base: int,
-                           pb_c_init: float,
-                           discount: float) -> float:
-    pb_c = jnp.log((total_children_visit_counts + pb_c_base + 1) /
-                   pb_c_base) + pb_c_init
+def ucb_score_jax_vmap_jit(
+        child_visit_count: float, child_prior: float, child_reward: float, child_value: float, maximum: float,
+        minimum: float, total_children_visit_counts: int, pb_c_base: int, pb_c_init: float, discount: float
+) -> float:
+    pb_c = jnp.log((total_children_visit_counts + pb_c_base + 1) / pb_c_base) + pb_c_init
     pb_c *= jnp.sqrt(total_children_visit_counts) / (child_visit_count + 1)
 
     prior_score = pb_c * child_prior
@@ -38,11 +37,11 @@ def ucb_score_jax_vmap_jit(child_visit_count: float, child_prior: float, child_r
     return prior_score + value_score
 
 
-def ucb_score_jax_vmap(child_visit_count: float, child_prior: float, child_reward: float, child_value: float,
-                       min_max_stats: MinMaxStats, total_children_visit_counts: int, pb_c_base: int, pb_c_init: float,
-                       discount: float) -> float:
-    pb_c = jnp.log((total_children_visit_counts + pb_c_base + 1) /
-                   pb_c_base) + pb_c_init
+def ucb_score_jax_vmap(
+        child_visit_count: float, child_prior: float, child_reward: float, child_value: float,
+        min_max_stats: MinMaxStats, total_children_visit_counts: int, pb_c_base: int, pb_c_init: float, discount: float
+) -> float:
+    pb_c = jnp.log((total_children_visit_counts + pb_c_base + 1) / pb_c_base) + pb_c_init
     pb_c *= jnp.sqrt(total_children_visit_counts) / (child_visit_count + 1)
 
     prior_score = pb_c * child_prior
@@ -50,13 +49,12 @@ def ucb_score_jax_vmap(child_visit_count: float, child_prior: float, child_rewar
     return prior_score + value_score
 
 
-def ucb_score_jax(child_visit_count: list, child_prior: list, child_reward: list, child_value: list,
-                             min_max_stats: MinMaxStats, total_children_visit_counts: int, pb_c_base: int,
-                             pb_c_init: float,
-                             discount: float) -> float:
+def ucb_score_jax(
+        child_visit_count: list, child_prior: list, child_reward: list, child_value: list, min_max_stats: MinMaxStats,
+        total_children_visit_counts: int, pb_c_base: int, pb_c_init: float, discount: float
+) -> float:
     for i in range(total_children_visit_counts):
-        pb_c = jnp.log((total_children_visit_counts + pb_c_base + 1) /
-                       pb_c_base) + pb_c_init
+        pb_c = jnp.log((total_children_visit_counts + pb_c_base + 1) / pb_c_base) + pb_c_init
         pb_c *= jnp.sqrt(total_children_visit_counts) / (child_visit_count[i] + 1)
 
         prior_score = pb_c * child_prior[i]

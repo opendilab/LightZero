@@ -1,10 +1,3 @@
-import sys
-
-# sys.path.append('/Users/puyuan/code/LightZero')
-# sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
-# sys.path.append('/mnt/lustre/puyuan/LightZero')
-
 import torch
 from easydict import EasyDict
 

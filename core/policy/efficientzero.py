@@ -14,7 +14,6 @@ from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
 from torch.distributions import Categorical, Independent, Normal
 
-
 # python mcts
 import core.rl_utils.mcts.ptree_efficientzero as ptree
 from core.rl_utils import EfficientZeroMCTSCtree as MCTS_ctree
@@ -388,10 +387,8 @@ class EfficientZeroPolicy(Policy):
             dist = Categorical(prob)
             policy_entropy += dist.entropy().mean()
 
-
             # the target policy, target_value_phi, target_value_prefix_phi is calculated in game buffer now
             policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
-
 
             # only for debug
             # take th hypothetical step k= step_i + 1
@@ -575,7 +572,6 @@ class EfficientZeroPolicy(Policy):
                 'policy_loss': loss_data[4],
                 'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
                 'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-
                 'value_prefix_loss': loss_data[5],
                 'value_loss': loss_data[6],
                 'consistency_loss': loss_data[7] / self._cfg.num_unroll_steps,
@@ -594,29 +590,28 @@ class EfficientZeroPolicy(Policy):
             }
         else:
             return {
-            # 'priority':priority_info,
-            'total_loss': loss_data[0],
-            'weighted_loss': loss_data[1],
-            'loss_mean': loss_data[2],
-            'policy_loss': loss_data[4],
-            'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-            'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-
-            'value_prefix_loss': loss_data[5],
-            'value_loss': loss_data[6],
-            'consistency_loss': loss_data[7]/self._cfg.num_unroll_steps,
-            'value_priority': td_data[0].flatten().mean().item(),
-            'target_value_prefix': td_data[1].flatten().mean().item(),
-            'target_value': td_data[2].flatten().mean().item(),
-            'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
-            'transformed_target_value': td_data[4].flatten().mean().item(),
-            'predicted_value_prefixs': td_data[5].flatten().mean().item(),
-            'predicted_values': td_data[6].flatten().mean().item(),
-            # 'target_policy':td_data[9],
-            # 'predicted_policies':td_data[10]
-            # 'td_data': td_data,
-            # 'priority_data_weights': priority_data[0],
-            # 'priority_data_indices': priority_data[1]
+                # 'priority':priority_info,
+                'total_loss': loss_data[0],
+                'weighted_loss': loss_data[1],
+                'loss_mean': loss_data[2],
+                'policy_loss': loss_data[4],
+                'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+                'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+                'value_prefix_loss': loss_data[5],
+                'value_loss': loss_data[6],
+                'consistency_loss': loss_data[7] / self._cfg.num_unroll_steps,
+                'value_priority': td_data[0].flatten().mean().item(),
+                'target_value_prefix': td_data[1].flatten().mean().item(),
+                'target_value': td_data[2].flatten().mean().item(),
+                'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
+                'transformed_target_value': td_data[4].flatten().mean().item(),
+                'predicted_value_prefixs': td_data[5].flatten().mean().item(),
+                'predicted_values': td_data[6].flatten().mean().item(),
+                # 'target_policy':td_data[9],
+                # 'predicted_policies':td_data[10]
+                # 'td_data': td_data,
+                # 'priority_data_weights': priority_data[0],
+                # 'priority_data_indices': priority_data[1]
             }
 
     def _init_collect(self) -> None:
@@ -863,7 +858,6 @@ class EfficientZeroPolicy(Policy):
             'policy_loss',
             'policy_entropy',
             'target_policy_entropy',
-
             'value_prefix_loss',
             'value_loss',
             'consistency_loss',

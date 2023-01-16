@@ -108,7 +108,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         self._max_eval_reward = float("-inf")
         self._last_eval_iter = -1
         self._end_flag = False
-    
+
     def close(self) -> None:
         """
         Overview:
@@ -143,7 +143,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             return False
         self._last_eval_iter = train_iter
         return True
-    
+
     def eval(
             self,
             save_ckpt_fn: Callable = None,
@@ -166,7 +166,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         '''
         stop_flag, return_info = False, []
         if n_episode is None:
-                n_episode = self._default_n_episode
+            n_episode = self._default_n_episode
         assert n_episode is not None, "please indicate eval n_episode"
         envstep_count = 0
         info = {}

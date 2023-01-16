@@ -355,11 +355,11 @@ class GomokuExpert(object):
 
         m_action, m_value = self.evaluate_all_value(self.m_player_id)
         # TODO(pu)
-        # logging.info("loaction:{loc},value:{value}".format(loc=self.action_to_location(m_action), value=m_value))
+        # logging.info("location:{loc},value:{value}".format(loc=self.action_to_location(m_action), value=m_value))
 
         s_action, s_value = self.evaluate_all_value(self.s_player_id)
         # TODO(pu)
-        # logging.info("O_loaction:{loc},value:{value}".format(loc=self.action_to_location(s_action), value=s_value))
+        # logging.info("O_location:{loc},value:{value}".format(loc=self.action_to_location(s_action), value=s_value))
 
         # Block this position if it is better for the opponent to play here
         if m_value >= s_value:

@@ -10,6 +10,7 @@ import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY
 
+
 class DownSample(nn.Module):
 
     def __init__(self, in_channels, out_channels, momentum=0.1, activation=nn.ReLU(inplace=True)):
@@ -26,11 +27,7 @@ class DownSample(nn.Module):
         self.resblocks1 = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=out_channels // 2,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
+                    in_channels=out_channels // 2, activation=activation, norm_type='BN', res_type='basic', bias=False
                 ) for _ in range(1)
             ]
         )
@@ -52,25 +49,15 @@ class DownSample(nn.Module):
         )
         self.resblocks2 = nn.ModuleList(
             [
-                ResBlock(
-                    in_channels=out_channels,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(1)
+                ResBlock(in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                for _ in range(1)
             ]
         )
         self.pooling1 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
         self.resblocks3 = nn.ModuleList(
             [
-                ResBlock(
-                    in_channels=out_channels,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(1)
+                ResBlock(in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                for _ in range(1)
             ]
         )
         self.pooling2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
@@ -92,17 +79,18 @@ class DownSample(nn.Module):
         x = self.pooling2(x)
         return x
 
+
 # Encode the observations into hidden states
 class RepresentationNetwork(nn.Module):
 
     def __init__(
-            self,
-            observation_shape,
-            num_blocks,
-            num_channels,
-            downsample,
-            momentum=0.1,
-            activation=nn.ReLU(inplace=True),
+        self,
+        observation_shape,
+        num_blocks,
+        num_channels,
+        downsample,
+        momentum=0.1,
+        activation=nn.ReLU(inplace=True),
     ):
         """
         Overview: Representation network
@@ -125,13 +113,8 @@ class RepresentationNetwork(nn.Module):
             self.bn = nn.BatchNorm2d(num_channels, momentum=momentum)
         self.resblocks = nn.ModuleList(
             [
-                ResBlock(
-                    in_channels=num_channels,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(num_blocks)
+                ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                for _ in range(num_blocks)
             ]
         )
         self.activation = activation
@@ -153,21 +136,21 @@ class RepresentationNetwork(nn.Module):
 class PredictionNetwork(nn.Module):
 
     def __init__(
-            self,
-            action_space_size,
-            num_blocks,
-            in_channels,
-            num_channels,
-            reduced_channels_value,
-            reduced_channels_policy,
-            fc_value_layers,
-            fc_policy_layers,
-            full_support_size,
-            block_output_size_value,
-            block_output_size_policy,
-            momentum=0.1,
-            last_linear_layer_init_zero=False,
-            activation=nn.ReLU(inplace=True),
+        self,
+        action_space_size,
+        num_blocks,
+        in_channels,
+        num_channels,
+        reduced_channels_value,
+        reduced_channels_policy,
+        fc_value_layers,
+        fc_policy_layers,
+        full_support_size,
+        block_output_size_value,
+        block_output_size_policy,
+        momentum=0.1,
+        last_linear_layer_init_zero=False,
+        activation=nn.ReLU(inplace=True),
     ):
         """Prediction network
         Parameters
@@ -204,13 +187,8 @@ class PredictionNetwork(nn.Module):
 
         self.resblocks = nn.ModuleList(
             [
-                ResBlock(
-                    in_channels=num_channels,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(num_blocks)
+                ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                for _ in range(num_blocks)
             ]
         )
 
@@ -262,7 +240,7 @@ class PredictionNetwork(nn.Module):
         policy = self.bn_policy(policy)
         policy = self.activation(policy)
 
-        value = value.reshape(-1,  self.block_output_size_value)
+        value = value.reshape(-1, self.block_output_size_value)
         policy = policy.reshape(-1, self.block_output_size_policy)
 
         value = self.fc_value(value)
@@ -274,25 +252,25 @@ class PredictionNetwork(nn.Module):
 class AlphaNet(nn.Module):
 
     def __init__(
-            self,
-            observation_shape,
-            action_space_size,
-            num_blocks,
-            num_channels,
-            reduced_channels_value,
-            reduced_channels_policy,
-            fc_value_layers,
-            fc_policy_layers,
-            reward_support_size,
-            value_support_size,
-            downsample,
-            representation_model_type: str = 'conv_res_blocks',
-            representation_model: nn.Module = None,
-            bn_mt=0.1,
-            last_linear_layer_init_zero=False,
-            state_norm=False,
-            categorical_distribution=True,
-            activation=nn.ReLU(inplace=True),
+        self,
+        observation_shape,
+        action_space_size,
+        num_blocks,
+        num_channels,
+        reduced_channels_value,
+        reduced_channels_policy,
+        fc_value_layers,
+        fc_policy_layers,
+        reward_support_size,
+        value_support_size,
+        downsample,
+        representation_model_type: str = 'conv_res_blocks',
+        representation_model: nn.Module = None,
+        bn_mt=0.1,
+        last_linear_layer_init_zero=False,
+        state_norm=False,
+        categorical_distribution=True,
+        activation=nn.ReLU(inplace=True),
     ):
         """
         Overview:
@@ -355,7 +333,7 @@ class AlphaNet(nn.Module):
                 momentum=bn_mt,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                 activation=activation,
-                )
+            )
         else:
             self.prediction_network = PredictionNetwork(
                 action_space_size,
@@ -394,7 +372,7 @@ class AlphaNet(nn.Module):
         encoded_state = self.representation_network(encoded_state)
         logit, value = self.prediction_network(encoded_state)
         return logit, value
-    
+
     def compute_prob_value(self, state_batch):
         logits, values = self.forward(state_batch)
         dist = torch.distributions.Categorical(logits=logits)

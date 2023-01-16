@@ -11,4 +11,3 @@ from .sampled_efficientzero_evaluator import SampledEfficientZeroEvaluator
 
 from .alphazero_collector import AlphaZeroCollector
 from .alphazero_evaluator import AlphaZeroEvaluator
-

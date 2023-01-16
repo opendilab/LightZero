@@ -93,7 +93,9 @@ class AlphaZeroPolicy(Policy):
                 # clip_value=self._cfg.learn.grad_clip_value,
             )
         elif self._cfg.learn.optim_type == 'Adam':
-            self._optimizer = optim.Adam(self._model.parameters(), lr=self._cfg.learn.learning_rate, weight_decay=self._cfg.learn.weight_decay)
+            self._optimizer = optim.Adam(
+                self._model.parameters(), lr=self._cfg.learn.learning_rate, weight_decay=self._cfg.learn.weight_decay
+            )
 
         # Optimizer
         self._grad_norm = self._cfg.learn.grad_norm
@@ -122,7 +124,7 @@ class AlphaZeroPolicy(Policy):
         action_probs, values = self._learn_model.compute_prob_value(state_batch)
         log_probs = torch.log(action_probs)
 
-        # calc policy entropy, for monitoring only 
+        # calc policy entropy, for monitoring only
         entropy = torch.mean(-torch.sum(action_probs * log_probs, 1))
         entropy_loss = -entropy
         # ============
@@ -186,12 +188,15 @@ class AlphaZeroPolicy(Policy):
         for env_id in ready_env_id:
             # print('[collect] start_player_index={}'.format(start_player_index[env_id]))
             # print('[collect] init_state=\n{}'.format(init_state[env_id]))
-            envs[env_id].reset(start_player_index=start_player_index[env_id], init_state=init_state[env_id],)
+            envs[env_id].reset(
+                start_player_index=start_player_index[env_id],
+                init_state=init_state[env_id],
+            )
             action, mcts_probs = self._collect_mcts.get_next_action(
                 envs[env_id], policy_forward_fn=self._policy_value_fn, temperature=1.0, sample=True
             )
             output[env_id] = {
-                'action': action, 
+                'action': action,
                 'probs': mcts_probs,
             }
         return output
@@ -213,13 +218,13 @@ class AlphaZeroPolicy(Policy):
             - transition (:obj:`dict`): Dict type transition data.
         """
         return {
-                'obs': obs,
-                'next_obs': timestep.obs,
-                'action': model_output['action'],
-                'probs': model_output['probs'],
-                'reward': timestep.reward,
-                'done': timestep.done,
-            }
+            'obs': obs,
+            'next_obs': timestep.obs,
+            'action': model_output['action'],
+            'probs': model_output['probs'],
+            'reward': timestep.reward,
+            'done': timestep.done,
+        }
 
     def _init_eval(self) -> None:
         r"""
@@ -248,16 +253,19 @@ class AlphaZeroPolicy(Policy):
         for env_id in ready_env_id:
             # print('[eval] start_player_index={}'.format(start_player_index[env_id]))
             # print('[eval] init_state=\n {}'.format(init_state[env_id]))
-            envs[env_id].reset(start_player_index=start_player_index[env_id], init_state=init_state[env_id],)
+            envs[env_id].reset(
+                start_player_index=start_player_index[env_id],
+                init_state=init_state[env_id],
+            )
             action, mcts_probs = self._collect_mcts.get_next_action(
                 envs[env_id], policy_forward_fn=self._policy_value_fn, temperature=1.0, sample=False
             )
             output[env_id] = {
-                'action': action, 
+                'action': action,
                 'probs': mcts_probs,
             }
         return output
-    
+
     @torch.no_grad()
     def _policy_value_fn(self, env):
         """
@@ -277,4 +285,6 @@ class AlphaZeroPolicy(Policy):
         return action_probs_dict, value
 
     def _monitor_vars_learn(self) -> List[str]:
-        return super()._monitor_vars_learn() + ['cur_lr', 'total_loss', 'policy_loss', 'value_loss', 'entropy_loss', 'grad_norm']
+        return super()._monitor_vars_learn() + [
+            'cur_lr', 'total_loss', 'policy_loss', 'value_loss', 'entropy_loss', 'grad_norm'
+        ]

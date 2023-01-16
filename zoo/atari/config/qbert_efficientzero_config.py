@@ -26,7 +26,7 @@ batch_size = 256
 # The key hyper-para to tune, for different env, we have different episode_length
 # e.g. reuse_factor = 0.5
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 2000
+update_per_collect = 1000
 
 # for debug
 # collector_env_num = 1

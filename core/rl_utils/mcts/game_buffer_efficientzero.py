@@ -355,7 +355,7 @@ class EfficientZeroGameBuffer(Buffer):
         # TODO(pu): reanalyze the outdated data according to their generated time
         if self.config.reanalyze_outdated is True:
             batch_index_list.sort()
-            
+
         weights_lst = (total * probs[batch_index_list]) ** (-beta)
         weights_lst /= weights_lst.max()
 
@@ -434,7 +434,6 @@ class EfficientZeroGameBuffer(Buffer):
         reward_value_context = self.prepare_reward_value_context(
             batch_index_list, game_lst, game_history_pos_lst, total_transitions
         )
-
         """
         only reanalyze recent reanalyze_ratio (e.g. 50%) data
         """

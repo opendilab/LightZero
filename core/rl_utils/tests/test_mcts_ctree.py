@@ -144,7 +144,7 @@ def test_mcts_1pm_to_play():
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert np.array(roots_distributions).shape == (batch_size, action_space_size)
-    assert np.array(roots_values).shape == (batch_size,)
+    assert np.array(roots_values).shape == (batch_size, )
 
 
 @pytest.mark.unittest
@@ -194,7 +194,7 @@ def test_mcts_1pm_to_play_large():
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert np.array(roots_distributions).shape == (game_config.batch_size, game_config.action_space_size)
-    assert np.array(roots_values).shape == (game_config.batch_size,)
+    assert np.array(roots_values).shape == (game_config.batch_size, )
 
 
 @pytest.mark.unittest
@@ -248,7 +248,7 @@ def test_mcts_2pm():
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert np.array(roots_distributions).shape == (batch_size, action_space_size)
-    assert np.array(roots_values).shape == (batch_size,)
+    assert np.array(roots_values).shape == (batch_size, )
 
 
 @pytest.mark.unittest
@@ -281,6 +281,7 @@ def test_mcts_2pm_legal_action():
         assert action_index < action_num[i]
         assert action == legal_actions_list[i][action_index]
         print('\n action_index={}, legal_action={}, action={}'.format(action_index, legal_actions_list[i], action))
+
 
 # debug
 test_mcts_1pm_to_play_large()

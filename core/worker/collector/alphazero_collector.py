@@ -11,7 +11,6 @@ from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, ENV_R
 from ding.torch_utils import to_tensor, to_ndarray
 
 
-
 @SERIAL_COLLECTOR_REGISTRY.register('episode_alphazero')
 class AlphaZeroCollector(ISerialCollector):
     """
@@ -22,18 +21,20 @@ class AlphaZeroCollector(ISerialCollector):
     Property:
         envstep
     """
-    config = dict(deepcopy_obs=False, transform_obs=False, collect_print_freq=100, get_train_sample=False, reward_shaping=True)
+    config = dict(
+        deepcopy_obs=False, transform_obs=False, collect_print_freq=100, get_train_sample=False, reward_shaping=True
+    )
 
     def __init__(
-            self,
-            cfg: EasyDict,
-            env: BaseEnvManager = None,
-            policy: namedtuple = None,
-            tb_logger: 'SummaryWriter' = None,  # noqa
-            exp_name: Optional[str] = 'default_experiment',
-            instance_name: Optional[str] = 'collector',
-            replay_buffer: 'replay_buffer' = None,  # noqa
-            env_config=None,
+        self,
+        cfg: EasyDict,
+        env: BaseEnvManager = None,
+        policy: namedtuple = None,
+        tb_logger: 'SummaryWriter' = None,  # noqa
+        exp_name: Optional[str] = 'default_experiment',
+        instance_name: Optional[str] = 'collector',
+        replay_buffer: 'replay_buffer' = None,  # noqa
+        env_config=None,
     ):
         self._exp_name = exp_name
         self._instance_name = instance_name
@@ -56,7 +57,7 @@ class AlphaZeroCollector(ISerialCollector):
                 path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name
             )
         self.reset(policy, env)
-    
+
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
         """
         Overview:
@@ -116,7 +117,7 @@ class AlphaZeroCollector(ISerialCollector):
             self.reset_env(_env)
         if _policy is not None:
             self.reset_policy(_policy)
-        
+
         self._obs_pool = CachePool('obs', self._env_num, deepcopy=self._deepcopy_obs)
         self._policy_output_pool = CachePool('policy_output', self._env_num)
         # _traj_buffer is {env_id: TrajBuffer}, is used to store traj_len pieces of transitions
@@ -129,7 +130,7 @@ class AlphaZeroCollector(ISerialCollector):
         self._total_duration = 0
         self._last_train_iter = 0
         self._end_flag = False
-    
+
     def _reset_stat(self, env_id: int) -> None:
         """
         Overview:
@@ -143,7 +144,7 @@ class AlphaZeroCollector(ISerialCollector):
         self._obs_pool.reset(env_id)
         self._policy_output_pool.reset(env_id)
         self._env_info[env_id] = {'time': 0., 'step': 0}
-    
+
     def collect(self,
                 n_episode: Optional[int] = None,
                 train_iter: int = 0,
@@ -179,7 +180,7 @@ class AlphaZeroCollector(ISerialCollector):
                     simulation_envs[env_id] = ENV_REGISTRY.build(self._cfg.env.type, self._env_config)
                 policy_output = self._policy.forward(simulation_envs, obs)
                 self._policy_output_pool.update(policy_output)
-                 # Interact with env.
+                # Interact with env.
                 actions = {env_id: output['action'] for env_id, output in policy_output.items()}
                 actions = to_ndarray(actions)
                 timesteps = self._env.step(actions)
@@ -268,7 +269,7 @@ class AlphaZeroCollector(ISerialCollector):
                 destroy the collector instance when the collector finishes its work
         """
         self.close()
-    
+
     def _output_log(self, train_iter: int) -> None:
         """
         Overview:
@@ -308,7 +309,7 @@ class AlphaZeroCollector(ISerialCollector):
                 if k in ['total_envstep_count']:
                     continue
                 self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
-        
+
     def reward_shaping(self, transitions):
         reward = transitions[-1]['reward']
         to_play = transitions[-1]['obs']['to_play']

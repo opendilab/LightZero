@@ -21,7 +21,7 @@ import random
 import jax
 from jax import vmap
 
-import pyximport;
+import pyximport
 pyximport.install()
 
 from eval_cython_cpp import ucb_score_cython_cpp
@@ -55,27 +55,38 @@ def eval_jax_time(parent_visit_count, data):
 
     # without vmap
     with timer:
-        ucb_score_jax(child_count, child_prior, child_reward, child_value, min_max_stats,
-                                 total_children_visit_counts=parent_visit_count, pb_c_base=1.25, pb_c_init=19652,
-                                 discount=0.997)
+        ucb_score_jax(
+            child_count,
+            child_prior,
+            child_reward,
+            child_value,
+            min_max_stats,
+            total_children_visit_counts=parent_visit_count,
+            pb_c_base=1.25,
+            pb_c_init=19652,
+            discount=0.997
+        )
     print(f"eval_jax_time: {timer.value}")
 
     # with vmap
     with timer:
-        vmap(ucb_score_jax_vmap, in_axes=(0, 0, 0, 0, None, None, None, None, None))(jax.numpy.array(child_count),
-                                                                                     jax.numpy.array(child_prior),
-                                                                                     jax.numpy.array(child_reward),
-                                                                                     jax.numpy.array(child_value),
-                                                                                     min_max_stats, parent_visit_count,
-                                                                                     1.25, 19652, 0.997)
+        vmap(
+            ucb_score_jax_vmap, in_axes=(0, 0, 0, 0, None, None, None, None, None)
+        )(
+            jax.numpy.array(child_count), jax.numpy.array(child_prior), jax.numpy.array(child_reward),
+            jax.numpy.array(child_value), min_max_stats, parent_visit_count, 1.25, 19652, 0.997
+        )
     print(f"eval_jax_vmap_time: {timer.value}")
 
     # with vmap and jit
     with timer:
-        vmap(ucb_score_jax_vmap_jit, in_axes=(0, 0, 0, 0, None, None, None, None, None, None))(
+        vmap(
+            ucb_score_jax_vmap_jit, in_axes=(0, 0, 0, 0, None, None, None, None, None, None)
+        )(
             jax.numpy.array(child_count), jax.numpy.array(child_prior), jax.numpy.array(child_reward),
             jax.numpy.array(child_value), min_max_stats.maximum, min_max_stats.minimum, parent_visit_count, 1.25, 19652,
-            0.997)
+            0.997
+        )
     print(f"eval_jax_vmap_jit_time: {timer.value}")
 
 
@@ -91,9 +102,17 @@ def eval_cython_time(parent_visit_count, data):
         min_max_stats.update(child_value[i])
 
     with timer:
-        ucb_score_cython.ucb_score(child_count, child_prior, child_reward, child_value, min_max_stats,
-                                   total_children_visit_counts=parent_visit_count, pb_c_base=1.25, pb_c_init=19652,
-                                   discount=0.997)
+        ucb_score_cython.ucb_score(
+            child_count,
+            child_prior,
+            child_reward,
+            child_value,
+            min_max_stats,
+            total_children_visit_counts=parent_visit_count,
+            pb_c_base=1.25,
+            pb_c_init=19652,
+            discount=0.997
+        )
     print(f"eval_cython_time: {timer.value}")
 
 
@@ -109,9 +128,17 @@ def eval_cython_cpp_time(parent_visit_count, data):
         min_max_stats.update(child_value[i])
 
     with timer:
-        ucb_score_cython_cpp.ucb_score(child_count, child_prior, child_reward, child_value, min_max_stats,
-                                       total_children_visit_counts=parent_visit_count, pb_c_base=1.25, pb_c_init=19652,
-                                       discount=0.997)
+        ucb_score_cython_cpp.ucb_score(
+            child_count,
+            child_prior,
+            child_reward,
+            child_value,
+            min_max_stats,
+            total_children_visit_counts=parent_visit_count,
+            pb_c_base=1.25,
+            pb_c_init=19652,
+            discount=0.997
+        )
     print(f"eval_cython-cpp_time: {timer.value}")
 
 
@@ -127,9 +154,17 @@ def eval_cython_cpp_openmp_time(parent_visit_count, data):
         min_max_stats.update(child_value[i])
 
     with timer:
-        ucb_score_cython_cpp_openmp.ucb_score(child_count, child_prior, child_reward, child_value, min_max_stats,
-                                              total_children_visit_counts=parent_visit_count, pb_c_base=1.25,
-                                              pb_c_init=19652, discount=0.997)
+        ucb_score_cython_cpp_openmp.ucb_score(
+            child_count,
+            child_prior,
+            child_reward,
+            child_value,
+            min_max_stats,
+            total_children_visit_counts=parent_visit_count,
+            pb_c_base=1.25,
+            pb_c_init=19652,
+            discount=0.997
+        )
     print(f"eval_cythoon-cpp-openmp_time: {timer.value}")
 
 
