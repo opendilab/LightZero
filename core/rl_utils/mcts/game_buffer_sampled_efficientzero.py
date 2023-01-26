@@ -84,11 +84,16 @@ class SampledEfficientZeroGameBuffer(Buffer):
         # if self.get_num_of_transitions() >= self.config.total_transitions:
         #     return
 
+        # TODO(pu)
         if meta['end_tag']:
             self._eps_collected += 1
-            valid_len = len(data)
-        else:
-            valid_len = len(data) - meta['gap_steps']
+        valid_len = len(data)
+
+        # if meta['end_tag']:
+        #     self._eps_collected += 1
+        #     valid_len = len(data)
+        # else:
+        #     valid_len = len(data) - meta['gap_steps']
 
         if meta['priorities'] is None:
             max_prio = self.priorities.max() if self.buffer else 1
@@ -97,6 +102,9 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 (self.priorities, [max_prio for _ in range(valid_len)] + [0. for _ in range(valid_len, len(data))])
             )
         else:
+            print('=='*20)
+            print('here'*20)
+            print('=='*20)
             assert len(data) == len(meta['priorities']), " priorities should be of same length as the game steps"
             priorities = meta['priorities'].copy().reshape(-1)
             priorities[valid_len:len(data)] = 0.
@@ -1289,13 +1297,15 @@ class SampledEfficientZeroGameBuffer(Buffer):
         # target policy
         batch_target_policies_re = self.compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
         batch_target_policies_non_re = self.compute_target_policy_non_reanalyzed(policy_non_re_context)
-        if self.config.reanalyze_ratio < 1:
+        if 0 < self.config.reanalyze_ratio < 1:
             try:
                 batch_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
             except Exception as error:
                 print(error)
-        else:
+        elif self.config.reanalyze_ratio == 1:
             batch_policies = batch_target_policies_re
+        elif self.config.reanalyze_ratio == 0:
+            batch_policies = batch_target_policies_non_re
         targets_batch = [batch_value_prefixs, batch_values, batch_policies]
         # a batch contains the inputs and the targets
         train_data = [inputs_batch, targets_batch, self]

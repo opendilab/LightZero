@@ -19,32 +19,32 @@ action_space_size = 6  # for pong
 # K = 3
 K = 6
 
-# num_simulations = 50
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# batch_size = 256
-# update_per_collect = 1000
-# # update_per_collect = 200
-# # for continuous action space, gaussian distribution
-# # policy_entropy_loss_coeff=5e-3
-# # for discrete action space
-# policy_entropy_loss_coeff = 0
-# normalize_prob_of_sampled_actions = False
-# # normalize_prob_of_sampled_actions = True
-
-
-# debug config 1
-num_simulations = 20
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-batch_size = 5
-update_per_collect = 10
+num_simulations = 50
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+batch_size = 256
+update_per_collect = 1000
+# update_per_collect = 200
+# for continuous action space, gaussian distribution
+# policy_entropy_loss_coeff=5e-3
+# for discrete action space
 policy_entropy_loss_coeff = 0
 normalize_prob_of_sampled_actions = False
 # normalize_prob_of_sampled_actions = True
 
+
+# debug config 1
+# num_simulations = 10
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# batch_size = 4
+# update_per_collect = 2
+# policy_entropy_loss_coeff = 0
+# normalize_prob_of_sampled_actions = False
+# # normalize_prob_of_sampled_actions = True
+# game_history_length = 20
 
 # debug config 2
 # num_simulations = 10
@@ -157,8 +157,8 @@ pong_sampled_efficientzero_config = dict(
         env_type='no_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
-        # mcts_ctree=True,
-        mcts_ctree=False,
+        mcts_ctree=True,
+        # mcts_ctree=False,
         image_based=True,
         # cvt_string=True,
         # trade memory for speed
@@ -187,7 +187,7 @@ pong_sampled_efficientzero_config = dict(
         # TODO(pu): how to set proper num_simulations automatically?
         num_simulations=num_simulations,
         batch_size=batch_size,
-        game_history_length=400,
+        game_history_length=game_history_length,
         total_transitions=int(1e5),
         # default config in EfficientZero original repo
         channels=64,
@@ -200,7 +200,10 @@ pong_sampled_efficientzero_config = dict(
         # reanalyze_ratio=0.99,
         # reanalyze_outdated=False,
 
-        reanalyze_ratio=0.5,
+        # reanalyze_ratio=0.5,
+        # reanalyze_outdated=True,
+
+        reanalyze_ratio=0.,
         reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?

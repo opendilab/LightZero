@@ -279,7 +279,7 @@ class SampledEfficientZeroCollector(ISerialCollector):
         Note:
             game_history element shape:
             obs: game_history_length + stack + num_unroll_steps, 20+4 +5
-            rew: game_history_length + stack + num_unroll_steps + td_steps -1  20 +5+3-1
+            rew: game_history_length + num_unroll_steps + td_steps -1  20 +5+3-1
             action: game_history_length -> 20
             root_values:  game_history_length + num_unroll_steps + td_steps -> 20 +5+3
             child_visits： game_history_length + num_unroll_steps -> 20 +5
