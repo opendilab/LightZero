@@ -647,9 +647,9 @@ def compute_ucb_score(
     ##################
     # sampled related code
     ##################
-    # TODO
-    # node_prior = "density"
-    node_prior = "uniform"
+    # TODO(pu)
+    node_prior = "density"
+    # node_prior = "uniform"
     # Uniform prior for continuous action space
     if node_prior == "uniform":
         prior_score = pb_c * (1 / len(parent.children))

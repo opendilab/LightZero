@@ -417,8 +417,9 @@ class SampledEfficientZeroGameBuffer(Buffer):
             _actions = game.action_history[game_history_pos:game_history_pos + self.config.num_unroll_steps].tolist()
             # _actions = game.action_history[game_history_pos:game_history_pos + self.config.num_unroll_steps]
 
-            # NOTE: self.config.num_unroll_steps + 1, TODO why +1
-            _child_actions = game.child_actions[game_history_pos:game_history_pos + self.config.num_unroll_steps + 1]
+            # NOTE: self.config.num_unroll_steps + 1, TODO(pu): why +1
+            # _child_actions = game.child_actions[game_history_pos:game_history_pos + self.config.num_unroll_steps + 1]
+            _child_actions = game.child_actions[game_history_pos:game_history_pos + self.config.num_unroll_steps]
 
             # add mask for invalid actions (out of trajectory)
             _mask = [1. for i in range(len(_actions))]
@@ -436,7 +437,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 ]
                 _child_actions += [
                     np.random.rand(self.config.num_of_sampled_actions, self.config.action_space_size)
-                    for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))
+                    for _ in range(self.config.num_unroll_steps - len(_child_actions))
                 ]
             else:
                 _actions += [
@@ -445,16 +446,17 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 ]
                 if len(_child_actions[0].shape) == 1:
                     _child_actions += [
-                        np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions)
-                        # TODO(pu)
-                        for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))
+                        np.arange(self.config.action_space_size)
+                        # np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions)
+                        #  TODO(pu): why +1
+                        for _ in range(self.config.num_unroll_steps - len(_child_actions))
                     ]
                 else:
                     _child_actions += [
                         np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions).reshape(
                             self.config.num_of_sampled_actions, 1
-                        )  # TODO(pu)
-                        for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))
+                        )  # TODO(pu): why +1
+                        for _ in range(self.config.num_unroll_steps - len(_child_actions))
                     ]
 
             # obtain the input observations
@@ -1075,10 +1077,10 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         #     target_policies.append([0 for _ in range(self.config.action_space_size)])
 
                         # for sampled the invalid target policy TODO
-                        # target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
-                        target_policies.append(
-                            list(np.ones(self.config.num_of_sampled_actions) / self.config.num_of_sampled_actions)
-                        )
+                        target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                        # target_policies.append(
+                        #     list(np.ones(self.config.num_of_sampled_actions) / self.config.num_of_sampled_actions)
+                        # )
 
                     else:
                         if distributions is None:
@@ -1267,10 +1269,11 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         #     policy_mask.append(0)
 
                         # the invalid target policy
-                        # target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
-                        target_policies.append(
-                            list(np.ones(self.config.num_of_sampled_actions) / self.config.num_of_sampled_actions)
-                        )
+                        # TODO
+                        target_policies.append([0 for _ in range(self.config.num_of_sampled_actions)])
+                        # target_policies.append(
+                        #     list(np.ones(self.config.num_of_sampled_actions) / self.config.num_of_sampled_actions)
+                        # )
                         policy_mask.append(0)
 
                     policy_index += 1

@@ -32,6 +32,7 @@ update_per_collect = 1000
 policy_entropy_loss_coeff = 0
 normalize_prob_of_sampled_actions = False
 # normalize_prob_of_sampled_actions = True
+game_history_length = 400
 
 
 # debug config 1
@@ -57,7 +58,7 @@ normalize_prob_of_sampled_actions = False
 # normalize_prob_of_sampled_actions = False
 
 pong_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_mis256_rr05',
+    exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_mis256_rr03_fixedk_oripl_nohash_tgp0',
     # exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_normprob',
     env=dict(
         collector_env_num=collector_env_num,
@@ -119,7 +120,9 @@ pong_sampled_efficientzero_config = dict(
             normalize_prob_of_sampled_actions=normalize_prob_of_sampled_actions,
 
             # policy_loss_type='KL',
-            policy_loss_type='cross_entropy',
+            # policy_loss_type='cross_entropy',
+            policy_loss_type='original',
+
 
             update_per_collect=update_per_collect,
             target_update_freq=100,
@@ -317,4 +320,4 @@ create_config = pong_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from core.entry import serial_pipeline_sampled_efficientzero
-    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e5))
+    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))

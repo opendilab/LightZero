@@ -488,6 +488,11 @@ class SampledEfficientZeroPolicy(Policy):
                 # sum_p_dot_logp = torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) *
                 #           target_log_prob_sampled_actions.detach(), dim=-1)
 
+            elif self._cfg.learn.policy_loss_type == 'original':
+                # TODO: debug the original policy loss
+                # calculate loss for the first step
+                policy_loss = modified_cross_entropy_loss(policy_logits, target_policy[:, 0])
+
         #############################
         # calculate policy loss: KL loss
         #############################
@@ -641,7 +646,7 @@ class SampledEfficientZeroPolicy(Policy):
                 dist = Categorical(prob)
 
                 # take th hypothetical step k= step_i + 1
-                target_normalized_visit_count = target_policy[:, step_i + 1]
+                target_normalized_visit_count = copy.deepcopy(target_policy[:, step_i + 1])
 
                 if 0 in target_normalized_visit_count.sum(-1):
                     print('0 in target_normalized_visit_count.sum(-1)')
@@ -714,6 +719,10 @@ class SampledEfficientZeroPolicy(Policy):
                     policy_loss += -torch.sum(
                         torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
                     )
+                elif self._cfg.learn.policy_loss_type == 'original':
+                    # TODO: debug the original policy loss
+                    # calculate loss for the first step
+                    policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
 
             #############################
             # calculate policy loss: KL loss

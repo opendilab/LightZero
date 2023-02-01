@@ -381,7 +381,7 @@ def select_child(
     for a in root.legal_actions:
         child = root.get_child(a)
         temp_score = compute_ucb_score(
-            child, min_max_stats, mean_q, root.visit_count - 1, pb_c_base, pb_c_int, discount, players
+            child, min_max_stats, mean_q, root.visit_count, pb_c_base, pb_c_int, discount, players
         )
         if max_score < temp_score:
             max_score = temp_score

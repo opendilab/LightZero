@@ -381,19 +381,33 @@ namespace tree
             //               << "disc_action_with_probs[j].second " << disc_action_with_probs[j].second << std::endl;
             // }
 
-            // 取前num_of_sampled_actions个动作
+            // // 取前num_of_sampled_actions个动作
+            // for (int k = 0; k < num_of_sampled_actions; ++k)
+            // {
+            //     sampled_actions.push_back(disc_action_with_probs[k].first);
+            //     // disc_action_with_probs[k].second is disturbed_probs
+            //     // sampled_actions_probs.push_back(disc_action_with_probs[k].second);
+            //     sampled_actions_probs.push_back(probs[disc_action_with_probs[k].first]);
+
+
+            // // TODO(pu): logging
+            // // std::cout << "sampled_actions[k]： " << sampled_actions[k] << std::endl;
+            // // std::cout << "sampled_actions_probs[k]： " << sampled_actions_probs[k] << std::endl;
+            // }
+            
+            // TODO(pu): debugfixed k
+            // 取前num_of_sampled_actions个动作: k=0,1,...,K-1
             for (int k = 0; k < num_of_sampled_actions; ++k)
             {
-                sampled_actions.push_back(disc_action_with_probs[k].first);
+                sampled_actions.push_back(k);
                 // disc_action_with_probs[k].second is disturbed_probs
                 // sampled_actions_probs.push_back(disc_action_with_probs[k].second);
-                sampled_actions_probs.push_back(probs[disc_action_with_probs[k].first]);
-
-
+                sampled_actions_probs.push_back(probs[k]);
             // TODO(pu): logging
             // std::cout << "sampled_actions[k]： " << sampled_actions[k] << std::endl;
             // std::cout << "sampled_actions_probs[k]： " << sampled_actions_probs[k] << std::endl;
             }
+
             disturbed_probs.clear();        // 清空集合，为下次抽样做准备
             disc_action_with_probs.clear(); // 清空集合，为下次抽样做准备
             // std::cout << "position sampled doe" << std::endl;
@@ -464,7 +478,10 @@ namespace tree
                 // std::cout << "sampled_actions_probs[i]: " << sampled_actions_probs[i] << std::endl;
                 // std::cout << "probs[sampled_actions[i]] : " << probs[ sampled_actions[i] ] << std::endl;
 
-                this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
+                // this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
+                // TODO(pu): no hash
+                this->children[action.value[0]] = CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
+
                 // this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[ sampled_actions[i] ], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
                 this->legal_actions.push_back(action);
             }
@@ -609,7 +626,9 @@ namespace tree
     CNode *CNode::get_child(CAction action)
     {
         //        return &(this->children[action]);
-        return &(this->children[action.get_combined_hash()]);
+        // return &(this->children[action.get_combined_hash()]);
+        // TODO(pu): no hash
+        return &(this->children[action.value[0]]);
     }
 
     //*********************************************************

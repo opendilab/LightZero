@@ -251,6 +251,9 @@ class GameHistory:
         self.reward_history = np.array(self.reward_history)
 
         self.child_visit_history = np.array(self.child_visit_history)
+
+        # self.child_actions = np.array(self.child_actions)
+
         self.root_value_history = np.array(self.root_value_history)
 
         self.action_mask_history = np.array(self.action_mask_history)
