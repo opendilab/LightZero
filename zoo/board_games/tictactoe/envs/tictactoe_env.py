@@ -249,7 +249,7 @@ class TicTacToeEnv(BaseGameEnv):
     def expert_action(self):
         """
         Overview:
-            Hard coded expert agent for tictactoe env
+            Hard coded expert agent for tictactoe env.
         Returns:
             - action (:obj:`int`): the expert action to take in the current game state.
         """
@@ -265,34 +265,51 @@ class TicTacToeEnv(BaseGameEnv):
                 elif board[i][j] == 2:
                     board[i][j] = 1
 
+        # first random sample a action from legal_actions
         action = np.random.choice(self.legal_actions)
         # Horizontal and vertical checks
         for i in range(3):
             if abs(sum(board[i, :])) == 2:
+                # if i-th horizontal line has two same pieces and one empty position
+                # find the index in the i-th horizontal line
                 ind = np.where(board[i, :] == 0)[0][0]
+                # convert ind to action
                 action = np.ravel_multi_index((np.array([i]), np.array([ind])), (3, 3))[0]
                 if self.current_player_to_compute_expert_action * sum(board[i, :]) > 0:
+                    # only take the action that will lead a connect3 of current player's pieces
                     return action
 
             if abs(sum(board[:, i])) == 2:
+                # if i-th vertical line has two same pieces and one empty position
+                # find the index in the i-th vertical line
                 ind = np.where(board[:, i] == 0)[0][0]
+                # convert ind to action
                 action = np.ravel_multi_index((np.array([ind]), np.array([i])), (3, 3))[0]
                 if self.current_player_to_compute_expert_action * sum(board[:, i]) > 0:
+                    # only take the action that will lead a connect3 of current player's pieces
                     return action
 
         # Diagonal checks
         diag = board.diagonal()
         anti_diag = np.fliplr(board).diagonal()
         if abs(sum(diag)) == 2:
+            # if diagonal has two same pieces and one empty position
+            # find the index in the diag vector
             ind = np.where(diag == 0)[0][0]
+            # convert ind to action
             action = np.ravel_multi_index((np.array([ind]), np.array([ind])), (3, 3))[0]
             if self.current_player_to_compute_expert_action * sum(diag) > 0:
+                # only take the action that will lead a connect3 of current player's pieces
                 return action
 
         if abs(sum(anti_diag)) == 2:
+            # if anti-diagonal has two same pieces and one empty position
+            # find the index in the anti_diag vector
             ind = np.where(anti_diag == 0)[0][0]
+            # convert ind to action
             action = np.ravel_multi_index((np.array([ind]), np.array([2 - ind])), (3, 3))[0]
             if self.current_player_to_compute_expert_action * sum(anti_diag) > 0:
+                # only take the action that will lead a connect3 of current player's pieces
                 return action
 
         return action

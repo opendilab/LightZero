@@ -418,12 +418,16 @@ class SampledEfficientZeroGameBuffer(Buffer):
             # _actions = game.action_history[game_history_pos:game_history_pos + self.config.num_unroll_steps]
 
             # NOTE: self.config.num_unroll_steps + 1, TODO(pu): why +1
-            # _child_actions = game.child_actions[game_history_pos:game_history_pos + self.config.num_unroll_steps + 1]
-            _child_actions = game.child_actions[game_history_pos:game_history_pos + self.config.num_unroll_steps]
+            _child_actions = game.child_actions[game_history_pos:game_history_pos + self.config.num_unroll_steps + 1]
+
+            # _child_actions = game.child_actions[game_history_pos:game_history_pos + self.config.num_unroll_steps]
 
             # add mask for invalid actions (out of trajectory)
-            _mask = [1. for i in range(len(_actions))]
-            _mask += [0. for _ in range(self.config.num_unroll_steps - len(_mask))]
+            # _mask = [1. for i in range(len(_actions))]
+            # _mask += [0. for _ in range(self.config.num_unroll_steps - len(_mask))]
+            _mask = [1. for i in range(len(_child_actions))]
+            _mask += [0. for _ in range(self.config.num_unroll_steps + 1 - len(_mask))]
+
 
             ######################
             # sampled related code
@@ -437,7 +441,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 ]
                 _child_actions += [
                     np.random.rand(self.config.num_of_sampled_actions, self.config.action_space_size)
-                    for _ in range(self.config.num_unroll_steps - len(_child_actions))
+                    for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))
                 ]
             else:
                 _actions += [
@@ -449,14 +453,14 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         np.arange(self.config.action_space_size)
                         # np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions)
                         #  TODO(pu): why +1
-                        for _ in range(self.config.num_unroll_steps - len(_child_actions))
+                        for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))
                     ]
                 else:
                     _child_actions += [
                         np.random.randint(0, self.config.action_space_size, self.config.num_of_sampled_actions).reshape(
                             self.config.num_of_sampled_actions, 1
                         )  # TODO(pu): why +1
-                        for _ in range(self.config.num_unroll_steps - len(_child_actions))
+                        for _ in range(self.config.num_unroll_steps + 1 - len(_child_actions))
                     ]
 
             # obtain the input observations

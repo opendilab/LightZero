@@ -478,9 +478,9 @@ namespace tree
                 // std::cout << "sampled_actions_probs[i]: " << sampled_actions_probs[i] << std::endl;
                 // std::cout << "probs[sampled_actions[i]] : " << probs[ sampled_actions[i] ] << std::endl;
 
-                // this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
+                this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
                 // TODO(pu): no hash
-                this->children[action.value[0]] = CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
+                // this->children[action.value[0]] = CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
 
                 // this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[ sampled_actions[i] ], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
                 this->legal_actions.push_back(action);
@@ -626,9 +626,9 @@ namespace tree
     CNode *CNode::get_child(CAction action)
     {
         //        return &(this->children[action]);
-        // return &(this->children[action.get_combined_hash()]);
+        return &(this->children[action.get_combined_hash()]);
         // TODO(pu): no hash
-        return &(this->children[action.value[0]]);
+        // return &(this->children[action.value[0]]);
     }
 
     //*********************************************************

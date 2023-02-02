@@ -9,7 +9,7 @@ from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 class TestExpertAction:
 
     def test_expert_action(self):
-        cfg = EasyDict(battle_mode='one_player_mode', prob_random_agent=0)
+        cfg = EasyDict(battle_mode='one_player_mode', agent_vs_human=False, prob_random_agent=0, prob_expert_agent=0.)
         env = TicTacToeEnv(cfg)
         env.reset()
         print('init board state: ')
