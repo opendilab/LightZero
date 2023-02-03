@@ -1,10 +1,3 @@
-import sys
-
-# sys.path.append('/Users/puyuan/code/LightZero')
-# sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
-# sys.path.append('/mnt/lustre/puyuan/LightZero')
-
 import torch
 from easydict import EasyDict
 
@@ -25,19 +18,20 @@ gray_scale = True
 action_space_size = 9  # for mspacman
 K = 9
 # K = 5
+# K = 3
+# K = 2
 num_simulations = 50
-# num_simulations = 25
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 batch_size = 256
-# update_per_collect = 1000
-update_per_collect = 200
+update_per_collect = 1000
 # for continuous action space, gaussian distribution
 # policy_entropy_loss_coeff=5e-3
 # for discrete action space
 policy_entropy_loss_coeff = 0
-normalize_prob_of_sampled_actions = True
+# normalize_prob_of_sampled_actions = True
+normalize_prob_of_sampled_actions = False
 
 # debug config 1
 # action_space_size = 9  # for mspacman
@@ -65,7 +59,7 @@ normalize_prob_of_sampled_actions = True
 # normalize_prob_of_sampled_actions = False
 
 mspacman_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_normprob',
+    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_rr0_samplek_CEpl_hash_tgp0',
     # exp_name=f'data_sez_ptree/mspacman_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}',
     env=dict(
         collector_env_num=collector_env_num,
@@ -87,8 +81,8 @@ mspacman_sampled_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        # model_path=None,
-        model_path='/Users/puyuan/code/LightZero/data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc200_k9_ns50_ic1_pelc0_normprob-detach/ckpt/ckpt_best.pth.tar',
+        model_path=None,
+        # model_path='/Users/puyuan/code/LightZero/data_sez_ctree/mspacman_sampled_efficientzero_seed0_sub883_upc200_k9_ns50_ic1_pelc0_normprob-detach/ckpt/ckpt_best.pth.tar',
         env_name='MsPacmanNoFrameskip-v4',
         # Whether to use cuda for network.
         cuda=True,
@@ -205,8 +199,10 @@ mspacman_sampled_efficientzero_config = dict(
         num_unroll_steps=5,
         lstm_horizon_len=5,
 
-        # TODO(pu): why 0.99?
-        reanalyze_ratio=0.99,
+        # # TODO(pu): why 0.99?
+        # reanalyze_ratio=0.99,
+        reanalyze_ratio=0.,
+        reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?
         lr_manually=True,

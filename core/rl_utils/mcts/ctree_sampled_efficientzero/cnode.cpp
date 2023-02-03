@@ -382,31 +382,31 @@ namespace tree
             // }
 
             // // 取前num_of_sampled_actions个动作
-            // for (int k = 0; k < num_of_sampled_actions; ++k)
-            // {
-            //     sampled_actions.push_back(disc_action_with_probs[k].first);
-            //     // disc_action_with_probs[k].second is disturbed_probs
-            //     // sampled_actions_probs.push_back(disc_action_with_probs[k].second);
-            //     sampled_actions_probs.push_back(probs[disc_action_with_probs[k].first]);
-
-
-            // // TODO(pu): logging
-            // // std::cout << "sampled_actions[k]： " << sampled_actions[k] << std::endl;
-            // // std::cout << "sampled_actions_probs[k]： " << sampled_actions_probs[k] << std::endl;
-            // }
-            
-            // TODO(pu): debugfixed k
-            // 取前num_of_sampled_actions个动作: k=0,1,...,K-1
             for (int k = 0; k < num_of_sampled_actions; ++k)
             {
-                sampled_actions.push_back(k);
+                sampled_actions.push_back(disc_action_with_probs[k].first);
                 // disc_action_with_probs[k].second is disturbed_probs
                 // sampled_actions_probs.push_back(disc_action_with_probs[k].second);
-                sampled_actions_probs.push_back(probs[k]);
+                sampled_actions_probs.push_back(probs[disc_action_with_probs[k].first]);
+
+
             // TODO(pu): logging
             // std::cout << "sampled_actions[k]： " << sampled_actions[k] << std::endl;
             // std::cout << "sampled_actions_probs[k]： " << sampled_actions_probs[k] << std::endl;
             }
+            
+            // TODO(pu): debugfixed k
+            // 取前num_of_sampled_actions个动作: k=0,1,...,K-1
+            // for (int k = 0; k < num_of_sampled_actions; ++k)
+            // {
+            //     sampled_actions.push_back(k);
+            //     // disc_action_with_probs[k].second is disturbed_probs
+            //     // sampled_actions_probs.push_back(disc_action_with_probs[k].second);
+            //     sampled_actions_probs.push_back(probs[k]);
+            // // TODO(pu): logging
+            // // std::cout << "sampled_actions[k]： " << sampled_actions[k] << std::endl;
+            // // std::cout << "sampled_actions_probs[k]： " << sampled_actions_probs[k] << std::endl;
+            // }
 
             disturbed_probs.clear();        // 清空集合，为下次抽样做准备
             disc_action_with_probs.clear(); // 清空集合，为下次抽样做准备

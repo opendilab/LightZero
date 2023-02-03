@@ -15,9 +15,9 @@ class TestTicTacToeEnv:
         env.render()
         while True:
             """player 1"""
-            action = env.human_to_action()
+            # action = env.human_to_action()
             # action = env.random_action()
-            # action = env.expert_action()
+            action = env.expert_action()
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
             env.render()

@@ -16,8 +16,8 @@ gray_scale = False
 # gray_scale = True
 
 action_space_size = 6  # for pong
-# K = 3
-K = 6
+K = 3
+# K = 6
 
 # num_simulations = 50
 # collector_env_num = 8
@@ -58,7 +58,7 @@ game_history_length = 20
 # normalize_prob_of_sampled_actions = False
 
 pong_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_mis256_rr0_fixedk_CEpl_hash_tgp0',
+    exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_mis256_rr0_samplek_CEpl_hash_tgp0',
     # exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_normprob',
     env=dict(
         collector_env_num=collector_env_num,

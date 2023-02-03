@@ -12,13 +12,11 @@ from ding.utils.registry_factory import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
 
-
 from zoo.board_games.base_game_env import BaseGameEnv
 
 
 @ENV_REGISTRY.register('tictactoe')
 class TicTacToeEnv(BaseGameEnv):
-
     config = dict(
         prob_random_agent=0,
         prob_expert_agent=0,
@@ -39,7 +37,8 @@ class TicTacToeEnv(BaseGameEnv):
         self.total_num_actions = 9
         self.prob_random_agent = cfg.prob_random_agent
         self.prob_expert_agent = cfg.prob_expert_agent
-        assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
+        assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (
+                    self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
             f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
         self._env = self
         self.agent_vs_human = cfg.agent_vs_human
@@ -71,7 +70,7 @@ class TicTacToeEnv(BaseGameEnv):
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.uint8
         )
         self._action_space = gym.spaces.Discrete(self.board_size ** 2)
-        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1, ), dtype=np.float32)
+        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
@@ -81,9 +80,11 @@ class TicTacToeEnv(BaseGameEnv):
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
         if self.battle_mode == 'two_player_mode' or self.battle_mode == 'eval_mode':
-            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': self.current_player}
+            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board),
+                   'current_player_index': self.start_player_index, 'to_play': self.current_player}
         else:
-            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': None}
+            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board),
+                   'current_player_index': self.start_player_index, 'to_play': None}
         return obs
 
     def step(self, action):
@@ -143,7 +144,6 @@ class TicTacToeEnv(BaseGameEnv):
 
             timestep = timestep_player2
             return timestep
-        
 
     def _player_step(self, action):
         if action in self.legal_actions:
@@ -183,7 +183,8 @@ class TicTacToeEnv(BaseGameEnv):
 
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
-        obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.players.index(self.current_player), 'to_play': self.current_player}
+        obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board),
+               'current_player_index': self.players.index(self.current_player), 'to_play': self.current_player}
         return BaseEnvTimestep(obs, reward, done, info)
 
     def current_state(self):
@@ -363,7 +364,7 @@ class TicTacToeEnv(BaseGameEnv):
         row = action_number // self.board_size + 1
         col = action_number % self.board_size + 1
         return f"Play row {row}, column {col}"
-    
+
     def is_game_over(self):
         """
         Overview:
@@ -375,10 +376,10 @@ class TicTacToeEnv(BaseGameEnv):
             if winner = -1 reward = 0
         """
         # Check whether the game is ended or not and give the winner
-        #print('next_to_play={}'.format(self.current_player))
+        # print('next_to_play={}'.format(self.current_player))
         have_winner, winner = self.have_winner()
-        #print('winner={}'.format(winner))
-        reward = {1:1, 2:-1, -1:0}
+        # print('winner={}'.format(winner))
+        reward = {1: 1, 2: -1, -1: 0}
         if have_winner:
             return True, reward[winner]
         elif len(self.legal_actions) == 0:
@@ -398,16 +399,16 @@ class TicTacToeEnv(BaseGameEnv):
         -------
         """
         if action not in self.legal_actions:
-            raise ValueError("action {0} on board {1} is not legal". format(action, self.board))
+            raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
         new_board = copy.deepcopy(self.board)
         row, col = self.action_to_coord(action)
         new_board[row, col] = self.current_player
         if self.start_player_index == 0:
-            start_player_index = 1   # self.players = [1, 2], start_player = 2, start_player_index = 1
+            start_player_index = 1  # self.players = [1, 2], start_player = 2, start_player_index = 1
         else:
-            start_player_index = 0   # self.players = [1, 2], start_player = 1, start_player_index = 0
+            start_player_index = 0  # self.players = [1, 2], start_player = 1, start_player_index = 0
         next_simulator_env = copy.deepcopy(self)
-        next_simulator_env.reset(start_player_index, init_state=new_board) # index
+        next_simulator_env.reset(start_player_index, init_state=new_board)  # index
         return next_simulator_env
 
     @property

@@ -264,7 +264,7 @@ class SampledEfficientZeroPolicy(Policy):
             # scalar to categorical_distribution
             # Under this transformation, each scalar is represented as the linear combination of its two adjacent supports
             target_value_prefix_phi = reward_phi(self.reward_support, transformed_target_value_prefix)
-            target_value_phi = value_phi(self.value_support, transformed_target_value_prefix)
+            target_value_phi = value_phi(self.value_support, transformed_target_value)
 
         network_output = self._learn_model.initial_inference(obs_batch)
 
@@ -334,8 +334,13 @@ class SampledEfficientZeroPolicy(Policy):
 
             # take the init hypothetical step k=0
             target_normalized_visit_count_init_step = target_policy[:, 0]
+
+            target_normalized_visit_count_init_step_masked = torch.index_select(target_normalized_visit_count_init_step,
+                                                                                0,
+                                                                                torch.nonzero(mask_batch[:, 0]).squeeze(
+                                                                                    -1))
             # only for debug
-            target_dist = Categorical(target_normalized_visit_count_init_step)
+            target_dist = Categorical(target_normalized_visit_count_init_step_masked)
             target_policy_entropy = target_dist.entropy().mean()
 
             # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
@@ -388,14 +393,14 @@ class SampledEfficientZeroPolicy(Policy):
                 policy_loss = (
                         torch.exp(target_log_prob_sampled_actions.detach()) *
                         (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
-                ).sum(-1)
+                ).sum(-1)* mask_batch[:, 0]
             elif self._cfg.learn.policy_loss_type == 'cross_entropy':
                 # cross_entropy loss: - sum(p * log (q) )
                 # policy_loss = - torch.mean(
                 #     torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
                 policy_loss = -torch.sum(
                     torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
-                )
+                )* mask_batch[:, 0]
         else:
             """discrete action space"""
             prob = torch.softmax(policy_logits, dim=-1)
@@ -466,10 +471,6 @@ class SampledEfficientZeroPolicy(Policy):
                 # policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
                 #         target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
 
-                # policy_loss = (
-                #     torch.exp(target_log_prob_sampled_actions.detach()) *
-                #     (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
-                # ).sum(-1) * mask_batch[:, step_i]
                 policy_loss = (
                                       torch.exp(target_log_prob_sampled_actions.detach()) *
                                       (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
@@ -581,11 +582,18 @@ class SampledEfficientZeroPolicy(Policy):
                                                                           -self._cfg.action_space_size:]
                 dist = Independent(Normal(mu, sigma), 1)
 
-                # take the hypothetical step k>0
-                target_normalized_visit_count = target_policy[:, step_i + 1]
+                # take th hypothetical step k= step_i + 1
+                target_normalized_visit_count = copy.deepcopy(target_policy[:, step_i + 1])
+                # exclude the null target policy
+                target_normalized_visit_count_masked = torch.index_select(target_normalized_visit_count, 0,
+                                                                          torch.nonzero(
+                                                                              mask_batch[:, step_i + 1]).squeeze(-1))
                 # only for debug
-                target_dist = Categorical(target_normalized_visit_count_init_step)
-                target_policy_entropy = target_dist.entropy().mean()
+                try:
+                    target_dist = Categorical(target_normalized_visit_count_masked)
+                except Exception as error:
+                    print(error)
+                target_policy_entropy += target_dist.entropy().mean()
 
                 # batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1 -> batch_size, num_of_sampled_actions, action_dim
                 # e.g. 4, 3, 20, 2, 1 ->  4, 20, 2
@@ -638,7 +646,7 @@ class SampledEfficientZeroPolicy(Policy):
                     policy_loss += (
                             torch.exp(target_log_prob_sampled_actions.detach()) *
                             (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
-                    ).sum(-1)
+                    ).sum(-1)* mask_batch[:, step_i + 1]
                 elif self._cfg.learn.policy_loss_type == 'cross_entropy':
                     # cross_entropy loss: - sum(p * log (q) )
                     # NOTE: accumulate policy loss!!! should be +=
@@ -646,7 +654,7 @@ class SampledEfficientZeroPolicy(Policy):
                     #     torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
                     policy_loss += -torch.sum(
                         torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
-                    )
+                    )* mask_batch[:, step_i + 1]
 
             else:
                 """discrete action space"""

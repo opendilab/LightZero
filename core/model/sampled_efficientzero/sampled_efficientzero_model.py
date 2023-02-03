@@ -700,9 +700,9 @@ class SampledEfficientZeroNet(BaseNet):
     def dynamics(self, encoded_state, reward_hidden_state, action):
         """
         Overview:
-        :param encoded_state: (batch_siize, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6)
-        :param reward_hidden_state: (batch_siize, 1, 1) e.g. (1, 1, 1)
-        :param action: (batch_siize, action_dim)
+        :param encoded_state: (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6)
+        :param reward_hidden_state: (batch_size, 1, 1) e.g. (1, 1, 1)
+        :param action: (batch_size, action_dim)
         :return:
         """
         if not self.continuous_action_space:
@@ -728,8 +728,8 @@ class SampledEfficientZeroNet(BaseNet):
 
             # action[:, 0, None, None] shape: (4, 1, 1, 1)
             action_one_hot = (action[:, 0, None, None] * action_one_hot / self.action_space_size)
-
             state_action_encoding = torch.cat((encoded_state, action_one_hot), dim=1)
+
         else:  # continuous action space
             action_one_hot = (
                 torch.ones((
@@ -758,12 +758,15 @@ class SampledEfficientZeroNet(BaseNet):
                 print(action.shape, action_one_hot.shape)
 
             state_action_encoding = torch.cat((encoded_state, action_embedding), dim=1)
+
         try:
             next_encoded_state, reward_hidden_state, value_prefix = self.dynamics_network(
                 state_action_encoding, reward_hidden_state
             )
         except Exception as error:
             print(error)
+            print(encoded_state.shape, action_embedding.shape)
+            print(state_action_encoding.shape)
 
         if not self.state_norm:
             return next_encoded_state, reward_hidden_state, value_prefix
