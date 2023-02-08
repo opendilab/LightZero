@@ -71,40 +71,46 @@ class Node():
         return self.env.is_game_over()[1]
 
     @property
+    def estimated_value(self):
+        return 0
+
+    @property
     def state(self):
         return self.board
 
 
-def pruning(tree, maximising_player, alpha=float("-inf"), beta=float("+inf"), first_level=False):
+def pruning(tree, maximising_player, alpha=float("-inf"), beta=float("+inf"), depth=999, first_level=True):
     if tree.is_terminal_node is True:
         return tree.value
+    # TODO(pu): use a limited search depth
+    if depth == 0:
+        return tree.estimated_value
 
     # print(tree)
     if tree.expanded is False:
         tree.expand()
         # print('expand one node!')
-    # else:
-    #     print('current node has already expanded!')
-    #     print(tree.children)
 
+    # for debug
     # if (tree.state == np.array([[0, 0, 0], [0, 0, 0], [0, 0, 1]])).all():
     #     print('p1')
     # if (tree.state == np.array([[0, 0, 1], [2, 1, 2], [1, 2, 1]])).all():
     #     print('p2')
 
-    val, func = (float("-inf"), max) if maximising_player else (float("+inf"), min)
+    val = float("-inf") if maximising_player else float("+inf")
     for subtree in tree.children:
-        val = func(pruning(subtree, not maximising_player, alpha, beta, first_level=False), val)
+        sub_val = pruning(subtree, not maximising_player, alpha, beta, depth-1, first_level=False)
         if maximising_player:
+            val = max(sub_val, val)
             if val > alpha:
                 best_subtree = subtree
-            alpha = max(alpha, val)
+                alpha = val
         else:
+            val = min(sub_val, val)
             if val < beta:
                 best_subtree = subtree
-            beta = min(beta, val)
-
-        if (maximising_player and val >= beta) or (not maximising_player and val <= alpha):
+                beta = val
+        if beta <= alpha:
             break
 
     if first_level is True:
@@ -120,7 +126,7 @@ class AlphaBetaPruningBot:
         self.ENV = ENV
         self.cfg = cfg
 
-    def get_best_action(self, board, player_index):
+    def get_best_action(self, board, player_index, depth=999):
         try:
             simulator_env = self.ENV(EasyDict(self.cfg))
         except:
@@ -130,19 +136,19 @@ class AlphaBetaPruningBot:
             board, simulator_env.legal_actions, start_player_index=player_index, env=simulator_env
         )
         if player_index == 0:
-            val, best_subtree = pruning(root, True, first_level=True)
+            val, best_subtree = pruning(root, True, depth=depth, first_level=True)
         else:
-            val, best_subtree = pruning(root, False, first_level=True)
+            val, best_subtree = pruning(root, False, depth=depth, first_level=True)
 
         # print('val, best_subtree:', val, best_subtree)
-        print(f'alpha-beta searched best_action: {best_subtree.prev_action}, its val: {val}')
+        print(f'player_index: {player_index}, alpha-beta searched best_action: {best_subtree.prev_action}, its val: {val}')
 
         return best_subtree.prev_action
 
 
 if __name__ == "__main__":
-    """TicTacToe"""
-    """
+    import time
+    ##### TicTacToe #####
     from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
     cfg = dict(
         prob_random_agent=0,
@@ -172,11 +178,14 @@ if __name__ == "__main__":
 
     while not env.is_game_over()[0]:
         if player_index == 0:
+            start = time.time()
             action = player_0.get_best_action(state, player_index=player_index)
+            print('player 1 action time: ', time.time() - start)
             player_index = 1
         else:
-            print('-' * 40)
+            start = time.time()
             action = player_1.get_best_action(state, player_index=player_index)
+            print('player 2 action time: ', time.time() - start)
             player_index = 0
         env.step(action)
         state = env.board
@@ -192,8 +201,7 @@ if __name__ == "__main__":
     # assert env.have_winner()[0] is True, env.have_winner()[1] == 1
     """
 
-
-    """Gomoku"""
+    ##### Gomoku #####
     from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
     cfg = dict(
         board_size=5,
@@ -232,11 +240,14 @@ if __name__ == "__main__":
 
     while not env.is_game_over()[0]:
         if player_index == 0:
+            start = time.time()
             action = player_0.get_best_action(state, player_index=player_index)
+            print('player 1 action time: ', time.time() - start)
             player_index = 1
         else:
-            print('-' * 40)
+            start = time.time()
             action = player_1.get_best_action(state, player_index=player_index)
+            print('player 2 action time: ', time.time() - start)
             player_index = 0
         env.step(action)
         state = env.board
@@ -245,3 +256,4 @@ if __name__ == "__main__":
 
     assert env.have_winner()[0] is False, env.have_winner()[1] == -1
     # assert env.have_winner()[0] is True, env.have_winner()[1] == 2
+    """

@@ -127,7 +127,7 @@ mspacman_efficientzero_config = dict(
         image_channel=3,
         gray_scale=False,
         downsample=True,
-        vis_result=True,
+        monitor_statistics=True,
         # TODO(pu): test the effect of augmentation
         use_augmentation=True,
         # Style of augmentation

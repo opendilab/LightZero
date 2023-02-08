@@ -272,12 +272,12 @@ class MuZeroV2Policy(Policy):
 
             policy_logits = policy_logits.detach().cpu().numpy()
 
-        if self._cfg.vis_result:
+        if self._cfg.monitor_statistics:
             state_lst = hidden_state.detach().cpu().numpy()
 
         predicted_rewards = []
         # Note: Following line is just for logging.
-        if self._cfg.vis_result:
+        if self._cfg.monitor_statistics:
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
@@ -410,7 +410,7 @@ class MuZeroV2Policy(Policy):
             # Follow MuZero, set half gradient
             # hidden_state.register_hook(lambda grad: grad * 0.5)
 
-            if self._cfg.vis_result:
+            if self._cfg.monitor_statistics:
                 original_rewards = inverse_scalar_transform(
                     reward.detach(),
                     self._cfg.support_size,
@@ -485,7 +485,7 @@ class MuZeroV2Policy(Policy):
             total_loss.item(), weighted_loss.item(), loss.mean().item(), 0, policy_loss.mean().item(),
             reward_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
         )
-        if self._cfg.vis_result:
+        if self._cfg.monitor_statistics:
 
             # reward l1 loss
             reward_indices_0 = (target_reward_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 0)

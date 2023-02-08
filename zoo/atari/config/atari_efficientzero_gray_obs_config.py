@@ -116,7 +116,7 @@ atari_efficientzero_config = dict(
         # whether to turn the RGB image to gray scale before encoder
         gray_scale=True,
         downsample=True,
-        vis_result=True,
+        monitor_statistics=True,
         use_augmentation=True,
         # Style of augmentation
         # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']

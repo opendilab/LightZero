@@ -176,7 +176,7 @@ pendulum_sampled_efficientzero_config = dict(
 
         gray_scale=False,
         downsample=False,
-        vis_result=True,
+        monitor_statistics=True,
         # TODO(pu): test the effect of augmentation,
         # use_augmentation=True,  # only for atari image obs
         use_augmentation=False,

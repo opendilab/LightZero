@@ -277,12 +277,12 @@ class EfficientZeroVisualizePolicy(Policy):
             )
             policy_logits = policy_logits.detach().cpu().numpy()
 
-        if self._cfg.vis_result:
+        if self._cfg.monitor_statistics:
             state_lst = hidden_state.detach().cpu().numpy()
 
         predicted_value_prefixs = []
         # Note: Following line is just for logging.
-        if self._cfg.vis_result:
+        if self._cfg.monitor_statistics:
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
@@ -384,7 +384,7 @@ class EfficientZeroVisualizePolicy(Policy):
                     torch.zeros(1, self._cfg.batch_size, self._cfg.lstm_hidden_size).to(self._cfg.device)
                 )
 
-            if self._cfg.vis_result:
+            if self._cfg.monitor_statistics:
                 original_value_prefixs = inverse_scalar_transform(
                     value_prefix, self._cfg.support_size, categorical_distribution=self._cfg.categorical_distribution
                 )
@@ -462,7 +462,7 @@ class EfficientZeroVisualizePolicy(Policy):
             total_loss.item(), weighted_loss.item(), loss.mean().item(), 0, policy_loss.mean().item(),
             value_prefix_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
         )
-        if self._cfg.vis_result:
+        if self._cfg.monitor_statistics:
 
             # reward l1 loss
             value_prefix_indices_0 = (

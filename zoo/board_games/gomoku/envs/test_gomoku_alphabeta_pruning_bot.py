@@ -1,5 +1,6 @@
-import pytest
 from easydict import EasyDict
+import pytest
+import time
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
 from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
@@ -11,7 +12,7 @@ cfg = dict(
     battle_mode='two_player_mode',
     channel_last=True,
     agent_vs_human=False,
-    expert_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
+    expert_action_type='alpha_beta_pruning',  # options: {'v0', 'alpha_beta_pruning'}
 )
 
 
@@ -33,11 +34,14 @@ class TestGomokuBot:
 
         while not env.is_game_over()[0]:
             if player_index == 0:
+                start = time.time()
                 action = player_0.get_best_action(state, player_index=player_index)
+                print('player 1 action time: ', time.time() - start)
                 player_index = 1
             else:
-                print('-' * 40)
+                start = time.time()
                 action = player_1.get_best_action(state, player_index=player_index)
+                print('player 2 action time: ', time.time() - start)
                 player_index = 0
             env.step(action)
             state = env.board
@@ -65,17 +69,20 @@ class TestGomokuBot:
 
         while not env.is_game_over()[0]:
             if player_index == 0:
+                start = time.time()
                 action = player_0.get_best_action(state, player_index=player_index)
+                print('player 1 action time: ', time.time() - start)
                 player_index = 1
             else:
-                print('-' * 40)
+                start = time.time()
                 action = player_1.get_best_action(state, player_index=player_index)
+                print('player 2 action time: ', time.time() - start)
                 player_index = 0
             env.step(action)
             state = env.board
             print('-' * 15)
             print(state)
-            row, col = env.action_to_coord(action)
+        row, col = env.action_to_coord(action)
 
         # the player 2 win when place piece in (0, 4)
         assert env.have_winner()[1] == 2
@@ -100,17 +107,20 @@ class TestGomokuBot:
 
         while not env.is_game_over()[0]:
             if player_index == 0:
+                start = time.time()
                 action = player_0.get_best_action(state, player_index=player_index)
+                print('player 1 action time: ', time.time() - start)
                 player_index = 1
             else:
-                print('-' * 40)
+                start = time.time()
                 action = player_1.get_best_action(state, player_index=player_index)
+                print('player 2 action time: ', time.time() - start)
                 player_index = 0
             env.step(action)
             state = env.board
             print('-' * 15)
             print(state)
-            row, col = env.action_to_coord(action)
+        row, col = env.action_to_coord(action)
 
         # the player 1 win when place piece in (4, 4)
         assert env.have_winner()[1] == 1
