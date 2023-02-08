@@ -10,7 +10,8 @@ from ditk import logging
 from easydict import EasyDict
 
 from zoo.board_games.base_game_env import BaseGameEnv
-from zoo.board_games.gomoku.envs.gomoku_expert import GomokuExpert
+from zoo.board_games.gomoku.envs.gomoku_expert_v0 import GomokuExpertV0
+from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
 
 
 @ENV_REGISTRY.register('gomoku')
@@ -22,6 +23,7 @@ class GomokuEnv(BaseGameEnv):
         battle_mode='one_player_mode',
         channel_last=True,
         agent_vs_human=False,
+        expert_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
     )
 
     @classmethod
@@ -40,13 +42,24 @@ class GomokuEnv(BaseGameEnv):
         self.players = [1, 2]
         self.board_markers = [str(i + 1) for i in range(self.board_size)]
         self.total_num_actions = self.board_size * self.board_size
-        self.expert = GomokuExpert()
+        self.gomoku_expert_v0 = GomokuExpertV0()
         self._env = self
         self.agent_vs_human = cfg.agent_vs_human
+        self.expert_action_type = cfg.expert_action_type
+        if self.expert_action_type == 'alpha_beta_pruning':
+            self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 
     @property
     def current_player(self):
         return self._current_player
+
+    @property
+    def current_player_index(self):
+        """
+        current_player_index = 0, current_player = 1
+        current_player_index = 1, current_player = 2
+        """
+        return 0 if self._current_player == 1 else 1
 
     @property
     def to_play(self):
@@ -76,10 +89,33 @@ class GomokuEnv(BaseGameEnv):
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
         if self.battle_mode == 'two_player_mode' or self.battle_mode == 'eval_mode':
-            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': self.current_player}
+            obs = {
+                'observation': self.current_state(),
+                'action_mask': action_mask,
+                'board': copy.deepcopy(self.board),
+                'current_player_index': self.start_player_index,
+                'to_play': self.current_player
+            }
         else:
-            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': None}
+            obs = {
+                'observation': self.current_state(),
+                'action_mask': action_mask,
+                'board': copy.deepcopy(self.board),
+                'current_player_index': self.start_player_index,
+                'to_play': None
+            }
         return obs
+
+    def reset_v2(self, start_player_index=0, init_state=None):
+        """
+        for alpha-beta pruning bot
+        """
+        self.start_player_index = start_player_index
+        self._current_player = self.players[self.start_player_index]
+        if init_state is not None:
+            self.board = np.array(init_state, dtype="int32")
+        else:
+            self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
 
     def step(self, action):
         if self.battle_mode == 'two_player_mode':
@@ -167,7 +203,13 @@ class GomokuEnv(BaseGameEnv):
 
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
-        obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.players.index(self.current_player), 'to_play': self.current_player}
+        obs = {
+            'observation': self.current_state(),
+            'action_mask': action_mask,
+            'board': copy.deepcopy(self.board),
+            'current_player_index': self.players.index(self.current_player),
+            'to_play': self.current_player
+        }
         return BaseEnvTimestep(obs, reward, done, info)
 
     def current_state(self):
@@ -246,10 +288,20 @@ class GomokuEnv(BaseGameEnv):
         return np.random.choice(action_list)
 
     def expert_action(self):
+        if self.expert_action_type == 'v0':
+            return self.expert_action_v0()
+        elif self.expert_action_type == 'alpha_beta_pruning':
+            return self.expert_action_alpha_beta_pruning()
+
+    def expert_action_alpha_beta_pruning(self):
+        action = self.alpha_beta_pruning_player.get_best_action(self.board, player_index=self.current_player_index)
+        return action
+
+    def expert_action_v0(self):
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
         obs = {'observation': self.current_state(), 'action_mask': action_mask}
-        return self.expert.get_action(obs)
+        return self.gomoku_expert_v0.get_action(obs)
 
     def human_to_action(self):
         """
@@ -335,7 +387,7 @@ class GomokuEnv(BaseGameEnv):
         #print('next_to_play={}'.format(self.current_player))
         have_winner, winner = self.have_winner()
         #print('winner={}'.format(winner))
-        reward = {1:1, 2:-1, -1:0}
+        reward = {1: 1, 2: -1, -1: 0}
         if have_winner:
             return True, reward[winner]
         elif len(self.legal_actions) == 0:
@@ -355,17 +407,34 @@ class GomokuEnv(BaseGameEnv):
         -------
         """
         if action not in self.legal_actions:
-            raise ValueError("action {0} on board {1} is not legal". format(action, self.board))
+            raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
         new_board = copy.deepcopy(self.board)
         row, col = self.action_to_coord(action)
         new_board[row, col] = self.current_player
         if self.start_player_index == 0:
-            start_player_index = 1   # self.players = [1, 2], start_player = 2, start_player_index = 1
+            start_player_index = 1  # self.players = [1, 2], start_player = 2, start_player_index = 1
         else:
-            start_player_index = 0   # self.players = [1, 2], start_player = 1, start_player_index = 0
+            start_player_index = 0  # self.players = [1, 2], start_player = 1, start_player_index = 0
         next_simulator_env = copy.deepcopy(self)
-        next_simulator_env.reset(start_player_index, init_state=new_board) # index
+        next_simulator_env.reset(start_player_index, init_state=new_board)  # index
         return next_simulator_env
+
+    def simulate_action_v2(self, board, start_player_index, action):
+        """
+        Overview:
+            simulate action from board and get new_board, new_legal_actions
+        Returns:
+            Returns new_board, new_legal_actions
+        -------
+        """
+        self.reset(start_player_index, init_state=board)
+        if action not in self.legal_actions:
+            raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
+        row, col = self.action_to_coord(action)
+        self.board[row, col] = self.current_player
+        new_legal_actions = copy.deepcopy(self.legal_actions)
+        new_board = copy.deepcopy(self.board)
+        return new_board, new_legal_actions
 
     @property
     def observation_space(self) -> gym.spaces.Space:

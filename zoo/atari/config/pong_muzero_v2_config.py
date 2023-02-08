@@ -260,18 +260,18 @@ atari_efficientzero_create_config = dict(
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='muzero_v2',
-        import_names=['core.policy.muzero_v2'],
+        import_names=['lzero.policy.muzero_v2'],
     ),
     collector=dict(
         type='episode_muzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.muzero_collector'],
+        import_names=['lzero.worker.collector.muzero_collector'],
     )
 )
 atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
 create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_muzero
+    from lzero.entry import serial_pipeline_muzero
 
     serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(5e5))

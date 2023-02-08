@@ -4,7 +4,6 @@ from gomoku_efficientzero_base_eval_config import game_config
 
 board_size = 6  # default_size is 15
 
-
 collector_env_num = 1
 n_episode = 1
 evaluator_env_num = 1
@@ -27,12 +26,12 @@ gomoku_efficientzero_config = dict(
         # battle_mode='one_player_mode',
         prob_random_agent=0.,
         manager=dict(shared_memory=False, ),
-
     ),
     policy=dict(
         # pretrained model
         # model_path='/Users/puyuan/code/LightZero/data_ez_ptree/gomoku_1pm_efficientzero_seed0_sub885_221016_120924/ckpt/ckpt_best.pth.tar',
-        model_path='/Users/puyuan/code/LightZero/data_ez_ptree/gomoku_2pm_efficientzero_seed0_sub885_221018_235827/ckpt/ckpt_best.pth.tar',
+        model_path=
+        '/Users/puyuan/code/LightZero/data_ez_ptree/gomoku_2pm_efficientzero_seed0_sub885_221018_235827/ckpt/ckpt_best.pth.tar',
         # model_path=None,
         env_name='gomoku',
         # TODO(pu): how to pass into game_config, which is class, not a dict
@@ -71,7 +70,6 @@ gomoku_efficientzero_config = dict(
             # debug
             # update_per_collect=2,
             # batch_size=4,
-
             batch_size=256,
 
             # one_player_mode, board_size=6, episode_length=6**2/2=18
@@ -112,19 +110,21 @@ gomoku_efficientzero_create_config = dict(
     # env_manager=dict(type='subprocess'),
     policy=dict(
         type='efficientzero',
-        import_names=['core.policy.efficientzero'],
+        import_names=['lzero.policy.efficientzero'],
     ),
     collector=dict(
         type='episode_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.efficientzero_collector'],
+        import_names=['lzero.worker.collector.efficientzero_collector'],
     )
 )
 gomoku_efficientzero_create_config = EasyDict(gomoku_efficientzero_create_config)
 create_config = gomoku_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero_eval
+    from lzero.entry import serial_pipeline_efficientzero_eval
     for seed in range(5):
-        serial_pipeline_efficientzero_eval([main_config, create_config], game_config=game_config, seed=seed, max_env_step=int(1e6))
+        serial_pipeline_efficientzero_eval(
+            [main_config, create_config], game_config=game_config, seed=seed, max_env_step=int(1e6)
+        )
         print(f'eval seed {seed} done!')

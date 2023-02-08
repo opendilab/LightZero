@@ -324,18 +324,18 @@ pendulum_sampled_muzero_create_config = dict(
     # env_manager=dict(type='subprocess'),
     policy=dict(
         type='sampled_muzero',
-        import_names=['core.policy.sampled_muzero'],
+        import_names=['lzero.policy.sampled_muzero'],
     ),
     collector=dict(
         type='episode_sampled_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.sampled_efficientzero_collector'],
+        import_names=['lzero.worker.collector.sampled_efficientzero_collector'],
     )
 )
 pendulum_sampled_muzero_create_config = EasyDict(pendulum_sampled_muzero_create_config)
 create_config = pendulum_sampled_muzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_sampled_muzero
+    from lzero.entry import serial_pipeline_sampled_muzero
 
     serial_pipeline_sampled_muzero([main_config, create_config], seed=0, max_env_step=int(5e5))

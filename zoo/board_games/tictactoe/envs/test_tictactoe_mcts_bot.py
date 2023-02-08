@@ -7,8 +7,10 @@ from zoo.board_games.mcts_bot import MCTSBot
 
 import pytest
 
+
 @pytest.mark.envtest
 class TestTicTacToeBot:
+
     def test_tictactoe_two_player_mode_player0_win(self):
         # player_0  num_simulation=1000, will win
         # player_1  num_simulation=1
@@ -16,14 +18,15 @@ class TestTicTacToeBot:
             prob_random_agent=0,
             prob_expert_agent=0,
             battle_mode='two_player_mode',
+            agent_vs_human=False,
         )
         env = TicTacToeEnv(EasyDict(cfg))
         env.reset()
         state = env.board
-        player_0 = MCTSBot(TicTacToeEnv, cfg, 'a', 1000)  # player_index = 0, player = 1
-        player_1 = MCTSBot(TicTacToeEnv, cfg, 'b', 1)  # player_index = 1, player = 2
+        player_0 = MCTSBot(TicTacToeEnv, cfg, 'player 1', 1000)  # player_index = 0, player = 1
+        player_1 = MCTSBot(TicTacToeEnv, cfg, 'player 2', 1)  # player_index = 1, player = 2
 
-        player_index = 0  # A fist
+        player_index = 0  # player 1 fist
         print('#' * 15)
         print(state)
         print('#' * 15)
@@ -51,14 +54,15 @@ class TestTicTacToeBot:
             prob_random_agent=0,
             prob_expert_agent=0,
             battle_mode='two_player_mode',
+            agent_vs_human=False,
         )
         env = TicTacToeEnv(EasyDict(cfg))
         env.reset()
         state = env.board
-        player_0 = MCTSBot(TicTacToeEnv, cfg, 'a', 1)  # player_index = 0, player = 1
-        player_1 = MCTSBot(TicTacToeEnv, cfg, 'b', 1000)  # player_index = 1, player = 2
+        player_0 = MCTSBot(TicTacToeEnv, cfg, 'player 1', 1)  # player_index = 0, player = 1
+        player_1 = MCTSBot(TicTacToeEnv, cfg, 'player 2', 1000)  # player_index = 1, player = 2
 
-        player_index = 0  # A fist
+        player_index = 0  # player 1 fist
         print('#' * 15)
         print(state)
         print('#' * 15)
@@ -86,14 +90,15 @@ class TestTicTacToeBot:
             prob_random_agent=0,
             prob_expert_agent=0,
             battle_mode='two_player_mode',
+            agent_vs_human=False,
         )
         env = TicTacToeEnv(EasyDict(cfg))
         env.reset()
         state = env.board
-        player_0 = MCTSBot(TicTacToeEnv, cfg, 'a', 1000)  # player_index = 0, player = 1
-        player_1 = MCTSBot(TicTacToeEnv, cfg, 'b', 1000)  # player_index = 1, player = 2
+        player_0 = MCTSBot(TicTacToeEnv, cfg, 'player 1', 1000)  # player_index = 0, player = 1
+        player_1 = MCTSBot(TicTacToeEnv, cfg, 'player 2', 1000)  # player_index = 1, player = 2
 
-        player_index = 0  # A fist
+        player_index = 0  # player 1 fist
         print('#' * 15)
         print(state)
         print('#' * 15)
@@ -119,14 +124,13 @@ class TestTicTacToeBot:
             prob_random_agent=0,
             prob_expert_agent=0,
             battle_mode='two_player_mode',
+            agent_vs_human=False,
         )
         env = TicTacToeEnv(EasyDict(cfg))
-        init_state = [[1, 1, 0],
-                      [0, 2, 2],
-                      [0, 0, 0]]
-        player_0 = MCTSBot(TicTacToeEnv, cfg, 'a', 1000)  # player_index = 0, player = 1
-        player_1 = MCTSBot(TicTacToeEnv, cfg, 'b', 1000)  # player_index = 1, player = 2
-        player_index = 0  # A fist
+        init_state = [[1, 1, 0], [0, 2, 2], [0, 0, 0]]
+        player_0 = MCTSBot(TicTacToeEnv, cfg, 'player 1', 1000)  # player_index = 0, player = 1
+        player_1 = MCTSBot(TicTacToeEnv, cfg, 'player 2', 1000)  # player_index = 1, player = 2
+        player_index = 0  # player 1 fist
 
         env.reset(player_index, init_state)
         state = env.board
@@ -158,14 +162,13 @@ class TestTicTacToeBot:
             prob_random_agent=0,
             prob_expert_agent=0,
             battle_mode='two_player_mode',
+            agent_vs_human=False,
         )
         env = TicTacToeEnv(EasyDict(cfg))
-        init_state = [[1, 0, 1],
-                      [0, 0, 2],
-                      [2, 0, 1]]
-        player_0 = MCTSBot(TicTacToeEnv, cfg, 'a', 1000)  # player_index = 0, player = 1
-        player_1 = MCTSBot(TicTacToeEnv, cfg, 'b', 1000)  # player_index = 1, player = 2
-        player_index = 1  # A fist
+        init_state = [[1, 0, 1], [0, 0, 2], [2, 0, 1]]
+        player_0 = MCTSBot(TicTacToeEnv, cfg, 'player 1', 1000)  # player_index = 0, player = 1
+        player_1 = MCTSBot(TicTacToeEnv, cfg, 'player 2', 1000)  # player_index = 1, player = 2
+        player_index = 1  # player 1 fist
 
         env.reset(player_index, init_state)
         state = env.board

@@ -298,17 +298,17 @@ lunarlander_disc_efficientzero_create_config = dict(
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='efficientzero',
-        import_names=['core.policy.efficientzero'],
+        import_names=['lzero.policy.efficientzero'],
     ),
     collector=dict(
         type='episode_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.efficientzero_collector'],
+        import_names=['lzero.worker.collector.efficientzero_collector'],
     )
 )
 lunarlander_disc_efficientzero_create_config = EasyDict(lunarlander_disc_efficientzero_create_config)
 create_config = lunarlander_disc_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero_eval
+    from lzero.entry import serial_pipeline_efficientzero_eval
     serial_pipeline_efficientzero_eval([main_config, create_config], seed=0, max_env_step=int(5e5))

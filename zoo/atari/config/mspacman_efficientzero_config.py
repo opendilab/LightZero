@@ -8,29 +8,29 @@ else:
 
 categorical_distribution = True
 
-action_space_size = 9  # for mspacman
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-batch_size = 256
-num_simulations = 50
-# TODO(pu):
-# The key hyper-para to tune, for different env, we have different episode_length
-# e.g. reuse_factor = 0.5
-# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 1000
+# action_space_size = 9  # for mspacman
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# batch_size = 256
+# num_simulations = 50
+# # TODO(pu):
+# # The key hyper-para to tune, for different env, we have different episode_length
+# # e.g. reuse_factor = 0.5
+# # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+# update_per_collect = 1000
 
 # debug
-# action_space_size = 9  # for mspacman
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# batch_size = 5
-# num_simulations = 5
-# update_per_collect = 1
+action_space_size = 9  # for mspacman
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+batch_size = 5
+num_simulations = 5
+update_per_collect = 1
 
 mspacman_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/mspacman_efficientzero_seed0_sub883_upc{update_per_collect}_rr03',
+    exp_name=f'data_ez_ctree/mspacman_efficientzero_seed0_sub883_upc{update_per_collect}_rr0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -152,7 +152,7 @@ mspacman_efficientzero_config = dict(
         # reanalyze_ratio=0.99,
         # reanalyze_outdated=False,
 
-        reanalyze_ratio=0.3,
+        reanalyze_ratio=0.,
         reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?
@@ -250,17 +250,17 @@ mspacman_efficientzero_create_config = dict(
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='efficientzero',
-        import_names=['core.policy.efficientzero'],
+        import_names=['lzero.policy.efficientzero'],
     ),
     collector=dict(
         type='episode_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.efficientzero_collector'],
+        import_names=['lzero.worker.collector.efficientzero_collector'],
     )
 )
 mspacman_efficientzero_create_config = EasyDict(mspacman_efficientzero_create_config)
 create_config = mspacman_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero
+    from lzero.entry import serial_pipeline_efficientzero
     serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e5))

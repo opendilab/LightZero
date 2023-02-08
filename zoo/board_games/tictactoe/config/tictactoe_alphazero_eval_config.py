@@ -65,7 +65,8 @@ tictactoe_alphazero_config = dict(
                     load_ckpt_before_run='',
                     log_show_after_iter=1,
                     save_ckpt_after_iter=10000,
-                    save_ckpt_after_run=True, ),
+                    save_ckpt_after_run=True,
+                ),
             )
         ),
         collect=dict(
@@ -74,7 +75,8 @@ tictactoe_alphazero_config = dict(
             collector=dict(
                 env=dict(
                     type='tictactoe',
-                    import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'], ),
+                    import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
+                ),
                 augmentation=True,
             ),
             mcts=dict(num_simulations=num_simulations)
@@ -86,7 +88,8 @@ tictactoe_alphazero_config = dict(
                 stop_value=1,
                 env=dict(
                     type='tictactoe',
-                    import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'], ),
+                    import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
+                ),
             ),
             mcts=dict(num_simulations=num_simulations)
         ),
@@ -113,30 +116,31 @@ tictactoe_alphazero_create_config = dict(
     # env_manager=dict(type='subprocess'),
     policy=dict(
         type='alphazero',
-        import_names=['core.policy.alphazero'],
+        import_names=['lzero.policy.alphazero'],
     ),
     collector=dict(
         type='episode_alphazero',
         get_train_sample=False,
         # get_train_sample=True,
-        import_names=['core.worker.collector.alphazero_collector'],
+        import_names=['lzero.worker.collector.alphazero_collector'],
     ),
     evaluator=dict(
         type='alphazero',
-        import_names=['core.worker.collector.alphazero_evaluator'],
+        import_names=['lzero.worker.collector.alphazero_evaluator'],
     )
-
 )
 tictactoe_alphazero_create_config = EasyDict(tictactoe_alphazero_create_config)
 create_config = tictactoe_alphazero_create_config
 
 if __name__ == '__main__':
-    from core.entry import serial_pipeline_alphazero_eval
+    from lzero.entry import serial_pipeline_alphazero_eval
     import numpy as np
 
     seed = 0
     test_episodes = 5
-    reward_mean, reward_lst = serial_pipeline_alphazero_eval([main_config, create_config], seed=seed, test_episodes=test_episodes, max_env_step=int(1e5))
+    reward_mean, reward_lst = serial_pipeline_alphazero_eval(
+        [main_config, create_config], seed=seed, test_episodes=test_episodes, max_env_step=int(1e5)
+    )
 
     reward_lst = np.array(reward_lst)
     reward_mean = np.array(reward_mean)
@@ -144,5 +148,7 @@ if __name__ == '__main__':
     print("=" * 20)
     print(f'we eval total {seed} seed. In each seed, we test {test_episodes} episodes.')
     print('reward_mean:', reward_mean)
-    print(f'win rate: {len(np.where(reward_lst == 1.)[0]) / test_episodes}, draw rate: {len(np.where(reward_lst == 0.)[0]) / test_episodes}, lose rate: {len(np.where(reward_lst == -1.)[0]) / test_episodes}')
+    print(
+        f'win rate: {len(np.where(reward_lst == 1.)[0]) / test_episodes}, draw rate: {len(np.where(reward_lst == 0.)[0]) / test_episodes}, lose rate: {len(np.where(reward_lst == -1.)[0]) / test_episodes}'
+    )
     print("=" * 20)

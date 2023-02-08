@@ -14,12 +14,10 @@ else:
 
 from easydict import EasyDict
 
-
 # for debug
 # collector_env_num = 8
 # n_episode = 8
 # evaluator_env_num = 8
-
 
 collector_env_num = 8
 n_episode = 8
@@ -27,7 +25,6 @@ evaluator_env_num = 5
 
 tictactoe_efficientzero_config = dict(
     exp_name='data_ez_ctree/tictactoe_1pm_efficientzero_seed0_sub885_rmt-conv_nc16_urv-false_rbs1e5',
-
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -95,7 +92,6 @@ tictactoe_efficientzero_config = dict(
             # update_per_collect=int(3 ** 2 * collector_env_num),
             # update_per_collect=int(100),
             # batch_size=64,
-
             learning_rate=0.002,  # use fixed lr
             # Frequency of target network update.
             target_update_freq=400,
@@ -158,7 +154,6 @@ tictactoe_efficientzero_config = dict(
         # td_steps=9,
         # num_unroll_steps=3,
         # lstm_horizon_len=3,
-
         collector_env_num=8,
         evaluator_env_num=5,
         num_simulations=25,
@@ -241,7 +236,6 @@ tictactoe_efficientzero_config = dict(
         # consistency_coeff=0,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-
         bn_mt=0.1,
 
         # siamese
@@ -274,18 +268,18 @@ tictactoe_efficientzero_create_config = dict(
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='efficientzero',
-        import_names=['core.policy.efficientzero'],
+        import_names=['lzero.policy.efficientzero'],
     ),
     collector=dict(
         type='episode_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.efficientzero_collector'],
+        import_names=['lzero.worker.collector.efficientzero_collector'],
     )
 )
 tictactoe_efficientzero_create_config = EasyDict(tictactoe_efficientzero_create_config)
 create_config = tictactoe_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero
+    from lzero.entry import serial_pipeline_efficientzero
 
     serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))

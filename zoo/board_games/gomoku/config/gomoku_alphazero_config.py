@@ -62,7 +62,8 @@ gomoku_alphazero_config = dict(
                     load_ckpt_before_run='',
                     log_show_after_iter=1,
                     save_ckpt_after_iter=10000,
-                    save_ckpt_after_run=True, ),
+                    save_ckpt_after_run=True,
+                ),
             )
         ),
         collect=dict(
@@ -71,7 +72,8 @@ gomoku_alphazero_config = dict(
             collector=dict(
                 env=dict(
                     type='gomoku',
-                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'], ),
+                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
+                ),
                 augmentation=True,
             ),
             mcts=dict(num_simulations=num_simulations)
@@ -83,7 +85,8 @@ gomoku_alphazero_config = dict(
                 stop_value=1,
                 env=dict(
                     type='gomoku',
-                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'], ),
+                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
+                ),
             ),
             mcts=dict(num_simulations=num_simulations)
         ),
@@ -110,24 +113,23 @@ gomoku_alphazero_create_config = dict(
     # env_manager=dict(type='subprocess'),
     policy=dict(
         type='alphazero',
-        import_names=['core.policy.alphazero'],
+        import_names=['lzero.policy.alphazero'],
     ),
     collector=dict(
         type='episode_alphazero',
         get_train_sample=False,
         # get_train_sample=True,
-        import_names=['core.worker.collector.alphazero_collector'],
+        import_names=['lzero.worker.collector.alphazero_collector'],
     ),
     evaluator=dict(
         type='alphazero',
-        import_names=['core.worker.collector.alphazero_evaluator'],
+        import_names=['lzero.worker.collector.alphazero_evaluator'],
     )
-
 )
 gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
 create_config = gomoku_alphazero_create_config
 
 if __name__ == '__main__':
-    from core.entry import serial_pipeline_alphazero
+    from lzero.entry import serial_pipeline_alphazero
 
     serial_pipeline_alphazero([main_config, create_config], seed=0)
