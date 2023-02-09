@@ -1,6 +1,6 @@
 # LightZero
 The following is an overview of the historical evolution of the MCTS algorithm series:
-![pipeline](assets/lightzero_overview.png)
+![pipeline](assets/mcts_rl_evolution_overview.pdf)
 
 ## Introduction to LightZero
 LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of Monte Carlo Tree Search (MCTS) algorithms, including:

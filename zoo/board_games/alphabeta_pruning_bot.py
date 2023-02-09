@@ -148,6 +148,7 @@ class AlphaBetaPruningBot:
 
 if __name__ == "__main__":
     import time
+    """
     ##### TicTacToe #####
     from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
     cfg = dict(
@@ -217,22 +218,22 @@ if __name__ == "__main__":
     player_1 = AlphaBetaPruningBot(GomokuEnv, cfg, 'player 2')  # player_index = 1, player = 2
 
     ### test from the init empty board ###
-    # player_index = 0  # player 1 fist
-    # env.reset()
+    player_index = 0  # player 1 fist
+    env.reset()
 
     ### test from the init specified board ###
-    player_index = 1  # player 2 fist
-    init_state = [[1, 1, 1, 1, 0],
-                  [1, 0, 0, 0, 2],
-                  [0, 0, 2, 0, 2],
-                  [0, 2, 0, 0, 2],
-                  [2, 1, 1, 0, 0], ]
-    # init_state = [[1, 1, 1, 1, 2],
-    #               [1, 1, 2, 1, 2],
-    #               [2, 1, 2, 2, 2],
-    #               [0, 0, 0, 2, 2],
-    #               [2, 1, 1, 1, 0], ]
-    env.reset(player_index, init_state)
+    # player_index = 1  # player 2 fist
+    # init_state = [[1, 1, 1, 1, 0],
+    #               [1, 0, 0, 0, 2],
+    #               [0, 0, 2, 0, 2],
+    #               [0, 2, 0, 0, 2],
+    #               [2, 1, 1, 0, 0], ]
+    # # init_state = [[1, 1, 1, 1, 2],
+    # #               [1, 1, 2, 1, 2],
+    # #               [2, 1, 2, 2, 2],
+    # #               [0, 0, 0, 2, 2],
+    # #               [2, 1, 1, 1, 0], ]
+    # env.reset(player_index, init_state)
 
     state = env.board
     print('-' * 15)
@@ -256,4 +257,3 @@ if __name__ == "__main__":
 
     assert env.have_winner()[0] is False, env.have_winner()[1] == -1
     # assert env.have_winner()[0] is True, env.have_winner()[1] == 2
-    """
