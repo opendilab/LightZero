@@ -84,7 +84,7 @@ class EfficientZeroPolicy(Policy):
             # ==============================================================
             # The following configs are algorithm-specific
             # ==============================================================
-            # (int) Frequence of target network update.
+            # (int) Frequency of target network update.
             target_update_freq=200,
             # (bool) Whether ignore done(usually for max step termination env)
             ignore_done=False,
@@ -222,11 +222,11 @@ class EfficientZeroPolicy(Policy):
         weights = torch.from_numpy(weights_lst).to(self._cfg.device).float()
 
         # TODO
-        target_value_prefix = target_value_prefix.view(self._cfg.batch_size, -1)
-        target_value = target_value.view(self._cfg.batch_size, -1)
+        target_value_prefix = target_value_prefix.view(self._cfg.learn.batch_size, -1)
+        target_value = target_value.view(self._cfg.learn.batch_size, -1)
 
         batch_size = obs_batch.size(0)
-        assert batch_size == self._cfg.batch_size == target_value_prefix.size(0)
+        assert batch_size == self._cfg.learn.batch_size == target_value_prefix.size(0)
         l1_loss = torch.nn.L1Loss()
 
         # some logs preparation
@@ -249,7 +249,7 @@ class EfficientZeroPolicy(Policy):
         # scalar transform to transformed Q scale, h(.) function
         transformed_target_value_prefix = scalar_transform(target_value_prefix, self._cfg.support_size)
         transformed_target_value = scalar_transform(target_value, self._cfg.support_size)
-        if self._cfg.categorical_distribution:
+        if self._cfg.model.categorical_distribution:
             # scalar to categorical_distribution
             # Under this transformation, each scalar is represented as the linear combination of its two adjacent supports
             target_value_prefix_phi = reward_phi(self.reward_support, transformed_target_value_prefix)
@@ -268,11 +268,11 @@ class EfficientZeroPolicy(Policy):
         # h^-1(.) function
         # transform categorical representation to original_value
         original_value = inverse_scalar_transform(
-            value, self._cfg.support_size, categorical_distribution=self._cfg.categorical_distribution
+            value, self._cfg.support_size, categorical_distribution=self._cfg.model.categorical_distribution
         )
         # original_value_prefix = inverse_scalar_transform(value_prefix,
         #                                                self._cfg.support_size,
-        #                                                categorical_distribution=self._cfg.categorical_distribution)
+        #                                                categorical_distribution=self._cfg.model.categorical_distribution)
 
         # TODO(pu)
         if not self._learn_model.training:
@@ -319,7 +319,7 @@ class EfficientZeroPolicy(Policy):
             # print(error)
             target_policy_entropy = 0
 
-        if self._cfg.categorical_distribution:
+        if self._cfg.model.categorical_distribution:
             value_loss = modified_cross_entropy_loss(value, target_value_phi[:, 0])
         else:
             value_loss = torch.nn.MSELoss(reduction='none')(value.squeeze(-1), transformed_target_value[:, 0])
@@ -345,10 +345,10 @@ class EfficientZeroPolicy(Policy):
             # h^-1(.) function
             # first transform categorical representation to scalar, then transform to original_value
             original_value = inverse_scalar_transform(
-                value, self._cfg.support_size, categorical_distribution=self._cfg.categorical_distribution
+                value, self._cfg.support_size, categorical_distribution=self._cfg.model.categorical_distribution
             )
             original_value_prefix = inverse_scalar_transform(
-                value_prefix, self._cfg.support_size, categorical_distribution=self._cfg.categorical_distribution
+                value_prefix, self._cfg.support_size, categorical_distribution=self._cfg.model.categorical_distribution
             )
 
             # TODO(pu)
@@ -367,7 +367,7 @@ class EfficientZeroPolicy(Policy):
             end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
 
             # consistency loss
-            if self._cfg.consistency_coeff > 0:
+            if self._cfg.consistency_weight > 0:
                 # obtain the oracle hidden states from representation function
                 network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
                 presentation_state = network_output.hidden_state
@@ -404,7 +404,7 @@ class EfficientZeroPolicy(Policy):
                 # print(error)
                 target_policy_entropy += 0
 
-            if self._cfg.categorical_distribution:
+            if self._cfg.model.categorical_distribution:
                 value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
                 value_prefix_loss += modified_cross_entropy_loss(value_prefix, target_value_prefix_phi[:, step_i])
             else:
@@ -425,13 +425,13 @@ class EfficientZeroPolicy(Policy):
             # reset hidden states
             if (step_i + 1) % self._cfg.lstm_horizon_len == 0:
                 reward_hidden_state = (
-                    torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
-                    torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
+                    torch.zeros(1, self._cfg.learn.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
+                    torch.zeros(1, self._cfg.learn.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
                 )
 
             if self._cfg.monitor_statistics:
                 original_value_prefixs = inverse_scalar_transform(
-                    value_prefix, self._cfg.support_size, categorical_distribution=self._cfg.categorical_distribution
+                    value_prefix, self._cfg.support_size, categorical_distribution=self._cfg.model.categorical_distribution
                 )
                 original_value_prefixs_cpu = original_value_prefixs.detach().cpu()
 
@@ -439,7 +439,7 @@ class EfficientZeroPolicy(Policy):
                     (
                         predicted_values,
                         inverse_scalar_transform(
-                            value, self._cfg.support_size, categorical_distribution=self._cfg.categorical_distribution
+                            value, self._cfg.support_size, categorical_distribution=self._cfg.model.categorical_distribution
                         ).detach().cpu()
                     )
                 )
@@ -474,8 +474,8 @@ class EfficientZeroPolicy(Policy):
         # ----------------------------------------------------------------------------------
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-            self._cfg.consistency_coeff * consistency_loss + self._cfg.policy_loss_coeff * policy_loss +
-            self._cfg.value_loss_coeff * value_loss + self._cfg.reward_loss_coeff * value_prefix_loss
+            self._cfg.consistency_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss
         )
         weighted_loss = (weights * loss).mean()
 
@@ -538,7 +538,7 @@ class EfficientZeroPolicy(Policy):
                     predicted_value_prefixs[value_prefix_indices_0], target_value_prefix_base[value_prefix_indices_0]
                 )
 
-            if self._cfg.categorical_distribution:
+            if self._cfg.model.categorical_distribution:
                 td_data = (
                     value_priority, target_value_prefix.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
                     transformed_target_value_prefix.detach().cpu().numpy(),
@@ -559,7 +559,7 @@ class EfficientZeroPolicy(Policy):
         else:
             td_data, priority_data = None, None
 
-        if self._cfg.categorical_distribution:
+        if self._cfg.model.categorical_distribution:
             # loss_data = (
             #     total_loss.item(), weighted_loss.item(), loss.mean().item(), 0, policy_loss.mean().item(),
             #     value_prefix_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
@@ -662,7 +662,7 @@ class EfficientZeroPolicy(Policy):
                 pred_values_pool = inverse_scalar_transform(
                     pred_values_pool,
                     self._cfg.support_size,
-                    categorical_distribution=self._cfg.categorical_distribution
+                    categorical_distribution=self._cfg.model.categorical_distribution
                 ).detach().cpu().numpy()
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 reward_hidden_roots = (
@@ -789,7 +789,7 @@ class EfficientZeroPolicy(Policy):
                 pred_values_pool = inverse_scalar_transform(
                     pred_values_pool,
                     self._cfg.support_size,
-                    categorical_distribution=self._cfg.categorical_distribution
+                    categorical_distribution=self._cfg.model.categorical_distribution
                 ).detach().cpu().numpy()  # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 reward_hidden_roots = (

@@ -244,7 +244,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 ## Citation
 ```latex
 @misc{lightzero,
-    title={{LightZero: OpenDILab} A lightweight MCTS series algorithm library},
+    title={{LightZero: OpenDILab} A lightweight MCTS algorithm library},
     author={LightZero Contributors},
     publisher = {GitHub},
     howpublished = {\url{https://github.com/opendilab/LightZero}},

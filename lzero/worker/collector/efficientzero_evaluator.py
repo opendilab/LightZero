@@ -240,7 +240,7 @@ class EfficientZeroEvaluator(ISerialEvaluator):
         ]
         for i in range(env_nums):
             game_histories[i].init(
-                [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.frame_stack_num)]
+                [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)]
             )
 
         ep_ori_rewards = np.zeros(env_nums)
@@ -251,12 +251,9 @@ class EfficientZeroEvaluator(ISerialEvaluator):
 
         with self._timer:
             while not eval_monitor.is_finished():
-                # stack_obs = [game_history.step_obs() for game_history in game_histories]
-
                 # Get current ready env obs.
                 # only for subprocess, to get the ready_env_id
                 obs = self._env.ready_obs
-                # TODO(pu): subprocess
                 new_available_env_id = set(obs.keys()).difference(ready_env_id)
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
@@ -372,13 +369,13 @@ class EfficientZeroEvaluator(ISerialEvaluator):
                                 game_history_length=self.game_config.game_history_length,
                                 config=self.game_config
                             )
-                            # stack_obs_windows[env_id] = [init_obs for _ in range(self.game_config.frame_stack_num)]
+                            # stack_obs_windows[env_id] = [init_obs for _ in range(self.game_config.model.frame_stack_num)]
                             # game_histories[env_id].init(stack_obs_windows[env_id])
                             # last_game_histories[env_id] = None
                             # last_game_priorities[env_id] = None
 
                             game_histories[i].init(
-                                [init_obs[i]['observation'] for _ in range(self.game_config.frame_stack_num)]
+                                [init_obs[i]['observation'] for _ in range(self.game_config.model.frame_stack_num)]
                             )
 
                         # TODO(pu): subprocess

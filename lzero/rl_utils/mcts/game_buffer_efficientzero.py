@@ -33,17 +33,13 @@ class BufferedData:
 class EfficientZeroGameBuffer(Buffer):
     """
     Overview:
-        The specific game buffer for MuZero-based policy.
+        The specific game buffer for EfficientZero policy.
     """
 
     def __init__(self, config=None):
-        """
-        Reference : DISTRIBUTED PRIORITIZED EXPERIENCE REPLAY
-        Algo. 1 and Algo. 2 in Page-3 of (https://arxiv.org/pdf/1803.00933.pdf
-        """
-        super().__init__(config.total_transitions)
+        super().__init__(config.max_total_transitions)
         self.config = config
-        self.batch_size = config.batch_size
+        self.batch_size = config.learn.batch_size
         self.keep_ratio = 1
 
         self.model_index = 0
@@ -56,7 +52,7 @@ class EfficientZeroGameBuffer(Buffer):
         self._eps_collected = 0
         self.base_idx = 0
         self._alpha = config.priority_prob_alpha
-        self.transition_top = config.total_transitions
+        self.max_total_transition = config.max_total_transitions
         self.clear_time = 0
 
     def push(self, data: Any, meta: Optional[dict] = None):
@@ -77,10 +73,6 @@ class EfficientZeroGameBuffer(Buffer):
         Returns:
             - buffered_data (:obj:`BufferedData`): The pushed data.
         """
-        # TODO(pu)
-        # if self.get_num_of_transitions() >= self.config.total_transitions:
-        #     return
-
         if meta['end_tag']:
             self._eps_collected += 1
             valid_len = len(data)
@@ -257,15 +249,15 @@ class EfficientZeroGameBuffer(Buffer):
         """
         nums_of_game_histoty = self.get_num_of_game_histories()
         total_transition = self.get_num_of_transitions()
-        if total_transition > self.transition_top:
+        if total_transition > self.max_total_transition:
             index = 0
             for i in range(nums_of_game_histoty):
                 total_transition -= len(self.buffer[i])
-                if total_transition <= self.transition_top * self.keep_ratio:
+                if total_transition <= self.max_total_transition * self.keep_ratio:
                     index = i
                     break
 
-            if total_transition >= self.config.batch_size:
+            if total_transition >= self.config.learn.batch_size:
                 self._remove(index + 1)
 
     def _remove(self, num_excess_games):
@@ -695,9 +687,7 @@ class EfficientZeroGameBuffer(Buffer):
                 policy_logits_pool = policy_logits_pool.tolist()
 
                 if self.config.mcts_ctree:
-                    """
-                    cpp mcts
-                    """
+                    ## cpp mcts
                     if to_play_history[0][0] is None:
                         # for one_player atari games
                         action_mask = [
@@ -719,9 +709,7 @@ class EfficientZeroGameBuffer(Buffer):
                     # do MCTS for a new policy with the recent target model
                     MCTS_ctree(self.config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 else:
-                    """
-                    python mcts
-                    """
+                    ## python mcts
                     if to_play_history[0][0] is None:
                         # for one_player atari games
                         action_mask = [
@@ -830,9 +818,9 @@ class EfficientZeroGameBuffer(Buffer):
                 batch_value_prefixs.append(target_value_prefixs)
                 batch_values.append(target_values)
 
-        # TODO
-        batch_value_prefixs = np.asarray(batch_value_prefixs)
-        batch_values = np.asarray(batch_values)
+        # TODO: VisibleDeprecationWarning: Creating an ndarray from ragged nested sequences
+        batch_value_prefixs = np.asarray(batch_value_prefixs, dtype=object)
+        batch_values = np.asarray(batch_values, dtype=object)
         return batch_value_prefixs, batch_values
 
     def compute_target_policy_reanalyzed(self, policy_re_context, model):
@@ -929,9 +917,7 @@ class EfficientZeroGameBuffer(Buffer):
             value_prefix_pool = value_prefix_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
             if self.config.mcts_ctree:
-                """
-                cpp mcts
-                """
+                ## cpp mcts
                 if to_play_history[0][0] is None:
                     # for one_player atari games
                     action_mask = [
@@ -957,9 +943,7 @@ class EfficientZeroGameBuffer(Buffer):
                 roots_legal_actions_list = legal_actions
 
             else:
-                """
-                python mcts
-                """
+                ## python mcts
                 if to_play_history[0][0] is None:
                     # for one_player atari games
                     action_mask = [
@@ -1017,16 +1001,13 @@ class EfficientZeroGameBuffer(Buffer):
                             )
                         else:
                             if self.config.mcts_ctree:
-                                """
-                                cpp mcts
-                                """
+                                ## cpp mcts
                                 if to_play_history[0][0] is None:
                                     # for one_player atari games
                                     # TODO(pu): very important
                                     sum_visits = sum(distributions)
                                     policy = [visit_count / sum_visits for visit_count in distributions]
                                     target_policies.append(policy)
-                                    # target_policies.append(distributions)
                                 else:
                                     # for two_player board games
                                     policy_tmp = [0 for _ in range(self.config.model.action_space_size)]
@@ -1038,9 +1019,7 @@ class EfficientZeroGameBuffer(Buffer):
                                         policy_tmp[legal_action] = policy[index]
                                     target_policies.append(policy_tmp)
                             else:
-                                """
-                                python mcts
-                                """
+                                # python mcts
                                 if to_play_history[0][0] is None:
                                     # TODO(pu): very important
                                     sum_visits = sum(distributions)
@@ -1151,9 +1130,7 @@ class EfficientZeroGameBuffer(Buffer):
                                     #     print(error)
                                 target_policies.append(policy_tmp)
                         else:
-                            """
-                            python mcts
-                            """
+                            ## python mcts
                             if self.config.env_type == 'no_board_games':
                                 # for one_player atari games
                                 target_policies.append(distributions)

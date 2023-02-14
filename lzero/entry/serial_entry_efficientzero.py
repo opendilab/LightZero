@@ -70,10 +70,11 @@ def serial_pipeline_efficientzero(
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
-    ## EfficientZero related code ##
-    # specific game buffer for EfficientZero
+    # ==============================================================
+    # EfficientZero related code
+    # ==============================================================
     game_config = cfg.policy
-
+    # specific game buffer for EfficientZero
     replay_buffer = GameBuffer(game_config)
     collector = create_serial_collector(
         cfg.policy.collect.collector,
@@ -111,6 +112,11 @@ def serial_pipeline_efficientzero(
                     trained_steps=learner.train_iter * cfg.policy.learn.update_per_collect
                 ) for _ in range(game_config.collector_env_num)
             ]
+        )
+
+        # debug
+        stop, reward = evaluator.eval(
+            learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
         )
 
         # Evaluate policy performance
