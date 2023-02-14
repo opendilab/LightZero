@@ -14,6 +14,8 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
+categorical_distribution = True
+
 action_space_size = 6  # for qbert
 collector_env_num = 8
 n_episode = 8
@@ -24,7 +26,7 @@ batch_size = 256
 # The key hyper-para to tune, for different env, we have different episode_length
 # e.g. reuse_factor = 0.5
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 2000
+update_per_collect = 1000
 
 # for debug
 # collector_env_num = 1
@@ -32,7 +34,7 @@ update_per_collect = 2000
 # evaluator_env_num = 1
 
 qbert_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/qbert_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}',
+    exp_name=f'data_ez_ctree/qbert_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}_rr03',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -139,7 +141,7 @@ qbert_efficientzero_config = dict(
         image_channel=3,
         gray_scale=False,
         downsample=True,
-        vis_result=True,
+        monitor_statistics=True,
         # TODO(pu): test the effect of augmentation
         use_augmentation=True,
         # Style of augmentation
@@ -176,7 +178,11 @@ qbert_efficientzero_config = dict(
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        reanalyze_ratio=0.99,
+        # reanalyze_ratio=0.99,
+        # reanalyze_outdated=False,
+
+        reanalyze_ratio=0.3,
+        reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?
         lr_manually=True,
@@ -273,18 +279,18 @@ qbert_efficientzero_create_config = dict(
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='efficientzero',
-        import_names=['core.policy.efficientzero'],
+        import_names=['lzero.policy.efficientzero'],
     ),
     collector=dict(
         type='episode_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.efficientzero_collector'],
+        import_names=['lzero.worker.collector.efficientzero_collector'],
     )
 )
 qbert_efficientzero_create_config = EasyDict(qbert_efficientzero_create_config)
 create_config = qbert_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero
+    from lzero.entry import serial_pipeline_efficientzero
 
     serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e5))

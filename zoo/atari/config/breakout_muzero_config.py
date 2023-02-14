@@ -124,7 +124,7 @@ breakout_efficientzero_config = dict(
         image_channel=3,
         gray_scale=False,
         downsample=True,
-        vis_result=True,
+        monitor_statistics=True,
         # TODO(pu): test the effect of augmentation
         use_augmentation=True,
         # Style of augmentation
@@ -244,17 +244,17 @@ breakout_efficientzero_create_config = dict(
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='muzero',
-        import_names=['core.policy.muzero'],
+        import_names=['lzero.policy.muzero'],
     ),
     collector=dict(
         type='episode_muzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.muzero_collector'],
+        import_names=['lzero.worker.collector.muzero_collector'],
     )
 )
 breakout_efficientzero_create_config = EasyDict(breakout_efficientzero_create_config)
 create_config = breakout_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_muzero
+    from lzero.entry import serial_pipeline_muzero
     serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(5e5))

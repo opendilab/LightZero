@@ -7,7 +7,7 @@
 import torch
 from easydict import EasyDict
 
-from core.model import RepresentationNetwork
+from lzero.model import RepresentationNetwork
 
 if torch.cuda.is_available():
     device = 'cuda'
@@ -143,7 +143,7 @@ atari_efficientzero_config = dict(
         image_channel=3,
         gray_scale=False,
         downsample=True,
-        vis_result=True,
+        monitor_statistics=True,
         # TODO(pu): test the effect of augmentation
         use_augmentation=True,
         # Style of augmentation
@@ -279,12 +279,12 @@ atari_efficientzero_create_config = dict(
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='efficientzero',
-        import_names=['core.policy.efficientzero'],
+        import_names=['lzero.policy.efficientzero'],
     ),
     collector=dict(
         type='episode_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.efficientzero_collector'],
+        import_names=['lzero.worker.collector.efficientzero_collector'],
     )
 )
 atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
@@ -292,7 +292,7 @@ create_config = atari_efficientzero_create_config
 
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero
+    from lzero.entry import serial_pipeline_efficientzero
 
     max_env_step = int(1000)
     serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=max_env_step)

@@ -44,9 +44,9 @@ num_simulations = 50
 # n_episode = 2
 # evaluator_env_num = 2
 
-
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_bs6_2pm_ghl36_muzero_seed0_sub883_halfmodel_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
+    exp_name=
+    f'data_mz_ctree/gomoku_bs6_2pm_ghl36_muzero_seed0_sub883_halfmodel_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -80,9 +80,7 @@ gomoku_muzero_config = dict(
             # [4, board_size, board_size, 3] -> [12, board_size, board_size]
             # observation_shape=(12, board_size, board_size),  # if frame_stack_num=4
             observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
-
             action_space_size=int(1 * board_size * board_size),
-
             downsample=False,
             num_blocks=1,
             # num_channels=64,
@@ -114,14 +112,12 @@ gomoku_muzero_config = dict(
             # debug
             # update_per_collect=2,
             # batch_size=4,
-
             batch_size=256,
             update_per_collect=update_per_collect,
 
             # optim_type='SGD',
             # learning_rate=0.2,  # lr_manually
             # should set lr_manually=True, 0.2->0.02->0.002
-
             optim_type='Adam',
             learning_rate=0.003,  # adam lr
             # Frequency of target network update.
@@ -156,7 +152,6 @@ gomoku_muzero_config = dict(
         normalize_reward=False,
         # normalize_reward=True,
         normalize_reward_scale=100,
-
         game_wrapper=True,
         action_space_size=int(board_size * board_size),
         amp_type='none',
@@ -165,11 +160,10 @@ gomoku_muzero_config = dict(
         # obs_shape=(12, board_size, board_size),  # if frame_stack_num=4
         obs_shape=(3, board_size, board_size),  # if frame_stack_num=1
         frame_stack_num=1,
-
         image_channel=3,
         gray_scale=False,
         downsample=False,
-        vis_result=True,
+        monitor_statistics=True,
         # TODO(pu): test the effect of augmentation,
         # use_augmentation=True,  # only for atari image obs
         use_augmentation=False,
@@ -187,7 +181,6 @@ gomoku_muzero_config = dict(
         # td_steps=5,
         # # td_steps=int(board_size * board_size),
         # num_unroll_steps=5,
-
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         total_transitions=int(1e5),
@@ -207,7 +200,6 @@ gomoku_muzero_config = dict(
 
         # use_priority=False,
         # use_max_priority_for_new_data=True,
-
         use_priority=True,
         use_max_priority_for_new_data=True,
 
@@ -280,7 +272,6 @@ gomoku_muzero_config = dict(
         proj_out=512,
         pred_hid=256,
         pred_out=512,
-
         bn_mt=0.1,
         blocks=1,  # Number of blocks in the ResNet
         channels=16,  # Number of channels in the ResNet
@@ -307,18 +298,18 @@ gomoku_muzero_create_config = dict(
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='muzero',
-        import_names=['core.policy.muzero'],
+        import_names=['lzero.policy.muzero'],
     ),
     collector=dict(
         type='episode_muzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.muzero_collector'],
+        import_names=['lzero.worker.collector.muzero_collector'],
     )
 )
 gomoku_muzero_create_config = EasyDict(gomoku_muzero_create_config)
 create_config = gomoku_muzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_muzero
+    from lzero.entry import serial_pipeline_muzero
 
     serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(1e6))

@@ -11,19 +11,19 @@ from ding.envs.env.base_env import BaseEnvTimestep
 from ding.utils.registry_factory import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
-
+from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
 
 from zoo.board_games.base_game_env import BaseGameEnv
 
 
 @ENV_REGISTRY.register('tictactoe')
 class TicTacToeEnv(BaseGameEnv):
-
     config = dict(
         prob_random_agent=0,
         prob_expert_agent=0,
         battle_mode='one_player_mode',
         agent_vs_human=False,
+        expert_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
     )
 
     @classmethod
@@ -39,14 +39,26 @@ class TicTacToeEnv(BaseGameEnv):
         self.total_num_actions = 9
         self.prob_random_agent = cfg.prob_random_agent
         self.prob_expert_agent = cfg.prob_expert_agent
-        assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
+        assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (
+                    self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
             f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
         self._env = self
         self.agent_vs_human = cfg.agent_vs_human
+        self.expert_action_type = cfg.expert_action_type
+        if self.expert_action_type == 'alpha_beta_pruning':
+            self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 
     @property
     def current_player(self):
         return self._current_player
+
+    @property
+    def current_player_index(self):
+        """
+        current_player_index = 0, current_player = 1
+        current_player_index = 1, current_player = 2
+        """
+        return 0 if self._current_player == 1 else 1
 
     @property
     def to_play(self):
@@ -65,7 +77,7 @@ class TicTacToeEnv(BaseGameEnv):
             Env reset and custom state start by init_state
         Arguments:
             start_player_index: players = [1,2], player_index = [0,1]
-            inti_state: custom state start
+            init_state: custom state start
         """
         self._observation_space = gym.spaces.Box(
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.uint8
@@ -81,10 +93,33 @@ class TicTacToeEnv(BaseGameEnv):
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
         if self.battle_mode == 'two_player_mode' or self.battle_mode == 'eval_mode':
-            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': self.current_player}
+            obs = {
+                'observation': self.current_state(),
+                'action_mask': action_mask,
+                'board': copy.deepcopy(self.board),
+                'current_player_index': self.start_player_index,
+                'to_play': self.current_player
+            }
         else:
-            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': -1}
+            obs = {
+                'observation': self.current_state(),
+                'action_mask': action_mask,
+                'board': copy.deepcopy(self.board),
+                'current_player_index': self.start_player_index,
+                'to_play': -1
+            }
         return obs
+
+    def reset_v2(self, start_player_index=0, init_state=None):
+        """
+        for alpha-beta pruning bot
+        """
+        self.start_player_index = start_player_index
+        self._current_player = self.players[self.start_player_index]
+        if init_state is not None:
+            self.board = np.array(init_state, dtype="int32")
+        else:
+            self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
 
     def step(self, action):
         if self.battle_mode == 'two_player_mode':
@@ -143,7 +178,6 @@ class TicTacToeEnv(BaseGameEnv):
 
             timestep = timestep_player2
             return timestep
-        
 
     def _player_step(self, action):
         if action in self.legal_actions:
@@ -183,7 +217,13 @@ class TicTacToeEnv(BaseGameEnv):
 
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
-        obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.players.index(self.current_player), 'to_play': self.current_player}
+        obs = {
+            'observation': self.current_state(),
+            'action_mask': action_mask,
+            'board': copy.deepcopy(self.board),
+            'current_player_index': self.players.index(self.current_player),
+            'to_play': self.current_player
+        }
         return BaseEnvTimestep(obs, reward, done, info)
 
     def current_state(self):
@@ -247,9 +287,19 @@ class TicTacToeEnv(BaseGameEnv):
         return np.random.choice(action_list)
 
     def expert_action(self):
+        if self.expert_action_type == 'v0':
+            return self.expert_action_v0()
+        elif self.expert_action_type == 'alpha_beta_pruning':
+            return self.expert_action_alpha_beta_pruning()
+
+    def expert_action_alpha_beta_pruning(self):
+        action = self.alpha_beta_pruning_player.get_actions(self.board, player_index=self.current_player_index)
+        return action
+
+    def expert_action_v0(self):
         """
         Overview:
-            Hard coded expert agent for tictactoe env
+            Hard coded expert agent for tictactoe env.
         Returns:
             - action (:obj:`int`): the expert action to take in the current game state.
         """
@@ -265,34 +315,51 @@ class TicTacToeEnv(BaseGameEnv):
                 elif board[i][j] == 2:
                     board[i][j] = 1
 
+        # first random sample a action from legal_actions
         action = np.random.choice(self.legal_actions)
         # Horizontal and vertical checks
         for i in range(3):
             if abs(sum(board[i, :])) == 2:
+                # if i-th horizontal line has two same pieces and one empty position
+                # find the index in the i-th horizontal line
                 ind = np.where(board[i, :] == 0)[0][0]
+                # convert ind to action
                 action = np.ravel_multi_index((np.array([i]), np.array([ind])), (3, 3))[0]
                 if self.current_player_to_compute_expert_action * sum(board[i, :]) > 0:
+                    # only take the action that will lead a connect3 of current player's pieces
                     return action
 
             if abs(sum(board[:, i])) == 2:
+                # if i-th vertical line has two same pieces and one empty position
+                # find the index in the i-th vertical line
                 ind = np.where(board[:, i] == 0)[0][0]
+                # convert ind to action
                 action = np.ravel_multi_index((np.array([ind]), np.array([i])), (3, 3))[0]
                 if self.current_player_to_compute_expert_action * sum(board[:, i]) > 0:
+                    # only take the action that will lead a connect3 of current player's pieces
                     return action
 
         # Diagonal checks
         diag = board.diagonal()
         anti_diag = np.fliplr(board).diagonal()
         if abs(sum(diag)) == 2:
+            # if diagonal has two same pieces and one empty position
+            # find the index in the diag vector
             ind = np.where(diag == 0)[0][0]
+            # convert ind to action
             action = np.ravel_multi_index((np.array([ind]), np.array([ind])), (3, 3))[0]
             if self.current_player_to_compute_expert_action * sum(diag) > 0:
+                # only take the action that will lead a connect3 of current player's pieces
                 return action
 
         if abs(sum(anti_diag)) == 2:
+            # if anti-diagonal has two same pieces and one empty position
+            # find the index in the anti_diag vector
             ind = np.where(anti_diag == 0)[0][0]
+            # convert ind to action
             action = np.ravel_multi_index((np.array([ind]), np.array([2 - ind])), (3, 3))[0]
             if self.current_player_to_compute_expert_action * sum(anti_diag) > 0:
+                # only take the action that will lead a connect3 of current player's pieces
                 return action
 
         return action
@@ -346,7 +413,7 @@ class TicTacToeEnv(BaseGameEnv):
         row = action_number // self.board_size + 1
         col = action_number % self.board_size + 1
         return f"Play row {row}, column {col}"
-    
+
     def is_game_over(self):
         """
         Overview:
@@ -358,10 +425,10 @@ class TicTacToeEnv(BaseGameEnv):
             if winner = -1 reward = 0
         """
         # Check whether the game is ended or not and give the winner
-        #print('next_to_play={}'.format(self.current_player))
+        # print('next_to_play={}'.format(self.current_player))
         have_winner, winner = self.have_winner()
-        #print('winner={}'.format(winner))
-        reward = {1:1, 2:-1, -1:0}
+        # print('winner={}'.format(winner))
+        reward = {1: 1, 2: -1, -1: 0}
         if have_winner:
             return True, reward[winner]
         elif len(self.legal_actions) == 0:
@@ -381,17 +448,34 @@ class TicTacToeEnv(BaseGameEnv):
         -------
         """
         if action not in self.legal_actions:
-            raise ValueError("action {0} on board {1} is not legal". format(action, self.board))
+            raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
         new_board = copy.deepcopy(self.board)
         row, col = self.action_to_coord(action)
         new_board[row, col] = self.current_player
         if self.start_player_index == 0:
-            start_player_index = 1   # self.players = [1, 2], start_player = 2, start_player_index = 1
+            start_player_index = 1  # self.players = [1, 2], start_player = 2, start_player_index = 1
         else:
-            start_player_index = 0   # self.players = [1, 2], start_player = 1, start_player_index = 0
+            start_player_index = 0  # self.players = [1, 2], start_player = 1, start_player_index = 0
         next_simulator_env = copy.deepcopy(self)
-        next_simulator_env.reset(start_player_index, init_state=new_board) # index
+        next_simulator_env.reset(start_player_index, init_state=new_board)  # index
         return next_simulator_env
+
+    def simulate_action_v2(self, board, start_player_index, action):
+        """
+        Overview:
+            simulate action and get next_simulator_env
+        Returns:
+            Returns TicTacToeEnv
+        -------
+        """
+        self.reset(start_player_index, init_state=board)  # index
+        if action not in self.legal_actions:
+            raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
+        row, col = self.action_to_coord(action)
+        self.board[row, col] = self.current_player
+        new_legal_actions = copy.deepcopy(self.legal_actions)
+        new_board = copy.deepcopy(self.board)
+        return new_board, new_legal_actions
 
     @property
     def observation_space(self) -> gym.spaces.Space:

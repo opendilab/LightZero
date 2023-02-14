@@ -16,8 +16,8 @@ gray_scale = False
 # gray_scale = True
 
 action_space_size = 6  # for pong
-# K = 3
-K = 6
+K = 3
+# K = 6
 
 # num_simulations = 50
 # collector_env_num = 8
@@ -32,19 +32,20 @@ K = 6
 # policy_entropy_loss_coeff = 0
 # normalize_prob_of_sampled_actions = False
 # # normalize_prob_of_sampled_actions = True
+# game_history_length = 400
 
 
 # debug config 1
-num_simulations = 20
+num_simulations = 10
 collector_env_num = 1
 n_episode = 1
 evaluator_env_num = 1
-batch_size = 5
-update_per_collect = 10
+batch_size = 4
+update_per_collect = 2
 policy_entropy_loss_coeff = 0
 normalize_prob_of_sampled_actions = False
 # normalize_prob_of_sampled_actions = True
-
+game_history_length = 20
 
 # debug config 2
 # num_simulations = 10
@@ -57,7 +58,7 @@ normalize_prob_of_sampled_actions = False
 # normalize_prob_of_sampled_actions = False
 
 pong_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_mis256_rr05',
+    exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_mis256_rr0_samplek_CEpl_hash_tgp0',
     # exp_name=f'data_sez_ctree/pong_sampled_efficientzero_seed0_sub883_upc{update_per_collect}_k{K}_ns{num_simulations}_ic{image_channel}_pelc0_normprob',
     env=dict(
         collector_env_num=collector_env_num,
@@ -120,6 +121,8 @@ pong_sampled_efficientzero_config = dict(
 
             # policy_loss_type='KL',
             policy_loss_type='cross_entropy',
+            # policy_loss_type='original',
+
 
             update_per_collect=update_per_collect,
             target_update_freq=100,
@@ -175,7 +178,7 @@ pong_sampled_efficientzero_config = dict(
         image_channel=image_channel,
         gray_scale=False,
         downsample=True,
-        vis_result=True,
+        monitor_statistics=True,
         # TODO(pu): test the effect of augmentation
         use_augmentation=True,
         # Style of augmentation
@@ -187,7 +190,7 @@ pong_sampled_efficientzero_config = dict(
         # TODO(pu): how to set proper num_simulations automatically?
         num_simulations=num_simulations,
         batch_size=batch_size,
-        game_history_length=400,
+        game_history_length=game_history_length,
         total_transitions=int(1e5),
         # default config in EfficientZero original repo
         channels=64,
@@ -200,7 +203,10 @@ pong_sampled_efficientzero_config = dict(
         # reanalyze_ratio=0.99,
         # reanalyze_outdated=False,
 
-        reanalyze_ratio=0.5,
+        # reanalyze_ratio=0.5,
+        # reanalyze_outdated=True,
+
+        reanalyze_ratio=0.,
         reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?
@@ -301,17 +307,17 @@ pong_sampled_efficientzero_create_config = dict(
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='sampled_efficientzero',
-        import_names=['core.policy.sampled_efficientzero'],
+        import_names=['lzero.policy.sampled_efficientzero'],
     ),
     collector=dict(
         type='episode_sampled_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.sampled_efficientzero_collector'],
+        import_names=['lzero.worker.collector.sampled_efficientzero_collector'],
     )
 )
 pong_sampled_efficientzero_create_config = EasyDict(pong_sampled_efficientzero_create_config)
 create_config = pong_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_sampled_efficientzero
-    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e5))
+    from lzero.entry import serial_pipeline_sampled_efficientzero
+    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))

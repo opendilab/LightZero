@@ -1,7 +1,7 @@
 import torch
 from easydict import EasyDict
 
-from core.rl_utils import GameBaseConfig, DiscreteSupport
+from lzero.rl_utils import GameBaseConfig, DiscreteSupport
 
 if torch.cuda.is_available():
     device = 'cuda'
@@ -33,7 +33,7 @@ game_config = EasyDict(
         image_channel=3,
         gray_scale=False,
         downsample=False,
-        vis_result=True,
+        monitor_statistics=True,
         # TODO(pu): test the effect of augmentation,
         # use_augmentation=True,  # only for atari image obs
         use_augmentation=False,
@@ -53,7 +53,6 @@ game_config = EasyDict(
         # # td_steps=int(board_size * board_size),
         # num_unroll_steps=5,
         # lstm_horizon_len=5,
-
         collector_env_num=1,
         evaluator_env_num=1,
         total_transitions=int(1e5),
@@ -74,7 +73,6 @@ game_config = EasyDict(
 
         # use_priority=False,
         # use_max_priority_for_new_data=True,
-
         use_priority=True,
         use_max_priority_for_new_data=True,
 

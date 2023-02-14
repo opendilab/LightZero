@@ -1,11 +1,3 @@
-import sys
-
-# sys.path.append('/Users/puyuan/code/LightZero')
-# sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
-# sys.path.append('/mnt/lustre/puyuan/LightZero')
-
-
 import torch
 from easydict import EasyDict
 
@@ -14,29 +6,31 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-action_space_size = 9  # for mspacman
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-batch_size = 256
-num_simulations = 50
-# TODO(pu):
-# The key hyper-para to tune, for different env, we have different episode_length
-# e.g. reuse_factor = 0.5
-# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 1000
+categorical_distribution = True
+
+# action_space_size = 9  # for mspacman
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# batch_size = 256
+# num_simulations = 50
+# # TODO(pu):
+# # The key hyper-para to tune, for different env, we have different episode_length
+# # e.g. reuse_factor = 0.5
+# # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+# update_per_collect = 1000
 
 # debug
-# action_space_size = 9  # for mspacman
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# batch_size = 5
-# num_simulations = 5
-# update_per_collect = 1
+action_space_size = 9  # for mspacman
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+batch_size = 5
+num_simulations = 5
+update_per_collect = 1
 
 mspacman_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/mspacman_efficientzero_seed0_sub883_upc{update_per_collect}',
+    exp_name=f'data_ez_ctree/mspacman_efficientzero_seed0_sub883_upc{update_per_collect}_rr0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -63,7 +57,7 @@ mspacman_efficientzero_config = dict(
         cuda=True,
         model=dict(
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=True,
+            categorical_distribution=categorical_distribution,
             representation_model_type='conv_res_blocks',
             observation_shape=(12, 96, 96),  # if frame_stack_num=4, the original obs shape is（3,96,96）
             action_space_size=action_space_size,
@@ -133,7 +127,7 @@ mspacman_efficientzero_config = dict(
         image_channel=3,
         gray_scale=False,
         downsample=True,
-        vis_result=True,
+        monitor_statistics=True,
         # TODO(pu): test the effect of augmentation
         use_augmentation=True,
         # Style of augmentation
@@ -155,7 +149,11 @@ mspacman_efficientzero_config = dict(
         lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
-        reanalyze_ratio=0.99,
+        # reanalyze_ratio=0.99,
+        # reanalyze_outdated=False,
+
+        reanalyze_ratio=0.,
+        reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?
         lr_manually=True,
@@ -194,7 +192,7 @@ mspacman_efficientzero_config = dict(
         pb_c_base=19652,
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=True,
+        categorical_distribution=categorical_distribution,
         support_size=300,
         max_grad_norm=10,
         test_interval=10000,
@@ -252,17 +250,17 @@ mspacman_efficientzero_create_config = dict(
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='efficientzero',
-        import_names=['core.policy.efficientzero'],
+        import_names=['lzero.policy.efficientzero'],
     ),
     collector=dict(
         type='episode_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.efficientzero_collector'],
+        import_names=['lzero.worker.collector.efficientzero_collector'],
     )
 )
 mspacman_efficientzero_create_config = EasyDict(mspacman_efficientzero_create_config)
 create_config = mspacman_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_efficientzero
+    from lzero.entry import serial_pipeline_efficientzero
     serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e5))

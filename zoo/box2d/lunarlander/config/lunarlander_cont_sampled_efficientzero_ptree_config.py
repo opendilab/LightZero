@@ -170,7 +170,7 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
 
         gray_scale=False,
         downsample=False,
-        vis_result=True,
+        monitor_statistics=True,
         # TODO(pu): test the effect of augmentation,
         # use_augmentation=True,  # only for atari image obs
         use_augmentation=False,
@@ -305,17 +305,17 @@ lunarlander_cont_disc_sampled_efficientzero_create_config = dict(
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='sampled_efficientzero',
-        import_names=['core.policy.sampled_efficientzero'],
+        import_names=['lzero.policy.sampled_efficientzero'],
     ),
     collector=dict(
         type='episode_sampled_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.sampled_efficientzero_collector'],
+        import_names=['lzero.worker.collector.sampled_efficientzero_collector'],
     )
 )
 lunarlander_cont_disc_sampled_efficientzero_create_config = EasyDict(lunarlander_cont_disc_sampled_efficientzero_create_config)
 create_config = lunarlander_cont_disc_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_sampled_efficientzero
+    from lzero.entry import serial_pipeline_sampled_efficientzero
     serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e6))

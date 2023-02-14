@@ -7,6 +7,7 @@ import numpy as np
 from easydict import EasyDict
 
 class MCTSNode(ABC):
+
     def __init__(self, env, parent=None):
         """
         Overview:
@@ -73,10 +74,7 @@ class MCTSNode(ABC):
                     - c_param: constant num=1.4.
                  - Select the node with the highest ucb score.
         '''
-        choices_weights = [
-            (c.q / c.n) + c_param * np.sqrt((2 * np.log(self.n) / c.n))
-            for c in self.children
-        ]
+        choices_weights = [(c.q / c.n) + c_param * np.sqrt((2 * np.log(self.n) / c.n)) for c in self.children]
         self.best_action = self.parent_action[np.argmax(choices_weights)]
         return self.children[np.argmax(choices_weights)]
 
@@ -129,9 +127,7 @@ class TwoPlayersMCTSNode(MCTSNode):
     def expand(self):
         action = self.legal_actions.pop()
         next_simulator_env = self.env.simulate_action(action)
-        child_node = TwoPlayersMCTSNode(
-            next_simulator_env, parent=self
-        )
+        child_node = TwoPlayersMCTSNode(next_simulator_env, parent=self)
         self.children.append(child_node)
         self.parent_action.append(action)
         return child_node
@@ -157,6 +153,7 @@ class TwoPlayersMCTSNode(MCTSNode):
         self._results[result] += 1.
         if self.parent:
             self.parent.backpropagate(result)
+
 
 class MCTSSearchNode(object):
 
@@ -194,7 +191,7 @@ class MCTSSearchNode(object):
                     break
         else:
             for i in range(0, simulations_number):
-                # print('****simlulation-{}****'.format(i))            
+                # print('****simlulation-{}****'.format(i))
                 v = self._tree_policy()
                 reward = v.rollout()
                 # print('reward={}\n'.format(reward))
@@ -217,11 +214,13 @@ class MCTSSearchNode(object):
 
 
 class MCTSBot:
+
     def __init__(self, ENV, cfg, bot_name, num_simulation=10000):
         self.name = bot_name
         self.num_simulation = num_simulation
         self.ENV = ENV
         self.cfg = cfg
+
     def get_actions(self, state, player_index):
         simulator_env = self.ENV(EasyDict(self.cfg))
         simulator_env.reset(start_player_index=player_index, init_state=state)

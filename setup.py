@@ -35,7 +35,7 @@ group_requirements = {
 
 
 def find_pyx(path=None):
-    path = path or os.path.join(here, 'core')
+    path = path or os.path.join(here, 'lzero')
     pyx_files = []
     for root, dirs, filenames in os.walk(path):
         for fname in filenames:
@@ -74,13 +74,13 @@ setup(
     keywords='Reinforcement Learning, MCTS',
     packages=[
         # framework
-        *find_packages(include=('core', "core.*")),
+        *find_packages(include=('lzero', "lzero.*")),
         # application
         *find_packages(include=('zoo', 'zoo.*')),
     ],
     package_data={
         package_name: ['*.yaml', '*cfg']
-        for package_name in find_packages(include=('core.*',))
+        for package_name in find_packages(include=('lzero.*',))
     },
     python_requires=">=3.7",
     install_requires=requirements,

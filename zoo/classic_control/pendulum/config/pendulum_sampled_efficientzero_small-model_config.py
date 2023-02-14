@@ -1,10 +1,3 @@
-import sys
-
-# sys.path.append('/Users/puyuan/code/LightZero')
-# sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
-# sys.path.append('/mnt/lustre/puyuan/LightZero')
-
 import torch
 from easydict import EasyDict
 
@@ -18,36 +11,37 @@ action_dim = 1
 categorical_distribution = True
 game_history_length = 50  # we should ignore done in pendulum env which have fixed episode length 200
 norm_type = 'BN'  # 'LN' # TODO: res_blocks LN
+normalize_prob_of_sampled_actions = False
 
+# K = 5
+# num_simulations = 25
+# K = 20
+# num_simulations = 50
 # collector_env_num = 8
 # n_episode = 8
 # evaluator_env_num = 3
 # batch_size = 256
 # update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
-# # K = 5
-# # num_simulations = 25
-# K = 20
-# num_simulations = 50
 
 # for debug
+K = 2
+num_simulations = 3
 collector_env_num = 2
 n_episode = 2
 evaluator_env_num = 2
 batch_size = 3
-K = 2
-num_simulations = 3
 update_per_collect = 1
 
 pendulum_sampled_efficientzero_config = dict(
     # exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn10_tanh_fs03-ew5e-3',
     exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn10_tanh_cond-sigma-ew5e-3',
-
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         env_id='pendulum',
-        stop_value=-200,
+        # stop_value=-200,
+        stop_value=999,
         norm_obs=dict(use_norm=False, ),
         act_scale=True,
         battle_mode='one_player_mode',
@@ -65,8 +59,7 @@ pendulum_sampled_efficientzero_config = dict(
             # sigma_type='fixed',  # option list: ['fixed', 'conditioned']
             sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
             fixed_sigma_value=0.3,
-            bound_type=None,  # if bound_type='tanh', the policy mu is bouded in [-1,1]
-            # norm_type='LN',
+            bound_type=None,  # if bound_type='tanh', the policy mu is bounded in [-1,1]
             norm_type=norm_type,
 
             # activation=torch.nn.ReLU(inplace=True),
@@ -108,9 +101,9 @@ pendulum_sampled_efficientzero_config = dict(
         ),
         # learn_mode config
         learn=dict(
-            normalize_prob_of_sampled_actions=True,
-            policy_loss_type='KL',
-            # policy_loss_type='cross_entropy',
+            normalize_prob_of_sampled_actions=normalize_prob_of_sampled_actions,
+            # policy_loss_type='KL',
+            policy_loss_type='cross_entropy',
 
             update_per_collect=update_per_collect,
             target_update_freq=100,
@@ -183,7 +176,7 @@ pendulum_sampled_efficientzero_config = dict(
 
         gray_scale=False,
         downsample=False,
-        vis_result=True,
+        monitor_statistics=True,
         # TODO(pu): test the effect of augmentation,
         # use_augmentation=True,  # only for atari image obs
         use_augmentation=False,
@@ -213,8 +206,10 @@ pendulum_sampled_efficientzero_config = dict(
         num_unroll_steps=5,
         lstm_horizon_len=5,
 
-        # TODO(pu): why 0.99?
-        reanalyze_ratio=0.99,
+        # # TODO(pu): why 0.99?
+        # reanalyze_ratio=0.99,
+        reanalyze_ratio=0.,
+        reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?
         # lr_manually=True,
@@ -314,17 +309,17 @@ pendulum_sampled_efficientzero_create_config = dict(
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='sampled_efficientzero',
-        import_names=['core.policy.sampled_efficientzero'],
+        import_names=['lzero.policy.sampled_efficientzero'],
     ),
     collector=dict(
         type='episode_sampled_efficientzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.sampled_efficientzero_collector'],
+        import_names=['lzero.worker.collector.sampled_efficientzero_collector'],
     )
 )
 pendulum_sampled_efficientzero_create_config = EasyDict(pendulum_sampled_efficientzero_create_config)
 create_config = pendulum_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_sampled_efficientzero
-    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e5))
+    from lzero.entry import serial_pipeline_sampled_efficientzero
+    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e5))

@@ -14,7 +14,6 @@ else:
 
 from easydict import EasyDict
 
-
 # collector_env_num = 8
 # n_episode = 8
 # evaluator_env_num = 5
@@ -49,7 +48,8 @@ update_per_collect = 100
 # evaluator_env_num = 1
 
 tictactoe_muzero_config = dict(
-    exp_name=f'data_mz_ctree/tictactoe_2pm_muzero_seed0_sub885_ghl9_ftv1_fs2_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
+    exp_name=
+    f'data_mz_ctree/tictactoe_2pm_muzero_seed0_sub885_ghl9_ftv1_fs2_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -83,7 +83,7 @@ tictactoe_muzero_config = dict(
             action_space_size=9,
             downsample=False,
             num_blocks=1,
-            num_channels=16,   # TODO
+            num_channels=16,  # TODO
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -105,7 +105,6 @@ tictactoe_muzero_config = dict(
             # for debug
             # update_per_collect=2,
             # batch_size=4,
-
             update_per_collect=update_per_collect,
             batch_size=batch_size,
 
@@ -116,7 +115,6 @@ tictactoe_muzero_config = dict(
 
             # Frequency of target network update.
             target_update_freq=100,
-
             weight_decay=1e-4,
             momentum=0.9,
         ),
@@ -164,14 +162,13 @@ tictactoe_muzero_config = dict(
         image_channel=3,
         gray_scale=False,
         downsample=False,
-        vis_result=True,
+        monitor_statistics=True,
         # TODO(pu): test the effect of augmentation,
         # use_augmentation=True,  # only for atari image obs
         use_augmentation=False,
         # Style of augmentation
         # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
         augmentation=['shift', 'intensity'],
-
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         num_simulations=num_simulations,
@@ -196,7 +193,6 @@ tictactoe_muzero_config = dict(
 
         # TODO(pu): only used for adjust temperature manually
         max_training_steps=int(1e5),
-
         auto_temperature=False,
         # only effective when auto_temperature=False
         # fixed_temperature_value=0.25,
@@ -249,10 +245,8 @@ tictactoe_muzero_config = dict(
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
         reward_loss_coeff=1,
-
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-
         bn_mt=0.1,
 
         # siamese
@@ -285,19 +279,19 @@ tictactoe_muzero_create_config = dict(
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='muzero',
-        import_names=['core.policy.muzero'],
+        import_names=['lzero.policy.muzero'],
     ),
     collector=dict(
         type='episode_muzero',
         get_train_sample=True,
-        import_names=['core.worker.collector.muzero_collector'],
+        import_names=['lzero.worker.collector.muzero_collector'],
     )
 )
 tictactoe_muzero_create_config = EasyDict(tictactoe_muzero_create_config)
 create_config = tictactoe_muzero_create_config
 
 if __name__ == "__main__":
-    from core.entry import serial_pipeline_muzero_eval
+    from lzero.entry import serial_pipeline_muzero_eval
     import numpy as np
     # serial_pipeline_muzero_eval([main_config, create_config], seed=0, max_env_step=int(1e5))
 
@@ -307,7 +301,9 @@ if __name__ == "__main__":
     reward_all_seeds = []
     reward_mean_all_seeds = []
     for seed in range(test_seeds):
-        reward_mean, reward_lst = serial_pipeline_muzero_eval([main_config, create_config], seed=seed, test_episodes=test_episodes_each_seed, max_env_step=int(1e5))
+        reward_mean, reward_lst = serial_pipeline_muzero_eval(
+            [main_config, create_config], seed=seed, test_episodes=test_episodes_each_seed, max_env_step=int(1e5)
+        )
         reward_mean_all_seeds.append(reward_mean)
         reward_all_seeds.append(reward_lst)
 
@@ -318,5 +314,7 @@ if __name__ == "__main__":
     print(f'we eval total {test_seeds} seeds. In each seed, we test {test_episodes_each_seed} episodes.')
     print('reward_all_seeds:', reward_all_seeds)
     print('reward_mean_all_seeds:', reward_mean_all_seeds.mean())
-    print(f'win rate: {len(np.where(reward_all_seeds == 1.)[0]) / test_episodes}, draw rate: {len(np.where(reward_all_seeds == 0.)[0]) / test_episodes}, lose rate: {len(np.where(reward_all_seeds == -1.)[0]) / test_episodes}')
+    print(
+        f'win rate: {len(np.where(reward_all_seeds == 1.)[0]) / test_episodes}, draw rate: {len(np.where(reward_all_seeds == 0.)[0]) / test_episodes}, lose rate: {len(np.where(reward_all_seeds == -1.)[0]) / test_episodes}'
+    )
     print("=" * 20)
