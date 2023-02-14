@@ -183,7 +183,6 @@ class AlphaZeroCollector(ISerialCollector):
                 # Interact with env.
                 actions = {env_id: output['action'] for env_id, output in policy_output.items()}
                 actions = to_ndarray(actions)
-                import pdb;pdb.set_trace()
                 timesteps = self._env.step(actions)
 
             # TODO(nyz) this duration may be inaccurate in async env
