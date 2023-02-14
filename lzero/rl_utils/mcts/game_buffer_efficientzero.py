@@ -378,7 +378,6 @@ class EfficientZeroGameBuffer(Buffer):
         context = (game_lst, game_history_pos_lst, batch_index_list, weights_lst, make_time)
         return context
 
-    # @profile
     def make_batch(self, batch_context, reanalyze_ratio):
         """
         Overview:
@@ -518,7 +517,7 @@ class EfficientZeroGameBuffer(Buffer):
                     # beg_index = bootstrap_index - (state_index + td_steps)
                     # max of beg_index is num_unroll_steps
                     beg_index = current_index - state_index
-                    end_index = beg_index + config.frame_stack_num
+                    end_index = beg_index + config.model.frame_stack_num
                     # the stacked obs in time t
                     obs = game_obs[beg_index:end_index]
                 else:
@@ -594,7 +593,7 @@ class EfficientZeroGameBuffer(Buffer):
                     if current_index < traj_len:
                         policy_mask.append(1)
                         beg_index = current_index - state_index
-                        end_index = beg_index + config.frame_stack_num
+                        end_index = beg_index + config.model.frame_stack_num
                         obs = game_obs[beg_index:end_index]
                     else:
                         policy_mask.append(0)
@@ -607,7 +606,6 @@ class EfficientZeroGameBuffer(Buffer):
         ]
         return policy_re_context
 
-    # @profile
     def compute_target_reward_value(self, reward_value_context, model):
         """
         Overview:
@@ -644,7 +642,7 @@ class EfficientZeroGameBuffer(Buffer):
                 )
                 if len(action_mask_tmp) < self.config.num_unroll_steps + 1:
                     action_mask_tmp += [
-                        list(np.ones(self.config.action_space_size, dtype=np.int8))
+                        list(np.ones(self.config.model.action_space_size, dtype=np.int8))
                         for _ in range(self.config.num_unroll_steps + 1 - len(action_mask_tmp))
                     ]
                 action_mask.append(action_mask_tmp)
@@ -703,16 +701,16 @@ class EfficientZeroGameBuffer(Buffer):
                     if to_play_history[0][0] is None:
                         # for one_player atari games
                         action_mask = [
-                            list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
+                            list(np.ones(self.config.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                         ]
                         to_play = [0 for i in range(batch_size)]
 
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
-                    # roots = ctree_efficientzero.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
+                    # roots = ctree_efficientzero.Roots(batch_size, self.config.model.action_space_size, self.config.num_simulations)
                     roots = ctree.Roots(batch_size, self.config.num_simulations, legal_actions)
 
                     noises = [
-                        np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.action_space_size
+                        np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.model.action_space_size
                                             ).astype(np.float32).tolist() for _ in range(batch_size)
                     ]
                     roots.prepare(
@@ -727,7 +725,7 @@ class EfficientZeroGameBuffer(Buffer):
                     if to_play_history[0][0] is None:
                         # for one_player atari games
                         action_mask = [
-                            list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
+                            list(np.ones(self.config.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                         ]
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
                     roots = ptree_efficientzero.Roots(batch_size, self.config.num_simulations, legal_actions)
@@ -832,11 +830,11 @@ class EfficientZeroGameBuffer(Buffer):
                 batch_value_prefixs.append(target_value_prefixs)
                 batch_values.append(target_values)
 
+        # TODO
         batch_value_prefixs = np.asarray(batch_value_prefixs)
         batch_values = np.asarray(batch_values)
         return batch_value_prefixs, batch_values
 
-    # @profile
     def compute_target_policy_reanalyzed(self, policy_re_context, model):
         """
         compute policy targets from the reanalyzed context of policies
@@ -880,7 +878,7 @@ class EfficientZeroGameBuffer(Buffer):
                 )
                 if len(action_mask_tmp) < self.config.num_unroll_steps + 1:
                     action_mask_tmp += [
-                        list(np.ones(self.config.action_space_size, dtype=np.int8))
+                        list(np.ones(self.config.model.action_space_size, dtype=np.int8))
                         for _ in range(self.config.num_unroll_steps + 1 - len(action_mask_tmp))
                     ]
                 action_mask.append(action_mask_tmp)
@@ -937,16 +935,16 @@ class EfficientZeroGameBuffer(Buffer):
                 if to_play_history[0][0] is None:
                     # for one_player atari games
                     action_mask = [
-                        list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
+                        list(np.ones(self.config.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                     ]
                     to_play = [0 for i in range(batch_size)]
 
                 legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
-                # roots = ctree_efficientzero.Roots(batch_size, self.config.action_space_size, self.config.num_simulations)
+                # roots = ctree_efficientzero.Roots(batch_size, self.config.model.action_space_size, self.config.num_simulations)
                 roots = ctree.Roots(batch_size, self.config.num_simulations, legal_actions)
 
                 noises = [
-                    np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.action_space_size
+                    np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.model.action_space_size
                                         ).astype(np.float32).tolist() for _ in range(batch_size)
                 ]
                 roots.prepare(
@@ -965,7 +963,7 @@ class EfficientZeroGameBuffer(Buffer):
                 if to_play_history[0][0] is None:
                     # for one_player atari games
                     action_mask = [
-                        list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
+                        list(np.ones(self.config.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                     ]
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
@@ -1010,12 +1008,12 @@ class EfficientZeroGameBuffer(Buffer):
                     distributions = roots_distributions[policy_index]
 
                     if policy_mask[policy_index] == 0:
-                        target_policies.append([0 for _ in range(self.config.action_space_size)])
+                        target_policies.append([0 for _ in range(self.config.model.action_space_size)])
                     else:
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
                             target_policies.append(
-                                list(np.ones(self.config.action_space_size) / self.config.action_space_size)
+                                list(np.ones(self.config.model.action_space_size) / self.config.model.action_space_size)
                             )
                         else:
                             if self.config.mcts_ctree:
@@ -1031,7 +1029,7 @@ class EfficientZeroGameBuffer(Buffer):
                                     # target_policies.append(distributions)
                                 else:
                                     # for two_player board games
-                                    policy_tmp = [0 for _ in range(self.config.action_space_size)]
+                                    policy_tmp = [0 for _ in range(self.config.model.action_space_size)]
                                     # to make sure target_policies have the same dimension
                                     # target_policy = torch.from_numpy(target_policy) be correct
                                     sum_visits = sum(distributions)
@@ -1051,7 +1049,7 @@ class EfficientZeroGameBuffer(Buffer):
                                     # target_policies.append(distributions)
                                 else:
                                     # for two_player board games
-                                    policy_tmp = [0 for _ in range(self.config.action_space_size)]
+                                    policy_tmp = [0 for _ in range(self.config.model.action_space_size)]
                                     # to make sure target_policies have the same dimension
                                     # target_policy = torch.from_numpy(target_policy) be correct
                                     sum_visits = sum(distributions)
@@ -1101,7 +1099,7 @@ class EfficientZeroGameBuffer(Buffer):
                 )
                 if len(action_mask_tmp) < self.config.num_unroll_steps + 1:
                     action_mask_tmp += [
-                        list(np.ones(self.config.action_space_size, dtype=np.int8))
+                        list(np.ones(self.config.model.action_space_size, dtype=np.int8))
                         for _ in range(self.config.num_unroll_steps + 1 - len(action_mask_tmp))
                     ]
                 action_mask.append(action_mask_tmp)
@@ -1141,8 +1139,8 @@ class EfficientZeroGameBuffer(Buffer):
                                 target_policies.append(distributions)
                             else:
                                 # for two_player board games
-                                policy_tmp = [0 for _ in range(self.config.action_space_size)]
-                                # to make sure target_policies have the same dimension <self.config.action_space_size>
+                                policy_tmp = [0 for _ in range(self.config.model.action_space_size)]
+                                # to make sure target_policies have the same dimension <self.config.model.action_space_size>
                                 # sum_visits = sum(distributions)
                                 # distributions = [visit_count / sum_visits for visit_count in distributions]
                                 for index, legal_action in enumerate(legal_actions[policy_index]):
@@ -1161,8 +1159,8 @@ class EfficientZeroGameBuffer(Buffer):
                                 target_policies.append(distributions)
                             else:
                                 # for two_player board games
-                                policy_tmp = [0 for _ in range(self.config.action_space_size)]
-                                # to make sure target_policies have the same dimension <self.config.action_space_size>
+                                policy_tmp = [0 for _ in range(self.config.model.action_space_size)]
+                                # to make sure target_policies have the same dimension <self.config.model.action_space_size>
                                 # sum_visits = sum(distributions)
                                 # distributions = [visit_count / sum_visits for visit_count in distributions]
                                 for index, legal_action in enumerate(legal_actions[policy_index]):
@@ -1175,7 +1173,7 @@ class EfficientZeroGameBuffer(Buffer):
 
                     else:
                         # the invalid target policy
-                        target_policies.append([0 for _ in range(self.config.action_space_size)])
+                        target_policies.append([0 for _ in range(self.config.model.action_space_size)])
                         policy_mask.append(0)
 
                     policy_index += 1
@@ -1184,7 +1182,6 @@ class EfficientZeroGameBuffer(Buffer):
         batch_target_policies_non_re = np.asarray(batch_target_policies_non_re)
         return batch_target_policies_non_re
 
-    # @profile
     def sample_train_data(self, batch_size, policy):
         """
         Overview:

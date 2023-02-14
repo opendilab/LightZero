@@ -402,6 +402,8 @@ class EfficientZeroNet(BaseNet):
         state_norm=False,
         categorical_distribution=True,
         activation=nn.ReLU(inplace=True),
+        *args,
+        **kwargs
     ):
         """
         Overview:

@@ -255,7 +255,7 @@ class EfficientZeroCollector(ISerialCollector):
             (last_game_histories[i].obs_history[-4:][j] == game_histories[i].obs_history[:4][j]).all() is True
         """
         # pad over last block trajectory
-        beg_index = self.game_config.frame_stack_num
+        beg_index = self.game_config.model.frame_stack_num
         end_index = beg_index + self.game_config.num_unroll_steps
 
         # the start <frame_stack_num> obs is init zero obs, so we take the [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
@@ -367,7 +367,7 @@ class EfficientZeroCollector(ISerialCollector):
 
         # for i in range(env_nums):
         #     game_histories[i].init(
-        #         [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.frame_stack_num)]
+        #         [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)]
         #     )
 
         last_game_histories = [None for _ in range(env_nums)]
@@ -377,7 +377,7 @@ class EfficientZeroCollector(ISerialCollector):
         stack_obs_windows = [[] for _ in range(env_nums)]
         for i in range(env_nums):
             stack_obs_windows[i] = [
-                to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.frame_stack_num)
+                to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)
             ]
             game_histories[i].init(stack_obs_windows[i])
 
@@ -406,7 +406,7 @@ class EfficientZeroCollector(ISerialCollector):
             ep = -action_space * p * np.log2(p)
             return ep
 
-        max_visit_entropy = _get_max_entropy(self.game_config.action_space_size)
+        max_visit_entropy = _get_max_entropy(self.game_config.model.action_space_size)
         # print('max_visit_entropy', max_visit_entropy)
 
         ready_env_id = set()
@@ -629,7 +629,7 @@ class EfficientZeroCollector(ISerialCollector):
                             game_history_length=self.game_config.game_history_length,
                             config=self.game_config
                         )
-                        stack_obs_windows[env_id] = [init_obs for _ in range(self.game_config.frame_stack_num)]
+                        stack_obs_windows[env_id] = [init_obs for _ in range(self.game_config.model.frame_stack_num)]
                         game_histories[env_id].init(stack_obs_windows[env_id])
                         last_game_histories[env_id] = None
                         last_game_priorities[env_id] = None

@@ -165,7 +165,7 @@ pong_efficientzero_config = dict(
         reanalyze_ratio=0.3,
         reanalyze_outdated=True,
 
-        # TODO(pu): why not use adam?
+        # TODO(pu): why do't use adam?
         lr_manually=True,
 
         # use_priority=False,

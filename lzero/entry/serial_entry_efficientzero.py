@@ -18,7 +18,6 @@ from lzero.rl_utils import EfficientZeroGameBuffer as GameBuffer, visit_count_te
 from lzero.worker import EfficientZeroEvaluator as BaseSerialEvaluator
 
 
-# @profile
 def serial_pipeline_efficientzero(
         input_cfg: Union[str, Tuple[dict, dict]],
         seed: int = 0,
@@ -29,7 +28,7 @@ def serial_pipeline_efficientzero(
 ) -> 'Policy':  # noqa
     """
     Overview:
-        Serial pipeline entry for EfficientZero and its variants, such as EfficientZero.
+        Serial pipeline entry for EfficientZero.
     Arguments:
         - input_cfg (:obj:`Union[str, Tuple[dict, dict]]`): Config in dict type. \
             ``str`` type means config file path. \
@@ -47,7 +46,6 @@ def serial_pipeline_efficientzero(
         cfg, create_cfg = read_config(input_cfg)
     else:
         cfg, create_cfg = input_cfg
-    # create_cfg.policy.type = create_cfg.policy.type + '_command'
     create_cfg.policy.type = create_cfg.policy.type
 
     env_fn = None if env_setting is None else env_setting[0]
@@ -62,7 +60,6 @@ def serial_pipeline_efficientzero(
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
-    # policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval', 'command'])
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
@@ -73,7 +70,7 @@ def serial_pipeline_efficientzero(
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
-    # EfficientZero related code
+    ## EfficientZero related code ##
     # specific game buffer for EfficientZero
     game_config = cfg.policy
 
@@ -101,15 +98,10 @@ def serial_pipeline_efficientzero(
     # ==========
     # Learner's before_run hook.
     learner.call_hook('before_run')
-
-    # stop, reward = evaluator.eval(
-    #     learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-    # )
-
     while True:
         collect_kwargs = {}
         # set temperature for visit count distributions according to the train_iter,
-        # please refer to Appendix A.1 in EfficientZero for details
+        # please refer to Appendix A.1 in EfficientZero paper for details.
         collect_kwargs['temperature'] = np.array(
             [
                 visit_count_temperature(
@@ -132,13 +124,13 @@ def serial_pipeline_efficientzero(
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
-        # TODO(pu): save returned data collected by the collector
+        # save returned new_data collected by the collector
         replay_buffer.push_games(new_data[0], new_data[1])
 
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
-        # Learn policy from collected data
+        # Learn policy from collected data.
         for i in range(cfg.policy.learn.update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
             if replay_buffer.get_num_of_transitions() > learner.policy.get_attribute('batch_size'):
@@ -154,18 +146,12 @@ def serial_pipeline_efficientzero(
                 )
                 break
 
+            # the core train steps for EfficientZero.
             learner.train(train_data, collector.envstep)
 
             train_steps = learner.train_iter * cfg.policy.learn.update_per_collect
-
-            # if game_config.lr_manually:
-            #     # learning rate decay manually like EfficientZero paper
-            #     if train_steps  > 1e5 and train_steps  <= 2e5:
-            #         policy._optimizer.lr = 0.02
-            #     elif train_steps  > 2e5:
-            #         policy._optimizer.lr = 0.002
             if game_config.lr_manually:
-                # learning rate decay manually like MuZero paper
+                # learning rate decay manually like MuZero paper.
                 if train_steps < 0.5 * game_config.max_training_steps:
                     policy._optimizer.lr = 0.2
                 elif train_steps < 0.75 * game_config.max_training_steps:

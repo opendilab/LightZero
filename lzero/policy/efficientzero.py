@@ -30,7 +30,7 @@ from lzero.rl_utils.mcts.ctree_efficientzero import ez_tree as ctree
 class EfficientZeroPolicy(Policy):
     """
     Overview:
-        The policy class for EfficientZero
+        The policy class for EfficientZero.
     """
     config = dict(
         type='efficientzero',
@@ -158,7 +158,7 @@ class EfficientZeroPolicy(Policy):
         self._target_model.reset()
         if self._cfg.use_augmentation:
             self.transforms = Transforms(
-                self._cfg.augmentation, image_shape=(self._cfg.obs_shape[1], self._cfg.obs_shape[2])
+                self._cfg.augmentation, image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
             )
         self.value_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
         self.reward_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
@@ -200,14 +200,14 @@ class EfficientZeroPolicy(Policy):
         # (4, 4*3, 96, 96) = (4, 12, 96, 96)
         # take the first stacked obs at timestep t: o_t_stack
         # used in initial_inference
-        obs_batch = obs_batch_ori[:, 0:self._cfg.frame_stack_num * self._cfg.image_channel, :, :]
+        obs_batch = obs_batch_ori[:, 0:self._cfg.model.frame_stack_num * self._cfg.model.image_channel, :, :]
 
         # take the all obs other than timestep t1:
         # obs_target_batch is used for calculate consistency loss, which is only performed in the last 8 timesteps
         # for i in rnage(num_unroll_steeps):
-        #   beg_index = self._cfg.image_channel * step_i
-        #   end_index = self._cfg.image_channel * (step_i + self._cfg.frame_stack_num)
-        obs_target_batch = obs_batch_ori[:, self._cfg.image_channel:, :, :]
+        #   beg_index = self._cfg.model.image_channel * step_i
+        #   end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
+        obs_target_batch = obs_batch_ori[:, self._cfg.model.image_channel:, :, :]
 
         # do augmentations
         if self._cfg.use_augmentation:
@@ -363,8 +363,8 @@ class EfficientZeroPolicy(Policy):
                 )
                 policy_logits = policy_logits.detach().cpu().numpy()
 
-            beg_index = self._cfg.image_channel * step_i
-            end_index = self._cfg.image_channel * (step_i + self._cfg.frame_stack_num)
+            beg_index = self._cfg.model.image_channel * step_i
+            end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
 
             # consistency loss
             if self._cfg.consistency_coeff > 0:
@@ -425,8 +425,8 @@ class EfficientZeroPolicy(Policy):
             # reset hidden states
             if (step_i + 1) % self._cfg.lstm_horizon_len == 0:
                 reward_hidden_state = (
-                    torch.zeros(1, self._cfg.batch_size, self._cfg.lstm_hidden_size).to(self._cfg.device),
-                    torch.zeros(1, self._cfg.batch_size, self._cfg.lstm_hidden_size).to(self._cfg.device)
+                    torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
+                    torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
                 )
 
             if self._cfg.monitor_statistics:

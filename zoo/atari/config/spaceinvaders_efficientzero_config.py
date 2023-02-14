@@ -8,26 +8,26 @@ else:
 
 categorical_distribution = True
 
-# action_space_size = 6  # for spaceinvaders
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# batch_size = 256
-# num_simulations = 50
-# # TODO(pu):
-# # The key hyper-para to tune, for different env, we have different episode_length
-# # e.g. reuse_factor = 0.5
-# # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-# update_per_collect = 1000
+action_space_size = 6  # for spaceinvaders
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+batch_size = 256
+num_simulations = 50
+# TODO(pu):
+# The key hyper-para to tune, for different env, we have different episode_length
+# e.g. reuse_factor = 0.5
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+update_per_collect = 1000
 
 # debug config
-action_space_size = 6  # for pong
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-batch_size = 4
-num_simulations = 10
-update_per_collect = 10
+# action_space_size = 6  # for pong
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# batch_size = 4
+# num_simulations = 10
+# update_per_collect = 10
 
 spaceinvaders_efficientzero_config = dict(
     exp_name=f'data_ez_ctree/spaceinvaders_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}_rr03',
@@ -71,9 +71,6 @@ spaceinvaders_efficientzero_config = dict(
             # default config in EfficientZero original repo
             num_channels=64,
             lstm_hidden_size=512,
-            # The env steps required for convergence are twice the env steps corresponding to the original size model
-            # num_channels=32,
-            # lstm_hidden_size=256,
             reduced_channels_reward=16,
             reduced_channels_value=16,
             reduced_channels_policy=16,
@@ -107,8 +104,6 @@ spaceinvaders_efficientzero_config = dict(
         ),
         # the eval cost is expensive, so we set eval_freq larger
         eval=dict(evaluator=dict(eval_freq=int(2e3), )),
-        # for debug
-        # eval=dict(evaluator=dict(eval_freq=int(2), )),
         # command_mode config
         other=dict(
             # NOTE: the replay_buffer_size is ineffective, we specify it in game config
@@ -151,9 +146,6 @@ spaceinvaders_efficientzero_config = dict(
         # default config in EfficientZero original repo
         channels=64,
         lstm_hidden_size=512,
-        # The env steps required for convergence are twice the env steps corresponding to the original size model
-        # channels=32,
-        # lstm_hidden_size=256,
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
