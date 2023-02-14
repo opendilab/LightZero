@@ -20,7 +20,7 @@ class EfficientZeroMCTSCtree(object):
         device='gpu',
         pb_c_base=19652,
         pb_c_init=1.25,
-        support_size=300,
+        support_scale=300,
         discount=0.997,
         num_simulations=50,
         lstm_horizon_len=5,
@@ -108,11 +108,11 @@ class EfficientZeroMCTSCtree(object):
                     # if not in training, obtain the scalars of the value/reward
                     network_output.value = inverse_scalar_transform(
                         network_output.value,
-                        self.config.support_size,
+                        self.config.model.support_scale,
                     ).detach().cpu().numpy()
                     network_output.value_prefix = inverse_scalar_transform(
                         network_output.value_prefix,
-                        self.config.support_size,
+                        self.config.model.support_scale,
                     ).detach().cpu().numpy()
                     network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()
                     network_output.reward_hidden_state = (
@@ -161,7 +161,7 @@ class MuZeroMCTSCtree(object):
         device='gpu',
         pb_c_base=19652,
         pb_c_init=1.25,
-        support_size=300,
+        support_scale=300,
         discount=0.997,
         num_simulations=50,
         lstm_horizon_len=5,
@@ -237,12 +237,12 @@ class MuZeroMCTSCtree(object):
                     # if not in training, obtain the scalars of the value/reward
                     network_output.value = inverse_scalar_transform(
                         network_output.value,
-                        self.config.support_size,
+                        self.config.model.support_scale,
                         categorical_distribution=self.config.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.reward = inverse_scalar_transform(
                         network_output.reward,
-                        self.config.support_size,
+                        self.config.model.support_scale,
                         categorical_distribution=self.config.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()

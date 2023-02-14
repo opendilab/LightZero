@@ -1,21 +1,45 @@
-from typing import Any, Union, Optional
+import copy
+from typing import Optional
+
 import gym
-import torch
 import numpy as np
+import torch
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.envs.common.common_function import affine_transform
+from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
-from ding.torch_utils import to_ndarray, to_list
+from easydict import EasyDict
 
 
 @ENV_REGISTRY.register('pendulum')
 class PendulumEnv(BaseEnv):
 
+    @classmethod
+    def default_config(cls: type) -> EasyDict:
+        cfg = EasyDict(copy.deepcopy(cls.config))
+        cfg.cfg_type = cls.__name__ + 'Dict'
+        return cfg
+
+    config = dict(
+        save_replay_gif=False,
+        replay_path_gif=None,
+        replay_path=None,
+        act_scale=True,
+        delay_reward_step=0,
+        each_dim_disc_size=4,
+        battle_mode='one_player_mode',
+        prob_random_agent=0.,
+        collect_max_episode_steps=int(1.08e5),
+        eval_max_episode_steps=int(1.08e5),
+    )
+
     def __init__(self, cfg: dict) -> None:
         self._cfg = cfg
         self._act_scale = cfg.act_scale
-        # self._env = gym.make('Pendulum-v1')
-        self._env = gym.make('Pendulum-v0')
+        try:
+            self._env = gym.make('Pendulum-v1')
+        except:
+            self._env = gym.make('Pendulum-v0')
         self._init_flag = False
         self._replay_path = None
         if 'continuous' in cfg.keys():
@@ -37,8 +61,10 @@ class PendulumEnv(BaseEnv):
 
     def reset(self) -> np.ndarray:
         if not self._init_flag:
-            # self._env = gym.make('Pendulum-v1')
-            self._env = gym.make('Pendulum-v0')
+            try:
+                self._env = gym.make('Pendulum-v1')
+            except:
+                self._env = gym.make('Pendulum-v0')
             if self._replay_path is not None:
                 self._env = gym.wrappers.RecordVideo(
                     self._env,
@@ -58,8 +84,7 @@ class PendulumEnv(BaseEnv):
         obs = to_ndarray(obs).astype(np.float32)
         self._final_eval_reward = 0.
 
-        # lightzero related code
-        # to be compatible with muzero/efficientzero
+        # to be compatible with MuZero/EfficientZero policy
         # shape: [W, H, C]
         obs = obs.reshape(obs.shape[0], 1, 1)
         if not self._continuous:
@@ -95,13 +120,12 @@ class PendulumEnv(BaseEnv):
 
         self._final_eval_reward += rew
         obs = to_ndarray(obs).astype(np.float32)
-        # wrapped to be transfered to a array with shape (1,)
+        # wrapped to be transferred to a array with shape (1,)
         rew = to_ndarray([rew]).astype(np.float32)
         if done:
             info['final_eval_reward'] = self._final_eval_reward
 
-        # lightzero related code
-        # to be compatible with muzero/efficientzero
+        # to be compatible with requirement for data type in LightZero policy
         # shape: [W, H, C]
         obs = obs.reshape(obs.shape[0], 1, 1)
         if not self._continuous:
@@ -119,7 +143,6 @@ class PendulumEnv(BaseEnv):
         self._replay_path = replay_path
 
     def random_action(self) -> np.ndarray:
-        # consider discrete
         if self._continuous:
             random_action = self.action_space.sample().astype(np.float32)
         else:

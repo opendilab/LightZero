@@ -6,242 +6,139 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-categorical_distribution = True
-
-action_space_size = 6  # for spaceinvaders
+# ==============================================================
+# begin of the most frequently changed config specified by the user
+# ==============================================================
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-batch_size = 256
 num_simulations = 50
-# TODO(pu):
-# The key hyper-para to tune, for different env, we have different episode_length
-# e.g. reuse_factor = 0.5
+# update_per_collect determines the number of training steps after each collection of a batch of data.
+# For different env, we have different episode_length,
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
 update_per_collect = 1000
-
-# debug config
-# action_space_size = 6  # for pong
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# batch_size = 4
-# num_simulations = 10
-# update_per_collect = 10
+batch_size = 256
+max_env_step = int(1e6)
+# ==============================================================
+# end of the most frequently changed config specified by the user
+# ==============================================================
 
 spaceinvaders_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/spaceinvaders_efficientzero_seed0_sub883_mlr_ns50_ftv025_upc{update_per_collect}_rr03',
+    exp_name=f'data_ez_ctree/spaceinvaders_efficientzero_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         env_name='SpaceInvadersNoFrameskip-v4',
-        stop_value=int(1e6),
-        render_mode_human=False,
-        collect_max_episode_steps=int(1.08e5),
-        eval_max_episode_steps=int(1.08e5),
-        max_episode_steps=int(1.08e5),
-        # for debug
-        # collect_max_episode_steps=int(100),
-        # eval_max_episode_steps=int(100),
         frame_skip=4,
-        obs_shape=(12, 96, 96),
-        episode_life=True,
         gray_scale=False,
-        # cvt_string=True,
-        # trade memory for speed
-        cvt_string=False,
-        game_wrapper=True,
-        dqn_expert_data=False,
+        obs_shape=(12, 96, 96),
         manager=dict(shared_memory=False, ),
+        stop_value=int(1e6),
     ),
     policy=dict(
+        # the pretrained model path.
+        # Users should add their own model path here. Model path should lead to a model.
+        # Absolute path is recommended.
+        # In LightZero, it is ``exp_name/ckpt/ckpt_best.pth.tar``.
         model_path=None,
         env_name='SpaceInvadersNoFrameskip-v4',
-        # Whether to use cuda for network.
+        # whether to use cuda for network.
         cuda=True,
         model=dict(
-            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=categorical_distribution,
-            representation_model_type='conv_res_blocks',
-            observation_shape=(12, 96, 96),  # if frame_stack_num=4, the original obs shape is（3,96,96）
-            action_space_size=action_space_size,
+            # ==============================================================
+            # We use the default large size model, please refer to the
+            # default init config in EfficientZeroNet class or EfficientZero
+            # original paper for details.
+            # ==============================================================
+            image_channel=3,
+            frame_stack_num=4,
             downsample=True,
-            num_blocks=1,
-            # default config in EfficientZero original repo
-            num_channels=64,
-            lstm_hidden_size=512,
-            reduced_channels_reward=16,
-            reduced_channels_value=16,
-            reduced_channels_policy=16,
-            fc_reward_layers=[32],
-            fc_value_layers=[32],
-            fc_policy_layers=[32],
-            reward_support_size=601,
-            value_support_size=601,
-            bn_mt=0.1,
-            proj_hid=1024,
-            proj_out=1024,
-            pred_hid=512,
-            pred_out=1024,
-            last_linear_layer_init_zero=True,
-            state_norm=False,
+            # the stacked obs shape -> the transformed obs shape:
+            # [S, W, H, C] -> [S x C, W, H]
+            # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
+            observation_shape=(12, 96, 96),  # if frame_stack_nums=4
+            # observation_shape=(3, 96, 96),  # if frame_stack_num=1
+            action_space_size=6,
+            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
+            categorical_distribution=True,
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
         # learn_mode config
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
-
-            learning_rate=0.2,
+            lr_manually=True,
+            optim_type='SGD',
+            learning_rate=0.2,  # init lr for manually decay schedule
             # Frequency of target network update.
             target_update_freq=100,
         ),
         # collect_mode config
         collect=dict(
-            # You can use either "n_sample" or "n_episode" in collector.collect.
-            # Get "n_sample" samples per collect.
+            # Get "n_episode" episodes per collect.
             n_episode=n_episode,
         ),
-        # the eval cost is expensive, so we set eval_freq larger
+        # If the eval cost is expensive, we could set eval_freq larger.
         eval=dict(evaluator=dict(eval_freq=int(2e3), )),
         # command_mode config
         other=dict(
-            # NOTE: the replay_buffer_size is ineffective, we specify it in game config
+            # NOTE: the replay_buffer_size is ineffective,
+            # we specify it using ``max_total_transitions`` in the following game config
             replay_buffer=dict(type='game_buffer_efficientzero')
         ),
-        ######################################
-        # game_config begin
-        ######################################
-        env_type='no_board_games',
-        device=device,
-        # if mcts_ctree=True, using cpp mcts code
+        # ==============================================================
+        # begin of additional game_config
+        # ==============================================================
+        ## common
         mcts_ctree=True,
-        image_based=True,
-        # cvt_string=True,
-        # trade memory for speed
-        cvt_string=False,
-        clip_reward=True,
-        game_wrapper=True,
-        # NOTE: different env have different action_space_size
-        action_space_size=action_space_size,
-        amp_type='none',
-        obs_shape=(12, 96, 96),
-        image_channel=3,
-        gray_scale=False,
-        downsample=True,
-        monitor_statistics=True,
-        # TODO(pu): test the effect of augmentation
-        use_augmentation=True,
-        # Style of augmentation
-        # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
-        augmentation=['shift', 'intensity'],
-
+        device=device,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
-        # TODO(pu): how to set proper num_simulations automatically?
-        num_simulations=num_simulations,
-        batch_size=batch_size,
+        env_type='not_board_games',
         game_history_length=400,
-        total_transitions=int(1e5),
-        # default config in EfficientZero original repo
-        channels=64,
-        lstm_hidden_size=512,
+
+        ## observation
+        image_based=True,
+        cvt_string=False,
+        gray_scale=False,
+
+        ## reward
+        clip_reward=True,
+
+        ## learn
+        num_simulations=num_simulations,
+        lr_manually=True,
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
+        max_grad_norm=10,
+        # the weight of different loss
+        reward_loss_weight=1,
+        value_loss_weight=0.25,
+        policy_loss_weight=1,
+        consistency_weight=2,
+        # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
+        auto_temperature=False,
+        fixed_temperature_value=0.25,
+        # the size/capacity of replay_buffer
+        max_total_transitions=int(1e5),
+        # ``max_training_steps`` is only used for adjusting temperature manually.
+        max_training_steps=int(1e5),
 
-        # TODO(pu): why 0.99?
-        # reanalyze_ratio=0.99,
-        # reanalyze_outdated=False,
-
+        ## reanalyze
         reanalyze_ratio=0.3,
         reanalyze_outdated=True,
+        # whether to use root value in reanalyzing part
+        use_root_value=False,
+        mini_infer_size=256,
 
-        # TODO(pu): why not use adam?
-        lr_manually=True,
-
-        # use_priority=False,
-        # use_max_priority_for_new_data=True,
-
+        ## priority
         use_priority=True,
         use_max_priority_for_new_data=True,
-
-        # TODO(pu): only used for adjust temperature manually
-        max_training_steps=int(1e5),
-        auto_temperature=False,
-        # only effective when auto_temperature=False
-        fixed_temperature_value=0.25,
-        # TODO(pu): whether to use root value in reanalyzing?
-        use_root_value=False,
-        # use_root_value=True,
-
-        # TODO(pu): test the effect
-        last_linear_layer_init_zero=True,
-        state_norm=False,
-        mini_infer_size=256,
-        # (Float type) How much prioritization is used: 0 means no prioritization while 1 means full prioritization
-        priority_prob_alpha=0.6,
-        # (Float type)  How much correction is used: 0 means no correction while 1 means full correction
-        # TODO(pu): test effect of 0.4->1
-        priority_prob_beta=0.4,
-        prioritized_replay_eps=1e-6,
-        root_dirichlet_alpha=0.3,
-        root_exploration_fraction=0.25,
-        auto_td_steps=int(0.3 * 2e5),
-        auto_td_steps_ratio=0.3,
-
-        # UCB formula
-        pb_c_base=19652,
-        pb_c_init=1.25,
-        # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=categorical_distribution,
-
-        support_size=300,
-        # value_support=DiscreteSupport(-300, 300, delta=1),
-        # reward_support=DiscreteSupport(-300, 300, delta=1),
-        max_grad_norm=10,
-        test_interval=10000,
-        log_interval=1000,
-        vis_interval=1000,
-        checkpoint_interval=100,
-        target_model_interval=200,
-        save_ckpt_interval=10000,
-        discount=0.997,
-        dirichlet_alpha=0.3,
-        value_delta_max=0.01,
-        num_actors=1,
-        # network initialization/ & normalization
-        episode_life=True,
-        # replay window
-        start_transitions=8,
-        transition_num=1,
-        # frame skip & stack observation
-        frame_skip=4,
-        frame_stack_num=4,
-
-        # TODO(pu): EfficientZero -> MuZero
-        # coefficient
-        reward_loss_coeff=1,
-        value_loss_coeff=0.25,
-        policy_loss_coeff=1,
-        consistency_coeff=2,
-
-        # siamese
-        proj_hid=1024,
-        proj_out=1024,
-        pred_hid=512,
-        pred_out=1024,
-        bn_mt=0.1,
-        blocks=1,  # Number of blocks in the ResNet
-        reduced_channels_reward=16,  # x36 Number of channels in reward head
-        reduced_channels_value=16,  # x36 Number of channels in value head
-        reduced_channels_policy=16,  # x36 Number of channels in policy head
-        resnet_fc_reward_layers=[32],  # Define the hidden layers in the reward head of the dynamic network
-        resnet_fc_value_layers=[32],  # Define the hidden layers in the value head of the prediction network
-        resnet_fc_policy_layers=[32],  # Define the hidden layers in the policy head of the prediction network
-        ######################################
-        # game_config end
-        ######################################
+        # ==============================================================
+        # end of additional game_config
+        # ==============================================================
     ),
 )
 spaceinvaders_efficientzero_config = EasyDict(spaceinvaders_efficientzero_config)
@@ -268,4 +165,4 @@ create_config = spaceinvaders_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import serial_pipeline_efficientzero
-    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=max_env_step)

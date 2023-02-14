@@ -102,7 +102,7 @@ game_config = EasyDict(
         # UCB formula
         pb_c_base=19652,
         pb_c_init=1.25,
-        support_size=300,
+        support_scale=300,
         value_support=DiscreteSupport(-300, 300, delta=1),
         reward_support=DiscreteSupport(-300, 300, delta=1),
         max_grad_norm=10,
@@ -131,7 +131,7 @@ game_config = EasyDict(
         policy_loss_coeff=1,
         consistency_coeff=2,
         # consistency_coeff=0,
-        bn_mt=0.1,
+        batch_norm_momentum=0.1,
         # siamese
         proj_hid=1024,
         proj_out=1024,
@@ -139,9 +139,9 @@ game_config = EasyDict(
         pred_out=1024,
         blocks=1,  # Number of blocks in the ResNet
         channels=16,  # Number of channels in the ResNet
-        reduced_channels_reward=16,  # x36 Number of channels in reward head
-        reduced_channels_value=16,  # x36 Number of channels in value head
-        reduced_channels_policy=16,  # x36 Number of channels in policy head
+        reward_head_channels=16,  # x36 Number of channels in reward head
+        value_head_channels=16,  # x36 Number of channels in value head
+        policy_head_channels=16,  # x36 Number of channels in policy head
         resnet_fc_reward_layers=[32],  # Define the hidden layers in the reward head of the dynamic network
         resnet_fc_value_layers=[32],  # Define the hidden layers in the value head of the prediction network
         resnet_fc_policy_layers=[32],  # Define the hidden layers in the policy head of the prediction network

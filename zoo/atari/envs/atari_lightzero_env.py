@@ -20,8 +20,24 @@ from easydict import EasyDict
 class AtariLightZeroEnv(BaseEnv):
 
     config = dict(
-        dqn_expert_data=False,
+        collector_env_num=8,
+        evaluator_env_num=3,
+        n_evaluator_episode=3,
+        env_name='PongNoFrameskip-v4',
         render_mode_human=False,
+        collect_max_episode_steps=int(1.08e5),
+        eval_max_episode_steps=int(1.08e5),
+        max_episode_steps=int(1.08e5),
+        frame_skip=4,
+        obs_shape=(12, 96, 96),
+        episode_life=True,
+        gray_scale=False,
+        # trade memory for speed
+        cvt_string=False,
+        game_wrapper=True,
+        dqn_expert_data=False,
+        manager=dict(shared_memory=False, ),
+        stop_value=int(1e6),
     )
 
     @classmethod

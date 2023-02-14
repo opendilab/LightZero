@@ -86,7 +86,7 @@ class RepresentationNetwork(nn.Module):
     def __init__(
         self,
         observation_shape,
-        num_blocks,
+        num_res_blocks,
         num_channels,
         downsample,
         momentum=0.1,
@@ -96,7 +96,7 @@ class RepresentationNetwork(nn.Module):
         Overview: Representation network
         Arguments:
             - observation_shape (:obj:`Union[List, tuple]`):  shape of observations: [C, W, H]
-            - num_blocks (:obj:`int`): number of res blocks
+            - num_res_blocks (:obj:`int`): number of res blocks
             - num_channels (:obj:`int`): channels of hidden states
             - downsample (:obj:`bool`): True -> do downsampling for observations. (For board games, do not need)
         """
@@ -114,7 +114,7 @@ class RepresentationNetwork(nn.Module):
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
-                for _ in range(num_blocks)
+                for _ in range(num_res_blocks)
             ]
         )
         self.activation = activation
@@ -138,11 +138,11 @@ class PredictionNetwork(nn.Module):
     def __init__(
         self,
         action_space_size,
-        num_blocks,
+        num_res_blocks,
         in_channels,
         num_channels,
-        reduced_channels_value,
-        reduced_channels_policy,
+        value_head_channels,
+        policy_head_channels,
         fc_value_layers,
         fc_policy_layers,
         full_support_size,
@@ -157,15 +157,15 @@ class PredictionNetwork(nn.Module):
         ----------
         action_space_size: int
             action space
-        num_blocks: int
+        num_res_blocks: int
             number of res blocks
         in_channels: int
             channels of input, if None, then in_channels = num_channels
         num_channels: int
             channels of hidden states
-        reduced_channels_value: int
+        value_head_channels: int
             channels of value head
-        reduced_channels_policy: int
+        policy_head_channels: int
             channels of policy head
         fc_value_layers: list
             hidden layers of the value prediction head (MLP head)
@@ -188,14 +188,14 @@ class PredictionNetwork(nn.Module):
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
-                for _ in range(num_blocks)
+                for _ in range(num_res_blocks)
             ]
         )
 
-        self.conv1x1_value = nn.Conv2d(num_channels, reduced_channels_value, 1)
-        self.conv1x1_policy = nn.Conv2d(num_channels, reduced_channels_policy, 1)
-        self.bn_value = nn.BatchNorm2d(reduced_channels_value, momentum=momentum)
-        self.bn_policy = nn.BatchNorm2d(reduced_channels_policy, momentum=momentum)
+        self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
+        self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
+        self.bn_value = nn.BatchNorm2d(value_head_channels, momentum=momentum)
+        self.bn_policy = nn.BatchNorm2d(policy_head_channels, momentum=momentum)
         self.block_output_size_value = block_output_size_value
         self.block_output_size_policy = block_output_size_policy
         # TODO(pu)
@@ -255,10 +255,10 @@ class AlphaNet(nn.Module):
         self,
         observation_shape,
         action_space_size,
-        num_blocks,
+        num_res_blocks,
         num_channels,
-        reduced_channels_value,
-        reduced_channels_policy,
+        value_head_channels,
+        policy_head_channels,
         fc_value_layers,
         fc_policy_layers,
         reward_support_size,
@@ -266,7 +266,7 @@ class AlphaNet(nn.Module):
         downsample,
         representation_model_type: str = 'conv_res_blocks',
         representation_model: nn.Module = None,
-        bn_mt=0.1,
+        batch_norm_momentum=0.1,
         last_linear_layer_init_zero=False,
         state_norm=False,
         categorical_distribution=True,
@@ -279,14 +279,14 @@ class AlphaNet(nn.Module):
             - representation_model_type
             - observation_shape: tuple or list. shape of observations: [C, W, H]
             - action_space_size: (:obj:`int`): . action space
-            - num_blocks (:obj:`int`):  number of res blocks
+            - num_res_blocks (:obj:`int`):  number of res blocks
             - num_channels (:obj:`int`): channels of hidden states
-            - reduced_channels_value (:obj:`int`): channels of value head
-            - reduced_channels_policy (:obj:`int`): channels of policy head
+            - value_head_channels (:obj:`int`): channels of value head
+            - policy_head_channels (:obj:`int`): channels of policy head
             - fc_value_layers (:obj:`list`):  hidden layers of the value prediction head (MLP head)
             - fc_policy_layers (:obj:`list`):  hidden layers of the policy prediction head (MLP head)
             - downsample (:obj:`bool`): True -> do downsampling for observations. (For board games, do not need)
-            - bn_mt (:obj:`float`):  Momentum of BN
+            - batch_norm_momentum (:obj:`float`):  Momentum of BN
             - last_linear_layer_init_zero (:obj:`bool`): True -> zero initialization for the last layer of value/policy mlp
             - state_norm (:obj:`bool`):  True -> normalization for hidden states
         """
@@ -306,48 +306,48 @@ class AlphaNet(nn.Module):
 
         self.action_space_size = action_space_size
         block_output_size_value = (
-            (reduced_channels_value * math.ceil(observation_shape[1] / 16) *
+            (value_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else
-            (reduced_channels_value * observation_shape[1] * observation_shape[2])
+            (value_head_channels * observation_shape[1] * observation_shape[2])
         )
 
         block_output_size_policy = (
-            (reduced_channels_policy * math.ceil(observation_shape[1] / 16) *
+            (policy_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else
-            (reduced_channels_policy * observation_shape[1] * observation_shape[2])
+            (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
 
         if self.representation_model_type == 'identity':
             self.prediction_network = PredictionNetwork(
                 action_space_size,
-                num_blocks,
+                num_res_blocks,
                 observation_shape[0],  # in_channels
                 num_channels,
-                reduced_channels_value,
-                reduced_channels_policy,
+                value_head_channels,
+                policy_head_channels,
                 fc_value_layers,
                 fc_policy_layers,
                 self.value_support_size,
                 block_output_size_value,
                 block_output_size_policy,
-                momentum=bn_mt,
+                momentum=batch_norm_momentum,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                 activation=activation,
             )
         else:
             self.prediction_network = PredictionNetwork(
                 action_space_size,
-                num_blocks,
+                num_res_blocks,
                 None,  # in_channels
                 num_channels,
-                reduced_channels_value,
-                reduced_channels_policy,
+                value_head_channels,
+                policy_head_channels,
                 fc_value_layers,
                 fc_policy_layers,
                 self.value_support_size,
                 block_output_size_value,
                 block_output_size_policy,
-                momentum=bn_mt,
+                momentum=batch_norm_momentum,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                 activation=activation,
             )
@@ -358,10 +358,10 @@ class AlphaNet(nn.Module):
             elif self.representation_model_type == 'conv_res_blocks':
                 self.representation_network = RepresentationNetwork(
                     observation_shape,
-                    num_blocks,
+                    num_res_blocks,
                     num_channels,
                     downsample,
-                    momentum=bn_mt,
+                    momentum=batch_norm_momentum,
                     activation=activation,
                 )
             # elif

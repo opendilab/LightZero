@@ -107,7 +107,7 @@ class RepresentationNetwork(nn.Module):
     def __init__(
         self,
         observation_shape,
-        num_blocks,
+        num_res_blocks,
         num_channels,
         downsample,
         momentum=0.1,
@@ -117,7 +117,7 @@ class RepresentationNetwork(nn.Module):
         Overview: Representation network
         Arguments:
             - observation_shape (:obj:`Union[List, tuple]`):  shape of observations: [C, W, H]
-            - num_blocks (:obj:`int`): number of res blocks
+            - num_res_blocks (:obj:`int`): number of res blocks
             - num_channels (:obj:`int`): channels of hidden states
             - downsample (:obj:`bool`): True -> do downsampling for observations. (For board games, do not need)
         """
@@ -141,7 +141,7 @@ class RepresentationNetwork(nn.Module):
                     norm_type=self.norm_type,
                     res_type='basic',
                     bias=False
-                ) for _ in range(num_blocks)
+                ) for _ in range(num_res_blocks)
             ]
         )
         self.activation = nn.ReLU(inplace=True)
@@ -164,10 +164,10 @@ class DynamicsNetwork(nn.Module):
 
     def __init__(
         self,
-        num_blocks,
+        num_res_blocks,
         num_channels,
         action_space_size,
-        reduced_channels_reward,
+        reward_head_channels,
         fc_reward_layers,
         full_support_size,
         block_output_size_reward,
@@ -180,7 +180,7 @@ class DynamicsNetwork(nn.Module):
         Overview:
             Dynamics network
         Arguments:
-            - num_blocks (:obj:int): number of res blocks
+            - num_res_blocks (:obj:int): number of res blocks
             - num_channels (:obj:int): channels of hidden states
             - fc_reward_layers (:obj:list):  hidden layers of the reward prediction head (MLP head)
             - full_support_size (:obj:int): dim of reward output
@@ -207,7 +207,7 @@ class DynamicsNetwork(nn.Module):
                     norm_type=self.norm_type,
                     res_type='basic',
                     bias=False
-                ) for _ in range(num_blocks)
+                ) for _ in range(num_res_blocks)
             ]
         )
 
@@ -219,12 +219,12 @@ class DynamicsNetwork(nn.Module):
                     norm_type=self.norm_type,
                     res_type='basic',
                     bias=False
-                ) for _ in range(num_blocks)
+                ) for _ in range(num_res_blocks)
             ]
         )
 
-        self.conv1x1_reward = nn.Conv2d(num_channels - self.action_space_size, reduced_channels_reward, 1)
-        self.bn_reward = nn.BatchNorm2d(reduced_channels_reward, momentum=momentum)
+        self.conv1x1_reward = nn.Conv2d(num_channels - self.action_space_size, reward_head_channels, 1)
+        self.bn_reward = nn.BatchNorm2d(reward_head_channels, momentum=momentum)
         self.block_output_size_reward = block_output_size_reward
         self.lstm = nn.LSTM(input_size=self.block_output_size_reward, hidden_size=self.lstm_hidden_size)
         self.bn_value_prefix = nn.BatchNorm1d(self.lstm_hidden_size, momentum=momentum)
@@ -296,11 +296,11 @@ class PredictionNetwork(nn.Module):
         self,
         continuous_action_space,
         action_space_size,
-        num_blocks,
+        num_res_blocks,
         in_channels,
         num_channels,
-        reduced_channels_value,
-        reduced_channels_policy,
+        value_head_channels,
+        policy_head_channels,
         fc_value_layers,
         fc_policy_layers,
         full_support_size,
@@ -318,15 +318,15 @@ class PredictionNetwork(nn.Module):
         ----------
         action_space_size: int
             action space
-        num_blocks: int
+        num_res_blocks: int
             number of res blocks
         in_channels: int
             channels of input
         num_channels: int
             channels of hidden states
-        reduced_channels_value: int
+        value_head_channels: int
             channels of value head
-        reduced_channels_policy: int
+        policy_head_channels: int
             channels of policy head
         fc_value_layers: list
             hidden layers of the value prediction head (MLP head)
@@ -361,14 +361,14 @@ class PredictionNetwork(nn.Module):
                     norm_type=self.norm_type,
                     res_type='basic',
                     bias=False
-                ) for _ in range(num_blocks)
+                ) for _ in range(num_res_blocks)
             ]
         )
 
-        self.conv1x1_value = nn.Conv2d(num_channels, reduced_channels_value, 1)
-        self.conv1x1_policy = nn.Conv2d(num_channels, reduced_channels_policy, 1)
-        self.bn_value = nn.BatchNorm2d(reduced_channels_value, momentum=momentum)
-        self.bn_policy = nn.BatchNorm2d(reduced_channels_policy, momentum=momentum)
+        self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
+        self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
+        self.bn_value = nn.BatchNorm2d(value_head_channels, momentum=momentum)
+        self.bn_policy = nn.BatchNorm2d(policy_head_channels, momentum=momentum)
         self.block_output_size_value = block_output_size_value
         self.block_output_size_policy = block_output_size_policy
         # TODO(pu)
@@ -460,11 +460,11 @@ class SampledEfficientZeroNet(BaseNet):
         action_space_size,
         num_of_sampled_actions,
         continuous_action_space,
-        num_blocks,
+        num_res_blocks,
         num_channels,
-        reduced_channels_reward,
-        reduced_channels_value,
-        reduced_channels_policy,
+        reward_head_channels,
+        value_head_channels,
+        policy_head_channels,
         fc_reward_layers,
         fc_value_layers,
         fc_policy_layers,
@@ -474,7 +474,7 @@ class SampledEfficientZeroNet(BaseNet):
         representation_model_type: str = 'conv_res_blocks',
         representation_model: nn.Module = None,
         lstm_hidden_size=512,
-        bn_mt=0.1,
+        batch_norm_momentum=0.1,
         proj_hid=256,
         proj_out=256,
         pred_hid=64,
@@ -494,11 +494,11 @@ class SampledEfficientZeroNet(BaseNet):
             - representation_model_type
             - observation_shape: tuple or list. shape of observations: [C, W, H]
             - action_space_size: (:obj:`int`): . action space
-            - num_blocks (:obj:`int`):  number of res blocks
+            - num_res_blocks (:obj:`int`):  number of res blocks
             - num_channels (:obj:`int`): channels of hidden states
-            - reduced_channels_reward (:obj:`int`): channels of reward head
-            - reduced_channels_value (:obj:`int`): channels of value head
-            - reduced_channels_policy (:obj:`int`): channels of policy head
+            - reward_head_channels (:obj:`int`): channels of reward head
+            - value_head_channels (:obj:`int`): channels of value head
+            - policy_head_channels (:obj:`int`): channels of policy head
             - fc_reward_layers (:obj:`list`):  hidden layers of the reward prediction head (MLP head)
             - fc_value_layers (:obj:`list`):  hidden layers of the value prediction head (MLP head)
             - fc_policy_layers (:obj:`list`):  hidden layers of the policy prediction head (MLP head)
@@ -506,7 +506,7 @@ class SampledEfficientZeroNet(BaseNet):
             - value_support_size (:obj:`int`): dim of value output
             - downsample (:obj:`bool`): True -> do downsampling for observations. (For board games, do not need)
             - lstm_hidden_size (:obj:`int`):  dim of lstm hidden
-            - bn_mt (:obj:`float`):  Momentum of BN
+            - batch_norm_momentum (:obj:`float`):  Momentum of BN
             - proj_hid (:obj:`int`): dim of projection hidden layer
             - proj_out (:obj:`int`): dim of projection output layer
             - pred_hid (:obj:`int`):dim of projection head (prediction) hidden layer
@@ -544,21 +544,21 @@ class SampledEfficientZeroNet(BaseNet):
         self.downsample = downsample
 
         block_output_size_reward = (
-            (reduced_channels_reward * math.ceil(observation_shape[1] / 16) *
+            (reward_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else
-            (reduced_channels_reward * observation_shape[1] * observation_shape[2])
+            (reward_head_channels * observation_shape[1] * observation_shape[2])
         )
 
         block_output_size_value = (
-            (reduced_channels_value * math.ceil(observation_shape[1] / 16) *
+            (value_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else
-            (reduced_channels_value * observation_shape[1] * observation_shape[2])
+            (value_head_channels * observation_shape[1] * observation_shape[2])
         )
 
         block_output_size_policy = (
-            (reduced_channels_policy * math.ceil(observation_shape[1] / 16) *
+            (policy_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else
-            (reduced_channels_policy * observation_shape[1] * observation_shape[2])
+            (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
 
         if self.representation_model is None:
@@ -567,10 +567,10 @@ class SampledEfficientZeroNet(BaseNet):
             elif self.representation_model_type == 'conv_res_blocks':
                 self.representation_network = RepresentationNetwork(
                     observation_shape,
-                    num_blocks,
+                    num_res_blocks,
                     num_channels,
                     downsample,
-                    momentum=bn_mt,
+                    momentum=batch_norm_momentum,
                     norm_type=self.norm_type,
                 )
         else:
@@ -578,32 +578,32 @@ class SampledEfficientZeroNet(BaseNet):
 
         if self.representation_model_type == 'identity':
             self.dynamics_network = DynamicsNetwork(
-                num_blocks,
+                num_res_blocks,
                 observation_shape[0] + 1,  # in_channels=observation_shape[0]
                 1,
-                reduced_channels_reward,
+                reward_head_channels,
                 fc_reward_layers,
                 self.reward_support_size,
                 block_output_size_reward,
                 lstm_hidden_size=lstm_hidden_size,
-                momentum=bn_mt,
+                momentum=batch_norm_momentum,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                 norm_type=self.norm_type,
             )
             self.prediction_network = PredictionNetwork(
                 self.continuous_action_space,
                 action_space_size,
-                num_blocks,
+                num_res_blocks,
                 observation_shape[0],  # in_channels
                 num_channels,
-                reduced_channels_value,
-                reduced_channels_policy,
+                value_head_channels,
+                policy_head_channels,
                 fc_value_layers,
                 fc_policy_layers,
                 self.value_support_size,
                 block_output_size_value,
                 block_output_size_policy,
-                momentum=bn_mt,
+                momentum=batch_norm_momentum,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                 sigma_type=self.sigma_type,
                 fixed_sigma_value=self.fixed_sigma_value,
@@ -613,46 +613,46 @@ class SampledEfficientZeroNet(BaseNet):
         else:
             if self.continuous_action_space:
                 self.dynamics_network = DynamicsNetwork(
-                    num_blocks,
+                    num_res_blocks,
                     num_channels + self.action_space_size,
                     self.action_space_size,
-                    reduced_channels_reward,
+                    reward_head_channels,
                     fc_reward_layers,
                     self.reward_support_size,
                     block_output_size_reward,
                     lstm_hidden_size=lstm_hidden_size,
-                    momentum=bn_mt,
+                    momentum=batch_norm_momentum,
                     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                     norm_type=self.norm_type,
                 )
             else:
                 self.dynamics_network = DynamicsNetwork(
-                    num_blocks,
+                    num_res_blocks,
                     num_channels + 1,
                     1,
-                    reduced_channels_reward,
+                    reward_head_channels,
                     fc_reward_layers,
                     self.reward_support_size,
                     block_output_size_reward,
                     lstm_hidden_size=lstm_hidden_size,
-                    momentum=bn_mt,
+                    momentum=batch_norm_momentum,
                     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                     norm_type=self.norm_type,
                 )
             self.prediction_network = PredictionNetwork(
                 self.continuous_action_space,
                 action_space_size,
-                num_blocks,
+                num_res_blocks,
                 None,  # in_channels
                 num_channels,
-                reduced_channels_value,
-                reduced_channels_policy,
+                value_head_channels,
+                policy_head_channels,
                 fc_value_layers,
                 fc_policy_layers,
                 self.value_support_size,
                 block_output_size_value,
                 block_output_size_policy,
-                momentum=bn_mt,
+                momentum=batch_norm_momentum,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                 sigma_type=self.sigma_type,
                 fixed_sigma_value=self.fixed_sigma_value,

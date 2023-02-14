@@ -1,10 +1,3 @@
-import sys
-
-# sys.path.append('/Users/puyuan/code/LightZero')
-# sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
-# sys.path.append('/mnt/lustre/puyuan/LightZero')
-
 import torch
 from easydict import EasyDict
 
@@ -14,44 +7,43 @@ else:
     device = 'cpu'
 
 observation_dim = 3
-
-continuous_action_space = False
-action_dim = 11
-K = 5
-
+action_dim = 1
 categorical_distribution = True
 game_history_length = 50  # we should ignore done in pendulum env which have fixed episode length 200
 norm_type = 'BN'  # 'LN' # TODO: res_blocks LN
-policy_entropy_loss_coeff = 0
-normalize_prob_of_sampled_actions = True
+normalize_prob_of_sampled_actions = False
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-batch_size = 256
-update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
-num_simulations = 50
+# K = 5
+# num_simulations = 25
+# K = 20
+# num_simulations = 50
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# batch_size = 256
+# update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
 
 # for debug
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# batch_size = 3
-# update_per_collect = 1
-# num_simulations = 3
+K = 2
+num_simulations = 3
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+batch_size = 3
+update_per_collect = 1
 
 pendulum_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/pendulum_disc11_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_pelc0_normprob',
+    # exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn10_tanh_fs03-ew5e-3',
+    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_mgn10_tanh_cond-sigma-ew5e-3',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         env_id='pendulum',
-        continuous=False,
-        stop_value=-200,
+        # stop_value=-200,
+        stop_value=999,
         norm_obs=dict(use_norm=False, ),
         act_scale=True,
-        # ignore_done=True,
         battle_mode='one_player_mode',
         prob_random_agent=0.,
         collect_max_episode_steps=int(1.08e4),
@@ -64,12 +56,11 @@ pendulum_sampled_efficientzero_config = dict(
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            # # sigma_type='fixed',  # option list: ['fixed', 'conditioned']
-            # sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
-            # fixed_sigma_value=0.3,
-            # bound_type=None,  # if bound_type='tanh', the policy mu is bouded in [-1,1]
-            # # norm_type='LN',
-            # norm_type=norm_type,
+            # sigma_type='fixed',  # option list: ['fixed', 'conditioned']
+            sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
+            fixed_sigma_value=0.3,
+            bound_type=None,  # if bound_type='tanh', the policy mu is bounded in [-1,1]
+            norm_type=norm_type,
 
             # activation=torch.nn.ReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
@@ -83,23 +74,23 @@ pendulum_sampled_efficientzero_config = dict(
 
             action_space_size=action_dim,  # 4**2
             num_of_sampled_actions=K,
-            continuous_action_space=continuous_action_space,
+            continuous_action_space=True,
 
             downsample=False,
-            num_blocks=1,
+            num_res_blocks=1,
             # small size model
             num_channels=16,
             lstm_hidden_size=256,
-            reduced_channels_reward=16,
-            reduced_channels_value=16,
-            reduced_channels_policy=16,
+            reward_head_channels=16,
+            value_head_channels=16,
+            policy_head_channels=16,
             # small size model
             fc_reward_layers=[8],
             fc_value_layers=[8],
             fc_policy_layers=[8],
             reward_support_size=51,
             value_support_size=51,
-            bn_mt=0.1,
+            batch_norm_momentum=0.1,
             # small size model
             proj_hid=128,
             proj_out=128,
@@ -111,7 +102,6 @@ pendulum_sampled_efficientzero_config = dict(
         # learn_mode config
         learn=dict(
             normalize_prob_of_sampled_actions=normalize_prob_of_sampled_actions,
-
             # policy_loss_type='KL',
             policy_loss_type='cross_entropy',
 
@@ -153,14 +143,14 @@ pendulum_sampled_efficientzero_config = dict(
         ######################################
         # game_config begin
         ######################################
-        env_type='no_board_games',
+        env_type='not_board_games',
         device=device,
         # mcts_ctree=False,
         mcts_ctree=True,
         battle_mode='one_player_mode',
         game_history_length=game_history_length,
         action_space_size=action_dim,  # 4**2
-        continuous_action_space=continuous_action_space,
+        continuous_action_space=True,
         num_of_sampled_actions=K,
         # clip_reward=True,
         # TODO(pu)
@@ -194,6 +184,18 @@ pendulum_sampled_efficientzero_config = dict(
         # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
         augmentation=['shift', 'intensity'],
 
+        # debug
+        # collector_env_num=2,
+        # evaluator_env_num=2,
+        # num_simulations=9,
+        # batch_size=4,
+        # total_transitions=int(1e5),
+        # lstm_hidden_size=512,
+        # # # to make sure the value target is the final outcome
+        # td_steps=5,
+        # num_unroll_steps=3,
+        # lstm_horizon_len=3,
+
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         num_simulations=num_simulations,
@@ -204,18 +206,20 @@ pendulum_sampled_efficientzero_config = dict(
         num_unroll_steps=5,
         lstm_horizon_len=5,
 
-        # TODO(pu): why 0.99?
-        reanalyze_ratio=0.99,
+        # # TODO(pu): why 0.99?
+        # reanalyze_ratio=0.99,
+        reanalyze_ratio=0.,
+        reanalyze_outdated=True,
 
         # TODO(pu): why not use adam?
         # lr_manually=True,
         lr_manually=False,
 
-        use_priority=False,
-        use_max_priority_for_new_data=True,
-
-        # use_priority=True,
+        # use_priority=False,
         # use_max_priority_for_new_data=True,
+
+        use_priority=True,
+        use_max_priority_for_new_data=True,
 
         # TODO(pu): only used for adjust temperature manually
         max_training_steps=int(1e5),
@@ -270,7 +274,7 @@ pendulum_sampled_efficientzero_config = dict(
         reward_loss_coeff=1,  # value_prefix loss
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-        policy_entropy_loss_coeff=policy_entropy_loss_coeff,
+        policy_entropy_loss_coeff=5e-3,
         # consistency_coeff=2,
         consistency_coeff=0,
 
@@ -280,11 +284,11 @@ pendulum_sampled_efficientzero_config = dict(
         proj_out=128,
         pred_hid=64,
         pred_out=128,
-        bn_mt=0.1,
+        batch_norm_momentum=0.1,
         blocks=1,  # Number of blocks in the ResNet
-        reduced_channels_reward=16,  # x36 Number of channels in reward head
-        reduced_channels_value=16,  # x36 Number of channels in value head
-        reduced_channels_policy=16,  # x36 Number of channels in policy head
+        reward_head_channels=16,  # x36 Number of channels in reward head
+        value_head_channels=16,  # x36 Number of channels in value head
+        policy_head_channels=16,  # x36 Number of channels in policy head
         resnet_fc_reward_layers=[8],  # Define the hidden layers in the reward head of the dynamic network
         resnet_fc_value_layers=[8],  # Define the hidden layers in the value head of the prediction network
         resnet_fc_policy_layers=[8],  # Define the hidden layers in the policy head of the prediction network
@@ -318,4 +322,4 @@ create_config = pendulum_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import serial_pipeline_sampled_efficientzero
-    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e5))
+    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(5e5))

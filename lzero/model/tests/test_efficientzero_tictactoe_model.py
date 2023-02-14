@@ -8,15 +8,15 @@ from ding.torch_utils import is_differentiable
 
 bs_args = [10]
 
-num_blocks = [3]
+num_res_blocks = [3]
 num_channels = [3]
-reduced_channels_reward = [2]
+reward_head_channels = [2]
 fc_reward_layers = [[16, 8]]
 full_support_size = [2]
 block_output_size_reward = [180]
 dynamics_network_args = list(
     product(
-        num_blocks, num_channels, reduced_channels_reward, fc_reward_layers, full_support_size, block_output_size_reward
+        num_res_blocks, num_channels, reward_head_channels, fc_reward_layers, full_support_size, block_output_size_reward
     )
 )
 
@@ -38,25 +38,25 @@ class TestEfficientZero:
         batch = batch_size
         obs = torch.rand(batch, 1, 3, 3)
         representation_network = RepresentationNetwork(
-            observation_shape=[1, 3, 3], num_blocks=1, num_channels=16, downsample=False
+            observation_shape=[1, 3, 3], num_res_blocks=1, num_channels=16, downsample=False
         )
         state = representation_network(obs)
         assert state.shape == torch.Size([10, 16, 3, 3])
 
     @pytest.mark.parametrize(
-        'num_blocks, num_channels, reduced_channels_reward, fc_reward_layers, full_support_size,'
+        'num_res_blocks, num_channels, reward_head_channels, fc_reward_layers, full_support_size,'
         'block_output_size_reward', dynamics_network_args
     )
     def test_dynamics_network(
-        self, num_blocks, num_channels, reduced_channels_reward, fc_reward_layers, full_support_size,
+        self, num_res_blocks, num_channels, reward_head_channels, fc_reward_layers, full_support_size,
         block_output_size_reward
     ):
         batch = 100
         state = torch.rand(batch, 3, 3, 3)
         dynamics_network = DynamicsNetwork(
-            num_blocks=num_blocks,
+            num_res_blocks=num_res_blocks,
             num_channels=num_channels,
-            reduced_channels_reward=reduced_channels_reward,
+            reward_head_channels=reward_head_channels,
             fc_reward_layers=fc_reward_layers,
             full_support_size=full_support_size,
             block_output_size_reward=block_output_size_reward

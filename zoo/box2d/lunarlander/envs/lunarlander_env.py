@@ -1,21 +1,32 @@
-from typing import Any, List, Union, Optional
-import time
 import copy
+import os
+from typing import List, Optional
 
 import gym
-import os
 import numpy as np
-from easydict import EasyDict
-
 from ding.envs import BaseEnv, BaseEnvTimestep
-from ding.torch_utils import to_ndarray, to_list
-from ding.utils import ENV_REGISTRY
-from ding.envs.common import affine_transform
 from ding.envs import ObsPlusPrevActRewWrapper
+from ding.envs.common import affine_transform
+from ding.torch_utils import to_ndarray
+from ding.utils import ENV_REGISTRY
+from easydict import EasyDict
 
 
 @ENV_REGISTRY.register('lunarlander')
 class LunarLanderEnv(BaseEnv):
+
+    config = dict(
+        save_replay_gif=False,
+        replay_path_gif=None,
+        replay_path=None,
+        act_scale=True,
+        delay_reward_step=0,
+        each_dim_disc_size=4,
+        battle_mode='one_player_mode',
+        prob_random_agent=0.,
+        collect_max_episode_steps=int(1.08e5),
+        eval_max_episode_steps=int(1.08e5),
+    )
 
     @classmethod
     def default_config(cls: type) -> EasyDict:
@@ -23,30 +34,23 @@ class LunarLanderEnv(BaseEnv):
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
-    config = dict(
-        save_replay_gif=False,
-        replay_path_gif=None,
-        replay_path=None,
-        act_scale=True,
-    )
-
     def __init__(self, cfg: dict) -> None:
         self._cfg = cfg
         self._init_flag = False
-        # env_id: LunarLander-v2, LunarLanderContinuous-v2
-        self._env_id = cfg.env_id
+        # env_name options = {'LunarLander-v2', 'LunarLanderContinuous-v2'}
+        self._env_name = cfg.env_name
         self._replay_path = cfg.replay_path
         self._replay_path_gif = cfg.replay_path_gif
         self._save_replay_gif = cfg.save_replay_gif
         self._save_replay_count = 0
-        if 'Continuous' in self._env_id:
+        if 'Continuous' in self._env_name:
             self._act_scale = cfg.act_scale  # act_scale only works in continuous env
         else:
             self._act_scale = False
 
     def reset(self) -> np.ndarray:
         if not self._init_flag:
-            self._env = gym.make(self._cfg.env_id)
+            self._env = gym.make(self._cfg.env_name)
             if self._replay_path is not None:
                 self._env = gym.wrappers.RecordVideo(
                     self._env,
@@ -74,15 +78,15 @@ class LunarLanderEnv(BaseEnv):
         if self._save_replay_gif:
             self._frames = []
 
-        if 'Continuous' not in self._env_id:
-            # to be compatible with efficientzero
+        if 'Continuous' not in self._env_name:
+            # to be compatible with requirement for data type in LightZero policy
             # shape: [W, H, C]
             obs = obs.reshape(8, 1, 1)
             action_mask = np.ones(4, 'int8')
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
         else:
-            # if 'Continuous' in self._env_id:
-            # to be compatible with muzero/efficientzero
+            # if 'Continuous' in self._env_name:
+            # to be compatible with requirement for data type in LightZero policy
             # shape: [W, H, C]
             obs = obs.reshape(8, 1, 1)
             action_mask = None
@@ -111,15 +115,15 @@ class LunarLanderEnv(BaseEnv):
             self._frames.append(self._env.render(mode='rgb_array'))
 
         obs, rew, done, info = self._env.step(action)
-        if 'Continuous' not in self._env_id:
-            # to be compatible with efficientzero
+        if 'Continuous' not in self._env_name:
+            # to be compatible with requirement for data type in LightZero policy
             # shape: [W, H, C]
             obs = obs.reshape(8, 1, 1)
             action_mask = np.ones(4, 'int8')
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
         else:
-            # if 'Continuous' in self._env_id:
-            # to be compatible with efficientzero
+            # if 'Continuous' in self._env_name:
+            # to be compatible with requirement for data type in LightZero policy
             # shape: [W, H, C]
             obs = obs.reshape(8, 1, 1)
             action_mask = None
@@ -132,12 +136,8 @@ class LunarLanderEnv(BaseEnv):
             if self._save_replay_gif:
                 if not os.path.exists(self._replay_path_gif):
                     os.makedirs(self._replay_path_gif)
-                # path = os.path.join(
-                #     self._replay_path_gif,
-                #     '{}_episode_{}.gif'.format(self._env_id, self._save_replay_count)
-                # )
                 path = os.path.join(
-                    self._replay_path_gif, '{}_episode_{}_seed{}.gif'.format(self._env_id, self._save_replay_count, self._seed)
+                    self._replay_path_gif, '{}_episode_{}_seed{}.gif'.format(self._env_name, self._save_replay_count, self._seed)
                 )
                 self.display_frames_as_gif(self._frames, path)
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
@@ -184,7 +184,7 @@ class LunarLanderEnv(BaseEnv):
         return self._reward_space
 
     def __repr__(self) -> str:
-        return "DI-engine LunarLander Env"
+        return "LightZero LunarLander Env."
 
     @staticmethod
     def create_collector_env_cfg(cfg: dict) -> List[dict]:

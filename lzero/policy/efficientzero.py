@@ -47,27 +47,40 @@ class EfficientZeroPolicy(Policy):
         # (int) The number of step for calculating target q_value
         nstep=1,
         model=dict(
-            observation_shape=(12, 96, 96),
+            image_channel=3,
+            frame_stack_num=4,
+            # the key difference setting between image-input and vector input.
+            downsample=True,
+            # the stacked obs shape -> the transformed obs shape:
+            # [S, W, H, C] -> [S x C, W, H]
+            # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
+            observation_shape=(12, 96, 96),  # if frame_stack_nums=4
+            # observation_shape=(3, 96, 96),  # if frame_stack_num=1
             action_space_size=6,
-            num_blocks=1,
+            # the default config is large size model, same as the EfficientZero original paper.
+            num_res_blocks=1,
             num_channels=64,
-            reduced_channels_reward=16,
-            reduced_channels_value=16,
-            reduced_channels_policy=16,
+            reward_head_channels=16,
+            value_head_channels=16,
+            policy_head_channels=16,
             fc_reward_layers=[32],
             fc_value_layers=[32],
             fc_policy_layers=[32],
+            support_scale=300,
             reward_support_size=601,
             value_support_size=601,
-            downsample=True,
-            lstm_hidden_size=512,
-            bn_mt=0.1,
+            batch_norm_momentum=0.1,
             proj_hid=1024,
             proj_out=1024,
             pred_hid=512,
             pred_out=1024,
+            lstm_hidden_size=512,
             last_linear_layer_init_zero=True,
             state_norm=False,
+            activation=torch.nn.ReLU(inplace=True),
+            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
+            categorical_distribution=True,
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
         # learn_mode config
         learn=dict(
@@ -79,13 +92,16 @@ class EfficientZeroPolicy(Policy):
             update_per_collect=10,
             # (int) How many samples in a training batch
             batch_size=256,
-            # (float) The step size of gradient descent
-            learning_rate=0.001,
+            lr_manually=True,
+            # optim_type='Adam',
+            # learning_rate=0.001,  # lr for Adam optimizer
+            optim_type='SGD',
+            learning_rate=0.2,  # init lr for manually decay schedule
             # ==============================================================
             # The following configs are algorithm-specific
             # ==============================================================
             # (int) Frequency of target network update.
-            target_update_freq=200,
+            target_update_freq=100,
             # (bool) Whether ignore done(usually for max step termination env)
             ignore_done=False,
             weight_decay=1e-4,
@@ -97,7 +113,7 @@ class EfficientZeroPolicy(Policy):
         # collect_mode config
         collect=dict(
             # You can use either "n_sample" or "n_episode" in collector.collect.
-            # Get "n_sample" samples per collect.
+            # Get "n_episode" episodes per collect.
             n_episode=8,
             unroll_len=1,
         ),
@@ -111,8 +127,82 @@ class EfficientZeroPolicy(Policy):
                 end=0.1,
                 decay=50000,
             ),
+            # NOTE: the replay_buffer_size is ineffective, we specify it in following game config
             replay_buffer=dict(replay_buffer_size=100000, type='game')
         ),
+        # ==============================================================
+        # begin of additional game_config
+        # ==============================================================
+        ## common
+        mcts_ctree=True,
+        device='cuda',
+        collector_env_num=8,
+        evaluator_env_num=3,
+        env_type='not_board_games',
+        battle_mode='one_player_mode',
+        game_wrapper=True,
+        monitor_statistics=True,
+        game_history_length=200,
+
+        ## observation
+        # the key difference setting between image-input and vector input.
+        image_based=False,
+        cvt_string=False,
+        gray_scale=False,
+        use_augmentation=False,
+        # style of augmentation
+        augmentation=['shift', 'intensity'],  # options=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
+
+        ## reward
+        clip_reward=False,
+        normalize_reward=False,
+        normalize_reward_scale=100,
+
+        ## learn
+        num_simulations=50,
+        td_steps=5,
+        num_unroll_steps=5,
+        lstm_horizon_len=5,
+        max_grad_norm=10,
+        # the weight of different loss
+        reward_loss_weight=1,
+        value_loss_weight=0.25,
+        policy_loss_weight=1,
+        consistency_weight=2,
+        # fixed_temperature_value is effective only when auto_temperature=False
+        auto_temperature=False,
+        fixed_temperature_value=0.25,
+        # replay_buffer max size
+        max_total_transitions=int(1e5),
+        # max_training_steps is only used for adjusting temperature manually.
+        max_training_steps=int(1e5),
+
+        ## reanalyze
+        reanalyze_ratio=0.3,
+        reanalyze_outdated=True,
+        # whether to use root value in reanalyzing part
+        use_root_value=False,
+        mini_infer_size=256,
+
+        ## priority
+        use_priority=True,
+        use_max_priority_for_new_data=True,
+        # how much prioritization is used: 0 means no prioritization while 1 means full prioritization
+        priority_prob_alpha=0.6,
+        # how much correction is used: 0 means no correction while 1 means full correction
+        priority_prob_beta=0.4,
+        prioritized_replay_eps=1e-6,
+
+        ## UCB
+        root_dirichlet_alpha=0.3,
+        root_exploration_fraction=0.25,
+        pb_c_base=19652,
+        pb_c_init=1.25,
+        discount=0.997,
+        value_delta_max=0.01,
+        # ==============================================================
+        # end of additional game_config
+        # ==============================================================
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
@@ -160,10 +250,9 @@ class EfficientZeroPolicy(Policy):
             self.transforms = Transforms(
                 self._cfg.augmentation, image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
             )
-        self.value_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
-        self.reward_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
+        self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
+        self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
 
-    # @profile
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
         self._learn_model.train()
         self._target_model.train()
@@ -247,8 +336,8 @@ class EfficientZeroPolicy(Policy):
             other_loss[key + '_0'] = -1
 
         # scalar transform to transformed Q scale, h(.) function
-        transformed_target_value_prefix = scalar_transform(target_value_prefix, self._cfg.support_size)
-        transformed_target_value = scalar_transform(target_value, self._cfg.support_size)
+        transformed_target_value_prefix = scalar_transform(target_value_prefix, self._cfg.model.support_scale)
+        transformed_target_value = scalar_transform(target_value, self._cfg.model.support_scale)
         if self._cfg.model.categorical_distribution:
             # scalar to categorical_distribution
             # Under this transformation, each scalar is represented as the linear combination of its two adjacent supports
@@ -268,10 +357,10 @@ class EfficientZeroPolicy(Policy):
         # h^-1(.) function
         # transform categorical representation to original_value
         original_value = inverse_scalar_transform(
-            value, self._cfg.support_size, categorical_distribution=self._cfg.model.categorical_distribution
+            value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
         )
         # original_value_prefix = inverse_scalar_transform(value_prefix,
-        #                                                self._cfg.support_size,
+        #                                                self._cfg.model.support_scale,
         #                                                categorical_distribution=self._cfg.model.categorical_distribution)
 
         # TODO(pu)
@@ -345,10 +434,10 @@ class EfficientZeroPolicy(Policy):
             # h^-1(.) function
             # first transform categorical representation to scalar, then transform to original_value
             original_value = inverse_scalar_transform(
-                value, self._cfg.support_size, categorical_distribution=self._cfg.model.categorical_distribution
+                value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
             )
             original_value_prefix = inverse_scalar_transform(
-                value_prefix, self._cfg.support_size, categorical_distribution=self._cfg.model.categorical_distribution
+                value_prefix, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
             )
 
             # TODO(pu)
@@ -431,7 +520,7 @@ class EfficientZeroPolicy(Policy):
 
             if self._cfg.monitor_statistics:
                 original_value_prefixs = inverse_scalar_transform(
-                    value_prefix, self._cfg.support_size, categorical_distribution=self._cfg.model.categorical_distribution
+                    value_prefix, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
                 )
                 original_value_prefixs_cpu = original_value_prefixs.detach().cpu()
 
@@ -439,7 +528,7 @@ class EfficientZeroPolicy(Policy):
                     (
                         predicted_values,
                         inverse_scalar_transform(
-                            value, self._cfg.support_size, categorical_distribution=self._cfg.model.categorical_distribution
+                            value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
                         ).detach().cpu()
                     )
                 )
@@ -636,7 +725,6 @@ class EfficientZeroPolicy(Policy):
             ]
         )
 
-    # @profile
     def _forward_collect(
         self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None, ready_env_id=None
     ):
@@ -661,7 +749,7 @@ class EfficientZeroPolicy(Policy):
                 # if not in training, obtain the scalars of the value/reward
                 pred_values_pool = inverse_scalar_transform(
                     pred_values_pool,
-                    self._cfg.support_size,
+                    self._cfg.model.support_scale,
                     categorical_distribution=self._cfg.model.categorical_distribution
                 ).detach().cpu().numpy()
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
@@ -759,7 +847,6 @@ class EfficientZeroPolicy(Policy):
         else:
             self._mcts_eval = MCTS_ptree(self._cfg)
 
-    # @profile
     def _forward_eval(self, data: ttorch.Tensor, action_mask: list, to_play: None, ready_env_id=None):
         """
         Overview:
@@ -788,7 +875,7 @@ class EfficientZeroPolicy(Policy):
                 # if not in training, obtain the scalars of the value/reward
                 pred_values_pool = inverse_scalar_transform(
                     pred_values_pool,
-                    self._cfg.support_size,
+                    self._cfg.model.support_scale,
                     categorical_distribution=self._cfg.model.categorical_distribution
                 ).detach().cpu().numpy()  # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()

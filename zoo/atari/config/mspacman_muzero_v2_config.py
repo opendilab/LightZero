@@ -55,20 +55,20 @@ atari_efficientzero_config = dict(
             observation_shape=(12, 96, 96),  # 3,96,96 stack=4
             action_space_size=6,  # for mspacman
             downsample=True,
-            num_blocks=1,
+            num_res_blocks=1,
             # default config in EZ original repo
             num_channels=64,
             # The env step is twice as large as the original size model when converging
             # num_channels=32,
-            reduced_channels_reward=16,
-            reduced_channels_value=16,
-            reduced_channels_policy=16,
+            reward_head_channels=16,
+            value_head_channels=16,
+            policy_head_channels=16,
             fc_reward_layers=[32],
             fc_value_layers=[32],
             fc_policy_layers=[32],
             reward_support_size=601,
             value_support_size=601,
-            bn_mt=0.1,
+            batch_norm_momentum=0.1,
             proj_hid=1024,
             proj_out=1024,
             pred_hid=512,
@@ -105,7 +105,7 @@ atari_efficientzero_config = dict(
         ######################################
         # game_config begin
         ######################################
-        env_type='no_board_games',
+        env_type='not_board_games',
         device=device,
         # if mcts_ctree=True, using cpp mcts code
         mcts_ctree=True,
@@ -187,7 +187,7 @@ atari_efficientzero_config = dict(
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         categorical_distribution=True,
-        support_size=300,
+        support_scale=300,
         # value_support=DiscreteSupport(-300, 300, delta=1),
         # reward_support=DiscreteSupport(-300, 300, delta=1),
         max_grad_norm=10,
@@ -222,11 +222,11 @@ atari_efficientzero_config = dict(
         proj_out=1024,
         pred_hid=512,
         pred_out=1024,
-        bn_mt=0.1,
+        batch_norm_momentum=0.1,
         blocks=1,  # Number of blocks in the ResNet
-        reduced_channels_reward=16,  # x36 Number of channels in reward head
-        reduced_channels_value=16,  # x36 Number of channels in value head
-        reduced_channels_policy=16,  # x36 Number of channels in policy head
+        reward_head_channels=16,  # x36 Number of channels in reward head
+        value_head_channels=16,  # x36 Number of channels in value head
+        policy_head_channels=16,  # x36 Number of channels in policy head
         resnet_fc_reward_layers=[32],  # Define the hidden layers in the reward head of the dynamic network
         resnet_fc_value_layers=[32],  # Define the hidden layers in the value head of the prediction network
         resnet_fc_policy_layers=[32],  # Define the hidden layers in the policy head of the prediction network

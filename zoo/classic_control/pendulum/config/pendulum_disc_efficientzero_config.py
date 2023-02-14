@@ -9,31 +9,37 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-num_simulations = 50
-# update_per_collect determines the number of training steps after each collection of a batch of data.
-# For different env, we have different episode_length,
-# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 250
-batch_size = 256
-max_env_step = int(1e6)
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# num_simulations = 50
+# # update_per_collect determines the number of training steps after each collection of a batch of data.
+# # For different env, we have different episode_length,
+# # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+# update_per_collect = 250
+# batch_size = 256
+# max_env_step = int(1e6)
+
+## debug config
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 5
+update_per_collect = 2
+batch_size = 4
+max_env_step = int(1e4)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-lunarlander_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_seed0',
+pendulum_disc_efficientzero_config = dict(
+    exp_name=f'data_ez_ctree/pendulum_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        env_id='LunarLander-v2',
-        battle_mode='one_player_mode',
-        prob_random_agent=0.,
-        collect_max_episode_steps=int(1.08e5),
-        eval_max_episode_steps=int(1.08e5),
+        continuous=False,
+        norm_obs=dict(use_norm=False, ),
         manager=dict(shared_memory=False, ),
         stop_value=300,
     ),
@@ -43,12 +49,12 @@ lunarlander_disc_efficientzero_config = dict(
         # Absolute path is recommended.
         # In LightZero, it is ``exp_name/ckpt/ckpt_best.pth.tar``.
         model_path=None,
-        env_name='lunarlander_disc',
+        env_name='pendulum_disc',
         # whether to use cuda for network.
         cuda=True,
         model=dict(
             # ==============================================================
-            # We use the medium size model for lunarlander.
+            # We use the small size model for pendulum.
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
             image_channel=1,
@@ -56,21 +62,21 @@ lunarlander_disc_efficientzero_config = dict(
             downsample=False,
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
-            # e.g. [4, 8, 1, 1] -> [4*1, 8, 1]
-            # observation_shape=(4, 8, 1),  # if frame_stack_nums=4
-            observation_shape=(1, 8, 1),  # if frame_stack_num=1
-            action_space_size=4,
+            # e.g. [4, 3, 1, 1] -> [4*1, 3, 1]
+            # observation_shape=(4, 3, 1),  # if frame_stack_nums=4
+            observation_shape=(1, 3, 1),  # if frame_stack_num=1
+            action_space_size=11,
             ## medium size model
             num_res_blocks=1,
-            num_channels=32,
+            num_channels=16,
             reward_head_channels=16,
             value_head_channels=16,
             policy_head_channels=16,
-            fc_reward_layers=[32],
-            fc_value_layers=[32],
-            fc_policy_layers=[32],
-            reward_support_size=601,
-            value_support_size=601,
+            fc_reward_layers=[8],
+            fc_value_layers=[8],
+            fc_policy_layers=[8],
+            reward_support_size=51,
+            value_support_size=51,
             batch_norm_momentum=0.1,
             proj_hid=512,
             proj_out=512,
@@ -112,7 +118,7 @@ lunarlander_disc_efficientzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
-        game_history_length=200,
+        game_history_length=50,
 
         ## observation
         # the key difference setting between image-input and vector input.
@@ -131,7 +137,7 @@ lunarlander_disc_efficientzero_config = dict(
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
-        support_scale=300,
+        support_size=25,
         # the weight of different loss
         reward_loss_weight=1,
         value_loss_weight=0.25,
@@ -161,13 +167,13 @@ lunarlander_disc_efficientzero_config = dict(
     ),
 )
 
-lunarlander_disc_efficientzero_config = EasyDict(lunarlander_disc_efficientzero_config)
-main_config = lunarlander_disc_efficientzero_config
+pendulum_disc_efficientzero_config = EasyDict(pendulum_disc_efficientzero_config)
+main_config = pendulum_disc_efficientzero_config
 
-lunarlander_disc_efficientzero_create_config = dict(
+pendulum_disc_efficientzero_create_config = dict(
     env=dict(
-        type='lunarlander',
-        import_names=['zoo.box2d.lunarlander.envs.lunarlander_env'],
+        type='pendulum',
+        import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
@@ -180,9 +186,9 @@ lunarlander_disc_efficientzero_create_config = dict(
         import_names=['lzero.worker.collector.efficientzero_collector'],
     )
 )
-lunarlander_disc_efficientzero_create_config = EasyDict(lunarlander_disc_efficientzero_create_config)
-create_config = lunarlander_disc_efficientzero_create_config
+pendulum_disc_efficientzero_create_config = EasyDict(pendulum_disc_efficientzero_create_config)
+create_config = pendulum_disc_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import serial_pipeline_efficientzero_eval
-    serial_pipeline_efficientzero_eval([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import serial_pipeline_efficientzero
+    serial_pipeline_efficientzero([main_config, create_config], seed=0, max_env_step=max_env_step)
