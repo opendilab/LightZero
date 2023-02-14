@@ -8,7 +8,5 @@ from .muzero_evaluator import MuZeroEvaluator
 
 from .sampled_efficientzero_collector import SampledEfficientZeroCollector
 from .sampled_efficientzero_evaluator import SampledEfficientZeroEvaluator
-
 from .alphazero_collector import AlphaZeroCollector
 from .alphazero_evaluator import AlphaZeroEvaluator
-

@@ -78,7 +78,7 @@ class GomokuEnv(BaseGameEnv):
         if self.battle_mode == 'two_player_mode' or self.battle_mode == 'eval_mode':
             obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': self.current_player}
         else:
-            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': None}
+            obs = {'observation': self.current_state(), 'action_mask': action_mask, 'board': copy.deepcopy(self.board), 'current_player_index':self.start_player_index, 'to_play': -1}
         return obs
 
     def step(self, action):
@@ -96,14 +96,11 @@ class GomokuEnv(BaseGameEnv):
             # print('player 1 (efficientzero player): ' + self.action_to_string(action))  # TODO(pu): visualize
             if timestep_player1.done:
                 # in one_player_mode, we set to_play as None, because we don't consider the alternation between players
-                timestep_player1.obs['to_play'] = None
+                timestep_player1.obs['to_play'] = -1
                 return timestep_player1
 
             # player 2's turn
-            if self.agent_vs_human:
-                expert_action = self.human_to_action()
-            else:
-                expert_action = self.expert_action()
+            expert_action = self.expert_action()
             # print('player 2 (expert player): ' + self.action_to_string(expert_action))  # TODO(pu): visualize
             timestep_player2 = self._player_step(expert_action)
             # self.render()  # TODO(pu): visualize
@@ -113,7 +110,7 @@ class GomokuEnv(BaseGameEnv):
 
             timestep = timestep_player2
             # in one_player_mode, we set to_play as None, because we don't consider the alternation between players
-            timestep.obs['to_play'] = None
+            timestep.obs['to_play'] = -1
             return timestep
 
         elif self.battle_mode == 'eval_mode':
@@ -126,7 +123,10 @@ class GomokuEnv(BaseGameEnv):
                 return timestep_player1
 
             # player 2's turn
-            expert_action = self.expert_action()
+            if self.agent_vs_human:
+                expert_action = self.human_to_action()
+            else:
+                expert_action = self.expert_action()
             # expert_action = self.random_action()
             # print('player 2 (expert player): ' + self.action_to_string(expert_action))  # TODO(pu): visualize
             timestep_player2 = self._player_step(expert_action)

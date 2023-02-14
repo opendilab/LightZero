@@ -13,10 +13,8 @@ class Node(object):
         the node base class for mcts.
     """
     def __init__(self, parent, prior_p: float):
-        # Tree Structure
         self._parent = parent
         self._children = {}
-        # Search meta data
         self._visit_count = 0
         self._value_sum = 0
         self.prior_p = prior_p

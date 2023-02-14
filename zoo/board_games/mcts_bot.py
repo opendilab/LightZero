@@ -6,9 +6,6 @@ from collections import defaultdict
 import numpy as np
 from easydict import EasyDict
 
-sys.path.append('/YOUR/PATH/LightZero')
-
-
 class MCTSNode(ABC):
     def __init__(self, env, parent=None):
         """

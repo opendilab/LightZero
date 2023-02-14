@@ -177,11 +177,12 @@ class AlphaZeroCollector(ISerialCollector):
                 simulation_envs = {}
                 for env_id in ready_env_id:
                     simulation_envs[env_id] = ENV_REGISTRY.build(self._cfg.env.type, self._env_config)
-                policy_output = self._policy.forward(simulation_envs, obs)
+                policy_output = self._policy.forward(simulation_envs, obs_)
                 self._policy_output_pool.update(policy_output)
                  # Interact with env.
                 actions = {env_id: output['action'] for env_id, output in policy_output.items()}
                 actions = to_ndarray(actions)
+                import pdb;pdb.set_trace()
                 timesteps = self._env.step(actions)
 
             # TODO(nyz) this duration may be inaccurate in async env
@@ -220,9 +221,16 @@ class AlphaZeroCollector(ISerialCollector):
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
                     self._total_episode_count += 1
+                    if timestep.obs['to_play'] == -1: # one player mode
+                        reward = timestep.info['final_eval_reward']
+                    else:
+                        if timestep.obs['to_play'] == 1: # two player mode
+                            reward = - timestep.info['final_eval_reward']
+                        else:
+                            reward = timestep.info['final_eval_reward']
                     reward = timestep.info['final_eval_reward']
                     info = {
-                        'reward': reward,
+                        'reward': reward, #only means player1 reward
                         'time': self._env_info[env_id]['time'],
                         'step': self._env_info[env_id]['step'],
                     }
