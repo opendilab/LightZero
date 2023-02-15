@@ -99,7 +99,7 @@ class EfficientZeroGameBuffer(Buffer):
         collector_env_num=8,
         evaluator_env_num=3,
         env_type='not_board_games',
-        battle_mode='one_player_mode',
+        battle_mode='play_with_bot_mode',
         game_wrapper=True,
         monitor_statistics=True,
         game_history_length=200,

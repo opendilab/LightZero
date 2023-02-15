@@ -74,7 +74,7 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
         norm_obs=dict(use_norm=False, ),
         norm_reward=dict(use_norm=False, ),
         use_act_scale=True,
-        battle_mode='one_player_mode',
+        battle_mode='play_with_bot_mode',
         prob_random_agent=0.,
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
@@ -184,7 +184,7 @@ dmc2gym_disc_sampled_efficientzero_config = dict(
         device=device,
         # mcts_ctree=False,
         mcts_ctree=True,
-        battle_mode='one_player_mode',
+        battle_mode='play_with_bot_mode',
         game_history_length=game_history_length,
         action_space_size=action_dim,  # 4**2
         continuous_action_space=True,

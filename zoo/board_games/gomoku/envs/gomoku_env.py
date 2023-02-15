@@ -20,7 +20,7 @@ class GomokuEnv(BaseGameEnv):
     config = dict(
         prob_random_agent=0,
         board_size=15,
-        battle_mode='one_player_mode',
+        battle_mode='play_with_bot_mode',
         channel_last=True,
         agent_vs_human=False,
         expert_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
@@ -88,7 +88,10 @@ class GomokuEnv(BaseGameEnv):
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
-        if self.battle_mode == 'two_player_mode' or self.battle_mode == 'eval_mode':
+        if self.battle_mode == 'self_play_mode' or self.battle_mode == 'eval_mode':
+            # In contrast with ``play_with_bot_mode``, in ``self_play_mode`` and ``eval_mode``,
+            # we make ``to_play=self.current_player`` in obs, which is used to differentiate
+            # the alternation of 2 players in the game when do Q calculation.
             obs = {
                 'observation': self.current_state(),
                 'action_mask': action_mask,
@@ -102,7 +105,7 @@ class GomokuEnv(BaseGameEnv):
                 'action_mask': action_mask,
                 'board': copy.deepcopy(self.board),
                 'current_player_index': self.start_player_index,
-                'to_play': None
+                'to_play': -1
             }
         return obs
 
@@ -118,28 +121,25 @@ class GomokuEnv(BaseGameEnv):
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
 
     def step(self, action):
-        if self.battle_mode == 'two_player_mode':
+        if self.battle_mode == 'self_play_mode':
             if np.random.rand() < self.prob_random_agent:
                 action = self.random_action()
             timestep = self._player_step(action)
             # print(self.board)
             return timestep
-        elif self.battle_mode == 'one_player_mode':
+        elif self.battle_mode == 'play_with_bot_mode':
             # player 1 battle with expert player 2
 
             # player 1's turn
             timestep_player1 = self._player_step(action)
             # print('player 1 (efficientzero player): ' + self.action_to_string(action))  # TODO(pu): visualize
             if timestep_player1.done:
-                # in one_player_mode, we set to_play as None, because we don't consider the alternation between players
-                timestep_player1.obs['to_play'] = None
+                # in play_with_bot_mode, we set to_play as None/-1, because we don't consider the alternation between players
+                timestep_player1.obs['to_play'] = -1
                 return timestep_player1
 
             # player 2's turn
-            if self.agent_vs_human:
-                expert_action = self.human_to_action()
-            else:
-                expert_action = self.expert_action()
+            expert_action = self.expert_action()
             # print('player 2 (expert player): ' + self.action_to_string(expert_action))  # TODO(pu): visualize
             timestep_player2 = self._player_step(expert_action)
             # self.render()  # TODO(pu): visualize
@@ -148,8 +148,8 @@ class GomokuEnv(BaseGameEnv):
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
             timestep = timestep_player2
-            # in one_player_mode, we set to_play as None, because we don't consider the alternation between players
-            timestep.obs['to_play'] = None
+            # in ``play_with_bot_mode``, we set to_play as None/-1, because we don't consider the alternation between players
+            timestep.obs['to_play'] = -1
             return timestep
 
         elif self.battle_mode == 'eval_mode':
@@ -162,7 +162,10 @@ class GomokuEnv(BaseGameEnv):
                 return timestep_player1
 
             # player 2's turn
-            expert_action = self.expert_action()
+            if self.agent_vs_human:
+                expert_action = self.human_to_action()
+            else:
+                expert_action = self.expert_action()
             # expert_action = self.random_action()
             # print('player 2 (expert player): ' + self.action_to_string(expert_action))  # TODO(pu): visualize
             timestep_player2 = self._player_step(expert_action)
@@ -465,11 +468,10 @@ class GomokuEnv(BaseGameEnv):
     def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
         evaluator_env_num = cfg.pop('evaluator_env_num')
         cfg = copy.deepcopy(cfg)
-        # NOTE: when collect and train in two_player_mode,
-        # in eval phase, we use 'eval_mode' to evaluate the current agent with bot,
-        # in contrast with 'one_player_mode', in 'eval_mode', we include the to_play in obs,
-        # which is used in q calculation to differentiate between 2 players of the game.
-        if cfg.battle_mode == 'two_player_mode':
+        # When we collect and train agent in ``self_play_mode``, in eval phase,
+        # we use ``eval_mode`` to make agent paly with the built-in bot to
+        # evaluate the performance of the current agent.
+        if cfg.battle_mode == 'self_play_mode':
             cfg.battle_mode = 'eval_mode'
         return [cfg for _ in range(evaluator_env_num)]
 

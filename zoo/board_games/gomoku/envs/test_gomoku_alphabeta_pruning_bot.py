@@ -9,7 +9,7 @@ cfg = dict(
     board_size=5,
     prob_random_agent=0,
     prob_expert_agent=0,
-    battle_mode='two_player_mode',
+    battle_mode='self_play_mode',
     channel_last=True,
     agent_vs_human=False,
     expert_action_type='alpha_beta_pruning',  # options: {'v0', 'alpha_beta_pruning'}
@@ -18,7 +18,7 @@ cfg = dict(
 
 @pytest.mark.envtest
 class TestGomokuBot:
-    def test_gomoku_two_player_mode_draw(self):
+    def test_gomoku_self_play_mode_draw(self):
         # player_0: AlphaBetaPruningBot
         # player_1: AlphaBetaPruningBot
         # will draw
@@ -50,7 +50,7 @@ class TestGomokuBot:
 
         assert env.have_winner()[0] is False, env.have_winner()[1] == -1
 
-    def test_gomoku_two_player_mode_case_1(self):
+    def test_gomoku_self_play_mode_case_1(self):
         env = GomokuEnv(EasyDict(cfg))
         player_0 = AlphaBetaPruningBot(GomokuEnv, cfg, 'player 1')  # player_index = 0, player = 1
         player_1 = AlphaBetaPruningBot(GomokuEnv, cfg, 'player 2')  # player_index = 1, player = 2
@@ -88,7 +88,7 @@ class TestGomokuBot:
         assert env.have_winner()[1] == 2
         assert row == 0, col == 4
 
-    def test_gomoku_two_player_mode_case_2(self):
+    def test_gomoku_self_play_mode_case_2(self):
         env = GomokuEnv(EasyDict(cfg))
         player_0 = AlphaBetaPruningBot(GomokuEnv, cfg, 'player 1')  # player_index = 0, player = 1
         player_1 = AlphaBetaPruningBot(GomokuEnv, cfg, 'player 2')  # player_index = 1, player = 2

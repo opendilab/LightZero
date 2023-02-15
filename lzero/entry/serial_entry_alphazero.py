@@ -96,6 +96,7 @@ def serial_pipeline_alphazero(
             )
             if stop:
                 break
+
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter)
         if not cfg.policy.other.replay_buffer.save_episode:

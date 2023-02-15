@@ -147,7 +147,7 @@ if __name__ == "__main__":
     # cfg = dict(
     #     prob_random_agent=0,
     #     prob_expert_agent=0,
-    #     battle_mode='two_player_mode',
+    #     battle_mode='self_play_mode',
     #     agent_vs_human=False,
     # )
     # env = TicTacToeEnv(EasyDict(cfg))
@@ -187,7 +187,7 @@ if __name__ == "__main__":
         board_size=5,
         prob_random_agent=0,
         prob_expert_agent=0,
-        battle_mode='two_player_mode',
+        battle_mode='self_play_mode',
         channel_last=True,
         agent_vs_human=False,
         expert_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}

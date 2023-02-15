@@ -12,7 +12,7 @@ def test_tictactoe_mcts_bot_vs_expert_bot(num_simulations=50):
     cfg = dict(
         prob_random_agent=0,
         prob_expert_agent=0,
-        battle_mode='two_player_mode',
+        battle_mode='self_play_mode',
     )
     mcts_bot_time_list = []
     expert_action_time_list = []
@@ -72,7 +72,7 @@ def test_gomoku_mcts_bot_vs_expert_bot(num_simulations):
     cfg = dict(
         board_size=5,
         prob_random_agent=0,
-        battle_mode='two_player_mode',
+        battle_mode='self_play_mode',
     )
     mcts_bot_time_list = []
     expert_action_time_list = []

@@ -2,15 +2,16 @@ from easydict import EasyDict
 
 board_size = 6  # default_size is 15
 
-collector_env_num = 32
-n_episode = 32
-evaluator_env_num = 5
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
 num_simulations = 50
 update_per_collect = 100
 batch_size = 256
+agent_vs_human = False
 
 gomoku_alphazero_config = dict(
-    exp_name='data_ez_ptree/gomoku_2pm_alphazero',
+    exp_name='data_ez_ptree/gomoku_self-play_alphazero',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -19,11 +20,13 @@ gomoku_alphazero_config = dict(
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
         board_size=board_size,
-        battle_mode='two_player_mode',
+        battle_mode='self_play_mode',
         prob_random_agent=0.,
+        agent_vs_human=agent_vs_human,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        model_path='/mnt/lustre/yangzhenjie/code/LightZero/zoo/board_games/gomoku/experiment/gomoku_alphazero_bs256_sub32325_up100_s50/data_ez_ptree/gomoku_self-play_alphazero/ckpt/ckpt_best.pth.tar',
         type='alphazero',
         env_name='gomoku',
         cuda=True,
@@ -37,13 +40,13 @@ gomoku_alphazero_config = dict(
             downsample=False,
             reward_support_size=1,
             value_support_size=1,
-            num_res_blocks=1,
+            num_blocks=1,
             num_channels=32,
-            value_head_channels=16,
-            policy_head_channels=16,
+            reduced_channels_value=16,
+            reduced_channels_policy=16,
             fc_value_layers=[32],
             fc_policy_layers=[32],
-            batch_norm_momentum=0.1,
+            bn_mt=0.1,
             last_linear_layer_init_zero=True,
             state_norm=False,
         ),
@@ -62,8 +65,7 @@ gomoku_alphazero_config = dict(
                     load_ckpt_before_run='',
                     log_show_after_iter=1,
                     save_ckpt_after_iter=10000,
-                    save_ckpt_after_run=True,
-                ),
+                    save_ckpt_after_run=True, ),
             )
         ),
         collect=dict(
@@ -72,8 +74,7 @@ gomoku_alphazero_config = dict(
             collector=dict(
                 env=dict(
                     type='gomoku',
-                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
-                ),
+                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'], ),
                 augmentation=True,
             ),
             mcts=dict(num_simulations=num_simulations)
@@ -85,8 +86,7 @@ gomoku_alphazero_config = dict(
                 stop_value=1,
                 env=dict(
                     type='gomoku',
-                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
-                ),
+                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'], ),
             ),
             mcts=dict(num_simulations=num_simulations)
         ),
@@ -113,23 +113,37 @@ gomoku_alphazero_create_config = dict(
     # env_manager=dict(type='subprocess'),
     policy=dict(
         type='alphazero',
-        import_names=['lzero.policy.alphazero'],
+        import_names=['core.policy.alphazero'],
     ),
     collector=dict(
         type='episode_alphazero',
         get_train_sample=False,
         # get_train_sample=True,
-        import_names=['lzero.worker.collector.alphazero_collector'],
+        import_names=['core.worker.collector.alphazero_collector'],
     ),
     evaluator=dict(
         type='alphazero',
-        import_names=['lzero.worker.collector.alphazero_evaluator'],
+        import_names=['core.worker.collector.alphazero_evaluator'],
     )
+
 )
 gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
 create_config = gomoku_alphazero_create_config
 
 if __name__ == '__main__':
-    from lzero.entry import serial_pipeline_alphazero
+    from core.entry import serial_pipeline_alphazero_eval
+    import numpy as np
 
-    serial_pipeline_alphazero([main_config, create_config], seed=0)
+    seed = 0
+    test_episodes = 15
+    for i in range(15):
+        reward_mean, reward_lst = serial_pipeline_alphazero_eval([main_config, create_config], seed=i, test_episodes=1, max_env_step=int(1e5))
+
+    reward_lst = np.array(reward_lst)
+    reward_mean = np.array(reward_mean)
+
+    print("=" * 20)
+    print(f'we eval total {seed} seed. In each seed, we test {test_episodes} episodes.')
+    print('reward_mean:', reward_mean)
+    print(f'win rate: {len(np.where(reward_lst == 1.)[0]) / test_episodes}, draw rate: {len(np.where(reward_lst == 0.)[0]) / test_episodes}, lose rate: {len(np.where(reward_lst == -1.)[0]) / test_episodes}')
+    print("=" * 20)

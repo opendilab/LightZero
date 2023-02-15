@@ -29,10 +29,10 @@ from easydict import EasyDict
 # e.g. reuse_factor = 0.5
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
 
-# one_player_mode, board_size=3, episode_length=3**2/2=4.5
+# play_with_bot_mode, board_size=3, episode_length=3**2/2=4.5
 # collector_env_num=8,  n_sample_per_collect=5*8=40
 
-# two_player_mode, board_size=3, episode_length=3**2=9
+# self_play_mode, board_size=3, episode_length=3**2=9
 # collector_env_num=8,  n_sample_per_collect=9*8=72
 
 # for debug
@@ -46,15 +46,15 @@ update_per_collect = 4
 
 tictactoe_muzero_v2_config = dict(
     exp_name=f'data_mz_ctree/debug',
-    # exp_name=f'data_mz_ctree/tictactoe_1pm_muzero_v2_seed0_sub885_ghl5_ftv1_rc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
+    # exp_name=f'data_mz_ctree/tictactoe_vs-bot_muzero_v2_seed0_sub885_ghl5_ftv1_rc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         stop_value=1,
-        # if battle_mode='two_player_mode',
-        # automatically assign 'eval_mode' when eval, 'two_player_mode' when collect
-        battle_mode='one_player_mode',
+        # if battle_mode='self_play_mode',
+        # automatically assign 'eval_mode' when eval, 'self_play_mode' when collect
+        battle_mode='play_with_bot_mode',
         prob_random_agent=0.,
         prob_expert_agent=0.,
         max_episode_steps=int(1.08e5),
@@ -65,7 +65,7 @@ tictactoe_muzero_v2_config = dict(
     policy=dict(
         # model_path=None,
         model_path=
-        '/Users/puyuan/code/LightZero/data_mz_ctree/tictactoe_1pm_muzero_seed0_sub885_ghl5_ftv1_cc2_fs1_ns25_upc40_cdt_adam3e-3_mgn05_221128_134825/ckpt/ckpt_best.pth.tar',
+        '/Users/puyuan/code/LightZero/data_mz_ctree/tictactoe_vs-bot_muzero_seed0_sub885_ghl5_ftv1_cc2_fs1_ns25_upc40_cdt_adam3e-3_mgn05_221128_134825/ckpt/ckpt_best.pth.tar',
         env_name='tictactoe',
         # Whether to use cuda for network.
         cuda=True,
@@ -140,9 +140,9 @@ tictactoe_muzero_v2_config = dict(
         device=device,
         mcts_ctree=True,
         # mcts_ctree=False,
-        # battle_mode='two_player_mode',
+        # battle_mode='self_play_mode',
         # game_history_length=9,
-        battle_mode='one_player_mode',
+        battle_mode='play_with_bot_mode',
         game_history_length=5,
         image_based=False,
         cvt_string=False,

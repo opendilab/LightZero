@@ -46,7 +46,7 @@ lunarlander_disc_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         env_id='LunarLander-v2',
         stop_value=300,
-        battle_mode='one_player_mode',
+        battle_mode='play_with_bot_mode',
         prob_random_agent=0.,
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
@@ -138,7 +138,7 @@ lunarlander_disc_muzero_config = dict(
         env_type='not_board_games',
         device=device,
         mcts_ctree=True,
-        battle_mode='one_player_mode',
+        battle_mode='play_with_bot_mode',
         game_history_length=200,
         # game_history_length=50,
 

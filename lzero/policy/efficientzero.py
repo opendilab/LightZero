@@ -139,7 +139,7 @@ class EfficientZeroPolicy(Policy):
         collector_env_num=8,
         evaluator_env_num=3,
         env_type='not_board_games',
-        battle_mode='one_player_mode',
+        battle_mode='play_with_bot_mode',
         game_wrapper=True,
         monitor_statistics=True,
         game_history_length=200,
@@ -762,7 +762,7 @@ class EfficientZeroPolicy(Policy):
             # cpp mcts
             if self._cfg.mcts_ctree:
                 if to_play[0] is None:
-                    # we use to_play=0 means one_player_mode game in mcts_ctree
+                    # we use to_play=0 means play_with_bot_mode game in mcts_ctree
                     to_play = [0 for i in range(active_collect_env_num)]
                 action_num = int(action_mask[0].sum())
                 legal_actions = [
@@ -887,7 +887,7 @@ class EfficientZeroPolicy(Policy):
             if self._cfg.mcts_ctree:
                 # cpp mcts
                 if to_play[0] is None:
-                    # we use to_play=0 means one_player_mode game in mcts_ctree
+                    # we use to_play=0 means play_with_bot_mode game in mcts_ctree
                     to_play = [0 for i in range(active_eval_env_num)]
                 action_num = int(action_mask[0].sum())
                 legal_actions = [

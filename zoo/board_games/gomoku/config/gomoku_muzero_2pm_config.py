@@ -28,10 +28,10 @@ categorical_distribution = True
 # e.g. reuse_factor = 0.5
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
 
-# one_player_mode, board_size=6, episode_length=6**2/2=18
+# play_with_bot_mode, board_size=6, episode_length=6**2/2=18
 # n_episode=8,  update_per_collect=18*8=144
 
-# two_player_mode, board_size=6, episode_length=6**2=36
+# self_play_mode, board_size=6, episode_length=6**2=36
 # n_episode=8,  update_per_collect=36*8=268
 
 data_reuse_factor = 1
@@ -46,7 +46,7 @@ num_simulations = 50
 
 gomoku_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/gomoku_bs6_2pm_ghl36_muzero_seed0_sub883_halfmodel_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
+    f'data_mz_ctree/gomoku_bs6_self-play_ghl36_muzero_seed0_sub883_halfmodel_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -56,10 +56,10 @@ gomoku_muzero_config = dict(
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
         board_size=board_size,  # default_size is 15
-        # if battle_mode='two_player_mode',
-        # automatically assign 'eval_mode' when eval, 'two_player_mode' when collect
-        battle_mode='two_player_mode',
-        # battle_mode='one_player_mode',
+        # if battle_mode='self_play_mode',
+        # automatically assign 'eval_mode' when eval, 'self_play_mode' when collect
+        battle_mode='self_play_mode',
+        # battle_mode='play_with_bot_mode',
         prob_random_agent=0.,
         manager=dict(shared_memory=False, ),
     ),
@@ -142,9 +142,9 @@ gomoku_muzero_config = dict(
         env_type='board_games',
         device=device,
         mcts_ctree=True,
-        battle_mode='two_player_mode',
+        battle_mode='self_play_mode',
         game_history_length=36,
-        # battle_mode='one_player_mode',
+        # battle_mode='play_with_bot_mode',
         # game_history_length=18,
         image_based=False,
         cvt_string=False,

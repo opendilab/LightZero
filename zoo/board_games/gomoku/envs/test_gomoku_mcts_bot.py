@@ -14,7 +14,7 @@ cfg = dict(
     board_size=5,
     prob_random_agent=0,
     prob_expert_agent=0,
-    battle_mode='two_player_mode',
+    battle_mode='self_play_mode',
     channel_last=True,
     agent_vs_human=False,
     expert_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
@@ -24,7 +24,7 @@ cfg = dict(
 @pytest.mark.envtest
 class TestGomokuBot:
 
-    def test_gomoku_two_player_mode_player0_win(self):
+    def test_gomoku_self_play_mode_player0_win(self):
         # player_0  num_simulation=1000, will win
         # player_1  num_simulation=1
         env = GomokuEnv(EasyDict(cfg))
@@ -54,7 +54,7 @@ class TestGomokuBot:
             print('#' * 15)
         assert env.have_winner()[1] == 1
 
-    def test_gomoku_two_player_mode_player1_win(self):
+    def test_gomoku_self_play_mode_player1_win(self):
         # player_0  num_simulation=1
         # player_1  num_simulation=1000, will win
         env = GomokuEnv(EasyDict(cfg))
@@ -84,7 +84,7 @@ class TestGomokuBot:
             print('#' * 15)
         assert env.have_winner()[1] == 2
 
-    def test_gomoku_two_player_mode_draw(self):
+    def test_gomoku_self_play_mode_draw(self):
         # player_0  num_simulation=1000
         # player_1  num_simulation=1000, will draw
         env = GomokuEnv(EasyDict(cfg))
@@ -114,7 +114,7 @@ class TestGomokuBot:
             print('#' * 15)
         assert env.have_winner()[1] == -1
 
-    def test_gomoku_two_player_mode_case_1(self):
+    def test_gomoku_self_play_mode_case_1(self):
         env = GomokuEnv(EasyDict(cfg))
         init_state = [
             [1, 1, 1, 1, 0],
@@ -152,7 +152,7 @@ class TestGomokuBot:
         assert env.have_winner()[1] == 2
         assert state[0, 4] == 2
 
-    def test_gomoku_two_player_mode_case_2(self):
+    def test_gomoku_self_play_mode_case_2(self):
         env = GomokuEnv(EasyDict(cfg))
         init_state = [
             [0, 0, 2, 0, 0],

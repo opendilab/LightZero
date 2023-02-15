@@ -14,10 +14,8 @@ class Node(object):
     """
 
     def __init__(self, parent, prior_p: float):
-        # Tree Structure
         self._parent = parent
         self._children = {}
-        # Search meta data
         self._visit_count = 0
         self._value_sum = 0
         self.prior_p = prior_p
@@ -86,68 +84,84 @@ class MCTS(object):
         )  # 0.3  # for chess, 0.03 for Go and 0.15 for shogi.
         self._root_exploration_fraction = self._cfg.get('root_exploration_fraction', 0.25)  # 0.25
 
-    def get_next_action(self, state, policy_forward_fn, temperature=1.0, sample=True):
+    def get_next_action(self, simulate_env, policy_forward_fn, temperature=1.0, sample=True):
         """
         Overview:
-            calc the move probabilities based on visit counts at the root node
+            calculate the move probabilities based on visit counts at the root node.
         """
+
         root = Node(None, 1.0)
-        self._expand_leaf_node(root, state, policy_forward_fn)
+        self._expand_leaf_node(root, simulate_env, policy_forward_fn)
         if sample:
             self._add_exploration_noise(root)
         for n in range(self._num_simulations):
-            state_copy = copy.deepcopy(state)
-            self._simulate(root, state_copy, policy_forward_fn)
+            simulate_env_copy = copy.deepcopy(simulate_env)
+            # in MCTS search, when we input a action to the ``simulate_env``,
+            # the ``simulate_env`` only execute the action, don't execute the built-in bot action,
+            # i.e. the AlphaZero agent do self-play when do MCTS search.
+            simulate_env_copy.battle_mode = 'self_play_mode'
+            self._simulate(root, simulate_env_copy, policy_forward_fn)
 
         action_visits = []
-        for action in range(state.action_space.n):
+        for action in range(simulate_env.action_space.n):
             if action in root.children:
                 action_visits.append((action, root.children[action].visit_count))
             else:
                 action_visits.append((action, 0))
 
         actions, visits = zip(*action_visits)
-        action_probs = nn.functional.softmax(1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0).numpy()
+        action_probs = nn.functional.softmax(1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0).numpy()  # prob =
         if sample:
             action = np.random.choice(actions, p=action_probs)
         else:
             action = actions[np.argmax(action_probs)]
         return action, action_probs
 
-    def _simulate(self, node, state, policy_forward_fn):
+    def _simulate(self, node, simulate_env, policy_forward_fn):
         """
         Overview:
             Run a single playout from the root to the leaf, getting a value at the leaf and propagating it back through its parents.
-            State is modified in-place, so a copy must be provided.
+            State is modified in-place, so a deepcopy must be provided.
         """
         while not node.is_leaf():
             action, node = self._select_child(node)
-            # state.do_action(action)
-            state.step(action)
+            simulate_env.step(action)
 
-        # end, winner = state.game_end()
-        end, winner = state.have_winner()
+        end, winner = simulate_env.have_winner()
 
+        # the leaf_value is calculated from the perspective of player ``simulate_env.current_player``.
         if not end:
-            leaf_value = self._expand_leaf_node(node, state, policy_forward_fn)
+            leaf_value = self._expand_leaf_node(node, simulate_env, policy_forward_fn)
+            # leaf_value = self._expand_leaf_node(node, simulate_env_deepcopy, policy_forward_fn)
         else:
             if winner == -1:
                 leaf_value = 0
             else:
-                leaf_value = 1 if state.current_player == winner else -1
+                leaf_value = 1 if simulate_env.current_player == winner else -1
 
         # Update value and visit count of nodes in this traversal.
         node.update_recursive(-leaf_value)
 
-    # Select the child with the highest UCB score.
     def _select_child(self, node):
+        """
+        Overview:
+            Select the child with the highest UCB score.
+        """
         _, action, child = max((self._ucb_score(node, child), action, child) for action, child in node.children.items())
         return action, child
 
-    def _expand_leaf_node(self, node, state, policy_forward_fn):
-        action_probs_dict, leaf_value = policy_forward_fn(state)
+    def _expand_leaf_node(self, node, simulate_env, policy_forward_fn):
+        """
+        Overview:
+            expand the node with the policy_forward_fn.
+        """
+        action_probs_dict, leaf_value = policy_forward_fn(simulate_env)
         for action, prior_p in action_probs_dict.items():
             node.children[action] = Node(parent=node, prior_p=prior_p)
+        # if list(node.children.keys()) == [0, 1, 2, 4, 6, 7, 8]:
+        #     print('debug')
+        # if list(node.children.keys()) != simulate_env.legal_actions:
+        #     print('debug')
         return leaf_value
 
     # The score for a node is based on its value, plus an exploration bonus based on

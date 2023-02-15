@@ -1,31 +1,38 @@
 from easydict import EasyDict
 
-board_size = 3  # fixed
+board_size = 6  # default_size is 15
 
 collector_env_num = 32
 n_episode = 32
-evaluator_env_num = 16
+evaluator_env_num = 5
 num_simulations = 50
 update_per_collect = 100
 batch_size = 256
 
-tictactoe_alphazero_config = dict(
-    exp_name='data_ez_ptree/tictactoe_2pm_alphazero',
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 5
+# update_per_collect = 2
+# batch_size = 3
+
+gomoku_alphazero_config = dict(
+    exp_name='data_ez_ptree/gomoku_vs-bot_alphazero',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         channel_last=False,
-        collect_max_episode_steps=int(1.08e4),
+        collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
         board_size=board_size,
-        battle_mode='two_player_mode',
+        battle_mode='play_with_bot_mode',
         prob_random_agent=0.,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
         type='alphazero',
-        env_name='tictactoe',
+        env_name='gomoku',
         cuda=True,
         board_size=board_size,
         model=dict(
@@ -38,11 +45,11 @@ tictactoe_alphazero_config = dict(
             reward_support_size=1,
             value_support_size=1,
             num_res_blocks=1,
-            num_channels=16,
+            num_channels=32,
             value_head_channels=16,
             policy_head_channels=16,
-            fc_value_layers=[8],
-            fc_policy_layers=[8],
+            fc_value_layers=[32],
+            fc_policy_layers=[32],
             batch_norm_momentum=0.1,
             last_linear_layer_init_zero=True,
             state_norm=False,
@@ -71,8 +78,8 @@ tictactoe_alphazero_config = dict(
             n_episode=n_episode,
             collector=dict(
                 env=dict(
-                    type='tictactoe',
-                    import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
+                    type='gomoku',
+                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
                 ),
                 augmentation=True,
             ),
@@ -84,8 +91,8 @@ tictactoe_alphazero_config = dict(
                 eval_freq=int(100),
                 stop_value=1,
                 env=dict(
-                    type='tictactoe',
-                    import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
+                    type='gomoku',
+                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
                 ),
             ),
             mcts=dict(num_simulations=num_simulations)
@@ -101,13 +108,13 @@ tictactoe_alphazero_config = dict(
     ),
 )
 
-tictactoe_alphazero_config = EasyDict(tictactoe_alphazero_config)
-main_config = tictactoe_alphazero_config
+gomoku_alphazero_config = EasyDict(gomoku_alphazero_config)
+main_config = gomoku_alphazero_config
 
-tictactoe_alphazero_create_config = dict(
+gomoku_alphazero_create_config = dict(
     env=dict(
-        type='tictactoe',
-        import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
+        type='gomoku',
+        import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
     ),
     env_manager=dict(type='base'),
     # env_manager=dict(type='subprocess'),
@@ -126,10 +133,9 @@ tictactoe_alphazero_create_config = dict(
         import_names=['lzero.worker.collector.alphazero_evaluator'],
     )
 )
-tictactoe_alphazero_create_config = EasyDict(tictactoe_alphazero_create_config)
-create_config = tictactoe_alphazero_create_config
+gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
+create_config = gomoku_alphazero_create_config
 
 if __name__ == '__main__':
     from lzero.entry import serial_pipeline_alphazero
-
     serial_pipeline_alphazero([main_config, create_config], seed=0)

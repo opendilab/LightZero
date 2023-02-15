@@ -35,7 +35,7 @@ class LunarLanderDiscEnv(BaseEnv):
         use_act_scale=False,
         delay_reward_step=0,
         each_dim_disc_size=4,
-        battle_mode='one_player_mode',
+        battle_mode='play_with_bot_mode',
         prob_random_agent=0.,
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),

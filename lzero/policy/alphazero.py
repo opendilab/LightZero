@@ -124,9 +124,10 @@ class AlphaZeroPolicy(Policy):
         action_probs, values = self._learn_model.compute_prob_value(state_batch)
         log_probs = torch.log(action_probs)
 
-        # calc policy entropy, for monitoring only
+        # calculate policy entropy, for monitoring only
         entropy = torch.mean(-torch.sum(action_probs * log_probs, 1))
         entropy_loss = -entropy
+
         # ============
         # policy loss
         # ============
@@ -269,9 +270,10 @@ class AlphaZeroPolicy(Policy):
     @torch.no_grad()
     def _policy_value_fn(self, env):
         """
-        input: env
-        output: a list of (action, probability) tuples for each available
-        action and the score of the env state
+        Overview:
+            - input: env
+            - output: a list of (action, probability) tuples for each available
+                action and the score of the env state
         """
         legal_actions = env.legal_actions
         current_state = env.current_state()
@@ -282,6 +284,8 @@ class AlphaZeroPolicy(Policy):
             action_probs, value = self._policy_model.compute_prob_value(current_state)
         action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
         value = value.item()
+        if list(action_probs_dict.keys()) != legal_actions:
+            print('debug')
         return action_probs_dict, value
 
     def _monitor_vars_learn(self) -> List[str]:

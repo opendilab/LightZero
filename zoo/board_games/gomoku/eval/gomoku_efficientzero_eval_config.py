@@ -9,8 +9,8 @@ n_episode = 1
 evaluator_env_num = 1
 
 gomoku_efficientzero_config = dict(
-    exp_name='data_ptree/gomoku_2pm_efficientzero_seed0',
-    # exp_name='data_ptree_eval/gomoku_1pm_efficientzero_seed0',
+    exp_name='data_ptree/gomoku_self-play_efficientzero_seed0',
+    # exp_name='data_ptree_eval/gomoku_vs-bot_efficientzero_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -20,18 +20,18 @@ gomoku_efficientzero_config = dict(
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
         board_size=board_size,  # default_size is 15
-        # if battle_mode='two_player_mode',
-        # automatically assign 'one_player_mode' when eval, 'two_player_mode' when collect
-        battle_mode='two_player_mode',
-        # battle_mode='one_player_mode',
+        # if battle_mode='self_play_mode',
+        # automatically assign 'play_with_bot_mode' when eval, 'self_play_mode' when collect
+        battle_mode='self_play_mode',
+        # battle_mode='play_with_bot_mode',
         prob_random_agent=0.,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
         # pretrained model
-        # model_path='/Users/puyuan/code/LightZero/data_ez_ptree/gomoku_1pm_efficientzero_seed0_sub885_221016_120924/ckpt/ckpt_best.pth.tar',
+        # model_path='/Users/puyuan/code/LightZero/data_ez_ptree/gomoku_vs-bot_efficientzero_seed0_sub885_221016_120924/ckpt/ckpt_best.pth.tar',
         model_path=
-        '/Users/puyuan/code/LightZero/data_ez_ptree/gomoku_2pm_efficientzero_seed0_sub885_221018_235827/ckpt/ckpt_best.pth.tar',
+        '/Users/puyuan/code/LightZero/data_ez_ptree/gomoku_self-play_efficientzero_seed0_sub885_221018_235827/ckpt/ckpt_best.pth.tar',
         # model_path=None,
         env_name='gomoku',
         # TODO(pu): how to pass into game_config, which is class, not a dict
@@ -72,11 +72,11 @@ gomoku_efficientzero_config = dict(
             # batch_size=4,
             batch_size=256,
 
-            # one_player_mode, board_size=6, episode_length=6**2/2=18
+            # play_with_bot_mode, board_size=6, episode_length=6**2/2=18
             # n_episode=8,  update_per_collect=18*8=144
             update_per_collect=int(board_size ** 2 / 2 * n_episode),
 
-            # two_player_mode, board_size=6, episode_length=6**2=36
+            # self_play_mode, board_size=6, episode_length=6**2=36
             # n_episode=8,  update_per_collect=36*8=268
             # update_per_collect=int(board_size ** 2 * n_episode),
             learning_rate=0.002,
