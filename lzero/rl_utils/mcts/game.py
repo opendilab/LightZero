@@ -54,10 +54,10 @@ class GameHistory:
         self.game_history_length = game_history_length
         self.config = config
 
-        self.frame_stack_num = config.frame_stack_num
+        self.frame_stack_num = config.model.frame_stack_num
         self.discount = config.discount
-        self.action_space_size = config.action_space_size
-        self.zero_obs_shape = (config.obs_shape[-2], config.obs_shape[-1], config.image_channel)
+        self.action_space_size = config.model.action_space_size
+        self.zero_obs_shape = (config.model.observation_shape[-2], config.model.observation_shape[-1], config.model.image_channel)
 
         self.obs_history = []
         self.action_history = []

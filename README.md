@@ -1,9 +1,9 @@
 # LightZero
-The following is an overview of the historical evolution of the MCTS algorithm series:
-![pipeline](/assets/mcts_rl_evolution_overview.pdf)
+The following is an overview of the historical evolution of the Monte Carlo Tree Search (MCTS) algorithm series:
+![pipeline](assets/mcts_rl_evolution_overview.pdf)
 
 ## Introduction
-LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of Monte Carlo Tree Search (MCTS) algorithms, including:
+LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of MCTS algorithms (sometimes combined with cython and cpp), including:
 - [AlphaZero](https://www.science.org/doi/10.1126/science.aar6404)
 - [MuZero](https://arxiv.org/abs/1911.08265)
 - [EfficientZero](https://arxiv.org/abs/2111.00210)
@@ -14,7 +14,7 @@ Our implementation is mainly based on [DI-engine](https://github.com/opendilab/D
 
 ## Installation
 
-You can install latest LightZero in development from the Github source codes with the following command:
+You can install latest LightZero in development from the GitHub source codes with the following command:
 
 ```bash
 git clone https://github.com/opendilab/LightZero.git
@@ -26,7 +26,7 @@ pip install -e .
 
 ## Quick Start
 
-Train A MuZero agent to play Pong:
+Train a MuZero agent to play [Pong](https://gymnasium.farama.org/environments/atari/pong/):
 
 ```bash
 cd LightZero
@@ -34,7 +34,7 @@ python zoo/atari/config/pong_muzero_config.py
 ```
 
 
-Train A MuZero agent to play TicTacToe:
+Train a MuZero agent to play [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-toe):
 
 ```bash
 cd LightZero
@@ -47,21 +47,21 @@ The following are the overview MCTS principle diagrams of the above algorithms:
 <details open>
 <summary>(Click to Collapse)</summary>
 
-[comment]: <> (![alphazero]&#40;assets/alg_overview/mcts.png&#41;)
+![mcts](assets/algo_overview/mcts.png)
 
-![alphazero](assets/alg_overview/alphazero.png)
+![alphazero](assets/algo_overview/alphazero.png)
 
-![muzero](assets/alg_overview/muzero.png)
+![muzero](assets/algo_overview/muzero.png)
 
-![efficientzero](assets/alg_overview/efficientzero.png)
+![efficientzero](assets/algo_overview/efficientzero.png)
 
-![sampled muzero](assets/alg_overview/sampled_muzero.png)
+![sampled muzero](assets/algo_overview/sampled_muzero.png)
 
-![gumbel muzero](assets/alg_overview/gumbel_muzero.png)
+![gumbel muzero](assets/algo_overview/gumbel_muzero.png)
 
 </details>
 
-The following are the detailed notes of the above algorithms:
+The following are the detailed paper notes of the above algorithms:
 
 <details open>
 <summary>(Click to Collapse)</summary>
@@ -81,9 +81,8 @@ The following are the detailed notes of the above algorithms:
 
 ## Awesome-MCTS papers
 
-Here is a collection of research papers for **Monte Carlo Tree Search (MCTS)**.
-This Section will be continuously updated to track the frontier of MCTS. 
-
+Here is a collection of research papers about **Monte Carlo Tree Search**.
+[This Section](#awesome-msts-papers) will be continuously updated to track the frontier of MCTS. 
 
 <details open>
 <summary>(Click to Collapse)</summary>
@@ -101,7 +100,7 @@ This Section will be continuously updated to track the frontier of MCTS.
 
 - [2015 Nature AlphaGo Mastering the game of Go with deep neural networks and tree search](https://www.nature.com/articles/nature16961)
 - [2017  Nature AlphaGo Zero Mastering the game of Go without human knowledge](https://www.nature.com/articles/nature24270)
-- [2019 ELF OpenGo: An Analysis and Open Reimplementation of AlphaZero](https://arxiv.org/abs/1902.04522)
+- [2019 ELF OpenGo: An Analysis and Open Reimplementation of AlphaZero](https://arxiv.org/abs/1902.04522) 
   - [Code](https://github.com/pytorch/ELF)
 #### MuZero series
 - [2022 Online and Offline Reinforcement Learning by Planning with a Learned Model](https://arxiv.org/abs/2104.06294)
@@ -115,7 +114,8 @@ This Section will be continuously updated to track the frontier of MCTS.
 - [2022 PNAS Acquisition of Chess Knowledge in AlphaZero.](https://arxiv.org/abs/2111.09259)
 
 #### MCTS Application
-- [2022 Nature Discovering faster matrix multiplication algorithms with reinforcement learning](https://www.nature.com/articles/s41586-022-05172-4) Code
+- [2022 Nature Discovering faster matrix multiplication algorithms with reinforcement learning](https://www.nature.com/articles/s41586-022-05172-4) 
+  - [Code](https://github.com/deepmind/alphatensor)
 - [2022 MuZero with Self-competition for Rate Control in VP9 Video Compression](https://arxiv.org/abs/2202.06626)
 - [2021 DouZero: Mastering DouDizhu with Self-Play Deep Reinforcement Learning](https://arxiv.org/abs/2106.06135)
 
@@ -244,7 +244,7 @@ This Section will be continuously updated to track the frontier of MCTS.
 ## Citation
 ```latex
 @misc{lightzero,
-    title={{LightZero: OpenDILab} A lightweight MCTS algorithm series library},
+    title={{LightZero: OpenDILab} A lightweight MCTS algorithm library},
     author={LightZero Contributors},
     publisher = {GitHub},
     howpublished = {\url{https://github.com/opendilab/LightZero}},
@@ -256,7 +256,7 @@ This Section will be continuously updated to track the frontier of MCTS.
 
 This repo is partially based on the following repo, many thanks to their pioneering work:
 
-- https://github.com/opendilab/DI-engie
+- https://github.com/opendilab/DI-engine
 - https://github.com/YeWR/EfficientZero
 - https://github.com/werner-duvaud/muzero-general
 

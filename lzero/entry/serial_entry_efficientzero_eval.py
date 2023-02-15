@@ -1,4 +1,3 @@
-import logging
 import os
 from functools import partial
 from typing import Union, Optional, List, Any, Tuple
@@ -18,7 +17,6 @@ from lzero.rl_utils import EfficientZeroGameBuffer as GameBuffer, visit_count_te
 from lzero.worker import EfficientZeroEvaluator as BaseSerialEvaluator
 
 
-# @profile
 def serial_pipeline_efficientzero_eval(
         input_cfg: Union[str, Tuple[dict, dict]],
         seed: int = 0,
@@ -62,7 +60,6 @@ def serial_pipeline_efficientzero_eval(
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
-    # policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval', 'command'])
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
@@ -75,10 +72,11 @@ def serial_pipeline_efficientzero_eval(
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
+    # ==============================================================
     # EfficientZero related code
-    # specific game buffer for EfficientZero
+    # ==============================================================
     game_config = cfg.policy
-
+    # specific game buffer for EfficientZero
     replay_buffer = GameBuffer(game_config)
     collector = create_serial_collector(
         cfg.policy.collect.collector,
@@ -98,9 +96,6 @@ def serial_pipeline_efficientzero_eval(
         game_config=game_config
     )
 
-    # commander = BaseSerialCommander(
-    #     cfg.policy.other.commander, learner, collector, evaluator, replay_buffer, policy.command_mode
-    # )
     # ==========
     # Main loop
     # ==========
@@ -110,7 +105,7 @@ def serial_pipeline_efficientzero_eval(
     while True:
         collect_kwargs = {}
         # set temperature for visit count distributions according to the train_iter,
-        # please refer to Appendix A.1 in EfficientZero for details
+        # please refer to Appendix A.1 in EfficientZero paper for details.
         collect_kwargs['temperature'] = np.array(
             [
                 visit_count_temperature(
@@ -121,8 +116,9 @@ def serial_pipeline_efficientzero_eval(
                 ) for _ in range(game_config.collector_env_num)
             ]
         )
-
-        # TODO(pu): eval trained model
+        # ==============================================================
+        # eval trained model
+        # ==============================================================
         returns = []
         test_episodes = 10
         for i in range(test_episodes):
@@ -132,11 +128,5 @@ def serial_pipeline_efficientzero_eval(
             returns.append(reward)
         print(returns)
         returns = np.array(returns)
-        # print(f'win rate: {len(np.where(returns == 1.)[0])/ test_episodes}, draw rate: {len(np.where(returns == 0.)[0])/test_episodes}, lose rate: {len(np.where(returns == -1.)[0])/ test_episodes}')
+        print(f'win rate: {len(np.where(returns == 1.)[0])/ test_episodes}, draw rate: {len(np.where(returns == 0.)[0])/test_episodes}, lose rate: {len(np.where(returns == -1.)[0])/ test_episodes}')
         break
-
-        # TODO(pu): test muzero_evaluator
-        # for i in range(5):
-        #     stop, reward = evaluator.eval(
-        #             learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-        #         )

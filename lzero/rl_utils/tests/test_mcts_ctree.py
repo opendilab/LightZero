@@ -55,7 +55,7 @@ class MuZeroModelFake(torch.nn.Module):
 
 game_config = EasyDict(
     lstm_horizon_len=5,
-    support_size=300,
+    support_scale=300,
     action_space_size=9,
     num_simulations=8,
     batch_size=16,

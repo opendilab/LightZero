@@ -1,16 +1,20 @@
+"""
+lunarlander_cont env:
+    - obs_shape: 8
+    - action_shape: 2
+"""
 from easydict import EasyDict
 
 lunarlander_cont_sac_config = dict(
     exp_name='lunarlander_cont_sac_seed0',
     env=dict(
-        env_id='LunarLanderContinuous-v2',
+        env_name='LunarLanderContinuous-v2',
         collector_env_num=8,
         evaluator_env_num=8,
         # (bool) Scale output action into legal range.
         act_scale=True,
         n_evaluator_episode=8,
-        # stop_value=200,
-        stop_value=99999,
+        stop_value=int(1e6),
     ),
     policy=dict(
         cuda=True,
@@ -63,11 +67,6 @@ lunarlander_cont_sac_create_config = dict(
 lunarlander_cont_sac_create_config = EasyDict(lunarlander_cont_sac_create_config)
 create_config = lunarlander_cont_sac_create_config
 
-# if __name__ == '__main__':
-#     # or you can enter `ding -m serial -c lunarlander_cont_sac_config.py -s 0`
-#     from ding.entry import serial_pipeline
-#     serial_pipeline([main_config, create_config], seed=0, max_env_step=int(3e6))
-
 
 def train(args):
     main_config.exp_name = 'data_lunarlander/sac_seed' + f'{args.seed}' + '_3M'
@@ -78,11 +77,9 @@ if __name__ == "__main__":
     import copy
     import argparse
     from ding.entry import serial_pipeline
-    # for seed in [0,1,2]:
-    for seed in [0]:
+
+    for seed in [0, 1, 2]:
         parser = argparse.ArgumentParser()
         parser.add_argument('--seed', '-s', type=int, default=seed)
         args = parser.parse_args()
         train(args)
-        # obs_shape: 8
-        # action_shape: 2

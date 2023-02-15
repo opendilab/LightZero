@@ -17,9 +17,9 @@ import copy
 class LunarLanderDiscEnv(BaseEnv):
     """
         Overview:
-        The modified Mujoco environment with manually discretized action space. For each dimension, equally dividing the
-        original continuous action into ``each_dim_disc_size`` bins and using their Cartesian product to obtain
-        handcrafted discrete actions.
+            The modified Mujoco environment with manually discretized action space. For each dimension, equally dividing the
+            original continuous action into ``each_dim_disc_size`` bins and using their Cartesian product to obtain
+            handcrafted discrete actions.
     """
 
     @classmethod
@@ -35,25 +35,29 @@ class LunarLanderDiscEnv(BaseEnv):
         use_act_scale=False,
         delay_reward_step=0,
         each_dim_disc_size=4,
+        battle_mode='one_player_mode',
+        prob_random_agent=0.,
+        collect_max_episode_steps=int(1.08e5),
+        eval_max_episode_steps=int(1.08e5),
     )
 
     def __init__(self, cfg: dict) -> None:
         self._cfg = cfg
         self._init_flag = False
-        # env_id: LunarLander-v2, LunarLanderContinuous-v2
-        self._env_id = cfg.env_id
+        # env_name: LunarLander-v2, LunarLanderContinuous-v2
+        self._env_name = cfg.env_name
         self._replay_path = cfg.replay_path
         self._replay_path_gif = cfg.replay_path_gif
         self._save_replay_gif = cfg.save_replay_gif
         self._save_replay_count = 0
-        if 'Continuous' in self._env_id:
+        if 'Continuous' in self._env_name:
             self._act_scale = cfg.use_act_scale  # act_scale only works in continuous env
         else:
             self._act_scale = False
 
     def reset(self) -> np.ndarray:
         if not self._init_flag:
-            self._env = gym.make(self._cfg.env_id)
+            self._env = gym.make(self._cfg.env_name)
             if self._replay_path is not None:
                 self._env = gym.wrappers.RecordVideo(
                     self._env,
@@ -144,7 +148,7 @@ class LunarLanderDiscEnv(BaseEnv):
                 if not os.path.exists(self._replay_path):
                     os.makedirs(self._replay_path)
                 path = os.path.join(
-                    self._replay_path, '{}_episode_{}.gif'.format(self._env_id, self._save_replay_count)
+                    self._replay_path, '{}_episode_{}.gif'.format(self._env_name, self._save_replay_count)
                 )
                 self.display_frames_as_gif(self._frames, path)
                 self._save_replay_count += 1

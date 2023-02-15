@@ -1,18 +1,8 @@
-# import glfw
-# assert glfw.init()
-# import os
-# os.environ['MUJOCO_GL']="egl"
-
-import os
-
-os.environ['DISABLE_MUJOCO_RENDERING'] = '1'
-
 import sys
-
 # sys.path.append('/Users/puyuan/code/LightZero')
 # sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
-# sys.path.append('/mnt/lustre/puyuan/LightZero')
+# sys.path.append('/mnt/nfs/puyuan/LightZero')
+sys.path.append('/mnt/lustre/puyuan/LightZero')
 
 import torch
 from easydict import EasyDict
@@ -22,42 +12,40 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-observation_dim = 3
-action_dim = 1
-categorical_distribution = True
-game_history_length = 50  # we should ignore done in pendulum env which have fixed episode length 200
-norm_type = 'BN'  # 'LN' # TODO: res_blocks LN
 
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-batch_size = 256
-# K = 5
-# num_simulations = 25
-K = 20
-num_simulations = 50
-update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
+categorical_distribution = True
+num_simulations = 50  # action_space_size=20
+
+# TODO(pu):
+# The key hyper-para to tune, for different env, we have different episode_length
+# e.g. reuse_factor = 0.5
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+# update_per_collect = 500
+update_per_collect = 250
+
 
 # for debug
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
-# batch_size = 4
-# K = 3
-# num_simulations = 7
-# update_per_collect = 5
 
+"""
+LunarLanderContinuous-v2
+obs shape: 8
+action shape: 2
+"""
 
-pendulum_sampled_muzero_config = dict(
-    exp_name=f'data_sez_ctree/pendulum_sampled_muzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_adam3e-3_mgn10_tanh_fs03-ew5e-3',
+lunarlander_cont_disc_sampled_efficientzero_config = dict(
+    exp_name=f'data_sez_ctree/lunarlander_cont_sampled_efficientzero_seed0_sub883_ghl200_halfmodel_k20_fs1_ftv1_ns{num_simulations}_upc{update_per_collect}_cdt_cc0_adam3e-3_mgn05_fs03',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        env_id='pendulum',
-        stop_value=-200,
-        norm_obs=dict(use_norm=False, ),
-        act_scale=True,
+        env_id='LunarLanderContinuous-v2',
+        stop_value=300,
         battle_mode='one_player_mode',
         prob_random_agent=0.,
         collect_max_episode_steps=int(1.08e4),
@@ -66,17 +54,12 @@ pendulum_sampled_muzero_config = dict(
     ),
     policy=dict(
         model_path=None,
-        env_name='pendulum',
+        env_name='lunarlander_cont',
         # Whether to use cuda for network.
         cuda=True,
         model=dict(
-            sigma_type='fixed',  # option list: ['fixed', 'conditioned']
-            # sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
+            sigma_type='fixed',  # conditioned
             fixed_sigma_value=0.3,
-            bound_type=None,  # if bound_type='tanh', the policy mu is bouded in [-1,1]
-            # norm_type='LN',
-            norm_type=norm_type,
-
             # activation=torch.nn.ReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
             categorical_distribution=categorical_distribution,
@@ -84,42 +67,45 @@ pendulum_sampled_muzero_config = dict(
             representation_model_type='conv_res_blocks',
             # [S, W, H, C] -> [S x C, W, H]
             # [4,8,1,1] -> [4*1, 8, 1]
-            # observation_shape=(4,  observation_dim, 1),  # if frame_stack_nums=4
-            observation_shape=(1, observation_dim, 1),  # if frame_stack_nums=1
+            # observation_shape=(4, 8, 1),  # if frame_stack_nums=4
+            observation_shape=(1, 8, 1),  # if frame_stack_nums=1
 
-            action_space_size=action_dim,  # 4**2
-            num_of_sampled_actions=K,
+            action_space_size=2,  # 4**2
+            num_of_sampled_actions=20,
             # for debug
             # num_of_sampled_actions=5,
             continuous_action_space=True,
 
             downsample=False,
-            num_blocks=1,
-            # small size model
-            num_channels=16,
-            reduced_channels_reward=16,
-            reduced_channels_value=16,
-            reduced_channels_policy=16,
-            # small size model
-            fc_reward_layers=[8],
-            fc_value_layers=[8],
-            fc_policy_layers=[8],
-            reward_support_size=21,
-            value_support_size=21,
-            bn_mt=0.1,
-            # small size model
-            proj_hid=128,
-            proj_out=128,
-            pred_hid=64,
-            pred_out=128,
+            num_res_blocks=1,
+            # num_channels=64,
+            # lstm_hidden_size=512,
+            # half size model
+            num_channels=32,
+            lstm_hidden_size=256,
+            reward_head_channels=16,
+            value_head_channels=16,
+            policy_head_channels=16,
+            fc_reward_layers=[32],
+            fc_value_layers=[32],
+            fc_policy_layers=[32],
+            reward_support_size=601,
+            value_support_size=601,
+            batch_norm_momentum=0.1,
+            # proj_hid=1024,
+            # proj_out=1024,
+            # pred_hid=512,
+            # pred_out=1024,
+            # half size model
+            proj_hid=512,
+            proj_out=512,
+            pred_hid=256,
+            pred_out=512,
             last_linear_layer_init_zero=True,
             state_norm=False,
         ),
         # learn_mode config
         learn=dict(
-            normalize_prob_of_sampled_actions=True,
-            policy_loss_type='KL',
-            # policy_loss_type='cross_entropy',
             # for debug
             # update_per_collect=2,
             # batch_size=4,
@@ -129,19 +115,15 @@ pendulum_sampled_muzero_config = dict(
 
             update_per_collect=update_per_collect,
             target_update_freq=100,
-            batch_size=batch_size,
+            batch_size=256,
 
             # optim_type='SGD',
             # learning_rate=0.2,  # lr_manually
 
-            # sampled paper
-            cos_lr_scheduler=True,
-            learning_rate=1e-4,
-
-            # cos_lr_scheduler=False,
+            cos_lr_scheduler=False,
             weight_decay=2e-5,
             optim_type='Adam',
-            # learning_rate=0.003,  # adam lr
+            learning_rate=0.003,  # adam lr
         ),
         # collect_mode config
         collect=dict(
@@ -159,25 +141,26 @@ pendulum_sampled_muzero_config = dict(
         # command_mode config
         other=dict(
             # the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game_buffer_sampled_muzero')
+            replay_buffer=dict(type='game_buffer_sampled_efficientzero')
         ),
         ######################################
         # game_config begin
         ######################################
-        env_type='no_board_games',
+        env_type='not_board_games',
         device=device,
         # mcts_ctree=False,
         mcts_ctree=True,
         battle_mode='one_player_mode',
-        game_history_length=game_history_length,
-        action_space_size=action_dim,  # 4**2
+        game_history_length=200,
+        # game_history_length=50,
+        action_space_size=2,  # 4**2
         continuous_action_space=True,
-        num_of_sampled_actions=K,
+        num_of_sampled_actions=20,
         # clip_reward=True,
         # TODO(pu)
         clip_reward=False,
-        # normalize_reward=False,
-        normalize_reward=True,
+        normalize_reward=False,
+        # normalize_reward=True,
         normalize_reward_scale=100,
 
         image_based=False,
@@ -185,12 +168,12 @@ pendulum_sampled_muzero_config = dict(
         game_wrapper=True,
         amp_type='none',
         # [S, W, H, C] -> [S x C, W, H]
-        # [4, 4, 1, 1] -> [4*1, 4, 1]
+        # [4,8,1,1] -> [4*1, 8, 1]
         image_channel=1,
-        # obs_shape=(4, observation_dim, 1),  # if frame_stack_nums=4
+        # obs_shape=(4, 8, 1),  # if frame_stack_nums=4
         # frame_stack_num=4,
 
-        obs_shape=(1, observation_dim, 1),  # if frame_stack_num=1
+        obs_shape=(1, 8, 1),  # if frame_stack_num=1
         frame_stack_num=1,
         # frame skip & stack observation
         frame_skip=4,
@@ -211,17 +194,22 @@ pendulum_sampled_muzero_config = dict(
         # num_simulations=9,
         # batch_size=4,
         # total_transitions=int(1e5),
+        # lstm_hidden_size=512,
         # # # to make sure the value target is the final outcome
         # td_steps=5,
         # num_unroll_steps=3,
+        # lstm_horizon_len=3,
 
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         num_simulations=num_simulations,
-        batch_size=batch_size,
+        # TODO
+        batch_size=256,
         total_transitions=int(1e5),
+        lstm_hidden_size=512,
         td_steps=5,
         num_unroll_steps=5,
+        lstm_horizon_len=5,
 
         # TODO(pu): why 0.99?
         reanalyze_ratio=0.99,
@@ -265,9 +253,9 @@ pendulum_sampled_muzero_config = dict(
         pb_c_init=1.25,
         # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         categorical_distribution=categorical_distribution,
-        support_size=10,
-        max_grad_norm=10,
-        # max_grad_norm=0.5,
+        support_scale=300,
+        # max_grad_norm=10,
+        max_grad_norm=0.5,
         test_interval=10000,
         log_interval=1000,
         vis_interval=1000,
@@ -286,45 +274,48 @@ pendulum_sampled_muzero_config = dict(
 
         # TODO(pu): EfficientZero -> MuZero
         # coefficient
-        reward_loss_coeff=1,  # value_prefix loss
+        reward_loss_coeff=1,
         value_loss_coeff=0.25,
         policy_loss_coeff=1,
-        policy_entropy_loss_coeff=5e-3,
         # consistency_coeff=2,
         consistency_coeff=0,
 
         # siamese
-        # small size model
-        proj_hid=128,
-        proj_out=128,
-        pred_hid=64,
-        pred_out=128,
-        bn_mt=0.1,
+        # proj_hid=1024,
+        # proj_out=1024,
+        # pred_hid=512,
+        # pred_out=1024,
+        # half size model
+        proj_hid=512,
+        proj_out=512,
+        pred_hid=256,
+        pred_out=512,
+        batch_norm_momentum=0.1,
         blocks=1,  # Number of blocks in the ResNet
-        reduced_channels_reward=16,  # x36 Number of channels in reward head
-        reduced_channels_value=16,  # x36 Number of channels in value head
-        reduced_channels_policy=16,  # x36 Number of channels in policy head
-        resnet_fc_reward_layers=[8],  # Define the hidden layers in the reward head of the dynamic network
-        resnet_fc_value_layers=[8],  # Define the hidden layers in the value head of the prediction network
-        resnet_fc_policy_layers=[8],  # Define the hidden layers in the policy head of the prediction network
+        reward_head_channels=16,  # x36 Number of channels in reward head
+        value_head_channels=16,  # x36 Number of channels in value head
+        policy_head_channels=16,  # x36 Number of channels in policy head
+        resnet_fc_reward_layers=[32],  # Define the hidden layers in the reward head of the dynamic network
+        resnet_fc_value_layers=[32],  # Define the hidden layers in the value head of the prediction network
+        resnet_fc_policy_layers=[32],  # Define the hidden layers in the policy head of the prediction network
         ######################################
         # game_config end
         ######################################
     ),
 )
-pendulum_sampled_muzero_config = EasyDict(pendulum_sampled_muzero_config)
-main_config = pendulum_sampled_muzero_config
+lunarlander_cont_disc_sampled_efficientzero_config = EasyDict(lunarlander_cont_disc_sampled_efficientzero_config)
+main_config = lunarlander_cont_disc_sampled_efficientzero_config
 
-pendulum_sampled_muzero_create_config = dict(
+lunarlander_cont_disc_sampled_efficientzero_create_config = dict(
     env=dict(
-        type='pendulum',
-        import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
+        type='lunarlander',
+        import_names=['zoo.box2d.lunarlander.envs.lunarlander_env'],
     ),
-    env_manager=dict(type='base'),
-    # env_manager=dict(type='subprocess'),
+    # env_manager=dict(type='base'),
+    env_manager=dict(type='subprocess'),
     policy=dict(
-        type='sampled_muzero',
-        import_names=['lzero.policy.sampled_muzero'],
+        type='sampled_efficientzero',
+        import_names=['lzero.policy.sampled_efficientzero'],
     ),
     collector=dict(
         type='episode_sampled_efficientzero',
@@ -332,10 +323,9 @@ pendulum_sampled_muzero_create_config = dict(
         import_names=['lzero.worker.collector.sampled_efficientzero_collector'],
     )
 )
-pendulum_sampled_muzero_create_config = EasyDict(pendulum_sampled_muzero_create_config)
-create_config = pendulum_sampled_muzero_create_config
+lunarlander_cont_disc_sampled_efficientzero_create_config = EasyDict(lunarlander_cont_disc_sampled_efficientzero_create_config)
+create_config = lunarlander_cont_disc_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import serial_pipeline_sampled_muzero
-
-    serial_pipeline_sampled_muzero([main_config, create_config], seed=0, max_env_step=int(5e5))
+    from lzero.entry import serial_pipeline_sampled_efficientzero
+    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e6))

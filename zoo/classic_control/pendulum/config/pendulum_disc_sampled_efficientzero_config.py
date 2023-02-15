@@ -86,20 +86,20 @@ pendulum_sampled_efficientzero_config = dict(
             continuous_action_space=continuous_action_space,
 
             downsample=False,
-            num_blocks=1,
+            num_res_blocks=1,
             # small size model
             num_channels=16,
             lstm_hidden_size=256,
-            reduced_channels_reward=16,
-            reduced_channels_value=16,
-            reduced_channels_policy=16,
+            reward_head_channels=16,
+            value_head_channels=16,
+            policy_head_channels=16,
             # small size model
             fc_reward_layers=[8],
             fc_value_layers=[8],
             fc_policy_layers=[8],
             reward_support_size=51,
             value_support_size=51,
-            bn_mt=0.1,
+            batch_norm_momentum=0.1,
             # small size model
             proj_hid=128,
             proj_out=128,
@@ -153,7 +153,7 @@ pendulum_sampled_efficientzero_config = dict(
         ######################################
         # game_config begin
         ######################################
-        env_type='no_board_games',
+        env_type='not_board_games',
         device=device,
         # mcts_ctree=False,
         mcts_ctree=True,
@@ -280,11 +280,11 @@ pendulum_sampled_efficientzero_config = dict(
         proj_out=128,
         pred_hid=64,
         pred_out=128,
-        bn_mt=0.1,
+        batch_norm_momentum=0.1,
         blocks=1,  # Number of blocks in the ResNet
-        reduced_channels_reward=16,  # x36 Number of channels in reward head
-        reduced_channels_value=16,  # x36 Number of channels in value head
-        reduced_channels_policy=16,  # x36 Number of channels in policy head
+        reward_head_channels=16,  # x36 Number of channels in reward head
+        value_head_channels=16,  # x36 Number of channels in value head
+        policy_head_channels=16,  # x36 Number of channels in policy head
         resnet_fc_reward_layers=[8],  # Define the hidden layers in the reward head of the dynamic network
         resnet_fc_value_layers=[8],  # Define the hidden layers in the value head of the prediction network
         resnet_fc_policy_layers=[8],  # Define the hidden layers in the policy head of the prediction network

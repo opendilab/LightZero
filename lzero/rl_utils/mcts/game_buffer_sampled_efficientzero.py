@@ -1220,7 +1220,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                             """
                             cpp mcts
                             """
-                            if self.config.env_type == 'no_board_games':
+                            if self.config.env_type == 'not_board_games':
                                 # for one_player atari games
                                 target_policies.append(distributions)
                             else:
@@ -1240,7 +1240,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                             """
                             python mcts
                             """
-                            if self.config.env_type == 'no_board_games':
+                            if self.config.env_type == 'not_board_games':
                                 # for one_player atari games
                                 target_policies.append(distributions)
                             else:
