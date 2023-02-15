@@ -7,8 +7,8 @@ from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 @pytest.mark.envtest
 class TestGomokuEnv:
 
-    def test_two_player_mode(self):
-        cfg = EasyDict(board_size=15, battle_mode='two_player_mode', prob_random_agent=0)
+    def test_self_play_mode(self):
+        cfg = EasyDict(board_size=15, battle_mode='self_play_mode', prob_random_agent=0)
         env = GomokuEnv(cfg)
         obs = env.reset()
         print('init board state: ')
@@ -39,8 +39,8 @@ class TestGomokuEnv:
                     print('draw')
                 break
 
-    def test_one_player_mode(self):
-        cfg = EasyDict(board_size=15, battle_mode='one_player_mode', prob_random_agent=0)
+    def test_play_with_bot_mode(self):
+        cfg = EasyDict(board_size=15, battle_mode='play_with_bot_mode', prob_random_agent=0)
         env = GomokuEnv(cfg)
         env.reset()
         print('init board state: ')
@@ -64,4 +64,4 @@ class TestGomokuEnv:
 
 
 test = TestGomokuEnv()
-test.test_one_player_mode()
+test.test_play_with_bot_mode()

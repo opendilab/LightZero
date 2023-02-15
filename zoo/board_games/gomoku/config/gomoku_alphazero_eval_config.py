@@ -11,7 +11,7 @@ batch_size = 256
 agent_vs_human = False
 
 gomoku_alphazero_config = dict(
-    exp_name='data_ez_ptree/gomoku_2pm_alphazero',
+    exp_name='data_ez_ptree/gomoku_self-play_alphazero',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -20,13 +20,13 @@ gomoku_alphazero_config = dict(
         collect_max_episode_steps=int(1.08e4),
         eval_max_episode_steps=int(1.08e5),
         board_size=board_size,
-        battle_mode='two_player_mode',
+        battle_mode='self_play_mode',
         prob_random_agent=0.,
         agent_vs_human=agent_vs_human,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        model_path='/mnt/lustre/yangzhenjie/code/LightZero/zoo/board_games/gomoku/experiment/gomoku_alphazero_bs256_sub32325_up100_s50/data_ez_ptree/gomoku_2pm_alphazero/ckpt/ckpt_best.pth.tar',
+        model_path='/mnt/lustre/yangzhenjie/code/LightZero/zoo/board_games/gomoku/experiment/gomoku_alphazero_bs256_sub32325_up100_s50/data_ez_ptree/gomoku_self-play_alphazero/ckpt/ckpt_best.pth.tar',
         type='alphazero',
         env_name='gomoku',
         cuda=True,

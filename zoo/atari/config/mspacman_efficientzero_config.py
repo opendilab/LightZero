@@ -96,7 +96,7 @@ mspacman_efficientzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
-        battle_mode='one_player_mode',
+        battle_mode='play_with_bot_mode',
         game_history_length=400,
 
         ## observation

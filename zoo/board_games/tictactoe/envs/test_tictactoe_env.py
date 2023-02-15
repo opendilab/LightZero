@@ -6,9 +6,9 @@ from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 @pytest.mark.envtest
 class TestTicTacToeEnv:
 
-    def test_two_player_mode(self):
+    def test_self_play_mode(self):
         cfg = EasyDict(
-            battle_mode='two_player_mode',
+            battle_mode='self_play_mode',
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
@@ -44,9 +44,9 @@ class TestTicTacToeEnv:
                     print('draw')
                 break
 
-    def test_one_player_mode(self):
+    def test_play_with_bot_mode(self):
         cfg = EasyDict(
-            battle_mode='one_player_mode',
+            battle_mode='play_with_bot_mode',
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
@@ -75,4 +75,4 @@ class TestTicTacToeEnv:
 
 
 test = TestTicTacToeEnv()
-test.test_two_player_mode()
+test.test_self_play_mode()

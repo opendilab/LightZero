@@ -709,7 +709,7 @@ class SampledMuZeroGameBuffer(Buffer):
                     cpp mcts
                     """
                     if to_play_history[0][0] is None:
-                        # we use to_play=0 means one_player_mode game
+                        # we use to_play=0 means play_with_bot_mode game
                         to_play = [0 for i in range(batch_size)]
                         # if action_mask_history[0][0] is None:
                         # continuous action space env: all -1
@@ -918,7 +918,7 @@ class SampledMuZeroGameBuffer(Buffer):
                 # sampled related code
                 ######################
                 if to_play_history[0][0] is None:
-                    # we use to_play=0 means one_player_mode game
+                    # we use to_play=0 means play_with_bot_mode game
                     to_play = [0 for i in range(batch_size)]
                     # if action_mask_history[0][0] is None:
                     # continuous action space env: all -1

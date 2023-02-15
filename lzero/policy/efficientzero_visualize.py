@@ -625,7 +625,7 @@ class EfficientZeroVisualizePolicy(Policy):
             # cpp mcts
             if self._cfg.mcts_ctree:
                 if to_play[0] is None:
-                    # we use to_play=0 means one_player_mode game
+                    # we use to_play=0 means play_with_bot_mode game
                     to_play = [0 for i in range(active_collect_env_num)]
                 action_num = int(action_mask[0].sum())
                 legal_actions = [
@@ -782,7 +782,7 @@ class EfficientZeroVisualizePolicy(Policy):
             if self._cfg.mcts_ctree:
                 # cpp mcts
                 if to_play[0] is None:
-                    # we use to_play=0 means one_player_mode game
+                    # we use to_play=0 means play_with_bot_mode game
                     to_play = [0 for i in range(active_eval_env_num)]
                 action_num = int(action_mask[0].sum())
                 legal_actions = [

@@ -24,7 +24,7 @@ class Node:
         self.visit_count = 0
         self.value_sum = 0
         self.best_action = -1
-        self.to_play = 0  # default 0 means one_player_mode
+        self.to_play = 0  # default 0 means play_with_bot_mode
         self.reward = 0
         self.value_prefix = 0.0
         self.children = {}

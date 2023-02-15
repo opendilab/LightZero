@@ -7,7 +7,7 @@ import pytest
 cfg = dict(
     prob_random_agent=0,
     prob_expert_agent=0,
-    battle_mode='two_player_mode',
+    battle_mode='self_play_mode',
     agent_vs_human=False,
     expert_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
 )
@@ -15,7 +15,7 @@ cfg = dict(
 @pytest.mark.envtest
 class TestTicTacToeAlphaBetaPruningBot:
 
-    def test_tictactoe_two_player_mode_draw(self):
+    def test_tictactoe_self_play_mode_draw(self):
         # player_0: AlphaBetaPruningBot
         # player_1: AlphaBetaPruningBot
         # will draw
@@ -44,7 +44,7 @@ class TestTicTacToeAlphaBetaPruningBot:
 
         assert env.have_winner()[0] == False, env.have_winner()[1] == -1
 
-    def test_tictactoe_two_player_mode_half_case_1(self):
+    def test_tictactoe_self_play_mode_half_case_1(self):
         env = TicTacToeEnv(EasyDict(cfg))
         player_0 = AlphaBetaPruningBot(TicTacToeEnv, cfg, 'player 1')  # player_index = 0, player = 1
         player_1 = AlphaBetaPruningBot(TicTacToeEnv, cfg, 'player 2')  # player_index = 1, player = 2
@@ -75,7 +75,7 @@ class TestTicTacToeAlphaBetaPruningBot:
         assert row == 0, col == 2
         assert env.have_winner()[0] == True, env.have_winner()[1] == 1
 
-    def test_tictactoe_two_player_mode_half_case_2(self):
+    def test_tictactoe_self_play_mode_half_case_2(self):
         env = TicTacToeEnv(EasyDict(cfg))
         player_0 = AlphaBetaPruningBot(TicTacToeEnv, cfg, 'player 1')  # player_index = 0, player = 1
         player_1 = AlphaBetaPruningBot(TicTacToeEnv, cfg, 'player 2')  # player_index = 1, player = 2

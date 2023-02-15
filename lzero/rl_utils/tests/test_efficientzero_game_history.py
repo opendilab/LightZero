@@ -24,7 +24,7 @@ def test_game_history(env_name):
     elif env_name == 'tictactoe':
         from lzero.rl_utils.mcts.mcts_ctree import MuZeroMCTSCtree as MCTS
         from lzero.model.muzero.muzero_model import MuZeroNet as Model
-        from zoo.board_games.tictactoe.config.tictactoe_muzero_1pm_config import tictactoe_muzero_config as config
+        from zoo.board_games.tictactoe.config.tictactoe_muzero_vs-bot_config import tictactoe_muzero_config as config
 
     # set some additional config for test
     config.device = 'cpu'

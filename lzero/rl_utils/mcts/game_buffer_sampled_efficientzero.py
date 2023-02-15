@@ -763,7 +763,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     cpp mcts
                     """
                     if to_play_history[0][0] is None:
-                        # we use to_play=0 means one_player_mode game
+                        # we use to_play=0 means play_with_bot_mode game
                         to_play = [0 for i in range(batch_size)]
                         # if action_mask_history[0][0] is None:
                         # continuous action space env: all -1
@@ -1000,7 +1000,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 cpp mcts
                 """
                 if to_play_history[0][0] is None:
-                    # we use to_play=0 means one_player_mode game
+                    # we use to_play=0 means play_with_bot_mode game
                     to_play = [0 for i in range(batch_size)]
                     # if action_mask_history[0][0] is None:
                     # continuous action space env: all -1
@@ -1026,7 +1026,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 python mcts
                 """
                 if to_play_history[0][0] is None:
-                    # we use to_play=None means one_player_mode game in mcts_ptree
+                    # we use to_play=None means play_with_bot_mode game in mcts_ptree
                     to_play = [None for i in range(batch_size)]
                     # continuous action space env: all -1
                     legal_actions = [[-1 for i in range(self.config.num_of_sampled_actions)] for _ in range(batch_size)]

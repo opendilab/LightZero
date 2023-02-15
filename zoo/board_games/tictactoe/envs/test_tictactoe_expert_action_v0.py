@@ -10,7 +10,7 @@ class TestExpertAction:
 
     def test_expert_action(self):
         cfg = EasyDict(
-            battle_mode='one_player_mode',
+            battle_mode='play_with_bot_mode',
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0.,

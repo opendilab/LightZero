@@ -10,7 +10,7 @@ class TestExpertActionV0:
     def test_naive(self):
         cfg = EasyDict(
             board_size=6,
-            battle_mode='two_player_mode',
+            battle_mode='self_play_mode',
             prob_random_agent=0,
             channel_last=True,
             agent_vs_human=False,

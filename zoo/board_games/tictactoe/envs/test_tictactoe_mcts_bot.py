@@ -11,13 +11,13 @@ import pytest
 @pytest.mark.envtest
 class TestTicTacToeBot:
 
-    def test_tictactoe_two_player_mode_player0_win(self):
+    def test_tictactoe_self_play_mode_player0_win(self):
         # player_0  num_simulation=1000, will win
         # player_1  num_simulation=1
         cfg = dict(
             prob_random_agent=0,
             prob_expert_agent=0,
-            battle_mode='two_player_mode',
+            battle_mode='self_play_mode',
             agent_vs_human=False,
         )
         env = TicTacToeEnv(EasyDict(cfg))
@@ -47,13 +47,13 @@ class TestTicTacToeBot:
             print('#' * 15)
         assert env.have_winner()[1] == 1
 
-    def test_tictactoe_two_player_mode_player1_win(self):
+    def test_tictactoe_self_play_mode_player1_win(self):
         # player_0  num_simulation=1
         # player_1  num_simulation=1000, will win
         cfg = dict(
             prob_random_agent=0,
             prob_expert_agent=0,
-            battle_mode='two_player_mode',
+            battle_mode='self_play_mode',
             agent_vs_human=False,
         )
         env = TicTacToeEnv(EasyDict(cfg))
@@ -83,13 +83,13 @@ class TestTicTacToeBot:
             print('#' * 15)
         assert env.have_winner()[1] == 2
 
-    def test_tictactoe_two_player_mode_draw(self):
+    def test_tictactoe_self_play_mode_draw(self):
         # player_0  num_simulation=1000
         # player_1  num_simulation=1000, will draw
         cfg = dict(
             prob_random_agent=0,
             prob_expert_agent=0,
-            battle_mode='two_player_mode',
+            battle_mode='self_play_mode',
             agent_vs_human=False,
         )
         env = TicTacToeEnv(EasyDict(cfg))
@@ -119,11 +119,11 @@ class TestTicTacToeBot:
             print('#' * 15)
         assert env.have_winner()[1] == -1
 
-    def test_tictactoe_two_player_mode_half_case_1(self):
+    def test_tictactoe_self_play_mode_half_case_1(self):
         cfg = dict(
             prob_random_agent=0,
             prob_expert_agent=0,
-            battle_mode='two_player_mode',
+            battle_mode='self_play_mode',
             agent_vs_human=False,
         )
         env = TicTacToeEnv(EasyDict(cfg))
@@ -157,11 +157,11 @@ class TestTicTacToeBot:
         assert env.have_winner()[1] == 1
         assert row == 0, col == 2
 
-    def test_tictactoe_two_player_mode_half_case_2(self):
+    def test_tictactoe_self_play_mode_half_case_2(self):
         cfg = dict(
             prob_random_agent=0,
             prob_expert_agent=0,
-            battle_mode='two_player_mode',
+            battle_mode='self_play_mode',
             agent_vs_human=False,
         )
         env = TicTacToeEnv(EasyDict(cfg))

@@ -21,7 +21,7 @@ class TicTacToeEnv(BaseGameEnv):
     config = dict(
         prob_random_agent=0,
         prob_expert_agent=0,
-        battle_mode='one_player_mode',
+        battle_mode='play_with_bot_mode',
         agent_vs_human=False,
         expert_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
     )
@@ -92,7 +92,10 @@ class TicTacToeEnv(BaseGameEnv):
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
-        if self.battle_mode == 'two_player_mode' or self.battle_mode == 'eval_mode':
+        if self.battle_mode == 'self_play_mode' or self.battle_mode == 'eval_mode':
+            # In contrast with ``play_with_bot_mode``, in ``self_play_mode`` and ``eval_mode``,
+            # we make ``to_play=self.current_player`` in obs, which is used to differentiate
+            # the alternation of 2 players in the game when do Q calculation.
             obs = {
                 'observation': self.current_state(),
                 'action_mask': action_mask,
@@ -122,7 +125,7 @@ class TicTacToeEnv(BaseGameEnv):
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
 
     def step(self, action):
-        if self.battle_mode == 'two_player_mode':
+        if self.battle_mode == 'self_play_mode':
             if self.prob_random_agent > 0:
                 if np.random.rand() < self.prob_random_agent:
                     action = self.random_action()
@@ -133,14 +136,14 @@ class TicTacToeEnv(BaseGameEnv):
             timestep = self._player_step(action)
             # print(self.board)
             return timestep
-        elif self.battle_mode == 'one_player_mode':
+        elif self.battle_mode == 'play_with_bot_mode':
             # player 1 battle with expert player 2
 
             # player 1's turn
             timestep_player1 = self._player_step(action)
             # self.env.render()
             if timestep_player1.done:
-                # in one_player_mode, we set to_play as None, because we don't consider the alternation between players
+                # in play_with_bot_mode, we set to_play as None/-1, because we don't consider the alternation between players
                 timestep_player1.obs['to_play'] = -1
                 return timestep_player1
 
@@ -153,7 +156,7 @@ class TicTacToeEnv(BaseGameEnv):
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
             timestep = timestep_player2
-            # in one_player_mode, we set to_play as None, because we don't consider the alternation between players
+            # in play_with_bot_mode, we set to_play as None/-1, because we don't consider the alternation between players
             timestep.obs['to_play'] = -1
             return timestep
         elif self.battle_mode == 'eval_mode':
@@ -184,6 +187,7 @@ class TicTacToeEnv(BaseGameEnv):
             row, col = self.action_to_coord(action)
             self.board[row, col] = self.current_player
         else:
+            # import pdb;pdb.set_trace()
             logging.warning(
                 f"You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
                 f"Now we randomly choice a action from self.legal_actions."
@@ -193,16 +197,7 @@ class TicTacToeEnv(BaseGameEnv):
             self.board[row, col] = self.current_player
 
         # Check whether the game is ended or not and give the winner
-        have_winner, winner = self.have_winner()
-        if have_winner:
-            done, winner = True, winner
-        elif len(self.legal_actions) == 0:
-            # the agent don't have legal_actions to move, so episode is done
-            # winner=-1 indicates draw
-            done, winner = True, -1
-        else:
-            # episode is not done
-            done, winner = False, -1
+        done, winner = self.have_winner()
 
         reward = np.array(float(winner == self.current_player)).astype(np.float32)
         info = {'next player to play': self.to_play}
@@ -225,6 +220,20 @@ class TicTacToeEnv(BaseGameEnv):
             'to_play': self.current_player
         }
         return BaseEnvTimestep(obs, reward, done, info)
+
+    def have_winner(self):
+        have_winner, winner = self._pre_have_winner()
+        if have_winner:
+            done, winner = True, winner
+        elif len(self.legal_actions) == 0:
+            # the agent don't have legal_actions to move, so episode is done
+            # winner=-1 indicates draw
+            done, winner = True, -1
+        else:
+            # episode is not done
+            done, winner = False, -1
+
+        return done, winner
 
     def current_state(self):
         """
@@ -257,7 +266,7 @@ class TicTacToeEnv(BaseGameEnv):
         """
         return a // self.board_size, a % self.board_size
 
-    def have_winner(self):
+    def _pre_have_winner(self):
         # Horizontal and vertical checks
         for i in range(self.board_size):
             if len(set(self.board[i, :])) == 1 and (self.board[i, 0] != 0):
@@ -426,7 +435,7 @@ class TicTacToeEnv(BaseGameEnv):
         """
         # Check whether the game is ended or not and give the winner
         # print('next_to_play={}'.format(self.current_player))
-        have_winner, winner = self.have_winner()
+        have_winner, winner = self._pre_have_winner()
         # print('winner={}'.format(winner))
         reward = {1: 1, 2: -1, -1: 0}
         if have_winner:
@@ -511,13 +520,12 @@ class TicTacToeEnv(BaseGameEnv):
     def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
         evaluator_env_num = cfg.pop('evaluator_env_num')
         cfg = copy.deepcopy(cfg)
-        # NOTE: when collect and train in two_player_mode,
-        # in eval phase, we use 'eval_mode' to evaluate the current agent with bot,
-        # in contrast with 'one_player_mode', in 'eval_mode', we include the to_play in obs,
-        # which is used in q calculation to differentiate between 2 players of the game.
-        if cfg.battle_mode == 'two_player_mode':
+        # When we collect and train agent in ``self_play_mode``, in eval phase,
+        # we use ``eval_mode`` to make agent paly with the built-in bot to
+        # evaluate the performance of the current agent.
+        if cfg.battle_mode == 'self_play_mode':
             cfg.battle_mode = 'eval_mode'
         return [cfg for _ in range(evaluator_env_num)]
 
     def __repr__(self) -> str:
-        return "DI-engine TicTacToe Env"
+        return "LightZero TicTacToe Env"
