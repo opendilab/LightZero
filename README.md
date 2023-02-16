@@ -1,7 +1,7 @@
 # LightZero
 
 The following is an overview of the historical evolution of the Monte Carlo Tree Search (MCTS) algorithm series:
-![pip3eline](assets/mcts_rl_evolution_overview.png)
+![pipeline](assets/mcts_rl_evolution_overview.png)
 
 
 
@@ -188,11 +188,11 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - Xiufeng Yang, Tanuj Kr Aasawat, Kazuki Yoshizoe
   - Key: massively parallel Monte-Carlo Tree Search, molecular design, Hash-driven parallel search, 
   - ExpEnv:  octanol-water partition coefficient (logP) penalized by the synthetic accessibility (SA) and large Ring Penalty score.
--[ Watch the Unobserved: A Simple Approach to Parallelizing Monte Carlo Tree Search](https://arxiv.org/pdf/1810.11755.pdf) 2020
+- [Watch the Unobserved: A Simple Approach to Parallelizing Monte Carlo Tree Search](https://arxiv.org/pdf/1810.11755.pdf) 2020
   - Anji Liu, Jianshu Chen, Mingze Yu, Yu Zhai, Xuewen Zhou, Ji Liu
   - Key: parallel Monte-Carlo Tree Search, partition the tree into sub-trees efficiently, compare the observation ratio of each processor
   - ExpEnv: speedup and performance comparison on JOY-CITY game, average episode return on atari game
-  - [Code](https://github.com/brilee/python3 -u_uct)
+  - [Code](https://github.com/liuanji/WU-UCT)
 - [Learning to Plan in High Dimensions via Neural Exploration-Exploitation Trees](https://openreview.net/pdf?id=rJgJDAVKvB) 2020
   - Binghong Chen,  Bo Dai, Qinjie Lin, Guo Ye, Han Liu, Le Song
   - Key: meta path planning algorithm, exploits a novel neural architecture which can learn promising search directions from problem structures.
@@ -272,7 +272,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 - We appreciate all the feedbacks and contributions to improve LightZero, both algorithms and system designs. 
 
-- [comment]: <> (- Contributes to our future plan [Roadmap]&#40;https://github.com/opendilab/LightZero/projects&#41;)
+[comment]: <> (- Contributes to our future plan [Roadmap]&#40;https://github.com/opendilab/LightZero/projects&#41;)
 
 [comment]: <> (And `CONTRIBUTING.md` offers some necessary information.)
 
