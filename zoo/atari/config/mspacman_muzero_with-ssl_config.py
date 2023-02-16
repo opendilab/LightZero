@@ -27,7 +27,7 @@ max_env_step = int(1e6)
 # ==============================================================
 
 mspacman_muzero_config = dict(
-    exp_name=f'data_mz_ctree/mspacman_muzero_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_mz_ctree/mspacman_muzero_with-ssl_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -119,7 +119,7 @@ mspacman_muzero_config = dict(
         value_loss_weight=0.25,
         policy_loss_weight=1,
         ## NOTE: the only difference between muzero and muzero_with-ssl is the self-supervised-learning loss in policy and model.
-        consistency_coeff=2,
+        ssl_loss_weight=2,
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
         auto_temperature=False,
         fixed_temperature_value=0.25,

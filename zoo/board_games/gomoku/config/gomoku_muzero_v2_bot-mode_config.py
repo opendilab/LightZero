@@ -267,8 +267,8 @@ gomoku_muzero_with-ssl_config = dict(
         # reward_loss_weight=0,  # value_prefix_loss
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        # consistency_coeff=2,
-        consistency_coeff=0,
+        # ssl_loss_weight=2,
+        ssl_loss_weight=0,
 
         # siamese
         # proj_hid=1024,

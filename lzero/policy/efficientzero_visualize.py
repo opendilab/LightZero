@@ -341,7 +341,7 @@ class EfficientZeroVisualizePolicy(Policy):
             end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
 
             # consistency loss
-            if self._cfg.consistency_coeff > 0:
+            if self._cfg.ssl_loss_weight > 0:
                 # obtain the oracle hidden states from representation function
                 network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
                 presentation_state = network_output.hidden_state
@@ -429,7 +429,7 @@ class EfficientZeroVisualizePolicy(Policy):
         # ----------------------------------------------------------------------------------
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-            self._cfg.consistency_coeff * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
             self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss
         )
         weighted_loss = (weights * loss).mean()

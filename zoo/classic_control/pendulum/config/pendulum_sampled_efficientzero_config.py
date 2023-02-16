@@ -275,8 +275,8 @@ pendulum_sampled_efficientzero_config = dict(
         value_loss_weight=0.25,
         policy_loss_weight=1,
         policy_entropy_loss_coeff=5e-3,
-        # consistency_coeff=2,
-        consistency_coeff=0,
+        # ssl_loss_weight=2,
+        ssl_loss_weight=0,
 
         # siamese
         # small size model
