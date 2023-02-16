@@ -174,11 +174,10 @@ class Node:
 
 class Roots:
 
-    def __init__(self, root_num: int, legal_actions_list: Any, pool_size: int):
+    def __init__(self, root_num: int, legal_actions_list: Any, pool_size: int = 0):
         self.num = root_num
         self.root_num = root_num
         self.legal_actions_list = legal_actions_list  # list of list
-        self.pool_size = pool_size
 
         self.roots = []
         for i in range(self.root_num):

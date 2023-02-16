@@ -271,9 +271,9 @@ pendulum_sampled_efficientzero_config = dict(
 
         # TODO(pu): EfficientZero -> MuZero
         # coefficient
-        reward_loss_coeff=1,  # value_prefix loss
-        value_loss_coeff=0.25,
-        policy_loss_coeff=1,
+        reward_loss_weight=1,  # value_prefix loss
+        value_loss_weight=0.25,
+        policy_loss_weight=1,
         policy_entropy_loss_coeff=5e-3,
         # consistency_coeff=2,
         consistency_coeff=0,

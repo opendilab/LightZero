@@ -160,13 +160,13 @@ def serial_pipeline_sampled_muzero(
 
             train_steps = learner.train_iter * cfg.policy.learn.update_per_collect
 
-            # if game_config.lr_manually:
+            # if game_config.learn.lr_manually:
             #     # learning rate decay manually like EfficientZero paper
             #     if train_steps  > 1e5 and train_steps  <= 2e5:
             #         policy._optimizer.lr = 0.02
             #     elif train_steps  > 2e5:
             #         policy._optimizer.lr = 0.002
-            if game_config.lr_manually:
+            if game_config.learn.lr_manually:
                 # learning rate decay manually like MuZero paper
                 if train_steps < 0.5 * game_config.max_training_steps:
                     policy._optimizer.lr = 0.2

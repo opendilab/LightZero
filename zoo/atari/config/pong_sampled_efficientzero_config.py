@@ -271,9 +271,9 @@ pong_sampled_efficientzero_config = dict(
         frame_stack_num=4,
         # TODO(pu): EfficientZero -> MuZero
         # coefficient
-        reward_loss_coeff=1,
-        value_loss_coeff=0.25,
-        policy_loss_coeff=1,
+        reward_loss_weight=1,
+        value_loss_weight=0.25,
+        policy_loss_weight=1,
         policy_entropy_loss_coeff=policy_entropy_loss_coeff,
         consistency_coeff=2,
 

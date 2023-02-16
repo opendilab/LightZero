@@ -25,14 +25,14 @@ from lzero.rl_utils.mcts.ctree_muzero import mz_tree as ctree
 from lzero.rl_utils import MuZeroMCTSCtree as MCTSCtree
 
 
-@POLICY_REGISTRY.register('muzero_v2')
+@POLICY_REGISTRY.register('muzero_with-ssl')
 class MuZeroV2Policy(Policy):
     """
     Overview:
-        The policy class for EfficientZero
+        The policy class for MuZero with Self Supervised Learning (SSL) loss.
     """
     config = dict(
-        type='muzero_v2',
+        type='muzero_with-ssl',
         # (bool) Whether use cuda in policy
         cuda=False,
         # (bool) Whether learning policy is the same as collecting data policy(on-policy)
@@ -46,8 +46,17 @@ class MuZeroV2Policy(Policy):
         # (int) The number of step for calculating target q_value
         nstep=1,
         model=dict(
-            observation_shape=(12, 96, 96),
+            image_channel=3,
+            frame_stack_num=4,
+            # the key difference setting between image-input and vector input.
+            downsample=True,
+            # the stacked obs shape -> the transformed obs shape:
+            # [S, W, H, C] -> [S x C, W, H]
+            # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
+            observation_shape=(12, 96, 96),  # if frame_stack_nums=4
+            # observation_shape=(3, 96, 96),  # if frame_stack_num=1
             action_space_size=6,
+            # the default config is large size model, same as the EfficientZero original paper.
             num_res_blocks=1,
             num_channels=64,
             reward_head_channels=16,
@@ -56,9 +65,9 @@ class MuZeroV2Policy(Policy):
             fc_reward_layers=[32],
             fc_value_layers=[32],
             fc_policy_layers=[32],
+            support_scale=300,
             reward_support_size=601,
             value_support_size=601,
-            downsample=True,
             batch_norm_momentum=0.1,
             proj_hid=1024,
             proj_out=1024,
@@ -66,6 +75,10 @@ class MuZeroV2Policy(Policy):
             pred_out=1024,
             last_linear_layer_init_zero=True,
             state_norm=False,
+            activation=torch.nn.ReLU(inplace=True),
+            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
+            categorical_distribution=True,
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
         # learn_mode config
         learn=dict(
@@ -77,13 +90,16 @@ class MuZeroV2Policy(Policy):
             update_per_collect=10,
             # (int) How many samples in a training batch
             batch_size=256,
-            # (float) The step size of gradient descent
-            learning_rate=0.001,
+            lr_manually=True,
+            # optim_type='Adam',
+            # learning_rate=0.001,  # lr for Adam optimizer
+            optim_type='SGD',
+            learning_rate=0.2,  # init lr for manually decay schedule
             # ==============================================================
             # The following configs are algorithm-specific
             # ==============================================================
-            # (int) Frequence of target network update.
-            target_update_freq=200,
+            # (int) Frequency of target network update.
+            target_update_freq=100,
             # (bool) Whether ignore done(usually for max step termination env)
             ignore_done=False,
             weight_decay=1e-4,
@@ -95,7 +111,7 @@ class MuZeroV2Policy(Policy):
         # collect_mode config
         collect=dict(
             # You can use either "n_sample" or "n_episode" in collector.collect.
-            # Get "n_sample" samples per collect.
+            # Get "n_episode" episodes per collect.
             n_episode=8,
             unroll_len=1,
         ),
@@ -109,8 +125,81 @@ class MuZeroV2Policy(Policy):
                 end=0.1,
                 decay=50000,
             ),
+            # NOTE: the replay_buffer_size is ineffective, we specify it in following game config
             replay_buffer=dict(replay_buffer_size=100000, type='game')
         ),
+        # ==============================================================
+        # begin of additional game_config
+        # ==============================================================
+        ## common
+        mcts_ctree=True,
+        device='cuda',
+        collector_env_num=8,
+        evaluator_env_num=3,
+        env_type='not_board_games',
+        battle_mode='play_with_bot_mode',
+        game_wrapper=True,
+        monitor_statistics=True,
+        game_history_length=200,
+
+        ## observation
+        # the key difference setting between image-input and vector input.
+        image_based=False,
+        cvt_string=False,
+        gray_scale=False,
+        use_augmentation=False,
+        # style of augmentation
+        augmentation=['shift', 'intensity'],  # options=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
+
+        ## reward
+        clip_reward=False,
+        normalize_reward=False,
+        normalize_reward_scale=100,
+
+        ## learn
+        num_simulations=50,
+        td_steps=5,
+        num_unroll_steps=5,
+        max_grad_norm=10,
+        # the weight of different loss
+        reward_loss_weight=1,
+        value_loss_weight=0.25,
+        policy_loss_weight=1,
+        consistency_weight=2,
+        # fixed_temperature_value is effective only when auto_temperature=False
+        auto_temperature=False,
+        fixed_temperature_value=0.25,
+        # replay_buffer max size
+        max_total_transitions=int(1e5),
+        # max_training_steps is only used for adjusting temperature manually.
+        max_training_steps=int(1e5),
+
+        ## reanalyze
+        reanalyze_ratio=0.3,
+        reanalyze_outdated=True,
+        # whether to use root value in reanalyzing part
+        use_root_value=False,
+        mini_infer_size=256,
+
+        ## priority
+        use_priority=True,
+        use_max_priority_for_new_data=True,
+        # how much prioritization is used: 0 means no prioritization while 1 means full prioritization
+        priority_prob_alpha=0.6,
+        # how much correction is used: 0 means no correction while 1 means full correction
+        priority_prob_beta=0.4,
+        prioritized_replay_eps=1e-6,
+
+        ## UCB
+        root_dirichlet_alpha=0.3,
+        root_exploration_fraction=0.25,
+        pb_c_base=19652,
+        pb_c_init=1.25,
+        discount=0.997,
+        value_delta_max=0.01,
+        # ==============================================================
+        # end of additional game_config
+        # ==============================================================
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
@@ -124,7 +213,7 @@ class MuZeroV2Policy(Policy):
             The user can define and use customized network model but must obey the same inferface definition indicated \
             by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
         """
-        return 'MuZeroNetV2', ['lzero.model.muzero_v2.muzero_model']
+        return 'MuZeroNetV2', ['lzero.model.muzero_model_with_ssl']
 
     def _init_learn(self) -> None:
         if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
@@ -158,10 +247,9 @@ class MuZeroV2Policy(Policy):
             self.transforms = Transforms(
                 self._cfg.augmentation, image_shape=(self._cfg.obs_shape[1], self._cfg.obs_shape[2])
             )
-        self.value_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
-        self.reward_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
+        self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
+        self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
 
-    # @profile
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
         self._learn_model.train()
         self._target_model.train()
@@ -172,7 +260,7 @@ class MuZeroV2Policy(Policy):
         obs_batch_ori, action_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
         target_reward, target_value, target_policy = targets_batch
 
-        # [:, 0: config.frame_stack_num * 3,:,:]
+        # [:, 0: config.model.frame_stack_num * 3,:,:]
         # obs_batch_ori is the original observations in a batch
         # obs_batch is the observation for hat s_t (predicted hidden states from dynamics function)
         # obs_target_batch is the observations for s_t (hidden states from representation function)
@@ -198,14 +286,14 @@ class MuZeroV2Policy(Policy):
         # (4, 4*3, 96, 96) = (4, 12, 96, 96)
         # take the first stacked obs at timestep t: o_t_stack
         # used in initial_inference
-        obs_batch = obs_batch_ori[:, 0:self._cfg.frame_stack_num * self._cfg.image_channel, :, :]
+        obs_batch = obs_batch_ori[:, 0:self._cfg.model.frame_stack_num * self._cfg.model.image_channel, :, :]
 
         # take the all obs other than timestep t1:
         # obs_target_batch is used for calculate consistency loss, which is only performed in the last 8 timesteps
         # for i in rnage(num_unroll_steeps):
-        #   beg_index = self._cfg.image_channel * step_i
-        #   end_index = self._cfg.image_channel * (step_i + self._cfg.frame_stack_num)
-        obs_target_batch = obs_batch_ori[:, self._cfg.image_channel:, :, :]
+        #   beg_index = self._cfg.model.image_channel * step_i
+        #   end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
+        obs_target_batch = obs_batch_ori[:, self._cfg.model.image_channel:, :, :]
 
         # do augmentations
         if self._cfg.use_augmentation:
@@ -220,11 +308,11 @@ class MuZeroV2Policy(Policy):
         weights = torch.from_numpy(weights_lst).to(self._cfg.device).float()
 
         # TODO
-        target_reward = target_reward.view(self._cfg.batch_size, -1)
-        target_value = target_value.view(self._cfg.batch_size, -1)
+        target_reward = target_reward.view(self._cfg.learn.batch_size, -1)
+        target_value = target_value.view(self._cfg.learn.batch_size, -1)
 
         batch_size = obs_batch.size(0)
-        assert batch_size == self._cfg.batch_size == target_reward.size(0)
+        assert batch_size == self._cfg.learn.batch_size == target_reward.size(0)
         metric_loss = torch.nn.L1Loss()
 
         # some logs preparation
@@ -245,9 +333,9 @@ class MuZeroV2Policy(Policy):
             other_loss[key + '_0'] = -1
 
         # scalar transform to transformed Q scale, h(.) function
-        transformed_target_reward = scalar_transform(target_reward, self._cfg.support_size)
-        transformed_target_value = scalar_transform(target_value, self._cfg.support_size)
-        if self._cfg.categorical_distribution:
+        transformed_target_reward = scalar_transform(target_reward, self._cfg.model.support_scale)
+        transformed_target_value = scalar_transform(target_value, self._cfg.model.support_scale)
+        if self._cfg.model.categorical_distribution:
             # transform scalar to categorical_distribution
             target_reward_phi = reward_phi(self.reward_support, transformed_target_reward)
             target_value_phi = value_phi(self.value_support, transformed_target_value)
@@ -261,7 +349,7 @@ class MuZeroV2Policy(Policy):
 
         # transform categorical representation to original_value
         original_value = inverse_scalar_transform(
-            value, self._cfg.support_size, categorical_distribution=self._cfg.categorical_distribution
+            value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
         )
 
         # TODO(pu)
@@ -288,7 +376,7 @@ class MuZeroV2Policy(Policy):
 
         # calculate loss for the first step
         policy_loss = modified_cross_entropy_loss(policy_logits, target_policy[:, 0])
-        if self._cfg.categorical_distribution:
+        if self._cfg.model.categorical_distribution:
             value_loss = modified_cross_entropy_loss(value, target_value_phi[:, 0])
         else:
             value_loss = torch.nn.MSELoss(reduction='none')(value.squeeze(-1), transformed_target_value[:, 0])
@@ -310,10 +398,10 @@ class MuZeroV2Policy(Policy):
 
             # first transform categorical representation to scalar, then transform to original_value
             original_value = inverse_scalar_transform(
-                value, self._cfg.support_size, categorical_distribution=self._cfg.categorical_distribution
+                value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
             )
             original_reward = inverse_scalar_transform(
-                reward, self._cfg.support_size, categorical_distribution=self._cfg.categorical_distribution
+                reward, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
             )
             # TODO(pu)
             if not self._learn_model.training:
@@ -324,9 +412,12 @@ class MuZeroV2Policy(Policy):
 
                 policy_logits = policy_logits.detach().cpu().numpy()
 
-            beg_index = self._cfg.image_channel * step_i
-            end_index = self._cfg.image_channel * (step_i + self._cfg.frame_stack_num)
+            beg_index = self._cfg.model.image_channel * step_i
+            end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
 
+            # ==============================================================
+            # NOTE: the only difference between muzero and muzero_with-ssl is the consistency loss in policy and model.
+            # ==============================================================
             # consistency loss
             if self._cfg.consistency_coeff > 0:
                 # obtain the oracle hidden states from representation function
@@ -340,9 +431,9 @@ class MuZeroV2Policy(Policy):
                 dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
                 observation_proj = self._learn_model.project(representation_state, with_grad=False)
                 """
-                ##########
+                # ==============================================================
                 test how the consistece loss change with the board state
-                ##########
+                # ==============================================================
 
                 ##########
                 # take a minibatch state
@@ -388,13 +479,12 @@ class MuZeroV2Policy(Policy):
                 """
 
                 temp_loss = self._consist_loss_func(dynamic_proj, observation_proj) * mask_batch[:, step_i]
-
                 other_loss['consist_' + str(step_i + 1)] = temp_loss.mean().item()
                 consistency_loss += temp_loss
 
             # the target policy, target_value_phi, target_reward_phi is calculated in game buffer now
             policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
-            if self._cfg.categorical_distribution:
+            if self._cfg.model.categorical_distribution:
                 value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
                 reward_loss += modified_cross_entropy_loss(reward, target_reward_phi[:, step_i])
             else:
@@ -413,8 +503,8 @@ class MuZeroV2Policy(Policy):
             if self._cfg.monitor_statistics:
                 original_rewards = inverse_scalar_transform(
                     reward.detach(),
-                    self._cfg.support_size,
-                    categorical_distribution=self._cfg.categorical_distribution
+                    self._cfg.model.support_scale,
+                    categorical_distribution=self._cfg.model.categorical_distribution
                 )
                 original_rewards_cpu = original_rewards.detach().cpu()
 
@@ -422,7 +512,7 @@ class MuZeroV2Policy(Policy):
                     (
                         predicted_values,
                         inverse_scalar_transform(
-                            value, self._cfg.support_size, categorical_distribution=self._cfg.categorical_distribution
+                            value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
                         ).detach().cpu()
                     )
                 )
@@ -454,8 +544,8 @@ class MuZeroV2Policy(Policy):
         # ----------------------------------------------------------------------------------
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-            self._cfg.consistency_coeff * consistency_loss + self._cfg.policy_loss_coeff * policy_loss +
-            self._cfg.value_loss_coeff * value_loss + self._cfg.reward_loss_coeff * reward_loss
+            self._cfg.consistency_coeff * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
         )
         weighted_loss = (weights * loss).mean()
 
@@ -510,7 +600,7 @@ class MuZeroV2Policy(Policy):
                     predicted_rewards[reward_indices_0], target_reward_base[reward_indices_0]
                 )
 
-            if self._cfg.categorical_distribution:
+            if self._cfg.model.categorical_distribution:
                 td_data = (
                     value_priority, target_reward.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
                     transformed_target_reward.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
@@ -531,7 +621,7 @@ class MuZeroV2Policy(Policy):
         else:
             td_data, priority_data = None, None
 
-        if self._cfg.categorical_distribution:
+        if self._cfg.model.categorical_distribution:
             return {
                 # 'priority':priority_info,
                 'total_loss': loss_data[0],
@@ -600,7 +690,6 @@ class MuZeroV2Policy(Policy):
             ]
         )
 
-    # @profile
     def _forward_collect(
         self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None, ready_env_id=None
     ):
@@ -624,8 +713,8 @@ class MuZeroV2Policy(Policy):
                 # if not in training, obtain the scalars of the value/reward
                 pred_values_pool = inverse_scalar_transform(
                     pred_values_pool,
-                    self._cfg.support_size,
-                    categorical_distribution=self._cfg.categorical_distribution
+                    self._cfg.model.support_scale,
+                    categorical_distribution=self._cfg.model.categorical_distribution
                 ).detach().cpu().numpy()
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
@@ -640,7 +729,7 @@ class MuZeroV2Policy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = ctree.Roots(active_collect_env_num, self._cfg.num_simulations, legal_actions)
+                roots = ctree.Roots(active_collect_env_num, legal_actions)
                 # noises = [
                 #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * action_num
                 #                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
@@ -658,7 +747,7 @@ class MuZeroV2Policy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = ptree.Roots(active_collect_env_num, legal_actions, self._cfg.num_simulations)
+                roots = ptree.Roots(active_collect_env_num, legal_actions)
                 # the only difference between collect and eval is the dirichlet noise
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -715,7 +804,6 @@ class MuZeroV2Policy(Policy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
-    # @profile
     def _forward_eval(self, data: ttorch.Tensor, action_mask: list, to_play: None, ready_env_id=None):
         """
         Overview:
@@ -743,8 +831,8 @@ class MuZeroV2Policy(Policy):
                 # if not in training, obtain the scalars of the value/reward
                 pred_values_pool = inverse_scalar_transform(
                     pred_values_pool,
-                    self._cfg.support_size,
-                    categorical_distribution=self._cfg.categorical_distribution
+                    self._cfg.model.support_scale,
+                    categorical_distribution=self._cfg.model.categorical_distribution
                 ).detach().cpu().numpy()  # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
 
@@ -759,7 +847,7 @@ class MuZeroV2Policy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ctree.Roots(active_eval_env_num, self._cfg.num_simulations, legal_actions)
+                roots = ctree.Roots(active_eval_env_num, legal_actions)
                 roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, to_play)
@@ -768,7 +856,7 @@ class MuZeroV2Policy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ptree.Roots(active_eval_env_num, legal_actions, self._cfg.num_simulations)
+                roots = ptree.Roots(active_eval_env_num, legal_actions)
 
                 roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
@@ -903,7 +991,4 @@ class MuZeroV2Policy(Policy):
         f2 = F.normalize(f2, p=2., dim=-1, eps=1e-5)
         return -(f1 * f2).sum(dim=1)
 
-    @staticmethod
-    def _get_max_entropy(action_shape: int) -> None:
-        p = 1.0 / action_shape
-        return -action_shape * p * np.log2(p)
+

@@ -167,7 +167,7 @@ def serial_pipeline_muzero_expert_data(
 
             learner.train(train_data, collector.envstep)
 
-            if game_config.lr_manually:
+            if game_config.learn.lr_manually:
                 # learning rate decay manually like MuZero paper
                 if learner.train_iter < 0.5 * game_config.max_training_steps:
                     policy._optimizer.lr = 0.2

@@ -216,7 +216,7 @@ class EfficientZeroPolicy(Policy):
             The user can define and use customized network model but must obey the same inferface definition indicated \
             by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
         """
-        return 'EfficientZeroNet', ['lzero.model.efficientzero.efficientzero_model']
+        return 'EfficientZeroNet', ['lzero.model.efficientzero_model']
 
     def _init_learn(self) -> None:
         if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
@@ -263,7 +263,7 @@ class EfficientZeroPolicy(Policy):
         obs_batch_ori, action_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
         target_value_prefix, target_value, target_policy = targets_batch
 
-        # [:, 0: config.frame_stack_num * 3,:,:]
+        # [:, 0: config.model.frame_stack_num * 3,:,:]
         # obs_batch_ori is the original observations in a batch
         # obs_batch is the observation for hat s_t (predicted hidden states from dynamics function)
         # obs_target_batch is the observations for s_t (hidden states from representation function)

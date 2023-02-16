@@ -1,7 +1,7 @@
 """
-The following code is adapted from https://github.com/YeWR/EfficientZero/core/replay_buffer.py
+Acknowledgement: The following code is adapted from https://github.com/YeWR/EfficientZero/core/replay_buffer.py
 """
-
+import copy
 import itertools
 import logging
 import random
@@ -14,6 +14,8 @@ import torch
 from ding.data.buffer import Buffer
 from ding.torch_utils.data_helper import to_ndarray
 from ding.utils import BUFFER_REGISTRY
+from easydict import EasyDict
+
 
 # python mcts
 import lzero.rl_utils.mcts.ptree_muzero as ptree
@@ -36,17 +38,146 @@ class BufferedData:
 class MuZeroGameBuffer(Buffer):
     """
     Overview:
-        The specific game buffer for MuZero-based policy.
+        The specific game buffer for MuZero policy.
     """
+
+    @classmethod
+    def default_config(cls: type) -> EasyDict:
+        cfg = EasyDict(copy.deepcopy(cls.config))
+        cfg.cfg_type = cls.__name__ + 'Dict'
+        return cfg
+
+    # the default_config for MuZeroGameBuffer.
+    config = dict(
+        model=dict(
+            image_channel=3,
+            frame_stack_num=4,
+            # the key difference setting between image-input and vector input.
+            downsample=True,
+            # the stacked obs shape -> the transformed obs shape:
+            # [S, W, H, C] -> [S x C, W, H]
+            # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
+            observation_shape=(12, 96, 96),  # if frame_stack_nums=4
+            # observation_shape=(3, 96, 96),  # if frame_stack_num=1
+            action_space_size=6,
+            # the default config is large size model, same as the EfficientZero original paper.
+            num_res_blocks=1,
+            num_channels=64,
+            reward_head_channels=16,
+            value_head_channels=16,
+            policy_head_channels=16,
+            fc_reward_layers=[32],
+            fc_value_layers=[32],
+            fc_policy_layers=[32],
+            support_scale=300,
+            reward_support_size=601,
+            value_support_size=601,
+            batch_norm_momentum=0.1,
+            proj_hid=1024,
+            proj_out=1024,
+            pred_hid=512,
+            pred_out=1024,
+            last_linear_layer_init_zero=True,
+            state_norm=False,
+            activation=torch.nn.ReLU(inplace=True),
+            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
+            categorical_distribution=True,
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+        ),
+        # learn_mode config
+        learn=dict(
+            update_per_collect=200,
+            batch_size=256,
+            lr_manually=True,
+            # optim_type='Adam',
+            # learning_rate=0.001,  # lr for Adam optimizer
+            optim_type='SGD',
+            learning_rate=0.2,  # init lr for manually decay schedule
+            # Frequency of target network update.
+            target_update_freq=100,
+        ),
+        # ==============================================================
+        # begin of additional game_config
+        # ==============================================================
+        ## common
+        mcts_ctree=True,
+        device='cuda',
+        collector_env_num=8,
+        evaluator_env_num=3,
+        env_type='not_board_games',
+        battle_mode='play_with_bot_mode',
+        game_wrapper=True,
+        monitor_statistics=True,
+        game_history_length=200,
+
+        ## observation
+        # the key difference setting between image-input and vector input.
+        image_based=False,
+        cvt_string=False,
+        gray_scale=False,
+        use_augmentation=False,
+        # style of augmentation
+        augmentation=['shift', 'intensity'],  # options=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
+
+        ## reward
+        clip_reward=False,
+        normalize_reward=False,
+        normalize_reward_scale=100,
+
+        ## learn
+        num_simulations=50,
+        td_steps=5,
+        num_unroll_steps=5,
+        max_grad_norm=10,
+        # the weight of different loss
+        reward_loss_weight=1,
+        value_loss_weight=0.25,
+        policy_loss_weight=1,
+        consistency_weight=2,
+        # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
+        auto_temperature=False,
+        fixed_temperature_value=0.25,
+        # the size/capacity of replay_buffer
+        max_total_transitions=int(1e5),
+        # ``max_training_steps`` is only used for adjusting temperature manually.
+        max_training_steps=int(1e5),
+
+        ## reanalyze
+        reanalyze_ratio=0.3,
+        reanalyze_outdated=True,
+        # whether to use root value in reanalyzing part
+        use_root_value=False,
+        mini_infer_size=256,
+
+        ## priority
+        use_priority=True,
+        use_max_priority_for_new_data=True,
+        # how much prioritization is used: 0 means no prioritization while 1 means full prioritization
+        priority_prob_alpha=0.6,
+        # how much correction is used: 0 means no correction while 1 means full correction
+        priority_prob_beta=0.4,
+        prioritized_replay_eps=1e-6,
+
+        ## UCB
+        root_dirichlet_alpha=0.3,
+        root_exploration_fraction=0.25,
+        pb_c_base=19652,
+        pb_c_init=1.25,
+        discount=0.997,
+        value_delta_max=0.01,
+        # ==============================================================
+        # end of additional game_config
+        # ==============================================================
+    )
 
     def __init__(self, config=None):
         """
         Reference : DISTRIBUTED PRIORITIZED EXPERIENCE REPLAY
         Algo. 1 and Algo. 2 in Page-3 of (https://arxiv.org/pdf/1803.00933.pdf
         """
-        super().__init__(config.total_transitions)
-        self.config = config
-        self.batch_size = config.batch_size
+        super().__init__(config.max_total_transitions)
+        self._cfg = config
+        self.batch_size = self._cfg.learn.batch_size
         self.keep_ratio = 1
 
         self.model_index = 0
@@ -58,8 +189,8 @@ class MuZeroGameBuffer(Buffer):
 
         self._eps_collected = 0
         self.base_idx = 0
-        self._alpha = config.priority_prob_alpha
-        self.transition_top = config.total_transitions
+        self._alpha = self._cfg.priority_prob_alpha
+        self.transition_top = self._cfg.max_total_transitions
         self.clear_time = 0
 
     def push(self, data: Any, meta: Optional[dict] = None):
@@ -81,7 +212,7 @@ class MuZeroGameBuffer(Buffer):
             - buffered_data (:obj:`BufferedData`): The pushed data.
         """
         # TODO(pu)
-        # if self.get_num_of_transitions() >= self.config.total_transitions:
+        # if self.get_num_of_transitions() >= self._cfg.max_total_transitions:
         #     return
 
         if meta['end_tag']:
@@ -268,7 +399,7 @@ class MuZeroGameBuffer(Buffer):
                     index = i
                     break
 
-            if total_transition >= self.config.batch_size:
+            if total_transition >= self._cfg.learn.batch_size:
                 self._remove(index + 1)
 
     def _remove(self, num_excess_games):
@@ -319,7 +450,7 @@ class MuZeroGameBuffer(Buffer):
         return len(self.priorities)
 
     def __copy__(self) -> "GameBuffer":
-        buffer = type(self)(config=self.config)
+        buffer = type(self)(config=self._cfg)
         buffer.storage = self.buffer
         return buffer
 
@@ -342,7 +473,7 @@ class MuZeroGameBuffer(Buffer):
         # total number of transitions
         total = self.get_num_of_transitions()
 
-        if self.config.use_priority is False:
+        if self._cfg.use_priority is False:
             self.priorities = np.ones_like(self.priorities)
 
         # +1e-11 for numerical stability
@@ -356,7 +487,7 @@ class MuZeroGameBuffer(Buffer):
         batch_index_list = np.random.choice(total, batch_size, p=probs, replace=False)
 
         # TODO
-        if self.config.reanalyze_outdated is True:
+        if self._cfg.reanalyze_outdated is True:
             batch_index_list.sort()
 
         weights_list = (total * probs[batch_index_list]) ** (-beta)
@@ -401,15 +532,15 @@ class MuZeroGameBuffer(Buffer):
             pos_in_game_history = pos_in_game_history_list[i]
 
             _actions = game.action_history[pos_in_game_history:pos_in_game_history +
-                                           self.config.num_unroll_steps].tolist()
+                                           self._cfg.num_unroll_steps].tolist()
             # add mask for invalid actions (out of trajectory)
             _mask = [1. for i in range(len(_actions))]
-            _mask += [0. for _ in range(self.config.num_unroll_steps - len(_mask))]
+            _mask += [0. for _ in range(self._cfg.num_unroll_steps - len(_mask))]
 
             # pad random action
             _actions += [
                 np.random.randint(0, game.action_space_size)
-                for _ in range(self.config.num_unroll_steps - len(_actions))
+                for _ in range(self._cfg.num_unroll_steps - len(_actions))
             ]
 
             # obtain the input observations
@@ -417,7 +548,7 @@ class MuZeroGameBuffer(Buffer):
             # pad if length of obs in game_history is less than stack+num_unroll_steps
             obs_list.append(
                 game_history_list[i].obs(
-                    pos_in_game_history_list[i], extra_len=self.config.num_unroll_steps, padding=True
+                    pos_in_game_history_list[i], extra_len=self._cfg.num_unroll_steps, padding=True
                 )
             )
             action_list.append(_actions)
@@ -441,7 +572,7 @@ class MuZeroGameBuffer(Buffer):
         only reanalyze recent ratio (e.g. 50%) data
         """
         reanalyze_num = int(batch_size * ratio)
-        # if self.config.reanalyze_outdated is True:
+        # if self._cfg.reanalyze_outdated is True:
         # batch_index_list is sorted according to its generated enn_steps
 
         # 0:reanalyze_num -> reanalyzed policy, reanalyze_num: end -> non reanalyzed policy
@@ -481,7 +612,6 @@ class MuZeroGameBuffer(Buffer):
             - total_transitions (:obj:`int`): number of collected transitions
         """
         zero_obs = game_history_list[0].zero_obs()
-        config = self.config
         value_obs_list = []
         # the value is valid or not (out of trajectory)
         value_mask = []
@@ -501,12 +631,12 @@ class MuZeroGameBuffer(Buffer):
             # td_steps = config.td_steps - delta_td
             # td_steps = np.clip(td_steps, 1, 5).astype(np.int)
             # TODO(pu):
-            td_steps = np.clip(config.td_steps, 1, max(1, traj_len - state_index)).astype(np.int32)
+            td_steps = np.clip(self._cfg.td_steps, 1, max(1, traj_len - state_index)).astype(np.int32)
 
             # prepare the corresponding observations for bootstrapped values o_{t+k}
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
             # t=2+3 -> o[2+3, 2+3+4+5] -> o[5, 14]
-            game_obs = game_history.obs(state_index + td_steps, config.num_unroll_steps)
+            game_obs = game_history.obs(state_index + td_steps, self._cfg.num_unroll_steps)
 
             rewards_list.append(game_history.reward_history)
 
@@ -514,7 +644,7 @@ class MuZeroGameBuffer(Buffer):
             action_mask_history.append(game_history.action_mask_history)
             to_play_history.append(game_history.to_play_history)
 
-            for current_index in range(state_index, state_index + config.num_unroll_steps + 1):
+            for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                 # get the <num_unroll_steps+1>  bootstrapped target obs
                 td_steps_list.append(td_steps)
                 # index of bootstrapped obs o_{t+td_steps}
@@ -525,7 +655,7 @@ class MuZeroGameBuffer(Buffer):
                     # beg_index = bootstrap_index - (state_index + td_steps)
                     # max of beg_index is num_unroll_steps
                     beg_index = current_index - state_index
-                    end_index = beg_index + config.frame_stack_num
+                    end_index = beg_index + self._cfg.model.frame_stack_num
                     # the stacked obs in time t
                     obs = game_obs[beg_index:end_index]
                 else:
@@ -578,7 +708,6 @@ class MuZeroGameBuffer(Buffer):
             - pos_in_game_history_list (:obj:'list'): position of transition index in one game history
         """
         zero_obs = game_history_list[0].zero_obs()
-        config = self.config
 
         with torch.no_grad():
             # for policy
@@ -597,13 +726,13 @@ class MuZeroGameBuffer(Buffer):
 
                 child_visits.append(game_history.child_visit_history)
                 # prepare the corresponding observations
-                game_obs = game_history.obs(state_index, config.num_unroll_steps)
-                for current_index in range(state_index, state_index + config.num_unroll_steps + 1):
+                game_obs = game_history.obs(state_index, self._cfg.num_unroll_steps)
+                for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
 
                     if current_index < traj_len:
                         policy_mask.append(1)
                         beg_index = current_index - state_index
-                        end_index = beg_index + config.frame_stack_num
+                        end_index = beg_index + self._cfg.model.frame_stack_num
                         obs = game_obs[beg_index:end_index]
                     else:
                         policy_mask.append(0)
@@ -624,7 +753,7 @@ class MuZeroGameBuffer(Buffer):
         """
         value_obs_list, value_mask, pos_in_game_history_list, rewards_list, traj_lens, td_steps_list, action_mask_history, \
         to_play_history = reward_value_context
-        device = self.config.device
+        device = self._cfg.device
         batch_size = len(value_obs_list)
         game_history_batch_size = len(pos_in_game_history_list)
 
@@ -635,11 +764,11 @@ class MuZeroGameBuffer(Buffer):
             for bs in range(game_history_batch_size):
                 to_play_tmp = list(
                     to_play_history[bs][pos_in_game_history_list[bs]:pos_in_game_history_list[bs] +
-                                        self.config.num_unroll_steps + 1]
+                                        self._cfg.num_unroll_steps + 1]
                 )
-                if len(to_play_tmp) < self.config.num_unroll_steps + 1:
+                if len(to_play_tmp) < self._cfg.num_unroll_steps + 1:
                     # effective play index is {1,2}
-                    to_play_tmp += [0 for _ in range(self.config.num_unroll_steps + 1 - len(to_play_tmp))]
+                    to_play_tmp += [0 for _ in range(self._cfg.num_unroll_steps + 1 - len(to_play_tmp))]
                 to_play.append(to_play_tmp)
             # to_play = to_ndarray(to_play)
             tmp = []
@@ -651,12 +780,12 @@ class MuZeroGameBuffer(Buffer):
             for bs in range(game_history_batch_size):
                 action_mask_tmp = list(
                     action_mask_history[bs][pos_in_game_history_list[bs]:pos_in_game_history_list[bs] +
-                                            self.config.num_unroll_steps + 1]
+                                            self._cfg.num_unroll_steps + 1]
                 )
-                if len(action_mask_tmp) < self.config.num_unroll_steps + 1:
+                if len(action_mask_tmp) < self._cfg.num_unroll_steps + 1:
                     action_mask_tmp += [
-                        list(np.ones(self.config.action_space_size, dtype=np.int8))
-                        for _ in range(self.config.num_unroll_steps + 1 - len(action_mask_tmp))
+                        list(np.ones(self._cfg.model.action_space_size, dtype=np.int8))
+                        for _ in range(self._cfg.num_unroll_steps + 1 - len(action_mask_tmp))
                     ]
                 action_mask.append(action_mask_tmp)
             action_mask = to_ndarray(action_mask)
@@ -669,13 +798,13 @@ class MuZeroGameBuffer(Buffer):
         with torch.no_grad():
             value_obs_list = prepare_observation_list(value_obs_list)
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
-            m_batch = self.config.mini_infer_size
+            m_batch = self._cfg.mini_infer_size
             slices = np.ceil(batch_size / m_batch).astype(np.int_)
             network_output = []
             for i in range(slices):
                 beg_index = m_batch * i
                 end_index = m_batch * (i + 1)
-                if self.config.image_based:
+                if self._cfg.image_based:
                     m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(device).float() / 255.0
                 else:
                     m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(device).float()
@@ -688,26 +817,26 @@ class MuZeroGameBuffer(Buffer):
                     # if not in training, obtain the scalars of the value/reward
                     m_output.hidden_state = m_output.hidden_state.detach().cpu().numpy()
                     m_output.value = inverse_scalar_transform(m_output.value,
-                                                              self.config.support_size).detach().cpu().numpy()
+                                                              self._cfg.model.support_scale).detach().cpu().numpy()
                     m_output.policy_logits = m_output.policy_logits.detach().cpu().numpy()
                 network_output.append(m_output)
 
             # concat the output slices after model inference
-            if self.config.use_root_value:
+            if self._cfg.use_root_value:
                 # use the root values from MCTS
                 # the root values have limited improvement but require much more GPU actors;
                 _, reward_pool, policy_logits_pool, hidden_state_roots = concat_output(network_output)
                 reward_pool = reward_pool.squeeze().tolist()
                 policy_logits_pool = policy_logits_pool.tolist()
 
-                if self.config.mcts_ctree:
+                if self._cfg.mcts_ctree:
                     """
                     cpp mcts
                     """
                     if to_play_history[0][0] is None:
                         # for one_player atari games
                         action_mask = [
-                            list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
+                            list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                         ]
                         to_play = [0 for i in range(batch_size)]
 
@@ -715,14 +844,14 @@ class MuZeroGameBuffer(Buffer):
                     roots = ctree.Roots(batch_size, legal_actions)
 
                     noises = [
-                        np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.action_space_size
+                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
                                             ).astype(np.float32).tolist() for _ in range(batch_size)
                     ]
                     roots.prepare(
-                        self.config.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play
+                        self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ctree(self.config).search(roots, model, hidden_state_roots, to_play)
+                    MCTS_ctree(self._cfg).search(roots, model, hidden_state_roots, to_play)
                 else:
                     """
                     python mcts
@@ -730,35 +859,35 @@ class MuZeroGameBuffer(Buffer):
                     if to_play_history[0][0] is None:
                         # for one_player atari games
                         action_mask = [
-                            list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
+                            list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                         ]
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
-                    roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations)
+                    roots = ptree.Roots(batch_size, legal_actions, self._cfg.num_simulations)
                     noises = [
-                        np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(batch_size)
                     ]
 
                     if to_play_history[0][0] is None:
                         roots.prepare(
-                            self.config.root_exploration_fraction,
+                            self._cfg.root_exploration_fraction,
                             noises,
                             reward_pool,
                             policy_logits_pool,
                             to_play=None
                         )
                         # do MCTS for a new policy with the recent target model
-                        MCTS_ptree(self.config).search(roots, model, hidden_state_roots, to_play=None)
+                        MCTS_ptree(self._cfg).search(roots, model, hidden_state_roots, to_play=None)
                     else:
                         roots.prepare(
-                            self.config.root_exploration_fraction,
+                            self._cfg.root_exploration_fraction,
                             noises,
                             reward_pool,
                             policy_logits_pool,
                             to_play=to_play
                         )
                         # do MCTS for a new policy with the recent target model
-                        MCTS_ptree(self.config).search(roots, model, hidden_state_roots, to_play=to_play)
+                        MCTS_ptree(self._cfg).search(roots, model, hidden_state_roots, to_play=to_play)
 
                 roots_values = roots.get_values()
                 value_list = np.array(roots_values)
@@ -768,7 +897,7 @@ class MuZeroGameBuffer(Buffer):
 
             # get last state value
             value_list = value_list.reshape(-1) * (
-                np.array([self.config.discount for _ in range(batch_size)]) ** td_steps_list
+                np.array([self._cfg.discount for _ in range(batch_size)]) ** td_steps_list
             )
             value_list = value_list * np.array(value_mask)
             value_list = value_list.tolist()
@@ -781,24 +910,20 @@ class MuZeroGameBuffer(Buffer):
 
                 reward = 0.0
                 base_index = state_index
-                for current_index in range(state_index, state_index + self.config.num_unroll_steps + 1):
+                for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
                     # for i, reward in enumerate(game.rewards[current_index:bootstrap_index]):
                     for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
-                        value_list[value_index] += reward * self.config.discount ** i
+                        value_list[value_index] += reward * self._cfg.discount ** i
 
-                    # # reset every lstm_horizon_len
-                    # if horizon_id % self.config.lstm_horizon_len == 0:
-                    #     reward = 0.0
-                    #     base_index = current_index
                     horizon_id += 1
 
                     if current_index < traj_len_non_re:
                         target_values.append(value_list[value_index])
                         # Since the horizon is small and the discount is close to 1.
                         # Compute the reward sum to approximate the value prefix for simplification
-                        # reward += reward_list[current_index]  # * config.discount ** (current_index - base_index)
-                        # reward += reward_list[current_index]  # * config.discount ** (current_index - base_index)
+                        # reward += reward_list[current_index]  # * self._cfg.discount ** (current_index - base_index)
+                        # reward += reward_list[current_index]  # * self._cfg.discount ** (current_index - base_index)
                         # target_rewards.append(reward)
                         target_rewards.append(reward_list[current_index])
                     else:
@@ -829,9 +954,9 @@ class MuZeroGameBuffer(Buffer):
         batch_size = len(policy_obs_list)
         game_history_batch_size = len(pos_in_game_history_list)
 
-        device = self.config.device
+        device = self._cfg.device
 
-        if self.config.env_type == 'board_games':
+        if self._cfg.env_type == 'board_games':
             # for two_player board games: prepare the to_play and action_mask mini-batch
 
             # to_play
@@ -839,11 +964,11 @@ class MuZeroGameBuffer(Buffer):
             for bs in range(game_history_batch_size):
                 to_play_tmp = list(
                     to_play_history[bs][pos_in_game_history_list[bs]:pos_in_game_history_list[bs] +
-                                        self.config.num_unroll_steps + 1]
+                                        self._cfg.num_unroll_steps + 1]
                 )
-                if len(to_play_tmp) < self.config.num_unroll_steps + 1:
+                if len(to_play_tmp) < self._cfg.num_unroll_steps + 1:
                     # effective play index is {1,2}
-                    to_play_tmp += [0 for _ in range(self.config.num_unroll_steps + 1 - len(to_play_tmp))]
+                    to_play_tmp += [0 for _ in range(self._cfg.num_unroll_steps + 1 - len(to_play_tmp))]
                 to_play.append(to_play_tmp)
 
             tmp = []
@@ -856,12 +981,12 @@ class MuZeroGameBuffer(Buffer):
             for bs in range(game_history_batch_size):
                 action_mask_tmp = list(
                     action_mask_history[bs][pos_in_game_history_list[bs]:pos_in_game_history_list[bs] +
-                                            self.config.num_unroll_steps + 1]
+                                            self._cfg.num_unroll_steps + 1]
                 )
-                if len(action_mask_tmp) < self.config.num_unroll_steps + 1:
+                if len(action_mask_tmp) < self._cfg.num_unroll_steps + 1:
                     action_mask_tmp += [
-                        list(np.ones(self.config.action_space_size, dtype=np.int8))
-                        for _ in range(self.config.num_unroll_steps + 1 - len(action_mask_tmp))
+                        list(np.ones(self._cfg.model.action_space_size, dtype=np.int8))
+                        for _ in range(self._cfg.num_unroll_steps + 1 - len(action_mask_tmp))
                     ]
                 action_mask.append(action_mask_tmp)
 
@@ -871,23 +996,23 @@ class MuZeroGameBuffer(Buffer):
                 tmp += i
             action_mask = tmp
 
-            # the minimal size is <self.config. num_unroll_steps+1>
+            # the minimal size is <self._cfg. num_unroll_steps+1>
             legal_actions = [
                 [i for i, x in enumerate(action_mask[j]) if x == 1]
-                for j in range(max(self.config.num_unroll_steps + 1, batch_size))
+                for j in range(max(self._cfg.num_unroll_steps + 1, batch_size))
             ]
 
         with torch.no_grad():
             policy_obs_list = prepare_observation_list(policy_obs_list)
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
-            m_batch = self.config.mini_infer_size
+            m_batch = self._cfg.mini_infer_size
             slices = np.ceil(batch_size / m_batch).astype(np.int_)
             network_output = []
             for i in range(slices):
                 beg_index = m_batch * i
                 end_index = m_batch * (i + 1)
 
-                if self.config.image_based:
+                if self._cfg.image_based:
                     m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(device).float() / 255.0
                 else:
                     m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(device).float()
@@ -898,7 +1023,7 @@ class MuZeroGameBuffer(Buffer):
                     # if not in training, obtain the scalars of the value/reward
                     m_output.hidden_state = m_output.hidden_state.detach().cpu().numpy()
                     m_output.value = inverse_scalar_transform(m_output.value,
-                                                              self.config.support_size).detach().cpu().numpy()
+                                                              self._cfg.model.support_scale).detach().cpu().numpy()
                     m_output.policy_logits = m_output.policy_logits.detach().cpu().numpy()
 
                 network_output.append(m_output)
@@ -906,14 +1031,14 @@ class MuZeroGameBuffer(Buffer):
             _, reward_pool, policy_logits_pool, hidden_state_roots = concat_output(network_output)
             reward_pool = reward_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
-            if self.config.mcts_ctree:
+            if self._cfg.mcts_ctree:
                 """
                 cpp mcts
                 """
                 if to_play_history[0][0] is None:
                     # for one_player atari games
                     action_mask = [
-                        list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
+                        list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                     ]
                     to_play = [0 for i in range(batch_size)]
 
@@ -921,12 +1046,12 @@ class MuZeroGameBuffer(Buffer):
                 roots = ctree.Roots(batch_size, legal_actions)
 
                 noises = [
-                    np.random.dirichlet([self.config.root_dirichlet_alpha] * self.config.action_space_size
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
                                         ).astype(np.float32).tolist() for _ in range(batch_size)
                 ]
-                roots.prepare(self.config.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play)
+                roots.prepare(self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTS_ctree(self.config).search(roots, model, hidden_state_roots, to_play)
+                MCTS_ctree(self._cfg).search(roots, model, hidden_state_roots, to_play)
 
                 # TODO(pu)
                 # roots_legal_actions_list = roots.legal_actions_list
@@ -938,27 +1063,27 @@ class MuZeroGameBuffer(Buffer):
                 if to_play_history[0][0] is None:
                     # for one_player atari games
                     action_mask = [
-                        list(np.ones(self.config.action_space_size, dtype=np.int8)) for _ in range(batch_size)
+                        list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                     ]
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
-                roots = ptree.Roots(batch_size, legal_actions, self.config.num_simulations)
+                roots = ptree.Roots(batch_size, legal_actions, self._cfg.num_simulations)
                 noises = [
-                    np.random.dirichlet([self.config.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(batch_size)
                 ]
                 if to_play_history[0][0] is None:
                     roots.prepare(
-                        self.config.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play=None
+                        self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play=None
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ptree(self.config).search(roots, model, hidden_state_roots, to_play=None)
+                    MCTS_ptree(self._cfg).search(roots, model, hidden_state_roots, to_play=None)
                 else:
                     roots.prepare(
-                        self.config.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play=to_play
+                        self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play=to_play
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ptree(self.config).search(roots, model, hidden_state_roots, to_play=to_play)
+                    MCTS_ptree(self._cfg).search(roots, model, hidden_state_roots, to_play=to_play)
                 roots_legal_actions_list = roots.legal_actions_list
 
             roots_distributions = roots.get_distributions()
@@ -967,19 +1092,19 @@ class MuZeroGameBuffer(Buffer):
             for state_index, game_index in zip(pos_in_game_history_list, batch_index_list):
                 target_policies = []
 
-                for current_index in range(state_index, state_index + self.config.num_unroll_steps + 1):
+                for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     distributions = roots_distributions[policy_index]
 
                     if policy_mask[policy_index] == 0:
-                        target_policies.append([0 for _ in range(self.config.action_space_size)])
+                        target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
                     else:
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
                             target_policies.append(
-                                list(np.ones(self.config.action_space_size) / self.config.action_space_size)
+                                list(np.ones(self._cfg.model.action_space_size) / self._cfg.model.action_space_size)
                             )
                         else:
-                            if self.config.mcts_ctree:
+                            if self._cfg.mcts_ctree:
                                 """
                                 cpp mcts
                                 """
@@ -992,7 +1117,7 @@ class MuZeroGameBuffer(Buffer):
                                     # target_policies.append(distributions)
                                 else:
                                     # for two_player board games
-                                    policy_tmp = [0 for _ in range(self.config.action_space_size)]
+                                    policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
                                     # to make sure target_policies have the same dimension
                                     # target_policy = torch.from_numpy(target_policy) be correct
                                     sum_visits = sum(distributions)
@@ -1012,7 +1137,7 @@ class MuZeroGameBuffer(Buffer):
                                     # target_policies.append(distributions)
                                 else:
                                     # for two_player board games
-                                    policy_tmp = [0 for _ in range(self.config.action_space_size)]
+                                    policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
                                     # to make sure target_policies have the same dimension
                                     # target_policy = torch.from_numpy(target_policy) be correct
                                     sum_visits = sum(distributions)
@@ -1052,19 +1177,19 @@ class MuZeroGameBuffer(Buffer):
 
         game_history_batch_size = len(pos_in_game_history_list)
 
-        if self.config.env_type == 'board_games':
+        if self._cfg.env_type == 'board_games':
             # for two_player board games
             # action_mask
             action_mask = []
             for bs in range(game_history_batch_size):
                 action_mask_tmp = list(
                     action_mask_history[bs][pos_in_game_history_list[bs]:pos_in_game_history_list[bs] +
-                                            self.config.num_unroll_steps + 1]
+                                            self._cfg.num_unroll_steps + 1]
                 )
-                if len(action_mask_tmp) < self.config.num_unroll_steps + 1:
+                if len(action_mask_tmp) < self._cfg.num_unroll_steps + 1:
                     action_mask_tmp += [
-                        list(np.ones(self.config.action_space_size, dtype=np.int8))
-                        for _ in range(self.config.num_unroll_steps + 1 - len(action_mask_tmp))
+                        list(np.ones(self._cfg.model.action_space_size, dtype=np.int8))
+                        for _ in range(self._cfg.num_unroll_steps + 1 - len(action_mask_tmp))
                     ]
                 action_mask.append(action_mask_tmp)
             action_mask = to_ndarray(action_mask)
@@ -1073,10 +1198,10 @@ class MuZeroGameBuffer(Buffer):
                 tmp += i
             action_mask = tmp
 
-            # the minimal size is <self.config. num_unroll_steps+1>
+            # the minimal size is <self._cfg. num_unroll_steps+1>
             legal_actions = [
                 [i for i, x in enumerate(action_mask[j]) if x == 1]
-                for j in range(game_history_batch_size * (self.config.num_unroll_steps + 1))
+                for j in range(game_history_batch_size * (self._cfg.num_unroll_steps + 1))
             ]
 
         with torch.no_grad():
@@ -1088,23 +1213,23 @@ class MuZeroGameBuffer(Buffer):
                 # traj_len = len(game)
                 target_policies = []
 
-                for current_index in range(state_index, state_index + self.config.num_unroll_steps + 1):
+                for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     if current_index < traj_len:
                         # target_policies.append(child_visit[current_index])
                         policy_mask.append(1)
                         # child_visit is already a distribution
                         distributions = child_visit[current_index]
-                        if self.config.mcts_ctree:
+                        if self._cfg.mcts_ctree:
                             """
                             cpp mcts
                             """
-                            if self.config.env_type == 'not_board_games':
+                            if self._cfg.env_type == 'not_board_games':
                                 # for one_player atari games
                                 target_policies.append(distributions)
                             else:
                                 # for two_player board games
-                                policy_tmp = [0 for _ in range(self.config.action_space_size)]
-                                # to make sure target_policies have the same dimension <self.config.action_space_size>
+                                policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
+                                # to make sure target_policies have the same dimension <self._cfg.model.action_space_size>
                                 # sum_visits = sum(distributions)
                                 # distributions = [visit_count / sum_visits for visit_count in distributions]
                                 for index, legal_action in enumerate(legal_actions[policy_index]):
@@ -1118,13 +1243,13 @@ class MuZeroGameBuffer(Buffer):
                             """
                             python mcts
                             """
-                            if self.config.env_type == 'not_board_games':
+                            if self._cfg.env_type == 'not_board_games':
                                 # for one_player atari games
                                 target_policies.append(distributions)
                             else:
                                 # for two_player board games
-                                policy_tmp = [0 for _ in range(self.config.action_space_size)]
-                                # to make sure target_policies have the same dimension <self.config.action_space_size>
+                                policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
+                                # to make sure target_policies have the same dimension <self._cfg.model.action_space_size>
                                 # sum_visits = sum(distributions)
                                 # distributions = [visit_count / sum_visits for visit_count in distributions]
                                 for index, legal_action in enumerate(legal_actions[policy_index]):
@@ -1138,7 +1263,7 @@ class MuZeroGameBuffer(Buffer):
                     else:
                         # the invalid target policy
                         policy_mask.append(0)
-                        target_policies.append([0 for _ in range(self.config.action_space_size)])
+                        target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
 
                     policy_index += 1
 
@@ -1152,11 +1277,11 @@ class MuZeroGameBuffer(Buffer):
         Overview:
             sample data from ``GameBuffer`` and prepare the current and target batch for training
         """
-        policy._target_model.to(self.config.device)
+        policy._target_model.to(self._cfg.device)
         policy._target_model.eval()
 
-        batch_context = self.prepare_batch_context(batch_size, self.config.priority_prob_beta)
-        input_context = self.make_batch(batch_context, self.config.reanalyze_ratio)
+        batch_context = self.prepare_batch_context(batch_size, self._cfg.priority_prob_beta)
+        input_context = self.make_batch(batch_context, self._cfg.reanalyze_ratio)
         reward_value_context, policy_re_context, policy_non_re_context, inputs_batch = input_context
 
         # target reward, value
@@ -1164,7 +1289,7 @@ class MuZeroGameBuffer(Buffer):
         # target policy
         batch_target_policies_re = self.compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
         batch_target_policies_non_re = self.compute_target_policy_non_reanalyzed(policy_non_re_context)
-        if self.config.reanalyze_ratio < 1:
+        if self._cfg.reanalyze_ratio < 1:
             batch_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
         else:
             batch_policies = batch_target_policies_re

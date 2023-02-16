@@ -102,6 +102,10 @@ def serial_pipeline_muzero(
     # Learner's before_run hook.
     learner.call_hook('before_run')
 
+    stop, reward = evaluator.eval(
+        learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
+    )
+
     while True:
         collect_kwargs = {}
         # set temperature for visit count distributions according to the train_iter,
@@ -150,19 +154,15 @@ def serial_pipeline_muzero(
                 )
                 break
 
+            # the core train steps for MuZero.
             learner.train(train_data, collector.envstep)
 
-            # if game_config.lr_manually:
-            #     # learning rate decay manually like EfficientZero paper
-            #     if learner.train_iter > 1e5 and learner.train_iter <= 2e5:
-            #         policy._optimizer.lr = 0.02
-            #     elif learner.train_iter > 2e5:
-            #         policy._optimizer.lr = 0.002
-            if game_config.lr_manually:
-                # learning rate decay manually like MuZero paper
-                if learner.train_iter < 0.5 * game_config.max_training_steps:
+            train_steps = learner.train_iter * cfg.policy.learn.update_per_collect
+            if game_config.learn.lr_manually:
+                # learning rate decay manually like MuZero paper.
+                if train_steps < 0.5 * game_config.max_training_steps:
                     policy._optimizer.lr = 0.2
-                elif learner.train_iter < 0.75 * game_config.max_training_steps:
+                elif train_steps < 0.75 * game_config.max_training_steps:
                     policy._optimizer.lr = 0.02
                 else:
                     policy._optimizer.lr = 0.002

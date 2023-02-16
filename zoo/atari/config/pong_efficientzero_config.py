@@ -9,7 +9,6 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-
 # collector_env_num = 8
 # n_episode = 8
 # evaluator_env_num = 3
@@ -29,7 +28,6 @@ num_simulations = 5
 update_per_collect = 2
 batch_size = 4
 max_env_step = int(1e4)
-
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -72,7 +70,7 @@ pong_efficientzero_config = dict(
             observation_shape=(12, 96, 96),  # if frame_stack_nums=4
             # observation_shape=(3, 96, 96),  # if frame_stack_num=1
             action_space_size=6,
-            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
+            # whether to use discrete support to represent categorical distribution for value, value_prefix.
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
@@ -125,6 +123,7 @@ pong_efficientzero_config = dict(
         num_unroll_steps=5,
         lstm_horizon_len=5,
         # the weight of different loss
+        # TODO: value_prefix_loss_weight
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,

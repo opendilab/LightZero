@@ -83,7 +83,7 @@ class GomokuEnv(BaseGameEnv):
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
-            self.board = np.array(init_state, dtype="int32")
+            self.board = np.array(copy.deepcopy(init_state), dtype="int32")
         else:
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
         action_mask = np.zeros(self.total_num_actions, 'int8')

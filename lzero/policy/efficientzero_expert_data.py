@@ -150,8 +150,8 @@ class EfficientZeroExertDataPolicy(Policy):
             self.transforms = Transforms(
                 self._cfg.augmentation, image_shape=(self._cfg.obs_shape[1], self._cfg.obs_shape[2])
             )
-        self.value_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
-        self.reward_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
+        self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
+        self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
 
     # @profile
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
@@ -164,7 +164,7 @@ class EfficientZeroExertDataPolicy(Policy):
         obs_batch_ori, action_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
         target_value_prefix, target_value, target_policy = targets_batch
 
-        # [:, 0: config.frame_stack_num * 3,:,:]
+        # [:, 0: config.model.frame_stack_num * 3,:,:]
         # obs_batch_ori is the original observations in a batch
         # obs_batch is the observation for hat s_t (predicted hidden states from dynamics function)
         # obs_target_batch is the observations for s_t (hidden states from representation function)
@@ -190,14 +190,14 @@ class EfficientZeroExertDataPolicy(Policy):
         # (4, 4*3, 96, 96) = (4, 12, 96, 96)
         # take the first stacked obs at timestep t: o_t_stack
         # used in initial_inference
-        obs_batch = obs_batch_ori[:, 0:self._cfg.frame_stack_num * self._cfg.image_channel, :, :]
+        obs_batch = obs_batch_ori[:, 0:self._cfg.model.frame_stack_num * self._cfg.model.image_channel, :, :]
 
         # take the all obs other than timestep t1:
         # obs_target_batch is used for calculate consistency loss, which is only performed in the last 8 timesteps
         # for i in rnage(num_unroll_steeps):
-        #   beg_index = self._cfg.image_channel * step_i
-        #   end_index = self._cfg.image_channel * (step_i + self._cfg.frame_stack_num)
-        obs_target_batch = obs_batch_ori[:, self._cfg.image_channel:, :, :]
+        #   beg_index = self._cfg.model.image_channel * step_i
+        #   end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
+        obs_target_batch = obs_batch_ori[:, self._cfg.model.image_channel:, :, :]
 
         # do augmentations
         if self._cfg.use_augmentation:
@@ -212,11 +212,11 @@ class EfficientZeroExertDataPolicy(Policy):
         weights = torch.from_numpy(weights_lst).to(self._cfg.device).float()
 
         # TODO
-        target_value_prefix = target_value_prefix.view(self._cfg.batch_size, -1)
-        target_value = target_value.view(self._cfg.batch_size, -1)
+        target_value_prefix = target_value_prefix.view(self._cfg.learn.batch_size, -1)
+        target_value = target_value.view(self._cfg.learn.batch_size, -1)
 
         batch_size = obs_batch.size(0)
-        assert batch_size == self._cfg.batch_size == target_value_prefix.size(0)
+        assert batch_size == self._cfg.learn.batch_size == target_value_prefix.size(0)
         metric_loss = torch.nn.L1Loss()
 
         # some logs preparation
@@ -237,10 +237,10 @@ class EfficientZeroExertDataPolicy(Policy):
             other_loss[key + '_0'] = -1
 
         # transform targets to categorical representation
-        transformed_target_value_prefix = scalar_transform(target_value_prefix, self._cfg.support_size)
+        transformed_target_value_prefix = scalar_transform(target_value_prefix, self._cfg.model.support_scale)
         target_value_prefix_phi = reward_phi(self.reward_support, transformed_target_value_prefix)
 
-        transformed_target_value = scalar_transform(target_value, self._cfg.support_size)
+        transformed_target_value = scalar_transform(target_value, self._cfg.model.support_scale)
         target_value_phi = value_phi(self.value_support, transformed_target_value)
 
         network_output = self._learn_model.initial_inference(obs_batch)
@@ -252,13 +252,13 @@ class EfficientZeroExertDataPolicy(Policy):
         policy_logits = network_output.policy_logits  # {list: 2} {list:6}
 
         reward_hidden_state = to_device(reward_hidden_state, self._cfg.device)
-        scaled_value = inverse_scalar_transform(value, self._cfg.support_size)
+        scaled_value = inverse_scalar_transform(value, self._cfg.model.support_scale)
 
         # TODO(pu)
         if not self._learn_model.training:
             # if not in training, obtain the scalars of the value/reward
             scaled_value = scaled_value.detach().cpu().numpy()
-            scaled_value_prefix = inverse_scalar_transform(value_prefix, self._cfg.support_size).detach().cpu().numpy()
+            scaled_value_prefix = inverse_scalar_transform(value_prefix, self._cfg.model.support_scale).detach().cpu().numpy()
             hidden_state = hidden_state.detach().cpu().numpy()
             reward_hidden_state = (
                 reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -303,16 +303,16 @@ class EfficientZeroExertDataPolicy(Policy):
             # TODO(pu)
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                value = inverse_scalar_transform(value, self._cfg.support_size).detach().cpu().numpy()
-                value_prefix = inverse_scalar_transform(value_prefix, self._cfg.support_size).detach().cpu().numpy()
+                value = inverse_scalar_transform(value, self._cfg.model.support_scale).detach().cpu().numpy()
+                value_prefix = inverse_scalar_transform(value_prefix, self._cfg.model.support_scale).detach().cpu().numpy()
                 hidden_state = hidden_state.detach().cpu().numpy()
                 reward_hidden_state = (
                     reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
                 )
                 policy_logits = policy_logits.detach().cpu().numpy()
 
-            beg_index = self._cfg.image_channel * step_i
-            end_index = self._cfg.image_channel * (step_i + self._cfg.frame_stack_num)
+            beg_index = self._cfg.model.image_channel * step_i
+            end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
 
             # consistency loss
             if self._cfg.consistency_coeff > 0:
@@ -342,16 +342,16 @@ class EfficientZeroExertDataPolicy(Policy):
             # reset hidden states
             if (step_i + 1) % self._cfg.lstm_horizon_len == 0:
                 reward_hidden_state = (
-                    torch.zeros(1, self._cfg.batch_size, self._cfg.lstm_hidden_size).to(self._cfg.device),
-                    torch.zeros(1, self._cfg.batch_size, self._cfg.lstm_hidden_size).to(self._cfg.device)
+                    torch.zeros(1, self._cfg.learn.batch_size, self._cfg.lstm_hidden_size).to(self._cfg.device),
+                    torch.zeros(1, self._cfg.learn.batch_size, self._cfg.lstm_hidden_size).to(self._cfg.device)
                 )
 
             if self._cfg.monitor_statistics:
-                scaled_value_prefixs = inverse_scalar_transform(value_prefix.detach(), self._cfg.support_size)
+                scaled_value_prefixs = inverse_scalar_transform(value_prefix.detach(), self._cfg.model.support_scale)
                 scaled_value_prefixs_cpu = scaled_value_prefixs.detach().cpu()
 
                 predicted_values = torch.cat(
-                    (predicted_values, inverse_scalar_transform(value, self._cfg.support_size).detach().cpu())
+                    (predicted_values, inverse_scalar_transform(value, self._cfg.model.support_scale).detach().cpu())
                 )
                 predicted_value_prefixs.append(scaled_value_prefixs_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
@@ -384,8 +384,8 @@ class EfficientZeroExertDataPolicy(Policy):
         # ----------------------------------------------------------------------------------
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-            self._cfg.consistency_coeff * consistency_loss + self._cfg.policy_loss_coeff * policy_loss +
-            self._cfg.value_loss_coeff * value_loss + self._cfg.reward_loss_coeff * value_prefix_loss
+            self._cfg.consistency_coeff * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss
         )
         weighted_loss = (weights * loss).mean()
 
@@ -594,7 +594,7 @@ class EfficientZeroExertDataPolicy(Policy):
             # TODO(pu)
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                pred_values_pool = inverse_scalar_transform(pred_values_pool, self._cfg.support_size
+                pred_values_pool = inverse_scalar_transform(pred_values_pool, self._cfg.model.support_scale
                                                             ).detach().cpu().numpy()  # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 reward_hidden_roots = (

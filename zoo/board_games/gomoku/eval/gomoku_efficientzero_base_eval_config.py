@@ -125,10 +125,10 @@ game_config = EasyDict(
         frame_stack_num=4,
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
-        reward_loss_coeff=1,  # value_prefix_loss
-        # reward_loss_coeff=0,  # value_prefix_loss
-        value_loss_coeff=0.25,
-        policy_loss_coeff=1,
+        reward_loss_weight=1,  # value_prefix_loss
+        # reward_loss_weight=0,  # value_prefix_loss
+        value_loss_weight=0.25,
+        policy_loss_weight=1,
         consistency_coeff=2,
         # consistency_coeff=0,
         batch_norm_momentum=0.1,

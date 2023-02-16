@@ -533,7 +533,7 @@ class SampledMuZeroGameBuffer(Buffer):
                     # beg_index = bootstrap_index - (state_index + td_steps)
                     # max of beg_index is num_unroll_steps
                     beg_index = current_index - state_index
-                    end_index = beg_index + config.frame_stack_num
+                    end_index = beg_index + config.model.frame_stack_num
                     # the stacked obs in time t
                     obs = game_obs[beg_index:end_index]
                 else:
@@ -609,7 +609,7 @@ class SampledMuZeroGameBuffer(Buffer):
                     if current_index < traj_len:
                         policy_mask.append(1)
                         beg_index = current_index - state_index
-                        end_index = beg_index + config.frame_stack_num
+                        end_index = beg_index + config.model.frame_stack_num
                         obs = game_obs[beg_index:end_index]
                     else:
                         policy_mask.append(0)

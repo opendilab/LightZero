@@ -44,9 +44,9 @@ num_simulations = 50
 # n_episode = 2
 # evaluator_env_num = 2
 
-gomoku_muzero_v2_config = dict(
+gomoku_muzero_with-ssl_config = dict(
     exp_name=
-    f'data_mz_ctree/gomoku_bs6_self-play_ghl36_muzero_v2_seed0_sub883_halfmodel_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
+    f'data_mz_ctree/gomoku_bs6_self-play_ghl36_muzero_with-ssl_seed0_sub883_halfmodel_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -136,7 +136,7 @@ gomoku_muzero_v2_config = dict(
         # command_mode config
         other=dict(
             # the replay_buffer_size is ineffective, we specify it in game config
-            replay_buffer=dict(type='game_buffer_muzero_v2')
+            replay_buffer=dict(type='game_buffer_muzero_with-ssl')
         ),
         ######################################
         # game_config begin
@@ -263,10 +263,10 @@ gomoku_muzero_v2_config = dict(
 
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
-        reward_loss_coeff=1,  # value_prefix_loss
-        # reward_loss_coeff=0,  # value_prefix_loss
-        value_loss_coeff=0.25,
-        policy_loss_coeff=1,
+        reward_loss_weight=1,  # value_prefix_loss
+        # reward_loss_weight=0,  # value_prefix_loss
+        value_loss_weight=0.25,
+        policy_loss_weight=1,
         # consistency_coeff=2,
         consistency_coeff=0,
 
@@ -294,10 +294,10 @@ gomoku_muzero_v2_config = dict(
         ######################################
     ),
 )
-gomoku_muzero_v2_config = EasyDict(gomoku_muzero_v2_config)
-main_config = gomoku_muzero_v2_config
+gomoku_muzero_with-ssl_config = EasyDict(gomoku_muzero_with-ssl_config)
+main_config = gomoku_muzero_with-ssl_config
 
-gomoku_muzero_v2_create_config = dict(
+gomoku_muzero_with-ssl_create_config = dict(
     env=dict(
         type='gomoku',
         import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
@@ -305,8 +305,8 @@ gomoku_muzero_v2_create_config = dict(
     # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_v2',
-        import_names=['lzero.policy.muzero_v2'],
+        type='muzero_with-ssl',
+        import_names=['lzero.policy.muzero_with-ssl'],
     ),
     collector=dict(
         type='episode_muzero',
@@ -314,8 +314,8 @@ gomoku_muzero_v2_create_config = dict(
         import_names=['lzero.worker.collector.muzero_collector'],
     )
 )
-gomoku_muzero_v2_create_config = EasyDict(gomoku_muzero_v2_create_config)
-create_config = gomoku_muzero_v2_create_config
+gomoku_muzero_with-ssl_create_config = EasyDict(gomoku_muzero_with-ssl_create_config)
+create_config = gomoku_muzero_with-ssl_create_config
 
 if __name__ == "__main__":
     from lzero.entry import serial_pipeline_muzero

@@ -45,7 +45,7 @@ class TicTacToeEnv(BaseGameEnv):
         self._env = self
         self.agent_vs_human = cfg.agent_vs_human
         self.expert_action_type = cfg.expert_action_type
-        if self.expert_action_type == 'alpha_beta_pruning':
+        if 'alpha_beta_pruning' in self.expert_action_type:
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 
     @property
@@ -77,7 +77,7 @@ class TicTacToeEnv(BaseGameEnv):
             Env reset and custom state start by init_state
         Arguments:
             start_player_index: players = [1,2], player_index = [0,1]
-            init_state: custom state start
+            init_state: custom start state.
         """
         self._observation_space = gym.spaces.Box(
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.uint8
@@ -87,7 +87,7 @@ class TicTacToeEnv(BaseGameEnv):
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
-            self.board = np.array(init_state, dtype="int32")
+            self.board = np.array(copy.deepcopy(init_state), dtype="int32")
         else:
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
         action_mask = np.zeros(self.total_num_actions, 'int8')
@@ -302,7 +302,7 @@ class TicTacToeEnv(BaseGameEnv):
             return self.expert_action_alpha_beta_pruning()
 
     def expert_action_alpha_beta_pruning(self):
-        action = self.alpha_beta_pruning_player.get_actions(self.board, player_index=self.current_player_index)
+        action = self.alpha_beta_pruning_player.get_best_action(self.board, player_index=self.current_player_index)
         return action
 
     def expert_action_v0(self):

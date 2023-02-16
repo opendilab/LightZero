@@ -255,7 +255,7 @@ class SampledEfficientZeroCollector(ISerialCollector):
             (last_game_histories[i].obs_history[-4:] == game_histories[i].obs_history[:4]) is True
         """
         # pad over last block trajectory
-        beg_index = self.game_config.frame_stack_num
+        beg_index = self.game_config.model.frame_stack_num
         end_index = beg_index + self.game_config.num_unroll_steps
 
         # the start 4 obs is init zero obs, so we take the 4th -(4+5）th obs as the pad obs
@@ -364,7 +364,7 @@ class SampledEfficientZeroCollector(ISerialCollector):
 
         # for i in range(env_nums):
         #     game_histories[i].init(
-        #         [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.frame_stack_num)]
+        #         [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)]
         #     )
 
         last_game_histories = [None for _ in range(env_nums)]
@@ -374,7 +374,7 @@ class SampledEfficientZeroCollector(ISerialCollector):
         stack_obs_windows = [[] for _ in range(env_nums)]
         for i in range(env_nums):
             stack_obs_windows[i] = [
-                to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.frame_stack_num)
+                to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)
             ]
             game_histories[i].init(stack_obs_windows[i])
 
@@ -625,7 +625,7 @@ class SampledEfficientZeroCollector(ISerialCollector):
                             game_history_length=self.game_config.game_history_length,
                             config=self.game_config
                         )
-                        stack_obs_windows[env_id] = [init_obs for _ in range(self.game_config.frame_stack_num)]
+                        stack_obs_windows[env_id] = [init_obs for _ in range(self.game_config.model.frame_stack_num)]
                         game_histories[env_id].init(stack_obs_windows[env_id])
                         last_game_histories[env_id] = None
                         last_game_priorities[env_id] = None

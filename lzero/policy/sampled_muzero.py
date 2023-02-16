@@ -125,7 +125,7 @@ class SampledMuZeroPolicy(Policy):
             The user can define and use customized network model but must obey the same inferface definition indicated \
             by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
         """
-        return 'SampledMuZeroNet', ['lzero.model.sampled_muzero.sampled_muzero_model']
+        return 'SampledMuZeroNet', ['lzero.model.sampled_muzero_model']
 
     def _init_learn(self) -> None:
         if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
@@ -159,8 +159,8 @@ class SampledMuZeroPolicy(Policy):
             self.transforms = Transforms(
                 self._cfg.augmentation, image_shape=(self._cfg.obs_shape[1], self._cfg.obs_shape[2])
             )
-        self.value_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
-        self.reward_support = DiscreteSupport(-self._cfg.support_size, self._cfg.support_size, delta=1)
+        self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
+        self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
 
     # @profile
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
@@ -177,7 +177,7 @@ class SampledMuZeroPolicy(Policy):
 
         target_reward, target_value, target_policy = targets_batch
 
-        # [:, 0: config.frame_stack_num * 3,:,:]
+        # [:, 0: config.model.frame_stack_num * 3,:,:]
         # obs_batch_ori is the original observations in a batch
         # obs_batch is the observation for hat s_t (predicted hidden states from dynamics function)
 
@@ -202,7 +202,7 @@ class SampledMuZeroPolicy(Policy):
         # (4, 4*3, 96, 96) = (4, 12, 96, 96)
         # take the first stacked obs at timestep t: o_t_stack
         # used in initial_inference
-        obs_batch = obs_batch_ori[:, 0:self._cfg.frame_stack_num * self._cfg.image_channel, :, :]
+        obs_batch = obs_batch_ori[:, 0:self._cfg.model.frame_stack_num * self._cfg.model.image_channel, :, :]
 
         # do augmentations
         if self._cfg.use_augmentation:
@@ -217,11 +217,11 @@ class SampledMuZeroPolicy(Policy):
         weights = torch.from_numpy(weights_lst).to(self._cfg.device).float()
 
         # TODO
-        target_reward = target_reward.view(self._cfg.batch_size, -1)
-        target_value = target_value.view(self._cfg.batch_size, -1)
+        target_reward = target_reward.view(self._cfg.learn.batch_size, -1)
+        target_value = target_value.view(self._cfg.learn.batch_size, -1)
 
         batch_size = obs_batch.size(0)
-        assert batch_size == self._cfg.batch_size == target_reward.size(0)
+        assert batch_size == self._cfg.learn.batch_size == target_reward.size(0)
         metric_loss = torch.nn.L1Loss()
 
         # some logs preparation
@@ -242,9 +242,9 @@ class SampledMuZeroPolicy(Policy):
             other_loss[key + '_0'] = -1
 
         # scalar transform to transformed Q scale, h(.) function
-        transformed_target_reward = scalar_transform(target_reward, self._cfg.support_size)
-        transformed_target_value = scalar_transform(target_value, self._cfg.support_size)
-        if self._cfg.categorical_distribution:
+        transformed_target_reward = scalar_transform(target_reward, self._cfg.model.support_scale)
+        transformed_target_value = scalar_transform(target_value, self._cfg.model.support_scale)
+        if self._cfg.model.categorical_distribution:
             # transform scalar to categorical_distribution
             target_reward_phi = reward_phi(self.reward_support, transformed_target_reward)
             target_value_phi = value_phi(self.value_support, transformed_target_value)
@@ -258,7 +258,7 @@ class SampledMuZeroPolicy(Policy):
 
         # transform categorical representation to original_value
         original_value = inverse_scalar_transform(
-            value, self._cfg.support_size, categorical_distribution=self._cfg.categorical_distribution
+            value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
         )
 
         # TODO(pu)
@@ -283,7 +283,7 @@ class SampledMuZeroPolicy(Policy):
         value_priority = value_priority.data.cpu().numpy() + self._cfg.prioritized_replay_eps
 
         # calculate loss for the first step
-        if self._cfg.categorical_distribution:
+        if self._cfg.model.categorical_distribution:
             value_loss = modified_cross_entropy_loss(value, target_value_phi[:, 0])
         else:
             value_loss = torch.nn.MSELoss(reduction='none')(value.squeeze(-1), transformed_target_value[:, 0])
@@ -440,10 +440,10 @@ class SampledMuZeroPolicy(Policy):
 
             # first transform categorical representation to scalar, then transform to original_value
             original_value = inverse_scalar_transform(
-                value, self._cfg.support_size, categorical_distribution=self._cfg.categorical_distribution
+                value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
             )
             original_reward = inverse_scalar_transform(
-                reward, self._cfg.support_size, categorical_distribution=self._cfg.categorical_distribution
+                reward, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
             )
             # TODO(pu)
             if not self._learn_model.training:
@@ -453,8 +453,8 @@ class SampledMuZeroPolicy(Policy):
                 hidden_state = hidden_state.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy()
 
-            beg_index = self._cfg.image_channel * step_i
-            end_index = self._cfg.image_channel * (step_i + self._cfg.frame_stack_num)
+            beg_index = self._cfg.model.image_channel * step_i
+            end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
 
             # the target policy, target_value_phi, target_value_prefix_phi is calculated in game buffer now
             # policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
@@ -592,7 +592,7 @@ class SampledMuZeroPolicy(Policy):
             # calculate policy loss: KL loss
             #############################
 
-            if self._cfg.categorical_distribution:
+            if self._cfg.model.categorical_distribution:
                 value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
                 reward_loss += modified_cross_entropy_loss(reward, target_reward_phi[:, step_i])
             else:
@@ -611,8 +611,8 @@ class SampledMuZeroPolicy(Policy):
             if self._cfg.monitor_statistics:
                 original_rewards = inverse_scalar_transform(
                     reward.detach(),
-                    self._cfg.support_size,
-                    categorical_distribution=self._cfg.categorical_distribution
+                    self._cfg.model.support_scale,
+                    categorical_distribution=self._cfg.model.categorical_distribution
                 )
                 original_rewards_cpu = original_rewards.detach().cpu()
 
@@ -620,7 +620,7 @@ class SampledMuZeroPolicy(Policy):
                     (
                         predicted_values,
                         inverse_scalar_transform(
-                            value, self._cfg.support_size, categorical_distribution=self._cfg.categorical_distribution
+                            value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
                         ).detach().cpu()
                     )
                 )
@@ -652,8 +652,8 @@ class SampledMuZeroPolicy(Policy):
         # ----------------------------------------------------------------------------------
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-            self._cfg.policy_loss_coeff * policy_loss + self._cfg.value_loss_coeff * value_loss +
-            self._cfg.reward_loss_coeff * reward_loss
+            self._cfg.policy_loss_weight * policy_loss + self._cfg.value_loss_weight * value_loss +
+            self._cfg.reward_loss_weight * reward_loss
         )
         weighted_loss = (weights * loss).mean()
 
@@ -708,7 +708,7 @@ class SampledMuZeroPolicy(Policy):
                     predicted_rewards[reward_indices_0], target_reward_base[reward_indices_0]
                 )
 
-            if self._cfg.categorical_distribution:
+            if self._cfg.model.categorical_distribution:
                 td_data = (
                     value_priority, target_reward.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
                     transformed_target_reward.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
@@ -729,7 +729,7 @@ class SampledMuZeroPolicy(Policy):
         else:
             td_data, priority_data = None, None
 
-        if self._cfg.categorical_distribution:
+        if self._cfg.model.categorical_distribution:
             return {
                 # 'priority':priority_info,
                 'total_loss': loss_data[0],
@@ -852,8 +852,8 @@ class SampledMuZeroPolicy(Policy):
                 # if not in training, obtain the scalars of the value/reward
                 pred_values_pool = inverse_scalar_transform(
                     pred_values_pool,
-                    self._cfg.support_size,
-                    categorical_distribution=self._cfg.categorical_distribution
+                    self._cfg.model.support_scale,
+                    categorical_distribution=self._cfg.model.categorical_distribution
                 ).detach().cpu().numpy()
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
@@ -1045,8 +1045,8 @@ class SampledMuZeroPolicy(Policy):
                 # if not in training, obtain the scalars of the value/reward
                 pred_values_pool = inverse_scalar_transform(
                     pred_values_pool,
-                    self._cfg.support_size,
-                    categorical_distribution=self._cfg.categorical_distribution
+                    self._cfg.model.support_scale,
+                    categorical_distribution=self._cfg.model.categorical_distribution
                 ).detach().cpu().numpy()  # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()  # list shape（B, A）

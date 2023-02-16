@@ -1,5 +1,5 @@
 from easydict import EasyDict
-
+import copy
 
 class Node():
     """
@@ -128,9 +128,9 @@ class AlphaBetaPruningBot:
 
     def get_best_action(self, board, player_index, depth=999):
         try:
-            simulator_env = self.ENV(EasyDict(self.cfg))
+            simulator_env = copy.deepcopy(self.ENV(EasyDict(self.cfg)))
         except:
-            simulator_env = self.ENV
+            simulator_env = copy.deepcopy(self.ENV)
         simulator_env.reset(start_player_index=player_index, init_state=board)
         root = Node(
             board, simulator_env.legal_actions, start_player_index=player_index, env=simulator_env
@@ -140,8 +140,7 @@ class AlphaBetaPruningBot:
         else:
             val, best_subtree = pruning(root, False, depth=depth, first_level=True)
 
-        # print('val, best_subtree:', val, best_subtree)
-        print(f'player_index: {player_index}, alpha-beta searched best_action: {best_subtree.prev_action}, its val: {val}')
+        # print(f'player_index: {player_index}, alpha-beta searched best_action: {best_subtree.prev_action}, its val: {val}')
 
         return best_subtree.prev_action
 

@@ -10,10 +10,9 @@ from easydict import EasyDict
 from lzero.rl_utils.mcts.ctree_efficientzero import ez_tree as tree_efficientzero
 from ..scaling_transform import inverse_scalar_transform
 
-###########################################################
+# ==============================================================
 # EfficientZero
-###########################################################
-
+# ==============================================================
 
 class EfficientZeroMCTSCtree(object):
     config = dict(
@@ -109,10 +108,12 @@ class EfficientZeroMCTSCtree(object):
                     network_output.value = inverse_scalar_transform(
                         network_output.value,
                         self.config.model.support_scale,
+                        categorical_distribution=self.config.model.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.value_prefix = inverse_scalar_transform(
                         network_output.value_prefix,
                         self.config.model.support_scale,
+                        categorical_distribution=self.config.model.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()
                     network_output.reward_hidden_state = (
@@ -149,9 +150,10 @@ class EfficientZeroMCTSCtree(object):
                 )
 
 
-###########################################################
+# ==============================================================
 # MuZero
-###########################################################
+# ==============================================================
+
 
 from lzero.rl_utils.mcts.ctree_muzero import mz_tree as tree_muzero
 
@@ -164,7 +166,7 @@ class MuZeroMCTSCtree(object):
         support_scale=300,
         discount=0.997,
         num_simulations=50,
-        lstm_horizon_len=5,
+        categorical_distribution=True,
     )
 
     @classmethod
@@ -238,12 +240,12 @@ class MuZeroMCTSCtree(object):
                     network_output.value = inverse_scalar_transform(
                         network_output.value,
                         self.config.model.support_scale,
-                        categorical_distribution=self.config.categorical_distribution
+                        categorical_distribution=self.config.model.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.reward = inverse_scalar_transform(
                         network_output.reward,
                         self.config.model.support_scale,
-                        categorical_distribution=self.config.categorical_distribution
+                        categorical_distribution=self.config.model.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()
                     network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()

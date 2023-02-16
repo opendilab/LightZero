@@ -19,7 +19,7 @@ args = ['PongNoFrameskip-v4']
 def test_game_history(env_name):
     if env_name == 'PongNoFrameskip-v4':
         from lzero.rl_utils.mcts.mcts_ctree import EfficientZeroMCTSCtree as MCTS
-        from lzero.model.efficientzero.efficientzero_model import EfficientZeroNet as Model
+        from lzero.model.efficientzero_model import EfficientZeroNet as Model
         from zoo.atari.config.pong_efficientzero_config import pong_efficientzero_config as config
     elif env_name == 'tictactoe':
         from lzero.rl_utils.mcts.mcts_ctree import MuZeroMCTSCtree as MCTS

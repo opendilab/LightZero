@@ -250,10 +250,10 @@ gomoku_muzero_config = dict(
 
         # coefficient
         # TODO(pu): test the effect of value_prefix_loss and consistency_loss
-        reward_loss_coeff=1,
-        # reward_loss_coeff=0,
-        value_loss_coeff=0.25,
-        policy_loss_coeff=1,
+        reward_loss_weight=1,
+        # reward_loss_weight=0,
+        value_loss_weight=0.25,
+        policy_loss_weight=1,
 
         # siamese
         # proj_hid=1024,

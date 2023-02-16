@@ -1,8 +1,11 @@
 # LightZero
-The following is an overview of the historical evolution of the Monte Carlo Tree Search (MCTS) algorithm series:
-![pipeline](assets/mcts_rl_evolution_overview.pdf)
 
-## Introduction
+The following is an overview of the historical evolution of the Monte Carlo Tree Search (MCTS) algorithm series:
+![pip3eline](assets/mcts_rl_evolution_overview.png)
+
+
+
+## Introduction to LightZero
 LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of MCTS algorithms (sometimes combined with cython and cpp), including:
 - [AlphaZero](https://www.science.org/doi/10.1126/science.aar6404)
 - [MuZero](https://arxiv.org/abs/1911.08265)
@@ -12,6 +15,23 @@ LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of 
 [comment]: <> (- [Gumbel MuZero]&#40;https://openreview.net/pdf?id=bERaNdoegnO&#41;)
 Our implementation is mainly based on [DI-engine](https://github.com/opendilab/DI-engie).
 
+## Outline
+
+- [Introduction to LightZero](#introduction-to-lightzero)
+- [Outline](#outline)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Awesome-MCTS Notes](#awesome-mcts-notes)
+  - [&#8627; Algo. Overview](#algo-overview)
+  - [&#8627; Paper Notes](#paper-notes)
+- [Awesome-MCTS Papers](#awesome-mcts-papers)
+  - [&#8627; Key Papers](#key-ppers)
+  - [&#8627; Other Papers](#other-ppers)
+- [Feedback and Contribution](#feedback-and-contribution)
+- [Citation](#citation)
+- [Acknowledgments](#acknowledgments)
+- [License](#license)
+
 ## Installation
 
 You can install latest LightZero in development from the GitHub source codes with the following command:
@@ -19,7 +39,7 @@ You can install latest LightZero in development from the GitHub source codes wit
 ```bash
 git clone https://github.com/opendilab/LightZero.git
 cd LightZero
-pip install -e .
+pip3 install -e .
 ```
 
 [comment]: <> (- [AlphaGo Zero]&#40;https://www.nature.com/articles/nature24270&#41; )
@@ -30,7 +50,7 @@ Train a MuZero agent to play [Pong](https://gymnasium.farama.org/environments/at
 
 ```bash
 cd LightZero
-python zoo/atari/config/pong_muzero_config.py
+python3 -u zoo/atari/config/pong_muzero_config.py
 ```
 
 
@@ -38,9 +58,11 @@ Train a MuZero agent to play [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-t
 
 ```bash
 cd LightZero
-python zoo/board_games/tictactoe/config/tictactoe_muzero_1pm_config.py
+python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_vs-bot_config.py
 ```
+## Awesome-MCTS Notes
 
+### Algo. Overview
 
 The following are the overview MCTS principle diagrams of the above algorithms:
 
@@ -61,6 +83,7 @@ The following are the overview MCTS principle diagrams of the above algorithms:
 
 </details>
 
+### Paper Notes
 The following are the detailed paper notes of the above algorithms:
 
 <details open>
@@ -84,10 +107,11 @@ The following are the detailed paper notes of the above algorithms:
 Here is a collection of research papers about **Monte Carlo Tree Search**.
 [This Section](#awesome-msts-papers) will be continuously updated to track the frontier of MCTS. 
 
+### Key Papers
+
 <details open>
 <summary>(Click to Collapse)</summary>
 
-### Key Papers
 #### LightZero Implemented series
 
 - [2018 Science AlphaZero: A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play](https://www.science.org/doi/10.1126/science.aar6404)
@@ -121,10 +145,11 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 </details>
 
+### Other Papers
+
 <details open>
 <summary>(Click to Collapse)</summary>
 
-### Other Papers
 #### ICML
 - [Efficient Learning for AlphaZero via Path Consistency](https://proceedings.mlr.press/v162/zhao22h/zhao22h.pdf) 2022
   - Dengwei Zhao, Shikui Tu, Lei Xu
@@ -167,7 +192,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - Anji Liu, Jianshu Chen, Mingze Yu, Yu Zhai, Xuewen Zhou, Ji Liu
   - Key: parallel Monte-Carlo Tree Search, partition the tree into sub-trees efficiently, compare the observation ratio of each processor
   - ExpEnv: speedup and performance comparison on JOY-CITY game, average episode return on atari game
-  - [Code](https://github.com/brilee/python_uct)
+  - [Code](https://github.com/brilee/python3 -u_uct)
 - [Learning to Plan in High Dimensions via Neural Exploration-Exploitation Trees](https://openreview.net/pdf?id=rJgJDAVKvB) 2020
   - Binghong Chen,  Bo Dai, Qinjie Lin, Guo Ye, Han Liu, Le Song
   - Key: meta path planning algorithm, exploits a novel neural architecture which can learn promising search directions from problem structures.
@@ -240,6 +265,17 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 [comment]: <> (})
 
 [comment]: <> (```)
+
+## Feedback and Contribution
+- [File an issue](https://github.com/opendilab/LightZero/issues/new/choose) on Github
+- Contact our email (opendilab@pjlab.org.cn)
+
+- We appreciate all the feedbacks and contributions to improve LightZero, both algorithms and system designs. 
+
+- [comment]: <> (- Contributes to our future plan [Roadmap]&#40;https://github.com/opendilab/LightZero/projects&#41;)
+
+[comment]: <> (And `CONTRIBUTING.md` offers some necessary information.)
+
 
 ## Citation
 ```latex

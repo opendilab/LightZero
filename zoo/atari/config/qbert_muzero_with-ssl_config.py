@@ -12,44 +12,32 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 50
-# # update_per_collect determines the number of training steps after each collection of a batch of data.
-# # For different env, we have different episode_length,
-# # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-# update_per_collect = 1000
-# batch_size = 256
-# max_env_step = int(1e6)
-
-## debug config
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 5
-update_per_collect = 2
-batch_size = 4
-max_env_step = int(1e4)
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 50
+# update_per_collect determines the number of training steps after each collection of a batch of data.
+# For different env, we have different episode_length,
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+update_per_collect = 1000
+batch_size = 256
+max_env_step = int(1e6)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-pong_muzero_config = dict(
-    exp_name=f'data_mz_ctree/pong_muzero_ns{num_simulations}_upc{update_per_collect}_seed0',
+qbert_muzero_config = dict(
+    exp_name=f'data_mz_ctree/qbert_muzero_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        env_name='PongNoFrameskip-v4',
+        env_name='QbertNoFrameskip-v4',
         frame_skip=4,
         gray_scale=False,
         obs_shape=(12, 96, 96),
         manager=dict(shared_memory=False, ),
-        stop_value=int(20),
-        ## debug config
-        collect_max_episode_steps=int(1e3),
-        eval_max_episode_steps=int(1e3),
+        stop_value=int(1e6),
     ),
     policy=dict(
         # the pretrained model path.
@@ -57,7 +45,7 @@ pong_muzero_config = dict(
         # Absolute path is recommended.
         # In LightZero, it is ``exp_name/ckpt/ckpt_best.pth.tar``.
         model_path=None,
-        env_name='PongNoFrameskip-v4',
+        env_name='QbertNoFrameskip-v4',
         # whether to use cuda for network.
         cuda=True,
         model=dict(
@@ -130,6 +118,8 @@ pong_muzero_config = dict(
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
+        ## NOTE: the only difference between muzero and muzero_with-ssl is the  self-supervised-learning loss in policy and model.
+        consistency_coeff=2,
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
         auto_temperature=False,
         fixed_temperature_value=0.25,
@@ -153,18 +143,19 @@ pong_muzero_config = dict(
         # ==============================================================
     ),
 )
-pong_muzero_config = EasyDict(pong_muzero_config)
-main_config = pong_muzero_config
+qbert_muzero_config = EasyDict(qbert_muzero_config)
+main_config = qbert_muzero_config
 
-pong_muzero_create_config = dict(
+qbert_muzero_create_config = dict(
     env=dict(
         type='atari_lightzero',
         import_names=['zoo.atari.envs.atari_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero',
-        import_names=['lzero.policy.muzero'],
+        type='muzero_with-ssl',
+        ## NOTE: the only difference between muzero and muzero_with-ssl is the self-supervised-learning loss in policy and model.
+        import_names=['lzero.policy.muzero_with_ssl'],
     ),
     collector=dict(
         type='episode_muzero',
@@ -172,8 +163,8 @@ pong_muzero_create_config = dict(
         import_names=['lzero.worker.collector.muzero_collector'],
     )
 )
-pong_muzero_create_config = EasyDict(pong_muzero_create_config)
-create_config = pong_muzero_create_config
+qbert_muzero_create_config = EasyDict(qbert_muzero_create_config)
+create_config = qbert_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import serial_pipeline_muzero

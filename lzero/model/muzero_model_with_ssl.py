@@ -3,14 +3,15 @@ The following code is adapted from https://github.com/YeWR/EfficientZero/blob/ma
 """
 
 import math
+from typing import Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
-from ding.utils import MODEL_REGISTRY
+from ding.utils import MODEL_REGISTRY, SequenceType
 
-from ..muzero.muzero_base_model import BaseNet, renormalize
+from .muzero_base_model import BaseNet, renormalize
 
 
 def conv3x3(in_channels, out_channels, stride=1):
@@ -104,12 +105,12 @@ class DownSample(nn.Module):
 class RepresentationNetwork(nn.Module):
 
     def __init__(
-        self,
-        observation_shape,
-        num_res_blocks,
-        num_channels,
-        downsample,
-        momentum=0.1,
+            self,
+            observation_shape,
+            num_res_blocks,
+            num_channels,
+            downsample,
+            momentum=0.1,
     ):
         """
         Overview: Representation network
@@ -160,15 +161,15 @@ class RepresentationNetwork(nn.Module):
 class DynamicsNetwork(nn.Module):
 
     def __init__(
-        self,
-        num_res_blocks,
-        num_channels,
-        reward_head_channels,
-        fc_reward_layers,
-        full_support_size,
-        block_output_size_reward,
-        momentum=0.1,
-        last_linear_layer_init_zero=False,
+            self,
+            num_res_blocks,
+            num_channels,
+            reward_head_channels,
+            fc_reward_layers,
+            full_support_size,
+            block_output_size_reward,
+            momentum=0.1,
+            last_linear_layer_init_zero=False,
     ):
         """
         Overview:
@@ -260,20 +261,20 @@ class DynamicsNetwork(nn.Module):
 class PredictionNetwork(nn.Module):
 
     def __init__(
-        self,
-        action_space_size,
-        num_res_blocks,
-        in_channels,
-        num_channels,
-        value_head_channels,
-        policy_head_channels,
-        fc_value_layers,
-        fc_policy_layers,
-        full_support_size,
-        block_output_size_value,
-        block_output_size_policy,
-        momentum=0.1,
-        last_linear_layer_init_zero=False,
+            self,
+            action_space_size,
+            num_res_blocks,
+            in_channels,
+            num_channels,
+            value_head_channels,
+            policy_head_channels,
+            fc_value_layers,
+            fc_policy_layers,
+            full_support_size,
+            block_output_size_value,
+            block_output_size_policy,
+            momentum=0.1,
+            last_linear_layer_init_zero=False,
     ):
         """Prediction network
         Parameters
@@ -378,30 +379,33 @@ class PredictionNetwork(nn.Module):
 class MuZeroNetV2(BaseNet):
 
     def __init__(
-        self,
-        observation_shape,
-        action_space_size,
-        num_res_blocks,
-        num_channels,
-        reward_head_channels,
-        value_head_channels,
-        policy_head_channels,
-        fc_reward_layers,
-        fc_value_layers,
-        fc_policy_layers,
-        reward_support_size,
-        value_support_size,
-        downsample,
-        representation_model_type: str = 'conv_res_blocks',
-        representation_model: nn.Module = None,
-        batch_norm_momentum=0.1,
-        proj_hid=256,
-        proj_out=256,
-        pred_hid=64,
-        pred_out=256,
-        last_linear_layer_init_zero=False,
-        state_norm=False,
-        categorical_distribution=True,
+            self,
+            observation_shape: SequenceType = (12, 96, 96),
+            action_space_size: int = 6,
+            num_res_blocks: int = 1,
+            num_channels: int = 64,
+            reward_head_channels: int = 16,
+            value_head_channels: int = 16,
+            policy_head_channels: int = 16,
+            fc_reward_layers: SequenceType = [32],
+            fc_value_layers: SequenceType = [32],
+            fc_policy_layers: SequenceType = [32],
+            reward_support_size: int = 601,
+            value_support_size: int = 601,
+            downsample: bool = True,
+            representation_model_type: str = 'conv_res_blocks',
+            representation_model: nn.Module = None,
+            batch_norm_momentum=0.1,
+            proj_hid: int = 1024,
+            proj_out: int = 1024,
+            pred_hid: int = 512,
+            pred_out: int = 1024,
+            last_linear_layer_init_zero: bool = True,
+            state_norm: bool = False,
+            categorical_distribution: bool = True,
+            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            *args,
+            **kwargs
     ):
         """
         Overview:
