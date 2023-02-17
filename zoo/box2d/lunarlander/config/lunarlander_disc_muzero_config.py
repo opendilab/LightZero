@@ -53,29 +53,16 @@ lunarlander_muzero_config = dict(
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 8, 1, 1] -> [4*1, 8, 1]
-            # observation_shape=(4, 8, 1),  # if frame_stack_nums=4
+            # observation_shape=(4, 8, 1),  # if frame_stack_num=4
             observation_shape=(1, 8, 1),  # if frame_stack_num=1
             action_space_size=4,
+            # medium size model
+            num_res_blocks=1,
+            num_channels=32,
+            lstm_hidden_size=256,
             # whether to use discrete support to represent categorical distribution for value, reward.
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            ## medium size model
-            num_res_blocks=1,
-            num_channels=32,
-            reward_head_channels=16,
-            value_head_channels=16,
-            policy_head_channels=16,
-            fc_reward_layers=[32],
-            fc_value_layers=[32],
-            fc_policy_layers=[32],
-            reward_support_size=601,
-            value_support_size=601,
-            batch_norm_momentum=0.1,
-            proj_hid=512,
-            proj_out=512,
-            pred_hid=256,
-            pred_out=512,
-            lstm_hidden_size=256,
         ),
         # learn_mode config
         learn=dict(
@@ -132,7 +119,7 @@ lunarlander_muzero_config = dict(
         policy_loss_weight=1,
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
         auto_temperature=False,
-        fixed_temperature_value=0.25,
+        fixed_temperature_value=1,
         # the size/capacity of replay_buffer
         max_total_transitions=int(1e5),
         # ``max_training_steps`` is only used for adjusting temperature manually.

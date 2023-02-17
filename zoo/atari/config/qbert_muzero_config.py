@@ -63,7 +63,7 @@ qbert_muzero_config = dict(
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
-            observation_shape=(12, 96, 96),  # if frame_stack_nums=4
+            observation_shape=(12, 96, 96),  # if frame_stack_num=4
             # observation_shape=(3, 96, 96),  # if frame_stack_num=1
             action_space_size=6,
             # whether to use discrete support to represent categorical distribution for value, reward.

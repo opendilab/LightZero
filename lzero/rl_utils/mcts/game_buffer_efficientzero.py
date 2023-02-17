@@ -50,7 +50,7 @@ class EfficientZeroGameBuffer(Buffer):
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
-            observation_shape=(12, 96, 96),  # if frame_stack_nums=4
+            observation_shape=(12, 96, 96),  # if frame_stack_num=4
             # observation_shape=(3, 96, 96),  # if frame_stack_num=1
             action_space_size=6,
             # the default config is large size model, same as the EfficientZero original paper.
@@ -128,7 +128,7 @@ class EfficientZeroGameBuffer(Buffer):
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        consistency_weight=2,
+        ssl_loss_weight=2,
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
         auto_temperature=False,
         fixed_temperature_value=0.25,
@@ -167,6 +167,7 @@ class EfficientZeroGameBuffer(Buffer):
 
     def __init__(self, cfg: dict):
         super().__init__(cfg.max_total_transitions)
+        # NOTE: utilize the default config
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config

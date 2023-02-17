@@ -1,10 +1,3 @@
-import sys
-
-# sys.path.append('/Users/puyuan/code/LightZero')
-# sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
-# sys.path.append('/mnt/lustre/puyuan/LightZero')
-
 import torch
 from easydict import EasyDict
 
@@ -13,284 +6,145 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-observation_dim = 3
-
-continuous_action_space = False
-action_dim = 11
-K = 5
-
-categorical_distribution = True
-game_history_length = 50  # we should ignore done in pendulum env which have fixed episode length 200
-norm_type = 'BN'  # 'LN' # TODO: res_blocks LN
-policy_entropy_loss_coeff = 0
-normalize_prob_of_sampled_actions = True
-
+# ==============================================================
+# begin of the most frequently changed config specified by the user
+# ==============================================================
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-batch_size = 256
-update_per_collect = 100  # episode_length*collector_env_num=200*8=1600
+continuous_action_space = False
+K = 5  # num_of_sampled_actions
 num_simulations = 50
-
-# for debug
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# batch_size = 3
-# update_per_collect = 1
-# num_simulations = 3
+# update_per_collect determines the number of training steps after each collection of a batch of data.
+# For different env, we have different episode_length,
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+update_per_collect = 200
+batch_size = 256
+max_env_step = int(1e6)
+# ==============================================================
+# end of the most frequently changed config specified by the user
+# ==============================================================
 
 pendulum_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/pendulum_disc11_sampled_efficientzero_seed0_sub883_ghl{game_history_length}_smallmodel_{norm_type}_k{K}_ns{num_simulations}_upc{update_per_collect}_cdt-rew-norm100_cc0_adam3e-3_pelc0_normprob',
+    exp_name=f'data_sez_ctree/pendulum_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        env_id='pendulum',
         continuous=False,
-        stop_value=-200,
-        norm_obs=dict(use_norm=False, ),
-        act_scale=True,
-        # ignore_done=True,
-        battle_mode='play_with_bot_mode',
-        prob_random_agent=0.,
-        collect_max_episode_steps=int(1.08e4),
-        eval_max_episode_steps=int(1.08e5),
         manager=dict(shared_memory=False, ),
+        stop_value=int(1e6),
     ),
     policy=dict(
+        # the pretrained model path.
+        # Users should add their own model path here. Model path should lead to a model.
+        # Absolute path is recommended.
+        # In LightZero, it is ``exp_name/ckpt/ckpt_best.pth.tar``.
         model_path=None,
-        env_name='pendulum',
-        # Whether to use cuda for network.
+        # whether to use cuda for network.
         cuda=True,
         model=dict(
-            # # sigma_type='fixed',  # option list: ['fixed', 'conditioned']
-            # sigma_type='conditioned',  # option list: ['fixed', 'conditioned']
-            # fixed_sigma_value=0.3,
-            # bound_type=None,  # if bound_type='tanh', the policy mu is bouded in [-1,1]
-            # # norm_type='LN',
-            # norm_type=norm_type,
-
-            # activation=torch.nn.ReLU(inplace=True),
-            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=categorical_distribution,
-            # representation_model_type='identity',
-            representation_model_type='conv_res_blocks',
-            # [S, W, H, C] -> [S x C, W, H]
-            # [4,8,1,1] -> [4*1, 8, 1]
-            # observation_shape=(4,  observation_dim, 1),  # if frame_stack_nums=4
-            observation_shape=(1, observation_dim, 1),  # if frame_stack_nums=1
-
-            action_space_size=action_dim,  # 4**2
-            num_of_sampled_actions=K,
-            continuous_action_space=continuous_action_space,
-
+            # ==============================================================
+            # We use the small size model for pendulum.
+            # ==============================================================
+            # NOTE: the key difference setting between image-input and vector input.
+            image_channel=1,
             downsample=False,
+            frame_stack_num=1,
+            observation_shape=(1, 3, 1),  # if frame_stack_num=1
+            action_space_size=11,
+            continuous_action_space=continuous_action_space,
+            num_of_sampled_actions=K,
             num_res_blocks=1,
-            # small size model
             num_channels=16,
-            lstm_hidden_size=256,
-            reward_head_channels=16,
-            value_head_channels=16,
-            policy_head_channels=16,
-            # small size model
-            fc_reward_layers=[8],
-            fc_value_layers=[8],
-            fc_policy_layers=[8],
+            lstm_hidden_size=128,
+            support_scale=25,
             reward_support_size=51,
             value_support_size=51,
-            batch_norm_momentum=0.1,
-            # small size model
-            proj_hid=128,
-            proj_out=128,
-            pred_hid=64,
-            pred_out=128,
-            last_linear_layer_init_zero=True,
-            state_norm=False,
+            # whether to use discrete support to represent categorical distribution for value, value_prefix.
+            categorical_distribution=True,
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
         # learn_mode config
         learn=dict(
-            normalize_prob_of_sampled_actions=normalize_prob_of_sampled_actions,
-
-            # policy_loss_type='KL',
-            policy_loss_type='cross_entropy',
-
+            policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
             update_per_collect=update_per_collect,
-            target_update_freq=100,
             batch_size=batch_size,
-
-            # for atari same as in muzero
-            # optim_type='SGD',
-            # learning_rate=0.2,  # lr_manually:0.2->0.02->0.002
-
-            # sampled paper
-            optim_type='Adam',
-            learning_rate=3e-3,  # adam lr
-            cos_lr_scheduler=False,
-
-            # cos_lr_scheduler=True,
-            # learning_rate=1e-4,  # adam lr
-            weight_decay=2e-5,
+            lr_manually=True,
+            optim_type='SGD',
+            learning_rate=0.2,  # init lr for manually decay schedule
+            # Frequency of target network update.
+            target_update_freq=100,
         ),
         # collect_mode config
         collect=dict(
-            # You can use either "n_sample" or "n_episode" in collector.collect.
-            # Get "n_sample" samples per collect.
+            # Get "n_episode" episodes per collect.
             n_episode=n_episode,
         ),
-        # the eval cost is expensive, so we set eval_freq larger
-        # eval=dict(evaluator=dict(eval_freq=int(5e3), )),
-        # eval=dict(evaluator=dict(eval_freq=int(2e3), )),
-        eval=dict(evaluator=dict(eval_freq=int(1e3), )),
-
-        # for debug
-        # eval=dict(evaluator=dict(eval_freq=int(2), )),
+        # If the eval cost is expensive, we could set eval_freq larger.
+        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
         # command_mode config
         other=dict(
-            # the replay_buffer_size is ineffective, we specify it in game config
+            # NOTE: the replay_buffer_size is ineffective,
+            # we specify it using ``max_total_transitions`` in the following game config
             replay_buffer=dict(type='game_buffer_sampled_efficientzero')
         ),
-        ######################################
-        # game_config begin
-        ######################################
-        env_type='not_board_games',
-        device=device,
-        # mcts_ctree=False,
+        # ==============================================================
+        # begin of additional game_config
+        # ==============================================================
+        ## common
         mcts_ctree=True,
-        battle_mode='play_with_bot_mode',
-        game_history_length=game_history_length,
-        action_space_size=action_dim,  # 4**2
-        continuous_action_space=continuous_action_space,
-        num_of_sampled_actions=K,
-        # clip_reward=True,
-        # TODO(pu)
-        clip_reward=False,
-        # normalize_reward=False,
-        normalize_reward=True,
-        normalize_reward_scale=100,
-
-        image_based=False,
-        cvt_string=False,
-        game_wrapper=True,
-        amp_type='none',
-        # [S, W, H, C] -> [S x C, W, H]
-        # [4, 4, 1, 1] -> [4*1, 4, 1]
-        image_channel=1,
-        # obs_shape=(4, observation_dim, 1),  # if frame_stack_nums=4
-        # frame_stack_num=4,
-
-        obs_shape=(1, observation_dim, 1),  # if frame_stack_num=1
-        frame_stack_num=1,
-        # frame skip & stack observation
-        frame_skip=4,
-
-        gray_scale=False,
-        downsample=False,
-        monitor_statistics=True,
-        # TODO(pu): test the effect of augmentation,
-        # use_augmentation=True,  # only for atari image obs
-        use_augmentation=False,
-        # Style of augmentation
-        # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
-        augmentation=['shift', 'intensity'],
-
+        device=device,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
+        env_type='not_board_games',
+        game_history_length=50,
+
+        ## observation
+        # the key difference setting between image-input and vector input.
+        image_based=False,
+        cvt_string=False,
+        gray_scale=False,
+        downsample=False,
+        use_augmentation=False,
+
+        ## reward
+        clip_reward=True,
+
+        ## learn
         num_simulations=num_simulations,
-        batch_size=batch_size,
-        total_transitions=int(1e5),
-        lstm_hidden_size=256,
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
-
-        # TODO(pu): why 0.99?
-        reanalyze_ratio=0.99,
-
-        # TODO(pu): why not use adam?
-        # lr_manually=True,
-        lr_manually=False,
-
-        use_priority=False,
-        use_max_priority_for_new_data=True,
-
-        # use_priority=True,
-        # use_max_priority_for_new_data=True,
-
-        # TODO(pu): only used for adjust temperature manually
-        max_training_steps=int(1e5),
-        auto_temperature=False,
-        # only effective when auto_temperature=False
-        # fixed_temperature_value=0.25,
-        fixed_temperature_value=1,
-        # TODO(pu): whether to use root value in reanalyzing?
-        use_root_value=False,
-
-        # TODO(pu): test the effect
-        last_linear_layer_init_zero=True,
-        state_norm=False,
-        mini_infer_size=2,
-        # (Float type) How much prioritization is used: 0 means no prioritization while 1 means full prioritization
-        priority_prob_alpha=0.6,
-        # (Float type)  How much correction is used: 0 means no correction while 1 means full correction
-        # TODO(pu): test effect of 0.4->1
-        priority_prob_beta=0.4,
-        prioritized_replay_eps=1e-6,
-        root_dirichlet_alpha=0.3,
-        root_exploration_fraction=0.25,
-        auto_td_steps=int(0.3 * 2e5),
-        auto_td_steps_ratio=0.3,
-
-        # UCB formula
-        pb_c_base=19652,
-        pb_c_init=1.25,
-        # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=categorical_distribution,
-        support_size=25,
-        max_grad_norm=10,
-        # max_grad_norm=0.5,
-        test_interval=10000,
-        log_interval=1000,
-        vis_interval=1000,
-        checkpoint_interval=100,
-        target_model_interval=200,
-        save_ckpt_interval=10000,
-        discount=0.997,
-        dirichlet_alpha=0.3,
-        value_delta_max=0.01,
-        num_actors=1,
-        # network initialization/ & normalization
-        episode_life=True,
-        # replay window
-        start_transitions=8,
-        transition_num=1,
-
-        # TODO(pu): EfficientZero -> MuZero
-        # coefficient
-        reward_loss_weight=1,  # value_prefix loss
+        # the weight of different loss
+        # TODO: value_prefix_loss_weight
+        reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        policy_entropy_loss_coeff=policy_entropy_loss_coeff,
-        # ssl_loss_weight=2,
+        policy_entropy_loss_coeff=0,
+        # NOTE: for vector input, we don't use the ssl loss.
         ssl_loss_weight=0,
+        # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
+        auto_temperature=False,
+        fixed_temperature_value=0.25,
+        # the size/capacity of replay_buffer
+        max_total_transitions=int(1e5),
+        # ``max_training_steps`` is only used for adjusting temperature manually.
+        max_training_steps=int(1e5),
 
-        # siamese
-        # small size model
-        proj_hid=128,
-        proj_out=128,
-        pred_hid=64,
-        pred_out=128,
-        batch_norm_momentum=0.1,
-        blocks=1,  # Number of blocks in the ResNet
-        reward_head_channels=16,  # x36 Number of channels in reward head
-        value_head_channels=16,  # x36 Number of channels in value head
-        policy_head_channels=16,  # x36 Number of channels in policy head
-        resnet_fc_reward_layers=[8],  # Define the hidden layers in the reward head of the dynamic network
-        resnet_fc_value_layers=[8],  # Define the hidden layers in the value head of the prediction network
-        resnet_fc_policy_layers=[8],  # Define the hidden layers in the policy head of the prediction network
-        ######################################
-        # game_config end
-        ######################################
+        ## reanalyze
+        reanalyze_ratio=0.3,
+        reanalyze_outdated=True,
+        # whether to use root value in reanalyzing part
+        use_root_value=False,
+        mini_infer_size=256,
+
+        ## priority
+        use_priority=True,
+        use_max_priority_for_new_data=True,
+        # ==============================================================
+        # end of additional game_config
+        # ==============================================================
     ),
 )
 pendulum_sampled_efficientzero_config = EasyDict(pendulum_sampled_efficientzero_config)
@@ -301,7 +155,6 @@ pendulum_sampled_efficientzero_create_config = dict(
         type='pendulum',
         import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
     ),
-    # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='sampled_efficientzero',
@@ -318,4 +171,4 @@ create_config = pendulum_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import serial_pipeline_sampled_efficientzero
-    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=int(2e5))
+    serial_pipeline_sampled_efficientzero([main_config, create_config], seed=0, max_env_step=max_env_step)

@@ -57,7 +57,7 @@ breakout_efficientzero_config = dict(
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
-            observation_shape=(12, 96, 96),  # if frame_stack_nums=4
+            observation_shape=(12, 96, 96),  # if frame_stack_num=4
             # observation_shape=(3, 96, 96),  # if frame_stack_num=1
             # NOTE: the action_space_size=4 for breakout env.
             action_space_size=4,
@@ -117,7 +117,7 @@ breakout_efficientzero_config = dict(
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        consistency_weight=2,
+        ssl_loss_weight=2,
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
         auto_temperature=False,
         fixed_temperature_value=0.25,

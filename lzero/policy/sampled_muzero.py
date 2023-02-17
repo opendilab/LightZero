@@ -299,7 +299,7 @@ class SampledMuZeroPolicy(Policy):
         #############################
         # calculate policy loss: KL loss
         #############################
-        if self._cfg.continuous_action_space:
+        if self._cfg.model.continuous_action_space:
             """continuous action space"""
             (mu, sigma) = policy_logits[:, :self._cfg.action_space_size], policy_logits[:,
                                                                                         -self._cfg.action_space_size:]
@@ -320,7 +320,7 @@ class SampledMuZeroPolicy(Policy):
             # target_normalized_visit_count_init_step is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
             target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step + 1e-9)
             log_prob_sampled_actions = []
-            for k in range(self._cfg.num_of_sampled_actions):
+            for k in range(self._cfg.model.num_of_sampled_actions):
                 # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
                 # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
                 # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
@@ -379,7 +379,7 @@ class SampledMuZeroPolicy(Policy):
             # target_normalized_visit_count_init_step is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
             target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step + 1e-9)
             log_prob_sampled_actions = []
-            for k in range(self._cfg.num_of_sampled_actions):
+            for k in range(self._cfg.model.num_of_sampled_actions):
                 # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
                 # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
                 # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
@@ -466,7 +466,7 @@ class SampledMuZeroPolicy(Policy):
             #############################
             # calculate policy loss: KL loss
             #############################
-            if self._cfg.continuous_action_space:
+            if self._cfg.model.continuous_action_space:
                 (mu,
                  sigma) = policy_logits[:, :self._cfg.action_space_size], policy_logits[:,
                                                                                         -self._cfg.action_space_size:]
@@ -486,7 +486,7 @@ class SampledMuZeroPolicy(Policy):
                 # batch_size, num_of_sampled_actions -> 4,20
                 target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-9)
                 log_prob_sampled_actions = []
-                for k in range(self._cfg.num_of_sampled_actions):
+                for k in range(self._cfg.model.num_of_sampled_actions):
                     # target_sampled_actions[:,k,:].shape: (batch_size, action_dim) e.g. (4,2)
                     # dist.log_prob(target_sampled_actions[:,k,:]).shape: (batch_size,) e.g. (4,)
 
@@ -548,7 +548,7 @@ class SampledMuZeroPolicy(Policy):
                 # target_normalized_visit_count is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
                 target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-9)
                 log_prob_sampled_actions = []
-                for k in range(self._cfg.num_of_sampled_actions):
+                for k in range(self._cfg.model.num_of_sampled_actions):
                     # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
                     # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
                     # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
@@ -870,7 +870,7 @@ class SampledMuZeroPolicy(Policy):
                 if action_mask[0] is None:
                     # continuous action space env: all -1
                     legal_actions = [
-                        [-1 for i in range(self._cfg.num_of_sampled_actions)] for _ in range(active_collect_env_num)
+                        [-1 for i in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_collect_env_num)
                     ]
                 else:
                     action_num = int(action_mask[0].sum())
@@ -879,10 +879,10 @@ class SampledMuZeroPolicy(Policy):
                     ]
                 roots = ctree.Roots(
                     active_collect_env_num, legal_actions, self._cfg.action_space_size,
-                    self._cfg.num_of_sampled_actions, self._cfg.continuous_action_space
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
                 noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.num_of_sampled_actions
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 ]
                 ######################
@@ -906,7 +906,7 @@ class SampledMuZeroPolicy(Policy):
                 if action_mask[0] is None:
                     # continuous action space env: all -1
                     legal_actions = [
-                        [-1 for i in range(self._cfg.num_of_sampled_actions)] for _ in range(active_collect_env_num)
+                        [-1 for i in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_collect_env_num)
                     ]
                 else:
                     action_num = int(action_mask[0].sum())
@@ -915,11 +915,11 @@ class SampledMuZeroPolicy(Policy):
                     ]
                 roots = ptree.Roots(
                     active_collect_env_num, legal_actions, self._cfg.action_space_size,
-                    self._cfg.num_of_sampled_actions, self._cfg.continuous_action_space
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
                 # the only difference between collect and eval is the dirichlet noise
                 noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.num_of_sampled_actions
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 ]
                 roots.prepare(self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play)
@@ -962,7 +962,7 @@ class SampledMuZeroPolicy(Policy):
                 # sampled related code
                 ######################
                 # action, _ = select_action(distributions, temperature=1, deterministic=True)
-                if action_mask[0] is not None and not self._cfg.continuous_action_space:
+                if action_mask[0] is not None and not self._cfg.model.continuous_action_space:
                     # only discrete action space have action mask
                     try:
                         action = roots_sampled_actions[i][action].value
@@ -977,13 +977,13 @@ class SampledMuZeroPolicy(Policy):
                 else:
                     try:
                         action = roots_sampled_actions[i][action].value
-                        if not self._cfg.continuous_action_space:
+                        if not self._cfg.model.continuous_action_space:
                             action = int(action[0])
                     except Exception as error:
                         # print(error)
                         # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                         action = np.array(roots_sampled_actions[i][action])
-                if not self._cfg.continuous_action_space:
+                if not self._cfg.model.continuous_action_space:
                     if len(action.shape) == 0:
                         action = int(action)
                     elif len(action.shape) == 1:
@@ -1062,7 +1062,7 @@ class SampledMuZeroPolicy(Policy):
                 if action_mask[0] is None:
                     # continuous action space env: all -1
                     legal_actions = [
-                        [-1 for i in range(self._cfg.num_of_sampled_actions)] for _ in range(active_eval_env_num)
+                        [-1 for i in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_eval_env_num)
                     ]
                 else:
                     action_num = int(action_mask[0].sum())
@@ -1070,8 +1070,8 @@ class SampledMuZeroPolicy(Policy):
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                     ]
                 roots = ctree.Roots(
-                    active_eval_env_num, legal_actions, self._cfg.action_space_size, self._cfg.num_of_sampled_actions,
-                    self._cfg.continuous_action_space
+                    active_eval_env_num, legal_actions, self._cfg.action_space_size, self._cfg.model.num_of_sampled_actions,
+                    self._cfg.model.continuous_action_space
                 )
                 ######################
                 # sampled related code
@@ -1085,8 +1085,8 @@ class SampledMuZeroPolicy(Policy):
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
                 roots = ptree.Roots(
-                    active_eval_env_num, legal_actions, self._cfg.action_space_size, self._cfg.num_of_sampled_actions,
-                    self._cfg.continuous_action_space
+                    active_eval_env_num, legal_actions, self._cfg.action_space_size, self._cfg.model.num_of_sampled_actions,
+                    self._cfg.model.continuous_action_space
                 )
 
                 roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
@@ -1124,7 +1124,7 @@ class SampledMuZeroPolicy(Policy):
                 ######################
                 # sampled related code
                 ######################
-                if action_mask[0] is not None and not self._cfg.continuous_action_space:
+                if action_mask[0] is not None and not self._cfg.model.continuous_action_space:
                     # only discrete action space have action mask
                     try:
                         action = roots_sampled_actions[i][action].value
@@ -1145,7 +1145,7 @@ class SampledMuZeroPolicy(Policy):
                         # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                         action = np.array(roots_sampled_actions[i][action])
 
-                if not self._cfg.continuous_action_space:
+                if not self._cfg.model.continuous_action_space:
                     if len(action.shape) == 0:
                         action = int(action)
                     elif len(action.shape) == 1:

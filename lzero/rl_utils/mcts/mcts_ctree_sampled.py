@@ -83,7 +83,7 @@ class SampledEfficientZeroMCTSCtree(object):
                 # the hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play_batch),
-                    self.config.continuous_action_space
+                    self.config.model.continuous_action_space
                 )
                 # obtain the search horizon for leaf nodes
                 search_lens = results.get_search_len()
@@ -98,7 +98,7 @@ class SampledEfficientZeroMCTSCtree(object):
                 hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(device).unsqueeze(0)
                 hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(device).unsqueeze(0)
 
-                if self.config.continuous_action_space is True:
+                if self.config.model.continuous_action_space is True:
                     # continuous action
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).float()
 
@@ -114,9 +114,9 @@ class SampledEfficientZeroMCTSCtree(object):
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
                     network_output.value = inverse_scalar_transform(network_output.value,
-                                                                    self.config.support_size).detach().cpu().numpy()
+                                                                    self.config.model.support_scale).detach().cpu().numpy()
                     network_output.value_prefix = inverse_scalar_transform(
-                        network_output.value_prefix, self.config.support_size
+                        network_output.value_prefix, self.config.model.support_scale
                     ).detach().cpu().numpy()
                     network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()
                     network_output.reward_hidden_state = (
@@ -222,7 +222,7 @@ class SampledMuZeroMCTSCtree(object):
                 # the hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play_batch),
-                    self.config.continuous_action_space
+                    self.config.model.continuous_action_space
                 )
                 # obtain the search horizon for leaf nodes
                 search_lens = results.get_search_len()
@@ -233,7 +233,7 @@ class SampledMuZeroMCTSCtree(object):
 
                 hidden_states = torch.from_numpy(np.asarray(hidden_states)).to(device).float()
 
-                if self.config.continuous_action_space is True:
+                if self.config.model.continuous_action_space is True:
                     # continuous action
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).float()
 
@@ -248,12 +248,12 @@ class SampledMuZeroMCTSCtree(object):
                     # if not in training, obtain the scalars of the value/reward
                     network_output.value = inverse_scalar_transform(
                         network_output.value,
-                        self.config.support_size,
+                        self.config.model.support_scale,
                         categorical_distribution=self.config.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.reward = inverse_scalar_transform(
                         network_output.reward,
-                        self.config.support_size,
+                        self.config.model.support_scale,
                         categorical_distribution=self.config.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()

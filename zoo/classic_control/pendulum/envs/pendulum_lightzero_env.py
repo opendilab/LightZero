@@ -21,13 +21,12 @@ class PendulumEnv(BaseEnv):
         return cfg
 
     config = dict(
+        continuous=True,
         save_replay_gif=False,
         replay_path_gif=None,
         replay_path=None,
         act_scale=True,
         delay_reward_step=0,
-        each_dim_disc_size=4,
-        battle_mode='play_with_bot_mode',
         prob_random_agent=0.,
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),

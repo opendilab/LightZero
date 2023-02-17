@@ -403,19 +403,14 @@ class SampledEfficientZeroCollector(ISerialCollector):
             ep = -action_space * p * np.log2(p)
             return ep
 
-        max_visit_entropy = _get_max_entropy(self.game_config.action_space_size)
+        max_visit_entropy = _get_max_entropy(self.game_config.model.action_space_size)
         # print('max_visit_entropy', max_visit_entropy)
 
         ready_env_id = set()
         remain_episode = n_episode
-        # new_available_env_id = set(init_obs.keys()).difference(ready_env_id)
-        # ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
-        # remain_episode -= min(len(new_available_env_id), remain_episode)
 
         while True:
             with self._timer:
-                # stack_obs = [game_history.step_obs() for game_history in game_histories]
-
                 # Get current ready env obs.
                 # only for subprocess, to get the ready_env_id
                 obs = self._env.ready_obs

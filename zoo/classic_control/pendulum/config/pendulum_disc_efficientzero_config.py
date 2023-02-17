@@ -16,7 +16,7 @@ else:
 # # update_per_collect determines the number of training steps after each collection of a batch of data.
 # # For different env, we have different episode_length,
 # # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-# update_per_collect = 250
+# update_per_collect = 200
 # batch_size = 256
 # max_env_step = int(1e6)
 
@@ -41,7 +41,7 @@ pendulum_disc_efficientzero_config = dict(
         continuous=False,
         norm_obs=dict(use_norm=False, ),
         manager=dict(shared_memory=False, ),
-        stop_value=300,
+        stop_value=int(1e6),
     ),
     policy=dict(
         # the pretrained model path.
@@ -62,28 +62,17 @@ pendulum_disc_efficientzero_config = dict(
             downsample=False,
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
-            # e.g. [4, 3, 1, 1] -> [4*1, 3, 1]
-            # observation_shape=(4, 3, 1),  # if frame_stack_nums=4
+            # e.g. [1, 3, 1, 1] -> [1*1, 3, 1]
+            # observation_shape=(4, 3, 1),  # if frame_stack_num=4
             observation_shape=(1, 3, 1),  # if frame_stack_num=1
             action_space_size=11,
-            ## medium size model
             num_res_blocks=1,
             num_channels=16,
-            reward_head_channels=16,
-            value_head_channels=16,
-            policy_head_channels=16,
-            fc_reward_layers=[8],
-            fc_value_layers=[8],
-            fc_policy_layers=[8],
+            lstm_hidden_size=128,
+            support_scale=25,
             reward_support_size=51,
             value_support_size=51,
-            batch_norm_momentum=0.1,
-            proj_hid=512,
-            proj_out=512,
-            pred_hid=256,
-            pred_out=512,
-            lstm_hidden_size=256,
-            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
+            # whether to use discrete support to represent categorical distribution for value, value_prefix.
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
@@ -142,7 +131,8 @@ pendulum_disc_efficientzero_config = dict(
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        consistency_weight=2,
+        # NOTE: for vector input, we don't use the ssl loss.
+        ssl_loss_weight=0,
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
         auto_temperature=False,
         fixed_temperature_value=0.25,

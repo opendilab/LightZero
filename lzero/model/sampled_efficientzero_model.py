@@ -3,12 +3,13 @@ The following code is adapted from https://github.com/YeWR/EfficientZero/blob/ma
 """
 
 import math
+from typing import Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
-from ding.utils import MODEL_REGISTRY
+from ding.utils import MODEL_REGISTRY, SequenceType
 from ding.model.common import ReparameterizationHead
 from .sampled_efficientzero_base_model import BaseNet, renormalize
 
@@ -456,36 +457,43 @@ class SampledEfficientZeroNet(BaseNet):
 
     def __init__(
         self,
-        observation_shape,
-        action_space_size,
-        num_of_sampled_actions,
-        continuous_action_space,
-        num_res_blocks,
-        num_channels,
-        reward_head_channels,
-        value_head_channels,
-        policy_head_channels,
-        fc_reward_layers,
-        fc_value_layers,
-        fc_policy_layers,
-        reward_support_size,
-        value_support_size,
-        downsample,
+        observation_shape: SequenceType = (12, 96, 96),
+        action_space_size: int = 6,
+        continuous_action_space: bool = False,
+        num_of_sampled_actions: int = 6,
+        num_res_blocks: int = 1,
+        num_channels: int = 64,
+        reward_head_channels: int = 16,
+        value_head_channels: int = 16,
+        policy_head_channels: int = 16,
+        fc_reward_layers: SequenceType = [32],
+        fc_value_layers: SequenceType = [32],
+        fc_policy_layers: SequenceType = [32],
+        reward_support_size: int = 601,
+        value_support_size: int = 601,
+        downsample: bool = True,
         representation_model_type: str = 'conv_res_blocks',
         representation_model: nn.Module = None,
-        lstm_hidden_size=512,
         batch_norm_momentum=0.1,
-        proj_hid=256,
-        proj_out=256,
-        pred_hid=64,
-        pred_out=256,
-        last_linear_layer_init_zero=False,
-        state_norm=False,
-        categorical_distribution=True,
-        sigma_type='fixed',
+        proj_hid: int = 1024,
+        proj_out: int = 1024,
+        pred_hid: int = 512,
+        pred_out: int = 1024,
+        lstm_hidden_size: int = 512,
+        last_linear_layer_init_zero: bool = True,
+        state_norm: bool = False,
+        categorical_distribution: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        # ==============================================================
+        # specific sampled related config for continuous action space
+        # ==============================================================
+        sigma_type='conditioned',
         fixed_sigma_value=0.3,
         bound_type=None,
         norm_type='BN',
+        *args,
+        **kwargs,
+
     ):
         """
         Overview:

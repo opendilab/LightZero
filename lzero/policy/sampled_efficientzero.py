@@ -47,31 +47,57 @@ class SampledEfficientZeroPolicy(Policy):
         # (int) The number of step for calculating target q_value
         nstep=1,
         model=dict(
-            observation_shape=(12, 96, 96),
+            image_channel=3,
+            frame_stack_num=4,
+            # the key difference setting between image-input and vector input.
+            downsample=True,
+            # the stacked obs shape -> the transformed obs shape:
+            # [S, W, H, C] -> [S x C, W, H]
+            # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
+            observation_shape=(12, 96, 96),  # if frame_stack_num=4
+            # observation_shape=(3, 96, 96),  # if frame_stack_num=1
             action_space_size=6,
+            # ==============================================================
+            # begin of specific sampled related config
+            # ==============================================================
+            continuous_action_space=False,
+            num_of_sampled_actions=6,
+            # ==============================================================
+            # end of specific sampled related config
+            # ==============================================================
+            # the default config is large size model, same as the EfficientZero original paper.
             num_res_blocks=1,
             num_channels=64,
+            lstm_hidden_size=512,
+            ## the following model para. is usually fixed
             reward_head_channels=16,
             value_head_channels=16,
             policy_head_channels=16,
             fc_reward_layers=[32],
             fc_value_layers=[32],
             fc_policy_layers=[32],
+            support_scale=300,
             reward_support_size=601,
             value_support_size=601,
-            downsample=True,
-            lstm_hidden_size=512,
-            batch_norm_momentum=0.1,
             proj_hid=1024,
             proj_out=1024,
             pred_hid=512,
             pred_out=1024,
+            ## the above model para. is usually fixed
+            batch_norm_momentum=0.1,
             last_linear_layer_init_zero=True,
             state_norm=False,
+            activation=torch.nn.ReLU(inplace=True),
+            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
+            categorical_distribution=True,
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            sigma_type='conditioned',  # options={'conditioned', 'fixed'}
+            fixed_sigma_value=0.3,
+            bound_type=None,
+            norm_type='BN',
         ),
         # learn_mode config
         learn=dict(
-            policy_loss_type='KL',
             # (bool) Whether to use multi gpu
             multi_gpu=False,
             # How many updates(iterations) to train after collector's one collection.
@@ -80,26 +106,39 @@ class SampledEfficientZeroPolicy(Policy):
             update_per_collect=10,
             # (int) How many samples in a training batch
             batch_size=256,
-            # (float) The step size of gradient descent
-            learning_rate=0.001,
+
+            # ==============================================================
+            # begin of specific sampled related config
+            # ==============================================================
+            normalize_prob_of_sampled_actions=False,
+            policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
+            cos_lr_scheduler=False,
+            weight_decay=2e-5,
+            lr_manually=False,
+            optim_type='Adam',
+            learning_rate=0.003,  # lr for Adam optimizer
+            # lr_manually=True,
+            # optim_type='SGD',
+            # learning_rate=0.2,  # init lr for manually decay schedule
+            # ==============================================================
+            # end of specific sampled related config
+            # ==============================================================
             # ==============================================================
             # The following configs are algorithm-specific
             # ==============================================================
-            # (int) Frequence of target network update.
-            target_update_freq=200,
+            # (int) Frequency of target network update.
+            target_update_freq=100,
             # (bool) Whether ignore done(usually for max step termination env)
             ignore_done=False,
-            weight_decay=1e-4,
             momentum=0.9,
             grad_clip_type='clip_norm',
             grad_clip_value=10,
             # grad_clip_value=0.5,
-            cos_lr_scheduler=False,
         ),
         # collect_mode config
         collect=dict(
             # You can use either "n_sample" or "n_episode" in collector.collect.
-            # Get "n_sample" samples per collect.
+            # Get "n_episode" episodes per collect.
             n_episode=8,
             unroll_len=1,
         ),
@@ -113,8 +152,83 @@ class SampledEfficientZeroPolicy(Policy):
                 end=0.1,
                 decay=50000,
             ),
+            # NOTE: the replay_buffer_size is ineffective, we specify it in following game config
             replay_buffer=dict(replay_buffer_size=100000, type='game')
         ),
+        # ==============================================================
+        # begin of additional game_config
+        # ==============================================================
+        ## common
+        mcts_ctree=True,
+        device='cuda',
+        collector_env_num=8,
+        evaluator_env_num=3,
+        env_type='not_board_games',
+        battle_mode='play_with_bot_mode',
+        game_wrapper=True,
+        monitor_statistics=True,
+        game_history_length=200,
+
+        ## observation
+        # the key difference setting between image-input and vector input.
+        image_based=False,
+        cvt_string=False,
+        gray_scale=False,
+        use_augmentation=False,
+        # style of augmentation
+        augmentation=['shift', 'intensity'],  # options=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
+
+        ## reward
+        clip_reward=False,
+        normalize_reward=False,
+        normalize_reward_scale=100,
+
+        ## learn
+        num_simulations=50,
+        td_steps=5,
+        num_unroll_steps=5,
+        lstm_horizon_len=5,
+        max_grad_norm=10,
+        # the weight of different loss
+        reward_loss_weight=1,
+        value_loss_weight=0.25,
+        policy_loss_weight=1,
+        policy_entropy_loss_weight=0,
+        ssl_loss_weight=2,
+        # fixed_temperature_value is effective only when auto_temperature=False
+        auto_temperature=False,
+        fixed_temperature_value=0.25,
+        # replay_buffer max size
+        max_total_transitions=int(1e5),
+        # max_training_steps is only used for adjusting temperature manually.
+        max_training_steps=int(1e5),
+
+        ## reanalyze
+        reanalyze_ratio=0.3,
+        reanalyze_outdated=True,
+        # whether to use root value in reanalyzing part
+        use_root_value=False,
+        mini_infer_size=256,
+
+        ## priority
+        use_priority=True,
+        use_max_priority_for_new_data=True,
+        # how much prioritization is used: 0 means no prioritization while 1 means full prioritization
+        priority_prob_alpha=0.6,
+        # how much correction is used: 0 means no correction while 1 means full correction
+        priority_prob_beta=0.4,
+        prioritized_replay_eps=1e-6,
+
+        ## UCB
+        root_dirichlet_alpha=0.3,
+        root_exploration_fraction=0.25,
+        pb_c_base=19652,
+        pb_c_init=1.25,
+        discount=0.997,
+        value_delta_max=0.01,
+        # ==============================================================
+        # end of additional game_config
+        # ==============================================================
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
@@ -265,7 +379,8 @@ class SampledEfficientZeroPolicy(Policy):
         transformed_target_value = scalar_transform(target_value, self._cfg.model.support_scale)
         if self._cfg.model.categorical_distribution:
             # scalar to categorical_distribution
-            # Under this transformation, each scalar is represented as the linear combination of its two adjacent supports
+            # Under this transformation, each scalar is represented as the linear
+            # combination of its two adjacent supports
             target_value_prefix_phi = reward_phi(self.reward_support, transformed_target_value_prefix)
             target_value_phi = value_phi(self.value_support, transformed_target_value)
 
@@ -329,10 +444,10 @@ class SampledEfficientZeroPolicy(Policy):
         #############################
         # calculate policy loss: KL loss
         #############################
-        if self._cfg.continuous_action_space:
+        if self._cfg.model.continuous_action_space:
             """continuous action space"""
-            (mu, sigma) = policy_logits[:, :self._cfg.action_space_size], policy_logits[:,
-                                                                          -self._cfg.action_space_size:]
+            (mu, sigma) = policy_logits[:, :self._cfg.model.action_space_size], policy_logits[:,
+                                                                          -self._cfg.model.action_space_size:]
             dist = Independent(Normal(mu, sigma), 1)
 
             # take the init hypothetical step k=0
@@ -359,7 +474,7 @@ class SampledEfficientZeroPolicy(Policy):
             # target_normalized_visit_count_init_step is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
             target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step + 1e-9)
             log_prob_sampled_actions = []
-            for k in range(self._cfg.num_of_sampled_actions):
+            for k in range(self._cfg.model.num_of_sampled_actions):
                 # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
                 # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
                 # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
@@ -442,7 +557,7 @@ class SampledEfficientZeroPolicy(Policy):
             target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step + 1e-9)
 
             log_prob_sampled_actions = []
-            for k in range(self._cfg.num_of_sampled_actions):
+            for k in range(self._cfg.model.num_of_sampled_actions):
                 # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
                 # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
                 # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
@@ -578,11 +693,11 @@ class SampledEfficientZeroPolicy(Policy):
             #############################
             # calculate policy loss: KL loss
             #############################
-            if self._cfg.continuous_action_space:
+            if self._cfg.model.continuous_action_space:
 
                 (mu,
-                 sigma) = policy_logits[:, :self._cfg.action_space_size], policy_logits[:,
-                                                                          -self._cfg.action_space_size:]
+                 sigma) = policy_logits[:, :self._cfg.model.action_space_size], policy_logits[:,
+                                                                          -self._cfg.model.action_space_size:]
                 dist = Independent(Normal(mu, sigma), 1)
 
                 # take th hypothetical step k= step_i + 1
@@ -610,7 +725,7 @@ class SampledEfficientZeroPolicy(Policy):
                 # batch_size, num_of_sampled_actions -> 4,20
                 target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-9)
                 log_prob_sampled_actions = []
-                for k in range(self._cfg.num_of_sampled_actions):
+                for k in range(self._cfg.model.num_of_sampled_actions):
                     # target_sampled_actions[:,k,:].shape: (batch_size, action_dim) e.g. (4,2)
                     # dist.log_prob(target_sampled_actions[:,k,:]).shape: (batch_size,) e.g. (4,)
 
@@ -697,7 +812,7 @@ class SampledEfficientZeroPolicy(Policy):
                 # target_normalized_visit_count is categorical distribution [0,1], the range of target_log_prob_sampled_actions is (-inf,0)
                 target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-9)
                 log_prob_sampled_actions = []
-                for k in range(self._cfg.num_of_sampled_actions):
+                for k in range(self._cfg.model.num_of_sampled_actions):
                     # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
                     # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
                     # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
@@ -772,8 +887,8 @@ class SampledEfficientZeroPolicy(Policy):
             # reset hidden states
             if (step_i + 1) % self._cfg.lstm_horizon_len == 0:
                 reward_hidden_state = (
-                    torch.zeros(1, self._cfg.learn.batch_size, self._cfg.lstm_hidden_size).to(self._cfg.device),
-                    torch.zeros(1, self._cfg.learn.batch_size, self._cfg.lstm_hidden_size).to(self._cfg.device)
+                    torch.zeros(1, self._cfg.learn.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
+                    torch.zeros(1, self._cfg.learn.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
                 )
 
             if self._cfg.monitor_statistics:
@@ -824,7 +939,7 @@ class SampledEfficientZeroPolicy(Policy):
         loss = (
                 self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
                 self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss +
-                self._cfg.policy_entropy_loss_coeff * policy_entropy_loss
+                self._cfg.policy_entropy_loss_weight * policy_entropy_loss
         )
         weighted_loss = (weights * loss).mean()
 
@@ -919,7 +1034,7 @@ class SampledEfficientZeroPolicy(Policy):
             td_data, priority_data = None, None
 
         if self._cfg.model.categorical_distribution:
-            if self._cfg.continuous_action_space:
+            if self._cfg.model.continuous_action_space:
                 return {
                     # 'priority':priority_info,
                     'total_loss': loss_data[0],
@@ -995,7 +1110,7 @@ class SampledEfficientZeroPolicy(Policy):
                     # 'priority_data_indices': priority_data[1]
                 }
         else:
-            if self._cfg.continuous_action_space:
+            if self._cfg.model.continuous_action_space:
                 return {
                     # 'priority':priority_info,
                     'total_loss': loss_data[0],
@@ -1137,18 +1252,18 @@ class SampledEfficientZeroPolicy(Policy):
                 if action_mask[0] is None:
                     # continuous action space env: all -1
                     legal_actions = [
-                        [-1 for i in range(self._cfg.num_of_sampled_actions)] for _ in range(active_collect_env_num)
+                        [-1 for i in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_collect_env_num)
                     ]
                 else:
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                     ]
                 roots = ctree.Roots(
-                    active_collect_env_num, legal_actions, self._cfg.action_space_size,
-                    self._cfg.num_of_sampled_actions, self._cfg.continuous_action_space
+                    active_collect_env_num, legal_actions, self._cfg.model.action_space_size,
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
                 noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.num_of_sampled_actions
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 ]
                 ######################
@@ -1164,12 +1279,12 @@ class SampledEfficientZeroPolicy(Policy):
                 # if action_mask[0] is None:
                 #     # continuous action space
                 #     roots = ptree.Roots(active_collect_env_num, None,
-                #                         action_space_size=self._cfg.action_space_size,
-                #                         num_of_sampled_actions=self._cfg.num_of_sampled_actions, continuous_action_space=self._cfg.continuous_action_space)
+                #                         action_space_size=self._cfg.model.action_space_size,
+                #                         num_of_sampled_actions=self._cfg.model.num_of_sampled_actions, continuous_action_space=self._cfg.model.continuous_action_space)
                 #     # the only difference between collect and eval is the dirichlet noise
                 #     noises = [
                 #         np.random.dirichlet(
-                #             [self._cfg.root_dirichlet_alpha] * int(self._cfg.num_of_sampled_actions)
+                #             [self._cfg.root_dirichlet_alpha] * int(self._cfg.model.num_of_sampled_actions)
                 #         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 #     ]
                 # else:
@@ -1178,7 +1293,7 @@ class SampledEfficientZeroPolicy(Policy):
                 #         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 #     ]
                 #     roots = ptree.Roots(active_collect_env_num, legal_actions,
-                #                         num_of_sampled_actions=self._cfg.num_of_sampled_actions, continuous_action_space=self._cfg.continuous_action_space)
+                #                         num_of_sampled_actions=self._cfg.model.num_of_sampled_actions, continuous_action_space=self._cfg.model.continuous_action_space)
                 #     # the only difference between collect and eval is the dirichlet noise
                 #     noises = [
                 #         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -1196,14 +1311,14 @@ class SampledEfficientZeroPolicy(Policy):
                     roots = ptree.Roots(
                         active_collect_env_num,
                         None,
-                        action_space_size=self._cfg.action_space_size,
-                        num_of_sampled_actions=self._cfg.num_of_sampled_actions,
-                        continuous_action_space=self._cfg.continuous_action_space
+                        action_space_size=self._cfg.model.action_space_size,
+                        num_of_sampled_actions=self._cfg.model.num_of_sampled_actions,
+                        continuous_action_space=self._cfg.model.continuous_action_space
                     )
                     # the only difference between collect and eval is the dirichlet noise
-                    # TODO(pu):  int(self._cfg.action_space_size)
+                    # TODO(pu):  int(self._cfg.model.action_space_size)
                     noises = [
-                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(self._cfg.num_of_sampled_actions)
+                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(self._cfg.model.num_of_sampled_actions)
                                             ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                     ]
                 else:
@@ -1213,9 +1328,9 @@ class SampledEfficientZeroPolicy(Policy):
                     roots = ptree.Roots(
                         active_collect_env_num,
                         legal_actions,
-                        action_space_size=self._cfg.action_space_size,
-                        num_of_sampled_actions=self._cfg.num_of_sampled_actions,
-                        continuous_action_space=self._cfg.continuous_action_space
+                        action_space_size=self._cfg.model.action_space_size,
+                        num_of_sampled_actions=self._cfg.model.num_of_sampled_actions,
+                        continuous_action_space=self._cfg.model.continuous_action_space
                     )
                     # the only difference between collect and eval is the dirichlet noise
                     noises = [
@@ -1258,7 +1373,7 @@ class SampledEfficientZeroPolicy(Policy):
                     distributions, temperature=temperature[i], deterministic=False
                 )
                 # action, _ = select_action(distributions, temperature=1, deterministic=True)
-                if action_mask[0] is not None and not self._cfg.continuous_action_space:
+                if action_mask[0] is not None and not self._cfg.model.continuous_action_space:
                     # only discrete action space have action mask
                     try:
                         action = roots_sampled_actions[i][action].value
@@ -1280,7 +1395,7 @@ class SampledEfficientZeroPolicy(Policy):
                         # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                         action = np.array(roots_sampled_actions[i][action])
 
-                if not self._cfg.continuous_action_space:
+                if not self._cfg.model.continuous_action_space:
                     if len(action.shape) == 0:
                         action = int(action)
                     elif len(action.shape) == 1:
@@ -1360,7 +1475,7 @@ class SampledEfficientZeroPolicy(Policy):
                 if action_mask[0] is None:
                     # continuous action space env: all -1
                     legal_actions = [
-                        [-1 for i in range(self._cfg.num_of_sampled_actions)] for _ in range(active_eval_env_num)
+                        [-1 for i in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_eval_env_num)
                     ]
                 else:
                     legal_actions = [
@@ -1369,9 +1484,9 @@ class SampledEfficientZeroPolicy(Policy):
                 roots = ctree.Roots(
                     active_eval_env_num,
                     legal_actions,
-                    self._cfg.action_space_size,
-                    self._cfg.num_of_sampled_actions,
-                    continuous_action_space=self._cfg.continuous_action_space
+                    self._cfg.model.action_space_size,
+                    self._cfg.model.num_of_sampled_actions,
+                    continuous_action_space=self._cfg.model.continuous_action_space
                 )
 
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
@@ -1390,9 +1505,9 @@ class SampledEfficientZeroPolicy(Policy):
                     roots = ptree.Roots(
                         active_eval_env_num,
                         None,
-                        action_space_size=self._cfg.action_space_size,
-                        num_of_sampled_actions=self._cfg.num_of_sampled_actions,
-                        continuous_action_space=self._cfg.continuous_action_space
+                        action_space_size=self._cfg.model.action_space_size,
+                        num_of_sampled_actions=self._cfg.model.num_of_sampled_actions,
+                        continuous_action_space=self._cfg.model.continuous_action_space
                     )
                     # the only difference between collect and eval is the dirichlet noise
                 else:
@@ -1402,9 +1517,9 @@ class SampledEfficientZeroPolicy(Policy):
                     roots = ptree.Roots(
                         active_eval_env_num,
                         legal_actions,
-                        action_space_size=self._cfg.action_space_size,
-                        num_of_sampled_actions=self._cfg.num_of_sampled_actions,
-                        continuous_action_space=self._cfg.continuous_action_space
+                        action_space_size=self._cfg.model.action_space_size,
+                        num_of_sampled_actions=self._cfg.model.num_of_sampled_actions,
+                        continuous_action_space=self._cfg.model.continuous_action_space
                     )
                     # the only difference between collect and eval is the dirichlet noise
 
@@ -1442,7 +1557,7 @@ class SampledEfficientZeroPolicy(Policy):
                 ######################
                 # sampled related code
                 ######################
-                if action_mask[0] is not None and not self._cfg.continuous_action_space:
+                if action_mask[0] is not None and not self._cfg.model.continuous_action_space:
                     # only discrete action space have action mask
                     try:
                         action = roots_sampled_actions[i][action].value
@@ -1463,7 +1578,7 @@ class SampledEfficientZeroPolicy(Policy):
                         # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                         action = np.array(roots_sampled_actions[i][action])
 
-                if not self._cfg.continuous_action_space:
+                if not self._cfg.model.continuous_action_space:
                     if len(action.shape) == 0:
                         action = int(action)
                     elif len(action.shape) == 1:
@@ -1482,7 +1597,7 @@ class SampledEfficientZeroPolicy(Policy):
         return output
 
     def _monitor_vars_learn(self) -> List[str]:
-        if self._cfg.continuous_action_space:
+        if self._cfg.model.continuous_action_space:
             return [
                 'total_loss',
                 'weighted_loss',

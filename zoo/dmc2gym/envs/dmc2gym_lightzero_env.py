@@ -143,6 +143,8 @@ class DMC2GymEnv(BaseEnv):
         replay_path_gif=None,
         replay_path=None,
         act_scale=True,
+        collect_max_episode_steps=int(1.08e5),
+        eval_max_episode_steps=int(1.08e5),
     )
 
     def __init__(self, cfg: dict = {}) -> None:

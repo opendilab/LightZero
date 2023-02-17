@@ -71,7 +71,7 @@ def serial_pipeline_efficientzero(
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
     # ==============================================================
-    # EfficientZero related code
+    # EfficientZero related core code
     # ==============================================================
     game_config = cfg.policy
     # specific game buffer for EfficientZero
@@ -114,11 +114,6 @@ def serial_pipeline_efficientzero(
             ]
         )
 
-        # debug
-        stop, reward = evaluator.eval(
-            learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-        )
-
         # Evaluate policy performance
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(
@@ -129,10 +124,8 @@ def serial_pipeline_efficientzero(
 
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
-
         # save returned new_data collected by the collector
         replay_buffer.push_games(new_data[0], new_data[1])
-
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 

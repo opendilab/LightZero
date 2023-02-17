@@ -54,12 +54,14 @@ class EfficientZeroPolicy(Policy):
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
-            observation_shape=(12, 96, 96),  # if frame_stack_nums=4
+            observation_shape=(12, 96, 96),  # if frame_stack_num=4
             # observation_shape=(3, 96, 96),  # if frame_stack_num=1
             action_space_size=6,
             # the default config is large size model, same as the EfficientZero original paper.
             num_res_blocks=1,
             num_channels=64,
+            lstm_hidden_size=512,
+            ## the following model para. is usually fixed
             reward_head_channels=16,
             value_head_channels=16,
             policy_head_channels=16,
@@ -69,12 +71,12 @@ class EfficientZeroPolicy(Policy):
             support_scale=300,
             reward_support_size=601,
             value_support_size=601,
-            batch_norm_momentum=0.1,
             proj_hid=1024,
             proj_out=1024,
             pred_hid=512,
             pred_out=1024,
-            lstm_hidden_size=512,
+            ## the above model para. is usually fixed
+            batch_norm_momentum=0.1,
             last_linear_layer_init_zero=True,
             state_norm=False,
             activation=torch.nn.ReLU(inplace=True),
@@ -168,7 +170,7 @@ class EfficientZeroPolicy(Policy):
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        consistency_weight=2,
+        ssl_loss_weight=2,
         # fixed_temperature_value is effective only when auto_temperature=False
         auto_temperature=False,
         fixed_temperature_value=0.25,
@@ -456,7 +458,7 @@ class EfficientZeroPolicy(Policy):
             end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
 
             # consistency loss
-            if self._cfg.consistency_weight > 0:
+            if self._cfg.ssl_loss_weight > 0:
                 # obtain the oracle hidden states from representation function
                 network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
                 presentation_state = network_output.hidden_state
@@ -563,7 +565,7 @@ class EfficientZeroPolicy(Policy):
         # ----------------------------------------------------------------------------------
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-            self._cfg.consistency_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
             self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss
         )
         weighted_loss = (weights * loss).mean()

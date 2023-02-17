@@ -27,6 +27,10 @@ class BipedalWalkerEnv(BaseEnv):
         replay_path=None,
         act_scale=True,
         rew_clip=True,
+        delay_reward_step=0,
+        prob_random_agent=0.,
+        collect_max_episode_steps=int(1.08e5),
+        eval_max_episode_steps=int(1.08e5),
     )
 
     def __init__(self, cfg: dict) -> None:

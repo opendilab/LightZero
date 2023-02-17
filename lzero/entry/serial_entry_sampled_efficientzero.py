@@ -47,7 +47,6 @@ def serial_pipeline_sampled_efficientzero(
         cfg, create_cfg = read_config(input_cfg)
     else:
         cfg, create_cfg = input_cfg
-    # create_cfg.policy.type = create_cfg.policy.type + '_command'
     create_cfg.policy.type = create_cfg.policy.type
 
     env_fn = None if env_setting is None else env_setting[0]
@@ -62,7 +61,6 @@ def serial_pipeline_sampled_efficientzero(
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
-    # policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval', 'command'])
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
@@ -73,7 +71,9 @@ def serial_pipeline_sampled_efficientzero(
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
-    # Sampled EfficientZero related code
+    # ==============================================================
+    # Sampled EfficientZero related core code
+    # ==============================================================
     # specific game buffer for Sampled EfficientZero
     game_config = cfg.policy
 
@@ -96,20 +96,21 @@ def serial_pipeline_sampled_efficientzero(
         game_config=game_config
     )
 
-    # commander = BaseSerialCommander(
-    #     cfg.policy.other.commander, learner, collector, evaluator, replay_buffer, policy.command_mode
-    # )
     # ==========
     # Main loop
     # ==========
     # Learner's before_run hook.
     learner.call_hook('before_run')
 
+    stop, reward = evaluator.eval(
+        learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
+    )
+
     while True:
         # collect_kwargs = commander.step()
         collect_kwargs = {}
         # set temperature for visit count distributions according to the train_iter,
-        # please refer to Appendix A.1 in Sampled EfficientZero for details
+        # please refer to Appendix A.1 in Sampled EfficientZero for details.
         collect_kwargs['temperature'] = np.array(
             [
                 visit_count_temperature(
@@ -121,10 +122,6 @@ def serial_pipeline_sampled_efficientzero(
             ]
         )
 
-        # stop, reward = evaluator.eval(
-        #     learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-        # )
-
         # Evaluate policy performance
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(
@@ -135,12 +132,7 @@ def serial_pipeline_sampled_efficientzero(
 
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
-
-        # import pdb; pdb.set_trace()
-
-        # TODO(pu): collector return data
         replay_buffer.push_games(new_data[0], new_data[1])
-
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
@@ -160,18 +152,12 @@ def serial_pipeline_sampled_efficientzero(
                 )
                 break
 
+            # the core train steps for Sampled EfficientZero.
             learner.train(train_data, collector.envstep)
 
             train_steps = learner.train_iter * cfg.policy.learn.update_per_collect
-
-            # if game_config.learn.lr_manually:
-            #     # learning rate decay manually like EfficientZero paper
-            #     if train_steps  > 1e5 and train_steps  <= 2e5:
-            #         policy._optimizer.lr = 0.02
-            #     elif train_steps  > 2e5:
-            #         policy._optimizer.lr = 0.002
             if game_config.learn.lr_manually:
-                # learning rate decay manually like MuZero paper
+                # learning rate decay manually like MuZero paper.
                 if train_steps < 0.5 * game_config.max_training_steps:
                     policy._optimizer.lr = 0.2
                 elif train_steps < 0.75 * game_config.max_training_steps:
