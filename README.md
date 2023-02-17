@@ -114,7 +114,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 #### LightZero Implemented series
 
-- [2018 Science AlphaZero: A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play](https://www.science.org/doi/10.1126/science.aar6404)
+- [2018 _Science_ AlphaZero: A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play](https://www.science.org/doi/10.1126/science.aar6404)
 - [2019 MuZero](https://arxiv.org/abs/1911.08265)
 - [2021 EfficientZero](https://arxiv.org/abs/2111.00210)
 - [2021 Sampled MuZero](https://arxiv.org/abs/2104.06303)
@@ -122,8 +122,8 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 #### AlphaGo series
 
-- [2015 Nature AlphaGo Mastering the game of Go with deep neural networks and tree search](https://www.nature.com/articles/nature16961)
-- [2017  Nature AlphaGo Zero Mastering the game of Go without human knowledge](https://www.nature.com/articles/nature24270)
+- [2015 _Nature_ AlphaGo Mastering the game of Go with deep neural networks and tree search](https://www.nature.com/articles/nature16961)
+- [2017 _Nature_ AlphaGo Zero Mastering the game of Go without human knowledge](https://www.nature.com/articles/nature24270)
 - [2019 ELF OpenGo: An Analysis and Open Reimplementation of AlphaZero](https://arxiv.org/abs/1902.04522) 
   - [Code](https://github.com/pytorch/ELF)
 #### MuZero series
@@ -135,13 +135,14 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 - [2020 Monte-Carlo Tree Search as Regularized Policy Optimization](https://arxiv.org/abs/2007.12509)
 - [2021 Self-Consistent Models and Values](https://arxiv.org/abs/2110.12840)
 - [2022 Adversarial Policies Beat Professional-Level Go AIs](https://arxiv.org/abs/2211.00241)
-- [2022 PNAS Acquisition of Chess Knowledge in AlphaZero.](https://arxiv.org/abs/2111.09259)
+- [2022 _PNAS_ Acquisition of Chess Knowledge in AlphaZero.](https://arxiv.org/abs/2111.09259)
 
 #### MCTS Application
-- [2022 Nature Discovering faster matrix multiplication algorithms with reinforcement learning](https://www.nature.com/articles/s41586-022-05172-4) 
+- [2022 _Nature_ Discovering faster matrix multiplication algorithms with reinforcement learning](https://www.nature.com/articles/s41586-022-05172-4) 
   - [Code](https://github.com/deepmind/alphatensor)
 - [2022 MuZero with Self-competition for Rate Control in VP9 Video Compression](https://arxiv.org/abs/2202.06626)
 - [2021 DouZero: Mastering DouDizhu with Self-Play Deep Reinforcement Learning](https://arxiv.org/abs/2106.06135)
+- [2019 Combining Planning and Deep Reinforcement Learning in Tactical Decision Making for Autonomous Driving](https://arxiv.org/pdf/1905.02680.pdf)
 
 </details>
 
@@ -174,7 +175,6 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - Wang Ling, Wojciech Stokowiec, Domenic Donato, Chris Dyer, Lei Yu, Laurent Sartran, Austin Matthews
   - Key: adaptive tree search, translation models, autoregressive models, 
   - ExpEnv: Chinese–English and Pashto–English tasks from WMT2020, German–English from WMT2014
-
 - [What's Wrong with Deep Learning in Tree Search for Combinatorial Optimization](https://arxiv.org/abs/2201.10494) 2022
   - Maximili1an Böther, Otto Kißig, Martin Taraz, Sarel Cohen, Karen Seidel, Tobias Friedrich
   - Key: Combinatorial optimization, open-source benchmark suite for the NP-hard MAXIMUM INDEPENDENT SET problem, an in-depth analysis of the popular guided tree search algorithm,  compare the tree search implementations to other solvers

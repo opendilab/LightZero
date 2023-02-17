@@ -118,7 +118,7 @@ qbert_muzero_config = dict(
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        ## NOTE: the only difference between muzero and muzero_with-ssl is the  self-supervised-learning loss in policy and model.
+        ## NOTE: the only difference between muzero and muzero_with-ssl is the self-supervised-learning loss in policy and model.
         ssl_loss_weight=2,
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
         auto_temperature=False,

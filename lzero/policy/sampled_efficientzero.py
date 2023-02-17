@@ -222,7 +222,10 @@ class SampledEfficientZeroPolicy(Policy):
 
         # batch_size, num_unroll_steps, action_dim
         # e.g. 4, 5, 1
-        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1)
+        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).float().unsqueeze(-1)
+        # TODO: .float()
+        # action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1)
+
         # batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim, 1
         # e.g. 4, 6, 5, 1, 1
         child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device).unsqueeze(-1)

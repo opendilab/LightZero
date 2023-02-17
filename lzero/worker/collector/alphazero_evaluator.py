@@ -16,7 +16,7 @@ from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, Vector
 class AlphaZeroEvaluator(ISerialEvaluator):
     """
     Overview:
-        Alphazero Evaluator.
+        AlphaZero Evaluator.
     Interfaces:
         __init__, reset, reset_policy, reset_env, close, should_eval, eval
     Property:

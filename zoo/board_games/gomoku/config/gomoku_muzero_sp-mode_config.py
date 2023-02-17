@@ -1,90 +1,69 @@
-import sys
-
-# sys.path.append('/Users/puyuan/code/LightZero')
-# sys.path.append('/home/puyuan/LightZero')
-sys.path.append('/mnt/nfs/puyuan/LightZero')
-# sys.path.append('/mnt/lustre/puyuan/LightZero')
-
 import torch
+from easydict import EasyDict
 
 if torch.cuda.is_available():
     device = 'cuda'
 else:
     device = 'cpu'
 
-from easydict import EasyDict
-
+# ==============================================================
+# begin of the most frequently changed config specified by the user
+# ==============================================================
 board_size = 6  # default_size is 15
-
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 3
-
-categorical_distribution = True
-# categorical_distribution = False
-
-# TODO(pu):
-# The key hyper-para to tune, for different env, we have different episode_length
-# e.g. reuse_factor = 0.5
+evaluator_env_num = 5
+num_simulations = 25
+# update_per_collect determines the number of training steps after each collection of a batch of data.
+# For different env, we have different episode_length,
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-
-# play_with_bot_mode, board_size=6, episode_length=6**2/2=18
-# n_episode=8,  update_per_collect=18*8=144
-
-# self_play_mode, board_size=6, episode_length=6**2=36
-# n_episode=8,  update_per_collect=36*8=268
-
-data_reuse_factor = 1
-update_per_collect = int(144 * data_reuse_factor)
-
-num_simulations = 50
-
-# debug
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
+update_per_collect = 50
+batch_size = 256
+max_env_step = int(2e5)
+# ==============================================================
+# end of the most frequently changed config specified by the user
+# ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=
-    f'data_mz_ctree/gomoku_bs6_self-play_ghl36_muzero_seed0_sub883_halfmodel_ftv1_cc0_fs1_ns{num_simulations}_upc{update_per_collect}_cdt_adam3e-3_mgn05',
+    exp_name=f'data_mz_ctree/gomoku_muzero_sf-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        stop_value=1,
-        max_episode_steps=int(1.08e5),
-        collect_max_episode_steps=int(1.08e4),
-        eval_max_episode_steps=int(1.08e5),
-        board_size=board_size,  # default_size is 15
-        # if battle_mode='self_play_mode',
-        # automatically assign 'eval_mode' when eval, 'self_play_mode' when collect
+        board_size=board_size,
         battle_mode='self_play_mode',
-        # battle_mode='play_with_bot_mode',
-        prob_random_agent=0.,
         manager=dict(shared_memory=False, ),
+        stop_value=int(2),
     ),
     policy=dict(
-        # pretrained model
+        # the pretrained model path.
+        # Users should add their own model path here. Model path should lead to a model.
+        # Absolute path is recommended.
+        # In LightZero, it is ``exp_name/ckpt/ckpt_best.pth.tar``.
         model_path=None,
         env_name='gomoku',
-        # TODO(pu): how to pass into game_config, which is class, not a dict
-        # game_config=game_config,
-        # Whether to use cuda for network.
+        # whether to use cuda for network.
         cuda=True,
         model=dict(
-            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-            categorical_distribution=categorical_distribution,
-            # representation_model_type='identity',
-            representation_model_type='conv_res_blocks',
-            # [S, W, H, C] -> [S x C, W, H]
-            # [4, board_size, board_size, 3] -> [12, board_size, board_size]
-            # observation_shape=(12, board_size, board_size),  # if frame_stack_num=4
-            observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
-            action_space_size=int(1 * board_size * board_size),
+            # ==============================================================
+            # We use the default large size model, please refer to the
+            # default init config in MuZeroNet class for details.
+            # ==============================================================
+            # NOTE: the key difference setting between image-input and vector input.
+            image_channel=3,
+            frame_stack_num=1,
             downsample=False,
+            # the stacked obs shape -> the transformed obs shape:
+            # [S, W, H, C] -> [S x C, W, H]
+            # e.g. [4, 3, 3, 3] -> [12, 3, 3]
+            # observation_shape=(12, 3, 3),  # if frame_stack_nums=4
+            observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
+            action_space_size=int(board_size * board_size),
+            # whether to use discrete support to represent categorical distribution for value, reward.
+            categorical_distribution=True,
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            ## half size model
             num_res_blocks=1,
-            # num_channels=64,
-            # half size model
             num_channels=32,
             reward_head_channels=16,
             value_head_channels=16,
@@ -92,198 +71,90 @@ gomoku_muzero_config = dict(
             fc_reward_layers=[32],
             fc_value_layers=[32],
             fc_policy_layers=[32],
+            support_scale=300,
             reward_support_size=601,
             value_support_size=601,
             batch_norm_momentum=0.1,
-            # proj_hid=1024,
-            # proj_out=1024,
-            # pred_hid=512,
-            # pred_out=1024,
-            # half size model
             proj_hid=512,
             proj_out=512,
             pred_hid=256,
             pred_out=512,
-            last_linear_layer_init_zero=True,
-            state_norm=False,
         ),
         # learn_mode config
         learn=dict(
-            # debug
-            # update_per_collect=2,
-            # batch_size=4,
-            batch_size=256,
             update_per_collect=update_per_collect,
-
-            # optim_type='SGD',
-            # learning_rate=0.2,  # lr_manually
-            # should set lr_manually=True, 0.2->0.02->0.002
+            batch_size=batch_size,
+            lr_manually=False,
             optim_type='Adam',
-            learning_rate=0.003,  # adam lr
+            learning_rate=0.001,  # lr for Adam optimizer
             # Frequency of target network update.
             target_update_freq=100,
         ),
         # collect_mode config
         collect=dict(
-            # You can use either "n_sample" or "n_episode" in collector.collect.
-            # Get "n_sample" samples per collect.
+            # Get "n_episode" episodes per collect.
             n_episode=n_episode,
         ),
-        # the eval cost is expensive, so we set eval_freq larger
+        # If the eval cost is expensive, we could set eval_freq larger.
         eval=dict(evaluator=dict(eval_freq=int(500), )),
         # command_mode config
         other=dict(
-            # the replay_buffer_size is ineffective, we specify it in game config
+            # NOTE: the replay_buffer_size is ineffective,
+            # we specify it using ``max_total_transitions`` in the following game config
             replay_buffer=dict(type='game_buffer_muzero')
         ),
-        ######################################
-        # game_config begin
-        ######################################
-        env_type='board_games',
-        device=device,
+        # ==============================================================
+        # begin of additional game_config
+        # ==============================================================
+        ## common
         mcts_ctree=True,
-        battle_mode='self_play_mode',
-        game_history_length=36,
-        # battle_mode='play_with_bot_mode',
-        # game_history_length=18,
-        image_based=False,
-        cvt_string=False,
-        clip_reward=True,
-        normalize_reward=False,
-        # normalize_reward=True,
-        normalize_reward_scale=100,
-        game_wrapper=True,
-        action_space_size=int(board_size * board_size),
-        amp_type='none',
-        # [S, W, H, C] -> [S x C, W, H]
-        # [4, board_size, board_size, 3] -> [12, board_size, board_size]
-        # obs_shape=(12, board_size, board_size),  # if frame_stack_num=4
-        obs_shape=(3, board_size, board_size),  # if frame_stack_num=1
-        frame_stack_num=1,
-        image_channel=3,
-        gray_scale=False,
-        downsample=False,
-        monitor_statistics=True,
-        # TODO(pu): test the effect of augmentation,
-        # use_augmentation=True,  # only for atari image obs
-        use_augmentation=False,
-        # Style of augmentation
-        # choices=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
-        augmentation=['shift', 'intensity'],
-
-        # debug
-        # collector_env_num=3,
-        # evaluator_env_num=3,
-        # total_transitions=int(1e5),
-        # num_simulations=2,
-        # batch_size=4,
-        # # to make sure the value target is the final outcome
-        # td_steps=5,
-        # # td_steps=int(board_size * board_size),
-        # num_unroll_steps=5,
+        device=device,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
-        total_transitions=int(1e5),
+        env_type='board_games',
+        game_history_length=18,
+
+        ## observation
+        # NOTE: the key difference setting between image-input and vector input
+        image_based=False,
+        cvt_string=False,
+        gray_scale=False,
+        use_augmentation=False,
+        downsample=False,
+
+        ## reward
+        clip_reward=True,
+
+        ## learn
         num_simulations=num_simulations,
-        batch_size=256,
-        # half size model
-        # to make sure the value target is the final outcome
+        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=int(board_size * board_size),
         num_unroll_steps=5,
-
-        # TODO(pu): why 0.99?
-        reanalyze_ratio=0.99,
-
-        # TODO(pu): why not use adam?
-        # lr_manually=True,  # use manually lr
-        lr_manually=False,  # use fixed lr
-
-        # use_priority=False,
-        # use_max_priority_for_new_data=True,
-        use_priority=True,
-        use_max_priority_for_new_data=True,
-
-        # TODO(pu): only used for adjust temperature manually
-        max_training_steps=int(1e5),
-        auto_temperature=False,
-        # only effective when auto_temperature=False
-        # fixed_temperature_value=0.25,
-        fixed_temperature_value=1,
-
-        # TODO(pu): whether to use root value in reanalyzing?
-        use_root_value=False,
-
-        # TODO(pu): test the effect
-        init_zero=True,
-        state_norm=False,
-        mini_infer_size=2,
-        # (Float type) How much prioritization is used: 0 means no prioritization while 1 means full prioritization
-        priority_prob_alpha=0.6,
-        # (Float type)  How much correction is used: 0 means no correction while 1 means full correction
-        # TODO(pu): test effect of 0.4->1
-        priority_prob_beta=0.4,
-        prioritized_replay_eps=1e-6,
-        root_dirichlet_alpha=0.3,
-        root_exploration_fraction=0.25,
-        auto_td_steps=int(0.3 * 2e5),
-        auto_td_steps_ratio=0.3,
-
-        # UCB formula
-        pb_c_base=19652,
-        pb_c_init=1.25,
-        # whether to use discrete support to represent categorical distribution for value, reward/value_prefix
-        categorical_distribution=categorical_distribution,
-        support_scale=300,
-        # max_grad_norm=10,
-        max_grad_norm=0.5,
-        test_interval=10000,
-        log_interval=1000,
-        vis_interval=1000,
-        checkpoint_interval=100,
-        target_model_interval=200,
-        save_ckpt_interval=10000,
-        discount=1,
-        dirichlet_alpha=0.3,
-        value_delta_max=0.01,
-        num_actors=1,
-        # network initialization/ & normalization
-        episode_life=True,
-        start_transitions=8,
-        transition_num=1,
-        # frame skip & stack observation
-        frame_skip=4,
-
-        # coefficient
-        # TODO(pu): test the effect of value_prefix_loss and consistency_loss
-        reward_loss_weight=1,  # value_prefix_loss
-        # reward_loss_weight=0,  # value_prefix_loss
+        # the weight of different loss
+        reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        # ssl_loss_weight=2,
-        ssl_loss_weight=0,
+        # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
+        auto_temperature=False,
+        fixed_temperature_value=1,
+        # the size/capacity of replay_buffer
+        max_total_transitions=int(1e4),
+        # ``max_training_steps`` is only used for adjusting temperature manually.
+        max_training_steps=int(1e5),
 
-        # siamese
-        # proj_hid=1024,
-        # proj_out=1024,
-        # pred_hid=512,
-        # pred_out=1024,
-        # half size model
-        proj_hid=512,
-        proj_out=512,
-        pred_hid=256,
-        pred_out=512,
-        batch_norm_momentum=0.1,
-        blocks=1,  # Number of blocks in the ResNet
-        channels=16,  # Number of channels in the ResNet
-        reward_head_channels=16,  # x36 Number of channels in reward head
-        value_head_channels=16,  # x36 Number of channels in value head
-        policy_head_channels=16,  # x36 Number of channels in policy head
-        resnet_fc_reward_layers=[32],  # Define the hidden layers in the reward head of the dynamic network
-        resnet_fc_value_layers=[32],  # Define the hidden layers in the value head of the prediction network
-        resnet_fc_policy_layers=[32],  # Define the hidden layers in the policy head of the prediction network
-        ######################################
-        # game_config end
-        ######################################
+        ## reanalyze
+        reanalyze_ratio=0.3,
+        reanalyze_outdated=True,
+        # whether to use root value in reanalyzing part
+        use_root_value=False,
+        mini_infer_size=256,
+
+        ## priority
+        use_priority=True,
+        use_max_priority_for_new_data=True,
+        # ==============================================================
+        # end of additional game_config
+        # ==============================================================
     ),
 )
 gomoku_muzero_config = EasyDict(gomoku_muzero_config)
@@ -294,7 +165,6 @@ gomoku_muzero_create_config = dict(
         type='gomoku',
         import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
     ),
-    # env_manager=dict(type='base'),
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='muzero',
@@ -311,5 +181,4 @@ create_config = gomoku_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import serial_pipeline_muzero
-
-    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=int(1e6))
+    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

@@ -33,6 +33,11 @@ class MuZeroPolicy(Policy):
 
     config = dict(
         type='muzero',
+        # the pretrained model path.
+        # Users should add their own model path here. Model path should lead to a model.
+        # Absolute path is recommended.
+        # In LightZero, it is ``exp_name/ckpt/ckpt_best.pth.tar``.
+        model_path=None,
         # (bool) Whether use cuda in policy
         cuda=False,
         # (bool) Whether learning policy is the same as collecting data policy(on-policy)
@@ -87,6 +92,9 @@ class MuZeroPolicy(Policy):
             # How many updates(iterations) to train after collector's one collection.
             # Bigger "update_per_collect" means bigger off-policy.
             # collect data -> update policy-> collect data -> ...
+            # update_per_collect determines the number of training steps after each collection of a batch of data.
+            # For different env, we have different episode_length,
+            # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
             update_per_collect=10,
             # (int) How many samples in a training batch
             batch_size=256,
@@ -144,10 +152,10 @@ class MuZeroPolicy(Policy):
 
         ## observation
         # the key difference setting between image-input and vector input.
-        image_based=False,
+        image_based=True,
         cvt_string=False,
         gray_scale=False,
-        use_augmentation=False,
+        use_augmentation=True,
         # style of augmentation
         augmentation=['shift', 'intensity'],  # options=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
 

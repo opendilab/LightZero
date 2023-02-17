@@ -18,7 +18,6 @@ from lzero.rl_utils import MuZeroGameBuffer, visit_count_temperature
 from lzero.worker import MuZeroEvaluator as BaseSerialEvaluator
 
 
-# @profile
 def serial_pipeline_muzero(
         input_cfg: Union[str, Tuple[dict, dict]],
         seed: int = 0,
@@ -29,7 +28,7 @@ def serial_pipeline_muzero(
 ) -> 'Policy':  # noqa
     """
     Overview:
-        Serial pipeline entry for EfficientZero and its variants, such as EfficientZero.
+        Serial pipeline entry for MuZero.
     Arguments:
         - input_cfg (:obj:`Union[str, Tuple[dict, dict]]`): Config in dict type. \
             ``str`` type means config file path. \
@@ -62,7 +61,6 @@ def serial_pipeline_muzero(
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
-    # policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval', 'command'])
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
@@ -73,8 +71,10 @@ def serial_pipeline_muzero(
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
-    # EfficientZero related code
-    # specific game buffer for EfficientZero
+    # ==============================================================
+    # MuZero related code
+    # ==============================================================
+    # specific game buffer for MuZero
     game_config = cfg.policy
 
     replay_buffer = MuZeroGameBuffer(game_config)
@@ -101,10 +101,6 @@ def serial_pipeline_muzero(
     # ==========
     # Learner's before_run hook.
     learner.call_hook('before_run')
-
-    stop, reward = evaluator.eval(
-        learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-    )
 
     while True:
         collect_kwargs = {}

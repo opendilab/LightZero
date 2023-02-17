@@ -1,5 +1,5 @@
-import time
 import copy
+import time
 from collections import namedtuple
 from typing import Optional, Callable, Tuple
 
@@ -273,6 +273,7 @@ class EfficientZeroEvaluator(ISerialEvaluator):
                     stack_obs = torch.from_numpy(stack_obs).to(self.game_config.device).float() / 255.0
                 else:
                     stack_obs = torch.from_numpy(np.array(stack_obs)).to(self.game_config.device)
+
                 if two_player_game:
                     policy_output = self._policy.forward(stack_obs, action_mask, to_play)
                 else:

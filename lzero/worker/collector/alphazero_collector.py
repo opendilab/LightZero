@@ -15,14 +15,14 @@ from ding.torch_utils import to_tensor, to_ndarray
 class AlphaZeroCollector(ISerialCollector):
     """
     Overview:
-        Alphazero collector(n_episode)
+        AlphaZero collector (n_episode).
     Interfaces:
         __init__, reset, reset_env, reset_policy, collect, close
     Property:
         envstep
     """
     config = dict(
-        deepcopy_obs=False, transform_obs=False, collect_print_freq=100, get_train_sample=False, reward_shaping=True
+        deepcopy_obs=False, transform_obs=False, collect_print_freq=100, get_train_sample=False, reward_shaping=True, augmentation=False
     )
 
     def __init__(

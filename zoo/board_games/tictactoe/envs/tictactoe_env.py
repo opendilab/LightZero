@@ -19,6 +19,9 @@ from zoo.board_games.base_game_env import BaseGameEnv
 @ENV_REGISTRY.register('tictactoe')
 class TicTacToeEnv(BaseGameEnv):
     config = dict(
+        collect_max_episode_steps=int(1.08e5),
+        eval_max_episode_steps=int(1.08e5),
+        channel_last=False,
         prob_random_agent=0,
         prob_expert_agent=0,
         battle_mode='play_with_bot_mode',
