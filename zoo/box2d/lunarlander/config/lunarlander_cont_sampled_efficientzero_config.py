@@ -20,7 +20,7 @@ num_simulations = 50
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
 update_per_collect = 200
 batch_size = 256
-max_env_step = int(3e6)
+max_env_step = int(5e6)
 reanalyze_ratio = 0.
 
 ## debug config
@@ -137,13 +137,13 @@ lunarlander_cont_sampled_efficientzero_config = dict(
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        policy_entropy_loss_weight=1e-5,
+        policy_entropy_loss_weight=5e-3,
         # the key difference setting between image-input and vector input.
         # NOTE: for vector input, we don't use the ssl loss.
         ssl_loss_weight=0,
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
         auto_temperature=False,
-        fixed_temperature_value=1,
+        fixed_temperature_value=0.25,
         # the size/capacity of replay_buffer
         max_total_transitions=int(1e5),
         # ``max_training_steps`` is only used for adjusting temperature manually.

@@ -10,7 +10,7 @@ else:
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 continuous_action_space = True
-K = 5  # num_of_sampled_actions
+K = 20  # num_of_sampled_actions
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
@@ -55,9 +55,6 @@ pendulum_sampled_efficientzero_config = dict(
         # whether to use cuda for network.
         cuda=True,
         model=dict(
-            # ==============================================================
-            # We use the small size model for pendulum.
-            # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
             image_channel=1,
             frame_stack_num=1,
@@ -70,16 +67,19 @@ pendulum_sampled_efficientzero_config = dict(
             action_space_size=2,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
+            # whether to use discrete support to represent categorical distribution for value, value_prefix.
+            categorical_distribution=True,
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            sigma_type='conditioned',  # options={'conditioned', 'fixed'}
+            # ==============================================================
+            # We use the small size model for pendulum.
+            # ==============================================================
             num_res_blocks=1,
             num_channels=16,
             lstm_hidden_size=128,
             support_scale=25,
             reward_support_size=51,
             value_support_size=51,
-            # whether to use discrete support to represent categorical distribution for value, value_prefix.
-            categorical_distribution=True,
-            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            sigma_type='conditioned',  # options={'conditioned', 'fixed'}
         ),
         # learn_mode config
         learn=dict(
@@ -125,7 +125,7 @@ pendulum_sampled_efficientzero_config = dict(
         use_augmentation=False,
 
         ## reward
-        clip_reward=True,
+        clip_reward=False,
 
         ## learn
         num_simulations=num_simulations,
@@ -137,7 +137,7 @@ pendulum_sampled_efficientzero_config = dict(
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        policy_entropy_loss_weight=1e-5,
+        policy_entropy_loss_weight=5e-3,
         # NOTE: for vector input, we don't use the ssl loss.
         ssl_loss_weight=0,
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.

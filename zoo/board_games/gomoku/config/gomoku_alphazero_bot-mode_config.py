@@ -6,11 +6,11 @@ from easydict import EasyDict
 board_size = 6  # default_size is 15
 collector_env_num = 32
 n_episode = 32
-evaluator_env_num = 16
+evaluator_env_num = 2
 num_simulations = 50
 update_per_collect = 100
 batch_size = 256
-max_env_step = int(2e5)
+max_env_step = int(2e6)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================

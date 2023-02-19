@@ -23,7 +23,7 @@ from lzero.rl_utils import Transforms, visit_count_temperature, modified_cross_e
 from lzero.rl_utils import scalar_transform, inverse_scalar_transform
 from lzero.rl_utils import select_action
 # cpp mcts
-from lzero.rl_utils.mcts.ctree_sampled_efficientzero import ezs_tree as ctree
+from lzero.rl_utils.mcts.ctree_sampled_efficientzero import sez_tree as ctree
 
 
 @POLICY_REGISTRY.register('sampled_efficientzero')

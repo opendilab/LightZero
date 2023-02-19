@@ -19,7 +19,7 @@ from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
 
 # cpp mcts
-from .ctree_sampled_efficientzero import ezs_tree as ctree
+from .ctree_sampled_efficientzero import sez_tree as ctree
 from .mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTS_ctree
 from .mcts_ptree_sampled import SampledEfficientZeroMCTSPtree as MCTS_ptree
 from .utils import prepare_observation_list, concat_output, concat_output_value
@@ -202,6 +202,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         value_loss_weight=0.25,
         policy_loss_weight=1,
         ssl_loss_weight=2,
+        policy_entropy_loss_weight=5e-3,
         # fixed_temperature_value is effective only when auto_temperature=False
         auto_temperature=False,
         fixed_temperature_value=0.25,
@@ -280,7 +281,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             - buffered_data (:obj:`BufferedData`): The pushed data.
         """
         # TODO(pu)
-        # if self.get_num_of_transitions() >= self.self._cfg.max_total_transitions:
+        # if self.get_num_of_transitions() >= self._cfg.max_total_transitions:
         #     return
 
         # TODO(pu)
@@ -414,7 +415,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     index = i
                     break
 
-            if total_transition >= self.self._cfg.learn.batch_size:
+            if total_transition >= self._cfg.learn.batch_size:
                 self._remove(index + 1)
 
     def _remove(self, num_excess_games):

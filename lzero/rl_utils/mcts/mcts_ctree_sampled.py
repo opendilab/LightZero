@@ -9,7 +9,7 @@ from easydict import EasyDict
 
 from ..scaling_transform import inverse_scalar_transform
 
-from lzero.rl_utils.mcts.ctree_sampled_efficientzero import ezs_tree as tree_efficientzero
+from lzero.rl_utils.mcts.ctree_sampled_efficientzero import sez_tree as tree_efficientzero
 
 ###########################################################
 # Sampled EfficientZero

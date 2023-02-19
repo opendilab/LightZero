@@ -155,7 +155,7 @@ dmc2gym_sampled_efficientzero_config = dict(
         ssl_loss_weight=0,
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
         auto_temperature=False,
-        fixed_temperature_value=1,
+        fixed_temperature_value=0.25,
         # the size/capacity of replay_buffer
         max_total_transitions=int(1e5),
         # ``max_training_steps`` is only used for adjusting temperature manually.
