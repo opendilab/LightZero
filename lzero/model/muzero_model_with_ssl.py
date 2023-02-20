@@ -5,7 +5,6 @@ The following code is adapted from https://github.com/YeWR/EfficientZero/blob/ma
 import math
 from typing import Optional
 
-import numpy as np
 import torch
 import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock

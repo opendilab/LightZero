@@ -119,7 +119,6 @@ lunarlander_cont_disc_efficientzero_config = dict(
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
-        support_scale=300,
         # the weight of different loss
         reward_loss_weight=1,
         value_loss_weight=0.25,

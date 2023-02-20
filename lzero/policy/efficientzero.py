@@ -20,7 +20,7 @@ from lzero.rl_utils import EfficientZeroMCTSCtree as MCTS_ctree
 from lzero.rl_utils import EfficientZeroMCTSPtree as MCTS_ptree
 from lzero.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
-from lzero.rl_utils import scalar_transform, inverse_scalar_transform
+from lzero.rl_utils import scalar_transform, inverse_scalar_transform, InverseScalarTransform
 from lzero.rl_utils import select_action
 # cpp mcts
 from lzero.rl_utils.mcts.ctree_efficientzero import ez_tree as ctree
@@ -256,6 +256,8 @@ class EfficientZeroPolicy(Policy):
         self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
         self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
 
+        self.inverse_scalar_transform_handle = InverseScalarTransform(self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution)
+
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
         self._learn_model.train()
         self._target_model.train()
@@ -339,8 +341,8 @@ class EfficientZeroPolicy(Policy):
             other_loss[key + '_0'] = -1
 
         # scalar transform to transformed Q scale, h(.) function
-        transformed_target_value_prefix = scalar_transform(target_value_prefix, self._cfg.model.support_scale)
-        transformed_target_value = scalar_transform(target_value, self._cfg.model.support_scale)
+        transformed_target_value_prefix = scalar_transform(target_value_prefix)
+        transformed_target_value = scalar_transform(target_value)
         if self._cfg.model.categorical_distribution:
             # scalar to categorical_distribution
             # Under this transformation, each scalar is represented as the linear combination of its two adjacent supports
@@ -359,12 +361,7 @@ class EfficientZeroPolicy(Policy):
 
         # h^-1(.) function
         # transform categorical representation to original_value
-        original_value = inverse_scalar_transform(
-            value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
-        )
-        # original_value_prefix = inverse_scalar_transform(value_prefix,
-        #                                                self._cfg.model.support_scale,
-        #                                                categorical_distribution=self._cfg.model.categorical_distribution)
+        original_value = self.inverse_scalar_transform_handle(value)
 
         # TODO(pu)
         if not self._learn_model.training:
@@ -436,14 +433,8 @@ class EfficientZeroPolicy(Policy):
 
             # h^-1(.) function
             # first transform categorical representation to scalar, then transform to original_value
-            original_value = inverse_scalar_transform(
-                value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
-            )
-            original_value_prefix = inverse_scalar_transform(
-                value_prefix,
-                self._cfg.model.support_scale,
-                categorical_distribution=self._cfg.model.categorical_distribution
-            )
+            original_value = self.inverse_scalar_transform_handle(value)
+            original_value_prefix = self.inverse_scalar_transform_handle(value_prefix)
 
             # TODO(pu)
             if not self._learn_model.training:
@@ -524,21 +515,13 @@ class EfficientZeroPolicy(Policy):
                 )
 
             if self._cfg.monitor_statistics:
-                original_value_prefixs = inverse_scalar_transform(
-                    value_prefix,
-                    self._cfg.model.support_scale,
-                    categorical_distribution=self._cfg.model.categorical_distribution
-                )
+                original_value_prefixs = self.inverse_scalar_transform_handle(value_prefix)
                 original_value_prefixs_cpu = original_value_prefixs.detach().cpu()
 
                 predicted_values = torch.cat(
                     (
                         predicted_values,
-                        inverse_scalar_transform(
-                            value,
-                            self._cfg.model.support_scale,
-                            categorical_distribution=self._cfg.model.categorical_distribution
-                        ).detach().cpu()
+                        self.inverse_scalar_transform_handle(value).detach().cpu()
                     )
                 )
                 predicted_value_prefixs.append(original_value_prefixs_cpu)
@@ -756,11 +739,7 @@ class EfficientZeroPolicy(Policy):
             # TODO(pu)
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                pred_values_pool = inverse_scalar_transform(
-                    pred_values_pool,
-                    self._cfg.model.support_scale,
-                    categorical_distribution=self._cfg.model.categorical_distribution
-                ).detach().cpu().numpy()
+                pred_values_pool = self.inverse_scalar_transform_handle(pred_values_pool).detach().cpu().numpy()
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 reward_hidden_roots = (
                     reward_hidden_roots[0].detach().cpu().numpy(), reward_hidden_roots[1].detach().cpu().numpy()
@@ -882,11 +861,7 @@ class EfficientZeroPolicy(Policy):
             # TODO(pu)
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                pred_values_pool = inverse_scalar_transform(
-                    pred_values_pool,
-                    self._cfg.model.support_scale,
-                    categorical_distribution=self._cfg.model.categorical_distribution
-                ).detach().cpu().numpy()  # shape（B, 1）
+                pred_values_pool = self.inverse_scalar_transform_handle(pred_values_pool).detach().cpu().numpy() # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 reward_hidden_roots = (
                     reward_hidden_roots[0].detach().cpu().numpy(), reward_hidden_roots[1].detach().cpu().numpy()

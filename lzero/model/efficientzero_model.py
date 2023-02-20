@@ -10,7 +10,8 @@ import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 
-from .common import renormalize, EZNetworkOutput, RepresentationNetwork
+from .common import EZNetworkOutput, RepresentationNetwork
+from .utils import renormalize
 
 
 # Predict next hidden states given current states and actions
