@@ -9,7 +9,7 @@ from easydict import EasyDict
 
 from ..scaling_transform import inverse_scalar_transform
 
-from lzero.rl_utils.mcts.ctree_sampled_efficientzero import sez_tree as tree_efficientzero
+from lzero.rl_utils.mcts.ctree_sampled_efficientzero import ezs_tree as tree_efficientzero
 
 ###########################################################
 # Sampled EfficientZero
@@ -113,8 +113,9 @@ class SampledEfficientZeroMCTSCtree(object):
                 # TODO(pu)
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    network_output.value = inverse_scalar_transform(network_output.value,
-                                                                    self.config.model.support_scale).detach().cpu().numpy()
+                    network_output.value = inverse_scalar_transform(
+                        network_output.value, self.config.model.support_scale
+                    ).detach().cpu().numpy()
                     network_output.value_prefix = inverse_scalar_transform(
                         network_output.value_prefix, self.config.model.support_scale
                     ).detach().cpu().numpy()

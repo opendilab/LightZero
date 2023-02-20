@@ -16,7 +16,6 @@ from ding.torch_utils.data_helper import to_ndarray
 from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
 
-
 # python mcts
 import lzero.rl_utils.mcts.ptree_muzero as ptree
 from .mcts_ptree import MuZeroMCTSPtree as MCTS_ptree
@@ -539,8 +538,7 @@ class MuZeroGameBuffer(Buffer):
 
             # pad random action
             _actions += [
-                np.random.randint(0, game.action_space_size)
-                for _ in range(self._cfg.num_unroll_steps - len(_actions))
+                np.random.randint(0, game.action_space_size) for _ in range(self._cfg.num_unroll_steps - len(_actions))
             ]
 
             # obtain the input observations
@@ -847,9 +845,7 @@ class MuZeroGameBuffer(Buffer):
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
                                             ).astype(np.float32).tolist() for _ in range(batch_size)
                     ]
-                    roots.prepare(
-                        self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play
-                    )
+                    roots.prepare(self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
                     MCTS_ctree(self._cfg).search(roots, model, hidden_state_roots, to_play)
                 else:
@@ -870,11 +866,7 @@ class MuZeroGameBuffer(Buffer):
 
                     if to_play_history[0][0] is None:
                         roots.prepare(
-                            self._cfg.root_exploration_fraction,
-                            noises,
-                            reward_pool,
-                            policy_logits_pool,
-                            to_play=None
+                            self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play=None
                         )
                         # do MCTS for a new policy with the recent target model
                         MCTS_ptree(self._cfg).search(roots, model, hidden_state_roots, to_play=None)

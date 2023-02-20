@@ -322,7 +322,9 @@ class EfficientZeroVisualizePolicy(Policy):
                 value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
             )
             original_value_prefix = inverse_scalar_transform(
-                value_prefix, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
+                value_prefix,
+                self._cfg.model.support_scale,
+                categorical_distribution=self._cfg.model.categorical_distribution
             )
 
             # TODO(pu)
@@ -386,7 +388,9 @@ class EfficientZeroVisualizePolicy(Policy):
 
             if self._cfg.monitor_statistics:
                 original_value_prefixs = inverse_scalar_transform(
-                    value_prefix, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
+                    value_prefix,
+                    self._cfg.model.support_scale,
+                    categorical_distribution=self._cfg.model.categorical_distribution
                 )
                 original_value_prefixs_cpu = original_value_prefixs.detach().cpu()
 
@@ -394,7 +398,9 @@ class EfficientZeroVisualizePolicy(Policy):
                     (
                         predicted_values,
                         inverse_scalar_transform(
-                            value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
+                            value,
+                            self._cfg.model.support_scale,
+                            categorical_distribution=self._cfg.model.categorical_distribution
                         ).detach().cpu()
                     )
                 )

@@ -258,7 +258,8 @@ class EfficientZeroExertDataPolicy(Policy):
         if not self._learn_model.training:
             # if not in training, obtain the scalars of the value/reward
             scaled_value = scaled_value.detach().cpu().numpy()
-            scaled_value_prefix = inverse_scalar_transform(value_prefix, self._cfg.model.support_scale).detach().cpu().numpy()
+            scaled_value_prefix = inverse_scalar_transform(value_prefix,
+                                                           self._cfg.model.support_scale).detach().cpu().numpy()
             hidden_state = hidden_state.detach().cpu().numpy()
             reward_hidden_state = (
                 reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
@@ -304,7 +305,8 @@ class EfficientZeroExertDataPolicy(Policy):
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
                 value = inverse_scalar_transform(value, self._cfg.model.support_scale).detach().cpu().numpy()
-                value_prefix = inverse_scalar_transform(value_prefix, self._cfg.model.support_scale).detach().cpu().numpy()
+                value_prefix = inverse_scalar_transform(value_prefix,
+                                                        self._cfg.model.support_scale).detach().cpu().numpy()
                 hidden_state = hidden_state.detach().cpu().numpy()
                 reward_hidden_state = (
                     reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()

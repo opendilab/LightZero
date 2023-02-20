@@ -213,7 +213,7 @@ class MuZeroV2Policy(Policy):
             The user can define and use customized network model but must obey the same inferface definition indicated \
             by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
         """
-        return 'MuZeroNetV2', ['lzero.model.muzero_model_with_ssl']
+        return 'MuZeroNetSSL', ['lzero.model.muzero_model_with_ssl']
 
     def _init_learn(self) -> None:
         if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
@@ -401,7 +401,9 @@ class MuZeroV2Policy(Policy):
                 value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
             )
             original_reward = inverse_scalar_transform(
-                reward, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
+                reward,
+                self._cfg.model.support_scale,
+                categorical_distribution=self._cfg.model.categorical_distribution
             )
             # TODO(pu)
             if not self._learn_model.training:
@@ -512,7 +514,9 @@ class MuZeroV2Policy(Policy):
                     (
                         predicted_values,
                         inverse_scalar_transform(
-                            value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
+                            value,
+                            self._cfg.model.support_scale,
+                            categorical_distribution=self._cfg.model.categorical_distribution
                         ).detach().cpu()
                     )
                 )
@@ -990,5 +994,3 @@ class MuZeroV2Policy(Policy):
         f1 = F.normalize(f1, p=2., dim=-1, eps=1e-5)
         f2 = F.normalize(f2, p=2., dim=-1, eps=1e-5)
         return -(f1 * f2).sum(dim=1)
-
-

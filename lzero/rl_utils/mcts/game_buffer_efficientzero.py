@@ -247,7 +247,6 @@ class EfficientZeroGameBuffer(Buffer):
     ) -> Union[List[BufferedData], List[List[BufferedData]]]:
         pass
 
-
     def get_transition(self, idx):
         """
         Overview:
@@ -471,16 +470,13 @@ class EfficientZeroGameBuffer(Buffer):
 
             # pad random action
             _actions += [
-                np.random.randint(0, game.action_space_size)
-                for _ in range(self._cfg.num_unroll_steps - len(_actions))
+                np.random.randint(0, game.action_space_size) for _ in range(self._cfg.num_unroll_steps - len(_actions))
             ]
 
             # obtain the input observations
             # stack+num_unroll_steps  4+5
             # pad if length of obs in game_history is less than stack+num_unroll_steps
-            obs_lst.append(
-                game_lst[i].obs(game_history_pos_lst[i], extra_len=self._cfg.num_unroll_steps, padding=True)
-            )
+            obs_lst.append(game_lst[i].obs(game_history_pos_lst[i], extra_len=self._cfg.num_unroll_steps, padding=True))
             action_lst.append(_actions)
             mask_lst.append(_mask)
 
@@ -873,7 +869,8 @@ class EfficientZeroGameBuffer(Buffer):
                         target_values.append(value_lst[value_index])
                         # Since the horizon is small and the discount is close to 1.
                         # Compute the reward sum to approximate the value prefix for simplification
-                        value_prefix += reward_lst[current_index]  # * self._cfg.discount ** (current_index - base_index)
+                        value_prefix += reward_lst[current_index
+                                                   ]  # * self._cfg.discount ** (current_index - base_index)
 
                         # if to_play_list[current_index] == 1:
                         #     value_prefix = value_prefix

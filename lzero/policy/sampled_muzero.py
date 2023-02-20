@@ -443,7 +443,9 @@ class SampledMuZeroPolicy(Policy):
                 value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
             )
             original_reward = inverse_scalar_transform(
-                reward, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
+                reward,
+                self._cfg.model.support_scale,
+                categorical_distribution=self._cfg.model.categorical_distribution
             )
             # TODO(pu)
             if not self._learn_model.training:
@@ -620,7 +622,9 @@ class SampledMuZeroPolicy(Policy):
                     (
                         predicted_values,
                         inverse_scalar_transform(
-                            value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
+                            value,
+                            self._cfg.model.support_scale,
+                            categorical_distribution=self._cfg.model.categorical_distribution
                         ).detach().cpu()
                     )
                 )
@@ -870,7 +874,8 @@ class SampledMuZeroPolicy(Policy):
                 if action_mask[0] is None:
                     # continuous action space env: all -1
                     legal_actions = [
-                        [-1 for i in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_collect_env_num)
+                        [-1 for i in range(self._cfg.model.num_of_sampled_actions)]
+                        for _ in range(active_collect_env_num)
                     ]
                 else:
                     action_num = int(action_mask[0].sum())
@@ -906,7 +911,8 @@ class SampledMuZeroPolicy(Policy):
                 if action_mask[0] is None:
                     # continuous action space env: all -1
                     legal_actions = [
-                        [-1 for i in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_collect_env_num)
+                        [-1 for i in range(self._cfg.model.num_of_sampled_actions)]
+                        for _ in range(active_collect_env_num)
                     ]
                 else:
                     action_num = int(action_mask[0].sum())
@@ -1070,8 +1076,8 @@ class SampledMuZeroPolicy(Policy):
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                     ]
                 roots = ctree.Roots(
-                    active_eval_env_num, legal_actions, self._cfg.action_space_size, self._cfg.model.num_of_sampled_actions,
-                    self._cfg.model.continuous_action_space
+                    active_eval_env_num, legal_actions, self._cfg.action_space_size,
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
                 ######################
                 # sampled related code
@@ -1085,8 +1091,8 @@ class SampledMuZeroPolicy(Policy):
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
                 roots = ptree.Roots(
-                    active_eval_env_num, legal_actions, self._cfg.action_space_size, self._cfg.model.num_of_sampled_actions,
-                    self._cfg.model.continuous_action_space
+                    active_eval_env_num, legal_actions, self._cfg.action_space_size,
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
 
                 roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)

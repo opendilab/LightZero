@@ -250,7 +250,8 @@ class EfficientZeroPolicy(Policy):
         self._target_model.reset()
         if self._cfg.use_augmentation:
             self.transforms = Transforms(
-                self._cfg.augmentation, image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
+                self._cfg.augmentation,
+                image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
             )
         self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
         self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
@@ -439,7 +440,9 @@ class EfficientZeroPolicy(Policy):
                 value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
             )
             original_value_prefix = inverse_scalar_transform(
-                value_prefix, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
+                value_prefix,
+                self._cfg.model.support_scale,
+                categorical_distribution=self._cfg.model.categorical_distribution
             )
 
             # TODO(pu)
@@ -522,7 +525,9 @@ class EfficientZeroPolicy(Policy):
 
             if self._cfg.monitor_statistics:
                 original_value_prefixs = inverse_scalar_transform(
-                    value_prefix, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
+                    value_prefix,
+                    self._cfg.model.support_scale,
+                    categorical_distribution=self._cfg.model.categorical_distribution
                 )
                 original_value_prefixs_cpu = original_value_prefixs.detach().cpu()
 
@@ -530,7 +535,9 @@ class EfficientZeroPolicy(Policy):
                     (
                         predicted_values,
                         inverse_scalar_transform(
-                            value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
+                            value,
+                            self._cfg.model.support_scale,
+                            categorical_distribution=self._cfg.model.categorical_distribution
                         ).detach().cpu()
                     )
                 )

@@ -80,7 +80,7 @@ class AlphaZeroPolicy(Policy):
             The user can define and use customized network model but must obey the same inferface definition indicated \
             by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
         """
-        return 'AlphaNet', ['lzero.model.alphazero_model']
+        return 'AlphaZeroNet', ['lzero.model.alphazero_model']
 
     def _init_learn(self):
         if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':

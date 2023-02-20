@@ -110,7 +110,9 @@ class MCTS(object):
                 action_visits.append((action, 0))
 
         actions, visits = zip(*action_visits)
-        action_probs = nn.functional.softmax(1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0).numpy()  # prob =
+        action_probs = nn.functional.softmax(
+            1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0
+        ).numpy()  # prob =
         if sample:
             action = np.random.choice(actions, p=action_probs)
         else:

@@ -127,7 +127,7 @@ assert len(to_play) == batch_size
 
 
 @pytest.mark.unittest
-def test_mcts_vs-bot_to_play():
+def test_mcts_vs_bot_to_play():
     legal_actions_list = [[i for i in range(action_space_size)] for _ in range(env_nums)]  # all action
     roots = tree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
     noises = [
@@ -148,7 +148,7 @@ def test_mcts_vs-bot_to_play():
 
 
 @pytest.mark.unittest
-def test_mcts_vs-bot_to_play_large():
+def test_mcts_vs_bot_to_play_large():
     game_config.obs_space_size = 100
     game_config.action_space_size = 20
 
@@ -198,7 +198,7 @@ def test_mcts_vs-bot_to_play_large():
 
 
 @pytest.mark.unittest
-def test_mcts_vs-bot_to_play_legal_action():
+def test_mcts_vs_bot_to_play_legal_action():
     for i in range(env_nums):
         assert action_num[i] == len(legal_actions_list[i])
 
@@ -235,7 +235,7 @@ def test_mcts_vs-bot_to_play_legal_action():
 
 
 @pytest.mark.unittest
-def test_mcts_self-play():
+def test_mcts_self_play():
     legal_actions_list = [[i for i in range(action_space_size)] for _ in range(env_nums)]  # all action
     roots = tree.Roots(env_nums, game_config.num_simulations, legal_actions_list)
     noises = [
@@ -252,7 +252,7 @@ def test_mcts_self-play():
 
 
 @pytest.mark.unittest
-def test_mcts_self-play_legal_action():
+def test_mcts_self_play_legal_action():
     for i in range(env_nums):
         assert action_num[i] == len(legal_actions_list[i])
 
@@ -284,4 +284,4 @@ def test_mcts_self-play_legal_action():
 
 
 # debug
-test_mcts_vs-bot_to_play_large()
+test_mcts_vs_bot_to_play_large()

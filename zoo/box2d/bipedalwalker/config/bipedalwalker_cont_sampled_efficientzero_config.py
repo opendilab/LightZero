@@ -57,7 +57,6 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
         # whether to use cuda for network.
         cuda=True,
         model=dict(
-
             # NOTE: the key difference setting between image-input and vector input.
             image_channel=1,
             frame_stack_num=1,
