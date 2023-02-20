@@ -174,7 +174,7 @@ class SampledEfficientZeroPolicy(Policy):
         image_based=False,
         cvt_string=False,
         gray_scale=False,
-        use_augmentation=False,
+        use_augmentation=True,
         # style of augmentation
         augmentation=['shift', 'intensity'],  # options=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
 

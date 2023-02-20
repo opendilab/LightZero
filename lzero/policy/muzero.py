@@ -155,7 +155,7 @@ class MuZeroPolicy(Policy):
         image_based=True,
         cvt_string=False,
         gray_scale=False,
-        use_augmentation=True,
+        use_augmentation=False,
         # style of augmentation
         augmentation=['shift', 'intensity'],  # options=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
 
