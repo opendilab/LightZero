@@ -14,6 +14,7 @@ from ..scaling_transform import inverse_scalar_transform
 # EfficientZero
 # ==============================================================
 
+
 class EfficientZeroMCTSCtree(object):
     config = dict(
         device='gpu',
@@ -153,7 +154,6 @@ class EfficientZeroMCTSCtree(object):
 # ==============================================================
 # MuZero
 # ==============================================================
-
 
 from lzero.rl_utils.mcts.ctree_muzero import mz_tree as tree_muzero
 

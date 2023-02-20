@@ -248,8 +248,8 @@ class PredictionNetwork(nn.Module):
         return policy, value
 
 
-@MODEL_REGISTRY.register('AlphaNet')
-class AlphaNet(nn.Module):
+@MODEL_REGISTRY.register('AlphaZeroNet')
+class AlphaZeroNet(nn.Module):
 
     def __init__(
         self,
@@ -290,7 +290,7 @@ class AlphaNet(nn.Module):
             - last_linear_layer_init_zero (:obj:`bool`): True -> zero initialization for the last layer of value/policy mlp
             - state_norm (:obj:`bool`):  True -> normalization for hidden states
         """
-        super(AlphaNet, self).__init__()
+        super(AlphaZeroNet, self).__init__()
         self.categorical_distribution = categorical_distribution
         if not self.categorical_distribution:
             self.reward_support_size = 1

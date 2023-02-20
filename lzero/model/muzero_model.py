@@ -11,195 +11,23 @@ import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 
-from .muzero_base_model import BaseNet, renormalize
-
-
-def conv3x3(in_channels, out_channels, stride=1):
-    return nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
-
-
-class DownSample(nn.Module):
-
-    def __init__(self, in_channels, out_channels, momentum=0.1):
-        super().__init__()
-        self.conv1 = nn.Conv2d(
-            in_channels,
-            out_channels // 2,
-            kernel_size=3,
-            stride=2,
-            padding=1,
-            bias=False,
-        )
-        self.bn1 = nn.BatchNorm2d(out_channels // 2, momentum=momentum)
-        self.resblocks1 = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=out_channels // 2,
-                    activation=torch.nn.ReLU(inplace=True),
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(1)
-            ]
-        )
-        self.conv2 = nn.Conv2d(
-            out_channels // 2,
-            out_channels,
-            kernel_size=3,
-            stride=2,
-            padding=1,
-            bias=False,
-        )
-        self.downsample_block = ResBlock(
-            in_channels=out_channels // 2,
-            out_channels=out_channels,
-            activation=torch.nn.ReLU(inplace=True),
-            norm_type='BN',
-            res_type='downsample',
-            bias=False
-        )
-        self.resblocks2 = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=out_channels,
-                    activation=torch.nn.ReLU(inplace=True),
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(1)
-            ]
-        )
-        self.pooling1 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
-        self.resblocks3 = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=out_channels,
-                    activation=torch.nn.ReLU(inplace=True),
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(1)
-            ]
-        )
-        self.pooling2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
-        self.activation = nn.ReLU(inplace=True)
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.activation(x)
-
-        for block in self.resblocks1:
-            x = block(x)
-        x = self.downsample_block(x)
-        for block in self.resblocks2:
-            x = block(x)
-        x = self.pooling1(x)
-        for block in self.resblocks3:
-            x = block(x)
-        x = self.pooling2(x)
-        return x
-
-
-# Encode the observations into hidden states
-class RepresentationNetwork(nn.Module):
-
-    def __init__(
-            self,
-            observation_shape,
-            num_res_blocks,
-            num_channels,
-            downsample,
-            momentum=0.1,
-    ):
-        """
-        Overview: Representation network
-        Arguments:
-            - observation_shape (:obj:`Union[List, tuple]`):  shape of observations: [C, W, H]
-            - num_res_blocks (:obj:`int`): number of res blocks
-            - num_channels (:obj:`int`): channels of hidden states
-            - downsample (:obj:`bool`): True -> do downsampling for observations. (For board games, do not need)
-        """
-        super().__init__()
-        self.downsample = downsample
-        if self.downsample:
-            self.downsample_net = DownSample(
-                observation_shape[0],
-                num_channels,
-            )
-        else:
-            self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
-
-            self.bn = nn.BatchNorm2d(num_channels, momentum=momentum)
-        self.resblocks = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=num_channels,
-                    activation=torch.nn.ReLU(inplace=True),
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(num_res_blocks)
-            ]
-        )
-        self.activation = nn.ReLU(inplace=True)
-
-    def forward(self, x):
-        if self.downsample:
-            x = self.downsample_net(x)
-        else:
-            # for debug
-            # import copy
-            # state = copy.deepcopy(x)
-            # from ding.utils import EasyTimer
-            # timer = EasyTimer(cuda=True)
-            #
-            # time_list = []
-            # for i in range(100000):
-            #     state = torch.randint(0, 2, [8, 3, 3, 3]).float()
-            #     with timer:
-            #         x = self.conv(state)
-            #     # print(f"self.conv time: {timer.value}")
-            #     time_list.append(timer.value)
-            # print('mean: ', np.array(time_list).mean(), 'std: ', np.array(time_list).std(), 'max: ', max(time_list), 'min: ',min(time_list))
-            #
-            # time_list = []
-            # time_list_div_255 = []
-            # for i in range(100000):
-            #     state_atari = torch.randint(0, 255, [8, 3, 3, 3]).float()
-            #     state_atari_div_255 = state_atari / 255.
-            #     with timer:
-            #         x = self.conv(state_atari)
-            #     time_list.append(timer.value)
-            #
-            #     with timer:
-            #         x = self.conv(state_atari_div_255)
-            #     time_list_div_255.append(timer.value)
-            # print('mean: ', np.array(time_list).mean(), 'std: ', np.array(time_list).std(), 'max: ', max(time_list), 'min: ', min(time_list))
-            # print('mean: ', np.array(time_list_div_255).mean(), 'std: ', np.array(time_list_div_255).std(), 'max: ', max(time_list_div_255), 'min: ', min(time_list_div_255))
-
-            x = self.conv(x)
-            x = self.bn(x)
-            x = self.activation(x)
-
-        for block in self.resblocks:
-            x = block(x)
-        return x
+from .common import MZNetworkOutput, RepresentationNetwork
+from .utils import renormalize
 
 
 # Predict next hidden states given current states and actions
 class DynamicsNetwork(nn.Module):
 
     def __init__(
-            self,
-            num_res_blocks,
-            num_channels,
-            reward_head_channels,
-            fc_reward_layers,
-            full_support_size,
-            block_output_size_reward,
-            momentum=0.1,
-            last_linear_layer_init_zero=False,
+        self,
+        num_res_blocks,
+        num_channels,
+        reward_head_channels,
+        fc_reward_layers,
+        full_support_size,
+        block_output_size_reward,
+        momentum=0.1,
+        last_linear_layer_init_zero=False,
     ):
         """
         Overview:
@@ -268,43 +96,25 @@ class DynamicsNetwork(nn.Module):
 
         return state, reward
 
-    def get_dynamic_mean(self):
-        dynamic_mean = np.abs(self.conv.weight.detach().cpu().numpy().reshape(-1)).tolist()
-
-        for block in self.resblocks:
-            for name, param in block.named_parameters():
-                dynamic_mean += np.abs(param.detach().cpu().numpy().reshape(-1)).tolist()
-        dynamic_mean = sum(dynamic_mean) / len(dynamic_mean)
-        return dynamic_mean
-
-    def get_reward_mean(self):
-        reward_w_dist = self.conv1x1_reward.weight.detach().cpu().numpy().reshape(-1)
-
-        for name, param in self.fc.named_parameters():
-            temp_weights = param.detach().cpu().numpy().reshape(-1)
-            reward_w_dist = np.concatenate((reward_w_dist, temp_weights))
-        reward_mean = np.abs(reward_w_dist).mean()
-        return reward_w_dist, reward_mean
-
 
 # predict the value and policy given hidden states
 class PredictionNetwork(nn.Module):
 
     def __init__(
-            self,
-            action_space_size,
-            num_res_blocks,
-            in_channels,
-            num_channels,
-            value_head_channels,
-            policy_head_channels,
-            fc_value_layers,
-            fc_policy_layers,
-            full_support_size,
-            block_output_size_value,
-            block_output_size_policy,
-            momentum=0.1,
-            last_linear_layer_init_zero=False,
+        self,
+        action_space_size,
+        num_res_blocks,
+        in_channels,
+        num_channels,
+        value_head_channels,
+        policy_head_channels,
+        fc_value_layers,
+        fc_policy_layers,
+        full_support_size,
+        block_output_size_value,
+        block_output_size_policy,
+        momentum=0.1,
+        last_linear_layer_init_zero=False,
     ):
         """Prediction network
         Parameters
@@ -406,36 +216,36 @@ class PredictionNetwork(nn.Module):
 
 
 @MODEL_REGISTRY.register('MuZeroNet')
-class MuZeroNet(BaseNet):
+class MuZeroNet(nn.Module):
 
     def __init__(
-            self,
-            observation_shape: SequenceType = (12, 96, 96),
-            action_space_size: int = 6,
-            num_res_blocks: int = 1,
-            num_channels: int = 64,
-            reward_head_channels: int = 16,
-            value_head_channels: int = 16,
-            policy_head_channels: int = 16,
-            fc_reward_layers: SequenceType = [32],
-            fc_value_layers: SequenceType = [32],
-            fc_policy_layers: SequenceType = [32],
-            reward_support_size: int = 601,
-            value_support_size: int = 601,
-            downsample: bool = True,
-            representation_model_type: str = 'conv_res_blocks',
-            representation_model: nn.Module = None,
-            batch_norm_momentum=0.1,
-            proj_hid: int = 1024,
-            proj_out: int = 1024,
-            pred_hid: int = 512,
-            pred_out: int = 1024,
-            last_linear_layer_init_zero: bool = True,
-            state_norm: bool = False,
-            categorical_distribution: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            *args,
-            **kwargs
+        self,
+        observation_shape: SequenceType = (12, 96, 96),
+        action_space_size: int = 6,
+        num_res_blocks: int = 1,
+        num_channels: int = 64,
+        reward_head_channels: int = 16,
+        value_head_channels: int = 16,
+        policy_head_channels: int = 16,
+        fc_reward_layers: SequenceType = [32],
+        fc_value_layers: SequenceType = [32],
+        fc_policy_layers: SequenceType = [32],
+        reward_support_size: int = 601,
+        value_support_size: int = 601,
+        downsample: bool = True,
+        representation_model_type: str = 'conv_res_blocks',
+        representation_model: nn.Module = None,
+        batch_norm_momentum=0.1,
+        proj_hid: int = 1024,
+        proj_out: int = 1024,
+        pred_hid: int = 512,
+        pred_out: int = 1024,
+        last_linear_layer_init_zero: bool = True,
+        state_norm: bool = False,
+        categorical_distribution: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        *args,
+        **kwargs
     ):
         """
         Overview:
@@ -569,6 +379,22 @@ class MuZeroNet(BaseNet):
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             )
 
+    def initial_inference(self, obs) -> MZNetworkOutput:
+        num = obs.size(0)
+        hidden_state = self.representation(obs)
+        policy_logits, value = self.prediction(hidden_state)
+        return MZNetworkOutput(
+            value,
+            [0. for _ in range(num)],
+            policy_logits,
+            hidden_state,
+        )
+
+    def recurrent_inference(self, hidden_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
+        hidden_state, reward = self.dynamics(hidden_state, action)
+        policy_logits, value = self.prediction(hidden_state)
+        return MZNetworkOutput(value, reward, policy_logits, hidden_state)
+
     def prediction(self, encoded_state):
         policy, value = self.prediction_network(encoded_state)
         return policy, value
@@ -608,9 +434,14 @@ class MuZeroNet(BaseNet):
             next_encoded_state_normalized = renormalize(next_encoded_state)
             return next_encoded_state_normalized, reward
 
-    def get_params_mean(self):
-        representation_mean = self.representation_network.get_param_mean()
-        dynamic_mean = self.dynamics_network.get_dynamic_mean()
-        reward_w_dist, reward_mean = self.dynamics_network.get_reward_mean()
+    def get_gradients(self):
+        grads = []
+        for p in self.parameters():
+            grad = None if p.grad is None else p.grad.data.cpu().numpy()
+            grads.append(grad)
+        return grads
 
-        return reward_w_dist, representation_mean, dynamic_mean, reward_mean
+    def set_gradients(self, gradients: torch.Tensor):
+        for g, p in zip(gradients, self.parameters()):
+            if g is not None:
+                p.grad = g

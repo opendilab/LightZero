@@ -10,132 +10,7 @@ import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 
-from .efficientzero_base_model import BaseNet, renormalize
-
-
-def conv3x3(in_channels, out_channels, stride=1):
-    return nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
-
-
-class DownSample(nn.Module):
-
-    def __init__(self, in_channels, out_channels, momentum=0.1, activation=nn.ReLU(inplace=True)):
-        super().__init__()
-        self.conv1 = nn.Conv2d(
-            in_channels,
-            out_channels // 2,
-            kernel_size=3,
-            stride=2,
-            padding=1,
-            bias=False,
-        )
-        self.bn1 = nn.BatchNorm2d(out_channels // 2, momentum=momentum)
-        self.resblocks1 = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=out_channels // 2, activation=activation, norm_type='BN', res_type='basic', bias=False
-                ) for _ in range(1)
-            ]
-        )
-        self.conv2 = nn.Conv2d(
-            out_channels // 2,
-            out_channels,
-            kernel_size=3,
-            stride=2,
-            padding=1,
-            bias=False,
-        )
-        self.downsample_block = ResBlock(
-            in_channels=out_channels // 2,
-            out_channels=out_channels,
-            activation=activation,
-            norm_type='BN',
-            res_type='downsample',
-            bias=False
-        )
-        self.resblocks2 = nn.ModuleList(
-            [
-                ResBlock(in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
-                for _ in range(1)
-            ]
-        )
-        self.pooling1 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
-        self.resblocks3 = nn.ModuleList(
-            [
-                ResBlock(in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
-                for _ in range(1)
-            ]
-        )
-        self.pooling2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
-        self.activation = activation
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.activation(x)
-
-        for block in self.resblocks1:
-            x = block(x)
-        x = self.downsample_block(x)
-        for block in self.resblocks2:
-            x = block(x)
-        x = self.pooling1(x)
-        for block in self.resblocks3:
-            x = block(x)
-        x = self.pooling2(x)
-        return x
-
-
-# Encode the observations into hidden states
-class RepresentationNetwork(nn.Module):
-
-    def __init__(
-        self,
-        observation_shape,
-        num_res_blocks,
-        num_channels,
-        downsample,
-        momentum=0.1,
-        activation=nn.ReLU(inplace=True),
-    ):
-        """
-        Overview: Representation network
-        Arguments:
-            - observation_shape (:obj:`Union[List, tuple]`):  shape of observations: [C, W, H]
-            - num_res_blocks (:obj:`int`): number of res blocks
-            - num_channels (:obj:`int`): channels of hidden states
-            - downsample (:obj:`bool`): True -> do downsampling for observations. (For board games, do not need)
-        """
-        super().__init__()
-        self.downsample = downsample
-        if self.downsample:
-            self.downsample_net = DownSample(
-                observation_shape[0],
-                num_channels,
-            )
-        else:
-            self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
-
-            self.bn = nn.BatchNorm2d(num_channels, momentum=momentum)
-        self.resblocks = nn.ModuleList(
-            [
-                ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
-                for _ in range(num_res_blocks)
-            ]
-        )
-        self.activation = activation
-
-    def forward(self, x):
-        if self.downsample:
-            x = self.downsample_net(x)
-        else:
-            x = self.conv(x)
-            x = self.bn(x)
-            x = self.activation(x)
-
-        for block in self.resblocks:
-            x = block(x)
-        return x
+from .common import renormalize, EZNetworkOutput, RepresentationNetwork
 
 
 # Predict next hidden states given current states and actions
@@ -237,24 +112,6 @@ class DynamicsNetwork(nn.Module):
         value_prefix = self.fc(value_prefix)
 
         return state, reward_hidden_state, value_prefix
-
-    def get_dynamic_mean(self):
-        dynamic_mean = np.abs(self.conv.weight.detach().cpu().numpy().reshape(-1)).tolist()
-
-        for block in self.resblocks:
-            for name, param in block.named_parameters():
-                dynamic_mean += np.abs(param.detach().cpu().numpy().reshape(-1)).tolist()
-        dynamic_mean = sum(dynamic_mean) / len(dynamic_mean)
-        return dynamic_mean
-
-    def get_reward_mean(self):
-        reward_w_dist = self.conv1x1_reward.weight.detach().cpu().numpy().reshape(-1)
-
-        for name, param in self.fc.named_parameters():
-            temp_weights = param.detach().cpu().numpy().reshape(-1)
-            reward_w_dist = np.concatenate((reward_w_dist, temp_weights))
-        reward_mean = np.abs(reward_w_dist).mean()
-        return reward_w_dist, reward_mean
 
 
 # predict the value and policy given hidden states
@@ -373,7 +230,7 @@ class PredictionNetwork(nn.Module):
 
 
 @MODEL_REGISTRY.register('EfficientZeroNet')
-class EfficientZeroNet(BaseNet):
+class EfficientZeroNet(nn.Module):
 
     def __init__(
         self,
@@ -433,7 +290,8 @@ class EfficientZeroNet(BaseNet):
             - state_norm (:obj:`bool`):  True -> normalization for hidden states
             - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         """
-        super(EfficientZeroNet, self).__init__(lstm_hidden_size)
+        super(EfficientZeroNet, self).__init__()
+        self.lstm_hidden_size = lstm_hidden_size
         self.categorical_distribution = categorical_distribution
         if not self.categorical_distribution:
             self.reward_support_size = 1
@@ -571,6 +429,21 @@ class EfficientZeroNet(BaseNet):
             nn.Linear(self.pred_hid, self.pred_out),
         )
 
+    def initial_inference(self, obs) -> EZNetworkOutput:
+        num = obs.size(0)
+        hidden_state = self.representation(obs)
+        policy_logits, value = self.prediction(hidden_state)
+        # zero initialization for reward hidden states
+        reward_hidden = (torch.zeros(1, num, self.lstm_hidden_size), torch.zeros(1, num, self.lstm_hidden_size))
+        return EZNetworkOutput(value, [0. for _ in range(num)], policy_logits, hidden_state, reward_hidden)
+
+    def recurrent_inference(
+            self, hidden_state: torch.Tensor, reward_hidden: torch.Tensor, action: torch.Tensor
+    ) -> EZNetworkOutput:
+        hidden_state, reward_hidden, value_prefix = self.dynamics(hidden_state, reward_hidden, action)
+        policy_logits, value = self.prediction(hidden_state)
+        return EZNetworkOutput(value, value_prefix, policy_logits, hidden_state, reward_hidden)
+
     def prediction(self, encoded_state):
         policy, value = self.prediction_network(encoded_state)
         # encoded_state = torch.randn([5, 64, 8, 1])
@@ -613,13 +486,6 @@ class EfficientZeroNet(BaseNet):
             next_encoded_state_normalized = renormalize(next_encoded_state)
             return next_encoded_state_normalized, reward_hidden_state, value_prefix
 
-    def get_params_mean(self):
-        representation_mean = self.representation_network.get_param_mean()
-        dynamic_mean = self.dynamics_network.get_dynamic_mean()
-        reward_w_dist, reward_mean = self.dynamics_network.get_reward_mean()
-
-        return reward_w_dist, representation_mean, dynamic_mean, reward_mean
-
     def project(self, hidden_state, with_grad=True):
         # only the branch of proj + pred can share the gradients
 
@@ -645,3 +511,22 @@ class EfficientZeroNet(BaseNet):
             return self.projection_head(proj)
         else:
             return proj.detach()
+
+    def get_params_mean(self):
+        representation_mean = self.representation_network.get_param_mean()
+        dynamic_mean = self.dynamics_network.get_dynamic_mean()
+        reward_w_dist, reward_mean = self.dynamics_network.get_reward_mean()
+
+        return reward_w_dist, representation_mean, dynamic_mean, reward_mean
+
+    def get_gradients(self):
+        grads = []
+        for p in self.parameters():
+            grad = None if p.grad is None else p.grad.data.cpu().numpy()
+            grads.append(grad)
+        return grads
+
+    def set_gradients(self, gradients: torch.Tensor):
+        for g, p in zip(gradients, self.parameters()):
+            if g is not None:
+                p.grad = g

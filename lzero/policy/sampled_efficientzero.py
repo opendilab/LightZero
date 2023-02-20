@@ -23,7 +23,7 @@ from lzero.rl_utils import Transforms, visit_count_temperature, modified_cross_e
 from lzero.rl_utils import scalar_transform, inverse_scalar_transform
 from lzero.rl_utils import select_action
 # cpp mcts
-from lzero.rl_utils.mcts.ctree_sampled_efficientzero import sez_tree as ctree
+from lzero.rl_utils.mcts.ctree_sampled_efficientzero import ezs_tree as ctree
 
 
 @POLICY_REGISTRY.register('sampled_efficientzero')
@@ -446,17 +446,17 @@ class SampledEfficientZeroPolicy(Policy):
         #############################
         if self._cfg.model.continuous_action_space:
             """continuous action space"""
-            (mu, sigma) = policy_logits[:, :self._cfg.model.action_space_size], policy_logits[:,
-                                                                          -self._cfg.model.action_space_size:]
+            (mu, sigma) = policy_logits[:, :self._cfg.model.
+                                        action_space_size], policy_logits[:, -self._cfg.model.action_space_size:]
             dist = Independent(Normal(mu, sigma), 1)
 
             # take the init hypothetical step k=0
             target_normalized_visit_count_init_step = target_policy[:, 0]
 
-            target_normalized_visit_count_init_step_masked = torch.index_select(target_normalized_visit_count_init_step,
-                                                                                0,
-                                                                                torch.nonzero(mask_batch[:, 0]).squeeze(
-                                                                                    -1))
+            target_normalized_visit_count_init_step_masked = torch.index_select(
+                target_normalized_visit_count_init_step, 0,
+                torch.nonzero(mask_batch[:, 0]).squeeze(-1)
+            )
             # only for debug
             target_dist = Categorical(target_normalized_visit_count_init_step_masked)
             target_policy_entropy = target_dist.entropy().mean()
@@ -509,16 +509,16 @@ class SampledEfficientZeroPolicy(Policy):
                 # policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
                 #         target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
                 policy_loss = (
-                        torch.exp(target_log_prob_sampled_actions.detach()) *
-                        (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
-                ).sum(-1)* mask_batch[:, 0]
+                    torch.exp(target_log_prob_sampled_actions.detach()) *
+                    (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
+                ).sum(-1) * mask_batch[:, 0]
             elif self._cfg.learn.policy_loss_type == 'cross_entropy':
                 # cross_entropy loss: - sum(p * log (q) )
                 # policy_loss = - torch.mean(
                 #     torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
                 policy_loss = -torch.sum(
                     torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
-                )* mask_batch[:, 0]
+                ) * mask_batch[:, 0]
         else:
             """discrete action space"""
             prob = torch.softmax(policy_logits, dim=-1)
@@ -527,10 +527,10 @@ class SampledEfficientZeroPolicy(Policy):
             # take the init hypothetical step k=0
             target_normalized_visit_count_init_step = target_policy[:, 0]
 
-            target_normalized_visit_count_init_step_masked = torch.index_select(target_normalized_visit_count_init_step,
-                                                                                0,
-                                                                                torch.nonzero(mask_batch[:, 0]).squeeze(
-                                                                                    -1))
+            target_normalized_visit_count_init_step_masked = torch.index_select(
+                target_normalized_visit_count_init_step, 0,
+                torch.nonzero(mask_batch[:, 0]).squeeze(-1)
+            )
 
             # if 0 in target_normalized_visit_count_init_step.sum(-1):
             #     print('0 in target_normalized_visit_count.sum(-1)')
@@ -590,9 +590,9 @@ class SampledEfficientZeroPolicy(Policy):
                 #         target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
 
                 policy_loss = (
-                                      torch.exp(target_log_prob_sampled_actions.detach()) *
-                                      (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
-                              ).sum(-1) * mask_batch[:, 0]
+                    torch.exp(target_log_prob_sampled_actions.detach()) *
+                    (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
+                ).sum(-1) * mask_batch[:, 0]
 
                 # import torch.nn as nn
                 # kl_loss = nn.KLDivLoss(reduction="batchmean")
@@ -648,7 +648,9 @@ class SampledEfficientZeroPolicy(Policy):
                 value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
             )
             original_value_prefix = inverse_scalar_transform(
-                value_prefix, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
+                value_prefix,
+                self._cfg.model.support_scale,
+                categorical_distribution=self._cfg.model.categorical_distribution
             )
 
             # TODO(pu)
@@ -695,17 +697,17 @@ class SampledEfficientZeroPolicy(Policy):
             #############################
             if self._cfg.model.continuous_action_space:
 
-                (mu,
-                 sigma) = policy_logits[:, :self._cfg.model.action_space_size], policy_logits[:,
-                                                                          -self._cfg.model.action_space_size:]
+                (mu, sigma) = policy_logits[:, :self._cfg.model.
+                                            action_space_size], policy_logits[:, -self._cfg.model.action_space_size:]
                 dist = Independent(Normal(mu, sigma), 1)
 
                 # take th hypothetical step k= step_i + 1
                 target_normalized_visit_count = copy.deepcopy(target_policy[:, step_i + 1])
                 # exclude the null target policy
-                target_normalized_visit_count_masked = torch.index_select(target_normalized_visit_count, 0,
-                                                                          torch.nonzero(
-                                                                              mask_batch[:, step_i + 1]).squeeze(-1))
+                target_normalized_visit_count_masked = torch.index_select(
+                    target_normalized_visit_count, 0,
+                    torch.nonzero(mask_batch[:, step_i + 1]).squeeze(-1)
+                )
                 # only for debug
                 try:
                     target_dist = Categorical(target_normalized_visit_count_masked)
@@ -762,9 +764,9 @@ class SampledEfficientZeroPolicy(Policy):
                     # policy_loss += (torch.exp(target_log_prob_sampled_actions.detach()) * (
                     #         target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
                     policy_loss += (
-                            torch.exp(target_log_prob_sampled_actions.detach()) *
-                            (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
-                    ).sum(-1)* mask_batch[:, step_i + 1]
+                        torch.exp(target_log_prob_sampled_actions.detach()) *
+                        (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
+                    ).sum(-1) * mask_batch[:, step_i + 1]
                 elif self._cfg.learn.policy_loss_type == 'cross_entropy':
                     # cross_entropy loss: - sum(p * log (q) )
                     # NOTE: accumulate policy loss!!! should be +=
@@ -772,7 +774,7 @@ class SampledEfficientZeroPolicy(Policy):
                     #     torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
                     policy_loss += -torch.sum(
                         torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
-                    )* mask_batch[:, step_i + 1]
+                    ) * mask_batch[:, step_i + 1]
 
             else:
                 """discrete action space"""
@@ -782,9 +784,10 @@ class SampledEfficientZeroPolicy(Policy):
                 # take th hypothetical step k= step_i + 1
                 target_normalized_visit_count = copy.deepcopy(target_policy[:, step_i + 1])
                 # exclude the null target policy
-                target_normalized_visit_count_masked = torch.index_select(target_normalized_visit_count, 0,
-                                                                          torch.nonzero(
-                                                                              mask_batch[:, step_i + 1]).squeeze(-1))
+                target_normalized_visit_count_masked = torch.index_select(
+                    target_normalized_visit_count, 0,
+                    torch.nonzero(mask_batch[:, step_i + 1]).squeeze(-1)
+                )
 
                 # if 0 in target_normalized_visit_count.sum(-1):
                 #     print('0 in target_normalized_visit_count.sum(-1)')
@@ -850,9 +853,9 @@ class SampledEfficientZeroPolicy(Policy):
                     #     (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
                     # ).sum(-1)
                     policy_loss += (
-                                           torch.exp(target_log_prob_sampled_actions.detach()) *
-                                           (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
-                                   ).sum(-1) * mask_batch[:, step_i + 1]
+                        torch.exp(target_log_prob_sampled_actions.detach()) *
+                        (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
+                    ).sum(-1) * mask_batch[:, step_i + 1]
 
                 elif self._cfg.learn.policy_loss_type == 'cross_entropy':
                     # cross_entropy loss: - sum(p * log (q) )
@@ -893,7 +896,9 @@ class SampledEfficientZeroPolicy(Policy):
 
             if self._cfg.monitor_statistics:
                 original_value_prefixs = inverse_scalar_transform(
-                    value_prefix, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
+                    value_prefix,
+                    self._cfg.model.support_scale,
+                    categorical_distribution=self._cfg.model.categorical_distribution
                 )
                 original_value_prefixs_cpu = original_value_prefixs.detach().cpu()
 
@@ -901,7 +906,9 @@ class SampledEfficientZeroPolicy(Policy):
                     (
                         predicted_values,
                         inverse_scalar_transform(
-                            value, self._cfg.model.support_scale, categorical_distribution=self._cfg.model.categorical_distribution
+                            value,
+                            self._cfg.model.support_scale,
+                            categorical_distribution=self._cfg.model.categorical_distribution
                         ).detach().cpu()
                     )
                 )
@@ -937,9 +944,9 @@ class SampledEfficientZeroPolicy(Policy):
         # ----------------------------------------------------------------------------------
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-                self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss +
-                self._cfg.policy_entropy_loss_weight * policy_entropy_loss
+            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss +
+            self._cfg.policy_entropy_loss_weight * policy_entropy_loss
         )
         weighted_loss = (weights * loss).mean()
 
@@ -985,13 +992,13 @@ class SampledEfficientZeroPolicy(Policy):
 
             # reward l1 loss
             value_prefix_indices_0 = (
-                    target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 0
+                target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 0
             )
             value_prefix_indices_n1 = (
-                    target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == -1
+                target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == -1
             )
             value_prefix_indices_1 = (
-                    target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 1
+                target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 1
             )
 
             target_value_prefix_base = target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1)
@@ -1210,8 +1217,7 @@ class SampledEfficientZeroPolicy(Policy):
 
     # @profile
     def _forward_collect(
-            self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None,
-            ready_env_id=None
+        self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None, ready_env_id=None
     ):
         """
         Shapes:
@@ -1252,7 +1258,8 @@ class SampledEfficientZeroPolicy(Policy):
                 if action_mask[0] is None:
                     # continuous action space env: all -1
                     legal_actions = [
-                        [-1 for i in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_collect_env_num)
+                        [-1 for i in range(self._cfg.model.num_of_sampled_actions)]
+                        for _ in range(active_collect_env_num)
                     ]
                 else:
                     legal_actions = [
@@ -1318,8 +1325,9 @@ class SampledEfficientZeroPolicy(Policy):
                     # the only difference between collect and eval is the dirichlet noise
                     # TODO(pu):  int(self._cfg.model.action_space_size)
                     noises = [
-                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(self._cfg.model.num_of_sampled_actions)
-                                            ).astype(np.float32).tolist() for j in range(active_collect_env_num)
+                        np.random.dirichlet(
+                            [self._cfg.root_dirichlet_alpha] * int(self._cfg.model.num_of_sampled_actions)
+                        ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                     ]
                 else:
                     legal_actions = [

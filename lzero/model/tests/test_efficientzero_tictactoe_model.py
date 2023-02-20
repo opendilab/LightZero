@@ -16,7 +16,8 @@ full_support_size = [2]
 block_output_size_reward = [180]
 dynamics_network_args = list(
     product(
-        num_res_blocks, num_channels, reward_head_channels, fc_reward_layers, full_support_size, block_output_size_reward
+        num_res_blocks, num_channels, reward_head_channels, fc_reward_layers, full_support_size,
+        block_output_size_reward
     )
 )
 

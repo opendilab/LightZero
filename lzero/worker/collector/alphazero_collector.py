@@ -22,7 +22,12 @@ class AlphaZeroCollector(ISerialCollector):
         envstep
     """
     config = dict(
-        deepcopy_obs=False, transform_obs=False, collect_print_freq=100, get_train_sample=False, reward_shaping=True, augmentation=False
+        deepcopy_obs=False,
+        transform_obs=False,
+        collect_print_freq=100,
+        get_train_sample=False,
+        reward_shaping=True,
+        augmentation=False
     )
 
     def __init__(
@@ -221,16 +226,16 @@ class AlphaZeroCollector(ISerialCollector):
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
                     self._total_episode_count += 1
-                    if timestep.obs['to_play'] == -1: # one player mode
+                    if timestep.obs['to_play'] == -1:  # one player mode
                         reward = timestep.info['final_eval_reward']
                     else:
-                        if timestep.obs['to_play'] == 1: # two player mode
-                            reward = - timestep.info['final_eval_reward']
+                        if timestep.obs['to_play'] == 1:  # two player mode
+                            reward = -timestep.info['final_eval_reward']
                         else:
                             reward = timestep.info['final_eval_reward']
                     reward = timestep.info['final_eval_reward']
                     info = {
-                        'reward': reward, #only means player1 reward
+                        'reward': reward,  #only means player1 reward
                         'time': self._env_info[env_id]['time'],
                         'step': self._env_info[env_id]['step'],
                     }

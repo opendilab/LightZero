@@ -251,12 +251,12 @@ class MuZeroPolicy(Policy):
         self._target_model.reset()
         if self._cfg.use_augmentation:
             self.transforms = Transforms(
-                self._cfg.augmentation, image_shape=(self._cfg.obs_shape[1], self._cfg.obs_shape[2])
+                self._cfg.augmentation,
+                image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
             )
         self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
         self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
 
-    # @profile
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
         self._learn_model.train()
         self._target_model.train()
@@ -437,7 +437,9 @@ class MuZeroPolicy(Policy):
                     (
                         predicted_values,
                         inverse_scalar_transform(
-                            value, self._cfg.model.support_scale, categorical_distribution=self.cfg.model.categorical_distribution
+                            value,
+                            self._cfg.model.support_scale,
+                            categorical_distribution=self.cfg.model.categorical_distribution
                         ).detach().cpu()
                     )
                 )

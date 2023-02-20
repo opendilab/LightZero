@@ -19,7 +19,7 @@ from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
 
 # cpp mcts
-from .ctree_sampled_efficientzero import sez_tree as ctree
+from .ctree_sampled_efficientzero import ezs_tree as ctree
 from .mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTS_ctree
 from .mcts_ptree_sampled import SampledEfficientZeroMCTSPtree as MCTS_ptree
 from .utils import prepare_observation_list, concat_output, concat_output_value
@@ -39,6 +39,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
     Overview:
         The specific game buffer for Sampled EfficientZero policy.
     """
+
     @classmethod
     def default_config(cls: type) -> EasyDict:
         cfg = EasyDict(copy.deepcopy(cls.config))
@@ -245,7 +246,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
-        
+
         self.batch_size = self._cfg.learn.batch_size
         self.keep_ratio = 1
 
@@ -302,9 +303,9 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 (self.priorities, [max_prio for _ in range(valid_len)] + [0. for _ in range(valid_len, len(data))])
             )
         else:
-            print('=='*20)
-            print('here'*20)
-            print('=='*20)
+            print('==' * 20)
+            print('here' * 20)
+            print('==' * 20)
             assert len(data) == len(meta['priorities']), " priorities should be of same length as the game steps"
             priorities = meta['priorities'].copy().reshape(-1)
             priorities[valid_len:len(data)] = 0.
@@ -566,7 +567,6 @@ class SampledEfficientZeroGameBuffer(Buffer):
             _mask = [1. for i in range(len(_child_actions))]
             _mask += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(_mask))]
 
-
             ######################
             # sampled related code
             ######################
@@ -595,18 +595,17 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     ]
                 else:
                     _child_actions += [
-                        np.random.randint(0, self._cfg.model.action_space_size, self._cfg.model.num_of_sampled_actions).reshape(
-                            self._cfg.model.num_of_sampled_actions, 1
-                        )  # TODO(pu): why +1
+                        np.random.randint(0, self._cfg.model.action_space_size,
+                                          self._cfg.model.num_of_sampled_actions).reshape(
+                                              self._cfg.model.num_of_sampled_actions, 1
+                                          )  # TODO(pu): why +1
                         for _ in range(self._cfg.num_unroll_steps + 1 - len(_child_actions))
                     ]
 
             # obtain the input observations
             # stack+num_unroll_steps  4+5
             # pad if length of obs in game_history is less than stack+num_unroll_steps
-            obs_lst.append(
-                game_lst[i].obs(game_history_pos_lst[i], extra_len=self._cfg.num_unroll_steps, padding=True)
-            )
+            obs_lst.append(game_lst[i].obs(game_history_pos_lst[i], extra_len=self._cfg.num_unroll_steps, padding=True))
             action_lst.append(_actions)
             child_actions_lst.append(_child_actions)
 
@@ -904,13 +903,15 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         to_play = [0 for i in range(batch_size)]
                         # if action_mask_history[0][0] is None:
                         # continuous action space env: all -1
-                        legal_actions = [[-1 for i in range(self._cfg.model.action_space_size)] for _ in range(batch_size)]
+                        legal_actions = [
+                            [-1 for i in range(self._cfg.model.action_space_size)] for _ in range(batch_size)
+                        ]
                     else:
                         legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
                     roots = ctree.Roots(
-                        batch_size, legal_actions, self._cfg.model.action_space_size, self._cfg.model.num_of_sampled_actions,
-                        self._cfg.model.continuous_action_space
+                        batch_size, legal_actions, self._cfg.model.action_space_size,
+                        self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                     )
                     noises = [
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
@@ -1145,8 +1146,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
                 roots = ctree.Roots(
-                    batch_size, legal_actions, self._cfg.model.action_space_size, self._cfg.model.num_of_sampled_actions,
-                    self._cfg.model.continuous_action_space
+                    batch_size, legal_actions, self._cfg.model.action_space_size,
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
@@ -1165,7 +1166,9 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     # we use to_play=None means play_with_bot_mode game in mcts_ptree
                     to_play = [None for i in range(batch_size)]
                     # continuous action space env: all -1
-                    legal_actions = [[-1 for i in range(self._cfg.model.num_of_sampled_actions)] for _ in range(batch_size)]
+                    legal_actions = [
+                        [-1 for i in range(self._cfg.model.num_of_sampled_actions)] for _ in range(batch_size)
+                    ]
                     # action_mask = [
                     #     list(np.ones(self._cfg.model.num_of_sampled_actions, dtype=np.int8)) for _ in range(batch_size)
                     # ]
@@ -1235,7 +1238,10 @@ class SampledEfficientZeroGameBuffer(Buffer):
                             #         list(np.ones(self._cfg.model.action_space_size) / self._cfg.model.action_space_size)
                             #     )
                             target_policies.append(
-                                list(np.ones(self._cfg.model.num_of_sampled_actions) / self._cfg.model.num_of_sampled_actions)
+                                list(
+                                    np.ones(self._cfg.model.num_of_sampled_actions) /
+                                    self._cfg.model.num_of_sampled_actions
+                                )
                             )
                         else:
                             if self._cfg.mcts_ctree:

@@ -57,7 +57,9 @@ class GameHistory:
         self.frame_stack_num = config.model.frame_stack_num
         self.discount = config.discount
         self.action_space_size = config.model.action_space_size
-        self.zero_obs_shape = (config.model.observation_shape[-2], config.model.observation_shape[-1], config.model.image_channel)
+        self.zero_obs_shape = (
+            config.model.observation_shape[-2], config.model.observation_shape[-1], config.model.image_channel
+        )
 
         self.obs_history = []
         self.action_history = []

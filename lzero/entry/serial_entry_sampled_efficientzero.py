@@ -102,9 +102,7 @@ def serial_pipeline_sampled_efficientzero(
     # Learner's before_run hook.
     learner.call_hook('before_run')
 
-    stop, reward = evaluator.eval(
-        learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-    )
+    stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config)
 
     while True:
         # collect_kwargs = commander.step()
