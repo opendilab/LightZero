@@ -9,29 +9,44 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+continuous_action_space = False
+K = 3  # num_of_sampled_actions
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-continuous_action_space = False
-K = 5  # num_of_sampled_actions
 num_simulations = 50
 # update_per_collect determines the number of training steps after each collection of a batch of data.
 # For different env, we have different episode_length,
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 200
+update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
+
+## debug config
+# continuous_action_space = False
+# K = 3  # num_of_sampled_actions
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 5
+# update_per_collect = 2
+# batch_size = 4
+# max_env_step = int(1e4)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-pendulum_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/pendulum_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_seed0',
+qbert_sampled_efficientzero_config = dict(
+    exp_name=f'data_sez_ctree/qbert_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        continuous=False,
+        env_name='QbertNoFrameskip-v4',
+        frame_skip=4,
+        frame_stack_num=4,
+        gray_scale=False,
+        obs_shape=(12, 96, 96),
         manager=dict(shared_memory=False, ),
         stop_value=int(1e6),
     ),
@@ -41,26 +56,27 @@ pendulum_sampled_efficientzero_config = dict(
         # Absolute path is recommended.
         # In LightZero, it is ``exp_name/ckpt/ckpt_best.pth.tar``.
         model_path=None,
+        env_name='QbertNoFrameskip-v4',
         # whether to use cuda for network.
         cuda=True,
         model=dict(
             # ==============================================================
-            # We use the small size model for pendulum.
+            # We use the default large size model, please refer to the
+            # default init config in EfficientZeroNet class or EfficientZero
+            # original paper for details.
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
-            image_channel=1,
-            downsample=False,
-            frame_stack_num=1,
-            observation_shape=(1, 3, 1),  # if frame_stack_num=1
-            action_space_size=11,
+            image_channel=3,
+            frame_stack_num=4,
+            downsample=True,
+            # the stacked obs shape -> the transformed obs shape:
+            # [S, W, H, C] -> [S x C, W, H]
+            # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
+            observation_shape=(12, 96, 96),  # if frame_stack_num=4
+            # observation_shape=(3, 96, 96),  # if frame_stack_num=1
+            action_space_size=6,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            num_res_blocks=1,
-            num_channels=16,
-            lstm_hidden_size=128,
-            support_scale=25,
-            reward_support_size=51,
-            value_support_size=51,
             # whether to use discrete support to represent categorical distribution for value, value_prefix.
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
@@ -98,15 +114,13 @@ pendulum_sampled_efficientzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
-        game_history_length=50,
+        game_history_length=400,
 
         ## observation
-        # the key difference setting between image-input and vector input.
-        image_based=False,
+        # the key difference setting between image-input and vector input
+        image_based=True,
         cvt_string=False,
         gray_scale=False,
-        downsample=False,
-        use_augmentation=False,
 
         ## reward
         clip_reward=True,
@@ -122,8 +136,7 @@ pendulum_sampled_efficientzero_config = dict(
         value_loss_weight=0.25,
         policy_loss_weight=1,
         policy_entropy_loss_coeff=0,
-        # NOTE: for vector input, we don't use the ssl loss.
-        ssl_loss_weight=0,
+        ssl_loss_weight=2,
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
         auto_temperature=False,
         fixed_temperature_value=0.25,
@@ -147,13 +160,13 @@ pendulum_sampled_efficientzero_config = dict(
         # ==============================================================
     ),
 )
-pendulum_sampled_efficientzero_config = EasyDict(pendulum_sampled_efficientzero_config)
-main_config = pendulum_sampled_efficientzero_config
+qbert_sampled_efficientzero_config = EasyDict(qbert_sampled_efficientzero_config)
+main_config = qbert_sampled_efficientzero_config
 
-pendulum_sampled_efficientzero_create_config = dict(
+qbert_sampled_efficientzero_create_config = dict(
     env=dict(
-        type='pendulum',
-        import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
+        type='atari_lightzero',
+        import_names=['zoo.atari.envs.atari_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
@@ -166,8 +179,8 @@ pendulum_sampled_efficientzero_create_config = dict(
         import_names=['lzero.worker.collector.sampled_efficientzero_collector'],
     )
 )
-pendulum_sampled_efficientzero_create_config = EasyDict(pendulum_sampled_efficientzero_create_config)
-create_config = pendulum_sampled_efficientzero_create_config
+qbert_sampled_efficientzero_create_config = EasyDict(qbert_sampled_efficientzero_create_config)
+create_config = qbert_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import serial_pipeline_sampled_efficientzero
