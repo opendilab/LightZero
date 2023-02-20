@@ -17,7 +17,7 @@ import lzero.rl_utils.mcts.ptree_muzero as ptree
 from lzero.rl_utils import MuZeroMCTSPtree as MCTSPtree
 from lzero.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
-from lzero.rl_utils import scalar_transform, inverse_scalar_transform
+from lzero.rl_utils import scalar_transform, InverseScalarTransform
 from lzero.rl_utils import select_action
 # cpp MCTS
 from lzero.rl_utils.mcts.ctree_muzero import mz_tree as ctree
@@ -256,6 +256,7 @@ class MuZeroPolicy(Policy):
             )
         self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
         self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
+        self.inverse_scalar_transform_handle = InverseScalarTransform(self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution)
 
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
         self._learn_model.train()
@@ -331,8 +332,8 @@ class MuZeroPolicy(Policy):
             other_loss[key + '_0'] = -1
 
         # scalar transform to transformed Q scale, h(.) function
-        transformed_target_reward = scalar_transform(target_reward, self._cfg.model.support_scale)
-        transformed_target_value = scalar_transform(target_value, self._cfg.model.support_scale)
+        transformed_target_reward = scalar_transform(target_reward)
+        transformed_target_value = scalar_transform(target_value)
         if self.cfg.model.categorical_distribution:
             # transform scalar to categorical_distribution
             target_reward_phi = reward_phi(self.reward_support, transformed_target_reward)
@@ -346,9 +347,8 @@ class MuZeroPolicy(Policy):
         policy_logits = network_output.policy_logits  # {list: 2} {list:6}
 
         # transform categorical representation to original_value
-        original_value = inverse_scalar_transform(
-            value, self._cfg.model.support_scale, categorical_distribution=self.cfg.model.categorical_distribution
-        )
+        original_value = self.inverse_scalar_transform_handle(value)
+
 
         # TODO(pu)
         if not self._learn_model.training:
@@ -393,12 +393,9 @@ class MuZeroPolicy(Policy):
             hidden_state = network_output.hidden_state  # （2, 64, 6, 6）
 
             # first transform categorical representation to scalar, then transform to original_value
-            original_value = inverse_scalar_transform(
-                value, self._cfg.model.support_scale, categorical_distribution=self.cfg.model.categorical_distribution
-            )
-            original_reward = inverse_scalar_transform(
-                reward, self._cfg.model.support_scale, categorical_distribution=self.cfg.model.categorical_distribution
-            )
+            original_value = self.inverse_scalar_transform_handle(value)
+            original_reward = self.inverse_scalar_transform_handle(reward)
+
             # TODO(pu)
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
@@ -426,21 +423,14 @@ class MuZeroPolicy(Policy):
             # hidden_state.register_hook(lambda grad: grad * 0.5)
 
             if self._cfg.monitor_statistics:
-                original_rewards = inverse_scalar_transform(
-                    reward.detach(),
-                    self._cfg.model.support_scale,
-                    categorical_distribution=self.cfg.model.categorical_distribution
-                )
+
+                original_rewards = self.inverse_scalar_transform_handle(reward.detach())
                 original_rewards_cpu = original_rewards.detach().cpu()
 
                 predicted_values = torch.cat(
                     (
                         predicted_values,
-                        inverse_scalar_transform(
-                            value,
-                            self._cfg.model.support_scale,
-                            categorical_distribution=self.cfg.model.categorical_distribution
-                        ).detach().cpu()
+                        self.inverse_scalar_transform_handle(value).detach().cpu()
                     )
                 )
                 predicted_rewards.append(original_rewards_cpu)
@@ -637,11 +627,8 @@ class MuZeroPolicy(Policy):
             # TODO(pu)
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                pred_values_pool = inverse_scalar_transform(
-                    pred_values_pool,
-                    self._cfg.model.support_scale,
-                    categorical_distribution=self.cfg.model.categorical_distribution
-                ).detach().cpu().numpy()
+                pred_values_pool = self.inverse_scalar_transform_handle(pred_values_pool).detach().cpu().numpy()
+
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
@@ -756,11 +743,7 @@ class MuZeroPolicy(Policy):
             # TODO(pu)
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                pred_values_pool = inverse_scalar_transform(
-                    pred_values_pool,
-                    self._cfg.model.support_scale,
-                    categorical_distribution=self.cfg.model.categorical_distribution
-                ).detach().cpu().numpy()  # shape（B, 1）
+                pred_values_pool = self.inverse_scalar_transform_handle(pred_values_pool).detach().cpu().numpy() # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()  # list shape（B, A）
 
