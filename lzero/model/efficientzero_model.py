@@ -23,8 +23,8 @@ class DynamicsNetwork(nn.Module):
         num_channels,
         reward_head_channels,
         fc_reward_layers,
-        full_support_size,
-        block_output_size_reward,
+        output_support_size,
+        flatten_output_size_for_reward_head,
         lstm_hidden_size=64,
         momentum=0.1,
         last_linear_layer_init_zero=False,
@@ -37,8 +37,8 @@ class DynamicsNetwork(nn.Module):
             - num_res_blocks (:obj:int): number of res blocks
             - num_channels (:obj:int): channels of hidden states
             - fc_reward_layers (:obj:list):  hidden layers of the reward prediction head (MLP head)
-            - full_support_size (:obj:int): dim of reward output
-            - block_output_size_reward (:obj:int): dim of flatten hidden states
+            - output_support_size (:obj:int): dim of reward output
+            - flatten_output_size_for_reward_head (:obj:int): dim of flatten hidden states
             - lstm_hidden_size (:obj:int): dim of lstm hidden
             - last_linear_layer_init_zero (:obj:bool): if True -> zero initialization for the last layer of reward mlp
         """
@@ -66,14 +66,14 @@ class DynamicsNetwork(nn.Module):
 
         self.conv1x1_reward = nn.Conv2d(num_channels - 1, reward_head_channels, 1)
         self.bn_reward = nn.BatchNorm2d(reward_head_channels, momentum=momentum)
-        self.block_output_size_reward = block_output_size_reward
-        self.lstm = nn.LSTM(input_size=self.block_output_size_reward, hidden_size=self.lstm_hidden_size)
+        self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
+        self.lstm = nn.LSTM(input_size=self.flatten_output_size_for_reward_head, hidden_size=self.lstm_hidden_size)
         self.bn_value_prefix = nn.BatchNorm1d(self.lstm_hidden_size, momentum=momentum)
         # TODO(pu)
         self.fc = MLP(
             in_channels=self.lstm_hidden_size,
             hidden_channels=fc_reward_layers[0],
-            out_channels=full_support_size,
+            out_channels=output_support_size,
             layer_num=len(fc_reward_layers) + 1,
             activation=activation,
             norm_type='BN',
@@ -102,9 +102,9 @@ class DynamicsNetwork(nn.Module):
 
         # RuntimeError: view size is not compatible with input tensor size and stride (at least one dimension spans
         # across two contiguous subspaces)
-        # x = x.contiguous().view(-1, self.block_output_size_reward).unsqueeze(0)
+        # x = x.contiguous().view(-1, self.flatten_output_size_for_reward_head).unsqueeze(0)
         # reference: https://zhuanlan.zhihu.com/p/436892343
-        x = x.reshape(-1, self.block_output_size_reward).unsqueeze(0)
+        x = x.reshape(-1, self.flatten_output_size_for_reward_head).unsqueeze(0)
 
         value_prefix, reward_hidden_state = self.lstm(x, reward_hidden_state)
         value_prefix = value_prefix.squeeze(0)
@@ -134,9 +134,9 @@ class PredictionNetwork(nn.Module):
         policy_head_channels,
         fc_value_layers,
         fc_policy_layers,
-        full_support_size,
-        block_output_size_value,
-        block_output_size_policy,
+        output_support_size,
+        flatten_output_size_for_value_head,
+        flatten_output_size_for_policy_head,
         momentum=0.1,
         last_linear_layer_init_zero=False,
         activation=nn.ReLU(inplace=True),
@@ -160,11 +160,11 @@ class PredictionNetwork(nn.Module):
             hidden layers of the value prediction head (MLP head)
         fc_policy_layers: list
             hidden layers of the policy prediction head (MLP head)
-        full_support_size: int
+        output_support_size: int
             dim of value output
-        block_output_size_value: int
+        flatten_output_size_for_value_head: int
             dim of flatten hidden states
-        block_output_size_policy: int
+        flatten_output_size_for_policy_head: int
             dim of flatten hidden states
         last_linear_layer_init_zero: bool
             True -> zero initialization for the last layer of value/policy mlp
@@ -185,13 +185,12 @@ class PredictionNetwork(nn.Module):
         self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
         self.bn_value = nn.BatchNorm2d(value_head_channels, momentum=momentum)
         self.bn_policy = nn.BatchNorm2d(policy_head_channels, momentum=momentum)
-        self.block_output_size_value = block_output_size_value
-        self.block_output_size_policy = block_output_size_policy
-        # TODO(pu)
+        self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
+        self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
         self.fc_value = MLP(
-            in_channels=self.block_output_size_value,
+            in_channels=self.flatten_output_size_for_value_head,
             hidden_channels=fc_value_layers[0],
-            out_channels=full_support_size,
+            out_channels=output_support_size,
             layer_num=len(fc_value_layers) + 1,
             activation=activation,
             norm_type='BN',
@@ -200,7 +199,7 @@ class PredictionNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy = MLP(
-            in_channels=self.block_output_size_policy,
+            in_channels=self.flatten_output_size_for_policy_head,
             hidden_channels=fc_policy_layers[0],
             out_channels=action_space_size,
             layer_num=len(fc_policy_layers) + 1,
@@ -228,8 +227,8 @@ class PredictionNetwork(nn.Module):
         policy = self.bn_policy(policy)
         policy = self.activation(policy)
 
-        value = value.reshape(-1, self.block_output_size_value)
-        policy = policy.reshape(-1, self.block_output_size_policy)
+        value = value.reshape(-1, self.flatten_output_size_for_value_head)
+        policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
 
         value = self.fc_value(value)
         policy = self.fc_policy(policy)
@@ -318,19 +317,19 @@ class EfficientZeroModel(nn.Module):
         self.downsample = downsample
 
         self.action_space_size = action_space_size
-        block_output_size_reward = (
+        flatten_output_size_for_reward_head = (
             (reward_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else
             (reward_head_channels * observation_shape[1] * observation_shape[2])
         )
 
-        block_output_size_value = (
+        flatten_output_size_for_value_head = (
             (value_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else
             (value_head_channels * observation_shape[1] * observation_shape[2])
         )
 
-        block_output_size_policy = (
+        flatten_output_size_for_policy_head = (
             (policy_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else
             (policy_head_channels * observation_shape[1] * observation_shape[2])
@@ -348,7 +347,6 @@ class EfficientZeroModel(nn.Module):
                     momentum=batch_norm_momentum,
                     activation=activation,
                 )
-            # elif
         else:
             self.representation_network = self.representation_model
 
@@ -359,7 +357,7 @@ class EfficientZeroModel(nn.Module):
                 reward_head_channels,
                 fc_reward_layers,
                 self.reward_support_size,
-                block_output_size_reward,
+                flatten_output_size_for_reward_head,
                 lstm_hidden_size=lstm_hidden_size,
                 momentum=batch_norm_momentum,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
@@ -375,8 +373,8 @@ class EfficientZeroModel(nn.Module):
                 fc_value_layers,
                 fc_policy_layers,
                 self.value_support_size,
-                block_output_size_value,
-                block_output_size_policy,
+                flatten_output_size_for_value_head,
+                flatten_output_size_for_policy_head,
                 momentum=batch_norm_momentum,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                 activation=activation,
@@ -388,7 +386,7 @@ class EfficientZeroModel(nn.Module):
                 reward_head_channels,
                 fc_reward_layers,
                 self.reward_support_size,
-                block_output_size_reward,
+                flatten_output_size_for_reward_head,
                 lstm_hidden_size=lstm_hidden_size,
                 momentum=batch_norm_momentum,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
@@ -404,8 +402,8 @@ class EfficientZeroModel(nn.Module):
                 fc_value_layers,
                 fc_policy_layers,
                 self.value_support_size,
-                block_output_size_value,
-                block_output_size_policy,
+                flatten_output_size_for_value_head,
+                flatten_output_size_for_policy_head,
                 momentum=batch_norm_momentum,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                 activation=activation,

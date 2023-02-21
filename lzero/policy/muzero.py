@@ -540,9 +540,8 @@ class MuZeroPolicy(Policy):
         # ----------------------------------------------------------------------------------
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-                self._cfg.ssl_loss_weight * consistency_loss +
-                self._cfg.policy_loss_weight * policy_loss + self._cfg.value_loss_weight * value_loss +
-            self._cfg.reward_loss_weight * reward_loss
+            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
         )
         weighted_loss = (weights * loss).mean()
 
