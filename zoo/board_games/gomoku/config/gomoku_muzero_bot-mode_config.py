@@ -12,7 +12,7 @@ else:
 board_size = 6  # default_size is 15
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 5
+evaluator_env_num = 3
 num_simulations = 50
 # update_per_collect determines the number of training steps after each collection of a batch of data.
 # For different env, we have different episode_length,

@@ -138,7 +138,7 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        policy_entropy_loss_weight=5e-3,
+        policy_entropy_loss_weight=0,
         # the key difference setting between image-input and vector input.
         # NOTE: for vector input, we don't use the ssl loss.
         ssl_loss_weight=0,

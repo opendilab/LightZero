@@ -120,7 +120,8 @@ class AlphaZeroPolicy(Policy):
         state_batch = state_batch.to(device=self._device, dtype=torch.float)
         mcts_probs = mcts_probs.to(device=self._device, dtype=torch.float)
         reward = reward.to(device=self._device, dtype=torch.float)
-
+        # TODO
+        state_batch = state_batch.reshape(-1, 3, self._cfg.board_size, self._cfg.board_size)
         action_probs, values = self._learn_model.compute_prob_value(state_batch)
         log_probs = torch.log(action_probs)
 

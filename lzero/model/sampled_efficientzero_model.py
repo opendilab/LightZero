@@ -270,6 +270,7 @@ class PredictionNetwork(nn.Module):
         # print(value.shape, value)
         # value = value.view(-1, self.block_output_size_value)
         # policy = policy.view(-1, self.block_output_size_policy)
+        # TODO
         value = value.reshape(-1, self.block_output_size_value)
         policy = policy.reshape(-1, self.block_output_size_policy)
         value = self.fc_value(value)

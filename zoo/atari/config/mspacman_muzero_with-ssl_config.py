@@ -106,6 +106,7 @@ mspacman_muzero_config = dict(
         image_based=True,
         cvt_string=False,
         gray_scale=False,
+        use_augmentation=True,
 
         ## reward
         clip_reward=True,

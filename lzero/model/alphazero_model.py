@@ -270,9 +270,9 @@ class AlphaZeroNet(nn.Module):
         representation_model_type: str = 'conv_res_blocks',
         representation_model: nn.Module = None,
         batch_norm_momentum=0.1,
-        last_linear_layer_init_zero=False,
-        state_norm=False,
-        categorical_distribution=True,
+        last_linear_layer_init_zero: bool = True,
+        state_norm: bool = False,
+        categorical_distribution: bool = False,
         activation=nn.ReLU(inplace=True),
     ):
         """
