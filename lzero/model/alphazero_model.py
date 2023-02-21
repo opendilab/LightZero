@@ -123,7 +123,10 @@ class RepresentationNetwork(nn.Module):
         if self.downsample:
             x = self.downsample_net(x)
         else:
-            x = self.conv(x)
+            try:
+                x = self.conv(x)
+            except Exception as error:
+                print('here')
             x = self.bn(x)
             x = self.activation(x)
 
@@ -374,7 +377,13 @@ class AlphaZeroNet(nn.Module):
         return logit, value
 
     def compute_prob_value(self, state_batch):
-        logits, values = self.forward(state_batch)
+        try:
+            logits, values = self.forward(state_batch)
+        except Exception as error:
+            # TODO(pu)
+            state_batch = state_batch.reshape(-1, 3, self._cfg.board_size, self._cfg.board_size)
+            logits, values = self.forward(state_batch)
+            print('here')
         dist = torch.distributions.Categorical(logits=logits)
         probs = dist.probs
         return probs, values

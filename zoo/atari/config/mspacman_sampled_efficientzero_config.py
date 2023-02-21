@@ -14,7 +14,7 @@ K = 5  # num_of_sampled_actions
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-num_simulations = 50
+num_simulations = 100
 # update_per_collect determines the number of training steps after each collection of a batch of data.
 # For different env, we have different episode_length,
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
@@ -33,9 +33,8 @@ mspacman_sampled_efficientzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         env_name='MsPacmanNoFrameskip-v4',
         frame_skip=4,
-        frame_stack_num=4,
-        gray_scale=False,
-        obs_shape=(12, 96, 96),
+        frame_stack_num=1,
+        obs_shape=(3, 96, 96),
         manager=dict(shared_memory=False, ),
         stop_value=int(1e6),
     ),
@@ -56,13 +55,13 @@ mspacman_sampled_efficientzero_config = dict(
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
             image_channel=3,
-            frame_stack_num=4,
+            frame_stack_num=1,
             downsample=True,
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
-            observation_shape=(12, 96, 96),  # if frame_stack_num=4
-            # observation_shape=(3, 96, 96),  # if frame_stack_num=1
+            # observation_shape=(12, 96, 96),  # if frame_stack_num=4
+            observation_shape=(3, 96, 96),  # if frame_stack_num=1
             action_space_size=9,  # for MsPacmanNoFrameskip-v4
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
@@ -108,8 +107,7 @@ mspacman_sampled_efficientzero_config = dict(
         ## observation
         # the key difference setting between image-input and vector input
         image_based=True,
-        cvt_string=False,
-        gray_scale=False,
+        gray_scale=True,
         use_augmentation=True,
 
         ## reward
@@ -128,8 +126,9 @@ mspacman_sampled_efficientzero_config = dict(
         policy_entropy_loss_coeff=0,
         ssl_loss_weight=2,
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
-        auto_temperature=False,
-        fixed_temperature_value=0.25,
+        # auto_temperature=False,
+        # fixed_temperature_value=0.25,
+        auto_temperature=True,
         # the size/capacity of replay_buffer
         max_total_transitions=int(1e5),
         # ``max_training_steps`` is only used for adjusting temperature manually.

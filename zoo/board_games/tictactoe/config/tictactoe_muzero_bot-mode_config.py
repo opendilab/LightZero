@@ -16,15 +16,15 @@ num_simulations = 25
 # update_per_collect determines the number of training steps after each collection of a batch of data.
 # For different env, we have different episode_length,
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 40
+update_per_collect = 50
 batch_size = 256
-max_env_step = int(1e5)
+max_env_step = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 tictactoe_muzero_config = dict(
-    exp_name=f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed1',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -71,11 +71,6 @@ tictactoe_muzero_config = dict(
             support_scale=10,
             reward_support_size=21,
             value_support_size=21,
-            batch_norm_momentum=0.1,
-            proj_hid=128,
-            proj_out=128,
-            pred_hid=64,
-            pred_out=128,
         ),
         # learn_mode config
         learn=dict(
@@ -86,7 +81,7 @@ tictactoe_muzero_config = dict(
             # learning_rate=0.2,  # init lr for manually decay schedule
             lr_manually=False,
             optim_type='Adam',
-            learning_rate=0.001,  # lr for Adam optimizer
+            learning_rate=0.003,  # lr for Adam optimizer
             # Frequency of target network update.
             target_update_freq=100,
         ),
@@ -122,7 +117,7 @@ tictactoe_muzero_config = dict(
         use_augmentation=False,
 
         ## reward
-        clip_reward=True,
+        clip_reward=False,
 
         ## learn
         num_simulations=num_simulations,
@@ -180,4 +175,4 @@ create_config = tictactoe_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import serial_pipeline_muzero
-    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    serial_pipeline_muzero([main_config, create_config], seed=1, max_env_step=max_env_step)

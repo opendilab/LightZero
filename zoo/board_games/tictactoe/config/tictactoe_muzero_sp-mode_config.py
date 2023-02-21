@@ -80,11 +80,6 @@ tictactoe_muzero_config = dict(
             support_scale=10,
             reward_support_size=21,
             value_support_size=21,
-            batch_norm_momentum=0.1,
-            proj_hid=128,
-            proj_out=128,
-            pred_hid=64,
-            pred_out=128,
         ),
         # learn_mode config
         learn=dict(

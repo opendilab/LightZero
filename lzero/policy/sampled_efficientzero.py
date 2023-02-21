@@ -276,7 +276,7 @@ class SampledEfficientZeroPolicy(Policy):
         self._target_model.reset()
         if self._cfg.use_augmentation:
             self.transforms = Transforms(
-                self._cfg.augmentation, image_shape=(self._cfg.obs_shape[1], self._cfg.obs_shape[2])
+                self._cfg.augmentation, image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
             )
         self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
         self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)

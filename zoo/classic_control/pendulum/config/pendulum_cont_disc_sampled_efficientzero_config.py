@@ -21,6 +21,7 @@ num_simulations = 50
 update_per_collect = 200
 batch_size = 256
 max_env_step = int(1e6)
+reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -133,7 +134,7 @@ pendulum_sampled_efficientzero_config = dict(
         max_training_steps=int(1e5),
 
         ## reanalyze
-        reanalyze_ratio=0.3,
+        reanalyze_ratio=reanalyze_ratio,
         reanalyze_outdated=True,
         # whether to use root value in reanalyzing part
         use_root_value=False,

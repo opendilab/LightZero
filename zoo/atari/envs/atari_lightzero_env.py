@@ -24,12 +24,12 @@ class AtariLightZeroEnv(BaseEnv):
         evaluator_env_num=3,
         n_evaluator_episode=3,
         env_name='PongNoFrameskip-v4',
+        obs_shape=(3, 96, 96),
         render_mode_human=False,
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
         max_episode_steps=int(1.08e5),
         frame_skip=4,
-        obs_shape=(12, 96, 96),
         episode_life=True,
         gray_scale=False,
         # trade memory for speed

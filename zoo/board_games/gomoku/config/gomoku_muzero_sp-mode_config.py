@@ -13,7 +13,7 @@ board_size = 6  # default_size is 15
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 5
-num_simulations = 25
+num_simulations = 50
 # update_per_collect determines the number of training steps after each collection of a batch of data.
 # For different env, we have different episode_length,
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
@@ -74,11 +74,6 @@ gomoku_muzero_config = dict(
             support_scale=300,
             reward_support_size=601,
             value_support_size=601,
-            batch_norm_momentum=0.1,
-            proj_hid=512,
-            proj_out=512,
-            pred_hid=256,
-            pred_out=512,
         ),
         # learn_mode config
         learn=dict(
@@ -86,7 +81,7 @@ gomoku_muzero_config = dict(
             batch_size=batch_size,
             lr_manually=False,
             optim_type='Adam',
-            learning_rate=0.001,  # lr for Adam optimizer
+            learning_rate=0.003,  # lr for Adam optimizer
             # Frequency of target network update.
             target_update_freq=100,
         ),
@@ -123,7 +118,7 @@ gomoku_muzero_config = dict(
         downsample=False,
 
         ## reward
-        clip_reward=True,
+        clip_reward=False,
 
         ## learn
         num_simulations=num_simulations,

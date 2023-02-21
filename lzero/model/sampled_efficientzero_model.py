@@ -268,10 +268,10 @@ class PredictionNetwork(nn.Module):
         policy = self.activation(policy)
 
         # print(value.shape, value)
-        value = value.view(-1, self.block_output_size_value)
-        policy = policy.view(-1, self.block_output_size_policy)
-        # value = value.reshape(-1, self.block_output_size_value)
-        # policy = policy.reshape(-1, self.block_output_size_policy)
+        # value = value.view(-1, self.block_output_size_value)
+        # policy = policy.view(-1, self.block_output_size_policy)
+        value = value.reshape(-1, self.block_output_size_value)
+        policy = policy.reshape(-1, self.block_output_size_policy)
         value = self.fc_value(value)
         # policy = self.fc_policy(policy)
 
