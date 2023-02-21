@@ -12,7 +12,7 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 
 from .common import MZNetworkOutput, RepresentationNetwork
-from .utils import renormalize
+from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
 # Predict next hidden states given current states and actions
@@ -95,6 +95,12 @@ class DynamicsNetwork(nn.Module):
         reward = self.fc(x)
 
         return state, reward
+
+    def get_dynamic_mean(self):
+        return get_dynamic_mean(self)
+
+    def get_reward_mean(self):
+        return get_reward_mean(self)
 
 
 # predict the value and policy given hidden states
@@ -215,8 +221,8 @@ class PredictionNetwork(nn.Module):
         return policy, value
 
 
-@MODEL_REGISTRY.register('MuZeroNet')
-class MuZeroNet(nn.Module):
+@MODEL_REGISTRY.register('MuZeroModel')
+class MuZeroModel(nn.Module):
 
     def __init__(
         self,
@@ -243,6 +249,7 @@ class MuZeroNet(nn.Module):
         last_linear_layer_init_zero: bool = True,
         state_norm: bool = False,
         categorical_distribution: bool = True,
+        self_supervised_learning_loss: bool = False,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
         *args,
         **kwargs
@@ -274,8 +281,9 @@ class MuZeroNet(nn.Module):
             - state_norm (:obj:`bool`):  True -> normalization for hidden states
             - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/reward
         """
-        super(MuZeroNet, self).__init__()
+        super(MuZeroModel, self).__init__()
         self.categorical_distribution = categorical_distribution
+        self.self_supervised_learning_loss = self_supervised_learning_loss
         if not self.categorical_distribution:
             self.reward_support_size = 1
             self.value_support_size = 1
@@ -379,6 +387,33 @@ class MuZeroNet(nn.Module):
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             )
 
+            if self.self_supervised_learning_loss:
+                # projection
+                if self.representation_model_type == 'identity':
+                    self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
+                else:
+                    if self.downsample:
+                        # for atari, due to downsample
+                        # observation_shape=(12, 96, 96),  # stack=4
+                        # 3 * 96/16 * 96/16 = 3*6*6 = 108
+                        self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
+                                                                             ) * math.ceil(observation_shape[2] / 16)
+                    else:
+                        self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
+
+                self.projection = nn.Sequential(
+                    nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
+                    nn.ReLU(inplace=True),
+                    nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), nn.ReLU(inplace=True),
+                    nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
+                )
+                self.projection_head = nn.Sequential(
+                    nn.Linear(self.proj_out, self.pred_hid),
+                    nn.BatchNorm1d(self.pred_hid),
+                    nn.ReLU(inplace=True),
+                    nn.Linear(self.pred_hid, self.pred_out),
+                )
+
     def initial_inference(self, obs) -> MZNetworkOutput:
         num = obs.size(0)
         hidden_state = self.representation(obs)
@@ -434,14 +469,34 @@ class MuZeroNet(nn.Module):
             next_encoded_state_normalized = renormalize(next_encoded_state)
             return next_encoded_state_normalized, reward
 
-    def get_gradients(self):
-        grads = []
-        for p in self.parameters():
-            grad = None if p.grad is None else p.grad.data.cpu().numpy()
-            grads.append(grad)
-        return grads
+    def project(self, hidden_state, with_grad=True):
+        """
+        Overview:
+            only used when ``self.self_supervised_learning_loss=True``.
+            Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
+        # only the branch of proj + pred can share the gradients
+        Examples:
+            # for lunarlander:
+            # observation_shape = (4, 8, 1),  # stack=4
+            # self.projection_input_dim = 64*8*1
+            # hidden_state.shape: (batch_size, num_channel, obs_shape[1], obs_shape[2])  256,64,8,1
+            # 256,64,8,1 -> 256,64*8*1
 
-    def set_gradients(self, gradients: torch.Tensor):
-        for g, p in zip(gradients, self.parameters()):
-            if g is not None:
-                p.grad = g
+            # for atari:
+            # observation_shape = (12, 96, 96),  # 3,96,96 stack=4
+            # self.projection_input_dim = 3*6*6 = 108
+            # hidden_state.shape: (batch_size, num_channel, obs_shape[1]/16, obs_shape[2]/16)  256,64,96/16,96/16 = 256,64,6,6
+            # 256, 64, 6, 6 -> 256,64*6*6
+        """
+        # hidden_state.shape[0] = batch_size
+        hidden_state = hidden_state.reshape(hidden_state.shape[0], -1)
+        proj = self.projection(hidden_state)
+
+        # with grad, use proj_head
+        if with_grad:
+            return self.projection_head(proj)
+        else:
+            return proj.detach()
+
+    def get_params_mean(self):
+        return get_params_mean(self)

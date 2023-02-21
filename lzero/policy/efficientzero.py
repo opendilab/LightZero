@@ -218,7 +218,7 @@ class EfficientZeroPolicy(Policy):
             The user can define and use customized network model but must obey the same inferface definition indicated \
             by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
         """
-        return 'EfficientZeroNet', ['lzero.model.efficientzero_model']
+        return 'EfficientZeroModel', ['lzero.model.efficientzero_model']
 
     def _init_learn(self) -> None:
         if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
@@ -256,7 +256,9 @@ class EfficientZeroPolicy(Policy):
         self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
         self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
 
-        self.inverse_scalar_transform_handle = InverseScalarTransform(self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution)
+        self.inverse_scalar_transform_handle = InverseScalarTransform(
+            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
+        )
 
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
         self._learn_model.train()
@@ -519,10 +521,7 @@ class EfficientZeroPolicy(Policy):
                 original_value_prefixs_cpu = original_value_prefixs.detach().cpu()
 
                 predicted_values = torch.cat(
-                    (
-                        predicted_values,
-                        self.inverse_scalar_transform_handle(value).detach().cpu()
-                    )
+                    (predicted_values, self.inverse_scalar_transform_handle(value).detach().cpu())
                 )
                 predicted_value_prefixs.append(original_value_prefixs_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
@@ -861,7 +860,8 @@ class EfficientZeroPolicy(Policy):
             # TODO(pu)
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                pred_values_pool = self.inverse_scalar_transform_handle(pred_values_pool).detach().cpu().numpy() # shape（B, 1）
+                pred_values_pool = self.inverse_scalar_transform_handle(pred_values_pool).detach().cpu().numpy(
+                )  # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 reward_hidden_roots = (
                     reward_hidden_roots[0].detach().cpu().numpy(), reward_hidden_roots[1].detach().cpu().numpy()

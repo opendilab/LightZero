@@ -1,3 +1,6 @@
+"""
+Acknowledgement: The following code is adapted from https://github.com/YeWR/EfficientZero/core/model.py
+"""
 import torch
 import numpy as np
 
@@ -40,3 +43,17 @@ def get_params_mean(xzero_model):
     reward_w_dist, reward_mean = xzero_model.dynamics_network.get_reward_mean()
 
     return reward_w_dist, representation_mean, dynamic_mean, reward_mean
+
+
+def get_gradients(model):
+    grads = []
+    for p in model.parameters():
+        grad = None if p.grad is None else p.grad.data.cpu().numpy()
+        grads.append(grad)
+    return grads
+
+
+def set_gradients(model, gradients: torch.Tensor):
+    for g, p in zip(gradients, model.parameters()):
+        if g is not None:
+            p.grad = g

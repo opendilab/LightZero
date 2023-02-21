@@ -80,7 +80,7 @@ class AlphaZeroPolicy(Policy):
             The user can define and use customized network model but must obey the same inferface definition indicated \
             by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
         """
-        return 'AlphaZeroNet', ['lzero.model.alphazero_model']
+        return 'AlphaZeroModel', ['lzero.model.alphazero_model']
 
     def _init_learn(self):
         if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
@@ -120,8 +120,7 @@ class AlphaZeroPolicy(Policy):
         state_batch = state_batch.to(device=self._device, dtype=torch.float)
         mcts_probs = mcts_probs.to(device=self._device, dtype=torch.float)
         reward = reward.to(device=self._device, dtype=torch.float)
-        # TODO
-        state_batch = state_batch.reshape(-1, 3, self._cfg.board_size, self._cfg.board_size)
+
         action_probs, values = self._learn_model.compute_prob_value(state_batch)
         log_probs = torch.log(action_probs)
 

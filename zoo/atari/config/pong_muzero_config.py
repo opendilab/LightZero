@@ -63,7 +63,7 @@ pong_muzero_config = dict(
         model=dict(
             # ==============================================================
             # We use the default large size model, please refer to the
-            # default init config in MuZeroNet class for details.
+            # default init config in MuZeroModel class for details.
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
             image_channel=3,

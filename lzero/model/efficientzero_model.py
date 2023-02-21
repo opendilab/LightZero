@@ -11,7 +11,7 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 
 from .common import EZNetworkOutput, RepresentationNetwork
-from .utils import renormalize
+from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
 # Predict next hidden states given current states and actions
@@ -113,6 +113,12 @@ class DynamicsNetwork(nn.Module):
         value_prefix = self.fc(value_prefix)
 
         return state, reward_hidden_state, value_prefix
+
+    def get_dynamic_mean(self):
+        return get_dynamic_mean(self)
+
+    def get_reward_mean(self):
+        return get_reward_mean(self)
 
 
 # predict the value and policy given hidden states
@@ -230,8 +236,8 @@ class PredictionNetwork(nn.Module):
         return policy, value
 
 
-@MODEL_REGISTRY.register('EfficientZeroNet')
-class EfficientZeroNet(nn.Module):
+@MODEL_REGISTRY.register('EfficientZeroModel')
+class EfficientZeroModel(nn.Module):
 
     def __init__(
         self,
@@ -291,7 +297,7 @@ class EfficientZeroNet(nn.Module):
             - state_norm (:obj:`bool`):  True -> normalization for hidden states
             - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         """
-        super(EfficientZeroNet, self).__init__()
+        super(EfficientZeroModel, self).__init__()
         self.lstm_hidden_size = lstm_hidden_size
         self.categorical_distribution = categorical_distribution
         if not self.categorical_distribution:
@@ -514,20 +520,4 @@ class EfficientZeroNet(nn.Module):
             return proj.detach()
 
     def get_params_mean(self):
-        representation_mean = self.representation_network.get_param_mean()
-        dynamic_mean = self.dynamics_network.get_dynamic_mean()
-        reward_w_dist, reward_mean = self.dynamics_network.get_reward_mean()
-
-        return reward_w_dist, representation_mean, dynamic_mean, reward_mean
-
-    def get_gradients(self):
-        grads = []
-        for p in self.parameters():
-            grad = None if p.grad is None else p.grad.data.cpu().numpy()
-            grads.append(grad)
-        return grads
-
-    def set_gradients(self, gradients: torch.Tensor):
-        for g, p in zip(gradients, self.parameters()):
-            if g is not None:
-                p.grad = g
+        return get_params_mean(self)

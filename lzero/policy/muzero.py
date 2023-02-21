@@ -11,6 +11,7 @@ from ding.policy.base_policy import Policy
 from ding.rl_utils import get_nstep_return_data, get_train_sample
 from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
+from ding.torch_utils import to_tensor
 
 # python MCTS
 import lzero.rl_utils.mcts.ptree_muzero as ptree
@@ -84,6 +85,7 @@ class MuZeroPolicy(Policy):
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            self_supervised_learning_loss=False,
         ),
         # learn_mode config
         learn=dict(
@@ -155,7 +157,7 @@ class MuZeroPolicy(Policy):
         image_based=True,
         cvt_string=False,
         gray_scale=False,
-        use_augmentation=False,
+        use_augmentation=True,
         # style of augmentation
         augmentation=['shift', 'intensity'],  # options=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
 
@@ -173,7 +175,7 @@ class MuZeroPolicy(Policy):
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        ssl_loss_weight=2,
+        ssl_loss_weight=0,
         # fixed_temperature_value is effective only when auto_temperature=False
         auto_temperature=False,
         fixed_temperature_value=0.25,
@@ -221,7 +223,7 @@ class MuZeroPolicy(Policy):
             The user can define and use customized network model but must obey the same inferface definition indicated \
             by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
         """
-        return 'MuZeroNet', ['lzero.model.muzero_model']
+        return 'MuZeroModel', ['lzero.model.muzero_model']
 
     def _init_learn(self) -> None:
         if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
@@ -256,7 +258,9 @@ class MuZeroPolicy(Policy):
             )
         self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
         self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
-        self.inverse_scalar_transform_handle = InverseScalarTransform(self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution)
+        self.inverse_scalar_transform_handle = InverseScalarTransform(
+            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
+        )
 
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
         self._learn_model.train()
@@ -271,6 +275,7 @@ class MuZeroPolicy(Policy):
         # [:, 0: config.model.frame_stack_num * 3,:,:]
         # obs_batch_ori is the original observations in a batch
         # obs_batch is the observation for hat s_t (predicted hidden states from dynamics function)
+        # obs_target_batch is the observations for s_t (hidden states from representation function)
 
         # to save GPU memory usage, obs_batch_ori contains (stack + unroll steps) frames
 
@@ -295,9 +300,19 @@ class MuZeroPolicy(Policy):
         # used in initial_inference
         obs_batch = obs_batch_ori[:, 0:self._cfg.model.frame_stack_num * self._cfg.model.image_channel, :, :]
 
+        if self._cfg.model.self_supervised_learning_loss:
+            # take the all obs other than timestep t1:
+            # obs_target_batch is used for calculate consistency loss, which is only performed in the last 8 timesteps
+            # for i in rnage(num_unroll_steeps):
+            #   beg_index = self._cfg.model.image_channel * step_i
+            #   end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
+            obs_target_batch = obs_batch_ori[:, self._cfg.model.image_channel:, :, :]
+
         # do augmentations
         if self._cfg.use_augmentation:
             obs_batch = self.transforms.transform(obs_batch)
+            if self._cfg.model.self_supervised_learning_loss:
+                obs_target_batch = self.transforms.transform(obs_target_batch)
 
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
         mask_batch = torch.from_numpy(mask_batch).to(self._cfg.device).float()
@@ -349,7 +364,6 @@ class MuZeroPolicy(Policy):
         # transform categorical representation to original_value
         original_value = self.inverse_scalar_transform_handle(value)
 
-
         # TODO(pu)
         if not self._learn_model.training:
             # if not in training, obtain the scalars of the value/reward
@@ -379,6 +393,7 @@ class MuZeroPolicy(Policy):
             value_loss = torch.nn.MSELoss(reduction='none')(value.squeeze(-1), transformed_target_value[:, 0])
 
         reward_loss = torch.zeros(batch_size, device=self._cfg.device)
+        consistency_loss = torch.zeros(batch_size, device=self._cfg.device)
 
         target_reward_cpu = target_reward.detach().cpu()
         gradient_scale = 1 / self._cfg.num_unroll_steps
@@ -404,16 +419,83 @@ class MuZeroPolicy(Policy):
                 hidden_state = hidden_state.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy()
 
+            if self._cfg.model.self_supervised_learning_loss:
+                beg_index = self._cfg.model.image_channel * step_i
+                end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
+
+                # ==============================================================
+                # NOTE: the only difference between muzero and muzero_with-ssl is the consistency loss in policy and model.
+                # ==============================================================
+                # consistency loss
+                if self._cfg.ssl_loss_weight > 0:
+                    # obtain the oracle hidden states from representation function
+                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
+                    representation_state = network_output.hidden_state
+
+                    hidden_state = to_tensor(hidden_state)
+                    representation_state = to_tensor(representation_state)
+
+                    # no grad for the representation_state branch
+                    dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
+                    observation_proj = self._learn_model.project(representation_state, with_grad=False)
+                    """
+                    # ==============================================================
+                    test how the consistece loss change with the board state
+                    # ==============================================================
+
+                    ##########
+                    # take a minibatch state
+                    ##########
+                    # obs_target_batch[:, :, :, :].shape  == (5, 9, 3, 3)
+                    # obs_target_batch[:, beg_index:end_index, :, :].shape  == (5, 3, 3, 3)
+
+                    for state_index in range(5):
+                        obs_target_batch_copy = copy.deepcopy(obs_target_batch)
+                        # obs_target_batch[:, beg_index:end_index, :, :][0] shape: (3,3,3)
+                        # print(obs_target_batch_copy[:, beg_index:end_index, :, :][state_index])
+
+                        network_output_change1bit = self._learn_model.initial_inference(
+                            obs_target_batch_copy[:, beg_index:end_index, :, :])
+                        representation_state_change1bit = network_output_change1bit.hidden_state
+                        representation_state_change1bit = to_tensor(representation_state_change1bit)
+                        observation_proj_change1bit = self._learn_model.project(representation_state_change1bit,
+                                                                                with_grad=False)
+                        # the similarity in state <state_index>
+                        print(f'======the cos similarity in state {state_index}=====')
+                        print(f'the cos similarity after change 0 bits in state {state_index}:',
+                              -self._consist_loss_func(observation_proj_change1bit, observation_proj)[state_index])
+
+                        for i in range(3):
+                            # change one bit in timestep 1
+                            if (obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] == torch.tensor(0)).item() is True:
+                                obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] = torch.tensor(1)
+                                # obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] += torch.tensor(0.1)
+                                # print(obs_target_batch_copy[:, beg_index:end_index, :, :][state_index])
+
+                            elif (obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] == torch.tensor(1)).item() is True:
+                                obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] = torch.tensor(0)
+                                # obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] -= torch.tensor(0.1)
+                                # print(obs_target_batch_copy[:, beg_index:end_index, :, :][state_index])
+
+                            network_output_change1bit = self._learn_model.initial_inference(obs_target_batch_copy[:, beg_index:end_index, :, :])
+                            representation_state_change1bit = network_output_change1bit.hidden_state
+                            representation_state_change1bit = to_tensor(representation_state_change1bit)
+                            observation_proj_change1bit = self._learn_model.project(representation_state_change1bit, with_grad=False)
+                            # the similarity in state <state_index>
+                            print(f'the cos similarity after change {i+1} bits in state {state_index}:', -self._consist_loss_func(observation_proj_change1bit, observation_proj)[state_index])
+
+                    """
+
+                    temp_loss = self._consist_loss_func(dynamic_proj, observation_proj) * mask_batch[:, step_i]
+                    other_loss['consist_' + str(step_i + 1)] = temp_loss.mean().item()
+                    consistency_loss += temp_loss
+
             # the target policy, target_value_phi, target_reward_phi is calculated in game buffer now
             policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
             if self.cfg.model.categorical_distribution:
                 value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
                 reward_loss += modified_cross_entropy_loss(reward, target_reward_phi[:, step_i])
             else:
-                # value_loss += torch.nn.MSELoss(reduction='none')(original_value.squeeze(-1), transformed_target_value[:, step_i + 1])
-                # reward_loss += torch.nn.MSELoss(reduction='none')(
-                #     original_reward.squeeze(-1), transformed_target_reward[:, step_i]
-                # )
                 value_loss += torch.nn.MSELoss(reduction='none'
                                                )(value.squeeze(-1), transformed_target_value[:, step_i + 1])
                 reward_loss += torch.nn.MSELoss(reduction='none'
@@ -424,14 +506,11 @@ class MuZeroPolicy(Policy):
 
             if self._cfg.monitor_statistics:
 
-                original_rewards = self.inverse_scalar_transform_handle(reward.detach())
+                original_rewards = self.inverse_scalar_transform_handle(reward)
                 original_rewards_cpu = original_rewards.detach().cpu()
 
                 predicted_values = torch.cat(
-                    (
-                        predicted_values,
-                        self.inverse_scalar_transform_handle(value).detach().cpu()
-                    )
+                    (predicted_values, self.inverse_scalar_transform_handle(value).detach().cpu())
                 )
                 predicted_rewards.append(original_rewards_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
@@ -461,7 +540,8 @@ class MuZeroPolicy(Policy):
         # ----------------------------------------------------------------------------------
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-            self._cfg.policy_loss_weight * policy_loss + self._cfg.value_loss_weight * value_loss +
+                self._cfg.ssl_loss_weight * consistency_loss +
+                self._cfg.policy_loss_weight * policy_loss + self._cfg.value_loss_weight * value_loss +
             self._cfg.reward_loss_weight * reward_loss
         )
         weighted_loss = (weights * loss).mean()
@@ -490,7 +570,7 @@ class MuZeroPolicy(Policy):
         # packing data for logging
         loss_data = (
             total_loss.item(), weighted_loss.item(), loss.mean().item(), 0, policy_loss.mean().item(),
-            reward_loss.mean().item(), value_loss.mean().item()
+            reward_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
         )
         if self._cfg.monitor_statistics:
 
@@ -547,6 +627,7 @@ class MuZeroPolicy(Policy):
                 'policy_loss': loss_data[4],
                 'reward_loss': loss_data[5],
                 'value_loss': loss_data[6],
+                'consistency_loss': loss_data[7],
                 'value_priority': td_data[0].flatten().mean().item(),
                 'target_reward': td_data[1].flatten().mean().item(),
                 'target_value': td_data[2].flatten().mean().item(),
@@ -569,6 +650,7 @@ class MuZeroPolicy(Policy):
                 'policy_loss': loss_data[4],
                 'reward_loss': loss_data[5],
                 'value_loss': loss_data[6],
+                'consistency_loss': loss_data[7],
                 'value_priority': td_data[0].flatten().mean().item(),
                 'target_reward': td_data[1].flatten().mean().item(),
                 'target_value': td_data[2].flatten().mean().item(),
@@ -605,7 +687,6 @@ class MuZeroPolicy(Policy):
             ]
         )
 
-    # @profile
     def _forward_collect(
         self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None, ready_env_id=None
     ):
@@ -660,7 +741,7 @@ class MuZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = ptree.Roots(active_collect_env_num, legal_actions, self._cfg.num_simulations)
+                roots = ptree.Roots(active_collect_env_num, legal_actions)
                 # the only difference between collect and eval is the dirichlet noise
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -717,7 +798,6 @@ class MuZeroPolicy(Policy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
-    # @profile
     def _forward_eval(self, data: ttorch.Tensor, action_mask: list, to_play: None, ready_env_id=None):
         """
         Overview:
@@ -743,7 +823,8 @@ class MuZeroPolicy(Policy):
             # TODO(pu)
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                pred_values_pool = self.inverse_scalar_transform_handle(pred_values_pool).detach().cpu().numpy() # shape（B, 1）
+                pred_values_pool = self.inverse_scalar_transform_handle(pred_values_pool).detach().cpu().numpy(
+                )  # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()  # list shape（B, A）
 
@@ -765,7 +846,7 @@ class MuZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ptree.Roots(active_eval_env_num, legal_actions, self._cfg.num_simulations)
+                roots = ptree.Roots(active_eval_env_num, legal_actions)
 
                 roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a policy (argmax in testing)
@@ -807,6 +888,7 @@ class MuZeroPolicy(Policy):
             'policy_loss',
             'reward_loss',
             'value_loss',
+            'consistency_loss',
             'value_priority',
             'target_reward',
             'target_value',
@@ -879,7 +961,20 @@ class MuZeroPolicy(Policy):
     @staticmethod
     def _consist_loss_func(f1, f2):
         """
-        Consistency loss function: similarity loss
+        Overview:
+            consistency loss function: the negative cosine similarity.
+        Arguments:
+            f1 (:obj:`torch.Tensor`): shape (batch_size, dim), e.g. (256, 512)
+            f2 (:obj:`torch.Tensor`): shape (batch_size, dim), e.g. (256, 512)
+        Returns:
+            (f1 * f2).sum(dim=1) is the cosine similarity between vector f1 and f2.
+            The cosine similarity always belongs to the interval [-1, 1].
+            For example, two proportional vectors have a cosine similarity of 1,
+            two orthogonal vectors have a similarity of 0,
+            and two opposite vectors have a similarity of -1.
+             -(f1 * f2).sum(dim=1) is consistency loss, i.e. the negative cosine similarity.
+        Reference:
+            https://en.wikipedia.org/wiki/Cosine_similarity
         """
         f1 = F.normalize(f1, p=2., dim=-1, eps=1e-5)
         f2 = F.normalize(f2, p=2., dim=-1, eps=1e-5)

@@ -5,7 +5,6 @@ The following code is adapted from https://github.com/YeWR/EfficientZero/blob/ma
 import math
 from typing import Optional
 
-import numpy as np
 import torch
 import torch.nn as nn
 from ding.model.common import ReparameterizationHead
@@ -13,10 +12,9 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 
 from .common import EZNetworkOutput, RepresentationNetwork
-from .utils import renormalize
+from .utils import renormalize, get_dynamic_mean, get_reward_mean, get_params_mean
 
 
-# Predict next hidden states, reward_hidden_state, and value_prefix given current states and actions
 class DynamicsNetwork(nn.Module):
 
     def __init__(
@@ -35,7 +33,7 @@ class DynamicsNetwork(nn.Module):
     ):
         """
         Overview:
-            Dynamics network
+            Dynamics network. Predict next hidden states, reward_hidden_state, and value_prefix given current states and actions
         Arguments:
             - num_res_blocks (:obj:int): number of res blocks
             - num_channels (:obj:int): channels of hidden states
@@ -126,6 +124,12 @@ class DynamicsNetwork(nn.Module):
         value_prefix = self.fc(value_prefix)
 
         return state, reward_hidden_state, value_prefix
+
+    def get_dynamic_mean(self):
+        return get_dynamic_mean(self)
+
+    def get_reward_mean(self):
+        return get_reward_mean(self)
 
 
 # predict the value and policy given hidden states
@@ -291,8 +295,8 @@ class PredictionNetwork(nn.Module):
         return policy, value
 
 
-@MODEL_REGISTRY.register('SampledEfficientZeroNet')
-class SampledEfficientZeroNet(nn.Module):
+@MODEL_REGISTRY.register('SampledEfficientZeroModel')
+class SampledEfficientZeroModel(nn.Module):
 
     def __init__(
         self,
@@ -361,7 +365,7 @@ class SampledEfficientZeroNet(nn.Module):
             - state_norm (:obj:`bool`):  True -> normalization for hidden states
             - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         """
-        super(SampledEfficientZeroNet, self).__init__()
+        super(SampledEfficientZeroModel, self).__init__()
         self.sigma_type = sigma_type
         self.fixed_sigma_value = fixed_sigma_value
         self.bound_type = bound_type
@@ -662,14 +666,5 @@ class SampledEfficientZeroNet(nn.Module):
         else:
             return proj.detach()
 
-    def get_gradients(self):
-        grads = []
-        for p in self.parameters():
-            grad = None if p.grad is None else p.grad.data.cpu().numpy()
-            grads.append(grad)
-        return grads
-
-    def set_gradients(self, gradients: torch.Tensor):
-        for g, p in zip(gradients, self.parameters()):
-            if g is not None:
-                p.grad = g
+    def get_params_mean(self):
+        return get_params_mean(self)

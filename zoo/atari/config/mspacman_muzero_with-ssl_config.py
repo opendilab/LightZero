@@ -1,5 +1,5 @@
 """
-NOTE: the only difference between muzero and muzero_with-ssl is the self-supervised-learning loss in policy and model.
+NOTE: the only difference between muzero and muzero_with-ssl is the self-supervised-learning loss.
 """
 import torch
 from easydict import EasyDict
@@ -51,7 +51,7 @@ mspacman_muzero_config = dict(
         model=dict(
             # ==============================================================
             # We use the default large size model, please refer to the
-            # default init config in MuZeroNet class for details.
+            # default init config in MuZeroModel class for details.
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
             image_channel=3,
@@ -66,6 +66,8 @@ mspacman_muzero_config = dict(
             # whether to use discrete support to represent categorical distribution for value, reward.
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            # NOTE: the only difference between muzero and muzero_with-ssl is the self-supervised-learning loss.
+            self_supervised_learning_loss=True,
         ),
         # learn_mode config
         learn=dict(
@@ -119,7 +121,7 @@ mspacman_muzero_config = dict(
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        ## NOTE: the only difference between muzero and muzero_with-ssl is the self-supervised-learning loss in policy and model.
+        # NOTE: the only difference between muzero and muzero_with-ssl is the self-supervised-learning loss.
         ssl_loss_weight=2,
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
         auto_temperature=False,
@@ -154,9 +156,9 @@ mspacman_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_with-ssl',
-        ## NOTE: the only difference between muzero and muzero_with-ssl is the self-supervised-learning loss in policy and model.
-        import_names=['lzero.policy.muzero_with_ssl'],
+        type='muzero',
+        # NOTE: the only difference between muzero and muzero_with-ssl is the self-supervised-learning loss.
+        import_names=['lzero.policy.muzero'],
     ),
     collector=dict(
         type='episode_muzero',

@@ -62,7 +62,7 @@ pong_sampled_efficientzero_config = dict(
         model=dict(
             # ==============================================================
             # We use the default large size model, please refer to the
-            # default init config in EfficientZeroNet class or EfficientZero
+            # default init config in EfficientZeroModel class or EfficientZero
             # original paper for details.
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.

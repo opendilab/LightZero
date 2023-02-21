@@ -62,6 +62,7 @@ def inverse_scalar_transform(logits, support_size, epsilon=0.001, categorical_di
 
 
 class InverseScalarTransform:
+
     def __init__(self, support_size, device='cpu', categorical_distribution=True):
         scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
         self.value_support = torch.from_numpy(scalar_support.range).unsqueeze(0)

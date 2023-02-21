@@ -1,8 +1,12 @@
+"""
+Acknowledgement: The following code is adapted from https://github.com/YeWR/EfficientZero/core/model.py
+"""
 import torch
 from typing import List
 from dataclasses import dataclass
 import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
+import numpy as np
 
 
 @dataclass
@@ -111,7 +115,8 @@ class RepresentationNetwork(nn.Module):
         norm_type: str = 'BN',
     ):
         """
-        Overview: Representation network
+        Overview:
+            Representation network
         Arguments:
             - observation_shape (:obj:`Union[List, tuple]`):  shape of observations: [C, W, H]
             - num_res_blocks (:obj:`int`): number of res blocks
@@ -149,3 +154,10 @@ class RepresentationNetwork(nn.Module):
         for block in self.resblocks:
             x = block(x)
         return x
+
+    def get_param_mean(self):
+        mean = []
+        for name, param in self.named_parameters():
+            mean += np.abs(param.detach().cpu().numpy().reshape(-1)).tolist()
+        mean = sum(mean) / len(mean)
+        return mean
