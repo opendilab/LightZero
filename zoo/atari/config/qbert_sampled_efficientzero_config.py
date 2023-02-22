@@ -177,7 +177,7 @@ qbert_sampled_efficientzero_create_config = dict(
     collector=dict(
         type='episode_sampled_efficientzero',
         get_train_sample=True,
-        import_names=['lzero.worker.collector.sampled_efficientzero_collector'],
+        import_names=['lzero.worker.sampled_efficientzero_collector'],
     )
 )
 qbert_sampled_efficientzero_create_config = EasyDict(qbert_sampled_efficientzero_create_config)

@@ -118,11 +118,11 @@ tictactoe_alphazero_create_config = dict(
         type='episode_alphazero',
         get_train_sample=False,
         # get_train_sample=True,
-        import_names=['lzero.worker.collector.alphazero_collector'],
+        import_names=['lzero.worker.alphazero_collector'],
     ),
     evaluator=dict(
         type='alphazero',
-        import_names=['lzero.worker.collector.alphazero_evaluator'],
+        import_names=['lzero.worker.alphazero_evaluator'],
     )
 )
 tictactoe_alphazero_create_config = EasyDict(tictactoe_alphazero_create_config)

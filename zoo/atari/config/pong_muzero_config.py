@@ -169,7 +169,7 @@ pong_muzero_create_config = dict(
     collector=dict(
         type='episode_muzero',
         get_train_sample=True,
-        import_names=['lzero.worker.collector.muzero_collector'],
+        import_names=['lzero.worker.muzero_collector'],
     )
 )
 pong_muzero_create_config = EasyDict(pong_muzero_create_config)

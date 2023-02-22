@@ -3,7 +3,6 @@ Acknowledgement: The following code is adapted from https://github.com/YeWR/Effi
 """
 import copy
 import time
-from dataclasses import dataclass
 from typing import Any, List, Optional, Union
 
 import numpy as np
@@ -20,11 +19,8 @@ from lzero.mcts.utils import prepare_observation_list, concat_output, concat_out
 from lzero.mcts.scaling_transform import inverse_scalar_transform
 
 
-@dataclass
-class BufferedData:
-    data: Any
-    index: str
-    meta: dict
+from lzero.mcts.utils import BufferedData
+
 
 
 @BUFFER_REGISTRY.register('game_buffer_efficientzero')

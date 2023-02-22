@@ -173,7 +173,7 @@ pendulum_disc_efficientzero_create_config = dict(
     collector=dict(
         type='episode_efficientzero',
         get_train_sample=True,
-        import_names=['lzero.worker.collector.efficientzero_collector'],
+        import_names=['lzero.worker.efficientzero_collector'],
     )
 )
 pendulum_disc_efficientzero_create_config = EasyDict(pendulum_disc_efficientzero_create_config)

@@ -18,7 +18,6 @@ from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer, visit_count
 from lzero.worker import SampledEfficientZeroEvaluator as BaseSerialEvaluator
 
 
-# @profile
 def serial_pipeline_sampled_efficientzero(
         input_cfg: Union[str, Tuple[dict, dict]],
         seed: int = 0,

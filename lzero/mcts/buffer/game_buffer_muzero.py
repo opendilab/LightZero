@@ -8,6 +8,7 @@ import random
 import time
 from dataclasses import dataclass
 from typing import Any, List, Optional, Union
+from lzero.mcts.utils import BufferedData
 
 import numpy as np
 import torch
@@ -26,11 +27,6 @@ from lzero.mcts.utils import prepare_observation_list, concat_output, concat_out
 from lzero.mcts.scaling_transform import inverse_scalar_transform
 
 
-@dataclass
-class BufferedData:
-    data: Any
-    index: str
-    meta: dict
 
 
 @BUFFER_REGISTRY.register('game_buffer_muzero')

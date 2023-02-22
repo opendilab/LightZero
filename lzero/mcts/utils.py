@@ -7,7 +7,14 @@ import numpy as np
 import torch
 from scipy.stats import entropy
 from graphviz import Digraph
+from typing import Any, List, Optional, Union
+from dataclasses import dataclass
 
+@dataclass
+class BufferedData:
+    data: Any
+    index: str
+    meta: dict
 
 def obtain_tree_topology(root, to_play=0):
     node_stack = []

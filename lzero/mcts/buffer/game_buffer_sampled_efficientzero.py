@@ -3,7 +3,7 @@ Acknowledgement: The following code is adapted from https://github.com/YeWR/Effi
 """
 import copy
 import time
-from dataclasses import dataclass
+from lzero.mcts.utils import BufferedData
 from typing import Any, List, Optional, Union
 
 # python mcts_tree
@@ -22,12 +22,6 @@ from lzero.mcts.tree_search.mcts_ptree_sampled import SampledEfficientZeroMCTSPt
 from lzero.mcts.utils import prepare_observation_list, concat_output, concat_output_value
 from lzero.mcts.scaling_transform import inverse_scalar_transform
 
-
-@dataclass
-class BufferedData:
-    data: Any
-    index: str
-    meta: dict
 
 
 @BUFFER_REGISTRY.register('game_buffer_sampled_efficientzero')
