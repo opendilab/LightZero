@@ -14,16 +14,16 @@ from ding.utils import POLICY_REGISTRY
 from torch.distributions import Categorical, Independent, Normal
 from torch.nn import L1Loss
 
-# python mcts
-import lzero.rl_utils.mcts.ptree_sampled_efficientzero as ptree
-from lzero.rl_utils import SampledEfficientZeroMCTSCtree as MCTSCtree
-from lzero.rl_utils import SampledEfficientZeroMCTSPtree as MCTSPtree
-from lzero.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
+# python mcts_tree
+import lzero.mcts.tree.ptree_sampled_efficientzero as ptree
+from lzero.mcts import SampledEfficientZeroMCTSCtree as MCTSCtree
+from lzero.mcts import SampledEfficientZeroMCTSPtree as MCTSPtree
+from lzero.mcts import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
-from lzero.rl_utils import scalar_transform, InverseScalarTransform
-from lzero.rl_utils import select_action
-# cpp mcts
-from lzero.rl_utils.mcts.ctree_sampled_efficientzero import ezs_tree as ctree
+from lzero.mcts import scalar_transform, InverseScalarTransform
+from lzero.mcts import select_action
+# cpp mcts_tree
+from lzero.mcts.tree.ctree_sampled_efficientzero import ezs_tree as ctree
 
 
 @POLICY_REGISTRY.register('sampled_efficientzero')
@@ -1228,7 +1228,7 @@ class SampledEfficientZeroPolicy(Policy):
                 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
             # TODO(pu): for board games, when action_num is a list, adapt the Roots method
-            # cpp mcts
+            # cpp mcts_tree
             if self._cfg.mcts_ctree:
                 ######################
                 # sampled related code
@@ -1263,7 +1263,7 @@ class SampledEfficientZeroPolicy(Policy):
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
             else:
-                # python mcts
+                # python mcts_tree
                 # if action_mask[0] is None:
                 #     # continuous action space
                 #     roots = ptree.Roots(active_collect_env_num, None,
@@ -1454,7 +1454,7 @@ class SampledEfficientZeroPolicy(Policy):
                 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()  # list shape（B, A）
 
             if self._cfg.mcts_ctree:
-                # cpp mcts
+                # cpp mcts_tree
                 ######################
                 # sampled related code
                 ######################
@@ -1482,7 +1482,7 @@ class SampledEfficientZeroPolicy(Policy):
                 # do MCTS for a policy (argmax in testing)
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
             else:
-                # python mcts
+                # python mcts_tree
                 ######################
                 # sampled related code
                 ######################

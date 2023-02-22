@@ -11,8 +11,8 @@ from ding.utils import build_logger, EasyTimer
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
 from easydict import EasyDict
 
-from lzero.rl_utils.mcts.game import GameHistory
-from lzero.rl_utils.mcts.utils import prepare_observation_list
+from lzero.mcts.tree_main.game import GameHistory
+from lzero.mcts.utils import prepare_observation_list
 
 
 class MuZeroEvaluator(ISerialEvaluator):

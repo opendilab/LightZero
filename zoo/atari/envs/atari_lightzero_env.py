@@ -48,14 +48,10 @@ class AtariLightZeroEnv(BaseEnv):
     
     def __init__(self, cfg=None):
         self.cfg = cfg
-        self.dqn_expert_data = cfg.dqn_expert_data
         self._init_flag = False
 
     def _make_env(self):
-        if self.dqn_expert_data:
-            return wrap_lightzero_dqn_expert_data(self.cfg)
-        else:
-            return wrap_lightzero(self.cfg)
+        return wrap_lightzero(self.cfg)
 
     def reset(self):
         if not self._init_flag:

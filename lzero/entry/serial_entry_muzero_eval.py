@@ -14,7 +14,7 @@ from ding.worker import BaseLearner
 from ding.worker import create_serial_collector
 from tensorboardX import SummaryWriter
 
-from lzero.rl_utils import MuZeroGameBuffer, visit_count_temperature
+from lzero.mcts import MuZeroGameBuffer, visit_count_temperature
 from lzero.worker import MuZeroEvaluator as BaseSerialEvaluator
 
 

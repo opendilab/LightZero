@@ -1,7 +1,7 @@
 import torch
 from easydict import EasyDict
 
-from lzero.rl_utils import GameBaseConfig, DiscreteSupport
+from lzero.mcts import GameBaseConfig, DiscreteSupport
 
 if torch.cuda.is_available():
     device = 'cuda'

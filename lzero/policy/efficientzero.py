@@ -14,16 +14,16 @@ from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
 from torch.distributions import Categorical, Independent, Normal
 
-# python mcts
-import lzero.rl_utils.mcts.ptree_efficientzero as ptree
-from lzero.rl_utils import EfficientZeroMCTSCtree as MCTS_ctree
-from lzero.rl_utils import EfficientZeroMCTSPtree as MCTS_ptree
-from lzero.rl_utils import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
+# python mcts_tree
+import lzero.mcts.tree.ptree_efficientzero as ptree
+from lzero.mcts import EfficientZeroMCTSCtree as MCTS_ctree
+from lzero.mcts import EfficientZeroMCTSPtree as MCTS_ptree
+from lzero.mcts import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
-from lzero.rl_utils import scalar_transform, inverse_scalar_transform, InverseScalarTransform
-from lzero.rl_utils import select_action
-# cpp mcts
-from lzero.rl_utils.mcts.ctree_efficientzero import ez_tree as ctree
+from lzero.mcts import scalar_transform, inverse_scalar_transform, InverseScalarTransform
+from lzero.mcts import select_action
+# cpp mcts_tree
+from lzero.mcts.tree.ctree_efficientzero import ez_tree as ctree
 
 
 @POLICY_REGISTRY.register('efficientzero')
@@ -746,7 +746,7 @@ class EfficientZeroPolicy(Policy):
                 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
             # TODO(pu): for board games, when action_num is a list, adapt the Roots method
-            # cpp mcts
+            # cpp mcts_tree
             if self._cfg.mcts_ctree:
                 if to_play[0] is None:
                     # we use to_play=0 means play_with_bot_mode game in mcts_ctree
@@ -771,7 +771,7 @@ class EfficientZeroPolicy(Policy):
                 self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
 
             else:
-                # python mcts
+                # python mcts_tree
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
@@ -869,7 +869,7 @@ class EfficientZeroPolicy(Policy):
                 policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()  # list shape（B, A）
 
             if self._cfg.mcts_ctree:
-                # cpp mcts
+                # cpp mcts_tree
                 if to_play[0] is None:
                     # we use to_play=0 means play_with_bot_mode game in mcts_ctree
                     to_play = [0 for i in range(active_eval_env_num)]
@@ -883,7 +883,7 @@ class EfficientZeroPolicy(Policy):
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
 
             else:
-                # python mcts
+                # python mcts_tree
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]

@@ -9,7 +9,7 @@ import torch.optim as optim
 from ding.config.config import read_config_yaml
 from ding.model import model_wrap
 from ding.policy.base_policy import Policy
-from lzero.rl_utils.mcts.ptree_alphazero.node import MCTS
+from lzero.mcts.tree.ptree_alphazero.node import MCTS
 from ding.torch_utils import Adam, to_device
 from ding.utils import POLICY_REGISTRY
 from ding.utils.data import default_collate
