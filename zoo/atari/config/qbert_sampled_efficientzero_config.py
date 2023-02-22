@@ -44,9 +44,9 @@ qbert_sampled_efficientzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         env_name='QbertNoFrameskip-v4',
         frame_skip=4,
-        frame_stack_num=4,
+        frame_stack_num=1,
         gray_scale=False,
-        obs_shape=(12, 96, 96),
+        obs_shape=(3, 96, 96),
         manager=dict(shared_memory=False, ),
         stop_value=int(1e6),
     ),
@@ -67,13 +67,13 @@ qbert_sampled_efficientzero_config = dict(
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
             image_channel=3,
-            frame_stack_num=4,
+            frame_stack_num=1,
             downsample=True,
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
-            observation_shape=(12, 96, 96),  # if frame_stack_num=4
-            # observation_shape=(3, 96, 96),  # if frame_stack_num=1
+            # observation_shape=(12, 96, 96),  # if frame_stack_num=4
+            observation_shape=(3, 96, 96),  # if frame_stack_num=1
             action_space_size=6,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
@@ -98,7 +98,7 @@ qbert_sampled_efficientzero_config = dict(
             n_episode=n_episode,
         ),
         # If the eval cost is expensive, we could set eval_freq larger.
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        eval=dict(evaluator=dict(eval_freq=int(5e3), )),
         # command_mode config
         other=dict(
             # NOTE: the replay_buffer_size is ineffective,
@@ -119,8 +119,7 @@ qbert_sampled_efficientzero_config = dict(
         ## observation
         # the key difference setting between image-input and vector input
         image_based=True,
-        cvt_string=False,
-        gray_scale=False,
+        gray_scale=True,
         use_augmentation=True,
 
         ## reward
@@ -141,13 +140,14 @@ qbert_sampled_efficientzero_config = dict(
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
         auto_temperature=False,
         fixed_temperature_value=0.25,
+        # auto_temperature=True,
         # the size/capacity of replay_buffer
         max_total_transitions=int(1e5),
         # ``max_training_steps`` is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 
         ## reanalyze
-        reanalyze_ratio=0.3,
+        reanalyze_ratio=0.,
         reanalyze_outdated=True,
         # whether to use root value in reanalyzing part
         use_root_value=False,

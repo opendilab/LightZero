@@ -147,7 +147,7 @@ pong_sampled_efficientzero_config = dict(
         max_training_steps=int(1e5),
 
         ## reanalyze
-        reanalyze_ratio=0.3,
+        reanalyze_ratio=0.,
         reanalyze_outdated=True,
         # whether to use root value in reanalyzing part
         use_root_value=False,

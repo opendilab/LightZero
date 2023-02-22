@@ -14,7 +14,7 @@ K = 5  # num_of_sampled_actions
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-num_simulations = 100
+num_simulations = 50
 # update_per_collect determines the number of training steps after each collection of a batch of data.
 # For different env, we have different episode_length,
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
@@ -86,7 +86,7 @@ mspacman_sampled_efficientzero_config = dict(
             n_episode=n_episode,
         ),
         # If the eval cost is expensive, we could set eval_freq larger.
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        eval=dict(evaluator=dict(eval_freq=int(5e3), )),
         # command_mode config
         other=dict(
             # NOTE: the replay_buffer_size is ineffective,
@@ -126,16 +126,16 @@ mspacman_sampled_efficientzero_config = dict(
         policy_entropy_loss_coeff=0,
         ssl_loss_weight=2,
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
-        # auto_temperature=False,
-        # fixed_temperature_value=0.25,
-        auto_temperature=True,
+        auto_temperature=False,
+        fixed_temperature_value=0.25,
+        # auto_temperature=True,
         # the size/capacity of replay_buffer
         max_total_transitions=int(1e5),
         # ``max_training_steps`` is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 
         ## reanalyze
-        reanalyze_ratio=0.3,
+        reanalyze_ratio=0.,
         reanalyze_outdated=True,
         # whether to use root value in reanalyzing part
         use_root_value=False,
