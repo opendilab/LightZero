@@ -67,7 +67,7 @@ qbert_sampled_efficientzero_config = dict(
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
             image_channel=1,
-            frame_stack_num=1,
+            frame_stack_num=4,
             downsample=True,
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]

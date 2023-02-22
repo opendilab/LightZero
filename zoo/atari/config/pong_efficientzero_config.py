@@ -40,10 +40,11 @@ pong_efficientzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         env_name='PongNoFrameskip-v4',
         frame_skip=4,
-        gray_scale=False,
-        obs_shape=(12, 96, 96),
+        frame_stack_num=4,
+        gray_scale=True,
+        obs_shape=(4, 96, 96),
         manager=dict(shared_memory=False, ),
-        stop_value=int(20),
+        stop_value=int(1e6),
     ),
     policy=dict(
         # the pretrained model path.
@@ -61,14 +62,15 @@ pong_efficientzero_config = dict(
             # original paper for details.
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
-            image_channel=3,
+            image_channel=1,
             frame_stack_num=4,
             downsample=True,
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
-            observation_shape=(12, 96, 96),  # if frame_stack_num=4
-            # observation_shape=(3, 96, 96),  # if frame_stack_num=1
+            # observation_shape=(12, 96, 96),  # if frame_stack_num=4, gray_scale=False
+            # observation_shape=(3, 96, 96),  # if frame_stack_num=1, gray_scale=False
+            observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
             action_space_size=6,
             # whether to use discrete support to represent categorical distribution for value, value_prefix.
             categorical_distribution=True,
@@ -111,8 +113,7 @@ pong_efficientzero_config = dict(
         ## observation
         # the key difference setting between image-input and vector input
         image_based=True,
-        cvt_string=False,
-        gray_scale=False,
+        use_augmentation=True,
 
         ## reward
         clip_reward=True,

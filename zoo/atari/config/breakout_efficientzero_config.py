@@ -31,8 +31,9 @@ breakout_efficientzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         env_name='BreakoutNoFrameskip-v4',
         frame_skip=4,
-        gray_scale=False,
-        obs_shape=(12, 96, 96),
+        frame_stack_num=4,
+        gray_scale=True,
+        obs_shape=(4, 96, 96),
         manager=dict(shared_memory=False, ),
         stop_value=int(1e6),
     ),
@@ -57,8 +58,9 @@ breakout_efficientzero_config = dict(
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
-            observation_shape=(12, 96, 96),  # if frame_stack_num=4
-            # observation_shape=(3, 96, 96),  # if frame_stack_num=1
+            # observation_shape=(12, 96, 96),  # if frame_stack_num=4, gray_scale=False
+            # observation_shape=(3, 96, 96),  # if frame_stack_num=1, gray_scale=False
+            observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
             # NOTE: the action_space_size=4 for breakout env.
             action_space_size=4,
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
@@ -102,8 +104,7 @@ breakout_efficientzero_config = dict(
         ## observation
         # the key difference setting between image-input and vector input.
         image_based=True,
-        cvt_string=False,
-        gray_scale=False,
+        use_augmentation=True,
 
         ## reward
         clip_reward=True,
