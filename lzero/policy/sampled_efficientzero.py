@@ -531,13 +531,6 @@ class SampledEfficientZeroPolicy(Policy):
                 torch.nonzero(mask_batch[:, 0]).squeeze(-1)
             )
 
-            # if 0 in target_normalized_visit_count_init_step.sum(-1):
-            #     print('0 in target_normalized_visit_count.sum(-1)')
-
-            # discrete fake target prob
-            # target_normalized_visit_count_init_step = torch.zeros_like(target_normalized_visit_count_init_step)
-            # target_normalized_visit_count_init_step[:,0] = 1
-
             # only for debug
             target_dist = Categorical(target_normalized_visit_count_init_step_masked)
             target_policy_entropy = target_dist.entropy().mean()
@@ -565,7 +558,6 @@ class SampledEfficientZeroPolicy(Policy):
                     target_sampled_actions = target_sampled_actions.unsqueeze(-1)
 
                 # way 1:
-                # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
                 log_prob = torch.log(prob.gather(-1, target_sampled_actions[:, k].long()).squeeze(-1))
 
                 log_prob_sampled_actions.append(log_prob)
@@ -583,41 +575,15 @@ class SampledEfficientZeroPolicy(Policy):
 
             if self._cfg.learn.policy_loss_type == 'KL':
                 # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
-                # policy_loss = (torch.exp(log_prob_sampled_actions) * (log_prob_sampled_actions - target_log_prob_sampled_actions.detach())).sum(-1).mean(0)
-
-                # policy_loss = (torch.exp(target_log_prob_sampled_actions.detach()) * (
-                #         target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)).sum(-1).mean(0)
-
                 policy_loss = (
                     torch.exp(target_log_prob_sampled_actions.detach()) *
                     (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
                 ).sum(-1) * mask_batch[:, 0]
-
-                # import torch.nn as nn
-                # kl_loss = nn.KLDivLoss(reduction="batchmean")
-                # policy_loss = kl_loss(log_prob_sampled_actions, target_log_prob_sampled_actions)
-
             elif self._cfg.learn.policy_loss_type == 'cross_entropy':
                 # cross_entropy loss: - sum(p * log (q) )
-                # policy_loss = - torch.mean(
-                #     torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1))
                 policy_loss = -torch.sum(
                     torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
                 ) * mask_batch[:, 0]
-
-                # verify the correctness of policy loss
-                # def modified_cross_entropy_loss_v2(target, prediction):
-                #     return -(target * torch.log_softmax(prediction, dim=1)).sum(1)
-                #
-                # - sum_p_dot_logq = modified_cross_entropy_loss_v2(target_normalized_visit_count_init_step, policy_logits)
-                #
-                # sum_p_dot_logp = torch.sum(torch.exp(target_log_prob_sampled_actions.detach()) *
-                #           target_log_prob_sampled_actions.detach(), dim=-1)
-
-            elif self._cfg.learn.policy_loss_type == 'original':
-                # TODO: debug the original policy loss
-                # calculate loss for the first step
-                policy_loss = modified_cross_entropy_loss(policy_logits, target_policy[:, 0])
 
         #############################
         # calculate policy loss: KL loss
@@ -1264,30 +1230,6 @@ class SampledEfficientZeroPolicy(Policy):
                 self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
             else:
                 # python mcts_tree
-                # if action_mask[0] is None:
-                #     # continuous action space
-                #     roots = ptree.Roots(active_collect_env_num, None,
-                #                         action_space_size=self._cfg.model.action_space_size,
-                #                         num_of_sampled_actions=self._cfg.model.num_of_sampled_actions, continuous_action_space=self._cfg.model.continuous_action_space)
-                #     # the only difference between collect and eval is the dirichlet noise
-                #     noises = [
-                #         np.random.dirichlet(
-                #             [self._cfg.root_dirichlet_alpha] * int(self._cfg.model.num_of_sampled_actions)
-                #         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
-                #     ]
-                # else:
-                #     # discrete action space
-                #     legal_actions = [
-                #         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
-                #     ]
-                #     roots = ptree.Roots(active_collect_env_num, legal_actions,
-                #                         num_of_sampled_actions=self._cfg.model.num_of_sampled_actions, continuous_action_space=self._cfg.model.continuous_action_space)
-                #     # the only difference between collect and eval is the dirichlet noise
-                #     noises = [
-                #         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                #                             ).astype(np.float32).tolist() for j in range(active_collect_env_num)
-                #     ]
-
                 ######################
                 # sampled related code
                 ######################
@@ -1346,13 +1288,13 @@ class SampledEfficientZeroPolicy(Policy):
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_distributions[i], roots_values[i]
                 try:
-                    child_actions = np.array([action.value for action in roots_sampled_actions[i]])
+                    root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
                 except Exception as error:
                     # print(error)
                     # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
-                    child_actions = np.array([action for action in roots_sampled_actions[i]])
+                    root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
 
-                # if child_actions.max() > 1 or child_actions.min() < -1:
+                # if root_sampled_actions.max() > 1 or root_sampled_actions.min() < -1:
                 #     print('here')
 
                 # select the argmax, not sampling
@@ -1393,7 +1335,7 @@ class SampledEfficientZeroPolicy(Policy):
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,
-                    'child_actions': child_actions,
+                    'root_sampled_actions': root_sampled_actions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
                     'value': value,
                     'pred_value': pred_values_pool[i],
@@ -1533,11 +1475,11 @@ class SampledEfficientZeroPolicy(Policy):
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_distributions[i], roots_values[i]
                 try:
-                    child_actions = np.array([action.value for action in roots_sampled_actions[i]])
+                    root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
                 except Exception as error:
                     # print(error)
                     # print('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
-                    child_actions = np.array([action for action in roots_sampled_actions[i]])
+                    root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
 
                 # select the argmax, not sampling
                 action, visit_count_distribution_entropy = select_action(
@@ -1576,7 +1518,7 @@ class SampledEfficientZeroPolicy(Policy):
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,
-                    'child_actions': child_actions,
+                    'root_sampled_actions': root_sampled_actions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
                     'value': value,
                     'pred_value': pred_values_pool[i],

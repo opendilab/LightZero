@@ -19,12 +19,13 @@ import lzero.mcts.ptree.ptree_sez as tree_sez
 
 class SampledEfficientZeroMCTSPtree(object):
     config = dict(
-        device='cpu',
+        cuda=True,
         pb_c_base=19652,
         pb_c_init=1.25,
         support_scale=300,
         discount=0.997,
         num_simulations=50,
+        categorical_distribution=True,
         lstm_horizon_len=5,
     )
 
@@ -34,11 +35,12 @@ class SampledEfficientZeroMCTSPtree(object):
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
-    def __init__(self, config=None):
-        if config is None:
-            config = config
-        self.config = config
-
+    def __init__(self, cfg=None):
+        # NOTE: utilize the default config
+        default_config = self.default_config()
+        default_config.update(cfg)
+        self._cfg = default_config
+        
     def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=None):
         """
         Overview:
@@ -55,8 +57,7 @@ class SampledEfficientZeroMCTSPtree(object):
 
             # preparation
             num = roots.num
-            device = self.config.device
-            pb_c_base, pb_c_init, discount = self.config.pb_c_base, self.config.pb_c_init, self.config.discount
+            pb_c_base, pb_c_init, discount = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount
             # the data storage of hidden states: storing the hidden states of all the ctree root nodes
             # hidden_state_roots.shape  (2, 12, 3, 3)
             hidden_state_pool = [hidden_state_roots]
@@ -73,7 +74,7 @@ class SampledEfficientZeroMCTSPtree(object):
             min_max_stats_lst = MinMaxStatsList(num)
 
             # virtual_to_play = copy.deepcopy(to_play)
-            for index_simulation in range(self.config.num_simulations):
+            for index_simulation in range(self._cfg.num_simulations):
                 """
                 each simulation, we expanded a new node, so we have `num_simulations)` num of node at most
                 """
@@ -94,7 +95,7 @@ class SampledEfficientZeroMCTSPtree(object):
                 # simulation reaches a leaf node s_l.
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play = tree_sez.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play),
-                    self.config.continuous_action_space
+                    self._cfg.model.continuous_action_space
                 )
                 # obtain the search horizon for leaf nodes (not expanded)
                 # TODO(pu)
@@ -110,19 +111,19 @@ class SampledEfficientZeroMCTSPtree(object):
                         reward_hidden_state_h_pool[ix][0][iy]
                     )  # reward_hidden_state_h_pool[ix][0][iy] shape (64,)
 
-                hidden_states = torch.from_numpy(np.asarray(hidden_states)).to(device).float()
+                hidden_states = torch.from_numpy(np.asarray(hidden_states)).to(self._cfg.device).float()
                 hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)
-                                                          ).to(device).unsqueeze(0)  # shape (1,1, 64)
+                                                          ).to(self._cfg.device).unsqueeze(0)  # shape (1,1, 64)
                 hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)
-                                                          ).to(device).unsqueeze(0)  # shape (1,1, 64)
+                                                          ).to(self._cfg.device).unsqueeze(0)  # shape (1,1, 64)
 
-                if self.config.continuous_action_space is True:
+                if self._cfg.model.continuous_action_space is True:
                     # continuous action
-                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).float()
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).float()
 
                 else:
                     # discrete action
-                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
 
                 # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are
                 # computed by the dynamics function
@@ -144,9 +145,9 @@ class SampledEfficientZeroMCTSPtree(object):
                     )
                     # if not in training, obtain the scalars of the value/reward
                     network_output.value = inverse_scalar_transform(network_output.value,
-                                                                    self.config.support_scale).detach().cpu().numpy()
+                                                                    self._cfg.support_scale).detach().cpu().numpy()
                     network_output.value_prefix = inverse_scalar_transform(
-                        network_output.value_prefix, self.config.support_scale
+                        network_output.value_prefix, self._cfg.support_scale
                     ).detach().cpu().numpy()
 
                     network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()
@@ -162,8 +163,8 @@ class SampledEfficientZeroMCTSPtree(object):
                 # reset 0
                 # reset the hidden states in LSTM every horizon steps in search
                 # only need to predict the value prefix in a range (eg: s0 -> s5)
-                assert self.config.lstm_horizon_len > 0
-                reset_idx = (np.array(search_lens) % self.config.lstm_horizon_len == 0)
+                assert self._cfg.lstm_horizon_len > 0
+                reset_idx = (np.array(search_lens) % self._cfg.lstm_horizon_len == 0)
 
                 reward_hidden_state_nodes[0][:, reset_idx, :] = 0
                 reward_hidden_state_nodes[1][:, reset_idx, :] = 0

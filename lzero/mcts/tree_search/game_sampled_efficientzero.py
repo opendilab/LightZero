@@ -75,7 +75,7 @@ class GameHistory:
         self.target_rewards = []
         self.target_policies = []
 
-        self.child_actions = []
+        self.root_sampled_actions = []
 
     def __len__(self):
         return len(self.action_history)
@@ -201,7 +201,7 @@ class GameHistory:
         """
         return self.target_values[i], self.target_rewards[i], self.target_policies[i]
 
-    def store_search_stats(self, visit_counts, root_value, child_actions, idx: int = None):
+    def store_search_stats(self, visit_counts, root_value, root_sampled_actions, idx: int = None):
         """
         Overview:
             store the visit count distributions and value of the root node after MCTS.
@@ -210,8 +210,8 @@ class GameHistory:
         if idx is None:
             self.child_visit_history.append([visit_count / sum_visits for visit_count in visit_counts])
             self.root_value_history.append(root_value)
-            self.child_actions.append(child_actions)
-            # self.child_actions.append(
+            self.root_sampled_actions.append(root_sampled_actions)
+            # self.root_sampled_actions.append(
             #     np.array([action.value for action in root.children.keys()])
             # )
         else:
@@ -254,7 +254,7 @@ class GameHistory:
 
         self.child_visit_history = np.array(self.child_visit_history)
 
-        # self.child_actions = np.array(self.child_actions)
+        # self.root_sampled_actions = np.array(self.root_sampled_actions)
 
         self.root_value_history = np.array(self.root_value_history)
 

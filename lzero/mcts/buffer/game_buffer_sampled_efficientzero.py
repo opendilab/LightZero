@@ -3,11 +3,8 @@ Acknowledgement: The following code is adapted from https://github.com/YeWR/Effi
 """
 import copy
 import time
-from lzero.mcts.utils import BufferedData
 from typing import Any, List, Optional, Union
 
-# python mcts_tree
-import lzero.mcts.ptree.ptree_sez as ptree
 import numpy as np
 import torch
 from ding.data.buffer import Buffer
@@ -15,13 +12,15 @@ from ding.torch_utils.data_helper import to_ndarray
 from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
 
-# cpp mcts_tree
-from ..ctree.ctree_sampled_efficientzero import ezs_tree as ctree
+# python mcts_tree
+import lzero.mcts.ptree.ptree_sez as ptree
+from lzero.mcts.scaling_transform import inverse_scalar_transform
 from lzero.mcts.tree_search.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTS_ctree
 from lzero.mcts.tree_search.mcts_ptree_sampled import SampledEfficientZeroMCTSPtree as MCTS_ptree
+from lzero.mcts.utils import BufferedData
 from lzero.mcts.utils import prepare_observation_list, concat_output, concat_output_value
-from lzero.mcts.scaling_transform import inverse_scalar_transform
-
+# cpp mcts_tree
+from ..ctree.ctree_sampled_efficientzero import ezs_tree as ctree
 
 
 @BUFFER_REGISTRY.register('game_buffer_sampled_efficientzero')
@@ -205,6 +204,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
         ## reanalyze
         reanalyze_ratio=0.3,
+        # for sampled_efficientzero, if reanalyze_ratio>0, we must set ``reanalyze_outdated=True`` to obtain
+        # the correct latest ``root_sampled_actions`` corresponding to the reanalyzed ``batch_target_policies_re``.
         reanalyze_outdated=True,
         # whether to use root value in reanalyzing part
         use_root_value=False,
@@ -272,20 +273,9 @@ class SampledEfficientZeroGameBuffer(Buffer):
         Returns:
             - buffered_data (:obj:`BufferedData`): The pushed data.
         """
-        # TODO(pu)
-        # if self.get_num_of_transitions() >= self._cfg.max_total_transitions:
-        #     return
-
-        # TODO(pu)
         if meta['end_tag']:
             self._eps_collected += 1
         valid_len = len(data)
-
-        # if meta['end_tag']:
-        #     self._eps_collected += 1
-        #     valid_len = len(data)
-        # else:
-        #     valid_len = len(data) - meta['gap_steps']
 
         if meta['priorities'] is None:
             max_prio = self.priorities.max() if self.buffer else 1
@@ -536,7 +526,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         game_lst, game_history_pos_lst, batch_index_list, weights_lst, make_time_lst = batch_context
         batch_size = len(batch_index_list)
         obs_lst, action_lst, mask_lst = [], [], []
-        child_actions_lst = []
+        root_sampled_actions_lst = []
         # prepare the inputs of a batch
         for i in range(batch_size):
             game = game_lst[i]
@@ -544,63 +534,56 @@ class SampledEfficientZeroGameBuffer(Buffer):
             ######################
             # sampled related code
             ######################
-            _actions = game.action_history[game_history_pos:game_history_pos + self._cfg.num_unroll_steps].tolist()
-            # _actions = game.action_history[game_history_pos:game_history_pos + self._cfg.num_unroll_steps]
+            actions_tmp = game.action_history[game_history_pos:game_history_pos + self._cfg.num_unroll_steps].tolist()
 
             # NOTE: self._cfg.num_unroll_steps + 1, TODO(pu): why +1
-            _child_actions = game.child_actions[game_history_pos:game_history_pos + self._cfg.num_unroll_steps + 1]
-
-            # _child_actions = game.child_actions[game_history_pos:game_history_pos + self._cfg.num_unroll_steps]
+            root_sampled_actions_tmp = game.root_sampled_actions[game_history_pos:game_history_pos + self._cfg.num_unroll_steps + 1]
+            # root_sampled_actions_tmp = game.root_sampled_actions[game_history_pos:game_history_pos + self._cfg.num_unroll_steps]
 
             # add mask for invalid actions (out of trajectory)
-            # _mask = [1. for i in range(len(_actions))]
-            # _mask += [0. for _ in range(self._cfg.num_unroll_steps - len(_mask))]
-            _mask = [1. for i in range(len(_child_actions))]
-            _mask += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(_mask))]
+            # mask_tmp = [1. for i in range(len(_actions))]
+            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps - len(mask_tmp))]
+            mask_tmp = [1. for i in range(len(root_sampled_actions_tmp))]
+            mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
-            ######################
-            # sampled related code
-            ######################
             # pad random action
-
             if self._cfg.model.continuous_action_space:
-                _actions += [
+                actions_tmp += [
                     np.random.randn(self._cfg.model.action_space_size)
-                    for _ in range(self._cfg.num_unroll_steps - len(_actions))
+                    for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
                 ]
-                _child_actions += [
+                root_sampled_actions_tmp += [
                     np.random.rand(self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size)
-                    for _ in range(self._cfg.num_unroll_steps + 1 - len(_child_actions))
+                    for _ in range(self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp))
                 ]
             else:
-                _actions += [
+                actions_tmp += [
                     np.random.randint(0, self._cfg.model.action_space_size, 1).item()
-                    for _ in range(self._cfg.num_unroll_steps - len(_actions))
+                    for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
                 ]
-                if len(_child_actions[0].shape) == 1:
-                    _child_actions += [
+                if len(root_sampled_actions_tmp[0].shape) == 1:
+                    root_sampled_actions_tmp += [
                         np.arange(self._cfg.model.action_space_size)
-                        # np.random.randint(0, self._cfg.model.action_space_size, self._cfg.model.num_of_sampled_actions)
                         #  TODO(pu): why +1
-                        for _ in range(self._cfg.num_unroll_steps + 1 - len(_child_actions))
+                        for _ in range(self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp))
                     ]
                 else:
-                    _child_actions += [
+                    root_sampled_actions_tmp += [
                         np.random.randint(0, self._cfg.model.action_space_size,
                                           self._cfg.model.num_of_sampled_actions).reshape(
-                                              self._cfg.model.num_of_sampled_actions, 1
-                                          )  # TODO(pu): why +1
-                        for _ in range(self._cfg.num_unroll_steps + 1 - len(_child_actions))
+                            self._cfg.model.num_of_sampled_actions, 1
+                        )  # TODO(pu): why +1
+                        for _ in range(self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp))
                     ]
 
             # obtain the input observations
             # stack+num_unroll_steps  4+5
             # pad if length of obs in game_history is less than stack+num_unroll_steps
             obs_lst.append(game_lst[i].obs(game_history_pos_lst[i], extra_len=self._cfg.num_unroll_steps, padding=True))
-            action_lst.append(_actions)
-            child_actions_lst.append(_child_actions)
+            action_lst.append(actions_tmp)
+            root_sampled_actions_lst.append(root_sampled_actions_tmp)
 
-            mask_lst.append(_mask)
+            mask_lst.append(mask_tmp)
 
         # formalize the input observations
         obs_lst = prepare_observation_list(obs_lst)
@@ -608,10 +591,11 @@ class SampledEfficientZeroGameBuffer(Buffer):
         # sampled related code
         ######################
         # formalize the inputs of a batch
-        inputs_batch = [obs_lst, action_lst, child_actions_lst, mask_lst, batch_index_list, weights_lst, make_time_lst]
+        inputs_batch = [obs_lst, action_lst, root_sampled_actions_lst, mask_lst, batch_index_list, weights_lst,
+                        make_time_lst]
 
         try:
-            child_actions_lst = np.concatenate([child_actions_lst])
+            root_sampled_actions_lst = np.concatenate([root_sampled_actions_lst])
         except Exception as error:
             print(error)
 
@@ -968,13 +952,14 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 value_lst = value_lst.reshape(-1) * np.array(
                     [
                         self._cfg.discount ** td_steps_lst[i] if int(td_steps_lst[i]) %
-                        2 == 0 else -self._cfg.discount ** td_steps_lst[i] for i in range(batch_size)
+                                                                 2 == 0 else -self._cfg.discount ** td_steps_lst[i] for
+                        i in range(batch_size)
                     ]
                 )
 
             else:
                 value_lst = value_lst.reshape(-1) * (
-                    np.array([self._cfg.discount for _ in range(batch_size)]) ** td_steps_lst
+                        np.array([self._cfg.discount for _ in range(batch_size)]) ** td_steps_lst
                 )
             value_lst = value_lst * np.array(value_mask)
             value_lst = value_lst.tolist()
@@ -1031,7 +1016,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
     def compute_target_policy_reanalyzed(self, policy_re_context, model):
         """
-        compute policy targets from the reanalyzed context of policies
+        compute policy targets from the reanalyzed context of policies.
         """
         batch_target_policies_re = []
         if policy_re_context is None:
@@ -1193,6 +1178,15 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
             roots_distributions = roots.get_distributions()
 
+            # ==============================================================
+            # fix reanalyze in sez
+            # ==============================================================
+            roots_sampled_actions = roots.get_sampled_actions()
+            try:
+                root_sampled_actions = np.array([action.value for action in roots_sampled_actions])
+            except Exception as error:
+                root_sampled_actions = np.array([action for action in roots_sampled_actions])
+
             policy_index = 0
             for state_index, game_idx in zip(state_index_lst, indices):
                 target_policies = []
@@ -1203,31 +1197,12 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     # sampled related code
                     ######################
                     if policy_mask[policy_index] == 0:
-                        # # the null target policy
-                        # if self._cfg.model.continuous_action_space:
-                        #     # for continuous action space games
-                        #     # the invalid target policy
-                        #     target_policies.append([0 for _ in range(self._cfg.model.num_of_sampled_actions)])
-                        # else:
-                        #     target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
-
-                        # for sampled the invalid target policy TODO
+                        # the null target policy
+                        # for sampled the invalid target policy
                         target_policies.append([0 for _ in range(self._cfg.model.num_of_sampled_actions)])
-                        # target_policies.append(
-                        #     list(np.ones(self._cfg.model.num_of_sampled_actions) / self._cfg.model.num_of_sampled_actions)
-                        # )
-
                     else:
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
-                            # if self._cfg.model.continuous_action_space:
-                            #     target_policies.append(
-                            #         list(np.ones(self._cfg.model.num_of_sampled_actions) / self._cfg.model.num_of_sampled_actions)
-                            #     )
-                            # else:
-                            #     target_policies.append(
-                            #         list(np.ones(self._cfg.model.action_space_size) / self._cfg.model.action_space_size)
-                            #     )
                             target_policies.append(
                                 list(
                                     np.ones(self._cfg.model.num_of_sampled_actions) /
@@ -1236,16 +1211,13 @@ class SampledEfficientZeroGameBuffer(Buffer):
                             )
                         else:
                             if self._cfg.mcts_ctree:
-                                """
-                                cpp mcts_tree
-                                """
+                                ## cpp mcts_tree
                                 if to_play_history[0][0] is None:
                                     # for one_player atari games
                                     # TODO(pu): very important
                                     sum_visits = sum(distributions)
                                     policy = [visit_count / sum_visits for visit_count in distributions]
                                     target_policies.append(policy)
-                                    # target_policies.append(distributions)
                                 else:
                                     # for two_player board games
                                     policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
@@ -1283,7 +1255,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
         batch_target_policies_re = np.array(batch_target_policies_re)
 
-        return batch_target_policies_re
+        return batch_target_policies_re, root_sampled_actions
 
     def compute_target_policy_non_reanalyzed(self, policy_non_re_context):
         """
@@ -1393,24 +1365,9 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         ######################
                         # sampled related code
                         ######################
-                        # if self._cfg.model.continuous_action_space:
-                        #     # for continuous action space games
-                        #     # the invalid target policy
-                        #     target_policies.append([0 for _ in range(self._cfg.model.num_of_sampled_actions)])
-                        #     policy_mask.append(0)
-                        #
-                        # else:
-                        #     # for discrete action space games
-                        #     # the invalid target policy
-                        #     target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
-                        #     policy_mask.append(0)
-
                         # the invalid target policy
                         # TODO
                         target_policies.append([0 for _ in range(self._cfg.model.num_of_sampled_actions)])
-                        # target_policies.append(
-                        #     list(np.ones(self._cfg.model.num_of_sampled_actions) / self._cfg.model.num_of_sampled_actions)
-                        # )
                         policy_mask.append(0)
 
                     policy_index += 1
@@ -1434,7 +1391,19 @@ class SampledEfficientZeroGameBuffer(Buffer):
         # target reward, value
         batch_value_prefixs, batch_values = self.compute_target_reward_value(reward_value_context, policy._target_model)
         # target policy
-        batch_target_policies_re = self.compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
+        batch_target_policies_re, root_sampled_actions = self.compute_target_policy_reanalyzed(policy_re_context,
+                                                                                               policy._target_model)
+
+        # ==============================================================
+        # fix reanalyze in sez:
+        # use the latest root_sampled_actions after the reanalyze process
+        # because the batch_target_policies_re is corresponding to the latest root_sampled_actions
+        # ==============================================================
+        # inputs_batch = [obs_lst, action_lst, root_sampled_actions_lst, mask_lst, batch_index_list, weights_lst, make_time_lst]
+        inputs_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
+            int(batch_size * self._cfg.reanalyze_ratio), self._cfg.num_unroll_steps + 1,
+            self._cfg.model.num_of_sampled_actions, 1)
+
         batch_target_policies_non_re = self.compute_target_policy_non_reanalyzed(policy_non_re_context)
         if 0 < self._cfg.reanalyze_ratio < 1:
             try:
