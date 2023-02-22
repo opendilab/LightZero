@@ -87,4 +87,4 @@ tree = Tree(
 val, best_subtree = pruning(tree, True, first_level=True)
 print(val)  # 7
 print(best_subtree.value)  # 7
-# print(pruning(tree, False))  # 5
+# print(pruning(ctree, False))  # 5

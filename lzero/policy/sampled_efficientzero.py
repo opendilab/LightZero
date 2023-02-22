@@ -15,7 +15,7 @@ from torch.distributions import Categorical, Independent, Normal
 from torch.nn import L1Loss
 
 # python mcts_tree
-import lzero.mcts.tree.ptree_sampled_efficientzero as ptree
+import lzero.mcts.ptree.ptree_sez as ptree
 from lzero.mcts import SampledEfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts import SampledEfficientZeroMCTSPtree as MCTSPtree
 from lzero.mcts import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
@@ -23,7 +23,7 @@ from lzero.mcts import Transforms, visit_count_temperature, modified_cross_entro
 from lzero.mcts import scalar_transform, InverseScalarTransform
 from lzero.mcts import select_action
 # cpp mcts_tree
-from lzero.mcts.tree.ctree_sampled_efficientzero import ezs_tree as ctree
+from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as ctree
 
 
 @POLICY_REGISTRY.register('sampled_efficientzero')

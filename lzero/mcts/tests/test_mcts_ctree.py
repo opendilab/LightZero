@@ -4,8 +4,8 @@ import torch
 from easydict import EasyDict
 
 from lzero.mcts import inverse_scalar_transform, select_action
-from lzero.mcts.tree.ctree_efficientzero import ez_tree as tree
-from lzero.mcts.tree_main.mcts_ctree import EfficientZeroMCTSCtree as EZ_MCTS
+from lzero.mcts.ctree.ctree_efficientzero import ez_tree as tree
+from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as EZ_MCTS
 
 
 class MuZeroModelFake(torch.nn.Module):

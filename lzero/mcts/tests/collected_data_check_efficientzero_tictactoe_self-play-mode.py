@@ -9,7 +9,7 @@ one_episode_replay_buffer_tictocetoe_2_player_mode = np.load(
     allow_pickle=True
 )
 """
-Note: please refer to ding/tree_main/tree_main/game.py for details.
+Note: please refer to ding/tree_search/tree_search/game.py for details.
 
 game_history element shape:
     e.g. game_history_length=9, stack=4, num_unroll_steps=3, td_steps=2

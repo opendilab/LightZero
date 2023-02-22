@@ -86,15 +86,15 @@ def pruning(tree, maximising_player, alpha=float("-inf"), beta=float("+inf"), de
     if depth == 0:
         return tree.estimated_value
 
-    # print(tree)
+    # print(ctree)
     if tree.expanded is False:
         tree.expand()
         # print('expand one node!')
 
     # for debug
-    # if (tree.state == np.array([[0, 0, 0], [0, 0, 0], [0, 0, 1]])).all():
+    # if (ctree.state == np.array([[0, 0, 0], [0, 0, 0], [0, 0, 1]])).all():
     #     print('p1')
-    # if (tree.state == np.array([[0, 0, 1], [2, 1, 2], [1, 2, 1]])).all():
+    # if (ctree.state == np.array([[0, 0, 1], [2, 1, 2], [1, 2, 1]])).all():
     #     print('p2')
 
     val = float("-inf") if maximising_player else float("+inf")

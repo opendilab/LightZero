@@ -12,18 +12,18 @@ from ding.rl_utils import get_nstep_return_data, get_train_sample
 from ding.torch_utils import to_tensor, to_device
 from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
-from torch.distributions import Categorical, Independent, Normal
+from torch.distributions import Categorical
 
 # python mcts_tree
-import lzero.mcts.tree.ptree_efficientzero as ptree
+import lzero.mcts.ptree.ptree_ez as ptree
 from lzero.mcts import EfficientZeroMCTSCtree as MCTS_ctree
 from lzero.mcts import EfficientZeroMCTSPtree as MCTS_ptree
 from lzero.mcts import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
-from lzero.mcts import scalar_transform, inverse_scalar_transform, InverseScalarTransform
+from lzero.mcts import scalar_transform, InverseScalarTransform
 from lzero.mcts import select_action
 # cpp mcts_tree
-from lzero.mcts.tree.ctree_efficientzero import ez_tree as ctree
+from lzero.mcts.ctree.ctree_efficientzero import ez_tree as ctree
 
 
 @POLICY_REGISTRY.register('efficientzero')

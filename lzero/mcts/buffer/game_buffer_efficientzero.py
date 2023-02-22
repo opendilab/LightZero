@@ -13,9 +13,9 @@ from ding.torch_utils.data_helper import to_ndarray
 from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
 
-from ..tree.ctree_efficientzero import ez_tree as ctree
-from lzero.mcts.tree_main.mcts_ctree import EfficientZeroMCTSCtree as MCTS_ctree
-from lzero.mcts.tree_main.mcts_ptree import EfficientZeroMCTSPtree as MCTS_ptree
+from ..ctree.ctree_efficientzero import ez_tree as ctree
+from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTS_ctree
+from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree as MCTS_ptree
 from lzero.mcts.utils import prepare_observation_list, concat_output, concat_output_value
 from lzero.mcts.scaling_transform import inverse_scalar_transform
 

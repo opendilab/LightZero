@@ -50,9 +50,9 @@ class MuZeroModelFake(torch.nn.Module):
 
 
 def check_mcts():
-    import lzero.mcts.tree.ptree_efficientzero as tree
+    import lzero.mcts.ptree.ptree_ez as tree
     import numpy as np
-    from lzero.mcts.tree_main.mcts_ptree import EfficientZeroMCTSPtree as MCTS
+    from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree as MCTS
 
     game_config = EasyDict(
         dict(

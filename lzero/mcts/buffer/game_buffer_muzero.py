@@ -17,11 +17,11 @@ from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
 
 # python mcts_tree
-import lzero.mcts.tree.ptree_muzero as ptree
-from lzero.mcts.tree_main.mcts_ptree import MuZeroMCTSPtree as MCTS_ptree
+import lzero.mcts.ptree.ptree_mz as ptree
+from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTS_ptree
 # cpp mcts_tree
-from lzero.mcts.tree.ctree_muzero import mz_tree as ctree
-from lzero.mcts.tree_main.mcts_ctree import MuZeroMCTSCtree as MCTS_ctree
+from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
+from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTS_ctree
 from lzero.mcts.utils import prepare_observation_list, concat_output, concat_output_value
 from lzero.mcts.scaling_transform import inverse_scalar_transform
 

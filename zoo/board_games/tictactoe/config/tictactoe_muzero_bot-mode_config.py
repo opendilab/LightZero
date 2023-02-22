@@ -9,16 +9,25 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 5
-num_simulations = 25
-# update_per_collect determines the number of training steps after each collection of a batch of data.
-# For different env, we have different episode_length,
-# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 50
-batch_size = 256
-max_env_step = int(2e5)
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 5
+# num_simulations = 25
+# # update_per_collect determines the number of training steps after each collection of a batch of data.
+# # For different env, we have different episode_length,
+# # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+# update_per_collect = 50
+# batch_size = 256
+# max_env_step = int(2e5)
+
+# debug config
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 2
+update_per_collect = 5
+batch_size = 4
+max_env_step = int(2e3)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -103,6 +112,9 @@ tictactoe_muzero_config = dict(
         # ==============================================================
         ## common
         mcts_ctree=True,
+        # debug
+        # mcts_ctree=False,
+
         device=device,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

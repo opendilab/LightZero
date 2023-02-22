@@ -2,9 +2,9 @@ import pytest
 import torch
 from easydict import EasyDict
 from lzero.mcts import inverse_scalar_transform, select_action
-import lzero.mcts.tree.ptree_efficientzero as tree
+import lzero.mcts.ptree.ptree_ez as tree
 import numpy as np
-from lzero.mcts.tree_main.mcts_ptree import EfficientZeroMCTSPtree as MCTS
+from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree as MCTS
 
 
 class MuZeroModelFake(torch.nn.Module):

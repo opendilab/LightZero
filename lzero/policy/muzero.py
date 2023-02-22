@@ -14,14 +14,14 @@ from torch.nn import L1Loss
 from ding.torch_utils import to_tensor
 
 # python MCTS
-import lzero.mcts.tree.ptree_muzero as ptree
+import lzero.mcts.ptree.ptree_mz as ptree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.mcts import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
 from lzero.mcts import scalar_transform, InverseScalarTransform
 from lzero.mcts import select_action
 # cpp MCTS
-from lzero.mcts.tree.ctree_muzero import mz_tree as ctree
+from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
 from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 
 

@@ -6,8 +6,8 @@ import numpy as np
 import torch
 from torch.cuda.amp import autocast as autocast
 
-from lzero.mcts.tree.ctree_efficientzero import ez_tree
-from lzero.mcts.tree_main.game import GameHistory
+from lzero.mcts.ctree.ctree_efficientzero import ez_tree
+from lzero.mcts.tree_search.game import GameHistory
 from lzero.mcts.utils import select_action, prepare_observation_list
 
 # args = ['PongNoFrameskip-v4', 'tictactoe']
@@ -18,11 +18,11 @@ args = ['PongNoFrameskip-v4']
 @pytest.mark.parametrize('env_name', args)
 def test_game_history(env_name):
     if env_name == 'PongNoFrameskip-v4':
-        from lzero.mcts.tree_main.mcts_ctree import EfficientZeroMCTSCtree as MCTS
+        from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTS
         from lzero.model.efficientzero_model import EfficientZeroModel as Model
         from lzero.mcts.tests.pong_efficientzero_config import pong_efficientzero_config as config
     elif env_name == 'tictactoe':
-        from lzero.mcts.tree_main.mcts_ctree import MuZeroMCTSCtree as MCTS
+        from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTS
         from lzero.model.muzero_model import MuZeroModel as Model
         from lzero.mcts.tests.tictactoe_muzero_bot_mode_config import tictactoe_muzero_config as config
 

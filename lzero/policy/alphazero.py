@@ -1,4 +1,3 @@
-import os
 from collections import namedtuple
 from typing import List, Dict, Any, Tuple, Union
 
@@ -6,11 +5,10 @@ import torch.distributions
 import torch.nn.functional as F
 import torch.optim as optim
 
-from ding.config.config import read_config_yaml
 from ding.model import model_wrap
 from ding.policy.base_policy import Policy
-from lzero.mcts.tree.ptree_alphazero.node import MCTS
-from ding.torch_utils import Adam, to_device
+from lzero.mcts.ptree.ptree_az import MCTS
+from ding.torch_utils import to_device
 from ding.utils import POLICY_REGISTRY
 from ding.utils.data import default_collate
 from ding.rl_utils import get_nstep_return_data, get_train_sample

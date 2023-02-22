@@ -1,4 +1,3 @@
-import pytest
 import torch
 from easydict import EasyDict
 from lzero.mcts import inverse_scalar_transform
@@ -6,11 +5,11 @@ from lzero.mcts import select_action
 import numpy as np
 import random
 
-import lzero.mcts.tree.ptree_efficientzero as ptree
-from lzero.mcts.tree.ctree_efficientzero import ez_tree as ctree
+import lzero.mcts.ptree.ptree_ez as ptree
+from lzero.mcts.ctree.ctree_efficientzero import ez_tree as ctree
 
-from lzero.mcts.tree_main.mcts_ptree import EfficientZeroMCTSPtree
-from lzero.mcts.tree_main.mcts_ctree import EfficientZeroMCTSCtree
+from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree
+from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree
 import time
 
 

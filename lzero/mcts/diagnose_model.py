@@ -4,8 +4,7 @@ import seaborn
 import torch
 
 import models
-from lzero.mcts.tree.ptree_efficientzero.node import Node
-from tree_main.mcts_ptree import MCTS, Node, SelfPlay
+from tree_search.mcts_ptree import MCTS, Node, SelfPlay
 
 
 class DiagnoseModel:
@@ -173,7 +172,7 @@ class DiagnoseModel:
         traverse(root, None, None, True)
         graph.node(str(0), color="red")
         # print(graph.source)
-        graph.render("tree_main", view=plot, cleanup=True, format="pdf")
+        graph.render("tree_search", view=plot, cleanup=True, format="pdf")
         return graph
 
 
@@ -189,7 +188,7 @@ class Trajectoryinfo:
         self.reward_history = []
         self.prior_policies = []
         self.policies_after_planning = []
-        # Not implemented, need to store them in every nodes of the tree_main
+        # Not implemented, need to store them in every nodes of the tree_search
         self.prior_values = []
         self.values_after_planning = [[numpy.NaN] * len(self.config.action_space)]
         self.prior_root_value = []

@@ -13,7 +13,7 @@ one_episode_replay_buffer_img = np.load(
     '/Users/puyuan/code/DI-engine/dizoo/board_games/atari/config/one_episode_replay_buffer_img.npy', allow_pickle=True
 )
 """
-Note: please refer to ding/tree_main/tree_main/game.py for details.
+Note: please refer to ding/tree_search/tree_search/game.py for details.
 
 game_history element shape:
     e.g. game_history_length=20, stack=4, num_unroll_steps=5, td_steps=5

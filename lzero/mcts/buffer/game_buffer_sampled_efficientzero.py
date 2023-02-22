@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, List, Optional, Union
 
 # python mcts_tree
-import lzero.mcts.tree.ptree_sampled_efficientzero as ptree
+import lzero.mcts.ptree.ptree_sez as ptree
 import numpy as np
 import torch
 from ding.data.buffer import Buffer
@@ -16,9 +16,9 @@ from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
 
 # cpp mcts_tree
-from ..tree.ctree_sampled_efficientzero import ezs_tree as ctree
-from lzero.mcts.tree_main.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTS_ctree
-from lzero.mcts.tree_main.mcts_ptree_sampled import SampledEfficientZeroMCTSPtree as MCTS_ptree
+from ..ctree.ctree_sampled_efficientzero import ezs_tree as ctree
+from lzero.mcts.tree_search.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTS_ctree
+from lzero.mcts.tree_search.mcts_ptree_sampled import SampledEfficientZeroMCTSPtree as MCTS_ptree
 from lzero.mcts.utils import prepare_observation_list, concat_output, concat_output_value
 from lzero.mcts.scaling_transform import inverse_scalar_transform
 

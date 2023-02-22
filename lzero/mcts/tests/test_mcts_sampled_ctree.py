@@ -54,9 +54,9 @@ class MuZeroModelFake(torch.nn.Module):
 
 @pytest.mark.unittest
 def test_mcts():
-    from lzero.mcts.tree.ctree_sampled_efficientzero import ezs_tree as ctree
+    from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as ctree
     import numpy as np
-    from lzero.mcts.tree_main.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTS
+    from lzero.mcts.tree_search.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTS
 
     game_config = EasyDict(
         dict(

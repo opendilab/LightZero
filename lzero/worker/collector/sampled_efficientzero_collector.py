@@ -11,7 +11,7 @@ from ding.worker.collector.base_serial_collector import ISerialCollector, CacheP
 from easydict import EasyDict
 from torch.nn import L1Loss
 
-from lzero.mcts.tree_main.game_sampled_efficientzero import GameHistory
+from lzero.mcts.tree_search.game_sampled_efficientzero import GameHistory
 from lzero.mcts.utils import prepare_observation_list
 
 
