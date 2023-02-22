@@ -17,13 +17,13 @@ from ..scaling_transform import inverse_scalar_transform
 
 class EfficientZeroMCTSPtree(object):
     config = dict(
-        device='cpu',
+        cuda=True,
         pb_c_base=19652,
         pb_c_init=1.25,
         support_scale=300,
         discount=0.997,
         num_simulations=50,
-        lstm_horizon_len=5,
+        categorical_distribution=True,
     )
 
     @classmethod
@@ -32,10 +32,11 @@ class EfficientZeroMCTSPtree(object):
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
-    def __init__(self, config=None):
-        if config is None:
-            config = config
-        self.config = config
+    def __init__(self, cfg=None):
+        # NOTE: utilize the default config
+        default_config = self.default_config()
+        default_config.update(cfg)
+        self._cfg = default_config
 
     def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=None):
         """
@@ -53,8 +54,8 @@ class EfficientZeroMCTSPtree(object):
 
             # preparation
             num = roots.num
-            device = self.config.device
-            pb_c_base, pb_c_init, discount = self.config.pb_c_base, self.config.pb_c_init, self.config.discount
+            device = self._cfg.device
+            pb_c_base, pb_c_init, discount = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount
             # the data storage of hidden states: storing the hidden states of all the ctree root nodes
             # hidden_state_roots.shape  (2, 12, 3, 3)
             hidden_state_pool = [hidden_state_roots]
@@ -71,7 +72,7 @@ class EfficientZeroMCTSPtree(object):
             min_max_stats_lst = MinMaxStatsList(num)
 
             # virtual_to_play = copy.deepcopy(to_play)
-            for index_simulation in range(self.config.num_simulations):
+            for index_simulation in range(self._cfg.num_simulations):
                 """
                 each simulation, we expanded a new node, so we have `num_simulations)` num of node at most
                 """
@@ -136,13 +137,13 @@ class EfficientZeroMCTSPtree(object):
                     # if not in training, obtain the scalars of the value/reward
                     network_output.value = inverse_scalar_transform(
                         network_output.value,
-                        self.config.model.support_scale,
-                        categorical_distribution=self.config.model.categorical_distribution
+                        self._cfg.model.support_scale,
+                        categorical_distribution=self._cfg.model.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.value_prefix = inverse_scalar_transform(
                         network_output.value_prefix,
-                        self.config.model.support_scale,
-                        categorical_distribution=self.config.model.categorical_distribution
+                        self._cfg.model.support_scale,
+                        categorical_distribution=self._cfg.model.categorical_distribution
                     ).detach().cpu().numpy()
 
                     network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()
@@ -158,8 +159,8 @@ class EfficientZeroMCTSPtree(object):
                 # reset 0
                 # reset the hidden states in LSTM every horizon steps in search
                 # only need to predict the value prefix in a range (eg: s0 -> s5)
-                assert self.config.lstm_horizon_len > 0
-                reset_idx = (np.array(search_lens) % self.config.lstm_horizon_len == 0)
+                assert self._cfg.lstm_horizon_len > 0
+                reset_idx = (np.array(search_lens) % self._cfg.lstm_horizon_len == 0)
 
                 reward_hidden_state_nodes[0][:, reset_idx, :] = 0
                 reward_hidden_state_nodes[1][:, reset_idx, :] = 0
@@ -189,13 +190,13 @@ import lzero.mcts.ptree.ptree_mz as tree_muzero
 
 class MuZeroMCTSPtree(object):
     config = dict(
-        device='cpu',
+        cuda=True,
         pb_c_base=19652,
         pb_c_init=1.25,
         support_scale=300,
         discount=0.997,
         num_simulations=50,
-        lstm_horizon_len=5,
+        categorical_distribution=True,
     )
 
     @classmethod
@@ -204,10 +205,11 @@ class MuZeroMCTSPtree(object):
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
-    def __init__(self, config=None):
-        if config is None:
-            config = config
-        self.config = config
+    def __init__(self, cfg=None):
+        # NOTE: utilize the default config
+        default_config = self.default_config()
+        default_config.update(cfg)
+        self._cfg = default_config
 
     def search(self, roots, model, hidden_state_roots, to_play=None):
         """
@@ -224,8 +226,8 @@ class MuZeroMCTSPtree(object):
 
             # preparation
             num = roots.num
-            device = self.config.device
-            pb_c_base, pb_c_init, discount = self.config.pb_c_base, self.config.pb_c_init, self.config.discount
+            device = self._cfg.device
+            pb_c_base, pb_c_init, discount = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount
             # the data storage of hidden states: storing the hidden states of all the ctree root nodes
             # hidden_state_roots.shape  (2, 12, 3, 3)
             hidden_state_pool = [hidden_state_roots]
@@ -236,7 +238,7 @@ class MuZeroMCTSPtree(object):
             min_max_stats_lst = MinMaxStatsList(num)
 
             # virtual_to_play = copy.deepcopy(to_play)
-            for index_simulation in range(self.config.num_simulations):
+            for index_simulation in range(self._cfg.num_simulations):
                 """
                 each simulation, we expanded a new node, so we have `num_simulations)` num of node at most
                 """
@@ -283,13 +285,13 @@ class MuZeroMCTSPtree(object):
                     # if not in training, obtain the scalars of the value/reward
                     network_output.value = inverse_scalar_transform(
                         network_output.value,
-                        self.config.model.support_scale,
-                        categorical_distribution=self.config.model.categorical_distribution
+                        self._cfg.model.support_scale,
+                        categorical_distribution=self._cfg.model.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.reward = inverse_scalar_transform(
                         network_output.reward,
-                        self.config.model.support_scale,
-                        categorical_distribution=self.config.model.categorical_distribution
+                        self._cfg.model.support_scale,
+                        categorical_distribution=self._cfg.model.categorical_distribution
                     ).detach().cpu().numpy()
 
                     network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()

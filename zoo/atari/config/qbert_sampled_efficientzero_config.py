@@ -20,7 +20,7 @@ num_simulations = 50
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
 update_per_collect = 1000
 batch_size = 256
-max_env_step = int(1e6)
+max_env_step = int(10e6)
 
 ## debug config
 # continuous_action_space = False
@@ -37,16 +37,16 @@ max_env_step = int(1e6)
 # ==============================================================
 
 qbert_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/qbert_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_sez_ctree/qbert_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_ic1_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         env_name='QbertNoFrameskip-v4',
         frame_skip=4,
-        frame_stack_num=1,
-        gray_scale=False,
-        obs_shape=(3, 96, 96),
+        frame_stack_num=4,
+        gray_scale=True,
+        obs_shape=(4, 96, 96),
         manager=dict(shared_memory=False, ),
         stop_value=int(1e6),
     ),
@@ -66,14 +66,15 @@ qbert_sampled_efficientzero_config = dict(
             # original paper for details.
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
-            image_channel=3,
+            image_channel=1,
             frame_stack_num=1,
             downsample=True,
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
-            # observation_shape=(12, 96, 96),  # if frame_stack_num=4
-            observation_shape=(3, 96, 96),  # if frame_stack_num=1
+            # observation_shape=(12, 96, 96),  # if frame_stack_num=4, gray_scale=False
+            # observation_shape=(3, 96, 96),  # if frame_stack_num=1, gray_scale=False
+            observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
             action_space_size=6,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
@@ -119,7 +120,6 @@ qbert_sampled_efficientzero_config = dict(
         ## observation
         # the key difference setting between image-input and vector input
         image_based=True,
-        gray_scale=True,
         use_augmentation=True,
 
         ## reward

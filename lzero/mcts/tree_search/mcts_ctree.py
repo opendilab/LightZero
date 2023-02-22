@@ -10,6 +10,7 @@ from easydict import EasyDict
 from lzero.mcts.ctree.ctree_efficientzero import ez_tree as tree_efficientzero
 from ..scaling_transform import inverse_scalar_transform
 
+
 # ==============================================================
 # EfficientZero
 # ==============================================================
@@ -39,10 +40,6 @@ class EfficientZeroMCTSCtree(object):
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
-        if self._cfg.cuda:
-            self._cfg.device = 'cuda'
-        else:
-            self._cfg.device = 'cpu'
 
     def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play_batch):
         """
@@ -60,7 +57,7 @@ class EfficientZeroMCTSCtree(object):
 
             # preparation
             num = roots.num
-            pb_c_base, pb_c_init, discount = self.config.pb_c_base, self.config.pb_c_init, self.config.discount
+            pb_c_base, pb_c_init, discount = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount
             # the data storage of hidden states: storing the states of all the ctree nodes
             hidden_state_pool = [hidden_state_roots]
             # 1 x batch x 64
@@ -72,9 +69,9 @@ class EfficientZeroMCTSCtree(object):
             hidden_state_index_x = 0
             # minimax value storage
             min_max_stats_lst = tree_efficientzero.MinMaxStatsList(num)
-            min_max_stats_lst.set_delta(self.config.value_delta_max)
+            min_max_stats_lst.set_delta(self._cfg.value_delta_max)
 
-            for index_simulation in range(self.config.num_simulations):
+            for index_simulation in range(self._cfg.num_simulations):
                 hidden_states = []
                 hidden_states_c_reward = []
                 hidden_states_h_reward = []
@@ -113,13 +110,13 @@ class EfficientZeroMCTSCtree(object):
                     # if not in training, obtain the scalars of the value/reward
                     network_output.value = inverse_scalar_transform(
                         network_output.value,
-                        self.config.model.support_scale,
-                        categorical_distribution=self.config.model.categorical_distribution
+                        self._cfg.model.support_scale,
+                        categorical_distribution=self._cfg.model.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.value_prefix = inverse_scalar_transform(
                         network_output.value_prefix,
-                        self.config.model.support_scale,
-                        categorical_distribution=self.config.model.categorical_distribution
+                        self._cfg.model.support_scale,
+                        categorical_distribution=self._cfg.model.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()
                     network_output.reward_hidden_state = (
@@ -138,8 +135,8 @@ class EfficientZeroMCTSCtree(object):
                 # reset 0
                 # reset the hidden states in LSTM every horizon steps in search
                 # only need to predict the value prefix in a range (eg: s0 -> s5)
-                assert self.config.lstm_horizon_len > 0
-                reset_idx = (np.array(search_lens) % self.config.lstm_horizon_len == 0)
+                assert self._cfg.lstm_horizon_len > 0
+                reset_idx = (np.array(search_lens) % self._cfg.lstm_horizon_len == 0)
                 assert len(reset_idx) == num
                 reward_hidden_state_nodes[0][:, reset_idx, :] = 0
                 reward_hidden_state_nodes[1][:, reset_idx, :] = 0
@@ -185,10 +182,6 @@ class MuZeroMCTSCtree(object):
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
-        if self._cfg.cuda:
-            self._cfg.device = 'cuda'
-        else:
-            self._cfg.device = 'cpu'
 
     def search(self, roots, model, hidden_state_roots, to_play_batch):
         """
@@ -205,7 +198,7 @@ class MuZeroMCTSCtree(object):
 
             # preparation
             num = roots.num
-            pb_c_base, pb_c_init, discount = self.config.pb_c_base, self.config.pb_c_init, self.config.discount
+            pb_c_base, pb_c_init, discount = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount
             # the data storage of hidden states: storing the states of all the ctree nodes
             hidden_state_pool = [hidden_state_roots]
 
@@ -213,9 +206,9 @@ class MuZeroMCTSCtree(object):
             hidden_state_index_x = 0
             # minimax value storage
             min_max_stats_lst = tree_muzero.MinMaxStatsList(num)
-            min_max_stats_lst.set_delta(self.config.value_delta_max)
+            min_max_stats_lst.set_delta(self._cfg.value_delta_max)
 
-            for index_simulation in range(self.config.num_simulations):
+            for index_simulation in range(self._cfg.num_simulations):
                 hidden_states = []
                 hidden_states_c_reward = []
                 hidden_states_h_reward = []
@@ -248,13 +241,13 @@ class MuZeroMCTSCtree(object):
                     # if not in training, obtain the scalars of the value/reward
                     network_output.value = inverse_scalar_transform(
                         network_output.value,
-                        self.config.model.support_scale,
-                        categorical_distribution=self.config.model.categorical_distribution
+                        self._cfg.model.support_scale,
+                        categorical_distribution=self._cfg.model.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.reward = inverse_scalar_transform(
                         network_output.reward,
-                        self.config.model.support_scale,
-                        categorical_distribution=self.config.model.categorical_distribution
+                        self._cfg.model.support_scale,
+                        categorical_distribution=self._cfg.model.categorical_distribution
                     ).detach().cpu().numpy()
                     network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()
                     network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()
