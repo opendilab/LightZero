@@ -1390,21 +1390,23 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
         # target reward, value
         batch_value_prefixs, batch_values = self.compute_target_reward_value(reward_value_context, policy._target_model)
-        # target policy
-        batch_target_policies_re, root_sampled_actions = self.compute_target_policy_reanalyzed(policy_re_context,
-                                                                                               policy._target_model)
-
-        # ==============================================================
-        # fix reanalyze in sez:
-        # use the latest root_sampled_actions after the reanalyze process
-        # because the batch_target_policies_re is corresponding to the latest root_sampled_actions
-        # ==============================================================
-        # inputs_batch = [obs_lst, action_lst, root_sampled_actions_lst, mask_lst, batch_index_list, weights_lst, make_time_lst]
-        inputs_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
-            int(batch_size * self._cfg.reanalyze_ratio), self._cfg.num_unroll_steps + 1,
-            self._cfg.model.num_of_sampled_actions, 1)
 
         batch_target_policies_non_re = self.compute_target_policy_non_reanalyzed(policy_non_re_context)
+
+        if self._cfg.reanalyze_ratio > 0:
+            # target policy
+            batch_target_policies_re, root_sampled_actions = self.compute_target_policy_reanalyzed(policy_re_context,
+                                                                                                   policy._target_model)
+            # ==============================================================
+            # fix reanalyze in sez:
+            # use the latest root_sampled_actions after the reanalyze process
+            # because the batch_target_policies_re is corresponding to the latest root_sampled_actions
+            # ==============================================================
+            # inputs_batch = [obs_lst, action_lst, root_sampled_actions_lst, mask_lst, batch_index_list, weights_lst, make_time_lst]
+            inputs_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
+                int(batch_size * self._cfg.reanalyze_ratio), self._cfg.num_unroll_steps + 1,
+                self._cfg.model.num_of_sampled_actions, 1)
+
         if 0 < self._cfg.reanalyze_ratio < 1:
             try:
                 batch_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
