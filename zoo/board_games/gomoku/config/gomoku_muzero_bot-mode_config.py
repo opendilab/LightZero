@@ -25,7 +25,7 @@ max_env_step = int(2e6)
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr03_gcv05_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -83,6 +83,7 @@ gomoku_muzero_config = dict(
             learning_rate=0.003,  # lr for Adam optimizer
             # Frequency of target network update.
             target_update_freq=100,
+            grad_clip_value=0.5,
         ),
         # collect_mode config
         collect=dict(

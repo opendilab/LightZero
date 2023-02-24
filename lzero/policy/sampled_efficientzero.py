@@ -916,7 +916,7 @@ class SampledEfficientZeroPolicy(Policy):
         # self._learn_model.state_dict()['prediction_network.fc_value.0.weight'],
         # self._learn_model.state_dict()['prediction_network.fc_value.0.bias']
 
-        torch.nn.utils.clip_grad_norm_(parameters, self._cfg.max_grad_norm)
+        torch.nn.utils.clip_grad_norm_(parameters, self._cfg.learn.grad_clip_value)
         self._optimizer.step()
         if self._cfg.learn.cos_lr_scheduler is True:
             self.rl_scheduler.step()

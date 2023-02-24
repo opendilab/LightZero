@@ -569,7 +569,7 @@ class EfficientZeroPolicy(Policy):
 
         self._optimizer.zero_grad()
         total_loss.backward()
-        torch.nn.utils.clip_grad_norm_(parameters, self._cfg.max_grad_norm)
+        torch.nn.utils.clip_grad_norm_(parameters, self._cfg.learn.grad_clip_value)
         self._optimizer.step()
 
         # =============
