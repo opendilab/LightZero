@@ -1277,10 +1277,14 @@ class MuZeroGameBuffer(Buffer):
         # target policy
         batch_target_policies_re = self.compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
         batch_target_policies_non_re = self.compute_target_policy_non_reanalyzed(policy_non_re_context)
-        if self._cfg.reanalyze_ratio < 1:
+
+        if 0 < self._cfg.reanalyze_ratio < 1:
             batch_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
-        else:
+        elif self._cfg.reanalyze_ratio == 1:
             batch_policies = batch_target_policies_re
+        elif self._cfg.reanalyze_ratio == 0:
+            batch_policies = batch_target_policies_non_re
+
         targets_batch = [batch_rewards, batch_values, batch_policies]
         # a batch contains the inputs and the targets
         train_data = [inputs_batch, targets_batch, self]

@@ -1,5 +1,4 @@
 from typing import Any, List, Union, Optional
-import time
 import gym
 import os
 import numpy as np
@@ -17,7 +16,7 @@ import copy
 class LunarLanderDiscEnv(BaseEnv):
     """
         Overview:
-            The modified Mujoco environment with manually discretized action space. For each dimension, equally dividing the
+            The modified LunarLander environment with manually discretized action space. For each dimension, equally dividing the
             original continuous action into ``each_dim_disc_size`` bins and using their Cartesian product to obtain
             handcrafted discrete actions.
     """
@@ -34,11 +33,10 @@ class LunarLanderDiscEnv(BaseEnv):
         replay_path=None,
         use_act_scale=False,
         delay_reward_step=0,
-        each_dim_disc_size=4,
-        battle_mode='play_with_bot_mode',
         prob_random_agent=0.,
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
+        each_dim_disc_size=4,
     )
 
     def __init__(self, cfg: dict) -> None:
@@ -68,7 +66,6 @@ class LunarLanderDiscEnv(BaseEnv):
             if hasattr(self._cfg, 'obs_plus_prev_action_reward') and self._cfg.obs_plus_prev_action_reward:
                 self._env = ObsPlusPrevActRewWrapper(self._env)
             self._observation_space = self._env.observation_space
-            self._raw_action_space = self._env.action_space
 
             self._reward_space = gym.spaces.Box(
                 low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1,), dtype=np.float32
@@ -90,15 +87,18 @@ class LunarLanderDiscEnv(BaseEnv):
         if self._save_replay_gif:
             self._frames = []
 
+        # ==============================================================
         # NOTE: disc_to_cont: transform discrete action index to original continuous action
+        self._raw_action_space = self._env.action_space
         self.m = self._raw_action_space.shape[0]
         self.n = self._cfg.each_dim_disc_size
         self.K = self.n ** self.m
         self.disc_to_cont = list(product(*[list(range(self.n)) for dim in range(self.m)]))
         # the modified discrete action space
         self._action_space = gym.spaces.Discrete(self.K)
+        # ==============================================================
 
-        # to be compatible with efficientzero
+        # to be compatible with LightZero model
         # shape: [W, H, C]
         obs = obs.reshape(8, 1, 1)
         action_mask = np.ones(self.K, 'int8')
@@ -120,9 +120,11 @@ class LunarLanderDiscEnv(BaseEnv):
         np.random.seed(self._seed)
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
+        # ==============================================================
         # NOTE: disc_to_cont: transform discrete action index to original continuous action
         action = [-1 + 2 / self.n * k for k in self.disc_to_cont[int(action)]]
         action = to_ndarray(action)
+        # ==============================================================
 
         if action.shape == (1,):
             action = action.item()  # 0-dim array
@@ -130,9 +132,10 @@ class LunarLanderDiscEnv(BaseEnv):
             action = affine_transform(action, min_val=-1, max_val=1)
         if self._save_replay_gif:
             self._frames.append(self._env.render(mode='rgb_array'))
+
         obs, rew, done, info = self._env.step(action)
 
-        # to be compatible with efficientzero
+        # to be compatible with LightZero model
         # shape: [W, H, C]
         obs = obs.reshape(8, 1, 1)
         action_mask = np.ones(self._action_space.n, 'int8')

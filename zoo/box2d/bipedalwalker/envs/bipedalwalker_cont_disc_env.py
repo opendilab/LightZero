@@ -1,19 +1,25 @@
-from typing import Any, List, Union, Optional
-import time
 import copy
-import gym
 import os
+from itertools import product
+from typing import List, Optional
+
+import gym
 import numpy as np
+from ding.envs import BaseEnv, BaseEnvTimestep
+from ding.envs.common.common_function import affine_transform
+from ding.torch_utils import to_ndarray
+from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
 
-from ding.envs import BaseEnv, BaseEnvTimestep, FrameStackWrapper
-from ding.torch_utils import to_ndarray, to_list
-from ding.envs.common.common_function import affine_transform
-from ding.utils import ENV_REGISTRY
 
-
-@ENV_REGISTRY.register('bipedalwalker')
-class BipedalWalkerEnv(BaseEnv):
+@ENV_REGISTRY.register('bipedalwalker_cont_disc')
+class BipedalWalkerDiscEnv(BaseEnv):
+    """
+        Overview:
+            The modified BipedalWalker environment with manually discretized action space. For each dimension, equally dividing the
+            original continuous action into ``each_dim_disc_size`` bins and using their Cartesian product to obtain
+            handcrafted discrete actions.
+    """
 
     @classmethod
     def default_config(cls: type) -> EasyDict:
@@ -31,6 +37,7 @@ class BipedalWalkerEnv(BaseEnv):
         prob_random_agent=0.,
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
+        each_dim_disc_size=4,
     )
 
     def __init__(self, cfg: dict) -> None:
@@ -70,11 +77,22 @@ class BipedalWalkerEnv(BaseEnv):
         if self._save_replay_gif:
             self._frames = []
 
+        # ==============================================================
+        # NOTE: disc_to_cont: transform discrete action index to original continuous action
+        self._raw_action_space = self._env.action_space
+        self.m = self._raw_action_space.shape[0]
+        self.n = self._cfg.each_dim_disc_size
+        self.K = self.n ** self.m
+        self.disc_to_cont = list(product(*[list(range(self.n)) for _ in range(self.m)]))
+        # the modified discrete action space
+        self._action_space = gym.spaces.Discrete(self.K)
+        # ==============================================================
+
         # original env: obs_shape: 24, action_shape: 4
-        # to be compatible with efficientzero
+        # to be compatible with LightZero model
         # shape: [W, H, C]
         obs = obs.reshape(24, 1, 1)
-        action_mask = None
+        action_mask = np.ones(self.K, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
 
         return obs
@@ -93,17 +111,22 @@ class BipedalWalkerEnv(BaseEnv):
         np.random.seed(self._seed)
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
-        assert isinstance(action, np.ndarray), type(action)
+        # ==============================================================
+        # NOTE: disc_to_cont: transform discrete action index to original continuous action
+        action = [-1 + 2 / self.n * k for k in self.disc_to_cont[int(action)]]
+        action = to_ndarray(action)
+        # ==============================================================
+
         if action.shape == (1, ):
             action = action.squeeze()  # 0-dim array
         if self._act_scale:
-            action = affine_transform(action, min_val=self.action_space.low, max_val=self.action_space.high)
+            action = affine_transform(action, min_val=self._raw_action_space.low, max_val=self._raw_action_space.high)
         if self._save_replay_gif:
             self._frames.append(self._env.render(mode='rgb_array'))
 
         obs, rew, done, info = self._env.step(action)
-        # self.render()
-        # to be compatible with muzero/efficientzero
+
+        # to be compatible with LightZero model
         # shape: [W, H, C]
         obs = obs.reshape(24, 1, 1)
         action_mask = None
@@ -126,6 +149,7 @@ class BipedalWalkerEnv(BaseEnv):
                 self.display_frames_as_gif(self._frames, path)
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
                 self._save_replay_count += 1
+
         obs = to_ndarray(obs)
         rew = to_ndarray([rew])  # wrapped to be transferred to a array with shape (1,)
         return BaseEnvTimestep(obs, rew, done, info)

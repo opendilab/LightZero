@@ -3,23 +3,23 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-board_size = 6  # default_size is 15
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-num_simulations = 100
-update_per_collect = 50
-batch_size = 256
-max_env_step = int(2e6)
-
 # board_size = 6  # default_size is 15
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 2
-# num_simulations = 5
-# update_per_collect = 2
-# batch_size = 4
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# num_simulations = 100
+# update_per_collect = 50
+# batch_size = 256
 # max_env_step = int(2e6)
+
+board_size = 6  # default_size is 15
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 2
+num_simulations = 5
+update_per_collect = 2
+batch_size = 4
+max_env_step = int(2e6)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================

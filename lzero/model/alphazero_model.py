@@ -171,6 +171,7 @@ class AlphaZeroModel(nn.Module):
         """
         super(AlphaZeroModel, self).__init__()
         self.categorical_distribution = categorical_distribution
+        self.observation_shape = observation_shape
         if not self.categorical_distribution:
             self.reward_support_size = 1
             self.value_support_size = 1
@@ -185,22 +186,22 @@ class AlphaZeroModel(nn.Module):
 
         self.action_space_size = action_space_size
         flatten_output_size_for_value_head = (
-            (value_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
-            (value_head_channels * observation_shape[1] * observation_shape[2])
+            (value_head_channels * math.ceil(self.observation_shape[1] / 16) *
+             math.ceil(self.observation_shape[2] / 16)) if downsample else
+            (value_head_channels * self.observation_shape[1] * self.observation_shape[2])
         )
 
         flatten_output_size_for_policy_head = (
-            (policy_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
-            (policy_head_channels * observation_shape[1] * observation_shape[2])
+            (policy_head_channels * math.ceil(self.observation_shape[1] / 16) *
+             math.ceil(self.observation_shape[2] / 16)) if downsample else
+            (policy_head_channels * self.observation_shape[1] * self.observation_shape[2])
         )
 
         if self.representation_model_type == 'identity':
             self.prediction_network = PredictionNetwork(
                 action_space_size,
                 num_res_blocks,
-                observation_shape[0],  # in_channels
+                self.observation_shape[0],  # in_channels
                 num_channels,
                 value_head_channels,
                 policy_head_channels,
@@ -236,7 +237,7 @@ class AlphaZeroModel(nn.Module):
                 self.representation_network = nn.Identity()
             elif self.representation_model_type == 'conv_res_blocks':
                 self.representation_network = RepresentationNetwork(
-                    observation_shape,
+                    self.observation_shape,
                     num_res_blocks,
                     num_channels,
                     downsample,
@@ -257,9 +258,9 @@ class AlphaZeroModel(nn.Module):
             logits, values = self.forward(state_batch)
         except Exception as error:
             # TODO(pu)
-            state_batch = state_batch.reshape(-1, 3, self._cfg.board_size, self._cfg.board_size)
+            state_batch = state_batch.reshape(-1, self.observation_shape[0], self.observation_shape[1], self.observation_shape[2])
             logits, values = self.forward(state_batch)
-            print('here')
+            # print('here')
         dist = torch.distributions.Categorical(logits=logits)
         probs = dist.probs
         return probs, values
