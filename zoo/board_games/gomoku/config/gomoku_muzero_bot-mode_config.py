@@ -95,7 +95,7 @@ gomoku_muzero_config = dict(
         # command_mode config
         other=dict(
             # NOTE: the replay_buffer_size is ineffective,
-            # we specify it using ``max_total_transitions`` in the following game config
+            # we specify it using ``replay_buffer_size`` in the following game config
             replay_buffer=dict(type='game_buffer_muzero')
         ),
         # ==============================================================
@@ -133,7 +133,7 @@ gomoku_muzero_config = dict(
         auto_temperature=False,
         fixed_temperature_value=1,
         # the size/capacity of replay_buffer
-        max_total_transitions=int(1e4),
+        replay_buffer_size=int(1e4),
         # ``max_training_steps`` is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 

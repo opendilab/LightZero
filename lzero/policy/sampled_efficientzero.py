@@ -132,8 +132,9 @@ class SampledEfficientZeroPolicy(Policy):
             ignore_done=False,
             momentum=0.9,
             grad_clip_type='clip_norm',
-            grad_clip_value=10,
-            # grad_clip_value=0.5,
+            grad_clip_value=0.5,
+            # (float) Weight uniform initialization range in the last output layer
+            init_w=3e-3,
         ),
         # collect_mode config
         collect=dict(
@@ -199,7 +200,7 @@ class SampledEfficientZeroPolicy(Policy):
         auto_temperature=False,
         fixed_temperature_value=0.25,
         # replay_buffer max size
-        max_total_transitions=int(1e5),
+        replay_buffer_size=int(1e5),
         # max_training_steps is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 
@@ -245,6 +246,13 @@ class SampledEfficientZeroPolicy(Policy):
         return 'SampledEfficientZeroModel', ['lzero.model.sampled_efficientzero_model']
 
     def _init_learn(self) -> None:
+        # Weight Init for the last output layer of policy in prediction network.
+        init_w = self._cfg.learn.init_w
+        self._model.prediction_network.sampled_fc_policy.mu.weight.data.uniform_(-init_w, init_w)
+        self._model.prediction_network.sampled_fc_policy.mu.bias.data.uniform_(-init_w, init_w)
+        self._model.prediction_network.sampled_fc_policy.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
+        self._model.prediction_network.sampled_fc_policy.log_sigma_layer.bias.data.uniform_(-init_w, init_w)
+
         if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
             self._optimizer = optim.SGD(
                 self._model.parameters(),
@@ -447,7 +455,12 @@ class SampledEfficientZeroPolicy(Policy):
             """continuous action space"""
             (mu, sigma) = policy_logits[:, :self._cfg.model.
                                         action_space_size], policy_logits[:, -self._cfg.model.action_space_size:]
-            dist = Independent(Normal(mu, sigma), 1)
+
+            try:
+                dist = Independent(Normal(mu, sigma), 1)
+            except ValueError as e:
+                # Sometimes, random hyperparams can generate NaN
+                pass
 
             # take the init hypothetical step k=0
             target_normalized_visit_count_init_step = target_policy[:, 0]
@@ -471,7 +484,7 @@ class SampledEfficientZeroPolicy(Policy):
             # calculate KL loss
             # batch_size, num_of_sampled_actions -> 4,20
             # target_normalized_visit_count_init_step is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
-            target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step + 1e-9)
+            target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step +1e-6)
             log_prob_sampled_actions = []
             for k in range(self._cfg.model.num_of_sampled_actions):
                 # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
@@ -482,7 +495,7 @@ class SampledEfficientZeroPolicy(Policy):
                 # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
 
                 # way 2: SAC-like
-                y = 1 - target_sampled_actions[:, k, :].pow(2) + 1e-9
+                y = 1 - target_sampled_actions[:, k, :].pow(2) +1e-6
                 target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions[:, k, :])
                 # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
                 log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
@@ -498,7 +511,7 @@ class SampledEfficientZeroPolicy(Policy):
                 prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(
                     log_prob_sampled_actions
                 ).sum(-1).unsqueeze(-1).repeat(1, log_prob_sampled_actions.shape[-1]).detach()
-                # prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-9)
+                # prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-6)
                 log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
 
             if self._cfg.learn.policy_loss_type == 'KL':
@@ -546,7 +559,7 @@ class SampledEfficientZeroPolicy(Policy):
             # calculate KL loss
             # batch_size, num_of_sampled_actions -> 4,20
             # target_normalized_visit_count_init_step is categorical distribution, the range of target_log_prob_sampled_actions is (-inf,0)
-            target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step + 1e-9)
+            target_log_prob_sampled_actions = torch.log(target_normalized_visit_count_init_step +1e-6)
 
             log_prob_sampled_actions = []
             for k in range(self._cfg.model.num_of_sampled_actions):
@@ -570,7 +583,7 @@ class SampledEfficientZeroPolicy(Policy):
                 prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(
                     log_prob_sampled_actions
                 ).sum(-1).unsqueeze(-1).repeat(1, log_prob_sampled_actions.shape[-1]).detach()
-                # prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-9)
+                # prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-6)
                 log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
 
             if self._cfg.learn.policy_loss_type == 'KL':
@@ -684,7 +697,7 @@ class SampledEfficientZeroPolicy(Policy):
                 # project the sampled-based improved policy back onto the space of representable policies
 
                 # batch_size, num_of_sampled_actions -> 4,20
-                target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-9)
+                target_log_prob_sampled_actions = torch.log(target_normalized_visit_count +1e-6)
                 log_prob_sampled_actions = []
                 for k in range(self._cfg.model.num_of_sampled_actions):
                     # target_sampled_actions[:,k,:].shape: (batch_size, action_dim) e.g. (4,2)
@@ -694,7 +707,7 @@ class SampledEfficientZeroPolicy(Policy):
                     # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
 
                     # way 2:
-                    y = 1 - target_sampled_actions[:, k, :].pow(2) + 1e-9
+                    y = 1 - target_sampled_actions[:, k, :].pow(2) +1e-6
                     target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions[:, k, :])
                     # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
                     log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
@@ -712,7 +725,7 @@ class SampledEfficientZeroPolicy(Policy):
                         log_prob_sampled_actions
                     ).sum(-1).unsqueeze(-1).repeat(1, log_prob_sampled_actions.shape[-1]).detach()
                     # prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1,
-                    #                                         eps=1e-9)
+                    #                                         eps=1e-6)
                     log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
 
                 if self._cfg.learn.policy_loss_type == 'KL':
@@ -772,7 +785,7 @@ class SampledEfficientZeroPolicy(Policy):
                 # project the sampled-based improved policy back onto the space of representable policies
                 # shape: (batch_size, num_of_sampled_actions) -> 4,20
                 # target_normalized_visit_count is categorical distribution [0,1], the range of target_log_prob_sampled_actions is (-inf,0)
-                target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-9)
+                target_log_prob_sampled_actions = torch.log(target_normalized_visit_count +1e-6)
                 log_prob_sampled_actions = []
                 for k in range(self._cfg.model.num_of_sampled_actions):
                     # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
@@ -797,7 +810,7 @@ class SampledEfficientZeroPolicy(Policy):
                         log_prob_sampled_actions
                     ).sum(-1).unsqueeze(-1).repeat(1, log_prob_sampled_actions.shape[-1]).detach()
                     # prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1,
-                    #                                         eps=1e-9)
+                    #                                         eps=1e-6)
                     log_prob_sampled_actions = torch.log(prob_sampled_actions_norm)
 
                 if self._cfg.learn.policy_loss_type == 'KL':
@@ -1665,8 +1678,8 @@ class SampledEfficientZeroPolicy(Policy):
         """
         Consistency loss function: similarity loss
         """
-        f1 = F.normalize(f1, p=2., dim=-1, eps=1e-9)
-        f2 = F.normalize(f2, p=2., dim=-1, eps=1e-9)
+        f1 = F.normalize(f1, p=2., dim=-1, eps=1e-6)
+        f2 = F.normalize(f2, p=2., dim=-1, eps=1e-6)
         return -(f1 * f2).sum(dim=1)
 
     @staticmethod

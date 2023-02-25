@@ -133,7 +133,7 @@ class MuZeroGameBuffer(Buffer):
         auto_temperature=False,
         fixed_temperature_value=0.25,
         # the size/capacity of replay_buffer
-        max_total_transitions=int(1e5),
+        replay_buffer_size=int(1e5),
         # ``max_training_steps`` is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 
@@ -170,7 +170,7 @@ class MuZeroGameBuffer(Buffer):
         Reference : DISTRIBUTED PRIORITIZED EXPERIENCE REPLAY
         Algo. 1 and Algo. 2 in Page-3 of (https://arxiv.org/pdf/1803.00933.pdf
         """
-        super().__init__(config.max_total_transitions)
+        super().__init__(config.replay_buffer_size)
         self._cfg = config
         self.batch_size = self._cfg.learn.batch_size
         self.keep_ratio = 1
@@ -185,7 +185,7 @@ class MuZeroGameBuffer(Buffer):
         self._eps_collected = 0
         self.base_idx = 0
         self._alpha = self._cfg.priority_prob_alpha
-        self.transition_top = self._cfg.max_total_transitions
+        self.transition_top = self._cfg.replay_buffer_size
         self.clear_time = 0
 
     def push(self, data: Any, meta: Optional[dict] = None):
@@ -207,7 +207,7 @@ class MuZeroGameBuffer(Buffer):
             - buffered_data (:obj:`BufferedData`): The pushed data.
         """
         # TODO(pu)
-        # if self.get_num_of_transitions() >= self._cfg.max_total_transitions:
+        # if self.get_num_of_transitions() >= self._cfg.replay_buffer_size:
         #     return
 
         if meta['end_tag']:

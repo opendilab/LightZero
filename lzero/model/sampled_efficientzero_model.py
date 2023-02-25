@@ -28,7 +28,7 @@ class DynamicsNetwork(nn.Module):
         flatten_output_size_for_reward_head,
         lstm_hidden_size=64,
         momentum=0.1,
-        last_linear_layer_init_zero=False,
+        last_linear_layer_init_zero=True,
         norm_type='BN',
     ):
         """
@@ -150,7 +150,7 @@ class PredictionNetwork(nn.Module):
         flatten_output_size_for_value_head,
         flatten_output_size_for_policy_head,
         momentum=0.1,
-        last_linear_layer_init_zero=False,
+        last_linear_layer_init_zero=True,
         sigma_type='fixed',
         fixed_sigma_value=0.3,
         bound_type=None,

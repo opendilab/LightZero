@@ -251,8 +251,8 @@ namespace tree
                     //                std::cout << "sampled_action_one_dim:" << sampled_action_one_dim <<std::endl;
                     sampled_action_before_tanh.push_back(sampled_action_one_dim_before_tanh);
                     sampled_action_after_tanh.push_back(tanh(sampled_action_one_dim_before_tanh));
-                    // y = 1 - pow(sampled_actions, 2) + 1e-9;
-                    y.push_back(1 - pow(tanh(sampled_action_one_dim_before_tanh), 2) + 1e-9);
+                    // y = 1 - pow(sampled_actions, 2) + 1e-6;
+                    y.push_back(1 - pow(tanh(sampled_action_one_dim_before_tanh), 2) + 1e-6);
                 }
                 sampled_actions_before_tanh.push_back(sampled_action_before_tanh);
                 sampled_actions_after_tanh.push_back(sampled_action_after_tanh);
@@ -310,7 +310,7 @@ namespace tree
             }
             for (int i = 0; i < policy_logits.size(); ++i)
             {
-                probs.push_back(exp(policy_logits[i]) / (logits_exp_sum + 1e-9));
+                probs.push_back(exp(policy_logits[i]) / (logits_exp_sum + 1e-6));
                 // std::cout << "probs[i]:" << probs[i] << std::endl;
 
             }
@@ -506,7 +506,7 @@ namespace tree
             prior = child->prior;
             if (this->continuous_action_space == true){
                 // prior is log_prob
-                child->prior = log(exp(prior) * (1 - exploration_fraction) + noise * exploration_fraction + 1e-9);
+                child->prior = log(exp(prior) * (1 - exploration_fraction) + noise * exploration_fraction + 1e-6);
             }
             else{
                 // prior is prob
@@ -1024,8 +1024,8 @@ namespace tree
                 {
                     empirical_prob_sum += exp(parent->get_child(parent->legal_actions[i])->prior);
                 }
-                prior_score = pb_c * exp(child->prior) / (empirical_prob_sum + 1e-9);
-                // std::cout << "position prior_score = pb_c * exp(child->prior) / (empirical_prob_sum + 1e-9);" << std::endl;
+                prior_score = pb_c * exp(child->prior) / (empirical_prob_sum + 1e-6);
+                // std::cout << "position prior_score = pb_c * exp(child->prior) / (empirical_prob_sum + 1e-6);" << std::endl;
             }
             else
             {
@@ -1034,7 +1034,7 @@ namespace tree
                 {
                     empirical_prob_sum += parent->get_child(parent->legal_actions[i])->prior;
                 }
-                prior_score = pb_c * child->prior / (empirical_prob_sum + 1e-9);
+                prior_score = pb_c * child->prior / (empirical_prob_sum + 1e-6);
             }
         }
         else if (empirical_distribution_type.compare("uniform"))

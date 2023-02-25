@@ -658,11 +658,11 @@ def compute_ucb_score(
         if continuous_action_space:
             # prior is log_prob
             prior_score = pb_c * (
-                torch.exp(child.prior) / (sum([torch.exp(node.prior) for node in parent.children.values()]) + 1e-9)
+                torch.exp(child.prior) / (sum([torch.exp(node.prior) for node in parent.children.values()]) + 1e-6)
             )
         else:
             # prior is prob
-            prior_score = pb_c * (child.prior / (sum([node.prior for node in parent.children.values()]) + 1e-9))
+            prior_score = pb_c * (child.prior / (sum([node.prior for node in parent.children.values()]) + 1e-6))
             # print('prior_score: ', prior_score)
     else:
         raise ValueError("{} is unknown prior option, choose uniform or density")

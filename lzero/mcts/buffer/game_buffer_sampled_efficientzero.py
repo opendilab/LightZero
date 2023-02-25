@@ -198,7 +198,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         auto_temperature=False,
         fixed_temperature_value=0.25,
         # replay_buffer max size
-        max_total_transitionss=int(1e5),
+        replay_buffer_sizes=int(1e5),
         # max_training_steps is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 
@@ -233,7 +233,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
     )
 
     def __init__(self, cfg: dict):
-        super().__init__(cfg.max_total_transitions)
+        super().__init__(cfg.replay_buffer_size)
         # NOTE: utilize the default config
         default_config = self.default_config()
         default_config.update(cfg)
@@ -252,7 +252,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         self._eps_collected = 0
         self.base_idx = 0
         self._alpha = self._cfg.priority_prob_alpha
-        self.max_total_transitions = self._cfg.max_total_transitions
+        self.replay_buffer_size = self._cfg.replay_buffer_size
         self.clear_time = 0
 
     def push(self, data: Any, meta: Optional[dict] = None):
@@ -389,11 +389,11 @@ class SampledEfficientZeroGameBuffer(Buffer):
         """
         nums_of_game_histoty = self.get_num_of_game_histories()
         total_transition = self.get_num_of_transitions()
-        if total_transition > self.max_total_transitions:
+        if total_transition > self.replay_buffer_size:
             index = 0
             for i in range(nums_of_game_histoty):
                 total_transition -= len(self.buffer[i])
-                if total_transition <= self.max_total_transitions * self.keep_ratio:
+                if total_transition <= self.replay_buffer_size * self.keep_ratio:
                     index = i
                     break
 

@@ -180,7 +180,7 @@ class MuZeroPolicy(Policy):
         auto_temperature=False,
         fixed_temperature_value=0.25,
         # replay_buffer max size
-        max_total_transitions=int(1e5),
+        replay_buffer_size=int(1e5),
         # max_training_steps is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 

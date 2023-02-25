@@ -27,7 +27,7 @@ class DynamicsNetwork(nn.Module):
         flatten_output_size_for_reward_head,
         lstm_hidden_size=64,
         momentum=0.1,
-        last_linear_layer_init_zero=False,
+        last_linear_layer_init_zero=True,
         activation=nn.ReLU(inplace=True),
     ):
         """
@@ -138,7 +138,7 @@ class PredictionNetwork(nn.Module):
         flatten_output_size_for_value_head,
         flatten_output_size_for_policy_head,
         momentum=0.1,
-        last_linear_layer_init_zero=False,
+        last_linear_layer_init_zero=True,
         activation=nn.ReLU(inplace=True),
     ):
         """Prediction network

@@ -57,7 +57,7 @@ config = EasyDict(dict(
     batch_size=10,
     transition_num=20,
     priority_prob_alpha=0.5,
-    max_total_transitions=10000,
+    replay_buffer_size=10000,
 ))
 
 

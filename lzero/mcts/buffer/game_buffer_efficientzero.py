@@ -129,7 +129,7 @@ class EfficientZeroGameBuffer(Buffer):
         auto_temperature=False,
         fixed_temperature_value=0.25,
         # the size/capacity of replay_buffer
-        max_total_transitions=int(1e5),
+        replay_buffer_size=int(1e5),
         # ``max_training_steps`` is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 
@@ -162,7 +162,7 @@ class EfficientZeroGameBuffer(Buffer):
     )
 
     def __init__(self, cfg: dict):
-        super().__init__(cfg.max_total_transitions)
+        super().__init__(cfg.replay_buffer_size)
         # NOTE: utilize the default config
         default_config = self.default_config()
         default_config.update(cfg)
@@ -181,7 +181,7 @@ class EfficientZeroGameBuffer(Buffer):
         self._eps_collected = 0
         self.base_idx = 0
         self._alpha = self._cfg.priority_prob_alpha
-        self.max_total_transition = self._cfg.max_total_transitions
+        self.max_total_transition = self._cfg.replay_buffer_size
         self.clear_time = 0
 
     def push(self, data: Any, meta: Optional[dict] = None):

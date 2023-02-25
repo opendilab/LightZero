@@ -19,14 +19,18 @@ num_simulations = 50
 # For different env, we have different episode_length,
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
 update_per_collect = 1000
+replay_buffer_size = int(1e5)
+reanalyze_ratio = 0.
+
 batch_size = 256
 max_env_step = int(10e6)
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 mspacman_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_ic1_seed0',
+    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_ic1_k{K}_ns{num_simulations}_upc{update_per_collect}_rbs{replay_buffer_size}_rr{reanalyze_ratio}_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -92,7 +96,7 @@ mspacman_sampled_efficientzero_config = dict(
         # command_mode config
         other=dict(
             # NOTE: the replay_buffer_size is ineffective,
-            # we specify it using ``max_total_transitions`` in the following game config
+            # we specify it using ``replay_buffer_size`` in the following game config
             replay_buffer=dict(type='game_buffer_sampled_efficientzero')
         ),
         # ==============================================================
@@ -131,12 +135,12 @@ mspacman_sampled_efficientzero_config = dict(
         fixed_temperature_value=0.25,
         # auto_temperature=True,
         # the size/capacity of replay_buffer
-        max_total_transitions=int(1e5),
+        replay_buffer_size=replay_buffer_size,
         # ``max_training_steps`` is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 
         ## reanalyze
-        reanalyze_ratio=0.,
+        reanalyze_ratio=reanalyze_ratio,
         # for sampled_efficientzero, if reanalyze_ratio>0, we must set ``reanalyze_outdated=True`` to obtain
         # the correct latest ``root_sampled_actions`` corresponding to the reanalyzed ``batch_target_policies_re``.
         reanalyze_outdated=True,
