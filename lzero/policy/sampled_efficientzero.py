@@ -456,11 +456,11 @@ class SampledEfficientZeroPolicy(Policy):
             (mu, sigma) = policy_logits[:, :self._cfg.model.
                                         action_space_size], policy_logits[:, -self._cfg.model.action_space_size:]
 
-            try:
-                dist = Independent(Normal(mu, sigma), 1)
-            except ValueError as e:
-                # Sometimes, random hyperparams can generate NaN
-                pass
+            # try:
+            dist = Independent(Normal(mu, sigma), 1)
+            # except Exception as error:
+            #     # Sometimes, random hyperparams can generate NaN
+            #     print(error)
 
             # take the init hypothetical step k=0
             target_normalized_visit_count_init_step = target_policy[:, 0]
