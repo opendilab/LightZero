@@ -196,9 +196,10 @@ class SampledEfficientZeroPolicy(Policy):
         policy_loss_weight=1,
         policy_entropy_loss_weight=0,
         ssl_loss_weight=2,
-        # fixed_temperature_value is effective only when auto_temperature=False
-        auto_temperature=False,
-        fixed_temperature_value=0.25,
+        # ``fixed_temperature_value`` is effective only when auto_temperature=False
+        auto_temperature=True,
+        # auto_temperature=False,
+        # fixed_temperature_value=0.25,
         # replay_buffer max size
         replay_buffer_size=int(1e5),
         # max_training_steps is only used for adjusting temperature manually.
@@ -246,12 +247,13 @@ class SampledEfficientZeroPolicy(Policy):
         return 'SampledEfficientZeroModel', ['lzero.model.sampled_efficientzero_model']
 
     def _init_learn(self) -> None:
-        # Weight Init for the last output layer of policy in prediction network.
-        init_w = self._cfg.learn.init_w
-        self._model.prediction_network.sampled_fc_policy.mu.weight.data.uniform_(-init_w, init_w)
-        self._model.prediction_network.sampled_fc_policy.mu.bias.data.uniform_(-init_w, init_w)
-        self._model.prediction_network.sampled_fc_policy.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
-        self._model.prediction_network.sampled_fc_policy.log_sigma_layer.bias.data.uniform_(-init_w, init_w)
+        if self._cfg.model.continuous_action_space:
+            # Weight Init for the last output layer of gaussian policy in prediction network.
+            init_w = self._cfg.learn.init_w
+            self._model.prediction_network.sampled_fc_policy.mu.weight.data.uniform_(-init_w, init_w)
+            self._model.prediction_network.sampled_fc_policy.mu.bias.data.uniform_(-init_w, init_w)
+            self._model.prediction_network.sampled_fc_policy.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
+            self._model.prediction_network.sampled_fc_policy.log_sigma_layer.bias.data.uniform_(-init_w, init_w)
 
         if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
             self._optimizer = optim.SGD(

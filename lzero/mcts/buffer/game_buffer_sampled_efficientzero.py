@@ -195,8 +195,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         ssl_loss_weight=2,
         policy_entropy_loss_weight=5e-3,
         # fixed_temperature_value is effective only when auto_temperature=False
-        auto_temperature=False,
-        fixed_temperature_value=0.25,
+
         # replay_buffer max size
         replay_buffer_sizes=int(1e5),
         # max_training_steps is only used for adjusting temperature manually.

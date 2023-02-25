@@ -133,9 +133,6 @@ pendulum_disc_efficientzero_config = dict(
         policy_loss_weight=1,
         # NOTE: for vector input, we don't use the ssl loss.
         ssl_loss_weight=0,
-        # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
-        auto_temperature=False,
-        fixed_temperature_value=0.25,
         # the size/capacity of replay_buffer
         replay_buffer_size=int(1e5),
         # ``max_training_steps`` is only used for adjusting temperature manually.

@@ -137,10 +137,6 @@ qbert_sampled_efficientzero_config = dict(
         policy_loss_weight=1,
         policy_entropy_loss_coeff=0,
         ssl_loss_weight=2,
-        # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
-        auto_temperature=False,
-        fixed_temperature_value=0.25,
-        # auto_temperature=True,
         # the size/capacity of replay_buffer
         replay_buffer_size=int(1e5),
         # ``max_training_steps`` is only used for adjusting temperature manually.

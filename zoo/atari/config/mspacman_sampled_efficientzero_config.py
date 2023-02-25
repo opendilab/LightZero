@@ -19,7 +19,7 @@ num_simulations = 50
 # For different env, we have different episode_length,
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
 update_per_collect = 1000
-replay_buffer_size = int(1e5)
+replay_buffer_size = int(1e6)
 reanalyze_ratio = 0.
 
 batch_size = 256
@@ -30,7 +30,7 @@ max_env_step = int(10e6)
 # ==============================================================
 
 mspacman_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_ic1_k{K}_ns{num_simulations}_upc{update_per_collect}_rbs{replay_buffer_size}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez_ctree/mspacman_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rbs{replay_buffer_size}_rr{reanalyze_ratio}_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -130,10 +130,6 @@ mspacman_sampled_efficientzero_config = dict(
         policy_loss_weight=1,
         policy_entropy_loss_coeff=0,
         ssl_loss_weight=2,
-        # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
-        auto_temperature=False,
-        fixed_temperature_value=0.25,
-        # auto_temperature=True,
         # the size/capacity of replay_buffer
         replay_buffer_size=replay_buffer_size,
         # ``max_training_steps`` is only used for adjusting temperature manually.
