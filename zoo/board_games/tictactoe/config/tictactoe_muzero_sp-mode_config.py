@@ -127,7 +127,7 @@ tictactoe_muzero_config = dict(
         use_augmentation=False,
 
         ## reward
-        clip_reward=True,
+        clip_rewards=True,
 
         ## learn
         num_simulations=num_simulations,

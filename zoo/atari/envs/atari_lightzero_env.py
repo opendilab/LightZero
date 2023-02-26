@@ -31,7 +31,9 @@ class AtariLightZeroEnv(BaseEnv):
         max_episode_steps=int(1.08e5),
         frame_skip=4,
         episode_life=True,
-        gray_scale=False,
+        clip_rewards=True,
+        scale=True,
+        gray_scale=True,
         # trade memory for speed
         cvt_string=False,
         game_wrapper=True,

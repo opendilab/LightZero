@@ -73,12 +73,7 @@ def wrap_deepmind_mr(env_id, episode_life=True, clip_rewards=True, frame_stack=4
     return env
 
 
-"""
-The following code is adapted from https://github.com/YeWR/EfficientZero
-"""
-
-
-def wrap_lightzero(config, warp_frame=True, save_video=False, save_path=None, video_callable=None, uid=None):
+def wrap_lightzero(config, warp_frame=True, clip_rewards=True, scale=True, save_video=False, save_path=None, uid=None):
     """
     Overview:
         Configure environment for MuZero-style Atari. The observation is
@@ -103,6 +98,10 @@ def wrap_lightzero(config, warp_frame=True, save_video=False, save_path=None, vi
     env = TimeLimit(env, max_episode_steps=config.max_episode_steps)
     if warp_frame:
         env = WarpFrame(env, width=config.obs_shape[1], height=config.obs_shape[2], grayscale=config.gray_scale)
+    if scale:
+        env = ScaledFloatFrameWrapper(env)
+    if clip_rewards:
+        env = ClipRewardWrapper(env)
     if save_video:
         env = RecordVideo(
             env, video_folder=save_path, episode_trigger=lambda episode_id: True, name_prefix='rl-video-{}'.format(uid)

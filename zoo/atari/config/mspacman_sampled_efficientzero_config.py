@@ -40,6 +40,8 @@ mspacman_sampled_efficientzero_config = dict(
         gray_scale=True,
         frame_stack_num=4,
         obs_shape=(4, 96, 96),
+        clip_rewards=True,
+        scale=True,
         manager=dict(shared_memory=False, ),
         stop_value=int(1e6),
     ),
@@ -115,9 +117,6 @@ mspacman_sampled_efficientzero_config = dict(
         # the key difference setting between image-input and vector input
         image_based=True,
         use_augmentation=True,
-
-        ## reward
-        clip_reward=True,
 
         ## learn
         num_simulations=num_simulations,

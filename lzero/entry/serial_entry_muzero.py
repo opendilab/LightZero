@@ -151,7 +151,10 @@ def serial_pipeline_muzero(
                 break
 
             # the core train steps for MuZero.
-            learner.train(train_data, collector.envstep)
+            log_vars = learner.train(train_data, collector.envstep)
+
+            if cfg.policy.use_priority:
+                replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
             train_steps = learner.train_iter * cfg.policy.learn.update_per_collect
             if game_config.learn.lr_manually:

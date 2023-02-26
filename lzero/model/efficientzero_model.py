@@ -4,7 +4,6 @@ The following code is adapted from https://github.com/YeWR/EfficientZero/blob/ma
 import math
 from typing import Optional
 
-import numpy as np
 import torch
 import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
@@ -14,7 +13,6 @@ from .common import EZNetworkOutput, RepresentationNetwork
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
-# Predict next hidden states given current states and actions
 class DynamicsNetwork(nn.Module):
 
     def __init__(
@@ -32,7 +30,7 @@ class DynamicsNetwork(nn.Module):
     ):
         """
         Overview:
-            Dynamics network
+            Dynamics network. Predict next hidden states given current states and actions
         Arguments:
             - num_res_blocks (:obj:int): number of res blocks
             - num_channels (:obj:int): channels of hidden states
@@ -69,7 +67,6 @@ class DynamicsNetwork(nn.Module):
         self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
         self.lstm = nn.LSTM(input_size=self.flatten_output_size_for_reward_head, hidden_size=self.lstm_hidden_size)
         self.bn_value_prefix = nn.BatchNorm1d(self.lstm_hidden_size, momentum=momentum)
-        # TODO(pu)
         self.fc = MLP(
             in_channels=self.lstm_hidden_size,
             hidden_channels=fc_reward_layers[0],
@@ -121,7 +118,6 @@ class DynamicsNetwork(nn.Module):
         return get_reward_mean(self)
 
 
-# predict the value and policy given hidden states
 class PredictionNetwork(nn.Module):
 
     def __init__(
@@ -141,33 +137,22 @@ class PredictionNetwork(nn.Module):
         last_linear_layer_init_zero=True,
         activation=nn.ReLU(inplace=True),
     ):
-        """Prediction network
-        Parameters
-        ----------
-        action_space_size: int
-            action space
-        num_res_blocks: int
-            number of res blocks
-        in_channels: int
-            channels of input, if None, then in_channels = num_channels
-        num_channels: int
-            channels of hidden states
-        value_head_channels: int
-            channels of value head
-        policy_head_channels: int
-            channels of policy head
-        fc_value_layers: list
-            hidden layers of the value prediction head (MLP head)
-        fc_policy_layers: list
-            hidden layers of the policy prediction head (MLP head)
-        output_support_size: int
-            dim of value output
-        flatten_output_size_for_value_head: int
-            dim of flatten hidden states
-        flatten_output_size_for_policy_head: int
-            dim of flatten hidden states
-        last_linear_layer_init_zero: bool
-            True -> zero initialization for the last layer of value/policy mlp
+        """
+        Overview:
+            Prediction network. predict the value and policy given hidden states
+        Arguments:
+            - action_space_size: int. action space
+            - num_res_blocks: int. number of res blocks
+            - in_channels: int. channels of input, if None, then in_channels = num_channels
+            - num_channels: int. channels of hidden states
+            - value_head_channels: int. channels of value head
+            - policy_head_channels: int. channels of policy head
+            - fc_value_layers: list. hidden layers of the value prediction head (MLP head)
+            - fc_policy_layers: list. hidden layers of the policy prediction head (MLP head)
+            - output_support_size: int. dim of value output
+            - flatten_output_size_for_value_head: int. dim of flatten hidden states
+            - flatten_output_size_for_policy_head: int. dim of flatten hidden states
+            - last_linear_layer_init_zero: bool. True -> zero initialization for the last layer of value/policy mlp
         """
         super().__init__()
         self.in_channels = in_channels
@@ -297,6 +282,8 @@ class EfficientZeroModel(nn.Module):
             - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         """
         super(EfficientZeroModel, self).__init__()
+        self.representation_model_type = representation_model_type
+        assert self.representation_model_type in ['identity', 'conv_res_blocks']
         self.lstm_hidden_size = lstm_hidden_size
         self.categorical_distribution = categorical_distribution
         if not self.categorical_distribution:
@@ -312,7 +299,6 @@ class EfficientZeroModel(nn.Module):
         self.pred_out = pred_out
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
-        self.representation_model_type = representation_model_type
         self.representation_model = representation_model
         self.downsample = downsample
 

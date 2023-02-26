@@ -121,33 +121,22 @@ class PredictionNetwork(nn.Module):
         momentum: float = 0.1,
         last_linear_layer_init_zero: bool = True,
     ):
-        """Prediction network
-        Parameters
-        ----------
-        action_space_size: int
-            action space
-        num_res_blocks: int
-            number of res blocks
-        in_channels: int
-            channels of input
-        num_channels: int
-            channels of hidden states
-        value_head_channels: int
-            channels of value head
-        policy_head_channels: int
-            channels of policy head
-        fc_value_layers: list
-            hidden layers of the value prediction head (MLP head)
-        fc_policy_layers: list
-            hidden layers of the policy prediction head (MLP head)
-        output_support_size: int
-            dim of value output
-        flatten_output_size_for_value_head: int
-            dim of flatten hidden states
-        flatten_output_size_for_policy_head: int
-            dim of flatten hidden states
-        last_linear_layer_init_zero: bool
-            True -> zero initialization for the last layer of value/policy mlp
+        """
+        Overview:
+            Prediction network.
+        Arguments:
+            - action_space_size: int. action space
+            - num_res_blocks: int. number of res blocks
+            - in_channels: int. channels of input, if None, then in_channels = num_channels
+            - num_channels: int. channels of hidden states
+            - value_head_channels: int. channels of value head
+            - policy_head_channels: int. channels of policy head
+            - fc_value_layers: list. hidden layers of the value prediction head (MLP head)
+            - fc_policy_layers: list. hidden layers of the policy prediction head (MLP head)
+            - output_support_size: int. dim of value output
+            - flatten_output_size_for_value_head: int. dim of flatten hidden states
+            - flatten_output_size_for_policy_head: int. dim of flatten hidden states
+            - last_linear_layer_init_zero: bool. True -> zero initialization for the last layer of value/policy mlp
         """
         super().__init__()
         self.in_channels = in_channels
@@ -172,7 +161,6 @@ class PredictionNetwork(nn.Module):
         self.bn_policy = nn.BatchNorm2d(policy_head_channels, momentum=momentum)
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
-        # TODO(pu)
         self.fc_value = MLP(
             in_channels=self.flatten_output_size_for_value_head,
             hidden_channels=fc_value_layers[0],
@@ -281,6 +269,8 @@ class MuZeroModel(nn.Module):
             - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/reward
         """
         super(MuZeroModel, self).__init__()
+        self.representation_model_type = representation_model_type
+        assert self.representation_model_type in ['identity', 'conv_res_blocks']
         self.categorical_distribution = categorical_distribution
         self.self_supervised_learning_loss = self_supervised_learning_loss
         if not self.categorical_distribution:
@@ -296,7 +286,6 @@ class MuZeroModel(nn.Module):
         self.pred_out = pred_out
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
-        self.representation_model_type = representation_model_type
         self.representation_model = representation_model
         self.downsample = downsample
 

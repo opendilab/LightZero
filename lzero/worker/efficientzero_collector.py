@@ -355,9 +355,7 @@ class EfficientZeroCollector(ISerialCollector):
         pred_values_lst = [[] for _ in range(env_nums)]
 
         # some logs
-        eps_ori_reward_lst, eps_reward_lst, eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros(
-            env_nums
-        ), np.zeros(env_nums), np.zeros(env_nums)
+        eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros(env_nums)
 
         self_play_rewards = 0.
         self_play_ori_rewards = 0.
@@ -407,10 +405,7 @@ class EfficientZeroCollector(ISerialCollector):
                 stack_obs = to_ndarray(stack_obs)
                 stack_obs = prepare_observation_list(stack_obs)
 
-                if self.game_config.image_based:
-                    stack_obs = torch.from_numpy(stack_obs).to(self.game_config.device).float() / 255.0
-                else:
-                    stack_obs = torch.from_numpy(np.array(stack_obs)).to(self.game_config.device)
+                stack_obs = torch.from_numpy(stack_obs).to(self.game_config.device).float()
 
                 if two_player_game:
                     policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play)
@@ -458,26 +453,19 @@ class EfficientZeroCollector(ISerialCollector):
                         self._logger.info('Env{} returns a abnormal step, its info is {}'.format(env_id, timestep.info))
                         continue
                     i = env_id
-                    obs, ori_reward, done, info = timestep.obs, timestep.reward, timestep.done, timestep.info
+                    obs, reward, done, info = timestep.obs, timestep.reward, timestep.done, timestep.info
 
-                    if self.game_config.clip_reward:
-                        clip_reward = np.sign(ori_reward)
-                    elif self.game_config.normalize_reward:
-                        # TODO(pu)
-                        clip_reward = ori_reward / self.game_config.normalize_reward_scale
-                    else:
-                        clip_reward = ori_reward
                     game_blocks[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
                     if two_player_game:
                         # for two_player board games
                         # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
                         # in ``game_blocks[env_id].init``, we have append o_{t} in ``self.obs_history``
                         game_blocks[env_id].append(
-                            actions[env_id], to_ndarray(obs['observation']), clip_reward, action_mask_dict[env_id],
+                            actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
                             to_play_dict[env_id]
                         )
                     else:
-                        game_blocks[env_id].append(actions[env_id], to_ndarray(obs['observation']), clip_reward)
+                        game_blocks[env_id].append(actions[env_id], to_ndarray(obs['observation']), reward)
 
                     # NOTE: the position of code snippet is very important.
                     # the obs['action_mask'] and obs['to_play'] is corresponding to next action
@@ -485,8 +473,6 @@ class EfficientZeroCollector(ISerialCollector):
                         action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                         to_play_dict[env_id] = to_ndarray(obs['to_play'])
 
-                    eps_reward_lst[env_id] += clip_reward
-                    eps_ori_reward_lst[env_id] += ori_reward
                     dones[env_id] = done
                     visit_entropies_lst[env_id] += visit_entropy_dict[env_id]
 
@@ -601,10 +587,7 @@ class EfficientZeroCollector(ISerialCollector):
                         last_game_priorities[env_id] = None
 
                     # log
-                    self_play_rewards_max = max(self_play_rewards_max, eps_reward_lst[env_id])
                     self_play_moves_max = max(self_play_moves_max, eps_steps_lst[env_id])
-                    self_play_rewards += eps_reward_lst[env_id]
-                    self_play_ori_rewards += eps_ori_reward_lst[env_id]
                     self_play_visit_entropy.append(visit_entropies_lst[env_id] / eps_steps_lst[env_id])
                     self_play_moves += eps_steps_lst[env_id]
                     self_play_episodes += 1
@@ -612,8 +595,6 @@ class EfficientZeroCollector(ISerialCollector):
                     pred_values_lst[env_id] = []
                     search_values_lst[env_id] = []
                     eps_steps_lst[env_id] = 0
-                    eps_reward_lst[env_id] = 0
-                    eps_ori_reward_lst[env_id] = 0
                     visit_entropies_lst[env_id] = 0
 
                     # Env reset is done by env_manager automatically

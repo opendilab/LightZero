@@ -21,9 +21,9 @@ else:
 # max_env_step = int(1e6)
 
 ## debug config
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
 num_simulations = 5
 update_per_collect = 2
 batch_size = 4
@@ -43,6 +43,8 @@ pong_efficientzero_config = dict(
         frame_stack_num=4,
         gray_scale=True,
         obs_shape=(4, 96, 96),
+        clip_rewards=True,
+        scale=True,
         manager=dict(shared_memory=False, ),
         stop_value=int(1e6),
     ),
@@ -115,9 +117,6 @@ pong_efficientzero_config = dict(
         # the key difference setting between image-input and vector input
         image_based=True,
         use_augmentation=True,
-
-        ## reward
-        clip_reward=True,
 
         ## learn
         num_simulations=num_simulations,

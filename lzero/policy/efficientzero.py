@@ -38,10 +38,6 @@ class EfficientZeroPolicy(Policy):
         cuda=False,
         # (bool) Whether learning policy is the same as collecting data policy(on-policy)
         on_policy=False,
-        # (bool) Whether enable priority experience sample
-        priority=False,
-        # (bool) Whether use Importance Sampling Weight to correct biased update. If True, priority must be True.
-        priority_IS_weight=False,
         # (float) Discount factor(gamma) for returns
         discount_factor=0.97,
         # (int) The number of step for calculating target q_value
@@ -158,11 +154,6 @@ class EfficientZeroPolicy(Policy):
         # style of augmentation
         augmentation=['shift', 'intensity'],  # options=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
 
-        ## reward
-        clip_reward=False,
-        normalize_reward=False,
-        normalize_reward_scale=100,
-
         ## learn
         num_simulations=50,
         td_steps=5,
@@ -268,9 +259,7 @@ class EfficientZeroPolicy(Policy):
         self._learn_model.train()
         self._target_model.train()
 
-        # TODO(pu): priority
-        inputs_batch, targets_batch, replay_buffer = data
-
+        inputs_batch, targets_batch = data
         obs_batch_ori, action_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
         target_value_prefix, target_value, target_policy = targets_batch
 
@@ -321,7 +310,6 @@ class EfficientZeroPolicy(Policy):
         target_policy = torch.from_numpy(target_policy).to(self._cfg.device).float()
         weights = torch.from_numpy(weights_lst).to(self._cfg.device).float()
 
-        # TODO
         target_value_prefix = target_value_prefix.view(self._cfg.learn.batch_size, -1)
         target_value = target_value.view(self._cfg.learn.batch_size, -1)
 
@@ -333,7 +321,7 @@ class EfficientZeroPolicy(Policy):
         other_log = {}
         other_dist = {}
 
-        other_loss = {
+        extra_statistics = {
             'l1': -1,
             'l1_1': -1,
             'l1_-1': -1,
@@ -341,10 +329,10 @@ class EfficientZeroPolicy(Policy):
         }
         for i in range(self._cfg.num_unroll_steps):
             key = 'unroll_' + str(i + 1) + '_l1'
-            other_loss[key] = -1
-            other_loss[key + '_1'] = -1
-            other_loss[key + '_-1'] = -1
-            other_loss[key + '_0'] = -1
+            extra_statistics[key] = -1
+            extra_statistics[key + '_1'] = -1
+            extra_statistics[key + '_-1'] = -1
+            extra_statistics[key + '_0'] = -1
 
         # scalar transform to transformed Q scale, h(.) function
         transformed_target_value_prefix = scalar_transform(target_value_prefix)
@@ -423,7 +411,7 @@ class EfficientZeroPolicy(Policy):
         consistency_loss = torch.zeros(batch_size, device=self._cfg.device)
 
         target_value_prefix_cpu = target_value_prefix.detach().cpu()
-        gradient_scale = 1 / self._cfg.num_unroll_steps
+
 
         # loss of the unrolled steps
         for step_i in range(self._cfg.num_unroll_steps):
@@ -471,7 +459,7 @@ class EfficientZeroPolicy(Policy):
                 observation_proj = self._learn_model.project(presentation_state, with_grad=False)
                 temp_loss = self._consist_loss_func(dynamic_proj, observation_proj) * mask_batch[:, step_i]
 
-                other_loss['consist_' + str(step_i + 1)] = temp_loss.mean().item()
+                extra_statistics['consist_' + str(step_i + 1)] = temp_loss.mean().item()
                 consistency_loss += temp_loss
 
             prob = torch.softmax(policy_logits, dim=-1)
@@ -539,60 +527,52 @@ class EfficientZeroPolicy(Policy):
 
                 target_value_prefix_base = target_value_prefix_cpu[:, step_i].reshape(-1).unsqueeze(-1)
 
-                other_loss[key] = l1_loss(original_value_prefixs_cpu, target_value_prefix_base)
+                extra_statistics[key] = l1_loss(original_value_prefixs_cpu, target_value_prefix_base)
                 if value_prefix_indices_1.any():
-                    other_loss[key + '_1'] = l1_loss(
+                    extra_statistics[key + '_1'] = l1_loss(
                         original_value_prefixs_cpu[value_prefix_indices_1],
                         target_value_prefix_base[value_prefix_indices_1]
                     )
                 if value_prefix_indices_n1.any():
-                    other_loss[key + '_-1'] = l1_loss(
+                    extra_statistics[key + '_-1'] = l1_loss(
                         original_value_prefixs_cpu[value_prefix_indices_n1],
                         target_value_prefix_base[value_prefix_indices_n1]
                     )
                 if value_prefix_indices_0.any():
-                    other_loss[key + '_0'] = l1_loss(
+                    extra_statistics[key + '_0'] = l1_loss(
                         original_value_prefixs_cpu[value_prefix_indices_0],
                         target_value_prefix_base[value_prefix_indices_0]
                     )
-        # ----------------------------------------------------------------------------------
+
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
             self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
             self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss
         )
-        weighted_loss = (weights * loss).mean()
+        weighted_total_loss = (weights * loss).mean()
 
         # backward
         parameters = self._learn_model.parameters()
 
-        total_loss = weighted_loss
-
         # TODO(pu): test the effect
-        total_loss.register_hook(lambda grad: grad * gradient_scale)
+        gradient_scale = 1 / self._cfg.num_unroll_steps
+        weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
 
         self._optimizer.zero_grad()
-        total_loss.backward()
+        weighted_total_loss.backward()
         torch.nn.utils.clip_grad_norm_(parameters, self._cfg.learn.grad_clip_value)
         self._optimizer.step()
 
-        # =============
+        # ==============================================================
         # target model update
-        # =============
+        # ==============================================================
         self._target_model.update(self._learn_model.state_dict())
 
-        # ----------------------------------------------------------------------------------
-        # update priority
-        # priority_info = {'indices':indices, 'make_time':make_time, 'batch_priorities':value_priority}
-        replay_buffer.batch_update(indices=indices, metas={'make_time': make_time, 'batch_priorities': value_priority})
-
-        # packing data for logging
         loss_data = (
-            total_loss.item(), weighted_loss.item(), loss.mean().item(), 0, policy_loss.mean().item(),
+            weighted_total_loss.item(), loss.mean().item(), policy_loss.mean().item(),
             value_prefix_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
         )
         if self._cfg.monitor_statistics:
-
             # reward l1 loss
             value_prefix_indices_0 = (
                 target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 0
@@ -608,17 +588,17 @@ class EfficientZeroPolicy(Policy):
 
             predicted_value_prefixs = torch.stack(predicted_value_prefixs).transpose(1, 0).squeeze(-1)
             predicted_value_prefixs = predicted_value_prefixs.reshape(-1).unsqueeze(-1)
-            other_loss['l1'] = l1_loss(predicted_value_prefixs, target_value_prefix_base)
+            extra_statistics['l1'] = l1_loss(predicted_value_prefixs, target_value_prefix_base)
             if value_prefix_indices_1.any():
-                other_loss['l1_1'] = l1_loss(
+                extra_statistics['l1_1'] = l1_loss(
                     predicted_value_prefixs[value_prefix_indices_1], target_value_prefix_base[value_prefix_indices_1]
                 )
             if value_prefix_indices_n1.any():
-                other_loss['l1_-1'] = l1_loss(
+                extra_statistics['l1_-1'] = l1_loss(
                     predicted_value_prefixs[value_prefix_indices_n1], target_value_prefix_base[value_prefix_indices_n1]
                 )
             if value_prefix_indices_0.any():
-                other_loss['l1_0'] = l1_loss(
+                extra_statistics['l1_0'] = l1_loss(
                     predicted_value_prefixs[value_prefix_indices_0], target_value_prefix_base[value_prefix_indices_0]
                 )
 
@@ -629,7 +609,7 @@ class EfficientZeroPolicy(Policy):
                     transformed_target_value.detach().cpu().numpy(), target_value_prefix_phi.detach().cpu().numpy(),
                     target_value_phi.detach().cpu().numpy(), predicted_value_prefixs.detach().cpu().numpy(),
                     predicted_values.detach().cpu().numpy(), target_policy.detach().cpu().numpy(),
-                    predicted_policies.detach().cpu().numpy(), state_lst, other_loss, other_log, other_dist
+                    predicted_policies.detach().cpu().numpy(), state_lst, extra_statistics, other_log, other_dist
                 )
             else:
                 td_data = (
@@ -637,29 +617,25 @@ class EfficientZeroPolicy(Policy):
                     transformed_target_value_prefix.detach().cpu().numpy(),
                     transformed_target_value.detach().cpu().numpy(), predicted_value_prefixs.detach().cpu().numpy(),
                     predicted_values.detach().cpu().numpy(), target_policy.detach().cpu().numpy(),
-                    predicted_policies.detach().cpu().numpy(), state_lst, other_loss, other_log, other_dist
+                    predicted_policies.detach().cpu().numpy(), state_lst, extra_statistics, other_log, other_dist
                 )
-            priority_data = (weights, indices)
-        else:
-            td_data, priority_data = None, None
 
         if self._cfg.model.categorical_distribution:
-            # loss_data = (
-            #     total_loss.item(), weighted_loss.item(), loss.mean().item(), 0, policy_loss.mean().item(),
-            #     value_prefix_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
-            # )
             return {
-                # 'priority':priority_info,
-                'total_loss': loss_data[0],
-                'weighted_loss': loss_data[1],
-                'loss_mean': loss_data[2],
-                'policy_loss': loss_data[4],
+                'weighted_total_loss': loss_data[0],
+                'total_loss': loss_data[1],
+                'policy_loss': loss_data[2],
                 'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
                 'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'value_prefix_loss': loss_data[5],
-                'value_loss': loss_data[6],
-                'consistency_loss': loss_data[7] / self._cfg.num_unroll_steps,
+                'value_prefix_loss': loss_data[3],
+                'value_loss': loss_data[4],
+                'consistency_loss': loss_data[5] / self._cfg.num_unroll_steps,
+
                 'value_priority': td_data[0].flatten().mean().item(),
+                # ==============================================================
+                # priority related
+                'value_priority_orig': value_priority,
+                # ==============================================================
                 'target_value_prefix': td_data[1].flatten().mean().item(),
                 'target_value': td_data[2].flatten().mean().item(),
                 'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
@@ -668,23 +644,23 @@ class EfficientZeroPolicy(Policy):
                 'predicted_values': td_data[8].flatten().mean().item(),
                 # 'target_policy':td_data[9],
                 # 'predicted_policies':td_data[10]
-                # 'td_data': td_data,
-                # 'priority_data_weights': priority_data[0],
-                # 'priority_data_indices': priority_data[1]
             }
         else:
             return {
-                # 'priority':priority_info,
-                'total_loss': loss_data[0],
-                'weighted_loss': loss_data[1],
-                'loss_mean': loss_data[2],
-                'policy_loss': loss_data[4],
+                'weighted_total_loss': loss_data[0],
+                'total_loss': loss_data[1],
+                'policy_loss': loss_data[2],
                 'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
                 'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'value_prefix_loss': loss_data[5],
-                'value_loss': loss_data[6],
-                'consistency_loss': loss_data[7] / self._cfg.num_unroll_steps,
+                'value_prefix_loss': loss_data[3],
+                'value_loss': loss_data[4],
+                'consistency_loss': loss_data[5] / self._cfg.num_unroll_steps,
+
                 'value_priority': td_data[0].flatten().mean().item(),
+                # ==============================================================
+                # priority related
+                'value_priority_orig': value_priority,
+                # ==============================================================
                 'target_value_prefix': td_data[1].flatten().mean().item(),
                 'target_value': td_data[2].flatten().mean().item(),
                 'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
@@ -693,15 +669,11 @@ class EfficientZeroPolicy(Policy):
                 'predicted_values': td_data[6].flatten().mean().item(),
                 # 'target_policy':td_data[9],
                 # 'predicted_policies':td_data[10]
-                # 'td_data': td_data,
-                # 'priority_data_weights': priority_data[0],
-                # 'priority_data_indices': priority_data[1]
             }
 
     def _init_collect(self) -> None:
         self._unroll_len = self._cfg.collect.unroll_len
-        # self._collect_model = model_wrap(self._model, 'base')
-        self._collect_model = self._learn_model
+        self._collect_model = model_wrap(self._model, 'base')
         self._collect_model.reset()
         if self._cfg.mcts_ctree:
             self._mcts_collect = MCTS_ctree(self._cfg)
@@ -828,8 +800,6 @@ class EfficientZeroPolicy(Policy):
         Overview:
             Evaluate mode init method. Called by ``self.__init__``, initialize eval_model.
         """
-        # self._eval_model = self._learn_model
-        # TODO(pu)
         self._eval_model = model_wrap(self._model, wrapper_name='base')
 
         self._eval_model.reset()
@@ -927,16 +897,14 @@ class EfficientZeroPolicy(Policy):
 
     def _monitor_vars_learn(self) -> List[str]:
         return [
+            'weighted_total_loss',
             'total_loss',
-            'weighted_loss',
-            'loss_mean',
             'policy_loss',
             'policy_entropy',
             'target_policy_entropy',
             'value_prefix_loss',
             'value_loss',
             'consistency_loss',
-            #
             'value_priority',
             'target_value_prefix',
             'target_value',
@@ -947,9 +915,6 @@ class EfficientZeroPolicy(Policy):
             # 'visit_count_distribution_entropy',
             # 'target_policy',
             # 'predicted_policies'
-            # 'td_data',
-            # 'priority_data_weights',
-            # 'priority_data_indices'
         ]
 
     def _state_dict_learn(self) -> Dict[str, Any]:

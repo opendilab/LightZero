@@ -132,7 +132,6 @@ class DynamicsNetwork(nn.Module):
         return get_reward_mean(self)
 
 
-# predict the value and policy given hidden states
 class PredictionNetwork(nn.Module):
 
     def __init__(
@@ -156,33 +155,22 @@ class PredictionNetwork(nn.Module):
         bound_type=None,
         norm_type='BN',
     ):
-        """Prediction network
-        Parameters
-        ----------
-        action_space_size: int
-            action space
-        num_res_blocks: int
-            number of res blocks
-        in_channels: int
-            channels of input
-        num_channels: int
-            channels of hidden states
-        value_head_channels: int
-            channels of value head
-        policy_head_channels: int
-            channels of policy head
-        fc_value_layers: list
-            hidden layers of the value prediction head (MLP head)
-        fc_policy_layers: list
-            hidden layers of the policy prediction head (MLP head)
-        output_support_size: int
-            dim of value output
-        flatten_output_size_for_value_head: int
-            dim of flatten hidden states
-        flatten_output_size_for_policy_head: int
-            dim of flatten hidden states
-        last_linear_layer_init_zero: bool
-            True -> zero initialization for the last layer of value/policy mlp
+        """
+        Overview:
+            Prediction network. predict the value and policy given hidden states
+        Arguments:
+            - action_space_size: int. action space
+            - num_res_blocks: int. number of res blocks
+            - in_channels: int. channels of input, if None, then in_channels = num_channels
+            - num_channels: int. channels of hidden states
+            - value_head_channels: int. channels of value head
+            - policy_head_channels: int. channels of policy head
+            - fc_value_layers: list. hidden layers of the value prediction head (MLP head)
+            - fc_policy_layers: list. hidden layers of the policy prediction head (MLP head)
+            - output_support_size: int. dim of value output
+            - flatten_output_size_for_value_head: int. dim of flatten hidden states
+            - flatten_output_size_for_policy_head: int. dim of flatten hidden states
+            - last_linear_layer_init_zero: bool. True -> zero initialization for the last layer of value/policy mlp
         """
         super().__init__()
         self.in_channels = in_channels
@@ -366,6 +354,8 @@ class SampledEfficientZeroModel(nn.Module):
             - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/value_prefix
         """
         super(SampledEfficientZeroModel, self).__init__()
+        self.representation_model_type = representation_model_type
+        assert self.representation_model_type in ['identity', 'conv_res_blocks']
         self.sigma_type = sigma_type
         self.fixed_sigma_value = fixed_sigma_value
         self.bound_type = bound_type
@@ -389,7 +379,6 @@ class SampledEfficientZeroModel(nn.Module):
         self.pred_out = pred_out
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
-        self.representation_model_type = representation_model_type
         self.representation_model = representation_model
         self.downsample = downsample
         self.lstm_hidden_size = lstm_hidden_size

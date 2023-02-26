@@ -269,10 +269,7 @@ class EfficientZeroEvaluator(ISerialEvaluator):
                 stack_obs = to_ndarray(stack_obs)
                 stack_obs = prepare_observation_list(stack_obs)
 
-                if self.game_config.image_based:
-                    stack_obs = torch.from_numpy(stack_obs).to(self.game_config.device).float() / 255.0
-                else:
-                    stack_obs = torch.from_numpy(np.array(stack_obs)).to(self.game_config.device)
+                stack_obs = torch.from_numpy(stack_obs).to(self.game_config.device).float()
 
                 if two_player_game:
                     policy_output = self._policy.forward(stack_obs, action_mask, to_play)

@@ -43,8 +43,6 @@ class SampledEfficientZeroGameBuffer(Buffer):
         cuda=False,
         # (bool) Whether learning policy is the same as collecting data policy(on-policy)
         on_policy=False,
-        # (bool) Whether enable priority experience sample
-        priority=False,
         # (bool) Whether use Importance Sampling Weight to correct biased update. If True, priority must be True.
         priority_IS_weight=False,
         # (float) Discount factor(gamma) for returns
@@ -237,12 +235,13 @@ class SampledEfficientZeroGameBuffer(Buffer):
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
+        assert self._cfg.env_type in ['not_board_games', 'board_games']
 
         self.batch_size = self._cfg.learn.batch_size
         self.replay_buffer_size = self._cfg.other.replay_buffer.replay_buffer_size
+        self._alpha = self._cfg.priority_prob_alpha
 
         self.keep_ratio = 1
-
         self.model_index = 0
         self.model_update_interval = 10
 
@@ -252,7 +251,6 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
         self._eps_collected = 0
         self.base_idx = 0
-        self._alpha = self._cfg.priority_prob_alpha
         self.clear_time = 0
 
     def push(self, data: Any, meta: Optional[dict] = None):
@@ -382,6 +380,14 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 idx, prio = indices[i], metas['batch_priorities'][i]
                 self.game_pos_priorities[idx] = prio
 
+    def update_priority(self, train_data, batch_priorities) -> None:
+        # update priority in replay_buffer
+        # inputs_batch, targets_batch = data
+        # obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
+        # target_value_prefix, target_value, target_policy = targets_batch
+        self.batch_update(indices=train_data[0][4],
+                          metas={'make_time': train_data[0][6], 'batch_priorities': batch_priorities})
+
     def remove_oldest_data_to_fit(self):
         """
         Overview:
@@ -474,8 +480,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
         if self._cfg.use_priority is False:
             self.game_pos_priorities = np.ones_like(self.game_pos_priorities)
 
-        # +1e-11 for numerical stability
-        probs = self.game_pos_priorities ** self._alpha + 1e-11
+        # +1e-6 for numerical stability
+        probs = self.game_pos_priorities ** self._alpha + 1e-6
 
         probs /= probs.sum()
         # TODO(pu): sample data in PER way
@@ -1418,7 +1424,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             batch_policies = batch_target_policies_non_re
         targets_batch = [batch_value_prefixs, batch_values, batch_policies]
         # a batch contains the inputs and the targets
-        train_data = [inputs_batch, targets_batch, self]
+        train_data = [inputs_batch, targets_batch]
         return train_data
 
     def save_data(self, file_name: str):

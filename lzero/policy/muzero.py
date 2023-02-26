@@ -43,8 +43,6 @@ class MuZeroPolicy(Policy):
         cuda=False,
         # (bool) Whether learning policy is the same as collecting data policy(on-policy)
         on_policy=False,
-        # (bool) Whether enable priority experience sample
-        priority=False,
         # (bool) Whether use Importance Sampling Weight to correct biased update. If True, priority must be True.
         priority_IS_weight=False,
         # (float) Discount factor(gamma) for returns
@@ -164,11 +162,6 @@ class MuZeroPolicy(Policy):
         # style of augmentation
         augmentation=['shift', 'intensity'],  # options=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
 
-        ## reward
-        clip_reward=False,
-        normalize_reward=False,
-        normalize_reward_scale=100,
-
         ## learn
         num_simulations=50,
         td_steps=5,
@@ -268,9 +261,7 @@ class MuZeroPolicy(Policy):
         self._learn_model.train()
         self._target_model.train()
 
-        # TODO(pu): priority
-        inputs_batch, targets_batch, replay_buffer = data
-
+        inputs_batch, targets_batch = data
         obs_batch_ori, action_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
         target_reward, target_value, target_policy = targets_batch
 
@@ -335,7 +326,7 @@ class MuZeroPolicy(Policy):
         other_log = {}
         other_dist = {}
 
-        other_loss = {
+        extra_statistics = {
             'l1': -1,
             'l1_1': -1,
             'l1_-1': -1,
@@ -343,10 +334,10 @@ class MuZeroPolicy(Policy):
         }
         for i in range(self._cfg.num_unroll_steps):
             key = 'unroll_' + str(i + 1) + '_l1'
-            other_loss[key] = -1
-            other_loss[key + '_1'] = -1
-            other_loss[key + '_-1'] = -1
-            other_loss[key + '_0'] = -1
+            extra_statistics[key] = -1
+            extra_statistics[key + '_1'] = -1
+            extra_statistics[key + '_-1'] = -1
+            extra_statistics[key + '_0'] = -1
 
         # scalar transform to transformed Q scale, h(.) function
         transformed_target_reward = scalar_transform(target_reward)
@@ -489,7 +480,7 @@ class MuZeroPolicy(Policy):
                     """
 
                     temp_loss = self._consist_loss_func(dynamic_proj, observation_proj) * mask_batch[:, step_i]
-                    other_loss['consist_' + str(step_i + 1)] = temp_loss.mean().item()
+                    extra_statistics['consist_' + str(step_i + 1)] = temp_loss.mean().item()
                     consistency_loss += temp_loss
 
             # the target policy, target_value_phi, target_reward_phi is calculated in game buffer now
@@ -526,35 +517,35 @@ class MuZeroPolicy(Policy):
 
                 target_reward_base = target_reward_cpu[:, step_i].reshape(-1).unsqueeze(-1)
 
-                other_loss[key] = metric_loss(original_rewards_cpu, target_reward_base)
+                extra_statistics[key] = metric_loss(original_rewards_cpu, target_reward_base)
                 if reward_indices_1.any():
-                    other_loss[key + '_1'] = metric_loss(
+                    extra_statistics[key + '_1'] = metric_loss(
                         original_rewards_cpu[reward_indices_1], target_reward_base[reward_indices_1]
                     )
                 if reward_indices_n1.any():
-                    other_loss[key + '_-1'] = metric_loss(
+                    extra_statistics[key + '_-1'] = metric_loss(
                         original_rewards_cpu[reward_indices_n1], target_reward_base[reward_indices_n1]
                     )
                 if reward_indices_0.any():
-                    other_loss[key + '_0'] = metric_loss(
+                    extra_statistics[key + '_0'] = metric_loss(
                         original_rewards_cpu[reward_indices_0], target_reward_base[reward_indices_0]
                     )
-        # ----------------------------------------------------------------------------------
+
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
             self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
             self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
         )
-        weighted_loss = (weights * loss).mean()
+        weighted_total_loss = (weights * loss).mean()
 
         # backward
         parameters = self._learn_model.parameters()
 
-        total_loss = weighted_loss
-        total_loss.register_hook(lambda grad: grad * gradient_scale)
+        gradient_scale = 1 / self._cfg.num_unroll_steps
+        weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
 
-        total_loss.backward()
+        weighted_total_loss.backward()
         torch.nn.utils.clip_grad_norm_(parameters, self._cfg.learn.grad_clip_value)
         self._optimizer.step()
 
@@ -563,14 +554,10 @@ class MuZeroPolicy(Policy):
         # ==============================================================
         self._target_model.update(self._learn_model.state_dict())
 
-        # ----------------------------------------------------------------------------------
-        # update priority
-        # priority_info = {'indices':indices, 'make_time':make_time, 'batch_priorities':value_priority}
-        replay_buffer.batch_update(indices=indices, metas={'make_time': make_time, 'batch_priorities': value_priority})
 
         # packing data for logging
         loss_data = (
-            total_loss.item(), weighted_loss.item(), loss.mean().item(), 0, policy_loss.mean().item(),
+            weighted_total_loss.item(), loss.mean().item(), policy_loss.mean().item(),
             reward_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
         )
         if self._cfg.monitor_statistics:
@@ -584,17 +571,17 @@ class MuZeroPolicy(Policy):
 
             predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
             predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
-            other_loss['l1'] = metric_loss(predicted_rewards, target_reward_base)
+            extra_statistics['l1'] = metric_loss(predicted_rewards, target_reward_base)
             if reward_indices_1.any():
-                other_loss['l1_1'] = metric_loss(
+                extra_statistics['l1_1'] = metric_loss(
                     predicted_rewards[reward_indices_1], target_reward_base[reward_indices_1]
                 )
             if reward_indices_n1.any():
-                other_loss['l1_-1'] = metric_loss(
+                extra_statistics['l1_-1'] = metric_loss(
                     predicted_rewards[reward_indices_n1], target_reward_base[reward_indices_n1]
                 )
             if reward_indices_0.any():
-                other_loss['l1_0'] = metric_loss(
+                extra_statistics['l1_0'] = metric_loss(
                     predicted_rewards[reward_indices_0], target_reward_base[reward_indices_0]
                 )
 
@@ -605,7 +592,7 @@ class MuZeroPolicy(Policy):
                     target_reward_phi.detach().cpu().numpy(), target_value_phi.detach().cpu().numpy(),
                     predicted_rewards.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
                     target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), state_lst,
-                    other_loss, other_log, other_dist
+                    extra_statistics, other_log, other_dist
                 )
             else:
                 td_data = (
@@ -613,23 +600,23 @@ class MuZeroPolicy(Policy):
                     transformed_target_reward.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
                     predicted_rewards.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
                     target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), state_lst,
-                    other_loss, other_log, other_dist
+                    extra_statistics, other_log, other_dist
                 )
-            priority_data = (weights, indices)
-        else:
-            td_data, priority_data = None, None
 
         if self.cfg.model.categorical_distribution:
             return {
-                # 'priority':priority_info,
-                'total_loss': loss_data[0],
-                'weighted_loss': loss_data[1],
-                'loss_mean': loss_data[2],
-                'policy_loss': loss_data[4],
-                'reward_loss': loss_data[5],
-                'value_loss': loss_data[6],
-                'consistency_loss': loss_data[7],
+                'weighted_total_loss': loss_data[0],
+                'total_loss': loss_data[1],
+                'policy_loss': loss_data[2],
+                'reward_loss': loss_data[3],
+                'value_loss': loss_data[4],
+                'consistency_loss': loss_data[5] / self._cfg.num_unroll_steps,
+
                 'value_priority': td_data[0].flatten().mean().item(),
+                # ==============================================================
+                # priority related
+                'value_priority_orig': value_priority,
+                # ==============================================================
                 'target_reward': td_data[1].flatten().mean().item(),
                 'target_value': td_data[2].flatten().mean().item(),
                 'transformed_target_reward': td_data[3].flatten().mean().item(),
@@ -638,21 +625,21 @@ class MuZeroPolicy(Policy):
                 'predicted_values': td_data[8].flatten().mean().item(),
                 # 'target_policy':td_data[9],
                 # 'predicted_policies':td_data[10]
-                # 'td_data': td_data,
-                # 'priority_data_weights': priority_data[0],
-                # 'priority_data_indices': priority_data[1]
             }
         else:
             return {
-                # 'priority':priority_info,
-                'total_loss': loss_data[0],
-                'weighted_loss': loss_data[1],
-                'loss_mean': loss_data[2],
-                'policy_loss': loss_data[4],
-                'reward_loss': loss_data[5],
-                'value_loss': loss_data[6],
-                'consistency_loss': loss_data[7],
+                'weighted_total_loss': loss_data[0],
+                'total_loss': loss_data[1],
+                'policy_loss': loss_data[2],
+                'reward_loss': loss_data[3],
+                'value_loss': loss_data[4],
+                'consistency_loss': loss_data[5] / self._cfg.num_unroll_steps,
+
                 'value_priority': td_data[0].flatten().mean().item(),
+                # ==============================================================
+                # priority related
+                'value_priority_orig': value_priority,
+                # ==============================================================
                 'target_reward': td_data[1].flatten().mean().item(),
                 'target_value': td_data[2].flatten().mean().item(),
                 'transformed_target_reward': td_data[3].flatten().mean().item(),
@@ -661,9 +648,6 @@ class MuZeroPolicy(Policy):
                 'predicted_values': td_data[6].flatten().mean().item(),
                 # 'target_policy':td_data[9],
                 # 'predicted_policies':td_data[10]
-                # 'td_data': td_data,
-                # 'priority_data_weights': priority_data[0],
-                # 'priority_data_indices': priority_data[1]
             }
 
     def _init_collect(self) -> None:
@@ -883,9 +867,8 @@ class MuZeroPolicy(Policy):
 
     def _monitor_vars_learn(self) -> List[str]:
         return [
+            'weighted_total_loss',
             'total_loss',
-            'weighted_loss',
-            'loss_mean',
             'policy_loss',
             'reward_loss',
             'value_loss',
@@ -900,9 +883,6 @@ class MuZeroPolicy(Policy):
             # 'visit_count_distribution_entropy',
             # 'target_policy',
             # 'predicted_policies'
-            # 'td_data',
-            # 'priority_data_weights',
-            # 'priority_data_indices'
         ]
 
     def _state_dict_learn(self) -> Dict[str, Any]:

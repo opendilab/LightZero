@@ -171,6 +171,7 @@ class EfficientZeroGameBuffer(Buffer):
         default_config.update(cfg)
         self._cfg = default_config
 
+        assert self._cfg.env_type in ['not_board_games', 'board_games']
         self.batch_size = self._cfg.learn.batch_size
         self.replay_buffer_size = self._cfg.other.replay_buffer.replay_buffer_size
 
@@ -321,6 +322,12 @@ class EfficientZeroGameBuffer(Buffer):
                 idx, prio = indices[i], metas['batch_priorities'][i]
                 self.game_pos_priorities[idx] = prio
 
+    def update_priority(self, train_data, batch_priorities) -> None:
+        # update priority in replay_buffer
+        # inputs_batch, targets_batch, replay_buffer = train_data
+        # obs_batch_ori, action_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
+        self.batch_update(indices=train_data[0][3], metas={'make_time': train_data[0][5], 'batch_priorities': batch_priorities})
+
     def remove_oldest_data_to_fit(self):
         """
         Overview:
@@ -414,8 +421,8 @@ class EfficientZeroGameBuffer(Buffer):
         if self._cfg.use_priority is False:
             self.game_pos_priorities = np.ones_like(self.game_pos_priorities)
 
-        # +1e-11 for numerical stability
-        probs = self.game_pos_priorities ** self._alpha + 1e-11
+        # +1e-6 for numerical stability
+        probs = self.game_pos_priorities ** self._alpha + 1e-6
 
         probs /= probs.sum()
         # TODO(pu): sample data in PER way
@@ -1263,7 +1270,7 @@ class EfficientZeroGameBuffer(Buffer):
             batch_policies = batch_target_policies_non_re
         targets_batch = [batch_value_prefixs, batch_values, batch_policies]
         # a batch contains the inputs and the targets
-        train_data = [inputs_batch, targets_batch, self]
+        train_data = [inputs_batch, targets_batch]
         return train_data
 
     def save_data(self, file_name: str):
