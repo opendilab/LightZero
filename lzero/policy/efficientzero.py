@@ -129,8 +129,11 @@ class EfficientZeroPolicy(Policy):
                 end=0.1,
                 decay=50000,
             ),
-            # NOTE: the replay_buffer_size is ineffective, we specify it in following game config
-            replay_buffer=dict(replay_buffer_size=100000, type='game')
+            replay_buffer=dict(
+                type='game_buffer_efficientzero',
+                # the size/capacity of replay_buffer, in the terms of transitions.
+                replay_buffer_size=int(1e5),
+            ),
         ),
         # ==============================================================
         # begin of additional game_config
@@ -144,7 +147,7 @@ class EfficientZeroPolicy(Policy):
         battle_mode='play_with_bot_mode',
         game_wrapper=True,
         monitor_statistics=True,
-        game_history_length=200,
+        game_block_length=200,
 
         ## observation
         # the key difference setting between image-input and vector input.

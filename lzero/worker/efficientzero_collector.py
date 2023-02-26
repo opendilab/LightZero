@@ -1,5 +1,5 @@
 import time
-from collections import namedtuple
+from collections import deque, namedtuple
 from typing import Optional, Any, List
 
 import numpy as np
@@ -26,7 +26,8 @@ class EfficientZeroCollector(ISerialCollector):
         envstep
     """
 
-    config = dict(deepcopy_obs=False, transform_obs=False, collect_print_freq=100, get_train_sample=False)
+    config = dict(game_block_pool_size=int(1e6), deepcopy_obs=False, transform_obs=False, collect_print_freq=100,
+                  get_train_sample=False)
 
     def __init__(
             self,
@@ -57,7 +58,7 @@ class EfficientZeroCollector(ISerialCollector):
         self._timer = EasyTimer()
         self._end_flag = False
 
-        # MuZero
+        # EfficientZero
         self.replay_buffer = replay_buffer
         self.game_config = game_config
 
@@ -144,10 +145,11 @@ class EfficientZeroCollector(ISerialCollector):
         self._total_duration = 0
         self._last_train_iter = 0
         self._end_flag = False
-        # double buffering when data is sufficient
-        self.trajectory_pool = []
+        # A game_block_pool implementation based on the deque structure.
+        self.game_block_pool = deque(maxlen=self._cfg.game_block_pool_size)
+
         self.pool_size = 1
-        self.gap_step = self.game_config.num_unroll_steps + self.game_config.td_steps
+        self.unroll_plus_td_steps = self.game_config.num_unroll_steps + self.game_config.td_steps
         self.last_model_index = -1
 
     def _reset_stat(self, env_id: int) -> None:
@@ -195,10 +197,9 @@ class EfficientZeroCollector(ISerialCollector):
         """
         self.close()
 
-    """
-    MCTS related method
-    """
-
+    # ==============================================================
+    # MCTS related method
+    # ==============================================================
     def get_priorities(self, i, pred_values_lst, search_values_lst):
         """
         Overview:
@@ -217,42 +218,16 @@ class EfficientZeroCollector(ISerialCollector):
 
         return priorities
 
-    def len_pool(self):
-        """
-        Overview:
-            current pool size
-        """
-        return len(self.trajectory_pool)
-
-    def free(self, end_tag):
-        """
-        Overview:
-            save the game histories and clear the pool
-            self.trajectory_pool: list of (game_history, priority)
-        """
-        if self.len_pool() >= self.pool_size:
-            self.replay_buffer.push_games(
-                [self.trajectory_pool[i][0] for i in range(self.len_pool())], [
-                    {
-                        'end_tag': end_tag,
-                        'priorities': self.trajectory_pool[i][1],
-                        'gap_steps': self.gap_step
-                    } for i in range(self.len_pool())
-                ]
-            )
-
-            del self.trajectory_pool[:]
-
-    def pad_and_save_last_trajectory(self, i, last_game_histories, last_game_priorities, game_histories, done):
+    def pad_and_save_last_trajectory(self, i, last_game_blocks, last_game_priorities, game_blocks, done):
         """
         Overview:
             put the last game history into the pool if the current game is finished
         Arguments:
-            - last_game_histories (:obj:`list`): list of the last game histories
+            - last_game_blocks (:obj:`list`): list of the last game histories
             - last_game_priorities (:obj:`list`): list of the last game priorities
-            - game_histories (:obj:`list`): list of the current game histories
+            - game_blocks (:obj:`list`): list of the current game histories
         Note:
-            (last_game_histories[i].obs_history[-4:][j] == game_histories[i].obs_history[:4][j]).all() is True
+            (last_game_blocks[i].obs_history[-4:][j] == game_blocks[i].obs_history[:4][j]).all() is True
         """
         # pad over last block trajectory
         beg_index = self.game_config.model.frame_stack_num
@@ -260,43 +235,43 @@ class EfficientZeroCollector(ISerialCollector):
 
         # the start <frame_stack_num> obs is init zero obs, so we take the [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
         # e.g. the start 4 obs is init zero obs, the num_unroll_steps is 5, so we take the [4:9] obs as the pad obs
-        pad_obs_lst = game_histories[i].obs_history[beg_index:end_index]
-        pad_child_visits_lst = game_histories[i].child_visit_history[:self.game_config.num_unroll_steps]
+        pad_obs_lst = game_blocks[i].obs_history[beg_index:end_index]
+        pad_child_visits_lst = game_blocks[i].child_visit_history[:self.game_config.num_unroll_steps]
         # EfficientZero bug?
-        # pad_child_visits_lst = game_histories[i].child_visit_history[beg_index:end_index]
+        # pad_child_visits_lst = game_blocks[i].child_visit_history[beg_index:end_index]
 
         beg_index = 0
-        # self.gap_step = self.game_config.num_unroll_steps + self.game_config.td_steps
-        end_index = beg_index + self.gap_step - 1
+        # self.unroll_plus_td_steps = self.game_config.num_unroll_steps + self.game_config.td_steps
+        end_index = beg_index + self.unroll_plus_td_steps - 1
 
-        pad_reward_lst = game_histories[i].reward_history[beg_index:end_index]
+        pad_reward_lst = game_blocks[i].reward_history[beg_index:end_index]
 
         beg_index = 0
-        end_index = beg_index + self.gap_step
+        end_index = beg_index + self.unroll_plus_td_steps
 
-        pad_root_values_lst = game_histories[i].root_value_history[beg_index:end_index]
+        pad_root_values_lst = game_blocks[i].root_value_history[beg_index:end_index]
 
         # pad over and save
-        last_game_histories[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
+        last_game_blocks[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
         """
         Note:
-            game_history element shape:
-            obs: game_history_length + stack + num_unroll_steps, 20+4 +5
-            rew: game_history_length + stack + num_unroll_steps + td_steps -1  20 +5+3-1
-            action: game_history_length -> 20
-            root_values:  game_history_length + num_unroll_steps + td_steps -> 20 +5+3
-            child_visits： game_history_length + num_unroll_steps -> 20 +5
-            to_play: game_history_length -> 20
-            action_mask: game_history_length -> 20
+            game_block element shape:
+            obs: game_block_length + stack + num_unroll_steps, 20+4 +5
+            rew: game_block_length + stack + num_unroll_steps + td_steps -1  20 +5+3-1
+            action: game_block_length -> 20
+            root_values:  game_block_length + num_unroll_steps + td_steps -> 20 +5+3
+            child_visits： game_block_length + num_unroll_steps -> 20 +5
+            to_play: game_block_length -> 20
+            action_mask: game_block_length -> 20
         """
 
-        last_game_histories[i].game_history_to_array()
+        last_game_blocks[i].game_block_to_array()
 
         # put the game history into the pool
-        self.trajectory_pool.append((last_game_histories[i], last_game_priorities[i], done[i]))
+        self.game_block_pool.append((last_game_blocks[i], last_game_priorities[i], done[i]))
 
-        # reset last game_histories
-        last_game_histories[i] = None
+        # reset last game_blocks
+        last_game_blocks[i] = None
         last_game_priorities[i] = None
 
         return None
@@ -326,7 +301,6 @@ class EfficientZeroCollector(ISerialCollector):
             policy_kwargs = {}
         temperature = policy_kwargs['temperature']
         collected_episode = 0
-        return_data = []
         env_nums = self._env_num
 
         # initializations
@@ -357,29 +331,24 @@ class EfficientZeroCollector(ISerialCollector):
             to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
 
         dones = np.array([False for _ in range(env_nums)])
-        game_histories = [
+        game_blocks = [
             GameHistory(
                 self._env.action_space,
-                game_history_length=self.game_config.game_history_length,
+                game_block_length=self.game_config.game_block_length,
                 config=self.game_config
             ) for _ in range(env_nums)
         ]
 
-        # for i in range(env_nums):
-        #     game_histories[i].init(
-        #         [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)]
-        #     )
-
-        last_game_histories = [None for _ in range(env_nums)]
+        last_game_blocks = [None for _ in range(env_nums)]
         last_game_priorities = [None for _ in range(env_nums)]
 
-        # stacked observation windows in reset stage for init game_histories
+        # stacked observation windows in reset stage for init game_blocks
         stack_obs_windows = [[] for _ in range(env_nums)]
         for i in range(env_nums):
             stack_obs_windows[i] = [
                 to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)
             ]
-            game_histories[i].init(stack_obs_windows[i])
+            game_blocks[i].init(stack_obs_windows[i])
 
         # for priorities in self-play
         search_values_lst = [[] for _ in range(env_nums)]
@@ -417,7 +386,7 @@ class EfficientZeroCollector(ISerialCollector):
 
         while True:
             with self._timer:
-                # stack_obs = [game_history.step_obs() for game_history in game_histories]
+                # stack_obs = [game_block.step_obs() for game_block in game_blocks]
 
                 # Get current ready env obs.
                 # only for subprocess, to get the ready_env_id
@@ -427,7 +396,7 @@ class EfficientZeroCollector(ISerialCollector):
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
 
-                stack_obs = {env_id: game_histories[env_id].step_obs() for env_id in ready_env_id}
+                stack_obs = {env_id: game_blocks[env_id].step_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
 
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
@@ -476,7 +445,6 @@ class EfficientZeroCollector(ISerialCollector):
                 # if len(timesteps.keys())!=self._env_num:
                 #     print(f'current ready env id is {list(timesteps.keys())}')
 
-            # TODO(nyz) this duration may be inaccurate in async env
             interaction_duration = self._timer.value / len(timesteps)
 
             for env_id, timestep in timesteps.items():
@@ -499,17 +467,17 @@ class EfficientZeroCollector(ISerialCollector):
                         clip_reward = ori_reward / self.game_config.normalize_reward_scale
                     else:
                         clip_reward = ori_reward
-                    game_histories[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
+                    game_blocks[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
                     if two_player_game:
                         # for two_player board games
                         # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
-                        # in ``game_histories[env_id].init``, we have append o_{t} in ``self.obs_history``
-                        game_histories[env_id].append(
+                        # in ``game_blocks[env_id].init``, we have append o_{t} in ``self.obs_history``
+                        game_blocks[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), clip_reward, action_mask_dict[env_id],
                             to_play_dict[env_id]
                         )
                     else:
-                        game_histories[env_id].append(actions[env_id], to_ndarray(obs['observation']), clip_reward)
+                        game_blocks[env_id].append(actions[env_id], to_ndarray(obs['observation']), clip_reward)
 
                     # NOTE: the position of code snippet is very important.
                     # the obs['action_mask'] and obs['to_play'] is corresponding to next action
@@ -533,19 +501,17 @@ class EfficientZeroCollector(ISerialCollector):
                     del stack_obs_windows[env_id][0]
                     stack_obs_windows[env_id].append(to_ndarray(obs['observation']))
 
-                    #########
+                    # ==============================================================
                     # we will save a game history if it is the end of the game or the next game history is finished.
-                    #########
+                    # ==============================================================
 
-                    #########
                     # if game history is full, we will save the last game history
-                    #########
-                    if game_histories[env_id].is_full():
+                    if game_blocks[env_id].is_full():
                         # pad over last block trajectory
-                        if last_game_histories[env_id] is not None:
+                        if last_game_blocks[env_id] is not None:
                             # TODO(pu): return the one game history
                             self.pad_and_save_last_trajectory(
-                                i, last_game_histories, last_game_priorities, game_histories, dones
+                                i, last_game_blocks, last_game_priorities, game_blocks, dones
                             )
 
                         # calculate priority
@@ -553,18 +519,18 @@ class EfficientZeroCollector(ISerialCollector):
                         pred_values_lst[env_id] = []
                         search_values_lst[env_id] = []
 
-                        # the current game_histories become last_game_history
-                        last_game_histories[env_id] = game_histories[env_id]
+                        # the current game_blocks become last_game_block
+                        last_game_blocks[env_id] = game_blocks[env_id]
                         last_game_priorities[env_id] = priorities
 
                         # create new GameHistory
-                        game_histories[env_id] = GameHistory(
+                        game_blocks[env_id] = GameHistory(
                             self._env.action_space,
-                            game_history_length=self.game_config.game_history_length,
+                            game_block_length=self.game_config.game_block_length,
                             config=self.game_config
                         )
-                        game_histories[env_id].init(stack_obs_windows[env_id])
-                        # print(game_histories[env_id].reward_history)
+                        game_blocks[env_id].init(stack_obs_windows[env_id])
+                        # print(game_blocks[env_id].reward_history)
 
                         # TODO(pu): return data
 
@@ -585,31 +551,31 @@ class EfficientZeroCollector(ISerialCollector):
                     collected_episode += 1
                     self._episode_info.append(info)
 
-                    #########
+                    # ==============================================================
                     # if it is the end of the game, we will save the game history
-                    #########
+                    # ==============================================================
 
                     # NOTE: put the penultimate game history in one episode into the trajectory_pool
-                    # pad over 2th last game_history using the last game_history
-                    if last_game_histories[env_id] is not None:
+                    # pad over 2th last game_block using the last game_block
+                    if last_game_blocks[env_id] is not None:
                         self.pad_and_save_last_trajectory(
-                            i, last_game_histories, last_game_priorities, game_histories, dones
+                            i, last_game_blocks, last_game_priorities, game_blocks, dones
                         )
 
                     # store current block trajectory
                     priorities = self.get_priorities(i, pred_values_lst, search_values_lst)
 
                     # NOTE: put the last game history in one episode into the trajectory_pool
-                    game_histories[env_id].game_history_to_array()
+                    game_blocks[env_id].game_block_to_array()
 
-                    # assert len(game_histories[env_id]) == len(priorities)
+                    # assert len(game_blocks[env_id]) == len(priorities)
                     # NOTE: save the last game history in one episode into the trajectory_pool if it's not null
-                    if len(game_histories[env_id].reward_history) != 0:
-                        self.trajectory_pool.append((game_histories[env_id], priorities, dones[env_id]))
+                    if len(game_blocks[env_id].reward_history) != 0:
+                        self.game_block_pool.append((game_blocks[env_id], priorities, dones[env_id]))
 
-                    # print(game_histories[env_id].reward_history)
+                    # print(game_blocks[env_id].reward_history)
                     # TODO(pu)
-                    # reset the finished env and init game_histories
+                    # reset the finished env and init game_blocks
                     if n_episode > self._env_num:
                         init_obs = self._env.ready_obs
 
@@ -624,14 +590,14 @@ class EfficientZeroCollector(ISerialCollector):
                         action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                         to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
 
-                        game_histories[env_id] = GameHistory(
+                        game_blocks[env_id] = GameHistory(
                             self._env.action_space,
-                            game_history_length=self.game_config.game_history_length,
+                            game_block_length=self.game_config.game_block_length,
                             config=self.game_config
                         )
                         stack_obs_windows[env_id] = [init_obs for _ in range(self.game_config.model.frame_stack_num)]
-                        game_histories[env_id].init(stack_obs_windows[env_id])
-                        last_game_histories[env_id] = None
+                        game_blocks[env_id].init(stack_obs_windows[env_id])
+                        last_game_blocks[env_id] = None
                         last_game_priorities[env_id] = None
 
                     # log
@@ -663,36 +629,39 @@ class EfficientZeroCollector(ISerialCollector):
                 # visit_entropies /= max_visit_entropy
                 # print('visit_entropies:', visit_entropies)
 
-                return_data = [self.trajectory_pool[i][0] for i in range(self.len_pool())], [
+                return_data = [self.game_block_pool[i][0] for i in range(len(self.game_block_pool))], [
                     {
-                        'priorities': self.trajectory_pool[i][1],
-                        'end_tag': self.trajectory_pool[i][2],
-                        'gap_steps': self.gap_step
-                    } for i in range(self.len_pool())
+                        'priorities': self.game_block_pool[i][1],
+                        'end_tag': self.game_block_pool[i][2],
+                        'unroll_plus_td_stepss': self.unroll_plus_td_steps
+                    } for i in range(len(self.game_block_pool))
                 ]
                 """
-                for i in range(len(self.trajectory_pool)):
-                    print(self.trajectory_pool[i][0].obs_history.__len__())
-                    print(self.trajectory_pool[i][0].reward_history)
+                for i in range(len(self.game_block_pool)):
+                    print(self.game_block_pool[i][0].obs_history.__len__())
+                    print(self.game_block_pool[i][0].reward_history)
                     
                 for i in range(len(return_data[0])):
                     print(return_data[0][i].reward_history)
     
                 """
-
+                # ==============================================================
                 # save the game histories and clear the pool
-                # self.trajectory_pool: list of (game_history, priority)
-
+                # ==============================================================
+                # self.game_block_pool: list of (game_block, priority)
                 # self.replay_buffer.push_games(
-                #     [self.trajectory_pool[i][0] for i in range(self.len_pool())], [
+                #     [self.game_block_pool[i][0] for i in range(len(self.game_block_pool))], [
                 #         {
-                #             'priorities': self.trajectory_pool[i][1],
-                #             'end_tag': self.trajectory_pool[i][2],
-                #             'gap_steps': self.gap_step
-                #         } for i in range(self.len_pool())
+                #             'priorities': self.game_block_pool[i][1],
+                #             'end_tag': self.game_block_pool[i][2],
+                #             'unroll_plus_td_stepss': self.unroll_plus_td_steps
+                #         } for i in range(len(self.game_block_pool))
                 #     ]
                 # )
 
+                # ==============================================================
+                # save the buffer to .npy file
+                # ==============================================================
                 # np.save('/Users/puyuan/code/DI-engine/dizoo/board_games/atari/config/one_episode_replay_buffer_img',
                 #         self.replay_buffer.buffer)
                 # one_episode_replay_buffer_img = np.load('/Users/puyuan/code/DI-engine/dizoo/board_games/atari/config/one_episode_replay_buffer_img.npy',
@@ -702,7 +671,6 @@ class EfficientZeroCollector(ISerialCollector):
                 #         self.replay_buffer.buffer)
                 # one_episode_replay_buffer_tictactoe_2playermode = np.load('/Users/puyuan/code/DI-engine/dizoo/board_games/tictactoe/config/one_episode_replay_buffer_tictactoe_2-player-mode.npy', allow_pickle=True)
 
-                del self.trajectory_pool[:]
                 break
         # log
         self._output_log(train_iter)

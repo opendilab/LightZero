@@ -112,7 +112,7 @@ lunarlander_disc_efficientzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
-        game_history_length=200,
+        game_block_length=200,
 
         ## observation
         # the key difference setting between image-input and vector input.

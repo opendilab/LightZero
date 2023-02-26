@@ -40,7 +40,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 pendulum_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_clrs_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -89,11 +89,13 @@ pendulum_sampled_efficientzero_config = dict(
             policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
             update_per_collect=update_per_collect,
             batch_size=batch_size,
-            lr_manually=True,
-            optim_type='SGD',
-            learning_rate=0.2,  # init lr for manually decay schedule
             # Frequency of target network update.
             target_update_freq=100,
+
+            optim_type='Adam',
+            lr_manually=False,
+            cos_lr_scheduler=True,
+            learning_rate=0.0001,  # init lr for Adam optimizer coupled with cos_lr_scheduler
         ),
         # collect_mode config
         collect=dict(
@@ -102,11 +104,12 @@ pendulum_sampled_efficientzero_config = dict(
         ),
         # If the eval cost is expensive, we could set eval_freq larger.
         eval=dict(evaluator=dict(eval_freq=int(2e3), )),
-        # command_mode config
         other=dict(
-            # NOTE: the replay_buffer_size is ineffective,
-            # we specify it using ``replay_buffer_size`` in the following game config
-            replay_buffer=dict(type='game_buffer_sampled_efficientzero')
+            replay_buffer=dict(
+                type='game_buffer_sampled_efficientzero',
+                # the size/capacity of replay_buffer, in the terms of transitions.
+                replay_buffer_size=int(1e5),
+            ),
         ),
         # ==============================================================
         # begin of additional game_config
@@ -117,7 +120,7 @@ pendulum_sampled_efficientzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
-        game_history_length=50,
+        game_block_length=50,
 
         ## observation
         # the key difference setting between image-input and vector input.
@@ -136,15 +139,12 @@ pendulum_sampled_efficientzero_config = dict(
         num_unroll_steps=5,
         lstm_horizon_len=5,
         # the weight of different loss
-        # TODO: value_prefix_loss_weight
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
         policy_entropy_loss_weight=5e-3,
         # NOTE: for vector input, we don't use the ssl loss.
         ssl_loss_weight=0,
-        # the size/capacity of replay_buffer
-        replay_buffer_size=int(1e5),
         # ``max_training_steps`` is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 

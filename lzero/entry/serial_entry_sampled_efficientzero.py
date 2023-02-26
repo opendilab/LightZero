@@ -143,7 +143,7 @@ def serial_pipeline_sampled_efficientzero(
                     f'The data in replay_buffer is not sufficient to sample a minibatch: '
                     f'batch_size: {replay_buffer.get_batch_size()},'
                     f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
-                    f'num of game historys: {replay_buffer.get_num_of_game_histories()}, '
+                    f'num of game historys: {replay_buffer.get_num_of_game_blocks()}, '
                     f'number of transitions: {replay_buffer.get_num_of_transitions()}, '
                     f'continue to collect now ....'
                 )

@@ -16,7 +16,7 @@ args = ['PongNoFrameskip-v4']
 
 @pytest.mark.unittest
 @pytest.mark.parametrize('env_name', args)
-def test_game_history(env_name):
+def test_game_block(env_name):
     if env_name == 'PongNoFrameskip-v4':
         from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTS
         from lzero.model.efficientzero_model import EfficientZeroModel as Model
@@ -36,7 +36,7 @@ def test_game_history(env_name):
     config.env.evaluator_env_num = 2
     config.env.render_mode_human = False
     config.env.num_simulations = 2
-    config.env.game_history_length = 20
+    config.env.game_block_length = 20
 
     # to obtain model
     model = Model(**config.policy.model)
@@ -54,13 +54,13 @@ def test_game_history(env_name):
         # initializations
         init_obses = [env.reset() for env in envs]
         dones = np.array([False for _ in range(config.env.evaluator_env_num)])
-        game_histories = [
+        game_blocks = [
             GameHistory(
-                envs[i].action_space, game_history_length=config.policy.game_history_length, config=config.policy
+                envs[i].action_space, game_block_length=config.policy.game_block_length, config=config.policy
             ) for i in range(config.env.evaluator_env_num)
         ]
         for i in range(config.env.evaluator_env_num):
-            game_histories[i].init([init_obses[i]['observation'] for _ in range(config.policy.model.frame_stack_num)])
+            game_blocks[i].init([init_obses[i]['observation'] for _ in range(config.policy.model.frame_stack_num)])
 
         ep_ori_rewards = np.zeros(config.env.evaluator_env_num)
         ep_clip_rewards = np.zeros(config.env.evaluator_env_num)
@@ -69,7 +69,7 @@ def test_game_history(env_name):
             if config.render:
                 for i in range(config.env.evaluator_env_num):
                     envs[i].render()
-            stack_obs = [game_history.step_obs() for game_history in game_histories]
+            stack_obs = [game_block.step_obs() for game_block in game_blocks]
             stack_obs = prepare_observation_list(stack_obs)
             if config.policy.image_based:
                 stack_obs = torch.from_numpy(stack_obs).to(config.device).float() / 255.0
@@ -118,8 +118,8 @@ def test_game_history(env_name):
                 else:
                     clip_reward = ori_reward
 
-                game_histories[i].store_search_stats(distributions, value)
-                game_histories[i].append(action, obs, clip_reward)
+                game_blocks[i].store_search_stats(distributions, value)
+                game_blocks[i].append(action, obs, clip_reward)
 
                 dones[i] = done
                 ep_ori_rewards[i] += ori_reward
@@ -130,4 +130,4 @@ def test_game_history(env_name):
 
 
 # debug
-test_game_history('PongNoFrameskip-v4')
+test_game_block('PongNoFrameskip-v4')

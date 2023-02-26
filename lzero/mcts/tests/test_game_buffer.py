@@ -18,7 +18,7 @@ class RateLimit:
     def __init__(self, max_rate: int = float("inf"), window_seconds: int = 30) -> None:
         self.max_rate = max_rate
         self.window_seconds = window_seconds
-        self.buffered = []
+        self.game_block_buffered = []
 
     def __call__(self, action: str, chain: Callable, *args, **kwargs):
         if action == "push":
@@ -28,9 +28,9 @@ class RateLimit:
     def push(self, chain, data, *args, **kwargs) -> None:
         current = time.time()
         # Cut off stale records
-        self.buffered = [t for t in self.buffered if t > current - self.window_seconds]
-        if len(self.buffered) < self.max_rate:
-            self.buffered.append(current)
+        self.game_block_buffered = [t for t in self.game_block_buffered if t > current - self.window_seconds]
+        if len(self.game_block_buffered) < self.max_rate:
+            self.game_block_buffered.append(current)
             return chain(data, *args, **kwargs)
         else:
             return None
@@ -66,7 +66,7 @@ def test_naive_push_sample():
     buffer = EfficientZeroGameBuffer(config)
     # fake data
     data = [[1, 1, 1] for _ in range(10)]  # (s,a,r)
-    meta = {'end_tag': True, 'gap_steps': 5, 'priorities': np.array([0.9 for i in range(10)])}
+    meta = {'end_tag': True, 'unroll_plus_td_stepss': 5, 'priorities': np.array([0.9 for i in range(10)])}
 
     # push
     for i in range(20):
@@ -94,7 +94,7 @@ def test_update():
     buffer = EfficientZeroGameBuffer(config)
     # fake data
     data = [[1, 1, 1] for _ in range(10)]  # (s,a,r)
-    meta = {'end_tag': True, 'gap_steps': 5, 'priorities': np.array([0.9 for i in range(10)])}
+    meta = {'end_tag': True, 'unroll_plus_td_stepss': 5, 'priorities': np.array([0.9 for i in range(10)])}
 
     # push
     for i in range(20):
@@ -115,7 +115,7 @@ def test_rate_limit_push_sample():
     buffer = EfficientZeroGameBuffer(config).use(RateLimit(max_rate=5))
     # fake data
     data = [[1, 1, 1] for i in range(10)]  # (s,a,r)
-    meta = {'end_tag': True, 'gap_steps': 5, 'priorities': np.array([0.9 for i in range(10)])}
+    meta = {'end_tag': True, 'unroll_plus_td_stepss': 5, 'priorities': np.array([0.9 for i in range(10)])}
 
     # push
     for i in range(20):
@@ -132,10 +132,10 @@ def test_prepare_batch_context():
 
     # fake data
     data_1 = [[1, 1, 1] for i in range(10)]  # (s,a,r)
-    meta_1 = {'end_tag': True, 'gap_steps': 5, 'priorities': np.array([0.9 for i in range(10)])}
+    meta_1 = {'end_tag': True, 'unroll_plus_td_stepss': 5, 'priorities': np.array([0.9 for i in range(10)])}
 
     data_2 = [[1, 1, 1] for i in range(10, 20)]  # (s,a,r)
-    meta_2 = {'end_tag': True, 'gap_steps': 5, 'priorities': np.array([0.9 for i in range(10)])}
+    meta_2 = {'end_tag': True, 'unroll_plus_td_stepss': 5, 'priorities': np.array([0.9 for i in range(10)])}
 
     # push
     buffer.push(data_1, meta_1)
@@ -152,7 +152,7 @@ def test_buffer_view():
 
     # fake data
     data = [[1, 1, 1] for _ in range(10)]  # (s,a,r)
-    meta = {'end_tag': True, 'gap_steps': 5, 'priorities': np.array([0.9 for i in range(10)])}
+    meta = {'end_tag': True, 'unroll_plus_td_stepss': 5, 'priorities': np.array([0.9 for i in range(10)])}
 
     # push
     buf1.push(data, meta)

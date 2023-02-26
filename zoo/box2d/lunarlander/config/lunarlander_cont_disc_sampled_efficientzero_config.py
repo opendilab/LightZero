@@ -100,11 +100,12 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         ),
         # If the eval cost is expensive, we could set eval_freq larger.
         eval=dict(evaluator=dict(eval_freq=int(2e3), )),
-        # command_mode config
         other=dict(
-            # NOTE: the replay_buffer_size is ineffective,
-            # we specify it using ``replay_buffer_size`` in the following game config
-            replay_buffer=dict(type='game_buffer_sampled_efficientzero')
+            replay_buffer=dict(
+                type='game_buffer_sampled_efficientzero',
+                # the size/capacity of replay_buffer, in the terms of transitions.
+                replay_buffer_size=int(1e5),
+            ),
         ),
         # ==============================================================
         # begin of additional game_config
@@ -115,7 +116,7 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
-        game_history_length=200,
+        game_block_length=200,
 
         ## observation
         # the key difference setting between image-input and vector input.
@@ -142,8 +143,6 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
         # the key difference setting between image-input and vector input.
         # NOTE: for vector input, we don't use the ssl loss.
         ssl_loss_weight=0,
-        # the size/capacity of replay_buffer
-        replay_buffer_size=int(1e5),
         # ``max_training_steps`` is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 

@@ -39,19 +39,19 @@ class GameHistory:
             ``GameHistory`` blocks.
         Interfaces:
             ``__init__``, ``__len__``,``init``, ``pad_over``, ``is_full``, ``legal_actions``, ``append``, ``obs``
-            ``zero_obs``, ``step_obs``, ``get_targets``, ``game_history_to_array``, ``store_search_stats``.
+            ``zero_obs``, ``step_obs``, ``get_targets``, ``game_block_to_array``, ``store_search_stats``.
     """
 
-    def __init__(self, action_space, game_history_length=200, config=None):
+    def __init__(self, action_space, game_block_length=200, config=None):
         """
         Overview:
             Init the ``GameHistory`` according to the provided arguments.
         Arguments:
              action_space (:obj:`int`): action space
-            - game_history_length (:obj:`int`): the transition number of one ``GameHistory`` block
+            - game_block_length (:obj:`int`): the transition number of one ``GameHistory`` block
         """
         self.action_space = action_space
-        self.game_history_length = game_history_length
+        self.game_block_length = game_block_length
         self.config = config
 
         self.frame_stack_num = config.model.frame_stack_num
@@ -106,9 +106,9 @@ class GameHistory:
     def is_full(self):
         """
         Overview:
-            check whether current game history block is full, i.e. larger than self.game_history_length
+            check whether current game history block is full, i.e. larger than self.game_block_length
         """
-        return self.__len__() >= self.game_history_length
+        return self.__len__() >= self.game_block_length
 
     def legal_actions(self):
         return [_ for _ in range(self.action_space.n)]
@@ -218,33 +218,33 @@ class GameHistory:
             self.child_visit_history[idx] = [visit_count / sum_visits for visit_count in visit_counts]
             self.root_value_history[idx] = root_value
 
-    def game_history_to_array(self):
+    def game_block_to_array(self):
         """
         Overview:
             post processing the data when a ``GameHistory`` block is full.
         Note:
-        game_history element shape:
-            e.g. game_history_length=20, stack=4, num_unroll_steps=5, td_steps=5
+        game_block element shape:
+            e.g. game_block_length=20, stack=4, num_unroll_steps=5, td_steps=5
 
-            obs:            game_history_length + stack + num_unroll_steps, 20+4+5
-            action:         game_history_length -> 20
-            reward:         game_history_length + num_unroll_steps + td_steps -1  20+5+5-1
-            root_values:    game_history_length + num_unroll_steps + td_steps -> 20 +5+5
-            child_visits：  game_history_length + num_unroll_steps -> 20+5
-            to_play:        game_history_length -> 20
-            action_mask:    game_history_length -> 20
+            obs:            game_block_length + stack + num_unroll_steps, 20+4+5
+            action:         game_block_length -> 20
+            reward:         game_block_length + num_unroll_steps + td_steps -1  20+5+5-1
+            root_values:    game_block_length + num_unroll_steps + td_steps -> 20 +5+5
+            child_visits：  game_block_length + num_unroll_steps -> 20+5
+            to_play:        game_block_length -> 20
+            action_mask:    game_block_length -> 20
 
-        game_history_t:
+        game_block_t:
             obs:  4       20        5
                  ----|----...----|-----|
-        game_history_t+1:
+        game_block_t+1:
             obs:               4       20        5
                              ----|----...----|-----|
 
-        game_history_t:
+        game_block_t:
             rew:     20        5      4
                  ----...----|------|-----|
-        game_history_t+1:
+        game_block_t+1:
             rew:             20        5    4
                         ----...----|-----|-----|
         """

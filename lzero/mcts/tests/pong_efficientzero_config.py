@@ -137,7 +137,7 @@ pong_efficientzero_config = dict(
         battle_mode='play_with_bot_mode',
         game_wrapper=True,
         monitor_statistics=True,
-        game_history_length=200,
+        game_block_length=200,
 
         ## observation
         # the key difference setting between image-input and vector input.

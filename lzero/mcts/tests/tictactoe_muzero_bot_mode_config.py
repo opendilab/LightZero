@@ -120,7 +120,7 @@ tictactoe_muzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='board_games',
-        game_history_length=5,
+        game_block_length=5,
 
         ## observation
         # NOTE: the key difference setting between image-input and vector input

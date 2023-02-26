@@ -231,15 +231,15 @@ class MuZeroEvaluator(ISerialEvaluator):
 
         dones = np.array([False for _ in range(env_nums)])
 
-        game_histories = [
+        game_blocks = [
             GameHistory(
                 self._env.action_space,
-                game_history_length=self.game_config.game_history_length,
+                game_block_length=self.game_config.game_block_length,
                 config=self.game_config
             ) for _ in range(env_nums)
         ]
         for i in range(env_nums):
-            game_histories[i].init(
+            game_blocks[i].init(
                 [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)]
             )
 
@@ -251,7 +251,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
         with self._timer:
             while not eval_monitor.is_finished():
-                # stack_obs = [game_history.step_obs() for game_history in game_histories]
+                # stack_obs = [game_block.step_obs() for game_block in game_blocks]
 
                 # Get current ready env obs.
                 # only for subprocess, to get the ready_env_id
@@ -261,7 +261,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
 
-                stack_obs = {env_id: game_histories[env_id].step_obs() for env_id in ready_env_id}
+                stack_obs = {env_id: game_blocks[env_id].step_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
 
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
@@ -316,17 +316,17 @@ class MuZeroEvaluator(ISerialEvaluator):
                         clip_reward = np.sign(ori_reward)
                     else:
                         clip_reward = ori_reward
-                    game_histories[i].store_search_stats(distributions_dict[i], value_dict[i])
+                    game_blocks[i].store_search_stats(distributions_dict[i], value_dict[i])
                     if two_player_game:
                         # for two_player board games
                         # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
-                        # in ``game_histories[env_id].init``, we have append o_{t} in ``self.obs_history``
-                        game_histories[i].append(
+                        # in ``game_blocks[env_id].init``, we have append o_{t} in ``self.obs_history``
+                        game_blocks[i].append(
                             actions[i], to_ndarray(obs['observation']), clip_reward, action_mask_dict[i],
                             to_play_dict[i]
                         )
                     else:
-                        game_histories[i].append(actions[i], to_ndarray(obs['observation']), clip_reward)
+                        game_blocks[i].append(actions[i], to_ndarray(obs['observation']), clip_reward)
 
                     # NOTE: the position of code snippt is very important.
                     # the obs['action_mask'] and obs['to_play'] is corresponding to next action
@@ -364,17 +364,17 @@ class MuZeroEvaluator(ISerialEvaluator):
                             action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                             to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
 
-                            game_histories[i] = GameHistory(
+                            game_blocks[i] = GameHistory(
                                 self._env.action_space,
-                                game_history_length=self.game_config.game_history_length,
+                                game_block_length=self.game_config.game_block_length,
                                 config=self.game_config
                             )
                             # stack_obs_windows[env_id] = [init_obs for _ in range(self.game_config.model.frame_stack_num)]
-                            # game_histories[env_id].init(stack_obs_windows[env_id])
-                            # last_game_histories[env_id] = None
+                            # game_blocks[env_id].init(stack_obs_windows[env_id])
+                            # last_game_blocks[env_id] = None
                             # last_game_priorities[env_id] = None
 
-                            game_histories[i].init(
+                            game_blocks[i].init(
                                 [init_obs[i]['observation'] for _ in range(self.game_config.model.frame_stack_num)]
                             )
 

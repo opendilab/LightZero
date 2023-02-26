@@ -103,7 +103,7 @@ class MuZeroGameBuffer(Buffer):
         battle_mode='play_with_bot_mode',
         game_wrapper=True,
         monitor_statistics=True,
-        game_history_length=200,
+        game_block_length=200,
 
         ## observation
         # the key difference setting between image-input and vector input.
@@ -129,9 +129,6 @@ class MuZeroGameBuffer(Buffer):
         value_loss_weight=0.25,
         policy_loss_weight=1,
         ssl_loss_weight=2,
-        # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
-        # the size/capacity of replay_buffer
-        replay_buffer_size=int(1e5),
         # ``max_training_steps`` is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 
@@ -163,27 +160,28 @@ class MuZeroGameBuffer(Buffer):
         # ==============================================================
     )
 
-    def __init__(self, config=None):
-        """
-        Reference : DISTRIBUTED PRIORITIZED EXPERIENCE REPLAY
-        Algo. 1 and Algo. 2 in Page-3 of (https://arxiv.org/pdf/1803.00933.pdf
-        """
-        super().__init__(config.replay_buffer_size)
-        self._cfg = config
+    def __init__(self, cfg: dict):
+        super().__init__(cfg.other.replay_buffer.replay_buffer_size)
+        # NOTE: utilize the default config
+        default_config = self.default_config()
+        default_config.update(cfg)
+        self._cfg = default_config
+        self.replay_buffer_size = self._cfg.other.replay_buffer.replay_buffer_size
+
+        
         self.batch_size = self._cfg.learn.batch_size
         self.keep_ratio = 1
 
         self.model_index = 0
         self.model_update_interval = 10
 
-        self.buffer = []
-        self.priorities = []
-        self.game_history_look_up = []
+        self.game_block_buffer = []
+        self.game_pos_priorities = []
+        self.game_block_game_pos_look_up = []
 
         self._eps_collected = 0
         self.base_idx = 0
         self._alpha = self._cfg.priority_prob_alpha
-        self.transition_top = self._cfg.replay_buffer_size
         self.clear_time = 0
 
     def push(self, data: Any, meta: Optional[dict] = None):
@@ -197,37 +195,34 @@ class MuZeroGameBuffer(Buffer):
             - meta (:obj:`dict`): Meta information, e.g. priority, count, staleness.
                 - end_tag: bool
                     True -> the game is finished. (always True)
-                - gap_steps: int
+                - unroll_plus_td_stepss: int
                     if the game is not finished, we only save the transitions that can be computed
                 - priorities: list
                     the priorities corresponding to the transitions in the game history
         Returns:
             - buffered_data (:obj:`BufferedData`): The pushed data.
         """
-        # TODO(pu)
-        # if self.get_num_of_transitions() >= self._cfg.replay_buffer_size:
-        #     return
 
         if meta['end_tag']:
             self._eps_collected += 1
             valid_len = len(data)
         else:
-            valid_len = len(data) - meta['gap_steps']
+            valid_len = len(data) - meta['unroll_plus_td_stepss']
 
         if meta['priorities'] is None:
-            max_prio = self.priorities.max() if self.buffer else 1
+            max_prio = self.game_pos_priorities.max() if self.game_block_buffer else 1
             # if no 'priorities' provided, set the valid part of the new-added game history the max_prio
-            self.priorities = np.concatenate(
-                (self.priorities, [max_prio for _ in range(valid_len)] + [0. for _ in range(valid_len, len(data))])
+            self.game_pos_priorities = np.concatenate(
+                (self.game_pos_priorities, [max_prio for _ in range(valid_len)] + [0. for _ in range(valid_len, len(data))])
             )
         else:
             assert len(data) == len(meta['priorities']), " priorities should be of same length as the game steps"
             priorities = meta['priorities'].copy().reshape(-1)
             priorities[valid_len:len(data)] = 0.
-            self.priorities = np.concatenate((self.priorities, priorities))
+            self.game_pos_priorities = np.concatenate((self.game_pos_priorities, priorities))
 
-        self.buffer.append(data)
-        self.game_history_look_up += [(self.base_idx + len(self.buffer) - 1, step_pos) for step_pos in range(len(data))]
+        self.game_block_buffer.append(data)
+        self.game_block_game_pos_look_up += [(self.base_idx + len(self.game_block_buffer) - 1, step_pos) for step_pos in range(len(data))]
 
     def push_games(self, data: Any, meta):
         """
@@ -263,7 +258,7 @@ class MuZeroGameBuffer(Buffer):
             - sample_data (:obj:`Union[List[BufferedData], List[List[BufferedData]]]`):
                 A list of data with length ``size``, may be nested if groupby or rolling_window is set.
         """
-        storage = self.buffer
+        storage = self.game_block_buffer
         if sample_range:
             storage = list(itertools.islice(self.storage, sample_range.start, sample_range.stop, sample_range.step))
 
@@ -282,7 +277,7 @@ class MuZeroGameBuffer(Buffer):
         value_error = None
         sampled_data = []
         if indices:
-            sampled_data = [self.buffer[game_history_idx] for game_history_idx in indices]
+            sampled_data = [self.game_block_buffer[game_block_idx] for game_block_idx in indices]
 
         elif groupby:
             sampled_data = self._sample_by_group(size=size, groupby=groupby, replace=replace, storage=storage)
@@ -315,9 +310,9 @@ class MuZeroGameBuffer(Buffer):
         Overview:
             sample one transition according to the idx
         """
-        game_history_idx, pos_in_game_history = self.game_history_look_up[idx]
-        game_history_idx -= self.base_idx
-        transition = self.buffer[game_history_idx][pos_in_game_history]
+        game_block_idx, pos_in_game_block = self.game_block_game_pos_look_up[idx]
+        game_block_idx -= self.base_idx
+        transition = self.game_block_buffer[game_block_idx][pos_in_game_block]
         return transition
 
     def get(self, idx: int) -> BufferedData:
@@ -330,13 +325,13 @@ class MuZeroGameBuffer(Buffer):
         Arguments:
             - idx: transition index
             - return the game history including this transition
-            - game_history_idx is the index of this game history in the self.buffer list
-            - pos_in_game_history is the relative position of this transition in this game history
+            - game_block_idx is the index of this game history in the self.game_block_buffer list
+            - pos_in_game_block is the relative position of this transition in this game history
         """
 
-        game_history_idx, pos_in_game_history = self.game_history_look_up[idx]
-        game_history_idx -= self.base_idx
-        game = self.buffer[game_history_idx]
+        game_block_idx, pos_in_game_block = self.game_block_game_pos_look_up[idx]
+        game_block_idx -= self.base_idx
+        game = self.game_block_buffer[game_block_idx]
         return game
 
     def update(self, index, data: Optional[Any] = None, meta: Optional[dict] = None) -> bool:
@@ -354,11 +349,11 @@ class MuZeroGameBuffer(Buffer):
         success = False
         if index < self.get_num_of_transitions():
             prio = meta['priorities']
-            self.priorities[index] = prio
-            game_history_idx, pos_in_game_history = self.game_history_look_up[index]
-            game_history_idx -= self.base_idx
+            self.game_pos_priorities[index] = prio
+            game_block_idx, pos_in_game_block = self.game_block_game_pos_look_up[index]
+            game_block_idx -= self.base_idx
             # update one transition
-            self.buffer[game_history_idx][pos_in_game_history] = data
+            self.game_block_buffer[game_block_idx][pos_in_game_block] = data
             success = True
 
         return success
@@ -375,20 +370,20 @@ class MuZeroGameBuffer(Buffer):
         for i in range(len(indices)):
             if metas['make_time'][i] > self.clear_time:
                 idx, prio = indices[i], metas['batch_priorities'][i]
-                self.priorities[idx] = prio
+                self.game_pos_priorities[idx] = prio
 
     def remove_oldest_data_to_fit(self):
         """
         Overview:
             remove some oldest data if the replay buffer is full.
         """
-        nums_of_game_histoty = self.get_num_of_game_histories()
+        nums_of_game_histoty = self.get_num_of_game_blocks()
         total_transition = self.get_num_of_transitions()
-        if total_transition > self.transition_top:
+        if total_transition > self.replay_buffer_size:
             index = 0
             for i in range(nums_of_game_histoty):
-                total_transition -= len(self.buffer[i])
-                if total_transition <= self.transition_top * self.keep_ratio:
+                total_transition -= len(self.game_block_buffer[i])
+                if total_transition <= self.replay_buffer_size * self.keep_ratio:
                     index = i
                     break
 
@@ -400,10 +395,10 @@ class MuZeroGameBuffer(Buffer):
         Overview:
             delete game histories in index [0: num_excess_games]
         """
-        excess_games_steps = sum([len(game) for game in self.buffer[:num_excess_games]])
-        del self.buffer[:num_excess_games]
-        self.priorities = self.priorities[excess_games_steps:]
-        del self.game_history_look_up[:excess_games_steps]
+        excess_games_steps = sum([len(game) for game in self.game_block_buffer[:num_excess_games]])
+        del self.game_block_buffer[:num_excess_games]
+        self.game_pos_priorities = self.game_pos_priorities[excess_games_steps:]
+        del self.game_block_game_pos_look_up[:excess_games_steps]
         self.base_idx += num_excess_games
 
         self.clear_time = time.time()
@@ -418,41 +413,41 @@ class MuZeroGameBuffer(Buffer):
         pass
 
     def clear(self) -> None:
-        del self.buffer[:]
+        del self.game_block_buffer[:]
 
     def get_batch_size(self):
         return self.batch_size
 
     def get_priorities(self):
-        return self.priorities
+        return self.game_pos_priorities
 
     def get_num_of_episodes(self):
         # number of collected episodes
         return self._eps_collected
 
-    def get_num_of_game_histories(self) -> int:
+    def get_num_of_game_blocks(self) -> int:
         # number of games, i.e. num of game history blocks
-        return len(self.buffer)
+        return len(self.game_block_buffer)
 
     def count(self):
         # number of games, i.e. num of game history blocks
-        return len(self.buffer)
+        return len(self.game_block_buffer)
 
     def get_num_of_transitions(self):
         # total number of transitions
-        return len(self.priorities)
+        return len(self.game_pos_priorities)
 
     def __copy__(self) -> "GameBuffer":
         buffer = type(self)(cfg=self._cfg)
-        buffer.storage = self.buffer
+        buffer.storage = self.game_block_buffer
         return buffer
 
     def prepare_batch_context(self, batch_size, beta):
         """
         Overview:
             Prepare a batch context that contains:
-            game_history_list: a list of game histories
-            pos_in_game_history_list: transition index in game (relative index)
+            game_block_list: a list of game histories
+            pos_in_game_block_list: transition index in game (relative index)
             batch_index_list: the index of start transition of sampled minibatch in replay buffer
             weights_list: the weight concerning the priority
             make_time: the time the batch is made (for correctly updating replay buffer
@@ -467,10 +462,10 @@ class MuZeroGameBuffer(Buffer):
         total = self.get_num_of_transitions()
 
         if self._cfg.use_priority is False:
-            self.priorities = np.ones_like(self.priorities)
+            self.game_pos_priorities = np.ones_like(self.game_pos_priorities)
 
         # +1e-11 for numerical stability
-        probs = self.priorities ** self._alpha + 1e-11
+        probs = self.game_pos_priorities ** self._alpha + 1e-11
 
         probs /= probs.sum()
         # TODO(pu): sample data in PER way
@@ -486,20 +481,20 @@ class MuZeroGameBuffer(Buffer):
         weights_list = (total * probs[batch_index_list]) ** (-beta)
         weights_list /= weights_list.max()
 
-        game_history_list = []
-        pos_in_game_history_list = []
+        game_block_list = []
+        pos_in_game_block_list = []
 
         for idx in batch_index_list:
-            game_history_idx, pos_in_game_history = self.game_history_look_up[idx]
-            game_history_idx -= self.base_idx
-            game_history = self.buffer[game_history_idx]
+            game_block_idx, pos_in_game_block = self.game_block_game_pos_look_up[idx]
+            game_block_idx -= self.base_idx
+            game_block = self.game_block_buffer[game_block_idx]
 
-            game_history_list.append(game_history)
-            pos_in_game_history_list.append(pos_in_game_history)
+            game_block_list.append(game_block)
+            pos_in_game_block_list.append(pos_in_game_block)
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
 
-        context = (game_history_list, pos_in_game_history_list, batch_index_list, weights_list, make_time)
+        context = (game_block_list, pos_in_game_block_list, batch_index_list, weights_list, make_time)
         return context
 
     # @profile
@@ -516,15 +511,15 @@ class MuZeroGameBuffer(Buffer):
             ratio: float ratio of reanalyzed policy (value is 100% reanalyzed)
         """
         # obtain the batch context from replay buffer
-        game_history_list, pos_in_game_history_list, batch_index_list, weights_list, make_time_list = batch_context
+        game_block_list, pos_in_game_block_list, batch_index_list, weights_list, make_time_list = batch_context
         batch_size = len(batch_index_list)
         obs_list, action_list, mask_list = [], [], []
         # prepare the inputs of a batch
         for i in range(batch_size):
-            game = game_history_list[i]
-            pos_in_game_history = pos_in_game_history_list[i]
+            game = game_block_list[i]
+            pos_in_game_block = pos_in_game_block_list[i]
 
-            _actions = game.action_history[pos_in_game_history:pos_in_game_history +
+            _actions = game.action_history[pos_in_game_block:pos_in_game_block +
                                            self._cfg.num_unroll_steps].tolist()
             # add mask for invalid actions (out of trajectory)
             _mask = [1. for i in range(len(_actions))]
@@ -537,10 +532,10 @@ class MuZeroGameBuffer(Buffer):
 
             # obtain the input observations
             # stack+num_unroll_steps  4+5
-            # pad if length of obs in game_history is less than stack+num_unroll_steps
+            # pad if length of obs in game_block is less than stack+num_unroll_steps
             obs_list.append(
-                game_history_list[i].obs(
-                    pos_in_game_history_list[i], extra_len=self._cfg.num_unroll_steps, padding=True
+                game_block_list[i].obs(
+                    pos_in_game_block_list[i], extra_len=self._cfg.num_unroll_steps, padding=True
                 )
             )
             action_list.append(_actions)
@@ -558,7 +553,7 @@ class MuZeroGameBuffer(Buffer):
 
         # obtain the context of value targets
         reward_value_context = self.prepare_reward_value_context(
-            batch_index_list, game_history_list, pos_in_game_history_list, total_transitions
+            batch_index_list, game_block_list, pos_in_game_block_list, total_transitions
         )
         """
         only reanalyze recent ratio (e.g. 50%) data
@@ -572,8 +567,8 @@ class MuZeroGameBuffer(Buffer):
         if reanalyze_num > 0:
             # obtain the context of reanalyzed policy targets
             policy_re_context = self.prepare_policy_reanalyzed_context(
-                batch_index_list[:reanalyze_num], game_history_list[:reanalyze_num],
-                pos_in_game_history_list[:reanalyze_num]
+                batch_index_list[:reanalyze_num], game_block_list[:reanalyze_num],
+                pos_in_game_block_list[:reanalyze_num]
             )
         else:
             policy_re_context = None
@@ -582,8 +577,8 @@ class MuZeroGameBuffer(Buffer):
         if reanalyze_num < batch_size:
             # obtain the context of non-reanalyzed policy targets
             policy_non_re_context = self.prepare_policy_non_reanalyzed_context(
-                batch_index_list[reanalyze_num:], game_history_list[reanalyze_num:],
-                pos_in_game_history_list[reanalyze_num:]
+                batch_index_list[reanalyze_num:], game_block_list[reanalyze_num:],
+                pos_in_game_block_list[reanalyze_num:]
             )
         else:
             policy_non_re_context = None
@@ -592,18 +587,18 @@ class MuZeroGameBuffer(Buffer):
         return context
 
     def prepare_reward_value_context(
-        self, batch_index_list, game_history_list, pos_in_game_history_list, total_transitions
+        self, batch_index_list, game_block_list, pos_in_game_block_list, total_transitions
     ):
         """
         Overview:
             prepare the context of rewards and values for calculating TD value target in reanalyzing part.
         Arguments:
             - batch_index_list (:obj:`list`): the index of start transition of sampled minibatch in replay buffer
-            - game_history_list (:obj:`list`): list of game histories
-            - pos_in_game_history_list (:obj:`list`): list of transition index in game_history
+            - game_block_list (:obj:`list`): list of game histories
+            - pos_in_game_block_list (:obj:`list`): list of transition index in game_block
             - total_transitions (:obj:`int`): number of collected transitions
         """
-        zero_obs = game_history_list[0].zero_obs()
+        zero_obs = game_block_list[0].zero_obs()
         value_obs_list = []
         # the value is valid or not (out of trajectory)
         value_mask = []
@@ -613,8 +608,8 @@ class MuZeroGameBuffer(Buffer):
         action_mask_history, to_play_history = [], []
 
         td_steps_list = []
-        for game_history, state_index, idx in zip(game_history_list, pos_in_game_history_list, batch_index_list):
-            traj_len = len(game_history)
+        for game_block, state_index, idx in zip(game_block_list, pos_in_game_block_list, batch_index_list):
+            traj_len = len(game_block)
             traj_lens.append(traj_len)
 
             # for atari
@@ -628,13 +623,13 @@ class MuZeroGameBuffer(Buffer):
             # prepare the corresponding observations for bootstrapped values o_{t+k}
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
             # t=2+3 -> o[2+3, 2+3+4+5] -> o[5, 14]
-            game_obs = game_history.obs(state_index + td_steps, self._cfg.num_unroll_steps)
+            game_obs = game_block.obs(state_index + td_steps, self._cfg.num_unroll_steps)
 
-            rewards_list.append(game_history.reward_history)
+            rewards_list.append(game_block.reward_history)
 
             # for two_player board games
-            action_mask_history.append(game_history.action_mask_history)
-            to_play_history.append(game_history.to_play_history)
+            action_mask_history.append(game_block.action_mask_history)
+            to_play_history.append(game_block.to_play_history)
 
             for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                 # get the <num_unroll_steps+1>  bootstrapped target obs
@@ -657,49 +652,49 @@ class MuZeroGameBuffer(Buffer):
                 value_obs_list.append(obs)
 
         reward_value_context = [
-            value_obs_list, value_mask, pos_in_game_history_list, rewards_list, traj_lens, td_steps_list,
+            value_obs_list, value_mask, pos_in_game_block_list, rewards_list, traj_lens, td_steps_list,
             action_mask_history, to_play_history
         ]
         return reward_value_context
 
-    def prepare_policy_non_reanalyzed_context(self, batch_index_list, game_history_list, pos_in_game_history_list):
+    def prepare_policy_non_reanalyzed_context(self, batch_index_list, game_block_list, pos_in_game_block_list):
         """
         Overview:
             prepare the context of policies for calculating policy target in non-reanalyzing part, just return the policy in self-play
         Arguments:
             - batch_index_list (:obj:`list`): the index of start transition of sampled minibatch in replay buffer
-            - game_history_list (:obj:`list`): list of game histories
-            - pos_in_game_history_list (:obj:`list`): list transition index in game
+            - game_block_list (:obj:`list`): list of game histories
+            - pos_in_game_block_list (:obj:`list`): list transition index in game
         """
         child_visits = []
         traj_lens = []
         # for two_player board games
         action_mask_history, to_play_history = [], []
 
-        for game_history, state_index, idx in zip(game_history_list, pos_in_game_history_list, batch_index_list):
-            traj_len = len(game_history)
+        for game_block, state_index, idx in zip(game_block_list, pos_in_game_block_list, batch_index_list):
+            traj_len = len(game_block)
             traj_lens.append(traj_len)
             # for two_player board games
-            action_mask_history.append(game_history.action_mask_history)
-            to_play_history.append(game_history.to_play_history)
+            action_mask_history.append(game_block.action_mask_history)
+            to_play_history.append(game_block.to_play_history)
 
-            child_visits.append(game_history.child_visit_history)
+            child_visits.append(game_block.child_visit_history)
 
         policy_non_re_context = [
-            pos_in_game_history_list, child_visits, traj_lens, action_mask_history, to_play_history
+            pos_in_game_block_list, child_visits, traj_lens, action_mask_history, to_play_history
         ]
         return policy_non_re_context
 
-    def prepare_policy_reanalyzed_context(self, batch_index_list, game_history_list, pos_in_game_history_list):
+    def prepare_policy_reanalyzed_context(self, batch_index_list, game_block_list, pos_in_game_block_list):
         """
         Overview:
             prepare the context of policies for calculating policy target in reanalyzing part.
         Arguments:
             - batch_index_list (:obj:'list'): start transition index in the replay buffer
-            - game_history_list (:obj:'list'): list of game histories
-            - pos_in_game_history_list (:obj:'list'): position of transition index in one game history
+            - game_block_list (:obj:'list'): list of game histories
+            - pos_in_game_block_list (:obj:'list'): position of transition index in one game history
         """
-        zero_obs = game_history_list[0].zero_obs()
+        zero_obs = game_block_list[0].zero_obs()
 
         with torch.no_grad():
             # for policy
@@ -708,17 +703,17 @@ class MuZeroGameBuffer(Buffer):
             rewards, child_visits, traj_lens = [], [], []
             # for two_player board games
             action_mask_history, to_play_history = [], []
-            for game_history, state_index in zip(game_history_list, pos_in_game_history_list):
-                traj_len = len(game_history)
+            for game_block, state_index in zip(game_block_list, pos_in_game_block_list):
+                traj_len = len(game_block)
                 traj_lens.append(traj_len)
-                rewards.append(game_history.reward_history)
+                rewards.append(game_block.reward_history)
                 # for two_player board games
-                action_mask_history.append(game_history.action_mask_history)
-                to_play_history.append(game_history.to_play_history)
+                action_mask_history.append(game_block.action_mask_history)
+                to_play_history.append(game_block.to_play_history)
 
-                child_visits.append(game_history.child_visit_history)
+                child_visits.append(game_block.child_visit_history)
                 # prepare the corresponding observations
-                game_obs = game_history.obs(state_index, self._cfg.num_unroll_steps)
+                game_obs = game_block.obs(state_index, self._cfg.num_unroll_steps)
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
 
                     if current_index < traj_len:
@@ -732,7 +727,7 @@ class MuZeroGameBuffer(Buffer):
                     policy_obs_list.append(obs)
 
         policy_re_context = [
-            policy_obs_list, policy_mask, pos_in_game_history_list, batch_index_list, child_visits, traj_lens,
+            policy_obs_list, policy_mask, pos_in_game_block_list, batch_index_list, child_visits, traj_lens,
             action_mask_history, to_play_history
         ]
         return policy_re_context
@@ -743,19 +738,19 @@ class MuZeroGameBuffer(Buffer):
         Overview:
             prepare reward and value targets from the context of rewards and values.
         """
-        value_obs_list, value_mask, pos_in_game_history_list, rewards_list, traj_lens, td_steps_list, action_mask_history, \
+        value_obs_list, value_mask, pos_in_game_block_list, rewards_list, traj_lens, td_steps_list, action_mask_history, \
         to_play_history = reward_value_context
         device = self._cfg.device
         batch_size = len(value_obs_list)
-        game_history_batch_size = len(pos_in_game_history_list)
+        game_block_batch_size = len(pos_in_game_block_list)
 
         if to_play_history[0][0] is not None:
             # for two_player board games
             # to_play
             to_play = []
-            for bs in range(game_history_batch_size):
+            for bs in range(game_block_batch_size):
                 to_play_tmp = list(
-                    to_play_history[bs][pos_in_game_history_list[bs]:pos_in_game_history_list[bs] +
+                    to_play_history[bs][pos_in_game_block_list[bs]:pos_in_game_block_list[bs] +
                                         self._cfg.num_unroll_steps + 1]
                 )
                 if len(to_play_tmp) < self._cfg.num_unroll_steps + 1:
@@ -769,9 +764,9 @@ class MuZeroGameBuffer(Buffer):
             to_play = tmp
             # action_mask
             action_mask = []
-            for bs in range(game_history_batch_size):
+            for bs in range(game_block_batch_size):
                 action_mask_tmp = list(
-                    action_mask_history[bs][pos_in_game_history_list[bs]:pos_in_game_history_list[bs] +
+                    action_mask_history[bs][pos_in_game_block_list[bs]:pos_in_game_block_list[bs] +
                                             self._cfg.num_unroll_steps + 1]
                 )
                 if len(action_mask_tmp) < self._cfg.num_unroll_steps + 1:
@@ -889,7 +884,7 @@ class MuZeroGameBuffer(Buffer):
             value_list = value_list.tolist()
 
             horizon_id, value_index = 0, 0
-            for traj_len_non_re, reward_list, state_index in zip(traj_lens, rewards_list, pos_in_game_history_list):
+            for traj_len_non_re, reward_list, state_index in zip(traj_lens, rewards_list, pos_in_game_block_list):
                 # traj_len = len(game)
                 target_values = []
                 target_rewards = []
@@ -935,10 +930,10 @@ class MuZeroGameBuffer(Buffer):
             return batch_target_policies_re
 
         # for two_player board games
-        policy_obs_list, policy_mask, pos_in_game_history_list, batch_index_list, child_visits, traj_lens, action_mask_history, \
+        policy_obs_list, policy_mask, pos_in_game_block_list, batch_index_list, child_visits, traj_lens, action_mask_history, \
         to_play_history = policy_re_context
         batch_size = len(policy_obs_list)
-        game_history_batch_size = len(pos_in_game_history_list)
+        game_block_batch_size = len(pos_in_game_block_list)
 
         device = self._cfg.device
 
@@ -947,9 +942,9 @@ class MuZeroGameBuffer(Buffer):
 
             # to_play
             to_play = []
-            for bs in range(game_history_batch_size):
+            for bs in range(game_block_batch_size):
                 to_play_tmp = list(
-                    to_play_history[bs][pos_in_game_history_list[bs]:pos_in_game_history_list[bs] +
+                    to_play_history[bs][pos_in_game_block_list[bs]:pos_in_game_block_list[bs] +
                                         self._cfg.num_unroll_steps + 1]
                 )
                 if len(to_play_tmp) < self._cfg.num_unroll_steps + 1:
@@ -964,9 +959,9 @@ class MuZeroGameBuffer(Buffer):
 
             # action_mask
             action_mask = []
-            for bs in range(game_history_batch_size):
+            for bs in range(game_block_batch_size):
                 action_mask_tmp = list(
-                    action_mask_history[bs][pos_in_game_history_list[bs]:pos_in_game_history_list[bs] +
+                    action_mask_history[bs][pos_in_game_block_list[bs]:pos_in_game_block_list[bs] +
                                             self._cfg.num_unroll_steps + 1]
                 )
                 if len(action_mask_tmp) < self._cfg.num_unroll_steps + 1:
@@ -1075,7 +1070,7 @@ class MuZeroGameBuffer(Buffer):
             roots_distributions = roots.get_distributions()
 
             policy_index = 0
-            for state_index, game_index in zip(pos_in_game_history_list, batch_index_list):
+            for state_index, game_index in zip(pos_in_game_block_list, batch_index_list):
                 target_policies = []
 
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
@@ -1147,7 +1142,7 @@ class MuZeroGameBuffer(Buffer):
             prepare policy targets from the non-reanalyzed context of policies
         Arguments:
             - policy_non_re_context (:obj:`List`): List containing:
-                - pos_in_game_history_list
+                - pos_in_game_block_list
                 - child_visits
                 - traj_lens
                 - action_mask_history
@@ -1159,17 +1154,17 @@ class MuZeroGameBuffer(Buffer):
         if policy_non_re_context is None:
             return batch_target_policies_non_re
 
-        pos_in_game_history_list, child_visits, traj_lens, action_mask_history, to_play_history = policy_non_re_context
+        pos_in_game_block_list, child_visits, traj_lens, action_mask_history, to_play_history = policy_non_re_context
 
-        game_history_batch_size = len(pos_in_game_history_list)
+        game_block_batch_size = len(pos_in_game_block_list)
 
         if self._cfg.env_type == 'board_games':
             # for two_player board games
             # action_mask
             action_mask = []
-            for bs in range(game_history_batch_size):
+            for bs in range(game_block_batch_size):
                 action_mask_tmp = list(
-                    action_mask_history[bs][pos_in_game_history_list[bs]:pos_in_game_history_list[bs] +
+                    action_mask_history[bs][pos_in_game_block_list[bs]:pos_in_game_block_list[bs] +
                                             self._cfg.num_unroll_steps + 1]
                 )
                 if len(action_mask_tmp) < self._cfg.num_unroll_steps + 1:
@@ -1187,15 +1182,15 @@ class MuZeroGameBuffer(Buffer):
             # the minimal size is <self._cfg. num_unroll_steps+1>
             legal_actions = [
                 [i for i, x in enumerate(action_mask[j]) if x == 1]
-                for j in range(game_history_batch_size * (self._cfg.num_unroll_steps + 1))
+                for j in range(game_block_batch_size * (self._cfg.num_unroll_steps + 1))
             ]
 
         with torch.no_grad():
             policy_index = 0
             # for policy
             policy_mask = []  # 0 -> out of traj, 1 -> old policy
-            # for game, state_index in zip(games, pos_in_game_history_list):
-            for traj_len, child_visit, state_index in zip(traj_lens, child_visits, pos_in_game_history_list):
+            # for game, state_index in zip(games, pos_in_game_block_list):
+            for traj_len, child_visit, state_index in zip(traj_lens, child_visits, pos_in_game_block_list):
                 # traj_len = len(game)
                 target_policies = []
 
