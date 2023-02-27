@@ -243,9 +243,6 @@ class MuZeroEvaluator(ISerialEvaluator):
                 [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)]
             )
 
-        ep_ori_rewards = np.zeros(env_nums)
-        ep_clip_rewards = np.zeros(env_nums)
-
         ready_env_id = set()
         remain_episode = n_episode
 
@@ -308,22 +305,18 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                 for env_id, t in timesteps.items():
                     i = env_id
-                    obs, ori_reward, done, info = t.obs, t.reward, t.done, t.info
-                    if self.game_config.clip_reward:
-                        clip_reward = np.sign(ori_reward)
-                    else:
-                        clip_reward = ori_reward
+                    obs, reward, done, info = t.obs, t.reward, t.done, t.info
                     game_blocks[i].store_search_stats(distributions_dict[i], value_dict[i])
                     if two_player_game:
                         # for two_player board games
                         # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
                         # in ``game_blocks[env_id].init``, we have append o_{t} in ``self.obs_history``
                         game_blocks[i].append(
-                            actions[i], to_ndarray(obs['observation']), clip_reward, action_mask_dict[i],
+                            actions[i], to_ndarray(obs['observation']), reward, action_mask_dict[i],
                             to_play_dict[i]
                         )
                     else:
-                        game_blocks[i].append(actions[i], to_ndarray(obs['observation']), clip_reward)
+                        game_blocks[i].append(actions[i], to_ndarray(obs['observation']), reward)
 
                     # NOTE: the position of code snippt is very important.
                     # the obs['action_mask'] and obs['to_play'] is corresponding to next action
@@ -332,8 +325,6 @@ class MuZeroEvaluator(ISerialEvaluator):
                         to_play_dict[i] = to_ndarray(obs['to_play'])
 
                     dones[i] = done
-                    ep_ori_rewards[i] += ori_reward
-                    ep_clip_rewards[i] += clip_reward
 
                     if t.done:
                         # Env reset is done by env_manager automatically.

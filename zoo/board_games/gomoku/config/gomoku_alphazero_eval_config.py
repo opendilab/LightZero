@@ -16,9 +16,8 @@ gomoku_alphazero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
+        # NOTE
         channel_last=False,
-        collect_max_episode_steps=int(1.08e4),
-        eval_max_episode_steps=int(1.08e5),
         board_size=board_size,
         battle_mode='self_play_mode',
         prob_random_agent=0.,

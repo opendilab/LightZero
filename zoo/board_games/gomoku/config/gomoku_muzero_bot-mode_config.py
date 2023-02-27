@@ -32,6 +32,7 @@ gomoku_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         board_size=board_size,
         battle_mode='play_with_bot_mode',
+        channel_last=True,
         manager=dict(shared_memory=False, ),
         stop_value=int(2),
     ),
@@ -49,7 +50,7 @@ gomoku_muzero_config = dict(
             # We use the half size model for gomoku
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
-            image_channel=1,
+            image_channel=3,
             frame_stack_num=1,
             downsample=False,
             # the stacked obs shape -> the transformed obs shape:
@@ -58,6 +59,7 @@ gomoku_muzero_config = dict(
             # observation_shape=(12, 3, 3),  # if frame_stack_num=4
             observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
             action_space_size=int(board_size * board_size),
+            last_linear_layer_init_zero=True,
             # whether to use discrete support to represent categorical distribution for value, reward.
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
@@ -96,7 +98,7 @@ gomoku_muzero_config = dict(
             replay_buffer=dict(
                 type='game_buffer_muzero',
                 # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(1e4),
+                replay_buffer_size=int(1e6),
             )
         ),
         # ==============================================================

@@ -21,7 +21,7 @@ class GomokuEnv(BaseGameEnv):
         prob_random_agent=0,
         board_size=15,
         battle_mode='play_with_bot_mode',
-        channel_last=True,
+        channel_last=False,
         agent_vs_human=False,
         expert_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
     )
@@ -231,9 +231,10 @@ class GomokuEnv(BaseGameEnv):
         board_to_play = np.full((self.board_size, self.board_size), self.current_player)
         raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
         if self.channel_last:
-            # move channel dim to last axis to be compatible with EfficientZero
+            # move channel dim to last axis
             # (3,6,6) -> (6,6,3)
-            return np.moveaxis(raw_obs, 0, 2)
+            # return np.moveaxis(raw_obs, 0, 2)
+            return np.transpose(raw_obs, [1, 2, 0])
         else:
             # (3,6,6)
             return raw_obs

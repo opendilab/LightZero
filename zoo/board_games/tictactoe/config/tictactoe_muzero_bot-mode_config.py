@@ -9,25 +9,25 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 5
-# num_simulations = 25
-# # update_per_collect determines the number of training steps after each collection of a batch of data.
-# # For different env, we have different episode_length,
-# # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-# update_per_collect = 50
-# batch_size = 256
-# max_env_step = int(2e5)
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 5
+num_simulations = 25
+# update_per_collect determines the number of training steps after each collection of a batch of data.
+# For different env, we have different episode_length,
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+update_per_collect = 50
+batch_size = 256
+max_env_step = int(2e5)
 
 # debug config
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 2
-update_per_collect = 5
-batch_size = 4
-max_env_step = int(2e3)
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 2
+# update_per_collect = 5
+# batch_size = 4
+# max_env_step = int(2e3)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -39,6 +39,7 @@ tictactoe_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         battle_mode='play_with_bot_mode',
+        channel_last=True,
         manager=dict(shared_memory=False, ),
         stop_value=int(2),
     ),
@@ -85,9 +86,6 @@ tictactoe_muzero_config = dict(
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
-            # lr_manually=True,
-            # optim_type='SGD',
-            # learning_rate=0.2,  # init lr for manually decay schedule
             lr_manually=False,
             optim_type='Adam',
             learning_rate=0.003,  # lr for Adam optimizer
@@ -105,7 +103,7 @@ tictactoe_muzero_config = dict(
             replay_buffer=dict(
                 type='game_buffer_muzero',
                 # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(3e3),
+                replay_buffer_size=int(1e6),
             )
         ),
         # ==============================================================

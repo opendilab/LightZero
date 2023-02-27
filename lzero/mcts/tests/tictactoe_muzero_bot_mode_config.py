@@ -144,7 +144,7 @@ tictactoe_muzero_config = dict(
         # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.        auto_temperature=False,
         fixed_temperature_value=1,
         # the size/capacity of replay_buffer
-        replay_buffer_size=int(3e3),
+        replay_buffer_size=int(1e6),
         # ``max_training_steps`` is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 

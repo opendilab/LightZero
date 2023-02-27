@@ -254,13 +254,7 @@ class AlphaZeroModel(nn.Module):
         return logit, value
 
     def compute_prob_value(self, state_batch):
-        try:
-            logits, values = self.forward(state_batch)
-        except Exception as error:
-            # TODO(pu)
-            state_batch = state_batch.reshape(-1, self.observation_shape[0], self.observation_shape[1], self.observation_shape[2])
-            logits, values = self.forward(state_batch)
-            # print('here')
+        logits, values = self.forward(state_batch)
         dist = torch.distributions.Categorical(logits=logits)
         probs = dist.probs
         return probs, values

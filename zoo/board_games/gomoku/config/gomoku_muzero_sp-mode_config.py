@@ -31,6 +31,7 @@ gomoku_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         board_size=board_size,
+        channel_last=True,
         battle_mode='self_play_mode',
         manager=dict(shared_memory=False, ),
         stop_value=int(2),
@@ -50,7 +51,7 @@ gomoku_muzero_config = dict(
             # default init config in MuZeroModel class for details.
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
-            image_channel=1,
+            image_channel=3,
             frame_stack_num=1,
             downsample=False,
             # the stacked obs shape -> the transformed obs shape:
@@ -96,7 +97,7 @@ gomoku_muzero_config = dict(
             replay_buffer=dict(
                 type='game_buffer_muzero',
                 # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(1e4),
+                replay_buffer_size=int(1e6),
             )
         ),
         # ==============================================================

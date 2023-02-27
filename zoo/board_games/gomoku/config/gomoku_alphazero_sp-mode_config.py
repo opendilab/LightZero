@@ -21,6 +21,8 @@ gomoku_alphazero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         board_size=board_size,
+        # NOTE
+        channel_last=False,
         battle_mode='self_play_mode',
         manager=dict(shared_memory=False, ),
     ),

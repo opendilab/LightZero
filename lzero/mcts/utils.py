@@ -136,7 +136,8 @@ def prepare_observation_list(observation_lst):
     # observation_lst = np.array(observation_lst, dtype=np.uint8)
     observation_lst = np.array(observation_lst)
     # 1, 4, 8, 1, 1 -> 1, 4, 1, 8, 1
-    observation_lst = np.moveaxis(observation_lst, -1, 2)
+    #   [B, S, W, H, C] -> [B, S x C, W, H]
+    observation_lst = np.transpose(observation_lst, (0, 1, 4, 2, 3))
 
     shape = observation_lst.shape
     # 1, 4, 1, 8, 1 -> 1, 4*1, 8, 1

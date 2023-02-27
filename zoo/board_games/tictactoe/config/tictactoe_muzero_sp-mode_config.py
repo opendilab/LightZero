@@ -39,6 +39,7 @@ tictactoe_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         battle_mode='self_play_mode',
+        channel_last=True,
         manager=dict(shared_memory=False, ),
         stop_value=int(2),
     ),
@@ -105,7 +106,7 @@ tictactoe_muzero_config = dict(
             replay_buffer=dict(
                 type='game_buffer_muzero',
                 # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(3e3),
+                replay_buffer_size=int(1e6),
             )
         ),
         # ==============================================================

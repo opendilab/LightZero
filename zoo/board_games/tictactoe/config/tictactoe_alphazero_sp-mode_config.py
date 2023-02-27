@@ -31,6 +31,8 @@ tictactoe_alphazero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         board_size=3,
         battle_mode='self_play_mode',
+        # NOTE
+        channel_last=False,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(

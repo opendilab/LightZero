@@ -12,7 +12,7 @@ from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
 
-from zoo.atari.envs.atari_wrappers import wrap_lightzero, wrap_lightzero_dqn_expert_data
+from zoo.atari.envs.atari_wrappers import wrap_lightzero
 from easydict import EasyDict
 
 
@@ -24,6 +24,7 @@ class AtariLightZeroEnv(BaseEnv):
         evaluator_env_num=3,
         n_evaluator_episode=3,
         env_name='PongNoFrameskip-v4',
+        channel_last=True,
         obs_shape=(3, 96, 96),
         render_mode_human=False,
         collect_max_episode_steps=int(1.08e5),
@@ -51,6 +52,7 @@ class AtariLightZeroEnv(BaseEnv):
     def __init__(self, cfg=None):
         self.cfg = cfg
         self._init_flag = False
+        self.channel_last = cfg.channel_last
 
     def _make_env(self):
         return wrap_lightzero(self.cfg)
@@ -85,6 +87,12 @@ class AtariLightZeroEnv(BaseEnv):
             add action_mask to obs to adapt with MCTS alg..
         """
         observation = self.obs
+
+        if not self.channel_last:
+            # move the channel dim to the fist axis
+            # (96, 96, 3) -> (3, 96, 96)
+            observation = np.transpose(observation, (2, 0, 1))
+
         action_mask = np.ones(self._action_space.n, 'int8')
         return {'observation': observation, 'action_mask': action_mask, 'to_play': None}
 

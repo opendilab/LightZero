@@ -3,23 +3,24 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# board_size = 6  # default_size is 15
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 100
-# update_per_collect = 50
-# batch_size = 256
-# max_env_step = int(2e6)
-
 board_size = 6  # default_size is 15
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 2
-num_simulations = 5
-update_per_collect = 2
-batch_size = 4
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+# num_simulations = 100
+num_simulations = 50
+update_per_collect = 50
+batch_size = 256
 max_env_step = int(2e6)
+
+# board_size = 6  # default_size is 15
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 2
+# num_simulations = 5
+# update_per_collect = 2
+# batch_size = 4
+# max_env_step = int(2e6)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -31,6 +32,8 @@ gomoku_alphazero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         board_size=board_size,
         battle_mode='play_with_bot_mode',
+        # NOTE
+        channel_last=False,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
@@ -42,6 +45,9 @@ gomoku_alphazero_config = dict(
             observation_shape=(3, board_size, board_size),
             action_space_size=int(1 * board_size * board_size),
             downsample=False,
+            last_linear_layer_init_zero=True,
+            categorical_distribution=False,
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # ==============================================================
             # We use the half size model for gomoku
             # ==============================================================
@@ -51,9 +57,6 @@ gomoku_alphazero_config = dict(
             policy_head_channels=16,
             fc_value_layers=[32],
             fc_policy_layers=[32],
-            last_linear_layer_init_zero=True,
-            categorical_distribution=False,
-            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
         learn=dict(
             update_per_collect=update_per_collect,

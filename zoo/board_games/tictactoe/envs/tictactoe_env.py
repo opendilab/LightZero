@@ -21,7 +21,7 @@ class TicTacToeEnv(BaseGameEnv):
     config = dict(
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
-        channel_last=False,
+        channel_last=True,
         prob_random_agent=0,
         prob_expert_agent=0,
         battle_mode='play_with_bot_mode',
@@ -36,6 +36,7 @@ class TicTacToeEnv(BaseGameEnv):
         return cfg
 
     def __init__(self, cfg=None):
+        self.channel_last = cfg.channel_last
         self.battle_mode = cfg.battle_mode
         self.board_size = 3
         self.players = [1, 2]
@@ -253,7 +254,15 @@ class TicTacToeEnv(BaseGameEnv):
         board_curr_player = np.where(self.board == self.current_player, 1, 0)
         board_opponent_player = np.where(self.board == self.to_play, 1, 0)
         board_to_play = np.full((self.board_size, self.board_size), self.current_player)
-        return np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
+        raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
+
+        if self.channel_last:
+            # move channel dim to last axis
+            # (C, W, H) -> (W, H, C)
+            return np.transpose(raw_obs, [1, 2, 0])
+        else:
+            # (C, W, H)
+            return raw_obs
 
     def coord_to_action(self, i, j):
         """

@@ -276,15 +276,10 @@ class AlphaZeroPolicy(Policy):
         legal_actions = env.legal_actions
         current_state = env.current_state()
         current_state = torch.from_numpy(current_state).to(device=self._device, dtype=torch.float).unsqueeze(0)
-        # TODO
-        current_state = current_state.reshape(-1, 3, self._cfg.board_size, self._cfg.board_size)
         with torch.no_grad():
             action_probs, value = self._policy_model.compute_prob_value(current_state)
         action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
-        value = value.item()
-        if list(action_probs_dict.keys()) != legal_actions:
-            print('debug')
-        return action_probs_dict, value
+        return action_probs_dict, value.item()
 
     def _monitor_vars_learn(self) -> List[str]:
         return super()._monitor_vars_learn() + [
