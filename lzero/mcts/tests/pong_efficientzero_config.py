@@ -64,7 +64,7 @@ pong_efficientzero_config = dict(
         # whether to use cuda for network.
         cuda=True,
         model=dict(
-            image_channel=3,
+            image_channel=1,
             frame_stack_num=4,
             # the key difference setting between image-input and vector input.
             downsample=True,
@@ -167,7 +167,7 @@ pong_efficientzero_config = dict(
         # fixed_temperature_value is effective only when auto_temperature=False
 
         # replay_buffer max size
-        replay_buffer_size=int(1e5),
+        replay_buffer_size=int(1e6),
         # max_training_steps is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 

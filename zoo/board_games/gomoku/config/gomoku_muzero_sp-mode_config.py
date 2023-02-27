@@ -50,7 +50,7 @@ gomoku_muzero_config = dict(
             # default init config in MuZeroModel class for details.
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
-            image_channel=3,
+            image_channel=1,
             frame_stack_num=1,
             downsample=False,
             # the stacked obs shape -> the transformed obs shape:

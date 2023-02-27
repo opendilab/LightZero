@@ -30,7 +30,7 @@ game_config = EasyDict(
         action_space_size=int(board_size * board_size),
         amp_type='none',
         obs_shape=(12, board_size, board_size),  # if frame_stack_num=4
-        image_channel=3,
+        image_channel=1,
         gray_scale=False,
         downsample=False,
         monitor_statistics=True,

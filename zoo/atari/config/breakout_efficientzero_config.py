@@ -54,7 +54,7 @@ breakout_efficientzero_config = dict(
             # default init config in EfficientZeroModel class or EfficientZero
             # original paper for details.
             # ==============================================================
-            image_channel=3,
+            image_channel=1,
             frame_stack_num=4,
             downsample=True,
             # the stacked obs shape -> the transformed obs shape:
@@ -90,7 +90,7 @@ breakout_efficientzero_config = dict(
             replay_buffer=dict(
                 type='game_buffer_efficientzero',
                 # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(1e5),
+                replay_buffer_size=int(1e6),
             ),
         ),
         # ==============================================================
@@ -123,7 +123,7 @@ breakout_efficientzero_config = dict(
         max_training_steps=int(1e5),
 
         ## reanalyze
-        reanalyze_ratio=0.3,
+        reanalyze_ratio=0.,
         reanalyze_outdated=True,
         # whether to use root value in reanalyzing part
         use_root_value=False,

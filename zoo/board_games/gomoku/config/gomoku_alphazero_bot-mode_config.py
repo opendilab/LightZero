@@ -91,7 +91,7 @@ gomoku_alphazero_config = dict(
         ),
         other=dict(
             replay_buffer=dict(
-                replay_buffer_size=int(1e5),
+                replay_buffer_size=int(1e6),
                 type='naive',
                 save_episode=False,
                 periodic_thruput_seconds=60,

@@ -99,7 +99,7 @@ mspacman_sampled_efficientzero_config = dict(
             replay_buffer=dict(
                 type='game_buffer_sampled_efficientzero',
                 # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(1e5),
+                replay_buffer_size=int(1e6),
             ),
         ),
         # ==============================================================
@@ -124,7 +124,6 @@ mspacman_sampled_efficientzero_config = dict(
         num_unroll_steps=5,
         lstm_horizon_len=5,
         # the weight of different loss
-        # TODO: value_prefix_loss_weight
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,

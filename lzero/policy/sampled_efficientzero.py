@@ -45,7 +45,7 @@ class SampledEfficientZeroPolicy(Policy):
         # (int) The number of step for calculating target q_value
         nstep=1,
         model=dict(
-            image_channel=3,
+            image_channel=1,
             frame_stack_num=4,
             # the key difference setting between image-input and vector input.
             downsample=True,
@@ -160,7 +160,7 @@ class SampledEfficientZeroPolicy(Policy):
             replay_buffer=dict(
                 type='game_buffer_sampled_efficientzero',
                 # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(1e5),
+                replay_buffer_size=int(1e6),
             ),
         ),
         # ==============================================================
@@ -253,7 +253,10 @@ class SampledEfficientZeroPolicy(Policy):
             self._model.prediction_network.sampled_fc_policy.mu.weight.data.uniform_(-init_w, init_w)
             self._model.prediction_network.sampled_fc_policy.mu.bias.data.uniform_(-init_w, init_w)
             self._model.prediction_network.sampled_fc_policy.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
-            self._model.prediction_network.sampled_fc_policy.log_sigma_layer.bias.data.uniform_(-init_w, init_w)
+            try:
+                self._model.prediction_network.sampled_fc_policy.log_sigma_layer.bias.data.uniform_(-init_w, init_w)
+            except Exception as exception:
+                print(exception)
 
         if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
             self._optimizer = optim.SGD(
@@ -887,7 +890,7 @@ class SampledEfficientZeroPolicy(Policy):
         # self._learn_model.state_dict()['prediction_network.fc_value.0.weight'],
         # self._learn_model.state_dict()['prediction_network.fc_value.0.bias']
 
-        torch.nn.utils.clip_grad_norm_(parameters, self._cfg.learn.grad_clip_value)
+        torch.nn.utils.clip_grad_norm_(parameters, self._cfg.learn.grad_clip_value, error_if_nonfinite=True)
         self._optimizer.step()
         if self._cfg.learn.cos_lr_scheduler is True:
             self.rl_scheduler.step()

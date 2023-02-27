@@ -49,7 +49,7 @@ gomoku_muzero_config = dict(
             # We use the half size model for gomoku
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
-            image_channel=3,
+            image_channel=1,
             frame_stack_num=1,
             downsample=False,
             # the stacked obs shape -> the transformed obs shape:
@@ -118,9 +118,6 @@ gomoku_muzero_config = dict(
         use_augmentation=False,
         downsample=False,
 
-        ## reward
-        clip_reward=False,
-
         ## learn
         num_simulations=num_simulations,
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
@@ -130,11 +127,12 @@ gomoku_muzero_config = dict(
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
+        ssl_loss_weight=0,
         # ``max_training_steps`` is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
 
         ## reanalyze
-        reanalyze_ratio=0.3,
+        reanalyze_ratio=0.,
         reanalyze_outdated=True,
         # whether to use root value in reanalyzing part
         use_root_value=False,

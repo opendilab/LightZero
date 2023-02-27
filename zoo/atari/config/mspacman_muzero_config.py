@@ -92,7 +92,7 @@ mspacman_muzero_config = dict(
             replay_buffer=dict(
                 type='game_buffer_muzero',
                 # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(1e5),
+                replay_buffer_size=int(1e6),
             )
         ),
         # ==============================================================

@@ -45,7 +45,7 @@ class MuZeroGameBuffer(Buffer):
     # the default_config for MuZeroGameBuffer.
     config = dict(
         model=dict(
-            image_channel=3,
+            image_channel=1,
             frame_stack_num=4,
             # the key difference setting between image-input and vector input.
             downsample=True,

@@ -99,7 +99,7 @@ pendulum_sampled_efficientzero_config = dict(
             replay_buffer=dict(
                 type='game_buffer_sampled_efficientzero',
                 # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(1e5),
+                replay_buffer_size=int(1e6),
             ),
         ),
         # ==============================================================

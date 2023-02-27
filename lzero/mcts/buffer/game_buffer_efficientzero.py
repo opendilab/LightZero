@@ -40,7 +40,7 @@ class EfficientZeroGameBuffer(Buffer):
     # the default_config for EfficientZeroGameBuffer.
     config = dict(
         model=dict(
-            image_channel=3,
+            image_channel=1,
             frame_stack_num=4,
             # the key difference setting between image-input and vector input.
             downsample=True,
@@ -91,7 +91,7 @@ class EfficientZeroGameBuffer(Buffer):
             replay_buffer=dict(
                 type='game_buffer_efficientzero',
                 # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(1e5),
+                replay_buffer_size=int(1e6),
             ),
         ),
         # ==============================================================
