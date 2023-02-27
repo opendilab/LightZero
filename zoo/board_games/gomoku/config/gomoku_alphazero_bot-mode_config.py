@@ -84,6 +84,7 @@ gomoku_alphazero_config = dict(
             evaluator=dict(
                 n_episode=evaluator_env_num,
                 eval_freq=int(500),
+                # stop when reaching max_env_step.
                 stop_value=2,
                 env=dict(
                     type='gomoku',

@@ -20,12 +20,13 @@ num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e6)
+reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr03_gcv05_seed0',
+    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -34,6 +35,7 @@ gomoku_muzero_config = dict(
         battle_mode='play_with_bot_mode',
         channel_last=True,
         manager=dict(shared_memory=False, ),
+        # stop when reaching max_env_step.
         stop_value=int(2),
     ),
     policy=dict(
@@ -134,7 +136,7 @@ gomoku_muzero_config = dict(
         max_training_steps=int(1e5),
 
         ## reanalyze
-        reanalyze_ratio=0.,
+        reanalyze_ratio=reanalyze_ratio,
         reanalyze_outdated=True,
         # whether to use root value in reanalyzing part
         use_root_value=False,
