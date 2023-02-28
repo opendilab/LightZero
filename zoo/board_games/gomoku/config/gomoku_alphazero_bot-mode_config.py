@@ -34,6 +34,8 @@ gomoku_alphazero_config = dict(
         battle_mode='play_with_bot_mode',
         # NOTE
         channel_last=False,
+        scale=True,
+        # scale=False,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
@@ -83,7 +85,7 @@ gomoku_alphazero_config = dict(
         eval=dict(
             evaluator=dict(
                 n_episode=evaluator_env_num,
-                eval_freq=int(500),
+                eval_freq=int(2e3),
                 # stop when reaching max_env_step.
                 stop_value=2,
                 env=dict(

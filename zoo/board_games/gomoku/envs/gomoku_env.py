@@ -19,9 +19,10 @@ class GomokuEnv(BaseGameEnv):
 
     config = dict(
         prob_random_agent=0,
-        board_size=15,
+        board_size=6,
         battle_mode='play_with_bot_mode',
         channel_last=False,
+        scale=False,
         agent_vs_human=False,
         expert_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
     )
@@ -38,6 +39,7 @@ class GomokuEnv(BaseGameEnv):
         self.board_size = cfg.board_size
         self.prob_random_agent = cfg.prob_random_agent
         self.channel_last = cfg.channel_last
+        self.scale = cfg.scale
 
         self.players = [1, 2]
         self.board_markers = [str(i + 1) for i in range(self.board_size)]
@@ -230,6 +232,8 @@ class GomokuEnv(BaseGameEnv):
         board_opponent_player = np.where(self.board == self.to_play, 1, 0)
         board_to_play = np.full((self.board_size, self.board_size), self.current_player)
         raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
+        if self.scale:
+            raw_obs = raw_obs / 2
         if self.channel_last:
             # move channel dim to last axis
             # (3,6,6) -> (6,6,3)
@@ -318,13 +322,11 @@ class GomokuEnv(BaseGameEnv):
         print(self.board)
         while True:
             try:
-                row = int(
-                    input(
+                row = int(input(
                         f"Enter the row (1, 2, ...,{self.board_size}, from up to bottom) to play for the player {self.current_player}: "
                     )
                 )
-                col = int(
-                    input(
+                col = int(input(
                         f"Enter the column (1, 2, ...,{self.board_size}, from left to right) to play for the player {self.current_player}: "
                     )
                 )

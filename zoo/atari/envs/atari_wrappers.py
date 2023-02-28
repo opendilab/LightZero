@@ -73,7 +73,7 @@ def wrap_deepmind_mr(env_id, episode_life=True, clip_rewards=True, frame_stack=4
     return env
 
 
-def wrap_lightzero(config, warp_frame=True, clip_rewards=True, scale=True, save_video=False, save_path=None, uid=None):
+def wrap_lightzero(config):
     """
     Overview:
         Configure environment for MuZero-style Atari. The observation is
@@ -96,15 +96,15 @@ def wrap_lightzero(config, warp_frame=True, clip_rewards=True, scale=True, save_
     if config.episode_life:
         env = EpisodicLifeWrapper(env)
     env = TimeLimit(env, max_episode_steps=config.max_episode_steps)
-    if warp_frame:
+    if config.warp_frame:
         env = WarpFrame(env, width=config.obs_shape[1], height=config.obs_shape[2], grayscale=config.gray_scale)
-    if scale:
+    if config.scale:
         env = ScaledFloatFrameWrapper(env)
-    if clip_rewards:
+    if config.clip_rewards:
         env = ClipRewardWrapper(env)
-    if save_video:
+    if config.save_video:
         env = RecordVideo(
-            env, video_folder=save_path, episode_trigger=lambda episode_id: True, name_prefix='rl-video-{}'.format(uid)
+            env, video_folder=config.save_path, episode_trigger=lambda episode_id: True, name_prefix='rl-video-{}'.format(config.uid)
         )
 
     env = JpegWrapper(env, cvt_string=config.cvt_string)

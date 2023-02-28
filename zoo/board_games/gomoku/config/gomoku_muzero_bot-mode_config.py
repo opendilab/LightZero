@@ -9,24 +9,35 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+# board_size = 6  # default_size is 15
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# num_simulations = 50
+# # update_per_collect determines the number of training steps after each collection of a batch of data.
+# # For different env, we have different episode_length,
+# # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+# update_per_collect = 50
+# batch_size = 256
+# max_env_step = int(2e6)
+# reanalyze_ratio = 0.3
+
+# debug config
 board_size = 6  # default_size is 15
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-num_simulations = 50
-# update_per_collect determines the number of training steps after each collection of a batch of data.
-# For different env, we have different episode_length,
-# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 50
-batch_size = 256
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 1
+num_simulations = 5
+update_per_collect = 5
+batch_size = 4
 max_env_step = int(2e6)
-reanalyze_ratio = 0.
+reanalyze_ratio = 0.3
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ftv1_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -34,6 +45,8 @@ gomoku_muzero_config = dict(
         board_size=board_size,
         battle_mode='play_with_bot_mode',
         channel_last=True,
+        scale=True,
+        # scale=False,
         manager=dict(shared_memory=False, ),
         # stop when reaching max_env_step.
         stop_value=int(2),
@@ -87,7 +100,7 @@ gomoku_muzero_config = dict(
             learning_rate=0.003,  # lr for Adam optimizer
             # Frequency of target network update.
             target_update_freq=100,
-            grad_clip_value=0.5,
+            grad_clip_value=10,
         ),
         # collect_mode config
         collect=dict(
@@ -95,12 +108,12 @@ gomoku_muzero_config = dict(
             n_episode=n_episode,
         ),
         # If the eval cost is expensive, we could set eval_freq larger.
-        eval=dict(evaluator=dict(eval_freq=int(500), )),
+        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
         other=dict(
             replay_buffer=dict(
                 type='game_buffer_muzero',
                 # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(1e6),
+                replay_buffer_size=int(1e4),
             )
         ),
         # ==============================================================
@@ -134,6 +147,8 @@ gomoku_muzero_config = dict(
         ssl_loss_weight=0,
         # ``max_training_steps`` is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
+        auto_temperature=False,
+        fixed_temperature_value=1,
 
         ## reanalyze
         reanalyze_ratio=reanalyze_ratio,

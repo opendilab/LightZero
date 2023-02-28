@@ -155,7 +155,7 @@ class MuZeroPolicy(Policy):
 
         ## observation
         # the key difference setting between image-input and vector input.
-        image_based=True,
+        image_based=False,
         cvt_string=False,
         gray_scale=False,
         use_augmentation=True,
@@ -272,10 +272,7 @@ class MuZeroPolicy(Policy):
 
         # to save GPU memory usage, obs_batch_ori contains (stack + unroll steps) frames
 
-        if self._cfg.image_based:
-            obs_batch_ori = torch.from_numpy(obs_batch_ori / 255.0).to(self._cfg.device).float()
-        else:
-            obs_batch_ori = torch.from_numpy(obs_batch_ori).to(self._cfg.device).float()
+        obs_batch_ori = torch.from_numpy(obs_batch_ori).to(self._cfg.device).float()
 
         # collector data process:
         # (batch_size, stack_num+num_unroll_steps, W, H, C) -> (batch_size, (stack_num+num_unroll_steps)*C, W, H )

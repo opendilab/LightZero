@@ -92,7 +92,7 @@ gomoku_muzero_config = dict(
             n_episode=n_episode,
         ),
         # If the eval cost is expensive, we could set eval_freq larger.
-        eval=dict(evaluator=dict(eval_freq=int(500), )),
+        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
         other=dict(
             replay_buffer=dict(
                 type='game_buffer_muzero',
@@ -109,7 +109,7 @@ gomoku_muzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='board_games',
-        game_block_length=18,
+        game_block_length=36,
 
         ## observation
         # NOTE: the key difference setting between image-input and vector input
