@@ -843,10 +843,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             for i in range(slices):
                 beg_index = m_batch * i
                 end_index = m_batch * (i + 1)
-                if self._cfg.image_based:
-                    m_obs = torch.from_numpy(value_obs_lst[beg_index:end_index]).to(device).float() / 255.0
-                else:
-                    m_obs = torch.from_numpy(value_obs_lst[beg_index:end_index]).to(device).float()
+                m_obs = torch.from_numpy(value_obs_lst[beg_index:end_index]).to(device).float()
 
                 # calculate the target value
                 m_output = model.initial_inference(m_obs)
@@ -1086,10 +1083,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             for i in range(slices):
                 beg_index = m_batch * i
                 end_index = m_batch * (i + 1)
-                if self._cfg.image_based:
-                    m_obs = torch.from_numpy(policy_obs_lst[beg_index:end_index]).to(device).float() / 255.0
-                else:
-                    m_obs = torch.from_numpy(policy_obs_lst[beg_index:end_index]).to(device).float()
+                m_obs = torch.from_numpy(policy_obs_lst[beg_index:end_index]).to(device).float()
 
                 # NOTE
                 m_output = model.initial_inference(m_obs)
@@ -1387,6 +1381,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         Overview:
             sample data from ``GameBuffer`` and prepare the current and target batch for training
         """
+
         policy._target_model.to(self._cfg.device)
         policy._target_model.eval()
 
@@ -1405,13 +1400,15 @@ class SampledEfficientZeroGameBuffer(Buffer):
                                                                                                    policy._target_model)
             # ==============================================================
             # fix reanalyze in sez:
-            # use the latest root_sampled_actions after the reanalyze process
+            # use the latest root_sampled_actions after the reanalyze process,
             # because the batch_target_policies_re is corresponding to the latest root_sampled_actions
             # ==============================================================
+            assert (self._cfg.reanalyze_ratio > 0 and self._cfg.reanalyze_outdated is True), \
+                "in sampled effiicientzero, if self._cfg.reanalyze_ratio>0, you must set self._cfg.reanalyze_outdated=True"
             # inputs_batch = [obs_lst, action_lst, root_sampled_actions_lst, mask_lst, batch_index_list, weights_lst, make_time_lst]
             inputs_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
                 int(batch_size * self._cfg.reanalyze_ratio), self._cfg.num_unroll_steps + 1,
-                self._cfg.model.num_of_sampled_actions, 1)
+                self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size)
 
         if 0 < self._cfg.reanalyze_ratio < 1:
             try:

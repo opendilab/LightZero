@@ -543,7 +543,7 @@ class MuZeroPolicy(Policy):
         self._optimizer.zero_grad()
 
         weighted_total_loss.backward()
-        torch.nn.utils.clip_grad_norm_(parameters, self._cfg.learn.grad_clip_value)
+        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(parameters, self._cfg.learn.grad_clip_value)
         self._optimizer.step()
 
         # ==============================================================
@@ -622,6 +622,7 @@ class MuZeroPolicy(Policy):
                 'predicted_values': td_data[8].flatten().mean().item(),
                 # 'target_policy':td_data[9],
                 # 'predicted_policies':td_data[10]
+                'total_grad_norm_before_clip': total_grad_norm_before_clip
             }
         else:
             return {
@@ -645,6 +646,7 @@ class MuZeroPolicy(Policy):
                 'predicted_values': td_data[6].flatten().mean().item(),
                 # 'target_policy':td_data[9],
                 # 'predicted_policies':td_data[10]
+                'total_grad_norm_before_clip': total_grad_norm_before_clip
             }
 
     def _init_collect(self) -> None:
@@ -880,6 +882,7 @@ class MuZeroPolicy(Policy):
             # 'visit_count_distribution_entropy',
             # 'target_policy',
             # 'predicted_policies'
+            'total_grad_norm_before_clip',
         ]
 
     def _state_dict_learn(self) -> Dict[str, Any]:

@@ -885,17 +885,7 @@ class SampledEfficientZeroPolicy(Policy):
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
 
-        # debug
-        # continuous
-        # self._learn_model.state_dict()['prediction_network.sampled_fc_policy.main.0.weight']
-        # discrete
-        # len(self._learn_model.state_dict()) = 197
-        # self._learn_model.state_dict()['prediction_network.sampled_fc_policy.0.weight']
-        # self._learn_model.state_dict()['prediction_network.sampled_fc_policy.0.bias']
-        # self._learn_model.state_dict()['prediction_network.fc_value.0.weight'],
-        # self._learn_model.state_dict()['prediction_network.fc_value.0.bias']
-
-        torch.nn.utils.clip_grad_norm_(parameters, self._cfg.learn.grad_clip_value, error_if_nonfinite=True)
+        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(parameters, self._cfg.learn.grad_clip_value)
         self._optimizer.step()
         if self._cfg.learn.cos_lr_scheduler is True:
             self.rl_scheduler.step()
@@ -998,6 +988,8 @@ class SampledEfficientZeroPolicy(Policy):
 
                     # 'target_policy':td_data[9],
                     # 'predicted_policies':td_data[10]
+                    'total_grad_norm_before_clip': total_grad_norm_before_clip
+
                 }
             else:
                 return {
@@ -1031,6 +1023,7 @@ class SampledEfficientZeroPolicy(Policy):
                     'target_sampled_actions_mean': target_sampled_actions[:, :].float().mean().item(),
                     # 'target_policy':td_data[9],
                     # 'predicted_policies':td_data[10]
+                    'total_grad_norm_before_clip': total_grad_norm_before_clip
                 }
         else:
             if self._cfg.model.continuous_action_space:
@@ -1071,6 +1064,8 @@ class SampledEfficientZeroPolicy(Policy):
                     # 'td_data': td_data,
                     # 'priority_data_weights': priority_data[0],
                     # 'priority_data_indices': priority_data[1]
+                    'total_grad_norm_before_clip': total_grad_norm_before_clip
+
                 }
             else:
                 return {
@@ -1098,6 +1093,7 @@ class SampledEfficientZeroPolicy(Policy):
                     'target_sampled_actions_max': target_sampled_actions[:, :].float().max().item(),
                     'target_sampled_actions_min': target_sampled_actions[:, :].float().min().item(),
                     'target_sampled_actions_mean': target_sampled_actions[:, :].float().mean().item(),
+                    'total_grad_norm_before_clip': total_grad_norm_before_clip
                 }
 
     def _init_collect(self) -> None:
@@ -1522,6 +1518,7 @@ class SampledEfficientZeroPolicy(Policy):
                 # 'visit_count_distribution_entropy',
                 # 'target_policy',
                 # 'predicted_policies'
+                'total_grad_norm_before_clip',
             ]
         else:
             return [
@@ -1554,6 +1551,7 @@ class SampledEfficientZeroPolicy(Policy):
                 # 'visit_count_distribution_entropy',
                 # 'target_policy',
                 # 'predicted_policies'
+                'total_grad_norm_before_clip',
             ]
 
     def _state_dict_learn(self) -> Dict[str, Any]:
