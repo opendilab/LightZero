@@ -119,9 +119,6 @@ gomoku_muzero_config = dict(
         use_augmentation=False,
         downsample=False,
 
-        ## reward
-        clip_reward=False,
-
         ## learn
         num_simulations=num_simulations,
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
