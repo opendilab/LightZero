@@ -9,29 +9,29 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# board_size = 6  # default_size is 15
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 50
-# # update_per_collect determines the number of training steps after each collection of a batch of data.
-# # For different env, we have different episode_length,
-# # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-# update_per_collect = 50
-# batch_size = 256
-# max_env_step = int(2e6)
-# reanalyze_ratio = 0.3
-
-# debug config
 board_size = 6  # default_size is 15
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 1
-num_simulations = 5
-update_per_collect = 5
-batch_size = 4
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 50
+# update_per_collect determines the number of training steps after each collection of a batch of data.
+# For different env, we have different episode_length,
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+update_per_collect = 50
+batch_size = 256
 max_env_step = int(2e6)
 reanalyze_ratio = 0.3
+
+# debug config
+# board_size = 6  # default_size is 15
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 1
+# num_simulations = 5
+# update_per_collect = 5
+# batch_size = 4
+# max_env_step = int(2e6)
+# reanalyze_ratio = 0.3
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================

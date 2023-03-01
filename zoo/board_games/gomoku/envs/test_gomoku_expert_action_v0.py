@@ -9,12 +9,13 @@ class TestExpertActionV0:
 
     def test_naive(self):
         cfg = EasyDict(
-            board_size=6,
-            battle_mode='self_play_mode',
             prob_random_agent=0,
-            channel_last=True,
+            board_size=6,
+            battle_mode='play_with_bot_mode',
+            channel_last=False,
+            scale=False,
             agent_vs_human=False,
-            expert_action_type='v0'
+            expert_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
         )
         env = GomokuEnv(cfg)
         test_episodes = 5

@@ -95,7 +95,7 @@ class GomokuEnv(BaseGameEnv):
             # we make ``to_play=self.current_player`` in obs, which is used to differentiate
             # the alternation of 2 players in the game when do Q calculation.
             obs = {
-                'observation': self.current_state(),
+                'observation': self.current_state()[1],
                 'action_mask': action_mask,
                 'board': copy.deepcopy(self.board),
                 'current_player_index': self.start_player_index,
@@ -103,7 +103,7 @@ class GomokuEnv(BaseGameEnv):
             }
         else:
             obs = {
-                'observation': self.current_state(),
+                'observation': self.current_state()[1],
                 'action_mask': action_mask,
                 'board': copy.deepcopy(self.board),
                 'current_player_index': self.start_player_index,
@@ -209,7 +209,7 @@ class GomokuEnv(BaseGameEnv):
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
         obs = {
-            'observation': self.current_state(),
+            'observation': self.current_state()[1],
             'action_mask': action_mask,
             'board': copy.deepcopy(self.board),
             'current_player_index': self.players.index(self.current_player),
@@ -233,15 +233,18 @@ class GomokuEnv(BaseGameEnv):
         board_to_play = np.full((self.board_size, self.board_size), self.current_player)
         raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
         if self.scale:
-            raw_obs = raw_obs / 2
+            scale_obs = copy.deepcopy(raw_obs / 2)
+        else:
+            scale_obs = copy.deepcopy(raw_obs)
+
         if self.channel_last:
             # move channel dim to last axis
             # (3,6,6) -> (6,6,3)
             # return np.moveaxis(raw_obs, 0, 2)
-            return np.transpose(raw_obs, [1, 2, 0])
+            return np.transpose(raw_obs, [1, 2, 0]), np.transpose(scale_obs, [1, 2, 0])
         else:
             # (3,6,6)
-            return raw_obs
+            return raw_obs, scale_obs
 
     def coord_to_action(self, i, j):
         """
@@ -308,7 +311,7 @@ class GomokuEnv(BaseGameEnv):
     def expert_action_v0(self):
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
-        obs = {'observation': self.current_state(), 'action_mask': action_mask}
+        obs = {'observation': self.current_state()[0], 'action_mask': action_mask}
         return self.gomoku_expert_v0.get_action(obs)
 
     def human_to_action(self):

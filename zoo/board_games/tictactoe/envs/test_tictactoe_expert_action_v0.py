@@ -10,11 +10,13 @@ class TestExpertAction:
 
     def test_expert_action(self):
         cfg = EasyDict(
+            channel_last=True,
+            scale=False,
+            prob_random_agent=0,
+            prob_expert_agent=0,
             battle_mode='play_with_bot_mode',
             agent_vs_human=False,
-            prob_random_agent=0,
-            prob_expert_agent=0.,
-            expert_action_type='v0'
+            expert_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
         )
         env = TicTacToeEnv(cfg)
         env.reset()

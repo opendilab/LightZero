@@ -19,8 +19,6 @@ from zoo.board_games.base_game_env import BaseGameEnv
 @ENV_REGISTRY.register('tictactoe')
 class TicTacToeEnv(BaseGameEnv):
     config = dict(
-        collect_max_episode_steps=int(1.08e5),
-        eval_max_episode_steps=int(1.08e5),
         channel_last=True,
         scale=False,
         prob_random_agent=0,
@@ -103,7 +101,7 @@ class TicTacToeEnv(BaseGameEnv):
             # we make ``to_play=self.current_player`` in obs, which is used to differentiate
             # the alternation of 2 players in the game when do Q calculation.
             obs = {
-                'observation': self.current_state(),
+                'observation': self.current_state()[1],
                 'action_mask': action_mask,
                 'board': copy.deepcopy(self.board),
                 'current_player_index': self.start_player_index,
@@ -111,7 +109,7 @@ class TicTacToeEnv(BaseGameEnv):
             }
         else:
             obs = {
-                'observation': self.current_state(),
+                'observation': self.current_state()[1],
                 'action_mask': action_mask,
                 'board': copy.deepcopy(self.board),
                 'current_player_index': self.start_player_index,
@@ -219,7 +217,7 @@ class TicTacToeEnv(BaseGameEnv):
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
         obs = {
-            'observation': self.current_state(),
+            'observation': self.current_state()[1],
             'action_mask': action_mask,
             'board': copy.deepcopy(self.board),
             'current_player_index': self.players.index(self.current_player),
@@ -259,13 +257,15 @@ class TicTacToeEnv(BaseGameEnv):
         raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
         if self.scale:
             raw_obs = raw_obs / 2
+        else:
+            scale_obs = raw_obs
         if self.channel_last:
             # move channel dim to last axis
             # (C, W, H) -> (W, H, C)
-            return np.transpose(raw_obs, [1, 2, 0])
+            return np.transpose(raw_obs, [1, 2, 0]), copy.deepcopy(scale_obs)
         else:
             # (C, W, H)
-            return raw_obs
+            return raw_obs, copy.deepcopy(scale_obs)
 
     def coord_to_action(self, i, j):
         """
