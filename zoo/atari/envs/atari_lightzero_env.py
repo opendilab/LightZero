@@ -34,6 +34,8 @@ class AtariLightZeroEnv(BaseEnv):
         episode_life=True,
         clip_rewards=True,
         scale=True,
+        warp_frame=True,
+        save_video=False,
         gray_scale=True,
         # trade memory for speed
         cvt_string=False,
