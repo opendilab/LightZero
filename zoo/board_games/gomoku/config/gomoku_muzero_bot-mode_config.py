@@ -20,7 +20,7 @@ num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e6)
-reanalyze_ratio = 0.3
+reanalyze_ratio = 0.
 
 # debug config
 # board_size = 6  # default_size is 15
@@ -37,7 +37,7 @@ reanalyze_ratio = 0.3
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ftv1_seed0',
+    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ftv1_rbs1e6_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -113,7 +113,7 @@ gomoku_muzero_config = dict(
             replay_buffer=dict(
                 type='game_buffer_muzero',
                 # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(1e4),
+                replay_buffer_size=int(1e6),
             )
         ),
         # ==============================================================

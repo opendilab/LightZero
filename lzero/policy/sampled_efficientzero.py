@@ -493,9 +493,13 @@ class SampledEfficientZeroPolicy(Policy):
 
                 # way 2: SAC-like
                 y = 1 - target_sampled_actions[:, k, :].pow(2)
-                target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions[:, k, :])
+                # for numerical stability
+                target_sampled_actions_clamped = torch.clamp(target_sampled_actions[:, k, :], torch.tensor(-1 + 1e-6),
+                                                             torch.tensor(1 - 1e-6))
+                target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
+
                 # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
-                log_prob = dist.log_prob(target_sampled_actions_before_tanh + 1e-6).unsqueeze(-1)
+                log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
                 log_prob = log_prob - torch.log(y + 1e-6).sum(-1, keepdim=True)
                 log_prob = log_prob.squeeze(-1)
 
@@ -696,9 +700,13 @@ class SampledEfficientZeroPolicy(Policy):
 
                     # way 2:
                     y = 1 - target_sampled_actions[:, k, :].pow(2)
-                    target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions[:, k, :])
+                    # for numerical stability
+                    target_sampled_actions_clamped = torch.clamp(target_sampled_actions[:, k, :],
+                                                                 torch.tensor(-1 + 1e-6),
+                                                                 torch.tensor(1 - 1e-6))
+                    target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
                     # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
-                    log_prob = dist.log_prob(target_sampled_actions_before_tanh + 1e-6).unsqueeze(-1)
+                    log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
 
                     log_prob = log_prob - torch.log(y + 1e-6).sum(-1, keepdim=True)
                     log_prob = log_prob.squeeze(-1)

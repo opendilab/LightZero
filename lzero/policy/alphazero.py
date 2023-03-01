@@ -274,10 +274,10 @@ class AlphaZeroPolicy(Policy):
                 action and the score of the env state
         """
         legal_actions = env.legal_actions
-        current_state = env.current_state()
-        current_state = torch.from_numpy(current_state).to(device=self._device, dtype=torch.float).unsqueeze(0)
+        current_state, current_state_scale = env.current_state()
+        current_state_scale = torch.from_numpy(current_state_scale).to(device=self._device, dtype=torch.float).unsqueeze(0)
         with torch.no_grad():
-            action_probs, value = self._policy_model.compute_prob_value(current_state)
+            action_probs, value = self._policy_model.compute_prob_value(current_state_scale)
         action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
         return action_probs_dict, value.item()
 

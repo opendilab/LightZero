@@ -14,7 +14,7 @@ n_episode = 8
 evaluator_env_num = 3
 continuous_action_space = True
 K = 20  # num_of_sampled_actions
-num_simulations = 50
+num_simulations = 100
 # update_per_collect determines the number of training steps after each collection of a batch of data.
 # For different env, we have different episode_length,
 # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
@@ -38,7 +38,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 bipedalwalker_cont_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/bipedalwalker_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_clrs_seed0',
+    exp_name=f'data_sez_ctree/bipedalwalker_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
