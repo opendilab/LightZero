@@ -103,19 +103,6 @@ def serial_pipeline_efficientzero_eval(
     learner.call_hook('before_run')
 
     while True:
-        collect_kwargs = {}
-        # set temperature for visit count distributions according to the train_iter,
-        # please refer to Appendix A.1 in EfficientZero paper for details.
-        collect_kwargs['temperature'] = np.array(
-            [
-                visit_count_temperature(
-                    game_config.auto_temperature,
-                    game_config.fixed_temperature_value,
-                    game_config.max_training_steps,
-                    trained_steps=learner.train_iter * cfg.policy.learn.update_per_collect
-                ) for _ in range(game_config.collector_env_num)
-            ]
-        )
         # ==============================================================
         # eval trained model
         # ==============================================================

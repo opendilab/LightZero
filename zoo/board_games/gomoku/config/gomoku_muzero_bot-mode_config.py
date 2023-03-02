@@ -47,7 +47,7 @@ categorical_distribution = False
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_lm-true_ftv1_rbs1e6_seed0',
+    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_lm-true_atv_rbs1e6_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -166,7 +166,8 @@ gomoku_muzero_config = dict(
         ssl_loss_weight=0,
         # ``max_training_steps`` is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
-        auto_temperature=False,
+        # auto_temperature=False,
+        auto_temperature=True,
         fixed_temperature_value=1,
 
         ## reanalyze

@@ -112,7 +112,7 @@ def serial_pipeline_muzero(
                     game_config.auto_temperature,
                     game_config.fixed_temperature_value,
                     game_config.max_training_steps,
-                    trained_steps=learner.train_iter
+                    trained_steps=learner.train_iter * cfg.policy.learn.update_per_collect
                 ) for _ in range(game_config.collector_env_num)
             ]
         )
