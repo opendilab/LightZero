@@ -54,11 +54,13 @@ class AtariLightZeroEnv(BaseEnv):
         self.cfg = cfg
         self._init_flag = False
         self.channel_last = cfg.channel_last
+        self.clip_rewards = cfg.clip_rewards
+        self.episode_life = cfg.episode_life
 
     def _make_env(self):
         return wrap_lightzero(self.cfg,
-                              episode_life=self.cfg.is_train,
-                              clip_rewards=self.cfg.is_train)
+                              episode_life=self.cfg.episode_life,
+                              clip_rewards=self.cfg.clip_rewards)
 
     def reset(self):
         if not self._init_flag:
@@ -175,7 +177,6 @@ class AtariLightZeroEnv(BaseEnv):
         collector_env_num = cfg.pop('collector_env_num')
         cfg = copy.deepcopy(cfg)
         cfg.max_episode_steps = cfg.collect_max_episode_steps
-        cfg.is_train = True
         return [cfg for _ in range(collector_env_num)]
 
     @staticmethod
@@ -183,5 +184,6 @@ class AtariLightZeroEnv(BaseEnv):
         evaluator_env_num = cfg.pop('evaluator_env_num')
         cfg = copy.deepcopy(cfg)
         cfg.max_episode_steps = cfg.eval_max_episode_steps
-        cfg.is_train = False
+        cfg.episode_life = False
+        cfg.clip_rewards = False
         return [cfg for _ in range(evaluator_env_num)]

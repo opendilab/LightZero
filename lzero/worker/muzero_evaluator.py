@@ -16,24 +16,24 @@ from lzero.mcts.utils import prepare_observation_list
 
 
 class MuZeroEvaluator(ISerialEvaluator):
-    # """
-    # Overview:
-    #     EfficientZero Evaluator.
-    # Interfaces:
-    #     __init__, reset, reset_policy, reset_env, close, should_eval, eval
-    # Property:
-    #     env, policy
-    # """
+    """
+    Overview:
+        EfficientZero Evaluator.
+    Interfaces:
+        __init__, reset, reset_policy, reset_env, close, should_eval, eval
+    Property:
+        env, policy
+    """
 
     @classmethod
     def default_config(cls: type) -> EasyDict:
-        # """
-        # Overview:
-        #     Get evaluator's default config. We merge evaluator's default config with other default configs\
-        #         and user's config to get the final config.
-        # Return:
-        #     cfg: (:obj:`EasyDict`): evaluator's default config
-        # """
+        """
+        Overview:
+            Get evaluator's default config. We merge evaluator's default config with other default configs\
+                and user's config to get the final config.
+        Return:
+            cfg: (:obj:`EasyDict`): evaluator's default config
+        """
         cfg = EasyDict(copy.deepcopy(cls.config))
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
@@ -53,13 +53,13 @@ class MuZeroEvaluator(ISerialEvaluator):
             instance_name: Optional[str] = 'evaluator',
             game_config: 'game_config' = None,  # noqa
     ) -> None:
-        # """
-        # Overview:
-        #     Init method. Load config and use ``self._cfg`` setting to build common serial evaluator components,
-        #     e.g. logger helper, timer.
-        # Arguments:
-        #     - cfg (:obj:`EasyDict`): Configuration EasyDict.
-        # """
+        """
+        Overview:
+            Init method. Load config and use ``self._cfg`` setting to build common serial evaluator components,
+            e.g. logger helper, timer.
+        Arguments:
+            - cfg (:obj:`EasyDict`): Configuration EasyDict.
+        """
         self._cfg = cfg
         self._exp_name = exp_name
         self._instance_name = instance_name
@@ -82,17 +82,17 @@ class MuZeroEvaluator(ISerialEvaluator):
         self.game_config = game_config
 
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
-        # """
-        # Overview:
-        #     Reset evaluator's environment. In some case, we need evaluator use the same policy in different \
-        #         environments. We can use reset_env to reset the environment.
-        #     If _env is None, reset the old environment.
-        #     If _env is not None, replace the old environment in the evaluator with the \
-        #         new passed in environment and launch.
-        # Arguments:
-        #     - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-        #         env_manager(BaseEnvManager)
-        # """
+        """
+        Overview:
+            Reset evaluator's environment. In some case, we need evaluator use the same policy in different \
+                environments. We can use reset_env to reset the environment.
+            If _env is None, reset the old environment.
+            If _env is not None, replace the old environment in the evaluator with the \
+                new passed in environment and launch.
+        Arguments:
+            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
+                env_manager(BaseEnvManager)
+        """
         if _env is not None:
             self._env = _env
             self._env.launch()
@@ -101,15 +101,15 @@ class MuZeroEvaluator(ISerialEvaluator):
             self._env.reset()
 
     def reset_policy(self, _policy: Optional[namedtuple] = None) -> None:
-        # """
-        # Overview:
-        #     Reset evaluator's policy. In some case, we need evaluator work in this same environment but use\
-        #         different policy. We can use reset_policy to reset the policy.
-        #     If _policy is None, reset the old policy.
-        #     If _policy is not None, replace the old policy in the evaluator with the new passed in policy.
-        # Arguments:
-        #     - policy (:obj:`Optional[namedtuple]`): the api namedtuple of eval_mode policy
-        # """
+        """
+        Overview:
+            Reset evaluator's policy. In some case, we need evaluator work in this same environment but use\
+                different policy. We can use reset_policy to reset the policy.
+            If _policy is None, reset the old policy.
+            If _policy is not None, replace the old policy in the evaluator with the new passed in policy.
+        Arguments:
+            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of eval_mode policy
+        """
         assert hasattr(self, '_env'), "please set env first"
         if _policy is not None:
             self._policy = _policy
@@ -117,19 +117,19 @@ class MuZeroEvaluator(ISerialEvaluator):
         self._policy.reset()
 
     def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
-        # """
-        # Overview:
-        #     Reset evaluator's policy and environment. Use new policy and environment to collect data.
-        #     If _env is None, reset the old environment.
-        #     If _env is not None, replace the old environment in the evaluator with the new passed in \
-        #         environment and launch.
-        #     If _policy is None, reset the old policy.
-        #     If _policy is not None, replace the old policy in the evaluator with the new passed in policy.
-        # Arguments:
-        #     - policy (:obj:`Optional[namedtuple]`): the api namedtuple of eval_mode policy
-        #     - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-        #         env_manager(BaseEnvManager)
-        # """
+        """
+        Overview:
+            Reset evaluator's policy and environment. Use new policy and environment to collect data.
+            If _env is None, reset the old environment.
+            If _env is not None, replace the old environment in the evaluator with the new passed in \
+                environment and launch.
+            If _policy is None, reset the old policy.
+            If _policy is not None, replace the old policy in the evaluator with the new passed in policy.
+        Arguments:
+            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of eval_mode policy
+            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
+                env_manager(BaseEnvManager)
+        """
         if _env is not None:
             self.reset_env(_env)
         if _policy is not None:
@@ -160,11 +160,11 @@ class MuZeroEvaluator(ISerialEvaluator):
         self.close()
 
     def should_eval(self, train_iter: int) -> bool:
-        # """
-        # Overview:
-        #     Determine whether you need to start the evaluation mode, if the number of training has reached\
-        #         the maximum number of times to start the evaluator, return True
-        # """
+        """
+        Overview:
+            Determine whether you need to start the evaluation mode, if the number of training has reached\
+                the maximum number of times to start the evaluator, return True
+        """
         if train_iter == self._last_eval_iter:
             return False
         if (train_iter - self._last_eval_iter) < self._cfg.eval_freq and train_iter != 0:
@@ -180,18 +180,18 @@ class MuZeroEvaluator(ISerialEvaluator):
             n_episode: Optional[int] = None,
             config: Optional[dict] = None,
     ) -> Tuple[bool, float]:
-        # '''
-        # Overview:
-        #     Evaluate policy and store the best policy based on whether it reaches the highest historical reward.
-        # Arguments:
-        #     - save_ckpt_fn (:obj:`Callable`): Saving ckpt function, which will be triggered by getting the best reward.
-        #     - train_iter (:obj:`int`): Current training iteration.
-        #     - envstep (:obj:`int`): Current env interaction step.
-        #     - n_episode (:obj:`int`): Number of evaluation episodes.
-        # Returns:
-        #     - stop_flag (:obj:`bool`): Whether this training program can be ended.
-        #     - eval_reward (:obj:`float`): Current eval_reward.
-        # '''
+        '''
+        Overview:
+            Evaluate policy and store the best policy based on whether it reaches the highest historical reward.
+        Arguments:
+            - save_ckpt_fn (:obj:`Callable`): Saving ckpt function, which will be triggered by getting the best reward.
+            - train_iter (:obj:`int`): Current training iteration.
+            - envstep (:obj:`int`): Current env interaction step.
+            - n_episode (:obj:`int`): Number of evaluation episodes.
+        Returns:
+            - stop_flag (:obj:`bool`): Whether this training program can be ended.
+            - eval_reward (:obj:`float`): Current eval_reward.
+        '''
         if n_episode is None:
             n_episode = self._default_n_episode
         assert n_episode is not None, "please indicate eval n_episode"

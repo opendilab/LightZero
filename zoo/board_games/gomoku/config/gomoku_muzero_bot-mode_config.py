@@ -17,7 +17,7 @@ num_simulations = 100
 update_per_collect = 100
 batch_size = 256
 max_env_step = int(2e6)
-reanalyze_ratio = 0.
+reanalyze_ratio = 0.3
 # categorical_distribution = True
 categorical_distribution = False
 
@@ -47,7 +47,7 @@ categorical_distribution = False
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_lm-true_atv_rbs1e6_seed0',
+    exp_name=f'data_mz_ctree/gomoku_b{board_size}_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_lm-true_atv_mts1e6_rbs1e6_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -144,7 +144,7 @@ gomoku_muzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='board_games',
-        game_block_length=18,
+        game_block_length=int(board_size * board_size/2),  # for battle_mode='play_with_bot_mode',
 
         ## observation
         # NOTE: the key difference setting between image-input and vector input
@@ -165,7 +165,7 @@ gomoku_muzero_config = dict(
         policy_loss_weight=1,
         ssl_loss_weight=0,
         # ``max_training_steps`` is only used for adjusting temperature manually.
-        max_training_steps=int(1e5),
+        max_training_steps=int(1e6),
         # auto_temperature=False,
         auto_temperature=True,
         fixed_temperature_value=1,

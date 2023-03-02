@@ -102,6 +102,8 @@ def wrap_lightzero(config, episode_life, clip_rewards):
         env = ScaledFloatFrameWrapper(env)
     if clip_rewards:
         env = ClipRewardWrapper(env)
+    else:
+        print('debug')
     if config.save_video:
         env = RecordVideo(
             env, video_folder=config.save_path, episode_trigger=lambda episode_id: True, name_prefix='rl-video-{}'.format(config.uid)

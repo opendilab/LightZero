@@ -19,6 +19,15 @@ num_simulations = 50
 update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
+
+## debug config
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 2
+# update_per_collect = 1
+# batch_size = 2
+# max_env_step = int(1e4)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
