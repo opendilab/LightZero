@@ -9,7 +9,7 @@ cfg = dict(
     prob_expert_agent=0,
     battle_mode='self_play_mode',
     agent_vs_human=False,
-    expert_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
+    bot_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
 )
 
 @pytest.mark.envtest

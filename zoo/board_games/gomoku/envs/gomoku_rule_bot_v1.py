@@ -1,12 +1,16 @@
 # Reference link:
 # https://github.com/LouisCaixuran/gomoku/blob/c1b6d508522d9e8c78be827f326bbee54c4dfd8b/gomoku/expert.py
 
-from collections import defaultdict
+"""
+when GomokuExpertV1 has 4-connect, and the opponent also have 4-connect, GomokuExpertV1 will block the opponent and don't
+play piece to 4-connect to 5-connect.
+"""
 
+from collections import defaultdict
 import numpy as np
 
 
-class GomokuExpertV0(object):
+class GomokuExpertV1(object):
     """
         Overview:
             The ``GomokuExpert`` used to output rule-based expert actions for Gomoku.
@@ -19,7 +23,7 @@ class GomokuExpertV0(object):
     def __init__(self):
         """
         Overview:
-            Init the ``GomokuExpertV0``.
+            Init the ``GomokuExpertV1``.
         """
         # The initial unit weight of pieces
         self.unit_weight = 100
@@ -265,10 +269,11 @@ class GomokuExpertV0(object):
         else:
             # When encountering an opponent_player's piece, minus 5 to the score
             score -= 5
+            # score -= 1  # TODO
             # When encountering an opponent_player's piece, return
-            # return is_continue = 0
+            # is_continue = 0
             return 0, score, unit_weight
-        # return is_continue = 1
+        # is_continue = 1
         return 1, score, unit_weight
 
     def evaluate_all_legal_moves(self, player):
@@ -298,6 +303,12 @@ class GomokuExpertV0(object):
                 elif self.action_score[action][k] >= 302:
                     self.action_score[action][k] = 1000
 
+            # ==============================================================
+            # <302: 原值
+            # 302<= x <= 390: 1000
+            # x >= 390: 2000
+            # ==============================================================
+
             # Combining the scores of each direction into a total action score
             self.action_score[action][4] = (
                 self.action_score[action][0] + self.action_score[action][1] + self.action_score[action][2] +
@@ -316,7 +327,7 @@ class GomokuExpertV0(object):
             - obs (:obj:`np.array`)
 
         Returns:
-            - expert_action
+            - bot_action
         """
         self.obs = obs
 

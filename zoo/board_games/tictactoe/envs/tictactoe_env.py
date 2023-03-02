@@ -25,7 +25,7 @@ class TicTacToeEnv(BaseGameEnv):
         prob_expert_agent=0,
         battle_mode='play_with_bot_mode',
         agent_vs_human=False,
-        expert_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
     )
 
     @classmethod
@@ -48,8 +48,8 @@ class TicTacToeEnv(BaseGameEnv):
             f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
         self._env = self
         self.agent_vs_human = cfg.agent_vs_human
-        self.expert_action_type = cfg.expert_action_type
-        if 'alpha_beta_pruning' in self.expert_action_type:
+        self.bot_action_type = cfg.bot_action_type
+        if 'alpha_beta_pruning' in self.bot_action_type:
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 
     @property
@@ -69,7 +69,7 @@ class TicTacToeEnv(BaseGameEnv):
         return self.players[0] if self.current_player == self.players[1] else self.players[1]
 
     @property
-    def current_player_to_compute_expert_action(self):
+    def current_player_to_compute_bot_action(self):
         """
         Overview: to compute expert action easily.
         """
@@ -135,7 +135,7 @@ class TicTacToeEnv(BaseGameEnv):
                     action = self.random_action()
             elif self.prob_expert_agent > 0:
                 if np.random.rand() < self.prob_expert_agent:
-                    action = self.expert_action()
+                    action = self.bot_action()
 
             timestep = self._player_step(action)
             # print(self.board)
@@ -152,9 +152,9 @@ class TicTacToeEnv(BaseGameEnv):
                 return timestep_player1
 
             # player 2's turn
-            expert_action = self.expert_action()
-            # print('player 2 (computer player): ' + self.action_to_string(expert_action))
-            timestep_player2 = self._player_step(expert_action)
+            bot_action = self.bot_action()
+            # print('player 2 (computer player): ' + self.action_to_string(bot_action))
+            timestep_player2 = self._player_step(bot_action)
             # the final_eval_reward is calculated from Player 1's perspective
             timestep_player2.info['final_eval_reward'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
@@ -174,11 +174,11 @@ class TicTacToeEnv(BaseGameEnv):
 
             # player 2's turn
             if self.agent_vs_human:
-                expert_action = self.human_to_action()
+                bot_action = self.human_to_action()
             else:
-                expert_action = self.expert_action()
-            # print('player 2 (computer player): ' + self.action_to_string(expert_action))
-            timestep_player2 = self._player_step(expert_action)
+                bot_action = self.bot_action()
+            # print('player 2 (computer player): ' + self.action_to_string(bot_action))
+            timestep_player2 = self._player_step(bot_action)
             # the final_eval_reward is calculated from Player 1's perspective
             timestep_player2.info['final_eval_reward'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
@@ -310,20 +310,21 @@ class TicTacToeEnv(BaseGameEnv):
         action_list = self.legal_actions
         return np.random.choice(action_list)
 
-    def expert_action(self):
-        if self.expert_action_type == 'v0':
-            return self.expert_action_v0()
-        elif self.expert_action_type == 'alpha_beta_pruning':
-            return self.expert_action_alpha_beta_pruning()
+    def bot_action(self):
+        if self.bot_action_type == 'v0':
+            return self.rule_bot_v0()
+        elif self.bot_action_type == 'alpha_beta_pruning':
+            return self.bot_action_alpha_beta_pruning()
 
-    def expert_action_alpha_beta_pruning(self):
+    def bot_action_alpha_beta_pruning(self):
         action = self.alpha_beta_pruning_player.get_best_action(self.board, player_index=self.current_player_index)
         return action
 
-    def expert_action_v0(self):
+    def rule_bot_v0(self):
         """
         Overview:
             Hard coded expert agent for tictactoe env.
+            First random sample a action from legal_actions, then take the action that will lead a connect3 of current player's pieces.
         Returns:
             - action (:obj:`int`): the expert action to take in the current game state.
         """
@@ -349,7 +350,7 @@ class TicTacToeEnv(BaseGameEnv):
                 ind = np.where(board[i, :] == 0)[0][0]
                 # convert ind to action
                 action = np.ravel_multi_index((np.array([i]), np.array([ind])), (3, 3))[0]
-                if self.current_player_to_compute_expert_action * sum(board[i, :]) > 0:
+                if self.current_player_to_compute_bot_action * sum(board[i, :]) > 0:
                     # only take the action that will lead a connect3 of current player's pieces
                     return action
 
@@ -359,7 +360,7 @@ class TicTacToeEnv(BaseGameEnv):
                 ind = np.where(board[:, i] == 0)[0][0]
                 # convert ind to action
                 action = np.ravel_multi_index((np.array([ind]), np.array([i])), (3, 3))[0]
-                if self.current_player_to_compute_expert_action * sum(board[:, i]) > 0:
+                if self.current_player_to_compute_bot_action * sum(board[:, i]) > 0:
                     # only take the action that will lead a connect3 of current player's pieces
                     return action
 
@@ -372,7 +373,7 @@ class TicTacToeEnv(BaseGameEnv):
             ind = np.where(diag == 0)[0][0]
             # convert ind to action
             action = np.ravel_multi_index((np.array([ind]), np.array([ind])), (3, 3))[0]
-            if self.current_player_to_compute_expert_action * sum(diag) > 0:
+            if self.current_player_to_compute_bot_action * sum(diag) > 0:
                 # only take the action that will lead a connect3 of current player's pieces
                 return action
 
@@ -382,7 +383,7 @@ class TicTacToeEnv(BaseGameEnv):
             ind = np.where(anti_diag == 0)[0][0]
             # convert ind to action
             action = np.ravel_multi_index((np.array([ind]), np.array([2 - ind])), (3, 3))[0]
-            if self.current_player_to_compute_expert_action * sum(anti_diag) > 0:
+            if self.current_player_to_compute_bot_action * sum(anti_diag) > 0:
                 # only take the action that will lead a connect3 of current player's pieces
                 return action
 

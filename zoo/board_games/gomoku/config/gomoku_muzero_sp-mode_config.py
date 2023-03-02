@@ -10,29 +10,40 @@ else:
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 board_size = 6  # default_size is 15
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 5
-num_simulations = 50
-# update_per_collect determines the number of training steps after each collection of a batch of data.
-# For different env, we have different episode_length,
-# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
-update_per_collect = 50
+collector_env_num = 32
+n_episode = 32
+evaluator_env_num = 3
+num_simulations = 100
+update_per_collect = 100
 batch_size = 256
-max_env_step = int(2e5)
+max_env_step = int(2e6)
+reanalyze_ratio = 0.
+
+# board_size = 6  # default_size is 15
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 5
+# num_simulations = 50
+# update_per_collect = 50
+# batch_size = 256
+# max_env_step = int(2e5)
+# reanalyze_ratio = 0.
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_muzero_sf-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_mz_ctree/gomoku_muzero_sp-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ftv1_rbs1e6_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         board_size=board_size,
-        channel_last=True,
         battle_mode='self_play_mode',
+        bot_action_type='v0',
+        channel_last=True,
+        scale=True,
         manager=dict(shared_memory=False, ),
         stop_value=int(2),
     ),
@@ -47,8 +58,7 @@ gomoku_muzero_config = dict(
         cuda=True,
         model=dict(
             # ==============================================================
-            # We use the default large size model, please refer to the
-            # default init config in MuZeroModel class for details.
+            # We use the half size model for gomoku
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
             image_channel=3,
@@ -63,7 +73,7 @@ gomoku_muzero_config = dict(
             # whether to use discrete support to represent categorical distribution for value, reward.
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            ## half size model
+            # half size model
             num_res_blocks=1,
             num_channels=32,
             reward_head_channels=16,
@@ -72,9 +82,12 @@ gomoku_muzero_config = dict(
             fc_reward_layers=[32],
             fc_value_layers=[32],
             fc_policy_layers=[32],
-            support_scale=300,
-            reward_support_size=601,
-            value_support_size=601,
+            # support_scale=300,
+            # reward_support_size=601,
+            # value_support_size=601,
+            support_scale=10,
+            reward_support_size=21,
+            value_support_size=21,
         ),
         # learn_mode config
         learn=dict(
@@ -130,9 +143,11 @@ gomoku_muzero_config = dict(
         policy_loss_weight=1,
         # ``max_training_steps`` is only used for adjusting temperature manually.
         max_training_steps=int(1e5),
+        auto_temperature=False,
+        fixed_temperature_value=1,
 
         ## reanalyze
-        reanalyze_ratio=0.3,
+        reanalyze_ratio=reanalyze_ratio,
         reanalyze_outdated=True,
         # whether to use root value in reanalyzing part
         use_root_value=False,

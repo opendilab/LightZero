@@ -26,7 +26,7 @@ class TestGomokuEnv:
                     print('draw')
                 break
 
-            # action = env.expert_action()
+            # action = env.bot_action()
             action = env.random_action()
             # action = env.human_to_action()
             print('player 2 (computer player): ' + env.action_to_string(action))

@@ -4,14 +4,23 @@ from easydict import EasyDict
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 board_size = 6  # default_size is 15
-collector_env_num = 8
-n_episode = 8
+collector_env_num = 32
+n_episode = 32
 evaluator_env_num = 3
-# num_simulations = 100
-num_simulations = 50
-update_per_collect = 50
+num_simulations = 100
+update_per_collect = 100
 batch_size = 256
 max_env_step = int(2e6)
+
+# board_size = 6  # default_size is 15
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# # num_simulations = 100
+# num_simulations = 50
+# update_per_collect = 50
+# batch_size = 256
+# max_env_step = int(2e6)
 
 # board_size = 6  # default_size is 15
 # collector_env_num = 1
@@ -32,10 +41,10 @@ gomoku_alphazero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         board_size=board_size,
         battle_mode='play_with_bot_mode',
+        bot_action_type='v0',
         # NOTE
         channel_last=False,
         scale=True,
-        # scale=False,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
@@ -114,8 +123,7 @@ gomoku_alphazero_create_config = dict(
         type='gomoku',
         import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
     ),
-    env_manager=dict(type='base'),
-    # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='subprocess'),
     policy=dict(
         type='alphazero',
         import_names=['lzero.policy.alphazero'],
@@ -123,7 +131,6 @@ gomoku_alphazero_create_config = dict(
     collector=dict(
         type='episode_alphazero',
         get_train_sample=False,
-        # get_train_sample=True,
         import_names=['lzero.worker.alphazero_collector'],
     ),
     evaluator=dict(

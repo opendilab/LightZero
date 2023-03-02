@@ -1362,11 +1362,10 @@ class SampledEfficientZeroGameBuffer(Buffer):
                                 target_policies.append(policy_tmp)
 
                     else:
-                        ######################
+                        # ==============================================================
                         # sampled related code
-                        ######################
+                        # ==============================================================
                         # the invalid target policy
-                        # TODO
                         target_policies.append([0 for _ in range(self._cfg.model.num_of_sampled_actions)])
                         policy_mask.append(0)
 

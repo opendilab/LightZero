@@ -17,7 +17,7 @@ cfg = dict(
     battle_mode='self_play_mode',
     channel_last=True,
     agent_vs_human=False,
-    expert_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
+    bot_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
 )
 
 

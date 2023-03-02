@@ -5,28 +5,28 @@ from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 
 
 @pytest.mark.envtest
-class TestExpertActionV0:
+class TestExpertActionV1:
 
     def test_naive(self):
         cfg = EasyDict(
             prob_random_agent=0,
             board_size=6,
-            battle_mode='play_with_bot_mode',
+            battle_mode='self_play_mode',
             channel_last=False,
             scale=False,
             agent_vs_human=False,
-            expert_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+            bot_action_type='v1',  # {'v0', 'v1', 'alpha_beta_pruning'}
         )
         env = GomokuEnv(cfg)
-        test_episodes = 5
+        test_episodes = 1
         for i in range(test_episodes):
             obs = env.reset()
             # print('init board state: ', obs)
             env.render()
             while True:
-                action = env.expert_action()
+                # action = env.bot_action()
                 # action = env.random_action()
-                # action = env.human_to_action()
+                action = env.human_to_action()
                 print('action index of player 1 is:', action)
                 print('player 1: ' + env.action_to_string(action))
                 obs, reward, done, info = env.step(action)
@@ -38,7 +38,7 @@ class TestExpertActionV0:
                         print('draw')
                     break
 
-                action = env.expert_action()
+                action = env.bot_action()
                 # action = env.random_action()
                 print('action index of player 2 is:', action)
                 print('player 2: ' + env.action_to_string(action))
@@ -52,5 +52,5 @@ class TestExpertActionV0:
                     break
 
 
-test = TestExpertActionV0()
+test = TestExpertActionV1()
 test.test_naive()

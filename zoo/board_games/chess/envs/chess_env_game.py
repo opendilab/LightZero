@@ -150,7 +150,7 @@ class ChessEnv(BaseGameEnv):
         action_list = self.legal_moves()
         return np.random.choice(action_list)
 
-    def expert_action(self):
+    def bot_action(self):
         # TODO
         pass
 

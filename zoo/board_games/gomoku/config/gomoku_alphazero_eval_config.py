@@ -16,10 +16,12 @@ gomoku_alphazero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        # NOTE
-        channel_last=False,
         board_size=board_size,
         battle_mode='self_play_mode',
+        bot_action_type='v0',
+        # NOTE
+        channel_last=False,
+        scale=True,
         prob_random_agent=0.,
         agent_vs_human=agent_vs_human,
         manager=dict(shared_memory=False, ),
@@ -130,7 +132,7 @@ gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
 create_config = gomoku_alphazero_create_config
 
 if __name__ == '__main__':
-    from core.entry import serial_pipeline_alphazero_eval
+    from lzero.entry import serial_pipeline_alphazero_eval
     import numpy as np
 
     seed = 0

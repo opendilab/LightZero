@@ -92,10 +92,14 @@ pendulum_sampled_efficientzero_config = dict(
             # Frequency of target network update.
             target_update_freq=100,
 
-            optim_type='Adam',
-            lr_manually=False,
-            cos_lr_scheduler=True,
-            learning_rate=0.0001,  # init lr for Adam optimizer coupled with cos_lr_scheduler
+            lr_manually=True,
+            optim_type='SGD',
+            learning_rate=0.2,  # init lr for manually decay schedule
+
+            # optim_type='Adam',
+            # lr_manually=False,
+            # cos_lr_scheduler=True,
+            # learning_rate=0.0001,  # init lr for Adam optimizer coupled with cos_lr_scheduler
         ),
         # collect_mode config
         collect=dict(

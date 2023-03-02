@@ -155,7 +155,7 @@ if __name__ == "__main__":
         prob_expert_agent=0,
         battle_mode='self_play_mode',
         agent_vs_human=False,
-        expert_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
+        bot_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
     )
     env = TicTacToeEnv(EasyDict(cfg))
     player_0 = AlphaBetaPruningBot(TicTacToeEnv, cfg, 'player 1')  # player_index = 0, player = 1
@@ -210,7 +210,7 @@ if __name__ == "__main__":
         battle_mode='self_play_mode',
         channel_last=True,
         agent_vs_human=False,
-        expert_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
+        bot_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
     )
     env = GomokuEnv(EasyDict(cfg))
     player_0 = AlphaBetaPruningBot(GomokuEnv, cfg, 'player 1')  # player_index = 0, player = 1

@@ -12,7 +12,7 @@ class TestTicTacToeEnv:
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
-            expert_action_type='alpha_beta_pruning'
+            bot_action_type='alpha_beta_pruning'
         )
         env = TicTacToeEnv(cfg)
         env.reset()
@@ -22,7 +22,7 @@ class TestTicTacToeEnv:
             """player 1"""
             action = env.human_to_action()
             # action = env.random_action()
-            # action = env.expert_action()
+            # action = env.bot_action()
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
             env.render()
@@ -33,7 +33,7 @@ class TestTicTacToeEnv:
                     print('draw')
                 break
             """player 2"""
-            action = env.expert_action()
+            action = env.bot_action()
             print('player 2 (computer player): ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
             env.render()
@@ -50,7 +50,7 @@ class TestTicTacToeEnv:
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
-            expert_action_type='v0'
+            bot_action_type='v0'
         )
         env = TicTacToeEnv(cfg)
         env.reset()

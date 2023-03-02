@@ -10,27 +10,17 @@ else:
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 board_size = 6  # default_size is 15
-collector_env_num = 32
-n_episode = 32
-evaluator_env_num = 3
-num_simulations = 100
-update_per_collect = 100
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 50
+# update_per_collect determines the number of training steps after each collection of a batch of data.
+# For different env, we have different episode_length,
+# we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e6)
 reanalyze_ratio = 0.
-# categorical_distribution = True
-categorical_distribution = False
-
-
-# board_size = 6  # default_size is 15
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 50
-# update_per_collect = 50
-# batch_size = 256
-# max_env_step = int(2e6)
-# reanalyze_ratio = 0.
 
 # debug config
 # board_size = 6  # default_size is 15
@@ -47,7 +37,7 @@ categorical_distribution = False
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_lm-true_ftv1_rbs1e6_seed0',
+    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ftv1_rbs1e6_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -57,7 +47,9 @@ gomoku_muzero_config = dict(
         bot_action_type='v0',
         channel_last=True,
         scale=True,
+        # scale=False,
         manager=dict(shared_memory=False, ),
+        agent_vs_human=True,
         # stop when reaching max_env_step.
         stop_value=int(2),
     ),
@@ -66,8 +58,8 @@ gomoku_muzero_config = dict(
         # Users should add their own model path here. Model path should lead to a model.
         # Absolute path is recommended.
         # In LightZero, it is ``exp_name/ckpt/ckpt_best.pth.tar``.
-        model_path=None,
-        # model_path="/Users/puyuan/code/LightZero/zoo/board_games/gomoku/gomoku_muzero_bot-mode_ns100_upc50_rr0.0_ftv1_rbs1e6_seed0/ckpt/ckpt_best.pth.tar",
+        # model_path=None,
+        model_path="/Users/puyuan/code/LightZero/zoo/board_games/gomoku/gomoku_muzero_bot-mode_ns100_upc50_rr0.0_ftv1_rbs1e6_seed0/ckpt/ckpt_best.pth.tar",
         env_name='gomoku',
         # whether to use cuda for network.
         cuda=True,
@@ -87,9 +79,9 @@ gomoku_muzero_config = dict(
             action_space_size=int(board_size * board_size),
             last_linear_layer_init_zero=True,
             # whether to use discrete support to represent categorical distribution for value, reward.
-            categorical_distribution=categorical_distribution,
+            categorical_distribution=True,
             representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            # half size model
+            ## half size model
             num_res_blocks=1,
             num_channels=32,
             reward_head_channels=16,
@@ -98,25 +90,17 @@ gomoku_muzero_config = dict(
             fc_reward_layers=[32],
             fc_value_layers=[32],
             fc_policy_layers=[32],
-            # support_scale=300,
-            # reward_support_size=601,
-            # value_support_size=601,
-            support_scale=10,
-            reward_support_size=21,
-            value_support_size=21,
+            support_scale=300,
+            reward_support_size=601,
+            value_support_size=601,
         ),
         # learn_mode config
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
-            # lr_manually=False,
-            # optim_type='Adam',
-            # learning_rate=0.003,  # lr for Adam optimizer
-
-            lr_manually=True,
-            optim_type='SGD',
-            learning_rate=0.2,  # init lr for manually decay schedule
-
+            lr_manually=False,
+            optim_type='Adam',
+            learning_rate=0.003,  # lr for Adam optimizer
             # Frequency of target network update.
             target_update_freq=100,
             grad_clip_value=10,
@@ -206,6 +190,20 @@ gomoku_muzero_create_config = dict(
 gomoku_muzero_create_config = EasyDict(gomoku_muzero_create_config)
 create_config = gomoku_muzero_create_config
 
-if __name__ == "__main__":
-    from lzero.entry import serial_pipeline_muzero
-    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+if __name__ == '__main__':
+    from lzero.entry import serial_pipeline_muzero_eval
+    import numpy as np
+
+    seed = 0
+    test_episodes = 15
+    for i in range(15):
+        reward_mean, reward_lst = serial_pipeline_muzero_eval([main_config, create_config], seed=i, test_episodes=1, max_env_step=int(1e5))
+
+    reward_lst = np.array(reward_lst)
+    reward_mean = np.array(reward_mean)
+
+    print("=" * 20)
+    print(f'we eval total {seed} seed. In each seed, we test {test_episodes} episodes.')
+    print('reward_mean:', reward_mean)
+    print(f'win rate: {len(np.where(reward_lst == 1.)[0]) / test_episodes}, draw rate: {len(np.where(reward_lst == 0.)[0]) / test_episodes}, lose rate: {len(np.where(reward_lst == -1.)[0]) / test_episodes}')
+    print("=" * 20)
