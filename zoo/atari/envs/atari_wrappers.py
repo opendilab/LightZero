@@ -73,7 +73,7 @@ def wrap_deepmind_mr(env_id, episode_life=True, clip_rewards=True, frame_stack=4
     return env
 
 
-def wrap_lightzero(config):
+def wrap_lightzero(config, episode_life, clip_rewards):
     """
     Overview:
         Configure environment for MuZero-style Atari. The observation is
@@ -93,14 +93,14 @@ def wrap_lightzero(config):
     assert 'NoFrameskip' in env.spec.id
     env = NoopResetWrapper(env, noop_max=30)
     env = MaxAndSkipWrapper(env, skip=4)
-    if config.episode_life:
+    if episode_life:
         env = EpisodicLifeWrapper(env)
     env = TimeLimit(env, max_episode_steps=config.max_episode_steps)
     if config.warp_frame:
         env = WarpFrame(env, width=config.obs_shape[1], height=config.obs_shape[2], grayscale=config.gray_scale)
     if config.scale:
         env = ScaledFloatFrameWrapper(env)
-    if config.clip_rewards:
+    if clip_rewards:
         env = ClipRewardWrapper(env)
     if config.save_video:
         env = RecordVideo(

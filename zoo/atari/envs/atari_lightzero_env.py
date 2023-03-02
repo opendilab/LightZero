@@ -11,14 +11,13 @@ import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
+from easydict import EasyDict
 
 from zoo.atari.envs.atari_wrappers import wrap_lightzero
-from easydict import EasyDict
 
 
 @ENV_REGISTRY.register('atari_lightzero')
 class AtariLightZeroEnv(BaseEnv):
-
     config = dict(
         collector_env_num=8,
         evaluator_env_num=3,
@@ -50,14 +49,16 @@ class AtariLightZeroEnv(BaseEnv):
         cfg = EasyDict(copy.deepcopy(cls.config))
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
-    
+
     def __init__(self, cfg=None):
         self.cfg = cfg
         self._init_flag = False
         self.channel_last = cfg.channel_last
 
     def _make_env(self):
-        return wrap_lightzero(self.cfg)
+        return wrap_lightzero(self.cfg,
+                              episode_life=self.cfg.is_train,
+                              clip_rewards=self.cfg.is_train)
 
     def reset(self):
         if not self._init_flag:
@@ -65,7 +66,7 @@ class AtariLightZeroEnv(BaseEnv):
             self._observation_space = self._env.env.observation_space
             self._action_space = self._env.env.action_space
             self._reward_space = gym.spaces.Box(
-                low=self._env.env.reward_range[0], high=self._env.env.reward_range[1], shape=(1, ), dtype=np.float32
+                low=self._env.env.reward_range[0], high=self._env.env.reward_range[1], shape=(1,), dtype=np.float32
             )
 
             self._init_flag = True
@@ -174,6 +175,7 @@ class AtariLightZeroEnv(BaseEnv):
         collector_env_num = cfg.pop('collector_env_num')
         cfg = copy.deepcopy(cfg)
         cfg.max_episode_steps = cfg.collect_max_episode_steps
+        cfg.is_train = True
         return [cfg for _ in range(collector_env_num)]
 
     @staticmethod
@@ -181,4 +183,5 @@ class AtariLightZeroEnv(BaseEnv):
         evaluator_env_num = cfg.pop('evaluator_env_num')
         cfg = copy.deepcopy(cfg)
         cfg.max_episode_steps = cfg.eval_max_episode_steps
+        cfg.is_train = False
         return [cfg for _ in range(evaluator_env_num)]
