@@ -171,8 +171,11 @@ class EfficientZeroPolicy(Policy):
         fixed_temperature_value=0.25,
         # replay_buffer max size
         replay_buffer_size=int(1e6),
-        # max_training_steps is only used for adjusting temperature manually.
-        max_training_steps=int(1e5),
+        # threshold_training_steps_for_final_lr_temperature is only used for adjusting temperature manually.
+        # threshold_training_steps_for_final_lr_temperature=int(threshold_env_steps_for_final_lr_temperature/collector_env_num/average_episode_length_when_converge * update_per_collect),
+        threshold_training_steps_for_final_lr_temperature=int(1e5),
+        # lr: 0.2 -> 0.02 -> 0.002
+        # temperature: 1 -> 0.5 -> 0.25
 
         ## reanalyze
         reanalyze_ratio=0.3,
@@ -408,7 +411,6 @@ class EfficientZeroPolicy(Policy):
         consistency_loss = torch.zeros(batch_size, device=self._cfg.device)
 
         target_value_prefix_cpu = target_value_prefix.detach().cpu()
-
 
         # loss of the unrolled steps
         for step_i in range(self._cfg.num_unroll_steps):
@@ -685,7 +687,7 @@ class EfficientZeroPolicy(Policy):
                 visit_count_temperature(
                     self._cfg.auto_temperature,
                     self._cfg.fixed_temperature_value,
-                    self._cfg.max_training_steps,
+                    self._cfg.threshold_training_steps_for_final_lr_temperature,
                     trained_steps=0
                 ) for _ in range(self._cfg.collector_env_num)
             ]

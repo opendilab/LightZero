@@ -10,6 +10,10 @@ else:
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 board_size = 6  # default_size is 15
+# only used for adjusting temperature/lr manually
+average_episode_length_when_converge = int(board_size * board_size)
+threshold_env_steps_for_final_lr_temperature = int(1e5)
+
 collector_env_num = 32
 n_episode = 32
 evaluator_env_num = 3
@@ -141,8 +145,8 @@ gomoku_muzero_config = dict(
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        # ``max_training_steps`` is only used for adjusting temperature manually.
-        max_training_steps=int(1e5),
+        # ``threshold_training_steps_for_final_lr_temperature`` is only used for adjusting temperature manually.
+        threshold_training_steps_for_final_lr_temperature=int(threshold_env_steps_for_final_lr_temperature/collector_env_num/average_episode_length_when_converge * update_per_collect),
         auto_temperature=False,
         fixed_temperature_value=1,
 

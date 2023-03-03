@@ -196,8 +196,9 @@ class SampledEfficientZeroGameBuffer(Buffer):
         ssl_loss_weight=2,
         policy_entropy_loss_weight=5e-3,
         # fixed_temperature_value is effective only when auto_temperature=False
-        # max_training_steps is only used for adjusting temperature manually.
-        max_training_steps=int(1e5),
+        # ``threshold_training_steps_for_final_lr_temperature`` is only used for adjusting temperature manually.
+        # threshold_training_steps_for_final_lr_temperature=int(threshold_env_steps_for_final_lr_temperature/collector_env_num/average_episode_length_when_converge * update_per_collect),
+        threshold_training_steps_for_final_lr_temperature=int(1e5),
 
         ## reanalyze
         reanalyze_ratio=0.3,
@@ -1405,9 +1406,14 @@ class SampledEfficientZeroGameBuffer(Buffer):
             assert (self._cfg.reanalyze_ratio > 0 and self._cfg.reanalyze_outdated is True), \
                 "in sampled effiicientzero, if self._cfg.reanalyze_ratio>0, you must set self._cfg.reanalyze_outdated=True"
             # inputs_batch = [obs_lst, action_lst, root_sampled_actions_lst, mask_lst, batch_index_list, weights_lst, make_time_lst]
-            inputs_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
-                int(batch_size * self._cfg.reanalyze_ratio), self._cfg.num_unroll_steps + 1,
-                self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size)
+            if self._cfg.model.continuous_action_space:
+                inputs_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
+                    int(batch_size * self._cfg.reanalyze_ratio), self._cfg.num_unroll_steps + 1,
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size)
+            else:
+                inputs_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
+                    int(batch_size * self._cfg.reanalyze_ratio), self._cfg.num_unroll_steps + 1,
+                    self._cfg.model.num_of_sampled_actions, 1)
 
         if 0 < self._cfg.reanalyze_ratio < 1:
             try:

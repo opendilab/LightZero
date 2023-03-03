@@ -9,6 +9,10 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+# only used for adjusting temperature/lr manually
+average_episode_length_when_converge = 2000
+threshold_env_steps_for_final_lr_temperature = int(2e5)
+
 # continuous_action_space = False
 # K = 3  # num_of_sampled_actions
 # collector_env_num = 8
@@ -17,7 +21,7 @@ else:
 # num_simulations = 50
 # # update_per_collect determines the number of training steps after each collection of a batch of data.
 # # For different env, we have different episode_length,
-# # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+# # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
 # update_per_collect = 1000
 # batch_size = 256
 # max_env_step = int(1e6)
@@ -138,8 +142,8 @@ pong_sampled_efficientzero_config = dict(
         policy_loss_weight=1,
         policy_entropy_loss_coeff=0,
         ssl_loss_weight=2,
-        # ``max_training_steps`` is only used for adjusting temperature manually.
-        max_training_steps=int(1e5),
+        # ``threshold_training_steps_for_final_lr_temperature`` is only used for adjusting temperature manually.
+        threshold_training_steps_for_final_lr_temperature=int(threshold_env_steps_for_final_lr_temperature/collector_env_num/average_episode_length_when_converge * update_per_collect),
 
         ## reanalyze
         reanalyze_ratio=0.3,

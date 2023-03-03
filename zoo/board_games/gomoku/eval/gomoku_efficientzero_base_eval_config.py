@@ -77,7 +77,7 @@ game_config = EasyDict(
         use_max_priority_for_new_data=True,
 
         # TODO(pu): only used for adjust temperature manually
-        max_training_steps=int(1e5),
+        threshold_training_steps_for_final_lr_temperature=int(threshold_env_steps_for_final_lr_temperature/collector_env_num/average_episode_length_when_converge * update_per_collect),
         auto_temperature=False,
         # only effective when auto_temperature=False
         fixed_temperature_value=0.25,

@@ -94,7 +94,7 @@ class MuZeroPolicy(Policy):
             # collect data -> update policy-> collect data -> ...
             # update_per_collect determines the number of training steps after each collection of a batch of data.
             # For different env, we have different episode_length,
-            # we usually set update_per_collect = collector_env_num * episode_length * reuse_factor
+            # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
             update_per_collect=10,
             # (int) How many samples in a training batch
             batch_size=256,
@@ -176,8 +176,11 @@ class MuZeroPolicy(Policy):
         # ``fixed_temperature_value`` is effective only when auto_temperature=False
         # auto_temperature=False,
         fixed_temperature_value=0.25,
-        # max_training_steps is only used for adjusting temperature manually.
-        max_training_steps=int(1e5),
+        # threshold_training_steps_for_final_lr_temperature is only used for adjusting temperature manually.
+        # threshold_training_steps_for_final_lr_temperature=int(threshold_env_steps_for_final_lr_temperature/collector_env_num/average_episode_length_when_converge * update_per_collect),
+        threshold_training_steps_for_final_lr_temperature=int(1e5),
+        # lr: 0.2 -> 0.02 -> 0.002
+        # temperature: 1 -> 0.5 -> 0.25
 
         ## reanalyze
         reanalyze_ratio=0.3,
@@ -665,7 +668,7 @@ class MuZeroPolicy(Policy):
                 visit_count_temperature(
                     self._cfg.auto_temperature,
                     self._cfg.fixed_temperature_value,
-                    self._cfg.max_training_steps,
+                    self._cfg.threshold_training_steps_for_final_lr_temperature,
                     trained_steps=0
                 ) for _ in range(self._cfg.collector_env_num)
             ]

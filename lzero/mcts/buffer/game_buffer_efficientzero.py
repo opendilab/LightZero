@@ -133,8 +133,9 @@ class EfficientZeroGameBuffer(Buffer):
         value_loss_weight=0.25,
         policy_loss_weight=1,
         ssl_loss_weight=2,
-        # ``max_training_steps`` is only used for adjusting temperature manually.
-        max_training_steps=int(1e5),
+        # ``threshold_training_steps_for_final_lr_temperature`` is only used for adjusting temperature manually.
+        # threshold_training_steps_for_final_lr_temperature=int(threshold_env_steps_for_final_lr_temperature/collector_env_num/average_episode_length_when_converge * update_per_collect),
+        threshold_training_steps_for_final_lr_temperature=int(1e5),
 
         ## reanalyze
         reanalyze_ratio=0.3,
