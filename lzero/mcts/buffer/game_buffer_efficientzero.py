@@ -114,8 +114,6 @@ class EfficientZeroGameBuffer(Buffer):
         cvt_string=False,
         gray_scale=False,
         use_augmentation=False,
-        # style of augmentation
-        augmentation=['shift', 'intensity'],  # options=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
 
         ## reward
         clip_reward=False,
@@ -180,7 +178,7 @@ class EfficientZeroGameBuffer(Buffer):
 
         self.model_index = 0
         self.model_update_interval = 10
-        
+
         # NOTE: the following implementation is wrong because the length of different game_blocks is different.
         # A buffer/priorities/game_block_game_pos_look_up implementation based on the deque structure.
         # self.game_block_buffer_size = int(self.replay_buffer_size/self._cfg.game_block_length)

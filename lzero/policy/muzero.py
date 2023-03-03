@@ -160,7 +160,7 @@ class MuZeroPolicy(Policy):
         gray_scale=False,
         use_augmentation=True,
         # style of augmentation
-        augmentation=['shift', 'intensity'],  # options=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
+        augmentation=['shift', 'intensity'],
 
         ## learn
         num_simulations=50,
