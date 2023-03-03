@@ -97,6 +97,7 @@ def wrap_lightzero(config, episode_life, clip_rewards):
         env = EpisodicLifeWrapper(env)
     env = TimeLimit(env, max_episode_steps=config.max_episode_steps)
     if config.warp_frame:
+        # we must set WarpFrame before ScaledFloatFrameWrapper
         env = WarpFrame(env, width=config.obs_shape[1], height=config.obs_shape[2], grayscale=config.gray_scale)
     if config.scale:
         env = ScaledFloatFrameWrapper(env)
@@ -105,42 +106,6 @@ def wrap_lightzero(config, episode_life, clip_rewards):
     if config.save_video:
         env = RecordVideo(
             env, video_folder=config.save_path, episode_trigger=lambda episode_id: True, name_prefix='rl-video-{}'.format(config.uid)
-        )
-
-    env = JpegWrapper(env, cvt_string=config.cvt_string)
-    if config.game_wrapper:
-        env = GameWrapper(env)
-
-    return env
-
-
-def wrap_lightzero_dqn_expert_data(
-    config, warp_frame=True, save_video=False, save_path=None, video_callable=None, uid=None
-):
-    """
-    Overview:
-        Configure environment for MuZero-style Atari. The observation is
-        channel-first: (c, h, w) instead of (h, w, c).
-    Arguments:
-        - config (:obj:`Dict`): Dict containing configuration.
-    :param str env_id: the atari environment id.
-    :param bool config.episode_life: wrap the episode life wrapper.
-    :param bool warp_frame: wrap the grayscale + resize observation wrapper.
-    :return: the wrapped atari environment.
-    """
-    env = gym.make(config.env_name)
-    assert 'NoFrameskip' in env.spec.id
-    env = NoopResetWrapper(env, noop_max=30)
-    env = MaxAndSkipWrapper(env, skip=4)
-    if config.episode_life:
-        env = EpisodicLifeWrapper(env)
-    env = TimeLimit(env, max_episode_steps=config.max_episode_steps)
-    if warp_frame:
-        # for collecting dqn expert data
-        env = WarpFrame(env, width=84, height=84, grayscale=False)
-    if save_video:
-        env = RecordVideo(
-            env, video_folder=save_path, episode_trigger=lambda episode_id: True, name_prefix='rl-video-{}'.format(uid)
         )
 
     env = JpegWrapper(env, cvt_string=config.cvt_string)
@@ -233,7 +198,6 @@ class JpegWrapper(gym.Wrapper):
 
     def step(self, action):
         observation, reward, done, info = self.env.step(action)
-        observation = observation.astype(np.uint8)
 
         if self.cvt_string:
             observation = jpeg_data_compressor(observation)
@@ -242,7 +206,6 @@ class JpegWrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         observation = self.env.reset(**kwargs)
-        observation = observation.astype(np.uint8)
 
         if self.cvt_string:
             observation = jpeg_data_compressor(observation)

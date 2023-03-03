@@ -13,27 +13,29 @@ else:
 average_episode_length_when_converge = 2000
 threshold_env_steps_for_final_lr_temperature = int(2e5)
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-num_simulations = 50
-# update_per_collect determines the number of training steps after each collection of a batch of data.
-# For different env, we have different episode_length,
-# we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
-# for pong, update_per_collect = 8*2000/256*20 ~= 1000
-update_per_collect = 1000
-batch_size = 256
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# num_simulations = 50
+# # update_per_collect determines the number of training steps after each collection of a batch of data.
+# # For different env, we have different episode_length,
+# # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
+# # for pong, update_per_collect = 8*2000/256*20 ~= 1000
+# update_per_collect = 1000
+# batch_size = 256
+# max_env_step = int(1e6)
+# reanalyze_ratio = 0.
+
+## debug config
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+num_simulations = 5
+update_per_collect = 2
+batch_size = 10
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
 
-## debug config
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 5
-# update_per_collect = 2
-# batch_size = 4
-# max_env_step = int(1e4)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
