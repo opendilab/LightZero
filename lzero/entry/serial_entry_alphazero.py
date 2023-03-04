@@ -24,7 +24,7 @@ def serial_pipeline_alphazero(
 ) -> 'Policy':  # noqa
     """
     Overview:
-        Serial pipeline entry for AlphaZero and its variants, such as AlphaZero.
+        Serial pipeline entry for AlphaZero.
     Arguments:
         - input_cfg (:obj:`Union[str, Tuple[dict, dict]]`): Config in dict type. \
             ``str`` type means config file path. \

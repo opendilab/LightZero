@@ -16,7 +16,7 @@ num_simulations = 50
 # update_per_collect determines the number of training steps after each collection of a batch of data.
 # For different env, we have different episode_length,
 # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
-update_per_collect = 250
+update_per_collect = 200
 batch_size = 256
 max_env_step = int(1e6)
 # ==============================================================
@@ -186,5 +186,5 @@ lunarlander_disc_efficientzero_create_config = EasyDict(lunarlander_disc_efficie
 create_config = lunarlander_disc_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import serial_pipeline_efficientzero_eval
-    serial_pipeline_efficientzero_eval([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import serial_pipeline_mcts_eval
+    serial_pipeline_mcts_eval([main_config, create_config], seed=0, max_env_step=max_env_step)

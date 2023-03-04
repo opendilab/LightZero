@@ -237,7 +237,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         assert self._cfg.env_type in ['not_board_games', 'board_games']
 
         self.batch_size = self._cfg.learn.batch_size
-        self.replay_buffer_size = self._cfg.other.replay_buffer.replay_buffer_size
+        self.replay_buffer_size = self._cfg.replay_buffer_size
         self._alpha = self._cfg.priority_prob_alpha
 
         self.keep_ratio = 1

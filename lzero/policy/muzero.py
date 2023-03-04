@@ -32,6 +32,7 @@ class MuZeroPolicy(Policy):
         The policy class for MuZero.
     """
 
+    # The default_config for MuZero policy.
     config = dict(
         type='muzero',
         # the pretrained model path.
@@ -39,30 +40,36 @@ class MuZeroPolicy(Policy):
         # Absolute path is recommended.
         # In LightZero, it is ``exp_name/ckpt/ckpt_best.pth.tar``.
         model_path=None,
-        # (bool) Whether use cuda in policy
-        cuda=False,
         # (bool) Whether learning policy is the same as collecting data policy(on-policy)
         on_policy=False,
-        # (bool) Whether use Importance Sampling Weight to correct biased update. If True, priority must be True.
-        priority_IS_weight=False,
-        # (float) Discount factor(gamma) for returns
-        discount_factor=0.97,
-        # (int) The number of step for calculating target q_value
-        nstep=1,
         model=dict(
-            image_channel=1,
-            frame_stack_num=4,
-            # the key difference setting between image-input and vector input.
-            downsample=True,
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
-            observation_shape=(12, 96, 96),  # if frame_stack_num=4
-            # observation_shape=(3, 96, 96),  # if frame_stack_num=1
+            # observation_shape=(12, 96, 96),  # if frame_stack_num=4, gray_scale=False
+            # observation_shape=(3, 96, 96),  # if frame_stack_num=1, gray_scale=False
+            observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
             action_space_size=6,
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            # whether use the self_supervised_learning_loss.
+            self_supervised_learning_loss=True,
+            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
+            categorical_distribution=True,
+            activation=torch.nn.ReLU(inplace=True),
+            batch_norm_momentum=0.1,
+            last_linear_layer_init_zero=True,
+            state_norm=False,
+            # the key difference setting between image-input and vector input.
+            image_channel=1,
+            frame_stack_num=4,
+            downsample=True,
+            # ==============================================================
             # the default config is large size model, same as the EfficientZero original paper.
+            # ==============================================================
             num_res_blocks=1,
             num_channels=64,
+            lstm_hidden_size=512,
+            # the following model para. is usually fixed
             reward_head_channels=16,
             value_head_channels=16,
             policy_head_channels=16,
@@ -72,18 +79,11 @@ class MuZeroPolicy(Policy):
             support_scale=300,
             reward_support_size=601,
             value_support_size=601,
-            batch_norm_momentum=0.1,
             proj_hid=1024,
             proj_out=1024,
             pred_hid=512,
             pred_out=1024,
-            last_linear_layer_init_zero=True,
-            state_norm=False,
-            activation=torch.nn.ReLU(inplace=True),
-            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
-            categorical_distribution=True,
-            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            self_supervised_learning_loss=False,
+            # the above model para. is usually fixed
         ),
         # learn_mode config
         learn=dict(
@@ -92,20 +92,16 @@ class MuZeroPolicy(Policy):
             # How many updates(iterations) to train after collector's one collection.
             # Bigger "update_per_collect" means bigger off-policy.
             # collect data -> update policy-> collect data -> ...
-            # update_per_collect determines the number of training steps after each collection of a batch of data.
             # For different env, we have different episode_length,
             # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
-            update_per_collect=10,
+            update_per_collect=100,
             # (int) How many samples in a training batch
             batch_size=256,
             lr_manually=True,
-            # optim_type='Adam',
-            # learning_rate=0.001,  # lr for Adam optimizer
             optim_type='SGD',
             learning_rate=0.2,  # init lr for manually decay schedule
-            # ==============================================================
-            # The following configs are algorithm-specific
-            # ==============================================================
+            # optim_type='Adam',
+            # learning_rate=0.001,  # lr for Adam optimizer
             # (int) Frequency of target network update.
             target_update_freq=100,
             # (bool) Whether ignore done(usually for max step termination env)
@@ -114,7 +110,6 @@ class MuZeroPolicy(Policy):
             momentum=0.9,
             grad_clip_type='clip_norm',
             grad_clip_value=10,
-            # grad_clip_value=0.5,
         ),
         # collect_mode config
         collect=dict(
@@ -122,22 +117,6 @@ class MuZeroPolicy(Policy):
             # Get "n_episode" episodes per collect.
             n_episode=8,
             unroll_len=1,
-        ),
-        # command_mode config
-        other=dict(
-            # Epsilon greedy with decay.
-            eps=dict(
-                # Decay type. Support ['exp', 'linear'].
-                type='exp',
-                start=0.95,
-                end=0.1,
-                decay=50000,
-            ),
-            replay_buffer=dict(
-                type='game_buffer_muzero',
-                # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(1e6),
-            ),
         ),
         # ==============================================================
         # begin of additional game_config
@@ -152,10 +131,11 @@ class MuZeroPolicy(Policy):
         game_wrapper=True,
         monitor_statistics=True,
         game_block_length=200,
+        # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e6),
 
         ## observation
         # the key difference setting between image-input and vector input.
-        image_based=False,
         cvt_string=False,
         gray_scale=False,
         use_augmentation=True,
@@ -172,15 +152,21 @@ class MuZeroPolicy(Policy):
         value_loss_weight=0.25,
         policy_loss_weight=1,
         ssl_loss_weight=0,
+
+        # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
+        # threshold_training_steps_for_final_lr=int(
+        #     threshold_env_steps_for_final_lr / collector_env_num / average_episode_length_when_converge * update_per_collect),
+        threshold_training_steps_for_final_lr=int(1e5),
+        # lr: 0.2 -> 0.02 -> 0.002
+
+        # ``threshold_training_steps_for_final_temperature`` is only used for adjusting temperature manually.
+        # threshold_training_steps_for_final_temperature=int(
+        #     threshold_env_steps_for_final_temperature / collector_env_num / average_episode_length_when_converge * update_per_collect),
+        threshold_training_steps_for_final_temperature=int(1e5),
+        # temperature: 1 -> 0.5 -> 0.25
         auto_temperature=True,
         # ``fixed_temperature_value`` is effective only when auto_temperature=False
-        # auto_temperature=False,
         fixed_temperature_value=0.25,
-        # threshold_training_steps_for_final_lr_temperature is only used for adjusting temperature manually.
-        # threshold_training_steps_for_final_lr_temperature=int(threshold_env_steps_for_final_lr_temperature/collector_env_num/average_episode_length_when_converge * update_per_collect),
-        threshold_training_steps_for_final_lr_temperature=int(1e5),
-        # lr: 0.2 -> 0.02 -> 0.002
-        # temperature: 1 -> 0.5 -> 0.25
 
         ## reanalyze
         reanalyze_ratio=0.3,

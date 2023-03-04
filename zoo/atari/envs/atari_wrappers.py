@@ -92,7 +92,7 @@ def wrap_lightzero(config, episode_life, clip_rewards):
         env = gym.make(config.env_name)
     assert 'NoFrameskip' in env.spec.id
     env = NoopResetWrapper(env, noop_max=30)
-    env = MaxAndSkipWrapper(env, skip=4)
+    env = MaxAndSkipWrapper(env, skip=config.frame_skip)
     if episode_life:
         env = EpisodicLifeWrapper(env)
     env = TimeLimit(env, max_episode_steps=config.max_episode_steps)

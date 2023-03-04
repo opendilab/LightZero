@@ -1,6 +1,3 @@
-"""
-NOTE: the only difference between muzero and muzero_with-ssl is the self-supervised-learning loss.
-"""
 import torch
 from easydict import EasyDict
 
@@ -12,40 +9,48 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+board_size = 6  # default_size is 15
 # only used for adjusting temperature/lr manually
-average_episode_length_when_converge = 800
+average_episode_length_when_converge = int(board_size * board_size)
 threshold_env_steps_for_final_lr = int(2e5)
 threshold_env_steps_for_final_temperature = int(5e5)
 
-collector_env_num = 8
-n_episode = 8
+collector_env_num = 32
+n_episode = 32
 evaluator_env_num = 3
-num_simulations = 50
-# update_per_collect determines the number of training steps after each collection of a batch of data.
-# For different env, we have different episode_length,
-# we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
-update_per_collect = 1000
+num_simulations = 100
+update_per_collect = 100
 batch_size = 256
-max_env_step = int(1e6)
+max_env_step = int(2e6)
+reanalyze_ratio = 0.
+
+# board_size = 6  # default_size is 15
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 5
+# num_simulations = 50
+# update_per_collect = 50
+# batch_size = 256
+# max_env_step = int(2e5)
+# reanalyze_ratio = 0.
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-qbert_muzero_config = dict(
-    exp_name=f'data_mz_ctree/qbert_muzero_with-ssl_ns{num_simulations}_upc{update_per_collect}_seed0',
+gomoku_muzero_config = dict(
+    exp_name=f'data_mz_ctree/gomoku_muzero_sp-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ftv1_rbs1e6_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        env_name='QbertNoFrameskip-v4',
-        frame_skip=4,
-        frame_stack_num=4,
-        gray_scale=True,
-        obs_shape=(4, 96, 96),
-        clip_rewards=True,
+        board_size=board_size,
+        battle_mode='self_play_mode',
+        bot_action_type='v0',
+        channel_last=True,
         scale=True,
         manager=dict(shared_memory=False, ),
-        stop_value=int(1e6),
+        stop_value=int(2),
     ),
     policy=dict(
         # the pretrained model path.
@@ -53,38 +58,49 @@ qbert_muzero_config = dict(
         # Absolute path is recommended.
         # In LightZero, it is ``exp_name/ckpt/ckpt_best.pth.tar``.
         model_path=None,
-        env_name='QbertNoFrameskip-v4',
+        env_name='gomoku',
         # whether to use cuda for network.
         cuda=True,
         model=dict(
             # ==============================================================
-            # We use the default large size model, please refer to the
-            # default init config in MuZeroModel class for details.
+            # We use the half size model for gomoku
             # ==============================================================
             # NOTE: the key difference setting between image-input and vector input.
-            image_channel=1,
-            frame_stack_num=4,
-            downsample=True,
+            image_channel=3,
+            frame_stack_num=1,
+            downsample=False,
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
-            # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
-            # observation_shape=(12, 96, 96),  # if frame_stack_num=4, gray_scale=False
-            # observation_shape=(3, 96, 96),  # if frame_stack_num=1, gray_scale=False
-            observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
-            action_space_size=6,
+            # e.g. [4, 3, 3, 3] -> [12, 3, 3]
+            # observation_shape=(12, 3, 3),  # if frame_stack_num=4
+            observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
+            action_space_size=int(board_size * board_size),
             # whether to use discrete support to represent categorical distribution for value, reward.
             categorical_distribution=True,
             representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            # NOTE: the only difference between muzero and muzero_with-ssl is the self-supervised-learning loss.
-            self_supervised_learning_loss=True,
+            # half size model
+            num_res_blocks=1,
+            num_channels=32,
+            reward_head_channels=16,
+            value_head_channels=16,
+            policy_head_channels=16,
+            fc_reward_layers=[32],
+            fc_value_layers=[32],
+            fc_policy_layers=[32],
+            # support_scale=300,
+            # reward_support_size=601,
+            # value_support_size=601,
+            support_scale=10,
+            reward_support_size=21,
+            value_support_size=21,
         ),
         # learn_mode config
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
-            lr_manually=True,
-            optim_type='SGD',
-            learning_rate=0.2,  # init lr for manually decay schedule
+            lr_manually=False,
+            optim_type='Adam',
+            learning_rate=0.003,  # lr for Adam optimizer
             # Frequency of target network update.
             target_update_freq=100,
         ),
@@ -110,24 +126,26 @@ qbert_muzero_config = dict(
         device=device,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
-        env_type='not_board_games',
-        game_block_length=400,
+        env_type='board_games',
+        game_block_length=36,
 
         ## observation
-        # the key difference setting between image-input and vector input
-        image_based=True,
-        use_augmentation=True,
+        # NOTE: the key difference setting between image-input and vector input
+        image_based=False,
+        cvt_string=False,
+        gray_scale=False,
+        use_augmentation=False,
+        downsample=False,
 
         ## learn
         num_simulations=num_simulations,
-        td_steps=5,
+        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
+        td_steps=int(board_size * board_size),
         num_unroll_steps=5,
         # the weight of different loss
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
-        # NOTE: the only difference between muzero and muzero_with-ssl is the self-supervised-learning loss.
-        ssl_loss_weight=2,
         # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
         threshold_training_steps_for_final_lr=int(
             threshold_env_steps_for_final_lr / collector_env_num / average_episode_length_when_converge * update_per_collect),
@@ -135,8 +153,11 @@ qbert_muzero_config = dict(
         threshold_training_steps_for_final_temperature=int(
             threshold_env_steps_for_final_temperature / collector_env_num / average_episode_length_when_converge * update_per_collect),
 
+        auto_temperature=False,
+        fixed_temperature_value=1,
+
         ## reanalyze
-        reanalyze_ratio=0.3,
+        reanalyze_ratio=reanalyze_ratio,
         reanalyze_outdated=True,
         # whether to use root value in reanalyzing part
         use_root_value=False,
@@ -150,18 +171,17 @@ qbert_muzero_config = dict(
         # ==============================================================
     ),
 )
-qbert_muzero_config = EasyDict(qbert_muzero_config)
-main_config = qbert_muzero_config
+gomoku_muzero_config = EasyDict(gomoku_muzero_config)
+main_config = gomoku_muzero_config
 
-qbert_muzero_create_config = dict(
+gomoku_muzero_create_config = dict(
     env=dict(
-        type='atari_lightzero',
-        import_names=['zoo.atari.envs.atari_lightzero_env'],
+        type='gomoku',
+        import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
         type='muzero',
-        # NOTE: the only difference between muzero and muzero_with-ssl is the self-supervised-learning loss.
         import_names=['lzero.policy.muzero'],
     ),
     collector=dict(
@@ -170,9 +190,9 @@ qbert_muzero_create_config = dict(
         import_names=['lzero.worker.muzero_collector'],
     )
 )
-qbert_muzero_create_config = EasyDict(qbert_muzero_create_config)
-create_config = qbert_muzero_create_config
+gomoku_muzero_create_config = EasyDict(gomoku_muzero_create_config)
+create_config = gomoku_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import serial_pipeline_muzero
-    serial_pipeline_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import serial_pipeline_mcts
+    serial_pipeline_mcts([main_config, create_config], seed=0, max_env_step=max_env_step)

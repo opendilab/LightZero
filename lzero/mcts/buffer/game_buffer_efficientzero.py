@@ -40,19 +40,31 @@ class EfficientZeroGameBuffer(Buffer):
     # the default_config for EfficientZeroGameBuffer.
     config = dict(
         model=dict(
-            image_channel=1,
-            frame_stack_num=4,
-            # the key difference setting between image-input and vector input.
-            downsample=True,
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
-            observation_shape=(12, 96, 96),  # if frame_stack_num=4
-            # observation_shape=(3, 96, 96),  # if frame_stack_num=1
+            # observation_shape=(12, 96, 96),  # if frame_stack_num=4, gray_scale=False
+            # observation_shape=(3, 96, 96),  # if frame_stack_num=1, gray_scale=False
+            observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
             action_space_size=6,
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
+            categorical_distribution=True,
+            activation=torch.nn.ReLU(inplace=True),
+            batch_norm_momentum=0.1,
+            last_linear_layer_init_zero=True,
+            state_norm=False,
+            # the key difference setting between image-input and vector input.
+            image_channel=1,
+            frame_stack_num=4,
+            downsample=True,
+            # ==============================================================
             # the default config is large size model, same as the EfficientZero original paper.
+            # ==============================================================
             num_res_blocks=1,
             num_channels=64,
+            lstm_hidden_size=512,
+            # the following model para. is usually fixed
             reward_head_channels=16,
             value_head_channels=16,
             policy_head_channels=16,
@@ -62,37 +74,44 @@ class EfficientZeroGameBuffer(Buffer):
             support_scale=300,
             reward_support_size=601,
             value_support_size=601,
-            batch_norm_momentum=0.1,
             proj_hid=1024,
             proj_out=1024,
             pred_hid=512,
             pred_out=1024,
-            lstm_hidden_size=512,
-            last_linear_layer_init_zero=True,
-            state_norm=False,
-            activation=torch.nn.ReLU(inplace=True),
-            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
-            categorical_distribution=True,
-            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            # the above model para. is usually fixed
         ),
         # learn_mode config
         learn=dict(
-            update_per_collect=200,
+            # (bool) Whether to use multi gpu
+            multi_gpu=False,
+            # How many updates(iterations) to train after collector's one collection.
+            # Bigger "update_per_collect" means bigger off-policy.
+            # collect data -> update policy-> collect data -> ...
+            # For different env, we have different episode_length,
+            # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
+            update_per_collect=100,
+            # (int) How many samples in a training batch
             batch_size=256,
             lr_manually=True,
-            # optim_type='Adam',
-            # learning_rate=0.001,  # lr for Adam optimizer
             optim_type='SGD',
             learning_rate=0.2,  # init lr for manually decay schedule
-            # Frequency of target network update.
+            # optim_type='Adam',
+            # learning_rate=0.001,  # lr for Adam optimizer
+            # (int) Frequency of target network update.
             target_update_freq=100,
+            # (bool) Whether ignore done(usually for max step termination env)
+            ignore_done=False,
+            weight_decay=1e-4,
+            momentum=0.9,
+            grad_clip_type='clip_norm',
+            grad_clip_value=10,
         ),
-        other=dict(
-            replay_buffer=dict(
-                type='game_buffer_efficientzero',
-                # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(1e6),
-            ),
+        # collect_mode config
+        collect=dict(
+            # You can use either "n_sample" or "n_episode" in collector.collect.
+            # Get "n_episode" episodes per collect.
+            n_episode=8,
+            unroll_len=1,
         ),
         # ==============================================================
         # begin of additional game_config
@@ -107,18 +126,16 @@ class EfficientZeroGameBuffer(Buffer):
         game_wrapper=True,
         monitor_statistics=True,
         game_block_length=200,
+        # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e6),
 
         ## observation
         # the key difference setting between image-input and vector input.
-        image_based=False,
         cvt_string=False,
         gray_scale=False,
-        use_augmentation=False,
-
-        ## reward
-        clip_reward=False,
-        normalize_reward=False,
-        normalize_reward_scale=100,
+        use_augmentation=True,
+        # style of augmentation
+        augmentation=['shift', 'intensity'],
 
         ## learn
         num_simulations=50,
@@ -131,9 +148,21 @@ class EfficientZeroGameBuffer(Buffer):
         value_loss_weight=0.25,
         policy_loss_weight=1,
         ssl_loss_weight=2,
-        # ``threshold_training_steps_for_final_lr_temperature`` is only used for adjusting temperature manually.
-        # threshold_training_steps_for_final_lr_temperature=int(threshold_env_steps_for_final_lr_temperature/collector_env_num/average_episode_length_when_converge * update_per_collect),
-        threshold_training_steps_for_final_lr_temperature=int(1e5),
+
+        # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
+        # threshold_training_steps_for_final_lr=int(
+        #     threshold_env_steps_for_final_lr / collector_env_num / average_episode_length_when_converge * update_per_collect),
+        threshold_training_steps_for_final_lr=int(1e5),
+        # lr: 0.2 -> 0.02 -> 0.002
+
+        # ``threshold_training_steps_for_final_temperature`` is only used for adjusting temperature manually.
+        # threshold_training_steps_for_final_temperature=int(
+        #     threshold_env_steps_for_final_temperature / collector_env_num / average_episode_length_when_converge * update_per_collect),
+        threshold_training_steps_for_final_temperature=int(1e5),
+        # temperature: 1 -> 0.5 -> 0.25
+        auto_temperature=True,
+        # ``fixed_temperature_value`` is effective only when auto_temperature=False
+        fixed_temperature_value=0.25,
 
         ## reanalyze
         reanalyze_ratio=0.3,
@@ -172,7 +201,7 @@ class EfficientZeroGameBuffer(Buffer):
 
         assert self._cfg.env_type in ['not_board_games', 'board_games']
         self.batch_size = self._cfg.learn.batch_size
-        self.replay_buffer_size = self._cfg.other.replay_buffer.replay_buffer_size
+        self.replay_buffer_size = self._cfg.replay_buffer_size
 
         self.keep_ratio = 1
 

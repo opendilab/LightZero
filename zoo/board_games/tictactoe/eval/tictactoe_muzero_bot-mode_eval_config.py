@@ -183,7 +183,7 @@ tictactoe_muzero_create_config = EasyDict(tictactoe_muzero_create_config)
 create_config = tictactoe_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import serial_pipeline_muzero_eval
+    from lzero.entry import serial_pipeline_mcts_eval
     import numpy as np
 
     test_seeds = 5
@@ -192,7 +192,7 @@ if __name__ == "__main__":
     reward_all_seeds = []
     reward_mean_all_seeds = []
     for seed in range(test_seeds):
-        reward_mean, reward_lst = serial_pipeline_muzero_eval(
+        reward_mean, reward_lst = serial_pipeline_mcts_eval(
             [main_config, create_config], seed=seed, test_episodes=test_episodes_each_seed, max_env_step=int(1e5)
         )
         reward_mean_all_seeds.append(reward_mean)
