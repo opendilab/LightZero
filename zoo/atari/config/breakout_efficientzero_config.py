@@ -11,7 +11,8 @@ else:
 # ==============================================================
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = 500
-threshold_env_steps_for_final_lr_temperature = int(2e5)
+threshold_env_steps_for_final_lr = int(2e5)
+threshold_env_steps_for_final_temperature = int(5e5)
 
 collector_env_num = 8
 n_episode = 8

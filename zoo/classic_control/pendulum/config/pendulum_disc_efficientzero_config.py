@@ -11,7 +11,8 @@ else:
 # ==============================================================
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = 200
-threshold_env_steps_for_final_lr_temperature = int(2e5)
+threshold_env_steps_for_final_lr = int(2e5)
+threshold_env_steps_for_final_temperature = int(5e5)
 
 # collector_env_num = 8
 # n_episode = 8
@@ -139,8 +140,12 @@ pendulum_disc_efficientzero_config = dict(
         ssl_loss_weight=0,
         # the size/capacity of replay_buffer
         replay_buffer_size=int(1e6),
-        # ``threshold_training_steps_for_final_lr_temperature`` is only used for adjusting temperature manually.
-        threshold_training_steps_for_final_lr_temperature=int(threshold_env_steps_for_final_lr_temperature/collector_env_num/average_episode_length_when_converge * update_per_collect),
+        # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
+        threshold_training_steps_for_final_lr=int(
+            threshold_env_steps_for_final_lr / collector_env_num / average_episode_length_when_converge * update_per_collect),
+        # ``threshold_training_steps_for_final_temperature`` is only used for adjusting temperature manually.
+        threshold_training_steps_for_final_temperature=int(
+            threshold_env_steps_for_final_temperature / collector_env_num / average_episode_length_when_converge * update_per_collect),
 
         ## reanalyze
         reanalyze_ratio=0.3,

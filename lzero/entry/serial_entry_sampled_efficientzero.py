@@ -113,7 +113,7 @@ def serial_pipeline_sampled_efficientzero(
                 visit_count_temperature(
                     game_config.auto_temperature,
                     game_config.fixed_temperature_value,
-                    game_config.threshold_training_steps_for_final_lr_temperature,
+                    game_config.threshold_training_steps_for_final_temperature,
                     trained_steps=learner.train_iter
                 ) for _ in range(game_config.collector_env_num)
             ]
@@ -158,9 +158,9 @@ def serial_pipeline_sampled_efficientzero(
             trained_steps = learner.train_iter
             if game_config.learn.lr_manually:
                 # learning rate decay manually like MuZero paper.
-                if trained_steps < 0.5 * game_config.threshold_training_steps_for_final_lr_temperature:
+                if trained_steps < 0.5 * game_config.threshold_training_steps_for_final_lr:
                     policy._optimizer.param_groups[0]['lr'] = 0.2
-                elif trained_steps < 0.75 * game_config.threshold_training_steps_for_final_lr_temperature:
+                elif trained_steps < 0.75 * game_config.threshold_training_steps_for_final_lr:
                     policy._optimizer.param_groups[0]['lr'] = 0.02
                 else:
                     policy._optimizer.param_groups[0]['lr'] = 0.002
