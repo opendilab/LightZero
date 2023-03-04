@@ -160,11 +160,11 @@ def serial_pipeline_muzero(
             if game_config.learn.lr_manually:
                 # learning rate decay manually like MuZero paper.
                 if trained_steps < 0.5 * game_config.threshold_training_steps_for_final_lr_temperature:
-                    policy._optimizer.lr = 0.2
+                    policy._optimizer.param_groups[0]['lr'] = 0.2
                 elif trained_steps < 0.75 * game_config.threshold_training_steps_for_final_lr_temperature:
-                    policy._optimizer.lr = 0.02
+                    policy._optimizer.param_groups[0]['lr'] = 0.02
                 else:
-                    policy._optimizer.lr = 0.002
+                    policy._optimizer.param_groups[0]['lr'] = 0.002
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break

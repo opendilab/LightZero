@@ -13,10 +13,9 @@ board_size = 6  # default_size is 15
 
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = int(board_size * board_size/2)
+bot_action_type = 'v0'  # 'v1'
 threshold_env_steps_for_final_lr_temperature = int(1e5)
-bot_action_type = 'v0'
-# bot_action_type = 'v1'
-
+reanalyze_ratio = 0.
 
 collector_env_num = 32
 n_episode = 32
@@ -25,37 +24,26 @@ num_simulations = 100
 update_per_collect = 100
 batch_size = 256
 max_env_step = int(2e6)
-reanalyze_ratio = 0.
 # categorical_distribution = True
 categorical_distribution = False
-
-
-# board_size = 6  # default_size is 15
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 50
-# update_per_collect = 50
-# batch_size = 256
-# max_env_step = int(2e6)
-# reanalyze_ratio = 0.
 
 # debug config
 # board_size = 6  # default_size is 15
 # collector_env_num = 2
 # n_episode = 2
-# evaluator_env_num = 1
+# evaluator_env_num = 2
 # num_simulations = 5
 # update_per_collect = 5
 # batch_size = 4
 # max_env_step = int(2e6)
-# reanalyze_ratio = 0.3
+# reanalyze_ratio = 0.
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_b{board_size}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_lm-true_atv_tes1e5_rbs1e6_seed0',
+    exp_name=f'data_mz_ctree/gomoku_b{board_size}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_lm-true_atv_tes{threshold_env_steps_for_final_lr_temperature}_rbs1e6_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
