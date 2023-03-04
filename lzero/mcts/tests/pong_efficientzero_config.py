@@ -146,7 +146,7 @@ pong_efficientzero_config = dict(
         gray_scale=False,
         use_augmentation=True,
         # style of augmentation
-        augmentation=['shift', 'intensity'],  # options=['none', 'rrc', 'affine', 'crop', 'blur', 'shift', 'intensity']
+        augmentation=['shift', 'intensity'],
 
         ## reward
         clip_reward=False,
