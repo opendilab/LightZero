@@ -14,6 +14,9 @@ board_size = 6  # default_size is 15
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = int(board_size * board_size/2)
 threshold_env_steps_for_final_lr_temperature = int(1e5)
+bot_action_type = 'v0'
+# bot_action_type = 'v1'
+
 
 collector_env_num = 32
 n_episode = 32
@@ -22,7 +25,7 @@ num_simulations = 100
 update_per_collect = 100
 batch_size = 256
 max_env_step = int(2e6)
-reanalyze_ratio = 0.3
+reanalyze_ratio = 0.
 # categorical_distribution = True
 categorical_distribution = False
 
@@ -52,14 +55,14 @@ categorical_distribution = False
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_b{board_size}_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_lm-true_atv_mts1e6_rbs1e6_seed0',
+    exp_name=f'data_mz_ctree/gomoku_b{board_size}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_lm-true_atv_tes1e5_rbs1e6_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         board_size=board_size,
         battle_mode='play_with_bot_mode',
-        bot_action_type='v0',
+        bot_action_type=bot_action_type,
         channel_last=True,
         scale=True,
         manager=dict(shared_memory=False, ),
@@ -170,10 +173,8 @@ gomoku_muzero_config = dict(
         policy_loss_weight=1,
         ssl_loss_weight=0,
         # ``threshold_training_steps_for_final_lr_temperature`` is only used for adjusting temperature manually.
-        threshold_training_steps_for_final_lr_temperature=int(1e6),
-        # auto_temperature=False,
+        threshold_training_steps_for_final_lr_temperature=int(threshold_env_steps_for_final_lr_temperature/collector_env_num/average_episode_length_when_converge * update_per_collect),
         auto_temperature=True,
-        fixed_temperature_value=1,
 
         ## reanalyze
         reanalyze_ratio=reanalyze_ratio,

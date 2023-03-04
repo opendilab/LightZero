@@ -135,16 +135,24 @@ if __name__ == '__main__':
     from lzero.entry import serial_pipeline_alphazero_eval
     import numpy as np
 
-    seed = 0
-    test_episodes = 15
-    for i in range(15):
-        reward_mean, reward_lst = serial_pipeline_alphazero_eval([main_config, create_config], seed=i, test_episodes=1, max_env_step=int(1e5))
+    returns_mean_seeds = []
+    returns_seeds = []
+    seeds = [0, 1]
+    num_episodes_each_seed = 2
+    total_test_episodes = num_episodes_each_seed * len(seeds)
+    for seed in seeds:
+        returns_mean, returns = serial_pipeline_alphazero_eval([main_config, create_config], seed=seed,
+                                                            num_episodes_each_seed=num_episodes_each_seed,
+                                                            print_seed_details=True, max_env_step=int(1e5))
+        returns_mean_seeds.append(returns_mean)
+        returns_seeds.append(returns)
 
-    reward_lst = np.array(reward_lst)
-    reward_mean = np.array(reward_mean)
+    returns_mean_seeds = np.array(returns_mean_seeds)
+    returns_seeds = np.array(returns_seeds)
 
     print("=" * 20)
-    print(f'we eval total {seed} seed. In each seed, we test {test_episodes} episodes.')
-    print('reward_mean:', reward_mean)
-    print(f'win rate: {len(np.where(reward_lst == 1.)[0]) / test_episodes}, draw rate: {len(np.where(reward_lst == 0.)[0]) / test_episodes}, lose rate: {len(np.where(reward_lst == -1.)[0]) / test_episodes}')
+    print(f'We eval total {len(seeds)} seeds. In each seed, we eval {num_episodes_each_seed} episodes.')
+    print(f'In seeds {seeds}, returns_mean_seeds is {returns_mean_seeds}, returns is {returns_seeds}')
+    print('In all seeds, reward_mean:', returns_mean_seeds.mean(), end='. ')
+    print(f'win rate: {len(np.where(returns_seeds == 1.)[0]) / total_test_episodes}, draw rate: {len(np.where(returns_seeds == 0.)[0]) / total_test_episodes}, lose rate: {len(np.where(returns_seeds == -1.)[0]) / total_test_episodes}')
     print("=" * 20)

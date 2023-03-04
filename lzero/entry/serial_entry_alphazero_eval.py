@@ -20,7 +20,8 @@ def serial_pipeline_alphazero_eval(
         seed: int = 0,
         env_setting: Optional[List[Any]] = None,
         model: Optional[torch.nn.Module] = None,
-        test_episodes: int = 1,
+        num_episodes_each_seed: int = 1,
+        print_seed_details: int = False,
         max_train_iter: Optional[int] = int(1e10),
         max_env_step: Optional[int] = int(1e10),
 ) -> 'Policy':  # noqa
@@ -79,10 +80,22 @@ def serial_pipeline_alphazero_eval(
     )
 
     while True:
-        rewards = []
-        for i in range(test_episodes):
+        # ==============================================================
+        # eval trained model
+        # ==============================================================
+        returns = []
+        for i in range(num_episodes_each_seed):
             stop, reward = evaluator.eval()
-            rewards.append(reward[0]['final_eval_reward'])
-        rewards = np.array(rewards)
-        break
-    return rewards.mean(), rewards
+            returns.append(reward[0]['final_eval_reward'])
+
+        returns = np.array(returns)
+
+        if print_seed_details:
+            print("=" * 20)
+            print(f'In seed {seed}, returns: {returns}')
+            print(
+                f'win rate: {len(np.where(returns == 1.)[0]) / num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0]) / num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0]) / num_episodes_each_seed}')
+            print("=" * 20)
+
+        return returns.mean(), returns
+

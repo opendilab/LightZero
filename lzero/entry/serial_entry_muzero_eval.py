@@ -24,7 +24,8 @@ def serial_pipeline_muzero_eval(
         seed: int = 0,
         env_setting: Optional[List[Any]] = None,
         model: Optional[torch.nn.Module] = None,
-        test_episodes: int = 1,
+        num_episodes_each_seed: int = 1,
+        print_seed_details: int = False,
         max_train_iter: Optional[int] = int(1e10),
         max_env_step: Optional[int] = int(1e10),
 ) -> 'Policy':  # noqa
@@ -107,19 +108,18 @@ def serial_pipeline_muzero_eval(
         # ==============================================================
         # eval trained model
         # ==============================================================
-        rewards = []
-        for i in range(test_episodes):
+        returns = []
+        for i in range(num_episodes_each_seed):
             stop, reward = evaluator.eval(
                 learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
             )
-            rewards.append(reward)
-        rewards = np.array(rewards)
-        # print("=" * 20)
-        # print(f'In seed {seed}, we test {test_episodes} episodes.')
-        # print('rewards:', rewards)
-        # print('reward_mean:', rewards.mean())
-        # print(f'win rate: {len(np.where(rewards == 1.)[0]) / test_episodes}, draw rate: {len(np.where(rewards == 0.)[0]) / test_episodes}, lose rate: {len(np.where(rewards == -1.)[0]) / test_episodes}')
-        # print("=" * 20)
-        break
+            returns.append(reward)
+        returns = np.array(returns)
 
-    return rewards.mean(), rewards
+        if print_seed_details:
+            print("=" * 20)
+            print(f'In seed {seed}, returns: {returns}')
+            print(f'win rate: {len(np.where(returns == 1.)[0])/ num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0])/num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0])/ num_episodes_each_seed}')
+            print("=" * 20)
+
+        return returns.mean(), returns

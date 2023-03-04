@@ -257,6 +257,8 @@ class EfficientZeroPolicy(Policy):
         self.inverse_scalar_transform_handle = InverseScalarTransform(
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
+        self.collect_mcts_temperature = 1
+
 
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
         self._learn_model.train()
@@ -621,6 +623,8 @@ class EfficientZeroPolicy(Policy):
 
         if self._cfg.model.categorical_distribution:
             return {
+                'collect_mcts_temperature': self.collect_mcts_temperature,
+                'cur_lr': self._optimizer.param_groups[0]['lr'],
                 'weighted_total_loss': loss_data[0],
                 'total_loss': loss_data[1],
                 'policy_loss': loss_data[2],
@@ -647,6 +651,8 @@ class EfficientZeroPolicy(Policy):
             }
         else:
             return {
+                'collect_mcts_temperature': self.collect_mcts_temperature,
+                'cur_lr': self._optimizer.param_groups[0]['lr'],
                 'weighted_total_loss': loss_data[0],
                 'total_loss': loss_data[1],
                 'policy_loss': loss_data[2],
@@ -681,18 +687,6 @@ class EfficientZeroPolicy(Policy):
         else:
             self._mcts_collect = MCTS_ptree(self._cfg)
 
-        # set temperature for distributions
-        self.collect_temperature = np.array(
-            [
-                visit_count_temperature(
-                    self._cfg.auto_temperature,
-                    self._cfg.fixed_temperature_value,
-                    self._cfg.threshold_training_steps_for_final_lr_temperature,
-                    trained_steps=0
-                ) for _ in range(self._cfg.collector_env_num)
-            ]
-        )
-
     def _forward_collect(
         self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None, ready_env_id=None
     ):
@@ -701,6 +695,7 @@ class EfficientZeroPolicy(Policy):
             obs: (B, S, C, H, W), where S is the stack num
             temperature: (N1, ), where N1 is the number of collect_env.
         """
+        self.collect_mcts_temperature = temperature[0]
         self._collect_model.eval()
         stack_obs = data
         active_collect_env_num = stack_obs.shape[0]
@@ -898,6 +893,8 @@ class EfficientZeroPolicy(Policy):
 
     def _monitor_vars_learn(self) -> List[str]:
         return [
+            'collect_mcts_temperature',
+            'cur_lr',
             'weighted_total_loss',
             'total_loss',
             'policy_loss',

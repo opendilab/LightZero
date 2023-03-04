@@ -9,18 +9,32 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-board_size = 6  # default_size is 15
+board_size = 5  # default_size is 15
+
+# only used for adjusting temperature/lr manually
+average_episode_length_when_converge = int(board_size * board_size / 2)
+threshold_env_steps_for_final_lr_temperature = int(1e5)
+
 collector_env_num = 1
 n_episode = 1
 evaluator_env_num = 1
-num_simulations = 50
-# update_per_collect determines the number of training steps after each collection of a batch of data.
-# For different env, we have different episode_length,
-# we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
-update_per_collect = 50
+num_simulations = 100
+update_per_collect = 100
 batch_size = 256
 max_env_step = int(2e6)
-reanalyze_ratio = 0.
+reanalyze_ratio = 0.3
+# categorical_distribution = True
+categorical_distribution = False
+
+# board_size = 6  # default_size is 15
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# num_simulations = 50
+# update_per_collect = 50
+# batch_size = 256
+# max_env_step = int(2e6)
+# reanalyze_ratio = 0.
 
 # debug config
 # board_size = 6  # default_size is 15
@@ -37,19 +51,20 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ftv1_rbs1e6_seed0',
+    exp_name=f'data_mz_ctree/gomoku_b{board_size}_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_lm-true_atv_mts1e6_rbs1e6_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         board_size=board_size,
         battle_mode='play_with_bot_mode',
+        agent_vs_human=True,
+        # agent_vs_human=False,
+
         bot_action_type='v0',
         channel_last=True,
         scale=True,
-        # scale=False,
         manager=dict(shared_memory=False, ),
-        agent_vs_human=True,
         # stop when reaching max_env_step.
         stop_value=int(2),
     ),
@@ -59,7 +74,8 @@ gomoku_muzero_config = dict(
         # Absolute path is recommended.
         # In LightZero, it is ``exp_name/ckpt/ckpt_best.pth.tar``.
         # model_path=None,
-        model_path="/Users/puyuan/code/LightZero/zoo/board_games/gomoku/gomoku_muzero_bot-mode_ns100_upc50_rr0.0_ftv1_rbs1e6_seed0/ckpt/ckpt_best.pth.tar",
+        model_path="/Users/puyuan/code/LightZero/zoo/board_games/gomoku/gomoku_b5_muzero_bot-mode_ns100_upc100_rr0.0_cd-False_lm-true_atv_mts1e6_rbs1e6_seed0/ckpt/ckpt_best.pth.tar",
+        # model_path="/Users/puyuan/code/LightZero/zoo/board_games/gomoku/gomoku_muzero_bot-mode_ns100_upc100_rr0.0_cd-False_lm-true_atv_mts1e6_rbs1e6_seed1/ckpt/ckpt_best.pth.tar",
         env_name='gomoku',
         # whether to use cuda for network.
         cuda=True,
@@ -79,9 +95,9 @@ gomoku_muzero_config = dict(
             action_space_size=int(board_size * board_size),
             last_linear_layer_init_zero=True,
             # whether to use discrete support to represent categorical distribution for value, reward.
-            categorical_distribution=True,
+            categorical_distribution=categorical_distribution,
             representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            ## half size model
+            # half size model
             num_res_blocks=1,
             num_channels=32,
             reward_head_channels=16,
@@ -90,17 +106,25 @@ gomoku_muzero_config = dict(
             fc_reward_layers=[32],
             fc_value_layers=[32],
             fc_policy_layers=[32],
-            support_scale=300,
-            reward_support_size=601,
-            value_support_size=601,
+            # support_scale=300,
+            # reward_support_size=601,
+            # value_support_size=601,
+            support_scale=10,
+            reward_support_size=21,
+            value_support_size=21,
         ),
         # learn_mode config
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
-            lr_manually=False,
-            optim_type='Adam',
-            learning_rate=0.003,  # lr for Adam optimizer
+            # lr_manually=False,
+            # optim_type='Adam',
+            # learning_rate=0.003,  # lr for Adam optimizer
+
+            lr_manually=True,
+            optim_type='SGD',
+            learning_rate=0.2,  # init lr for manually decay schedule
+
             # Frequency of target network update.
             target_update_freq=100,
             grad_clip_value=10,
@@ -128,7 +152,7 @@ gomoku_muzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='board_games',
-        game_block_length=18,
+        game_block_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode',
 
         ## observation
         # NOTE: the key difference setting between image-input and vector input
@@ -149,8 +173,9 @@ gomoku_muzero_config = dict(
         policy_loss_weight=1,
         ssl_loss_weight=0,
         # ``threshold_training_steps_for_final_lr_temperature`` is only used for adjusting temperature manually.
-        threshold_training_steps_for_final_lr_temperature=int(threshold_env_steps_for_final_lr_temperature/collector_env_num/average_episode_length_when_converge * update_per_collect),
-        auto_temperature=False,
+        threshold_training_steps_for_final_lr_temperature=int(1e6),
+        # auto_temperature=False,
+        auto_temperature=True,
         fixed_temperature_value=1,
 
         ## reanalyze
@@ -176,7 +201,10 @@ gomoku_muzero_create_config = dict(
         type='gomoku',
         import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
     ),
-    env_manager=dict(type='subprocess'),
+    # env_manager=dict(type='subprocess'),
+    # if agent_vs_human=True,
+    env_manager=dict(type='base'),
+
     policy=dict(
         type='muzero',
         import_names=['lzero.policy.muzero'],
@@ -194,16 +222,24 @@ if __name__ == '__main__':
     from lzero.entry import serial_pipeline_muzero_eval
     import numpy as np
 
-    seed = 0
-    test_episodes = 15
-    for i in range(15):
-        reward_mean, reward_lst = serial_pipeline_muzero_eval([main_config, create_config], seed=i, test_episodes=1, max_env_step=int(1e5))
+    returns_mean_seeds = []
+    returns_seeds = []
+    seeds = [0]
+    num_episodes_each_seed = 1
+    total_test_episodes = num_episodes_each_seed * len(seeds)
+    for seed in seeds:
+        returns_mean, returns = serial_pipeline_muzero_eval([main_config, create_config], seed=seed,
+                                                            num_episodes_each_seed=num_episodes_each_seed,
+                                                            print_seed_details=True, max_env_step=int(1e5))
+        returns_mean_seeds.append(returns_mean)
+        returns_seeds.append(returns)
 
-    reward_lst = np.array(reward_lst)
-    reward_mean = np.array(reward_mean)
+    returns_mean_seeds = np.array(returns_mean_seeds)
+    returns_seeds = np.array(returns_seeds)
 
     print("=" * 20)
-    print(f'we eval total {seed} seed. In each seed, we test {test_episodes} episodes.')
-    print('reward_mean:', reward_mean)
-    print(f'win rate: {len(np.where(reward_lst == 1.)[0]) / test_episodes}, draw rate: {len(np.where(reward_lst == 0.)[0]) / test_episodes}, lose rate: {len(np.where(reward_lst == -1.)[0]) / test_episodes}')
+    print(f'We eval total {len(seeds)} seeds. In each seed, we eval {num_episodes_each_seed} episodes.')
+    print(f'In seeds {seeds}, returns_mean_seeds is {returns_mean_seeds}, returns is {returns_seeds}')
+    print('In all seeds, reward_mean:', returns_mean_seeds.mean(), end='. ')
+    print(f'win rate: {len(np.where(returns_seeds == 1.)[0]) / total_test_episodes}, draw rate: {len(np.where(returns_seeds == 0.)[0]) / total_test_episodes}, lose rate: {len(np.where(returns_seeds == -1.)[0]) / total_test_episodes}')
     print("=" * 20)

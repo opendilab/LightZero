@@ -300,6 +300,8 @@ class SampledEfficientZeroPolicy(Policy):
         self.inverse_scalar_transform_handle = InverseScalarTransform(
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
+        self.collect_mcts_temperature = 1
+
 
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
         self._learn_model.train()
@@ -954,6 +956,7 @@ class SampledEfficientZeroPolicy(Policy):
         if self._cfg.model.categorical_distribution:
             if self._cfg.model.continuous_action_space:
                 return {
+                    'cur_lr': self._optimizer.param_groups[0]['lr'],
                     'weighted_total_loss': loss_data[0],
                     'total_loss': loss_data[1],
                     'policy_loss': loss_data[2],
@@ -996,6 +999,7 @@ class SampledEfficientZeroPolicy(Policy):
                 }
             else:
                 return {
+                    'cur_lr': self._optimizer.param_groups[0]['lr'],
                     'weighted_total_loss': loss_data[0],
                     'total_loss': loss_data[1],
                     'policy_loss': loss_data[2],
@@ -1031,6 +1035,8 @@ class SampledEfficientZeroPolicy(Policy):
         else:
             if self._cfg.model.continuous_action_space:
                 return {
+                    'collect_mcts_temperature': self.collect_mcts_temperature,
+                    'cur_lr': self._optimizer.param_groups[0]['lr'],
                     'weighted_total_loss': loss_data[0],
                     'total_loss': loss_data[1],
                     'policy_loss': loss_data[2],
@@ -1072,6 +1078,8 @@ class SampledEfficientZeroPolicy(Policy):
                 }
             else:
                 return {
+                    'collect_mcts_temperature': self.collect_mcts_temperature,
+                    'cur_lr': self._optimizer.param_groups[0]['lr'],
                     'weighted_total_loss': loss_data[0],
                     'total_loss': loss_data[1],
                     'policy_loss': loss_data[2],
@@ -1108,18 +1116,6 @@ class SampledEfficientZeroPolicy(Policy):
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
-
-        # set temperature for distributions
-        self.collect_temperature = np.array(
-            [
-                visit_count_temperature(
-                    self._cfg.auto_temperature,
-                    self._cfg.fixed_temperature_value,
-                    self._cfg.threshold_training_steps_for_final_lr_temperature,
-                    trained_steps=0
-                ) for _ in range(self._cfg.collector_env_num)
-            ]
-        )
 
     # @profile
     def _forward_collect(
@@ -1489,6 +1485,8 @@ class SampledEfficientZeroPolicy(Policy):
     def _monitor_vars_learn(self) -> List[str]:
         if self._cfg.model.continuous_action_space:
             return [
+                'collect_mcts_temperature',
+                'cur_lr',
                 'total_loss',
                 'weighted_total_loss',
                 'policy_loss',
@@ -1525,6 +1523,8 @@ class SampledEfficientZeroPolicy(Policy):
             ]
         else:
             return [
+                'collect_mcts_temperature',
+                'cur_lr',
                 'total_loss',
                 'weighted_total_loss',
                 'loss_mean',

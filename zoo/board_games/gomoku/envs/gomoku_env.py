@@ -12,7 +12,7 @@ from easydict import EasyDict
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
 from zoo.board_games.base_game_env import BaseGameEnv
-from zoo.board_games.gomoku.envs.gomoku_rule_bot_v1 import GomokuExpertV1
+from zoo.board_games.gomoku.envs.gomoku_rule_bot_v1 import GomokuRuleBotV1
 from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_case1, \
     check_action_to_special_connect4_case2, \
     check_action_to_connect4
@@ -49,7 +49,7 @@ class GomokuEnv(BaseGameEnv):
         self.players = [1, 2]
         self.board_markers = [str(i + 1) for i in range(self.board_size)]
         self.total_num_actions = self.board_size * self.board_size
-        self.gomoku_rule_bot_v1 = GomokuExpertV1()
+        self.gomoku_rule_bot_v1 = GomokuRuleBotV1()
         self._env = self
         self.agent_vs_human = cfg.agent_vs_human
         self.bot_action_type = cfg.bot_action_type
@@ -146,24 +146,28 @@ class GomokuEnv(BaseGameEnv):
 
             # player 1's turn
             timestep_player1 = self._player_step(action)
-            # print('player 1 (efficientzero player): ' + self.action_to_string(action))  # TODO(pu): visualize
+            # print('player 1 (efficientzero player): ' + self.action_to_string(action))  # Note: visualize
             if timestep_player1.done:
+
                 # in play_with_bot_mode, we set to_play as None/-1, because we don't consider the alternation between players
                 timestep_player1.obs['to_play'] = -1
+
                 return timestep_player1
 
             # player 2's turn
             bot_action = self.bot_action()
-            # print('player 2 (expert player): ' + self.action_to_string(bot_action))  # TODO(pu): visualize
+            # print('player 2 (expert player): ' + self.action_to_string(bot_action))  # Note: visualize
             timestep_player2 = self._player_step(bot_action)
-            # self.render()  # TODO(pu): visualize
+            # self.render()  # Note: visualize
             # the final_eval_reward is calculated from Player 1's perspective
             timestep_player2.info['final_eval_reward'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
             timestep = timestep_player2
+
             # in ``play_with_bot_mode``, we set to_play as None/-1, because we don't consider the alternation between players
             timestep.obs['to_play'] = -1
+
             return timestep
 
         elif self.battle_mode == 'eval_mode':
@@ -171,7 +175,10 @@ class GomokuEnv(BaseGameEnv):
 
             # player 1's turn
             timestep_player1 = self._player_step(action)
-            # print('player 1 (efficientzero player): ' + self.action_to_string(action))  # TODO(pu): visualize
+            if self.agent_vs_human:
+                print('player 1 (agent): ' + self.action_to_string(action))  # Note: visualize
+                self.render()
+
             if timestep_player1.done:
                 return timestep_player1
 
@@ -180,10 +187,13 @@ class GomokuEnv(BaseGameEnv):
                 bot_action = self.human_to_action()
             else:
                 bot_action = self.bot_action()
-            # bot_action = self.random_action()
-            # print('player 2 (expert player): ' + self.action_to_string(bot_action))  # TODO(pu): visualize
+                # bot_action = self.random_action()
+
             timestep_player2 = self._player_step(bot_action)
-            # self.render()  # TODO(pu): visualize
+            if self.agent_vs_human:
+                print('player 2 (human): ' + self.action_to_string(bot_action))  # Note: visualize
+                self.render()
+
             # the final_eval_reward is calculated from Player 1's perspective
             timestep_player2.info['final_eval_reward'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
@@ -331,8 +341,10 @@ class GomokuEnv(BaseGameEnv):
     def rule_bot_v0(self):
         """
         Overview:
-            Hard coded expert agent for gomoku env.
-            First random sample a action from legal_actions, then take the action that will lead a connect4 of current player's pieces.
+            Hard coded agent v0 for gomoku env.
+            Considering the situation of to-connect-4 and to-connect-5 in a sliding window of 5X5, and lacks the consideration of the entire chessboard.
+            In each sliding window of 5X5, first random sample a action from legal_actions,
+            then take the action that will lead a connect4 or connect-5 of current/oppenent player's pieces.
         Returns:
             - action (:obj:`int`): the expert action to take in the current game state.
         """
@@ -763,12 +775,12 @@ class GomokuEnv(BaseGameEnv):
     def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
         evaluator_env_num = cfg.pop('evaluator_env_num')
         cfg = copy.deepcopy(cfg)
-        # When we collect and train agent in ``self_play_mode``, in eval phase,
-        # we use ``eval_mode`` to make agent paly with the built-in bot to
+        # When we collect and train agent in ``self_play_mode`` or ``play_with_bot_mode``, in eval phase,
+        # we use ``eval_mode`` to make agent play with the built-in bot to
         # evaluate the performance of the current agent.
-        if cfg.battle_mode == 'self_play_mode':
-            cfg.battle_mode = 'eval_mode'
+        cfg.battle_mode = 'eval_mode'
+
         return [cfg for _ in range(evaluator_env_num)]
 
     def __repr__(self) -> str:
-        return "DI-engine Gomoku Env"
+        return "LightZero Gomoku Env"

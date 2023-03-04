@@ -53,6 +53,8 @@ breakout_efficientzero_config = dict(
         obs_shape=(4, 96, 96),
         clip_rewards=True,
         scale=True,
+        collect_max_episode_steps=int(1.08e4),
+        eval_max_episode_steps=int(1.08e4),
         manager=dict(shared_memory=False, ),
         stop_value=int(1e6),
     ),
