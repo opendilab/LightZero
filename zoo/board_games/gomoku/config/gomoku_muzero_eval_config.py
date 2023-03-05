@@ -23,8 +23,8 @@ board_size = 6  # default_size is 15
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = int(board_size * board_size/2)
 bot_action_type = 'v0'  # 'v1'
-threshold_env_steps_for_final_lr = int(2e5)
-threshold_env_steps_for_final_temperature = int(5e5)
+threshold_env_steps_for_final_lr = int(1e6)
+threshold_env_steps_for_final_temperature = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -125,7 +125,7 @@ gomoku_muzero_create_config = EasyDict(gomoku_muzero_create_config)
 create_config = gomoku_muzero_create_config
 
 if __name__ == '__main__':
-    from lzero.entry import serial_pipeline_mcts_eval
+    from lzero.entry import train_muzero_eval
     import numpy as np
 
     returns_mean_seeds = []
@@ -134,7 +134,7 @@ if __name__ == '__main__':
     num_episodes_each_seed = 1
     total_test_episodes = num_episodes_each_seed * len(seeds)
     for seed in seeds:
-        returns_mean, returns = serial_pipeline_mcts_eval([main_config, create_config], seed=seed,
+        returns_mean, returns = train_muzero_eval([main_config, create_config], seed=seed,
                                                             num_episodes_each_seed=num_episodes_each_seed,
                                                             print_seed_details=True, max_env_step=int(1e5))
         returns_mean_seeds.append(returns_mean)

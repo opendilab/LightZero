@@ -20,8 +20,8 @@ reanalyze_ratio = 0.3
 
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = 800  # env-specific
-threshold_env_steps_for_final_lr = int(2e5)
-threshold_env_steps_for_final_temperature = int(5e5)
+threshold_env_steps_for_final_lr = int(1e6)
+threshold_env_steps_for_final_temperature = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -93,6 +93,6 @@ qbert_efficientzero_create_config = EasyDict(qbert_efficientzero_create_config)
 create_config = qbert_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import serial_pipeline_mcts
+    from lzero.entry import train_muzero
 
-    serial_pipeline_mcts([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

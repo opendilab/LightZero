@@ -11,8 +11,8 @@ else:
 # ==============================================================
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = 2000
-threshold_env_steps_for_final_lr = int(2e5)
-threshold_env_steps_for_final_temperature = int(5e5)
+threshold_env_steps_for_final_lr = int(1e6)
+threshold_env_steps_for_final_temperature = int(2e5)
 
 # continuous_action_space = False
 # K = 3  # num_of_sampled_actions
@@ -115,5 +115,5 @@ pong_sampled_efficientzero_create_config = EasyDict(pong_sampled_efficientzero_c
 create_config = pong_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import serial_pipeline_mcts
-    serial_pipeline_mcts([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import train_muzero
+    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

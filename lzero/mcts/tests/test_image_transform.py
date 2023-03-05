@@ -10,3 +10,6 @@ def test_image_transform():
     processed_img = transform.transform(img)
     assert img.shape == (4, 3, 96, 96)
     assert not (img == processed_img).all()
+
+
+test_image_transform()

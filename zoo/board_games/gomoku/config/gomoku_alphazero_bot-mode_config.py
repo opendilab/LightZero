@@ -11,6 +11,7 @@ num_simulations = 100
 update_per_collect = 100
 batch_size = 256
 max_env_step = int(2e6)
+prob_random_action_in_bot = 0.1
 
 # board_size = 6  # default_size is 15
 # collector_env_num = 8
@@ -34,17 +35,16 @@ max_env_step = int(2e6)
 # end of the most frequently changed config specified by the user
 # ==============================================================
 gomoku_alphazero_config = dict(
-    exp_name=f'data_az_ptree/gomoku_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_az_ptree/gomoku_alphazero_bot-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
-        n_evaluator_episode=evaluator_env_num,
         board_size=board_size,
         battle_mode='play_with_bot_mode',
         bot_action_type='v0',
-        # NOTE
-        channel_last=False,
-        scale=True,
+        prob_random_action_in_bot=prob_random_action_in_bot,
+        channel_last=False,  # NOTE
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
+        n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
@@ -64,10 +64,6 @@ gomoku_alphazero_config = dict(
             # ==============================================================
             num_res_blocks=1,
             num_channels=32,
-            value_head_channels=16,
-            policy_head_channels=16,
-            fc_value_layers=[32],
-            fc_policy_layers=[32],
         ),
         learn=dict(
             update_per_collect=update_per_collect,

@@ -51,7 +51,7 @@ class MuZeroPolicy(Policy):
             observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
             action_space_size=6,
             representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            # whether use the self_supervised_learning_loss.
+            # whether to use the self_supervised_learning_loss.
             self_supervised_learning_loss=True,
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             categorical_distribution=True,

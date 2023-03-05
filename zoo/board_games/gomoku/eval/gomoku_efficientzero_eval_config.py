@@ -122,9 +122,9 @@ gomoku_efficientzero_create_config = EasyDict(gomoku_efficientzero_create_config
 create_config = gomoku_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import serial_pipeline_mcts_eval
+    from lzero.entry import train_muzero_eval
     for seed in range(5):
-        serial_pipeline_mcts_eval(
+        train_muzero_eval(
             [main_config, create_config], game_config=game_config, seed=seed, max_env_step=int(1e6)
         )
         print(f'eval seed {seed} done!')

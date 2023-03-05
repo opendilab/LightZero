@@ -122,5 +122,5 @@ gomoku_muzero_create_config = EasyDict(gomoku_muzero_create_config)
 create_config = gomoku_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import serial_pipeline_mcts
-    serial_pipeline_mcts([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import train_muzero
+    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

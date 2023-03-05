@@ -186,5 +186,5 @@ lunarlander_disc_efficientzero_create_config = EasyDict(lunarlander_disc_efficie
 create_config = lunarlander_disc_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import serial_pipeline_mcts_eval
-    serial_pipeline_mcts_eval([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import train_muzero_eval
+    train_muzero_eval([main_config, create_config], seed=0, max_env_step=max_env_step)

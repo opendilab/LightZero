@@ -9,33 +9,29 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 50
-# # update_per_collect determines the number of training steps after each collection of a batch of data.
-# # For different env, we have different episode_length,
-# # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
-# # for pong, update_per_collect = 8*2000/256*20 ~= 1000
-# update_per_collect = 1000
-# batch_size = 256
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0.
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 50
+update_per_collect = 1000
+batch_size = 256
+max_env_step = int(1e6)
+reanalyze_ratio = 0.
 
 ## debug config
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-num_simulations = 5
-update_per_collect = 2
-batch_size = 10
-max_env_step = int(1e6)
-reanalyze_ratio = 0.3
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 5
+# update_per_collect = 2
+# batch_size = 10
+# max_env_step = int(1e6)
+# reanalyze_ratio = 0.3
 
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = 2000
-threshold_env_steps_for_final_lr = int(2e5)
-threshold_env_steps_for_final_temperature = int(5e5)
+threshold_env_steps_for_final_lr = int(1e6)
+threshold_env_steps_for_final_temperature = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -107,6 +103,6 @@ pong_efficientzero_create_config = EasyDict(pong_efficientzero_create_config)
 create_config = pong_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import serial_pipeline_mcts
+    from lzero.entry import train_muzero
 
-    serial_pipeline_mcts([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

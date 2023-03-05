@@ -17,7 +17,7 @@ from tensorboardX import SummaryWriter
 from lzero.mcts import visit_count_temperature
 
 
-def serial_pipeline_mcts(
+def train_muzero(
         input_cfg: Union[str, Tuple[dict, dict]],
         seed: int = 0,
         env_setting: Optional[List[Any]] = None,
@@ -27,7 +27,7 @@ def serial_pipeline_mcts(
 ) -> 'Policy':  # noqa
     """
     Overview:
-        Serial pipeline entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
+        The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
     Arguments:
         - input_cfg (:obj:`Union[str, Tuple[dict, dict]]`): Config in dict type. \
             ``str`` type means config file path. \
@@ -47,7 +47,7 @@ def serial_pipeline_mcts(
         cfg, create_cfg = input_cfg
 
     assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero'], \
-        "LightZero noow only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero'"
+        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero'"
 
     if create_cfg.policy.type == 'muzero':
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
@@ -80,8 +80,6 @@ def serial_pipeline_mcts(
     # load pretrained model
     if cfg.policy.model_path is not None:
         policy.learn_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
-        policy.collect_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
-        policy.eval_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
@@ -111,10 +109,6 @@ def serial_pipeline_mcts(
         game_config=game_config
     )
 
-    stop, reward = evaluator.eval(
-        learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-    )
-
     # ==============================================================
     # Main loop
     # ==============================================================
@@ -123,7 +117,7 @@ def serial_pipeline_mcts(
     while True:
         collect_kwargs = {}
         # set temperature for visit count distributions according to the train_iter,
-        # please refer to Appendix A.1 in EfficientZero paper for details.
+        # please refer to Appendix D in MuZero paper for details.
         collect_kwargs['temperature'] = np.array(
             [
                 visit_count_temperature(
@@ -135,7 +129,7 @@ def serial_pipeline_mcts(
             ]
         )
 
-        # Evaluate policy performance
+        # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(
                 learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
@@ -143,7 +137,7 @@ def serial_pipeline_mcts(
             if stop:
                 break
 
-        # Collect data by default config n_sample/n_episode
+        # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         # save returned new_data collected by the collector
         replay_buffer.push_games(new_data[0], new_data[1])
@@ -157,27 +151,27 @@ def serial_pipeline_mcts(
                 train_data = replay_buffer.sample_train_data(learner.policy.get_attribute('batch_size'), policy)
             else:
                 logging.warning(
-                    f'The data in replay_buffer is not sufficient to sample a minibatch: '
+                    f'The data in replay_buffer is not sufficient to sample a mini-batch: '
                     f'batch_size: {replay_buffer.get_batch_size()},'
+                    f'current buffer statistics is: '
                     f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
-                    f'num of game historys: {replay_buffer.get_num_of_game_blocks()}, '
+                    f'num of game blocks: {replay_buffer.get_num_of_game_blocks()}, '
                     f'number of transitions: {replay_buffer.get_num_of_transitions()}, '
                     f'continue to collect now ....'
                 )
                 break
 
-            # the core train steps for MCTS+RL algorithms.
+            # The core train steps for MCTS+RL algorithms.
             log_vars = learner.train(train_data, collector.envstep)
 
             if cfg.policy.use_priority:
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
-            trained_steps = learner.train_iter
             if game_config.learn.lr_manually:
                 # learning rate decay manually like MuZero paper.
-                if trained_steps < 0.5 * game_config.threshold_training_steps_for_final_lr:
+                if learner.train_iter < 0.5 * game_config.threshold_training_steps_for_final_lr:
                     policy._optimizer.param_groups[0]['lr'] = 0.2
-                elif trained_steps < 0.75 * game_config.threshold_training_steps_for_final_lr:
+                elif learner.train_iter < 0.75 * game_config.threshold_training_steps_for_final_lr:
                     policy._optimizer.param_groups[0]['lr'] = 0.02
                 else:
                     policy._optimizer.param_groups[0]['lr'] = 0.002

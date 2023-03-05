@@ -1111,6 +1111,7 @@ class SampledEfficientZeroPolicy(Policy):
             obs: (B, S, C, H, W), where S is the stack num
             temperature: (N1, ), where N1 is the number of collect_env.
         """
+        self.collect_mcts_temperature = temperature[0]
         self._collect_model.eval()
         stack_obs = data
         active_collect_env_num = stack_obs.shape[0]

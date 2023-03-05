@@ -136,7 +136,6 @@ class EfficientZeroPolicy(Policy):
         ## observation
         # the key difference setting between image-input and vector input.
         cvt_string=False,
-        gray_scale=False,
         use_augmentation=True,
         # style of augmentation
         augmentation=['shift', 'intensity'],
@@ -479,19 +478,11 @@ class EfficientZeroPolicy(Policy):
                 value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])
                 value_prefix_loss += modified_cross_entropy_loss(value_prefix, target_value_prefix_phi[:, step_i])
             else:
-                # value_loss += torch.nn.MSELoss(reduction='none')(original_value.squeeze(-1),
-                #                                                  transformed_target_value[:, step_i + 1])
-                # value_prefix_loss += torch.nn.MSELoss(reduction='none')(
-                #     original_value_prefix.squeeze(-1), transformed_target_value_prefix[:, step_i]
-                # )
                 value_loss += torch.nn.MSELoss(reduction='none'
                                                )(value.squeeze(-1), transformed_target_value[:, step_i + 1])
                 value_prefix_loss += torch.nn.MSELoss(
                     reduction='none'
                 )(value_prefix.squeeze(-1), transformed_target_value_prefix[:, step_i])
-
-            # Follow MuZero, set half gradient
-            # hidden_state.register_hook(lambda grad: grad * 0.5)
 
             # reset hidden states
             if (step_i + 1) % self._cfg.lstm_horizon_len == 0:

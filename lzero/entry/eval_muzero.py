@@ -14,7 +14,7 @@ from ding.worker import create_serial_collector
 from tensorboardX import SummaryWriter
 
 
-def serial_pipeline_mcts_eval(
+def train_muzero_eval(
         input_cfg: Union[str, Tuple[dict, dict]],
         seed: int = 0,
         env_setting: Optional[List[Any]] = None,

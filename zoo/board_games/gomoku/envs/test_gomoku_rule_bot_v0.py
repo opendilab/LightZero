@@ -11,6 +11,7 @@ cfg = EasyDict(
     scale=False,
     agent_vs_human=False,
     bot_action_type='v0',  # {'v0', 'v1', 'alpha_beta_pruning'}
+    prob_random_action_in_bot=0.,
     check_action_to_connect4_in_bot_v0=False,
 )
 
@@ -86,10 +87,10 @@ class TestExpertActionV0:
             # print('init board state: ', obs)
             env.render()
             while True:
-                # env.bot_action_type = 'v1'
-                # action = env.bot_action()
+                env.bot_action_type = 'v0'
+                action = env.bot_action()
                 # action = env.random_action()
-                action = env.human_to_action()
+                # action = env.human_to_action()
                 print('action index of player 1 is:', action)
                 print('player 1: ' + env.action_to_string(action))
                 obs, reward, done, info = env.step(action)
@@ -122,4 +123,6 @@ class TestExpertActionV0:
 
 
 test = TestExpertActionV0()
-test.test_v0_vs_v1()
+# test.test_v0_vs_v1()
+test.test_naive()
+

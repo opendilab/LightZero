@@ -28,6 +28,7 @@ class GomokuEnv(BaseGameEnv):
         scale=False,
         agent_vs_human=False,
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+        prob_random_action_in_bot=0.,
         check_action_to_connect4_in_bot_v0=False,
     )
 
@@ -42,6 +43,8 @@ class GomokuEnv(BaseGameEnv):
         self.battle_mode = cfg.battle_mode
         self.board_size = cfg.board_size
         self.prob_random_agent = cfg.prob_random_agent
+        self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
+
         self.channel_last = cfg.channel_last
         self.scale = cfg.scale
         self.check_action_to_connect4_in_bot_v0 = self.cfg.check_action_to_connect4_in_bot_v0
@@ -321,12 +324,15 @@ class GomokuEnv(BaseGameEnv):
         return np.random.choice(action_list)
 
     def bot_action(self):
-        if self.bot_action_type == 'v0':
-            return self.rule_bot_v0()
-        elif self.bot_action_type == 'v1':
-            return self.rule_bot_v1()
-        elif self.bot_action_type == 'alpha_beta_pruning':
-            return self.bot_action_alpha_beta_pruning()
+        if np.random.rand() < self.prob_random_action_in_bot:
+            return self.random_action()
+        else:
+            if self.bot_action_type == 'v0':
+                return self.rule_bot_v0()
+            elif self.bot_action_type == 'v1':
+                return self.rule_bot_v1()
+            elif self.bot_action_type == 'alpha_beta_pruning':
+                return self.bot_action_alpha_beta_pruning()
 
     def bot_action_alpha_beta_pruning(self):
         action = self.alpha_beta_pruning_player.get_best_action(self.board, player_index=self.current_player_index)

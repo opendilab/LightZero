@@ -132,7 +132,6 @@ class EfficientZeroGameBuffer(Buffer):
         ## observation
         # the key difference setting between image-input and vector input.
         cvt_string=False,
-        gray_scale=False,
         use_augmentation=True,
         # style of augmentation
         augmentation=['shift', 'intensity'],

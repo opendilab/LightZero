@@ -17,23 +17,27 @@ update_per_collect = 100
 batch_size = 256
 max_env_step = int(2e6)
 categorical_distribution = False
-reanalyze_ratio = 0.3
+reanalyze_ratio = 0.
 
 board_size = 6  # default_size is 15
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = int(board_size * board_size/2)
 bot_action_type = 'v0'  # 'v1'
-threshold_env_steps_for_final_lr = int(1e5)
-threshold_env_steps_for_final_temperature = int(1e5)
+prob_random_action_in_bot = 0.1
+threshold_env_steps_for_final_lr = int(1e6)
+threshold_env_steps_for_final_temperature = int(1e6)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd{categorical_distribution}_seed0',
+    exp_name=f'data_mz_ctree/gomoku_b{board_size}_rand{prob_random_action_in_bot}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_lm-true_atv_'
+             f'tesfl{threshold_env_steps_for_final_lr}_tesft{threshold_env_steps_for_final_temperature}_rbs1e6_seed0',
     env=dict(
         stop_value=int(2),
+        board_size=board_size,
         battle_mode='play_with_bot_mode',
+        prob_random_action_in_bot=prob_random_action_in_bot,
         channel_last=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -116,5 +120,5 @@ gomoku_muzero_create_config = EasyDict(gomoku_muzero_create_config)
 create_config = gomoku_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import serial_pipeline_mcts
-    serial_pipeline_mcts([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import train_muzero
+    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
