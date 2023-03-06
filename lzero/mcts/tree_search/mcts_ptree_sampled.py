@@ -18,15 +18,21 @@ import lzero.mcts.ptree.ptree_sez as tree_sez
 
 
 class SampledEfficientZeroMCTSPtree(object):
+
+    # the default_config for SampledEfficientZeroMCTSPtree.
     config = dict(
-        cuda=True,
-        pb_c_base=19652,
-        pb_c_init=1.25,
         support_scale=300,
-        discount=0.997,
+        discount_factor=0.997,
         num_simulations=50,
         categorical_distribution=True,
         lstm_horizon_len=5,
+        # UCB related config
+        root_dirichlet_alpha=0.3,
+        root_exploration_fraction=0.25,
+        pb_c_base=19652,
+        pb_c_init=1.25,
+        value_delta_max=0.01,
+
     )
 
     @classmethod
@@ -36,7 +42,12 @@ class SampledEfficientZeroMCTSPtree(object):
         return cfg
 
     def __init__(self, cfg=None):
-        # NOTE: utilize the default config
+        """
+        Overview:
+            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
+            in the default configuration, the user-provided value will override the default configuration. Otherwise,
+            the default configuration will be used.
+        """
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
@@ -57,7 +68,7 @@ class SampledEfficientZeroMCTSPtree(object):
 
             # preparation
             num = roots.num
-            pb_c_base, pb_c_init, discount = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount
+            pb_c_base, pb_c_init, discount_factor = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount_factor
             # the data storage of hidden states: storing the hidden states of all the ctree root nodes
             # hidden_state_roots.shape  (2, 12, 3, 3)
             hidden_state_pool = [hidden_state_roots]
@@ -94,7 +105,7 @@ class SampledEfficientZeroMCTSPtree(object):
                 # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
                 # simulation reaches a leaf node s_l.
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play = tree_sez.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount, min_max_stats_lst, results, copy.deepcopy(to_play),
+                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play),
                     self._cfg.model.continuous_action_space
                 )
                 # obtain the search horizon for leaf nodes (not expanded)
@@ -181,7 +192,7 @@ class SampledEfficientZeroMCTSPtree(object):
 
                 # backpropagation along the search path to update the attributes
                 tree_sez.batch_backpropagate(
-                    hidden_state_index_x, discount, value_prefix_pool, value_pool, policy_logits_pool,
+                    hidden_state_index_x, discount_factor, value_prefix_pool, value_pool, policy_logits_pool,
                     min_max_stats_lst, results, is_reset_lst, virtual_to_play
                 )
 

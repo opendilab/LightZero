@@ -58,7 +58,7 @@ gomoku_alphazero_config = dict(
             downsample=False,
             last_linear_layer_init_zero=True,
             categorical_distribution=False,
-            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # ==============================================================
             # We use the half size model for gomoku
             # ==============================================================
