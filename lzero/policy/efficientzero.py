@@ -18,7 +18,7 @@ from torch.distributions import Categorical
 import lzero.mcts.ptree.ptree_ez as ptree
 from lzero.mcts import EfficientZeroMCTSCtree as MCTS_ctree
 from lzero.mcts import EfficientZeroMCTSPtree as MCTS_ptree
-from lzero.mcts import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
+from lzero.mcts import Transforms, modified_cross_entropy_loss, value_phi, reward_phi, \
     DiscreteSupport
 from lzero.mcts import scalar_transform, InverseScalarTransform
 from lzero.mcts import select_action
@@ -50,39 +50,13 @@ class EfficientZeroPolicy(Policy):
             # observation_shape=(12, 96, 96),  # if frame_stack_num=4, gray_scale=False
             # observation_shape=(3, 96, 96),  # if frame_stack_num=1, gray_scale=False
             observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
-            action_space_size=6,
-            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             categorical_distribution=True,
-            activation=torch.nn.ReLU(inplace=True),
-            batch_norm_momentum=0.1,
-            last_linear_layer_init_zero=True,
-            state_norm=False,
             # the key difference setting between image-input and vector input.
             image_channel=1,
-            frame_stack_num=4,
-            downsample=True,
-            # ==============================================================
-            # the default config is large size model, same as the EfficientZero original paper.
-            # ==============================================================
-            num_res_blocks=1,
-            num_channels=64,
             lstm_hidden_size=512,
-            # the following model para. is usually fixed
-            reward_head_channels=16,
-            value_head_channels=16,
-            policy_head_channels=16,
-            fc_reward_layers=[32],
-            fc_value_layers=[32],
-            fc_policy_layers=[32],
+            frame_stack_num=4,
             support_scale=300,
-            reward_support_size=601,
-            value_support_size=601,
-            proj_hid=1024,
-            proj_out=1024,
-            pred_hid=512,
-            pred_out=1024,
-            # the above model para. is usually fixed
         ),
         # learn_mode config
         learn=dict(
@@ -130,11 +104,8 @@ class EfficientZeroPolicy(Policy):
         game_wrapper=True,
         monitor_statistics=True,
         game_block_length=200,
-        # the size/capacity of replay_buffer, in the terms of transitions.
-        replay_buffer_size=int(1e6),
 
         ## observation
-        # the key difference setting between image-input and vector input.
         cvt_string=False,
         use_augmentation=True,
         # style of augmentation
@@ -142,6 +113,7 @@ class EfficientZeroPolicy(Policy):
 
         ## learn
         num_simulations=50,
+        discount_factor=0.997,
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
@@ -183,13 +155,9 @@ class EfficientZeroPolicy(Policy):
         priority_prob_beta=0.4,
         prioritized_replay_eps=1e-6,
 
-        ## UCB
+        # UCB related config
         root_dirichlet_alpha=0.3,
         root_exploration_fraction=0.25,
-        pb_c_base=19652,
-        pb_c_init=1.25,
-        discount=0.997,
-        value_delta_max=0.01,
         # ==============================================================
         # end of additional game_config
         # ==============================================================
@@ -248,7 +216,6 @@ class EfficientZeroPolicy(Policy):
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
         self.collect_mcts_temperature = 1
-
 
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
         self._learn_model.train()

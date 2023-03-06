@@ -24,8 +24,9 @@ reanalyze_ratio = 0.3
 
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = 800
-threshold_env_steps_for_final_lr = int(1e6)
-threshold_env_steps_for_final_temperature = int(2e5)
+threshold_env_steps_for_final_lr = int(2e5)
+# if we set threshold_env_steps_for_final_temperature=0, i.e. we use the fixed final temperature=0.25.
+threshold_env_steps_for_final_temperature = int(0)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -62,7 +63,7 @@ lunarlander_cont_disc_efficientzero_config = dict(
             downsample=False,
             observation_shape=(1, 8, 1),  # if frame_stack_num=1
             action_space_size=49,  # each_dim_disc_size**2=7**2=9
-            representation_model_type='conv_res_blocks',
+            representation_network_type='conv_res_blocks',
             # ==============================================================
             # We use the medium size model for lunarlander.
             # ==============================================================

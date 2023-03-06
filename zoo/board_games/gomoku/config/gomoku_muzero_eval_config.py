@@ -23,8 +23,9 @@ board_size = 6  # default_size is 15
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = int(board_size * board_size/2)
 bot_action_type = 'v0'  # 'v1'
-threshold_env_steps_for_final_lr = int(1e6)
-threshold_env_steps_for_final_temperature = int(2e5)
+threshold_env_steps_for_final_lr = int(2e5)
+# if we set threshold_env_steps_for_final_temperature=0, i.e. we use the fixed final temperature=0.25.
+threshold_env_steps_for_final_temperature = int(0)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -63,7 +64,7 @@ gomoku_muzero_config = dict(
             frame_stack_num=1,
             downsample=False,
             categorical_distribution=categorical_distribution,
-            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # ==============================================================
             # We use the half size model for gomoku
             # ==============================================================

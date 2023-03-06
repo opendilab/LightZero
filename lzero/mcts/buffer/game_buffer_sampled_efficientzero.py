@@ -38,122 +38,16 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
     # the default_config for SampledEfficientZeroGameBuffer.
     config = dict(
-        type='sampled_efficientzero',
-        # (bool) Whether use cuda in policy
-        cuda=False,
-        # (bool) Whether learning policy is the same as collecting data policy(on-policy)
-        on_policy=False,
-        # (bool) Whether use Importance Sampling Weight to correct biased update. If True, priority must be True.
-        priority_IS_weight=False,
-        # (float) Discount factor(gamma) for returns
-        discount_factor=0.97,
-        # (int) The number of step for calculating target q_value
-        nstep=1,
         model=dict(
-            image_channel=1,
-            frame_stack_num=4,
-            # the key difference setting between image-input and vector input.
-            downsample=True,
-            # the stacked obs shape -> the transformed obs shape:
-            # [S, W, H, C] -> [S x C, W, H]
-            # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
-            observation_shape=(12, 96, 96),  # if frame_stack_num=4
-            # observation_shape=(3, 96, 96),  # if frame_stack_num=1
             action_space_size=6,
-            # ==============================================================
-            # begin of specific sampled related config
-            # ==============================================================
             continuous_action_space=False,
             num_of_sampled_actions=6,
-            # ==============================================================
-            # end of specific sampled related config
-            # ==============================================================
-            # the default config is large size model, same as the EfficientZero original paper.
-            num_res_blocks=1,
-            num_channels=64,
-            reward_head_channels=16,
-            value_head_channels=16,
-            policy_head_channels=16,
-            fc_reward_layers=[32],
-            fc_value_layers=[32],
-            fc_policy_layers=[32],
-            support_scale=300,
-            reward_support_size=601,
-            value_support_size=601,
-            batch_norm_momentum=0.1,
-            proj_hid=1024,
-            proj_out=1024,
-            pred_hid=512,
-            pred_out=1024,
-            lstm_hidden_size=512,
-            last_linear_layer_init_zero=True,
-            state_norm=False,
-            activation=torch.nn.ReLU(inplace=True),
-            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
-            categorical_distribution=True,
-            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
         # learn_mode config
         learn=dict(
-            # (bool) Whether to use multi gpu
-            multi_gpu=False,
-            # How many updates(iterations) to train after collector's one collection.
-            # Bigger "update_per_collect" means bigger off-policy.
-            # collect data -> update policy-> collect data -> ...
-            update_per_collect=10,
             # (int) How many samples in a training batch
             batch_size=256,
-
-            # ==============================================================
-            # begin of specific sampled related config
-            # ==============================================================
-            normalize_prob_of_sampled_actions=False,
-            policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
-            cos_lr_scheduler=False,
-            weight_decay=2e-5,
-            lr_manually=False,
-            optim_type='Adam',
-            learning_rate=0.003,  # lr for Adam optimizer
-            # lr_manually=True,
-            # optim_type='SGD',
-            # learning_rate=0.2,  # init lr for manually decay schedule
-            # ==============================================================
-            # end of specific sampled related config
-            # ==============================================================
-            # ==============================================================
-            # The following configs are algorithm-specific
-            # ==============================================================
-            # (int) Frequency of target network update.
-            target_update_freq=100,
-            # (bool) Whether ignore done(usually for max step termination env)
-            ignore_done=False,
-            momentum=0.9,
-            grad_clip_type='clip_norm',
-            grad_clip_value=10,
-            # grad_clip_value=0.5,
-        ),
-        # collect_mode config
-        collect=dict(
-            # You can use either "n_sample" or "n_episode" in collector.collect.
-            # Get "n_episode" episodes per collect.
-            n_episode=8,
-            unroll_len=1,
-        ),
-        # command_mode config
-        other=dict(
-            # Epsilon greedy with decay.
-            eps=dict(
-                # Decay type. Support ['exp', 'linear'].
-                type='exp',
-                start=0.95,
-                end=0.1,
-                decay=50000,
-            ),
-            replay_buffer=dict(
-                type='game_buffer_sampled_efficientzero',
-                # the size/capacity of replay_buffer, in the terms of transitions.
-                replay_buffer_size=int(1e6),
-            ),
         ),
         # ==============================================================
         # begin of additional game_config
@@ -161,47 +55,18 @@ class SampledEfficientZeroGameBuffer(Buffer):
         ## common
         mcts_ctree=True,
         device='cuda',
-        collector_env_num=8,
-        evaluator_env_num=3,
         env_type='not_board_games',
-        battle_mode='play_with_bot_mode',
-        game_wrapper=True,
-        monitor_statistics=True,
-        game_block_length=200,
-
-        ## observation
-        # the key difference setting between image-input and vector input.
-        image_based=False,
-        cvt_string=False,
-        gray_scale=False,
-        use_augmentation=False,
-
-        ## reward
-        clip_reward=False,
-        normalize_reward=False,
-        normalize_reward_scale=100,
+        # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e6),
 
         ## learn
         num_simulations=50,
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
-        max_grad_norm=10,
-        # the weight of different loss
-        reward_loss_weight=1,
-        value_loss_weight=0.25,
-        policy_loss_weight=1,
-        ssl_loss_weight=2,
-        policy_entropy_loss_weight=5e-3,
-        # fixed_temperature_value is effective only when auto_temperature=False
-        # ``threshold_training_steps_for_final_lr_temperature`` is only used for adjusting temperature manually.
-        # threshold_training_steps_for_final_lr_temperature=int(threshold_env_steps_for_final_lr_temperature/collector_env_num/average_episode_length_when_converge * update_per_collect),
-        threshold_training_steps_for_final_lr_temperature=int(1e5),
 
         ## reanalyze
         reanalyze_ratio=0.3,
-        # for sampled_efficientzero, if reanalyze_ratio>0, we must set ``reanalyze_outdated=True`` to obtain
-        # the correct latest ``root_sampled_actions`` corresponding to the reanalyzed ``batch_target_policies_re``.
         reanalyze_outdated=True,
         # whether to use root value in reanalyzing part
         use_root_value=False,
@@ -221,7 +86,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         root_exploration_fraction=0.25,
         pb_c_base=19652,
         pb_c_init=1.25,
-        discount=0.997,
+        discount_factor=0.997,
         value_delta_max=0.01,
         # ==============================================================
         # end of additional game_config
@@ -230,7 +95,12 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
     def __init__(self, cfg: dict):
         super().__init__(cfg.other.replay_buffer.replay_buffer_size)
-        # NOTE: utilize the default config
+        """
+        Overview:
+            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
+            in the default configuration, the user-provided value will override the default configuration. Otherwise, 
+            the default configuration will be used.
+        """
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
@@ -953,15 +823,15 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 # TODO(pu): board_games
                 value_lst = value_lst.reshape(-1) * np.array(
                     [
-                        self._cfg.discount ** td_steps_lst[i] if int(td_steps_lst[i]) %
-                                                                 2 == 0 else -self._cfg.discount ** td_steps_lst[i] for
+                        self._cfg.discount_factor ** td_steps_lst[i] if int(td_steps_lst[i]) %
+                                                                 2 == 0 else -self._cfg.discount_factor ** td_steps_lst[i] for
                         i in range(batch_size)
                     ]
                 )
 
             else:
                 value_lst = value_lst.reshape(-1) * (
-                        np.array([self._cfg.discount for _ in range(batch_size)]) ** td_steps_lst
+                        np.array([self._cfg.discount_factor for _ in range(batch_size)]) ** td_steps_lst
                 )
             value_lst = value_lst * np.array(value_mask)
             value_lst = value_lst.tolist()
@@ -982,13 +852,13 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         if to_play_history[0][0] is not None:
                             # TODO(pu): board_games
                             if to_play_list[current_index] == to_play_list[i]:
-                                value_lst[value_index] += reward * self._cfg.discount ** i
+                                value_lst[value_index] += reward * self._cfg.discount_factor ** i
                             else:
-                                value_lst[value_index] += -reward * self._cfg.discount ** i
+                                value_lst[value_index] += -reward * self._cfg.discount_factor ** i
                         else:
-                            value_lst[value_index] += reward * self._cfg.discount ** i
+                            value_lst[value_index] += reward * self._cfg.discount_factor ** i
                             """
-                            TODO(pu): why value don't use discount factor
+                            TODO(pu): why value don't use discount_factor factor
                             """
 
                     # reset every lstm_horizon_len
@@ -999,9 +869,9 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
                     if current_index < traj_len_non_re:
                         target_values.append(value_lst[value_index])
-                        # Since the horizon is small and the discount is close to 1.
+                        # Since the horizon is small and the discount_factor is close to 1.
                         # Compute the reward sum to approximate the value prefix for simplification
-                        value_prefix += reward_lst[current_index]  # * config.discount ** (current_index - base_index)
+                        value_prefix += reward_lst[current_index]  # * config.discount_factor ** (current_index - base_index)
                         target_value_prefixs.append(value_prefix)
                     else:
                         target_values.append(0)

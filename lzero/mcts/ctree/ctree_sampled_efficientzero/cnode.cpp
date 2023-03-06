@@ -516,7 +516,7 @@ namespace tree
         //        std::cout << "add_exploration_noise done!" << std::endl;
     }
 
-    float CNode::compute_mean_q(int isRoot, float parent_q, float discount)
+    float CNode::compute_mean_q(int isRoot, float parent_q, float discount_factor)
     {
         float total_unsigned_q = 0.0;
         int total_visits = 0;
@@ -531,7 +531,7 @@ namespace tree
                 {
                     true_reward = child->value_prefix;
                 }
-                float qsa = true_reward + discount * child->value();
+                float qsa = true_reward + discount_factor * child->value();
                 total_unsigned_q += qsa;
                 total_visits += 1;
             }
@@ -823,7 +823,7 @@ namespace tree
 
     //*********************************************************
     //
-    void update_tree_q(CNode *root, tools::CMinMaxStats &min_max_stats, float discount, int players)
+    void update_tree_q(CNode *root, tools::CMinMaxStats &min_max_stats, float discount_factor, int players)
     {
         std::stack<CNode *> node_stack;
         node_stack.push(root);
@@ -847,10 +847,10 @@ namespace tree
                 }
                 float qsa;
                 if (players == 1)
-                    qsa = true_reward + discount * node->value();
+                    qsa = true_reward + discount_factor * node->value();
                 else if (players == 2)
                     // TODO(pu):
-                    qsa = true_reward + discount * (-1) * node->value();
+                    qsa = true_reward + discount_factor * (-1) * node->value();
 
                 min_max_stats.update(qsa);
             }
@@ -869,7 +869,7 @@ namespace tree
         }
     }
 
-    void cbackpropagate(std::vector<CNode *> &search_path, tools::CMinMaxStats &min_max_stats, int to_play, float value, float discount)
+    void cbackpropagate(std::vector<CNode *> &search_path, tools::CMinMaxStats &min_max_stats, int to_play, float value, float discount_factor)
     {
         if (to_play == 0)
         {
@@ -888,12 +888,12 @@ namespace tree
                     CNode *parent = search_path[i - 1];
                     parent_value_prefix = parent->value_prefix;
                     is_reset = parent->is_reset;
-                    //                float qsa = (node->value_prefix - parent_value_prefix) + discount * node->value();
+                    //                float qsa = (node->value_prefix - parent_value_prefix) + discount_factor * node->value();
                     //                min_max_stats.update(qsa);
                 }
 
                 float true_reward = node->value_prefix - parent_value_prefix;
-                min_max_stats.update(true_reward + discount * node->value());
+                min_max_stats.update(true_reward + discount_factor * node->value());
 
                 if (is_reset == 1)
                 {
@@ -901,7 +901,7 @@ namespace tree
                     true_reward = node->value_prefix;
                 }
 
-                bootstrap_value = true_reward + discount * bootstrap_value;
+                bootstrap_value = true_reward + discount_factor * bootstrap_value;
             }
         }
         else
@@ -930,7 +930,7 @@ namespace tree
                 // but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
                 float true_reward = node->value_prefix - parent_value_prefix;
 
-                min_max_stats.update(true_reward + discount * node->value());
+                min_max_stats.update(true_reward + discount_factor * node->value());
 
                 if (is_reset == 1)
                 {
@@ -938,18 +938,18 @@ namespace tree
                     true_reward = node->value_prefix;
                 }
                 if (node->to_play == to_play)
-                    bootstrap_value = -true_reward + discount * bootstrap_value;
+                    bootstrap_value = -true_reward + discount_factor * bootstrap_value;
                 else
-                    bootstrap_value = true_reward + discount * bootstrap_value;
+                    bootstrap_value = true_reward + discount_factor * bootstrap_value;
                 //                if(node->to_play == to_play)
-                //                    bootstrap_value = true_reward + discount * bootstrap_value;
+                //                    bootstrap_value = true_reward + discount_factor * bootstrap_value;
                 //                else
-                //                    bootstrap_value = - true_reward + discount * bootstrap_value;
+                //                    bootstrap_value = - true_reward + discount_factor * bootstrap_value;
             }
         }
     }
 
-    void cbatch_backpropagate(int hidden_state_index_x, float discount, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> is_reset_lst, std::vector<int> &to_play_batch)
+    void cbatch_backpropagate(int hidden_state_index_x, float discount_factor, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> is_reset_lst, std::vector<int> &to_play_batch)
     {
         for (int i = 0; i < results.num; ++i)
         {
@@ -957,11 +957,11 @@ namespace tree
             // reset
             results.nodes[i]->is_reset = is_reset_lst[i];
 
-            cbackpropagate(results.search_paths[i], min_max_stats_lst->stats_lst[i], to_play_batch[i], values[i], discount);
+            cbackpropagate(results.search_paths[i], min_max_stats_lst->stats_lst[i], to_play_batch[i], values[i], discount_factor);
         }
     }
 
-    CAction cselect_child(CNode *root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount, float mean_q, int players, bool continuous_action_space)
+    CAction cselect_child(CNode *root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount_factor, float mean_q, int players, bool continuous_action_space)
     {
         // sampled related code
         // TODO(pu): Progressive widening (See https://hal.archives-ouvertes.fr/hal-00542673v2/document)
@@ -973,9 +973,9 @@ namespace tree
 
             CNode *child = root->get_child(a);
             // sampled related code
-            //            float temp_score = cucb_score(child, min_max_stats, mean_q, root->is_reset, root->visit_count - 1, root->value_prefix, pb_c_base, pb_c_init, discount, players);
+            //            float temp_score = cucb_score(child, min_max_stats, mean_q, root->is_reset, root->visit_count - 1, root->value_prefix, pb_c_base, pb_c_init, discount_factor, players);
 
-            float temp_score = cucb_score(root, child, min_max_stats, mean_q, root->is_reset, root->visit_count - 1, root->value_prefix, pb_c_base, pb_c_init, discount, players, continuous_action_space);
+            float temp_score = cucb_score(root, child, min_max_stats, mean_q, root->is_reset, root->visit_count - 1, root->value_prefix, pb_c_base, pb_c_init, discount_factor, players, continuous_action_space);
 
             if (max_score < temp_score)
             {
@@ -1002,7 +1002,7 @@ namespace tree
     }
 
     // sampled related code
-    float cucb_score(CNode *parent, CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, int is_reset, float total_children_visit_counts, float parent_value_prefix, float pb_c_base, float pb_c_init, float discount, int players, bool continuous_action_space)
+    float cucb_score(CNode *parent, CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, int is_reset, float total_children_visit_counts, float parent_value_prefix, float pb_c_base, float pb_c_init, float discount_factor, int players, bool continuous_action_space)
 
     {
         float pb_c = 0.0, prior_score = 0.0, value_score = 0.0;
@@ -1056,9 +1056,9 @@ namespace tree
             }
 
             if (players == 1)
-                value_score = true_reward + discount * child->value();
+                value_score = true_reward + discount_factor * child->value();
             else if (players == 2)
-                value_score = true_reward + discount * (-child->value());
+                value_score = true_reward + discount_factor * (-child->value());
         }
 
         value_score = min_max_stats.normalize(value_score);
@@ -1072,7 +1072,7 @@ namespace tree
         return ucb_value;
     }
 
-    void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &virtual_to_play_batch, bool continuous_action_space)
+    void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount_factor, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &virtual_to_play_batch, bool continuous_action_space)
     {
         // set seed
         timeval t1;
@@ -1105,12 +1105,12 @@ namespace tree
 
             while (node->expanded())
             {
-                float mean_q = node->compute_mean_q(is_root, parent_q, discount);
+                float mean_q = node->compute_mean_q(is_root, parent_q, discount_factor);
                 is_root = 0;
                 parent_q = mean_q;
 
-                //                int action = cselect_child(node, min_max_stats_lst->stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players);
-                CAction action = cselect_child(node, min_max_stats_lst->stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players, continuous_action_space);
+                //                int action = cselect_child(node, min_max_stats_lst->stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players);
+                CAction action = cselect_child(node, min_max_stats_lst->stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players, continuous_action_space);
                 if (players > 1)
                 {
                     if (virtual_to_play_batch[i] == 1)

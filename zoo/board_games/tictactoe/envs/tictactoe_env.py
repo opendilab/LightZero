@@ -20,7 +20,7 @@ from zoo.board_games.base_game_env import BaseGameEnv
 class TicTacToeEnv(BaseGameEnv):
     config = dict(
         channel_last=True,
-        scale=False,
+        scale=True,
         prob_random_agent=0,
         prob_expert_agent=0,
         battle_mode='play_with_bot_mode',

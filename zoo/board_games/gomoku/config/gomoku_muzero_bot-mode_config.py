@@ -24,14 +24,14 @@ board_size = 6  # default_size is 15
 average_episode_length_when_converge = int(board_size * board_size/2)
 bot_action_type = 'v0'  # 'v1'
 prob_random_action_in_bot = 0.1
-threshold_env_steps_for_final_lr = int(1e6)
+threshold_env_steps_for_final_lr = int(2e5)
 threshold_env_steps_for_final_temperature = int(1e6)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_b{board_size}_rand{prob_random_action_in_bot}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_lm-true_atv_'
+    exp_name=f'data_mz_ctree/gomoku_b{board_size}_rand{prob_random_action_in_bot}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_lm-true_'
              f'tesfl{threshold_env_steps_for_final_lr}_tesft{threshold_env_steps_for_final_temperature}_rbs1e6_seed0',
     env=dict(
         stop_value=int(2),
@@ -65,7 +65,7 @@ gomoku_muzero_config = dict(
             frame_stack_num=1,
             downsample=False,
             categorical_distribution=categorical_distribution,
-            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # ==============================================================
             # We use the half size model for gomoku
             # ==============================================================
