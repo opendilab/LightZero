@@ -17,10 +17,10 @@ class DiscreteSupport(object):
 def scalar_transform(x, epsilon=0.001, delta=1):
     """
     Overview:
-        h(.) function
-        Reference:
-            MuZero: Appendix F: Network Architecture
-            https://arxiv.org/pdf/1805.11593.pdf (Page-11) Appendix A : Proposition A.2
+        transform the original value to the scaled value, i.e. h(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
+    Reference:
+        - MuZero: Appendix F: Network Architecture
+        - https://arxiv.org/pdf/1805.11593.pdf (Page-11) Appendix A : Proposition A.2
     """
     # h(.) function
     if delta == 1:
@@ -34,10 +34,11 @@ def scalar_transform(x, epsilon=0.001, delta=1):
 def inverse_scalar_transform(logits, support_size, epsilon=0.001, categorical_distribution=True):
     """
     Overview:
-        h^(-1)(.) function
-        Reference:
-            MuZero: Appendix F: Network Architecture
-            https://arxiv.org/pdf/1805.11593.pdf (Page-11) Appendix A : Proposition A.2 (iii)
+        transform the the scaled value or its categorical representation to the original value,
+        i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
+    Reference:
+        - MuZero Appendix F: Network Architecture.
+        - https://arxiv.org/pdf/1805.11593.pdf Appendix A: Proposition A.2
     """
     if categorical_distribution:
         scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
@@ -62,7 +63,14 @@ def inverse_scalar_transform(logits, support_size, epsilon=0.001, categorical_di
 
 
 class InverseScalarTransform:
-
+    """
+    Overview:
+        transform the the scaled value or its categorical representation to the original value,
+        i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
+    Reference:
+        - MuZero Appendix F: Network Architecture.
+        - https://arxiv.org/pdf/1805.11593.pdf Appendix A: Proposition A.2
+    """
     def __init__(self, support_size, device='cpu', categorical_distribution=True):
         scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
         self.value_support = torch.from_numpy(scalar_support.range).unsqueeze(0)
@@ -94,22 +102,13 @@ def visit_count_temperature(auto_temperature, fixed_temperature_value, threshold
         return fixed_temperature_value
 
 
-def modified_cross_entropy_loss(prediction, target):
-    return -(torch.log_softmax(prediction, dim=1) * target).sum(1)
-
-
-def value_phi(value_support, x):
-    return _phi(value_support, x)
-
-
-def reward_phi(reward_support, x):
-    return _phi(reward_support, x)
-
-
-def _phi(discrete_support, x):
+def phi_transform(discrete_support, x):
     """
     Overview:
-        Under this transformation, each scalar is represented as the linear combination of its two adjacent supports,
+        We then apply a transformation ``phi`` to the scalar in order to obtain equivalent categorical representations.
+         After this transformation, each scalar is represented as the linear combination of its two adjacent supports.
+    Reference:
+        - MuZero paper Appendix F: Network Architecture.
     """
     min = discrete_support.min
     max = discrete_support.max
@@ -126,7 +125,12 @@ def _phi(discrete_support, x):
     x_high_idx, x_low_idx = x_high - min / delta, x_low - min / delta
     target.scatter_(2, x_high_idx.long().unsqueeze(-1), p_high.unsqueeze(-1))
     target.scatter_(2, x_low_idx.long().unsqueeze(-1), p_low.unsqueeze(-1))
+
     return target
+
+
+def modified_cross_entropy_loss(prediction, target):
+    return -(torch.log_softmax(prediction, dim=1) * target).sum(1)
 
 
 if __name__ == "__main__":

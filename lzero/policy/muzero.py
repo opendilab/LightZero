@@ -16,7 +16,7 @@ from ding.torch_utils import to_tensor
 # python MCTS
 import lzero.mcts.ptree.ptree_mz as ptree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
-from lzero.mcts import ImageTransforms, modified_cross_entropy_loss, value_phi, reward_phi, DiscreteSupport
+from lzero.mcts import ImageTransforms, modified_cross_entropy_loss, value_phi, phi_transform, DiscreteSupport
 from lzero.mcts import scalar_transform, InverseScalarTransform
 from lzero.mcts import select_action
 # cpp MCTS
@@ -214,8 +214,8 @@ class MuZeroPolicy(Policy):
         self._learn_model.train()
         self._target_model.train()
 
-        inputs_batch, targets_batch = data
-        obs_batch_ori, action_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
+        current_batch, targets_batch = data
+        obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = targets_batch
 
         # [:, 0: config.model.frame_stack_num * 3,:,:]
@@ -262,7 +262,7 @@ class MuZeroPolicy(Policy):
         target_reward = torch.from_numpy(target_reward.astype('float64')).to(self._cfg.device).float()
         target_value = torch.from_numpy(target_value.astype('float64')).to(self._cfg.device).float()
         target_policy = torch.from_numpy(target_policy).to(self._cfg.device).float()
-        weights = torch.from_numpy(weights_lst).to(self._cfg.device).float()
+        weights = torch.from_numpy(weights).to(self._cfg.device).float()
 
         # TODO
         target_reward = target_reward.view(self._cfg.learn.batch_size, -1)
@@ -294,7 +294,7 @@ class MuZeroPolicy(Policy):
         transformed_target_value = scalar_transform(target_value)
         if self.cfg.model.categorical_distribution:
             # transform scalar to categorical_distribution
-            target_reward_phi = reward_phi(self.reward_support, transformed_target_reward)
+            target_reward_phi = phi_transform(self.reward_support, transformed_target_reward)
             target_value_phi = value_phi(self.value_support, transformed_target_value)
 
         network_output = self._learn_model.initial_inference(obs_batch)

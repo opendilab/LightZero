@@ -142,7 +142,7 @@ def test_prepare_batch_context():
     buffer.push(data_2, meta_2)
 
     context = buffer.prepare_batch_context(batch_size=2, beta=0.2)
-    # context = (game_lst, game_pos_lst, indices_lst, weights_lst, make_time)
+    # context = (game_lst, game_pos_lst, indices_lst, weights, make_time)
     # print(context)
 
 

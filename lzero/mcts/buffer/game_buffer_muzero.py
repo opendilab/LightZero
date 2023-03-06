@@ -314,8 +314,8 @@ class MuZeroGameBuffer(Buffer):
 
     def update_priority(self, train_data, batch_priorities) -> None:
         # update priority in replay_buffer
-        # inputs_batch, targets_batch, replay_buffer = train_data
-        # obs_batch_ori, action_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
+        # current_batch, targets_batch, replay_buffer = train_data
+        # obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
         self.batch_update(indices=train_data[0][3],
                           metas={'make_time': train_data[0][5], 'batch_priorities': batch_priorities})
 
@@ -452,7 +452,7 @@ class MuZeroGameBuffer(Buffer):
             reward_value_context:        the context of reanalyzed value targets
             policy_re_context:           the context of reanalyzed policy targets
             policy_non_re_context:       the context of non-reanalyzed policy targets
-            inputs_batch:                the inputs of batch
+            current_batch:                the inputs of batch
         Arguments:
             batch_context: Any batch context from replay buffer
             ratio: float ratio of reanalyzed policy (value is 100% reanalyzed)
@@ -492,9 +492,9 @@ class MuZeroGameBuffer(Buffer):
         obs_list = prepare_observation_list(obs_list)
 
         # formalize the inputs of a batch
-        inputs_batch = [obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list]
-        for i in range(len(inputs_batch)):
-            inputs_batch[i] = np.asarray(inputs_batch[i])
+        current_batch = [obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list]
+        for i in range(len(current_batch)):
+            current_batch[i] = np.asarray(current_batch[i])
 
         total_transitions = self.get_num_of_transitions()
 
@@ -530,7 +530,7 @@ class MuZeroGameBuffer(Buffer):
         else:
             policy_non_re_context = None
 
-        context = reward_value_context, policy_re_context, policy_non_re_context, inputs_batch
+        context = reward_value_context, policy_re_context, policy_non_re_context, current_batch
         return context
 
     def prepare_reward_value_context(
@@ -1204,7 +1204,7 @@ class MuZeroGameBuffer(Buffer):
 
         batch_context = self.prepare_batch_context(batch_size, self._cfg.priority_prob_beta)
         input_context = self.make_batch(batch_context, self._cfg.reanalyze_ratio)
-        reward_value_context, policy_re_context, policy_non_re_context, inputs_batch = input_context
+        reward_value_context, policy_re_context, policy_non_re_context, current_batch = input_context
 
         # target reward, value
         batch_rewards, batch_values = self.compute_target_reward_value(reward_value_context, policy._target_model)
@@ -1221,7 +1221,7 @@ class MuZeroGameBuffer(Buffer):
 
         targets_batch = [batch_rewards, batch_values, batch_policies]
         # a batch contains the inputs and the targets
-        train_data = [inputs_batch, targets_batch]
+        train_data = [current_batch, targets_batch]
         return train_data
 
     def save_data(self, file_name: str):

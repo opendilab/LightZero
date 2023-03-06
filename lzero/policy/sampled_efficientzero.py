@@ -257,11 +257,11 @@ class SampledEfficientZeroPolicy(Policy):
         self._learn_model.train()
         self._target_model.train()
 
-        inputs_batch, targets_batch = data
+        current_batch, targets_batch = data
         # ==============================================================
         # sampled related code
         # ==============================================================
-        obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
+        obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights, make_time = current_batch
         target_value_prefix, target_value, target_policy = targets_batch
 
         # [:, 0: config.model.frame_stack_num * 3,:,:]
@@ -314,7 +314,7 @@ class SampledEfficientZeroPolicy(Policy):
         target_value_prefix = torch.from_numpy(target_value_prefix.astype('float64')).to(self._cfg.device).float()
         target_value = torch.from_numpy(target_value.astype('float64')).to(self._cfg.device).float()
         target_policy = torch.from_numpy(target_policy).to(self._cfg.device).float()
-        weights = torch.from_numpy(weights_lst).to(self._cfg.device).float()
+        weights = torch.from_numpy(weights).to(self._cfg.device).float()
 
         # TODO
         target_value_prefix = target_value_prefix.view(self._cfg.learn.batch_size, -1)
@@ -770,7 +770,6 @@ class SampledEfficientZeroPolicy(Policy):
                     # TODO: debug the original policy loss
                     # calculate loss for the first step
                     policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
-
 
             if self._cfg.model.categorical_distribution:
                 value_loss += modified_cross_entropy_loss(value, target_value_phi[:, step_i + 1])

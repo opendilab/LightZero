@@ -251,8 +251,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
     def update_priority(self, train_data, batch_priorities) -> None:
         # update priority in replay_buffer
-        # inputs_batch, targets_batch = data
-        # obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights_lst, make_time = inputs_batch
+        # current_batch, targets_batch = data
+        # obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights, make_time = current_batch
         # target_value_prefix, target_value, target_policy = targets_batch
         self.batch_update(indices=train_data[0][4],
                           metas={'make_time': train_data[0][6], 'batch_priorities': batch_priorities})
@@ -334,7 +334,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             game_lst: a list of game histories
             game_block_pos_lst: transition index in game (relative index)
             batch_index_list: transition index in replay buffer
-            weights_lst: the weight concerning the priority
+            weights: the weight concerning the priority
             make_time: the time the batch is made (for correctly updating replay buffer
                 when data is deleted)
         Arguments:
@@ -363,8 +363,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
         if self._cfg.reanalyze_outdated is True:
             batch_index_list.sort()
 
-        weights_lst = (total * probs[batch_index_list]) ** (-beta)
-        weights_lst /= weights_lst.max()
+        weights = (total * probs[batch_index_list]) ** (-beta)
+        weights /= weights.max()
 
         game_lst = []
         game_block_pos_lst = []
@@ -382,7 +382,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
 
-        context = (game_lst, game_block_pos_lst, batch_index_list, weights_lst, make_time)
+        context = (game_lst, game_block_pos_lst, batch_index_list, weights, make_time)
         return context
 
     def make_batch(self, batch_context, reanalyze_ratio):
@@ -392,13 +392,13 @@ class SampledEfficientZeroGameBuffer(Buffer):
             reward_value_context:        the context of reanalyzed value targets
             policy_re_context:           the context of reanalyzed policy targets
             policy_non_re_context:       the context of non-reanalyzed policy targets
-            inputs_batch:                the inputs of batch
+            current_batch:                the inputs of batch
         Arguments:
             batch_context: Any batch context from replay buffer
              reanalyze_ratio: float ratio of reanalyzed policy (value is 100% reanalyzed)
         """
         # obtain the batch context from replay buffer
-        game_lst, game_block_pos_lst, batch_index_list, weights_lst, make_time_lst = batch_context
+        game_lst, game_block_pos_lst, batch_index_list, weights, make_time_lst = batch_context
         batch_size = len(batch_index_list)
         obs_lst, action_lst, mask_lst = [], [], []
         root_sampled_actions_lst = []
@@ -466,7 +466,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         # sampled related code
         ######################
         # formalize the inputs of a batch
-        inputs_batch = [obs_lst, action_lst, root_sampled_actions_lst, mask_lst, batch_index_list, weights_lst,
+        current_batch = [obs_lst, action_lst, root_sampled_actions_lst, mask_lst, batch_index_list, weights,
                         make_time_lst]
 
         try:
@@ -474,8 +474,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
         except Exception as error:
             print(error)
 
-        for i in range(len(inputs_batch)):
-            inputs_batch[i] = np.asarray(inputs_batch[i])
+        for i in range(len(current_batch)):
+            current_batch[i] = np.asarray(current_batch[i])
 
         total_transitions = self.get_num_of_transitions()
 
@@ -509,7 +509,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         else:
             policy_non_re_context = None
 
-        context = reward_value_context, policy_re_context, policy_non_re_context, inputs_batch
+        context = reward_value_context, policy_re_context, policy_non_re_context, current_batch
         return context
 
     def prepare_reward_value_context(self, indices, games, state_index_lst, total_transitions):
@@ -1255,7 +1255,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
         batch_context = self.prepare_batch_context(batch_size, self._cfg.priority_prob_beta)
         input_context = self.make_batch(batch_context, self._cfg.reanalyze_ratio)
-        reward_value_context, policy_re_context, policy_non_re_context, inputs_batch = input_context
+        reward_value_context, policy_re_context, policy_non_re_context, current_batch = input_context
 
         # target reward, value
         batch_value_prefixs, batch_values = self.compute_target_reward_value(reward_value_context, policy._target_model)
@@ -1273,13 +1273,13 @@ class SampledEfficientZeroGameBuffer(Buffer):
             # ==============================================================
             assert (self._cfg.reanalyze_ratio > 0 and self._cfg.reanalyze_outdated is True), \
                 "in sampled effiicientzero, if self._cfg.reanalyze_ratio>0, you must set self._cfg.reanalyze_outdated=True"
-            # inputs_batch = [obs_lst, action_lst, root_sampled_actions_lst, mask_lst, batch_index_list, weights_lst, make_time_lst]
+            # current_batch = [obs_lst, action_lst, root_sampled_actions_lst, mask_lst, batch_index_list, weights, make_time_lst]
             if self._cfg.model.continuous_action_space:
-                inputs_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
+                current_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
                     int(batch_size * self._cfg.reanalyze_ratio), self._cfg.num_unroll_steps + 1,
                     self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size)
             else:
-                inputs_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
+                current_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
                     int(batch_size * self._cfg.reanalyze_ratio), self._cfg.num_unroll_steps + 1,
                     self._cfg.model.num_of_sampled_actions, 1)
 
@@ -1294,7 +1294,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             batch_policies = batch_target_policies_non_re
         targets_batch = [batch_value_prefixs, batch_values, batch_policies]
         # a batch contains the inputs and the targets
-        train_data = [inputs_batch, targets_batch]
+        train_data = [current_batch, targets_batch]
         return train_data
 
     def save_data(self, file_name: str):
