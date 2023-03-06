@@ -77,10 +77,8 @@ def train_muzero_eval(
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
-    if cfg.policy.model_path is not None:
+    if cfg.policy.get('model_path', None) is not None:
         policy.learn_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
-        policy.collect_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
-        policy.eval_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))

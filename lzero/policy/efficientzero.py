@@ -35,12 +35,6 @@ class EfficientZeroPolicy(Policy):
 
     # The default_config for EfficientZero policy.
     config = dict(
-        type='efficientzero',
-        # the pretrained model path.
-        # Users should add their own model path here. Model path should lead to a model.
-        # Absolute path is recommended.
-        # In LightZero, it is ``exp_name/ckpt/ckpt_best.pth.tar``.
-        model_path=None,
         # (bool) Whether learning policy is the same as collecting data policy(on-policy)
         on_policy=False,
         model=dict(
@@ -734,7 +728,6 @@ class EfficientZeroPolicy(Policy):
                     'pred_value': pred_values_pool[i],
                     'policy_logits': policy_logits_pool[i],
                 }
-                # print('collect:', output[i])
 
         return output
 

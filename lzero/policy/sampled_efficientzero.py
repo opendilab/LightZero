@@ -34,12 +34,6 @@ class SampledEfficientZeroPolicy(Policy):
 
     # The default_config for Sampled fEficientZero policy.
     config = dict(
-        type='sampled_efficientzero',
-        # the pretrained model path.
-        # Users should add their own model path here. Model path should lead to a model.
-        # Absolute path is recommended.
-        # In LightZero, it is ``exp_name/ckpt/ckpt_best.pth.tar``.
-        model_path=None,
         # (bool) Whether learning policy is the same as collecting data policy(on-policy)
         on_policy=False,
         model=dict(

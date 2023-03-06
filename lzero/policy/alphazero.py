@@ -21,8 +21,6 @@ class AlphaZeroPolicy(Policy):
         The policy class for AlphaZero.
     """
     config = dict(
-        # (string) RL policy register name (refer to function "register_policy").
-        type='alphazero',
         # (bool) Whether to use cuda for network.
         cuda=False,
         # (bool) whether use on-policy training pipeline(behaviour policy and training policy are the same)
