@@ -79,7 +79,7 @@ lunarlander_disc_efficientzero_config = dict(
             lstm_hidden_size=256,
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             categorical_distribution=True,
-            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
         # learn_mode config
         learn=dict(

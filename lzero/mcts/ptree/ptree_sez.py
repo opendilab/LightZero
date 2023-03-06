@@ -189,7 +189,7 @@ class Node:
                 # prior is prob
                 self.children[a].prior = self.children[a].prior * (1 - exploration_fraction) + n * exploration_fraction
 
-    def compute_mean_q(self, is_root: int, parent_q: float, discount: float):
+    def compute_mean_q(self, is_root: int, parent_q: float, discount_factor: float):
         """
         Overview:
             get mean q
@@ -207,7 +207,7 @@ class Node:
                     # TODO(pu)
                     true_reward = child.value_prefix
                 # TODO(pu): only one step bootstrap?
-                q_of_s_a = true_reward + discount * child.value
+                q_of_s_a = true_reward + discount_factor * child.value
                 total_unsigned_q += q_of_s_a
                 total_visits += 1
         if is_root and total_visits > 0:
@@ -412,7 +412,7 @@ class SearchResults:
 
 
 # not used now
-def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play=0):
+def update_tree_q(root: Node, min_max_stats, discount_factor: float, players=1, to_play=0):
     root.parent_value_prefix = 0
     node_stack = []
     node_stack.append(root)
@@ -433,10 +433,10 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play
             if is_reset == 1:
                 true_reward = node.value_prefix
             if players == 1:
-                q_of_s_a = true_reward + discount * node.value
+                q_of_s_a = true_reward + discount_factor * node.value
             elif players == 2:
                 # TODO
-                q_of_s_a = true_reward + discount * -node.value
+                q_of_s_a = true_reward + discount_factor * -node.value
 
             min_max_stats.update(q_of_s_a)
 
@@ -451,7 +451,7 @@ def update_tree_q(root: Node, min_max_stats, discount: float, players=1, to_play
                 node_stack.append(child)
 
 
-def backpropagate(search_path, min_max_stats, to_play, value: float, discount: float):
+def backpropagate(search_path, min_max_stats, to_play, value: float, discount_factor: float):
     if to_play is None or to_play == 0:
         # for 1 player mode
         bootstrap_value = value
@@ -471,17 +471,17 @@ def backpropagate(search_path, min_max_stats, to_play, value: float, discount: f
             true_reward = node.value_prefix - parent_value_prefix
 
             # TODO(pu): the effect of different ways to update min_max_stats
-            min_max_stats.update(true_reward + discount * node.value)
+            min_max_stats.update(true_reward + discount_factor * node.value)
 
             if is_reset == 1:
                 true_reward = node.value_prefix
 
-            bootstrap_value = true_reward + discount * bootstrap_value
+            bootstrap_value = true_reward + discount_factor * bootstrap_value
 
         # TODO(pu): the effect of different ways to update min_max_stats
         # min_max_stats.clear()
         # root = search_path[0]
-        # update_tree_q(root, min_max_stats, discount, 1)
+        # update_tree_q(root, min_max_stats, discount_factor, 1)
     else:
         # for 2 player mode
         bootstrap_value = value
@@ -507,25 +507,25 @@ def backpropagate(search_path, min_max_stats, to_play, value: float, discount: f
             if is_reset == 1:
                 true_reward = node.value_prefix
 
-            # min_max_stats.update(true_reward + discount * node.value)
+            # min_max_stats.update(true_reward + discount_factor * node.value)
             # TODO(pu): why in muzero-general is - node.value
-            min_max_stats.update(true_reward + discount * -node.value)
+            min_max_stats.update(true_reward + discount_factor * -node.value)
 
             # to_play related
             # true_reward is in the perspective of current player of node
-            # bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount * bootstrap_value
+            # bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount_factor * bootstrap_value
             # TODO(pu): why in muzero-general is - node.value
-            bootstrap_value = (-true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
+            bootstrap_value = (-true_reward if node.to_play == to_play else true_reward) + discount_factor * bootstrap_value
 
         # TODO(pu): the effect of different ways to update min_max_stats
         # min_max_stats.clear()
         # root = search_path[0]
-        # update_tree_q(root, min_max_stats, discount, 2)
+        # update_tree_q(root, min_max_stats, discount_factor, 2)
 
 
 def batch_backpropagate(
         hidden_state_index_x: int,
-        discount: float,
+        discount_factor: float,
         value_prefixs: List,
         values: List[float],
         policies: List[float],
@@ -547,9 +547,9 @@ def batch_backpropagate(
         # reset
         results.nodes[i].is_reset = is_reset_lst[i]
         if to_play is None:
-            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], 0, values[i], discount)
+            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], 0, values[i], discount_factor)
         else:
-            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], to_play[i], values[i], discount)
+            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], to_play[i], values[i], discount_factor)
 
 
 def select_child(
@@ -557,7 +557,7 @@ def select_child(
         min_max_stats,
         pb_c_base: int,
         pb_c_int: float,
-        discount: float,
+        discount_factor: float,
         mean_q: float,
         players: int,
         continuous_action_space=False,
@@ -601,7 +601,7 @@ def select_child(
         # use root as input argument
         temp_score = compute_ucb_score(
             root, child, min_max_stats, mean_q, root.is_reset, root.visit_count, root.value_prefix, pb_c_base, pb_c_int,
-            discount, players, continuous_action_space
+            discount_factor, players, continuous_action_space
         )
         if max_score < temp_score:
             max_score = temp_score
@@ -627,7 +627,7 @@ def compute_ucb_score(
     parent_value_prefix: float,
     pb_c_base: float,
     pb_c_init: float,
-    discount: float,
+    discount_factor: float,
     players=1,
     continuous_action_space=False,
 ):
@@ -676,9 +676,9 @@ def compute_ucb_score(
         if is_reset == 1:
             true_reward = child.value_prefix
         if players == 1:
-            value_score = true_reward + discount * child.value
+            value_score = true_reward + discount_factor * child.value
         elif players == 2:
-            value_score = true_reward + discount * (-child.value)
+            value_score = true_reward + discount_factor * (-child.value)
 
     value_score = min_max_stats.normalize(value_score)
     if value_score < 0:
@@ -694,7 +694,7 @@ def batch_traverse(
     roots,
     pb_c_base: int,
     pb_c_init: float,
-    discount: float,
+    discount_factor: float,
     min_max_stats_lst,
     results: SearchResults,
     virtual_to_play,
@@ -707,7 +707,7 @@ def batch_traverse(
         - roots (:obj:`Any`): a batch of root nodes to be expanded.
         - pb_c_base (:obj:`int`): constant c1 used in pUCT rule, typically 1.25
         - pb_c_init (:obj:`int`): constant c2 used in pUCT rule, typically 19652
-        - discount (:obj:`int`): discount factor used i calculating bootstrapped value, if env is board_games, we set discount=1
+        - discount_factor (:obj:`int`): discount_factor factor used i calculating bootstrapped value, if env is board_games, we set discount_factor=1
         - virtual_to_play (:obj:`list`): the to_play list used in self_play collecting and trainin gin board games,
             `virtual` is to emphasize that actions are performed on an imaginary hidden state.
     """
@@ -737,13 +737,13 @@ def batch_traverse(
         # the leaf node is not expanded
         while node.expanded:
 
-            mean_q = node.compute_mean_q(is_root, parent_q, discount)
+            mean_q = node.compute_mean_q(is_root, parent_q, discount_factor)
             is_root = 0
             parent_q = mean_q
 
             # select action according to the pUCT rule
             action = select_child(
-                node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players,
+                node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players,
                 continuous_action_space
             )
 

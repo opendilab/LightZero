@@ -11,8 +11,9 @@ else:
 # ==============================================================
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = 2000
-threshold_env_steps_for_final_lr = int(1e6)
-threshold_env_steps_for_final_temperature = int(2e5)
+threshold_env_steps_for_final_lr = int(2e5)
+# if we set threshold_env_steps_for_final_temperature=0, i.e. we use the fixed final temperature=0.25.
+threshold_env_steps_for_final_temperature = int(0)
 
 # continuous_action_space = False
 # K = 3  # num_of_sampled_actions
@@ -68,7 +69,7 @@ pong_sampled_efficientzero_config = dict(
         model=dict(
             observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
             action_space_size=6,
-            representation_model_type='conv_res_blocks',
+            representation_network_type='conv_res_blocks',
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
         ),

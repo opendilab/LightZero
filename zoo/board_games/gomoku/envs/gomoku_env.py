@@ -25,7 +25,7 @@ class GomokuEnv(BaseGameEnv):
         board_size=6,
         battle_mode='play_with_bot_mode',
         channel_last=False,
-        scale=False,
+        scale=True,
         agent_vs_human=False,
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
         prob_random_action_in_bot=0.,

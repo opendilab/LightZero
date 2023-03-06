@@ -40,7 +40,7 @@ gomoku_efficientzero_config = dict(
         cuda=True,
         model=dict(
             projection_input_dim_type='board_games',
-            representation_model_type='conv_res_blocks',
+            representation_network_type='conv_res_blocks',
             observation_shape=(12, board_size, board_size),  # if frame_stack_num=4
             action_space_size=int(1 * board_size * board_size),
             num_res_blocks=1,
