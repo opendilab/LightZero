@@ -195,6 +195,7 @@ class EfficientZeroPolicy(Policy):
         self._learn_model = model_wrap(self._model, wrapper_name='base')
         self._learn_model.reset()
         self._target_model.reset()
+
         if self._cfg.use_augmentation:
             self.image_transforms = ImageTransforms(
                 self._cfg.augmentation,
@@ -215,6 +216,7 @@ class EfficientZeroPolicy(Policy):
         current_batch, targets_batch = data
         obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
         target_value_prefix, target_value, target_policy = targets_batch
+
         """
         ``obs_batch_ori`` is the original observations in a batch style, shape is:
         (batch_size, stack_num+num_unroll_steps, W, H, C) -> (batch_size, (stack_num+num_unroll_steps)*C, W, H )
@@ -229,11 +231,9 @@ class EfficientZeroPolicy(Policy):
         """
 
         obs_batch_ori = torch.from_numpy(obs_batch_ori).to(self._cfg.device).float()
-
         # ``obs_batch`` is used in ``initial_inference()``, which is the first stacked obs at timestep t in
         # ``obs_batch_ori``. shape is (4, 4*3, 96, 96) = (4, 12, 96, 96)
         obs_batch = obs_batch_ori[:, 0:self._cfg.model.frame_stack_num * self._cfg.model.image_channel, :, :]
-
         # ``obs_target_batch`` is only used for calculate consistency loss, which take the all obs other than
         # timestep t1, and is only performed in the last 8 timesteps in the second dim in ``obs_batch_ori``.
         obs_target_batch = obs_batch_ori[:, self._cfg.model.image_channel:, :, :]
@@ -243,6 +243,8 @@ class EfficientZeroPolicy(Policy):
             obs_batch = self.image_transforms.transform(obs_batch)
             obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
+        # shape: (batch_size, num_unroll_steps, action_dim)
+        # NOTE: .long(), in discrete action space.
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
         data_list = [
             mask_batch,
@@ -273,18 +275,14 @@ class EfficientZeroPolicy(Policy):
         # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
         hidden_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(network_output)
 
+        # TODO(pu): to verify
+        # reward_hidden_state = to_device(reward_hidden_state, self._cfg.device)
+
         # transform the scaled value or its categorical representation to its original value,
         # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
         original_value = self.inverse_scalar_transform_handle(value)
 
-        if not self._learn_model.training:
-            [original_value, hidden_state,
-             policy_logits] = to_detach_cpu_numpy([original_value, hidden_state, policy_logits])
-            reward_hidden_state = (
-                reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
-            )
-
-        # Note: The following line is just for logging.
+        # Note: The following lines are just for debugging.
         predicted_value_prefixs = []
         if self._cfg.monitor_statistics:
             hidden_state_list = hidden_state.detach().cpu().numpy()
@@ -339,14 +337,6 @@ class EfficientZeroPolicy(Policy):
             original_value = self.inverse_scalar_transform_handle(value)
             original_value_prefix = self.inverse_scalar_transform_handle(value_prefix)
 
-            # TODO(pu)
-            if not self._learn_model.training:
-                [original_value, original_value_prefix, hidden_state, policy_logits
-                 ] = to_detach_cpu_numpy([original_value, original_value_prefix, hidden_state, policy_logits])
-                reward_hidden_state = (
-                    reward_hidden_state[0].detach().cpu().numpy(), reward_hidden_state[1].detach().cpu().numpy()
-                )
-
             beg_index = self._cfg.model.image_channel * step_i
             end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
 
@@ -366,18 +356,20 @@ class EfficientZeroPolicy(Policy):
 
                 consistency_loss += temp_loss
 
-            prob = torch.softmax(policy_logits, dim=-1)
-            dist = Categorical(prob)
-            policy_entropy += dist.entropy().mean()
+
 
             # NOTE: the target policy, target_value_categorical, target_value_prefix_categorical is calculated in
             # game buffer now.
             # ==============================================================
-            # calculate policy loss for the next ``num_unroll_steps`` unroll steps. NOTE: the +=.
+            # calculate policy loss for the next ``num_unroll_steps`` unroll steps.
+            # NOTE: the +=.
             # ==============================================================
             policy_loss += modified_cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
 
             # only for debug. take th hypothetical step k = step_i + 1
+            prob = torch.softmax(policy_logits, dim=-1)
+            dist = Categorical(prob)
+            policy_entropy += dist.entropy().mean()
             target_normalized_visit_count = target_policy[:, step_i + 1]
             try:
                 # if there is zero in target_normalized_visit_count
@@ -520,9 +512,9 @@ class EfficientZeroPolicy(Policy):
             }
 
     def _init_collect(self) -> None:
-        self._unroll_len = self._cfg.collect.unroll_len
         self._collect_model = model_wrap(self._model, 'base')
         self._collect_model.reset()
+        self._unroll_len = self._cfg.collect.unroll_len
         if self._cfg.mcts_ctree:
             self._mcts_collect = MCTS_ctree(self._cfg)
         else:
@@ -707,7 +699,7 @@ class EfficientZeroPolicy(Policy):
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                # select the argmax, not sampling in eval phase.
+                # ``deterministic=True`` means selecting the argmax action, not sampling in eval phase.
                 action, visit_count_distribution_entropy = select_action(
                     distributions, temperature=1, deterministic=True
                 )
@@ -805,23 +797,10 @@ class EfficientZeroPolicy(Policy):
     def _process_transition(
             self, obs: ttorch.Tensor, policy_output: ttorch.Tensor, timestep: ttorch.Tensor
     ) -> ttorch.Tensor:
-        return ttorch.as_tensor(
-            {
-                'obs': obs,
-                'action': policy_output.action,
-                'distribution': policy_output.distribution,
-                'value': policy_output.value,
-                'next_obs': timestep.obs,
-                'reward': timestep.reward,
-                'done': timestep.done,
-            }
-        )
+        # be compatible with DI-engine base_policy
+        pass
 
     def _get_train_sample(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        data = get_nstep_return_data(data, self._nstep, gamma=self._gamma)
-        return get_train_sample(data, self._unroll_len)
+        # be compatible with DI-engine base_policy
+        pass
 
-    def _data_preprocess_learn(self, data: ttorch.Tensor):
-        data = data.cuda(self._cfg.device)
-        data = ttorch.stack(data)
-        return data

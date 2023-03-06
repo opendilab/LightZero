@@ -407,7 +407,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             game = game_lst[i]
             game_block_pos = game_block_pos_lst[i]
             ######################
-            # sampled related code
+            # sampled related core code
             ######################
             actions_tmp = game.action_history[game_block_pos:game_block_pos + self._cfg.num_unroll_steps].tolist()
 
@@ -463,7 +463,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         # formalize the input observations
         obs_lst = prepare_observation_list(obs_lst)
         ######################
-        # sampled related code
+        # sampled related core code
         ######################
         # formalize the inputs of a batch
         current_batch = [obs_lst, action_lst, root_sampled_actions_lst, mask_lst, batch_index_list, weights,
@@ -976,7 +976,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             policy_logits_pool = policy_logits_pool.tolist()
             if self._cfg.mcts_ctree:
                 ######################
-                # sampled related code
+                # sampled related core code
                 ######################
                 """
                 cpp mcts_tree
@@ -1063,7 +1063,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     distributions = roots_distributions[policy_index]
                     ######################
-                    # sampled related code
+                    # sampled related core code
                     ######################
                     if policy_mask[policy_index] == 0:
                         # the null target policy
@@ -1232,7 +1232,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
                     else:
                         # ==============================================================
-                        # sampled related code
+                        # sampled related core code
                         # ==============================================================
                         # the invalid target policy
                         target_policies.append([0 for _ in range(self._cfg.model.num_of_sampled_actions)])

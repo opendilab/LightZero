@@ -154,7 +154,7 @@ namespace tree
         this->value_prefix = value_prefix;
         int action_num = policy_logits.size();
 
-        // sampled related code
+        // sampled related core code
         std::vector<int> all_actions;
         for (int i = 0; i < action_num; ++i)
         {
@@ -668,7 +668,7 @@ namespace tree
         this->legal_actions_list = legal_actions_list;
         this->continuous_action_space = continuous_action_space;
 
-        // sampled related code
+        // sampled related core code
         this->num_of_sampled_actions = num_of_sampled_actions;
         this->action_space_size = action_space_size;
 
@@ -722,7 +722,7 @@ namespace tree
     void CRoots::prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch)
     {
         //    void CRoots::prepare(float root_exploration_fraction, const std::vector<std::vector<float> > noises, const std::vector<float> value_prefixs, const std::vector<std::vector<float> > policies, std::vector<int> to_play_batch){
-        // sampled related code
+        // sampled related core code
 
         for (int i = 0; i < this->root_num; ++i)
         {
@@ -787,7 +787,7 @@ namespace tree
         return distributions;
     }
 
-    // sampled related code
+    // sampled related core code
     std::vector<std::vector<std::vector<float> > > CRoots::get_sampled_actions()
     {
         std::vector<std::vector<CAction> > sampled_actions;
@@ -963,7 +963,7 @@ namespace tree
 
     CAction cselect_child(CNode *root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount_factor, float mean_q, int players, bool continuous_action_space)
     {
-        // sampled related code
+        // sampled related core code
         // TODO(pu): Progressive widening (See https://hal.archives-ouvertes.fr/hal-00542673v2/document)
         float max_score = FLOAT_MIN;
         const float epsilon = 0.000001;
@@ -972,7 +972,7 @@ namespace tree
         {
 
             CNode *child = root->get_child(a);
-            // sampled related code
+            // sampled related core code
             //            float temp_score = cucb_score(child, min_max_stats, mean_q, root->is_reset, root->visit_count - 1, root->value_prefix, pb_c_base, pb_c_init, discount_factor, players);
 
             float temp_score = cucb_score(root, child, min_max_stats, mean_q, root->is_reset, root->visit_count - 1, root->value_prefix, pb_c_base, pb_c_init, discount_factor, players, continuous_action_space);
@@ -1001,7 +1001,7 @@ namespace tree
         //        return &action;
     }
 
-    // sampled related code
+    // sampled related core code
     float cucb_score(CNode *parent, CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, int is_reset, float total_children_visit_counts, float parent_value_prefix, float pb_c_base, float pb_c_init, float discount_factor, int players, bool continuous_action_space)
 
     {
@@ -1011,7 +1011,7 @@ namespace tree
 
         // prior_score = pb_c * child->prior;
 
-        // sampled related code
+        // sampled related core code
         // TODO(pu): empirical distribution
         std::string empirical_distribution_type = "density";
         if (empirical_distribution_type.compare("density"))
@@ -1041,7 +1041,7 @@ namespace tree
         {
             prior_score = pb_c * 1 / parent->children.size();
         }
-        // sampled related code
+        // sampled related core code
 
         if (child->visit_count == 0)
         {

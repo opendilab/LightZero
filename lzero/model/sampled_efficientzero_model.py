@@ -626,7 +626,7 @@ class PredictionNetwork(nn.Module):
         )
 
         ######################
-        # sampled related code
+        # sampled related core code
         ######################
 
         if self.continuous_action_space:
@@ -679,7 +679,7 @@ class PredictionNetwork(nn.Module):
         # policy = self.fc_policy(policy)
 
         ######################
-        # sampled related code
+        # sampled related core code
         ######################
 
         #  {'mu': mu, 'sigma': sigma}

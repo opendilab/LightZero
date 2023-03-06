@@ -16,7 +16,7 @@ const int DEBUG_MODE = 0;
 
 namespace tree
 {
-    // sampled related code
+    // sampled related core code
     class CAction
     {
     public:
@@ -56,7 +56,7 @@ namespace tree
         std::vector<CAction> legal_actions;
 
         CNode();
-        // sampled related code
+        // sampled related core code
         CNode(float prior, std::vector<CAction> &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space);
         ~CNode();
 
@@ -69,7 +69,7 @@ namespace tree
 
         float value();
 
-        // sampled related code
+        // sampled related core code
         std::vector<std::vector<float> > get_trajectory();
         //            std::vector<CAction> get_trajectory();
         std::vector<int> get_children_distribution();
@@ -102,7 +102,7 @@ namespace tree
         void prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch);
         void prepare_no_noise(const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch);
         void clear();
-        // sampled related code
+        // sampled related core code
         std::vector<std::vector<std::vector<float> > > get_trajectories();
         //            std::vector<std::vector<CAction> >* get_trajectories();
         std::vector<std::vector<std::vector<float> > > get_sampled_actions();

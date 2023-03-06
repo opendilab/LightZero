@@ -81,7 +81,7 @@ class Node:
         #     self.children[action] = Node(p)
 
         ######################
-        # sampled related code
+        # sampled related core code
         ######################
         if self.continuous_action_space:
             # policy_logits = {'mu': torch.randn([1, 2]), 'sigma': torch.zeros([1, 2]) + 1e-7}
@@ -157,7 +157,7 @@ class Node:
             - noises (:obj: list): length is len(self.legal_actions)
         """
         ######################
-        # sampled related code
+        # sampled related core code
         ######################
         # TODO(pu): add noise to sample distribution \beta logits
         for i in range(len(policy_logits)):
@@ -176,7 +176,7 @@ class Node:
             - noises (:obj: list): length is len(self.legal_actions)
         """
         ######################
-        # sampled related code
+        # sampled related core code
         ######################
         actions = list(self.children.keys())
         for a, n in zip(actions, noises):
@@ -292,7 +292,7 @@ class Roots:
         self.roots = []
 
         ##################
-        # sampled related code
+        # sampled related core code
         ##################
         for i in range(self.root_num):
             if isinstance(legal_actions_list, list):
@@ -383,7 +383,7 @@ class Roots:
         return distributions
 
     ##################
-    # sampled related code
+    # sampled related core code
     ##################
     def get_sampled_actions(self):
         sampled_actions = []
@@ -563,7 +563,7 @@ def select_child(
         continuous_action_space=False,
 ) -> int:
     ##################
-    # sampled related code
+    # sampled related core code
     ##################
     # Progressive widening (See https://hal.archives-ouvertes.fr/hal-00542673v2/document)
     # pw_alpha = 0.49
@@ -596,7 +596,7 @@ def select_child(
     max_index_lst = []
     for action, child in root.children.items():
         ##################
-        # sampled related code
+        # sampled related core code
         ##################
         # use root as input argument
         temp_score = compute_ucb_score(
@@ -645,7 +645,7 @@ def compute_ucb_score(
     # prior_score = pb_c * child.prior
 
     ##################
-    # sampled related code
+    # sampled related core code
     ##################
     # TODO(pu)
     node_prior = "density"
