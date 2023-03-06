@@ -110,7 +110,10 @@ def select_action(visit_counts, temperature=1, deterministic=True):
         - temperature (:obj:`float`): the temperature for the distribution
         - deterministic (:obj:`bool`):  True -> select the argmax, False -> sample from the distribution
     """
+    # try:
     action_probs = [visit_count_i ** (1 / temperature) for visit_count_i in visit_counts]
+    # except Exception as error:
+    #     print(error)
     action_probs = [x / sum(action_probs) for x in action_probs]
 
     if deterministic:
@@ -130,6 +133,7 @@ def prepare_observation_list(observation_lst):
         batch, stack num, width, height, channel
     """
     # B, S, W, H, C
+    # observation_lst = np.array(observation_lst, dtype=np.uint8)
     observation_lst = np.array(observation_lst)
     # 1, 4, 8, 1, 1 -> 1, 4, 1, 8, 1
     #   [B, S, W, H, C] -> [B, S x C, W, H]

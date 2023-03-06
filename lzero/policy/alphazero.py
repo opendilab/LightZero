@@ -30,7 +30,7 @@ class AlphaZeroPolicy(Policy):
         priority=False,
         model=dict(
             categorical_distribution=False,
-            representation_network_type='conv_res_blocks',
+            representation_model_type='conv_res_blocks',
             observation_shape=(3, 6, 6),
             action_space_size=int(1 * 6 * 6),
             downsample=False,

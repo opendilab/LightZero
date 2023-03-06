@@ -6,10 +6,7 @@ import numpy as np
 
 
 def renormalize(input, first_dim=1):
-    """
-    Overview:
-        normalize the input states using the max-min-normalization.
-    """
+    # normalize the input (states)
     if first_dim < 0:
         first_dim = len(input.shape) + first_dim
     flat_input = input.view(*input.shape[:first_dim], -1)

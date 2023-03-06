@@ -143,8 +143,8 @@ class AlphaZeroModel(nn.Module):
         reward_support_size,
         value_support_size,
         downsample,
-        representation_network_type: str = 'conv_res_blocks',
-        representation_network: nn.Module = None,
+        representation_model_type: str = 'conv_res_blocks',
+        representation_model: nn.Module = None,
         batch_norm_momentum=0.1,
         last_linear_layer_init_zero: bool = True,
         state_norm: bool = False,
@@ -155,7 +155,7 @@ class AlphaZeroModel(nn.Module):
         Overview:
             AlphaZero network
         Arguments:
-            - representation_network_type
+            - representation_model_type
             - observation_shape: tuple or list. shape of observations: [C, W, H]
             - action_space_size: (:obj:`int`): . action space
             - num_res_blocks (:obj:`int`):  number of res blocks
@@ -180,8 +180,8 @@ class AlphaZeroModel(nn.Module):
             self.value_support_size = value_support_size
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
-        self.representation_network_type = representation_network_type
-        self.representation_network = representation_network
+        self.representation_model_type = representation_model_type
+        self.representation_model = representation_model
         self.downsample = downsample
 
         self.action_space_size = action_space_size
@@ -197,7 +197,7 @@ class AlphaZeroModel(nn.Module):
             (policy_head_channels * self.observation_shape[1] * self.observation_shape[2])
         )
 
-        if self.representation_network_type == 'identity':
+        if self.representation_model_type == 'identity':
             self.prediction_network = PredictionNetwork(
                 action_space_size,
                 num_res_blocks,
@@ -232,10 +232,10 @@ class AlphaZeroModel(nn.Module):
                 activation=activation,
             )
 
-        if self.representation_network is None:
-            if self.representation_network_type == 'identity':
+        if self.representation_model is None:
+            if self.representation_model_type == 'identity':
                 self.representation_network = nn.Identity()
-            elif self.representation_network_type == 'conv_res_blocks':
+            elif self.representation_model_type == 'conv_res_blocks':
                 self.representation_network = RepresentationNetwork(
                     self.observation_shape,
                     num_res_blocks,
@@ -246,7 +246,7 @@ class AlphaZeroModel(nn.Module):
                 )
             # elif
         else:
-            self.representation_network = self.representation_network
+            self.representation_network = self.representation_model
 
     def forward(self, encoded_state):
         encoded_state = self.representation_network(encoded_state)

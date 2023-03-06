@@ -1,5 +1,5 @@
 """
-Acknowledgement: The following code is adapted from https://github.com/YeWR/EfficientZero/core/mcts.py
+The following code is adapted from https://github.com/YeWR/EfficientZero/core/mcts.py
 """
 import copy
 
@@ -19,18 +19,14 @@ from ..scaling_transform import inverse_scalar_transform
 class EfficientZeroMCTSCtree(object):
 
     config = dict(
-        device='cpu',
+        cuda=True,
+        pb_c_base=19652,
+        pb_c_init=1.25,
         support_scale=300,
         discount_factor=0.997,
         num_simulations=50,
         lstm_horizon_len=5,
         categorical_distribution=True,
-        # UCB related config
-        root_dirichlet_alpha=0.3,
-        root_exploration_fraction=0.25,
-        pb_c_base=19652,
-        pb_c_init=1.25,
-        value_delta_max=0.01,
     )
 
     @classmethod
@@ -40,12 +36,7 @@ class EfficientZeroMCTSCtree(object):
         return cfg
 
     def __init__(self, cfg=None):
-        """
-        Overview:
-            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
-            in the default configuration, the user-provided value will override the default configuration. Otherwise, 
-            the default configuration will be used.
-        """
+        # NOTE: utilize the default config
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
@@ -171,17 +162,13 @@ from lzero.mcts.ctree.ctree_muzero import mz_tree as tree_muzero
 
 class MuZeroMCTSCtree(object):
     config = dict(
-        device='cpu',
-        discount_factor=0.997,
-        support_scale=300,
-        num_simulations=50,
-        categorical_distribution=True,
-        # UCB related config related config
-        root_dirichlet_alpha=0.3,
-        root_exploration_fraction=0.25,
+        cuda=True,
         pb_c_base=19652,
         pb_c_init=1.25,
-        value_delta_max=0.01,
+        support_scale=300,
+        discount_factor=0.997,
+        num_simulations=50,
+        categorical_distribution=True,
     )
 
     @classmethod
@@ -191,12 +178,7 @@ class MuZeroMCTSCtree(object):
         return cfg
 
     def __init__(self, cfg=None):
-        """
-        Overview:
-            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
-            in the default configuration, the user-provided value will override the default configuration. Otherwise, 
-            the default configuration will be used.
-        """
+        # NOTE: utilize the default config
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config

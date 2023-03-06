@@ -58,6 +58,7 @@ class EfficientZeroCollector(ISerialCollector):
         self._timer = EasyTimer()
         self._end_flag = False
 
+        # EfficientZero
         self.replay_buffer = replay_buffer
         self.game_config = game_config
 

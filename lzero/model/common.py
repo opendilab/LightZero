@@ -1,13 +1,11 @@
 """
 Acknowledgement: The following code is adapted from https://github.com/YeWR/EfficientZero/core/model.py
 """
-
-from typing import List, Optional
+import torch
+from typing import List
 from dataclasses import dataclass
 import torch.nn as nn
-from ding.torch_utils import ResBlock
-from ding.utils import SequenceType
-
+from ding.torch_utils import MLP, ResBlock
 import numpy as np
 
 
@@ -37,15 +35,6 @@ def conv3x3(in_channels, out_channels, stride=1):
 class DownSample(nn.Module):
 
     def __init__(self, in_channels, out_channels, momentum=0.1, activation=nn.ReLU(inplace=True)):
-        """
-        Overview:
-            DownSample network. Encode the observations into hidden state.
-            But sometimes, we do not need, e.g. board games.
-        Arguments:
-            - in_channels (:obj:`int`): in channels of input data.
-            - out_channels (:obj:`int`): out channels of output data.
-            - activation (:obj:`Optional[nn.Module]`): the activation function.
-        """
         super().__init__()
         self.conv1 = nn.Conv2d(
             in_channels,
@@ -112,29 +101,27 @@ class DownSample(nn.Module):
         return x
 
 
+# Encode the observations into hidden states
 class RepresentationNetwork(nn.Module):
 
     def __init__(
         self,
-        observation_shape: SequenceType = (12, 96, 96),
-        num_res_blocks: int = 1,
-        num_channels: int = 64,
-        downsample: bool = True,
-        momentum: float = 0.1,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        observation_shape,
+        num_res_blocks,
+        num_channels,
+        downsample,
+        momentum=0.1,
+        activation=nn.ReLU(inplace=True),
         norm_type: str = 'BN',
     ):
         """
         Overview:
-            Representation network. Encode the observations into hidden state.
+            Representation network
         Arguments:
-            - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96].
-            - num_res_blocks (:obj:`int`): number of res blocks in EfficientZero model.
-            - num_channels (:obj:`int`): channels of hidden states.
-            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, default set it to True. \
-                But sometimes, we do not need, e.g. board games.
-            - activation (:obj:`Optional[nn.Module]`): the activation in EfficientZero model.
-            - norm_type (:obj:`str`): The type of normalization in networks. default set it to 'BN'.
+            - observation_shape (:obj:`Union[List, tuple]`):  shape of observations: [C, W, H]
+            - num_res_blocks (:obj:`int`): number of res blocks
+            - num_channels (:obj:`int`): channels of hidden states
+            - downsample (:obj:`bool`): True -> do downsampling for observations. (For board games, do not need)
         """
         super().__init__()
         self.downsample = downsample

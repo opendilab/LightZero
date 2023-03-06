@@ -20,9 +20,8 @@ reanalyze_ratio = 0
 
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = 200
-threshold_env_steps_for_final_lr = int(2e5)
-# if we set threshold_env_steps_for_final_temperature=0, i.e. we use the fixed final temperature=0.25.
-threshold_env_steps_for_final_temperature = int(0)
+threshold_env_steps_for_final_lr = int(1e6)
+threshold_env_steps_for_final_temperature = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -57,7 +56,7 @@ pendulum_disc_efficientzero_config = dict(
             observation_shape=(1, 3, 1),  # if frame_stack_num=1
             action_space_size=11,
             categorical_distribution=True,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             image_channel=1,
             frame_stack_num=1,
             downsample=False,

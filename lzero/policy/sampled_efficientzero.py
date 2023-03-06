@@ -18,7 +18,8 @@ from torch.nn import L1Loss
 import lzero.mcts.ptree.ptree_sez as ptree
 from lzero.mcts import SampledEfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts import SampledEfficientZeroMCTSPtree as MCTSPtree
-from lzero.mcts import Transforms, modified_cross_entropy_loss, value_phi, reward_phi, DiscreteSupport
+from lzero.mcts import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
+    DiscreteSupport
 from lzero.mcts import scalar_transform, InverseScalarTransform
 from lzero.mcts import select_action
 # cpp mcts_tree
@@ -50,19 +51,37 @@ class SampledEfficientZeroPolicy(Policy):
             # observation_shape=(3, 96, 96),  # if frame_stack_num=1, gray_scale=False
             observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
             action_space_size=6,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             categorical_distribution=True,
+            activation=torch.nn.ReLU(inplace=True),
+            batch_norm_momentum=0.1,
+            last_linear_layer_init_zero=True,
+            state_norm=False,
             # the key difference setting between image-input and vector input.
             image_channel=1,
             frame_stack_num=4,
+            downsample=True,
             # ==============================================================
             # the default config is large size model, same as the EfficientZero original paper.
             # ==============================================================
             num_res_blocks=1,
             num_channels=64,
             lstm_hidden_size=512,
+            # the following model para. is usually fixed
+            reward_head_channels=16,
+            value_head_channels=16,
+            policy_head_channels=16,
+            fc_reward_layers=[32],
+            fc_value_layers=[32],
+            fc_policy_layers=[32],
             support_scale=300,
+            reward_support_size=601,
+            value_support_size=601,
+            proj_hid=1024,
+            proj_out=1024,
+            pred_hid=512,
+            pred_out=1024,
             # the above model para. is usually fixed
             # ==============================================================
             # the sampled specific config
@@ -133,17 +152,20 @@ class SampledEfficientZeroPolicy(Policy):
         game_wrapper=True,
         monitor_statistics=True,
         game_block_length=200,
+        # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e6),
 
         ## observation
         # the key difference setting between image-input and vector input.
+        image_based=False,
         cvt_string=False,
+        gray_scale=False,
         use_augmentation=True,
         # style of augmentation
         augmentation=['shift', 'intensity'],
 
         ## learn
         num_simulations=50,
-        discount_factor=0.997,
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
@@ -189,6 +211,10 @@ class SampledEfficientZeroPolicy(Policy):
         ## UCB
         root_dirichlet_alpha=0.3,
         root_exploration_fraction=0.25,
+        pb_c_base=19652,
+        pb_c_init=1.25,
+        discount=0.997,
+        value_delta_max=0.01,
         # ==============================================================
         # end of additional game_config
         # ==============================================================

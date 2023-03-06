@@ -65,7 +65,7 @@ class Node:
             prior = child.prior
             child.prior = prior * (1 - exploration_fraction) + noise * exploration_fraction
 
-    def compute_mean_q(self, is_root: int, parent_q: float, discount_factor: float):
+    def compute_mean_q(self, is_root: int, parent_q: float, discount: float):
         """
         Overview:
             get mean q
@@ -79,7 +79,7 @@ class Node:
             if child.visit_count > 0:
                 true_reward = child.reward
                 # TODO(pu): only one step bootstrap?
-                q_of_s_a = true_reward + discount_factor * child.value
+                q_of_s_a = true_reward + discount * child.value
                 total_unsigned_q += q_of_s_a
                 total_visits += 1
         if is_root and total_visits > 0:
@@ -216,7 +216,7 @@ class SearchResults:
         self.search_lens = []
 
 
-def update_tree_q(root: Node, min_max_stats, discount_factor: float, players=1):
+def update_tree_q(root: Node, min_max_stats, discount: float, players=1):
     node_stack = []
     node_stack.append(root)
     while len(node_stack) > 0:
@@ -226,9 +226,9 @@ def update_tree_q(root: Node, min_max_stats, discount_factor: float, players=1):
         if node != root:
             true_reward = node.reward
             if players == 1:
-                q_of_s_a = true_reward + discount_factor * node.value
+                q_of_s_a = true_reward + discount * node.value
             elif players == 2:
-                q_of_s_a = true_reward + discount_factor * (-node.value)
+                q_of_s_a = true_reward + discount * (-node.value)
 
             min_max_stats.update(q_of_s_a)
 
@@ -238,7 +238,7 @@ def update_tree_q(root: Node, min_max_stats, discount_factor: float, players=1):
                 node_stack.append(child)
 
 
-def backpropagate(search_path, min_max_stats, to_play, value: float, discount_factor: float):
+def backpropagate(search_path, min_max_stats, to_play, value: float, discount: float):
     if to_play is None or to_play == 0:
         # for 1 player mode
         bootstrap_value = value
@@ -251,13 +251,13 @@ def backpropagate(search_path, min_max_stats, to_play, value: float, discount_fa
             true_reward = node.reward
 
             # TODO(pu): the effect of different ways to update min_max_stats
-            min_max_stats.update(true_reward + discount_factor * node.value)
-            bootstrap_value = true_reward + discount_factor * bootstrap_value
+            min_max_stats.update(true_reward + discount * node.value)
+            bootstrap_value = true_reward + discount * bootstrap_value
 
         # TODO(pu): the effect of different ways to update min_max_stats
         # min_max_stats.clear()
         # root = search_path[0]
-        # update_tree_q(root, min_max_stats, discount_factor, 1)
+        # update_tree_q(root, min_max_stats, discount, 1)
     else:
         # for 2 player mode
         bootstrap_value = value
@@ -274,19 +274,19 @@ def backpropagate(search_path, min_max_stats, to_play, value: float, discount_fa
             # true_reward = node.value_prefix - (- parent_value_prefix)
             true_reward = node.reward
 
-            # min_max_stats.update(true_reward + discount_factor * node.value)
-            min_max_stats.update(true_reward + discount_factor * -node.value)
+            # min_max_stats.update(true_reward + discount * node.value)
+            min_max_stats.update(true_reward + discount * -node.value)
 
             # to_play related
             # true_reward is in the perspective of current player of node
-            # bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount_factor * bootstrap_value
-            bootstrap_value = (-true_reward if node.to_play == to_play else true_reward) + discount_factor * bootstrap_value
+            # bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount * bootstrap_value
+            bootstrap_value = (-true_reward if node.to_play == to_play else true_reward) + discount * bootstrap_value
 
 
 
 
 def select_child(
-        root: Node, min_max_stats, pb_c_base: int, pb_c_int: float, discount_factor: float, mean_q: float, players: int
+        root: Node, min_max_stats, pb_c_base: int, pb_c_int: float, discount: float, mean_q: float, players: int
 ) -> int:
     max_score = -np.inf
     epsilon = 0.000001
@@ -294,7 +294,7 @@ def select_child(
     for a in root.legal_actions:
         child = root.get_child(a)
         temp_score = compute_ucb_score(
-            child, min_max_stats, mean_q, root.visit_count, pb_c_base, pb_c_int, discount_factor, players
+            child, min_max_stats, mean_q, root.visit_count, pb_c_base, pb_c_int, discount, players
         )
         if max_score < temp_score:
             max_score = temp_score
@@ -317,7 +317,7 @@ def compute_ucb_score(
         total_children_visit_counts: float,
         pb_c_base: float,
         pb_c_init: float,
-        discount_factor: float,
+        discount: float,
         players=1
 ):
     """
@@ -336,9 +336,9 @@ def compute_ucb_score(
     else:
         true_reward = child.reward
         if players == 1:
-            value_score = true_reward + discount_factor * child.value
+            value_score = true_reward + discount * child.value
         elif players == 2:
-            value_score = true_reward + discount_factor * (-child.value)
+            value_score = true_reward + discount * (-child.value)
 
     value_score = min_max_stats.normalize(value_score)
     if value_score < 0:
@@ -351,7 +351,7 @@ def compute_ucb_score(
 
 
 def batch_traverse(
-        roots, pb_c_base: int, pb_c_init: float, discount_factor: float, min_max_stats_lst, results: SearchResults,
+        roots, pb_c_base: int, pb_c_init: float, discount: float, min_max_stats_lst, results: SearchResults,
         virtual_to_play
 ):
     """
@@ -361,7 +361,7 @@ def batch_traverse(
         - roots (:obj:`Any`): a batch of root nodes to be expanded.
         - pb_c_base (:obj:`int`): constant c1 used in pUCT rule, typically 1.25
         - pb_c_init (:obj:`int`): constant c2 used in pUCT rule, typically 19652
-        - discount_factor (:obj:`int`): discount_factor factor used i calculating bootstrapped value, if env is board_games, we set discount_factor=1
+        - discount (:obj:`int`): discount factor used i calculating bootstrapped value, if env is board_games, we set discount=1
         - virtual_to_play (:obj:`list`): the to_play list used in self_play collecting and trainin gin board games,
             `virtual` is to emphasize that actions are performed on an imaginary hidden state.
     """
@@ -389,12 +389,12 @@ def batch_traverse(
         # the leaf node is not expanded
         while node.expanded:
 
-            mean_q = node.compute_mean_q(is_root, parent_q, discount_factor)
+            mean_q = node.compute_mean_q(is_root, parent_q, discount)
             is_root = 0
             parent_q = mean_q
 
             # select action according to the pUCT rule
-            action = select_child(node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players)
+            action = select_child(node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount, mean_q, players)
             if virtual_to_play is not None and virtual_to_play[i] is not None:
                 # Players play turn by turn
                 if virtual_to_play[i] == 1:
@@ -425,7 +425,7 @@ def batch_traverse(
 
 def batch_backpropagate(
         hidden_state_index_x: int,
-        discount_factor: float,
+        discount: float,
         value_prefixs: List,
         values: List[float],
         policies: List[float],
@@ -444,6 +444,6 @@ def batch_backpropagate(
             results.nodes[i].expand(to_play[i], hidden_state_index_x, i, value_prefixs[i], policies[i])
 
         if to_play is None:
-            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], 0, values[i], discount_factor)
+            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], 0, values[i], discount)
         else:
-            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], to_play[i], values[i], discount_factor)
+            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], to_play[i], values[i], discount)

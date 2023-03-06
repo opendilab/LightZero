@@ -45,7 +45,7 @@ tictactoe_alphazero_config = dict(
             fc_policy_layers=[8],
             last_linear_layer_init_zero=True,
             categorical_distribution=False,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
         learn=dict(
             update_per_collect=update_per_collect,

@@ -44,7 +44,7 @@ tictactoe_alphazero_config = dict(
             # ==============================================================
             # We use the small size model for tictactoe
             # ==============================================================
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),
             downsample=False,

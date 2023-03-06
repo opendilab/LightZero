@@ -1,10 +1,11 @@
 """
-Acknowledgement: The following code is adapted from https://github.com/YeWR/MuZero/blob/main/config/atari/model.py
+The following code is adapted from https://github.com/YeWR/EfficientZero/blob/main/config/atari/model.py
 """
 
 import math
 from typing import Optional
 
+import numpy as np
 import torch
 import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
@@ -14,6 +15,199 @@ from .common import MZNetworkOutput, RepresentationNetwork
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
+class DynamicsNetwork(nn.Module):
+
+    def __init__(
+        self,
+        num_res_blocks,
+        num_channels,
+        reward_head_channels,
+        fc_reward_layers,
+        output_support_size,
+        flatten_output_size_for_reward_head,
+        momentum: float = 0.1,
+        last_linear_layer_init_zero: bool = True,
+    ):
+        """
+        Overview:
+            Dynamics network. Predict next hidden states given current states and actions
+        Arguments:
+            - num_res_blocks (:obj:int): number of res blocks
+            - num_channels (:obj:int): channels of hidden states
+            - fc_reward_layers (:obj:list):  hidden layers of the reward prediction head (MLP head)
+            - output_support_size (:obj:int): dim of reward output
+            - flatten_output_size_for_reward_head (:obj:int): dim of flatten hidden states
+            - last_linear_layer_init_zero (:obj:bool): if True -> zero initialization for the last layer of reward mlp
+        """
+        super().__init__()
+        self.num_channels = num_channels
+
+        self.conv = nn.Conv2d(num_channels, num_channels - 1, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn = nn.BatchNorm2d(num_channels - 1, momentum=momentum)
+        self.resblocks = nn.ModuleList(
+            [
+                ResBlock(
+                    in_channels=num_channels - 1,
+                    activation=torch.nn.ReLU(inplace=True),
+                    norm_type='BN',
+                    res_type='basic',
+                    bias=False
+                ) for _ in range(num_res_blocks)
+            ]
+        )
+
+        self.conv1x1_reward = nn.Conv2d(num_channels - 1, reward_head_channels, 1)
+        self.bn_reward = nn.BatchNorm2d(reward_head_channels, momentum=momentum)
+        self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
+        # TODO(pu)
+        self.fc = MLP(
+            self.flatten_output_size_for_reward_head,
+            hidden_channels=fc_reward_layers[0],
+            layer_num=len(fc_reward_layers) + 1,
+            out_channels=output_support_size,
+            activation=nn.ReLU(inplace=True),
+            norm_type='BN',
+            output_activation=nn.Identity(),
+            output_norm_type=None,
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
+        self.activation = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        # take the state encoding,  x[:, -1, :, :] is action encoding
+        state = x[:, :-1, :, :]
+        x = self.conv(x)
+        x = self.bn(x)
+
+        x += state
+        x = self.activation(x)
+
+        for block in self.resblocks:
+            x = block(x)
+        state = x
+
+        x = self.conv1x1_reward(x)
+        x = self.bn_reward(x)
+        x = self.activation(x)
+
+        x = x.view(-1, self.flatten_output_size_for_reward_head)
+        reward = self.fc(x)
+
+        return state, reward
+
+    def get_dynamic_mean(self):
+        return get_dynamic_mean(self)
+
+    def get_reward_mean(self):
+        return get_reward_mean(self)
+
+
+# predict the value and policy given hidden states
+class PredictionNetwork(nn.Module):
+
+    def __init__(
+        self,
+        action_space_size,
+        num_res_blocks,
+        in_channels,
+        num_channels,
+        value_head_channels,
+        policy_head_channels,
+        fc_value_layers,
+        fc_policy_layers,
+        output_support_size,
+        flatten_output_size_for_value_head,
+        flatten_output_size_for_policy_head,
+        momentum: float = 0.1,
+        last_linear_layer_init_zero: bool = True,
+    ):
+        """
+        Overview:
+            Prediction network.
+        Arguments:
+            - action_space_size: int. action space
+            - num_res_blocks: int. number of res blocks
+            - in_channels: int. channels of input, if None, then in_channels = num_channels
+            - num_channels: int. channels of hidden states
+            - value_head_channels: int. channels of value head
+            - policy_head_channels: int. channels of policy head
+            - fc_value_layers: list. hidden layers of the value prediction head (MLP head)
+            - fc_policy_layers: list. hidden layers of the policy prediction head (MLP head)
+            - output_support_size: int. dim of value output
+            - flatten_output_size_for_value_head: int. dim of flatten hidden states
+            - flatten_output_size_for_policy_head: int. dim of flatten hidden states
+            - last_linear_layer_init_zero: bool. True -> zero initialization for the last layer of value/policy mlp
+        """
+        super().__init__()
+        self.in_channels = in_channels
+        if self.in_channels is not None:
+            self.conv_input = nn.Conv2d(in_channels, num_channels, 1)
+
+        self.resblocks = nn.ModuleList(
+            [
+                ResBlock(
+                    in_channels=num_channels,
+                    activation=torch.nn.ReLU(inplace=True),
+                    norm_type='BN',
+                    res_type='basic',
+                    bias=False
+                ) for _ in range(num_res_blocks)
+            ]
+        )
+
+        self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
+        self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
+        self.bn_value = nn.BatchNorm2d(value_head_channels, momentum=momentum)
+        self.bn_policy = nn.BatchNorm2d(policy_head_channels, momentum=momentum)
+        self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
+        self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
+        self.fc_value = MLP(
+            in_channels=self.flatten_output_size_for_value_head,
+            hidden_channels=fc_value_layers[0],
+            out_channels=output_support_size,
+            layer_num=len(fc_value_layers) + 1,
+            activation=nn.ReLU(inplace=True),
+            norm_type='BN',
+            output_activation=nn.Identity(),
+            output_norm_type=None,
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
+        self.fc_policy = MLP(
+            in_channels=self.flatten_output_size_for_policy_head,
+            hidden_channels=fc_policy_layers[0],
+            out_channels=action_space_size,
+            layer_num=len(fc_policy_layers) + 1,
+            activation=nn.ReLU(inplace=True),
+            norm_type='BN',
+            output_activation=nn.Identity(),
+            output_norm_type=None,
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
+
+        self.activation = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        if self.in_channels is not None:
+            x = self.conv_input(x)
+
+        for block in self.resblocks:
+            x = block(x)
+        value = self.conv1x1_value(x)
+        value = self.bn_value(value)
+        value = self.activation(value)
+
+        policy = self.conv1x1_policy(x)
+        policy = self.bn_policy(policy)
+        policy = self.activation(policy)
+
+        value = value.reshape(-1, self.flatten_output_size_for_value_head)
+        policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
+
+        value = self.fc_value(value)
+        policy = self.fc_policy(policy)
+        return policy, value
+
+
 @MODEL_REGISTRY.register('MuZeroModel')
 class MuZeroModel(nn.Module):
 
@@ -21,17 +215,8 @@ class MuZeroModel(nn.Module):
         self,
         observation_shape: SequenceType = (12, 96, 96),
         action_space_size: int = 6,
-        representation_network_type: str = 'conv_res_blocks',
-        categorical_distribution: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-        representation_network: nn.Module = None,
-        batch_norm_momentum: float = 0.1,
-        last_linear_layer_init_zero: bool = True,
-        state_norm: bool = False,
-        downsample: bool = True,
         num_res_blocks: int = 1,
         num_channels: int = 64,
-        # the following model para. is usually fixed
         reward_head_channels: int = 16,
         value_head_channels: int = 16,
         policy_head_channels: int = 16,
@@ -40,12 +225,19 @@ class MuZeroModel(nn.Module):
         fc_policy_layers: SequenceType = [32],
         reward_support_size: int = 601,
         value_support_size: int = 601,
+        downsample: bool = True,
+        representation_model_type: str = 'conv_res_blocks',
+        representation_model: nn.Module = None,
+        batch_norm_momentum: float = 0.1,
         proj_hid: int = 1024,
         proj_out: int = 1024,
         pred_hid: int = 512,
         pred_out: int = 1024,
-        # the above model para. is usually fixed
+        last_linear_layer_init_zero: bool = True,
+        state_norm: bool = False,
+        categorical_distribution: bool = True,
         self_supervised_learning_loss: bool = False,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
         *args,
         **kwargs
     ):
@@ -53,36 +245,32 @@ class MuZeroModel(nn.Module):
         Overview:
             MuZero network.
         Arguments:
-            - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96].
-            - action_space_size: (:obj:`int`): Action space size, such as 6.
-            - representation_network_type (:obj:`Optional[str]`): The type of representation_network in MuZero model. options={'conv_res_blocks', 'identity'}
-            - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
-            - activation (:obj:`Optional[nn.Module]`): the activation in MuZero model.
-            - representation_network (:obj:`nn.Module`): the user-defined representation_network.
-            - batch_norm_momentum (:obj:`float`):  Momentum of BN
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to True.
-            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, default set it to True. \
-                But sometimes, we do not need, e.g. board games.
-            - num_res_blocks (:obj:`int`): number of res blocks in MuZero model.
-            - num_channels (:obj:`int`): channels of hidden states.
-            - reward_head_channels (:obj:`int`): channels of reward head.
-            - value_head_channels (:obj:`int`): channels of value head.
-            - policy_head_channels (:obj:`int`): channels of policy head.
-            - fc_reward_layers (:obj:`SequenceType`): hidden layers of the reward prediction head (MLP head).
-            - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
+            - representation_model_type
+            - observation_shape: tuple or list. shape of observations: [C, W, H]
+            - action_space_size: (:obj:`int`): . action space
+            - num_res_blocks (:obj:`int`):  number of res blocks
+            - num_channels (:obj:`int`): channels of hidden states
+            - reward_head_channels (:obj:`int`): channels of reward head
+            - value_head_channels (:obj:`int`): channels of value head
+            - policy_head_channels (:obj:`int`): channels of policy head
+            - fc_reward_layers (:obj:`list`):  hidden layers of the reward prediction head (MLP head)
+            - fc_value_layers (:obj:`list`):  hidden layers of the value prediction head (MLP head)
+            - fc_policy_layers (:obj:`list`):  hidden layers of the policy prediction head (MLP head)
             - reward_support_size (:obj:`int`): dim of reward output
-            - value_support_size (:obj:`int`): dim of value output.
-            - proj_hid (:obj:`int`): dim of projection hidden layer.
-            - proj_out (:obj:`int`): dim of projection output layer.
-            - pred_hid (:obj:`int`):dim of prediction hidden layer.
-            - pred_out (:obj:`int`): dim of prediction output layer.
-            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks in MuZero model, default set it to False.
+            - value_support_size (:obj:`int`): dim of value output
+            - downsample (:obj:`bool`): True -> do downsampling for observations. (For board games, do not need)
+            - batch_norm_momentum (:obj:`float`):  Momentum of BN
+            - proj_hid (:obj:`int`): dim of projection hidden layer
+            - proj_out (:obj:`int`): dim of projection output layer
+            - pred_hid (:obj:`int`):dim of projection head (prediction) hidden layer
+            - pred_out (:obj:`int`): dim of projection head (prediction) output layer
+            - last_linear_layer_init_zero (:obj:`bool`): True -> zero initialization for the last layer of value/policy mlp
+            - state_norm (:obj:`bool`):  True -> normalization for hidden states
+            - categorical_distribution (:obj:`bool`): whether to use discrete support to represent categorical distribution for value, reward/reward
         """
         super(MuZeroModel, self).__init__()
-        self.representation_network_type = representation_network_type
-        assert self.representation_network_type in ['identity', 'conv_res_blocks']
+        self.representation_model_type = representation_model_type
+        assert self.representation_model_type in ['identity', 'conv_res_blocks']
         self.categorical_distribution = categorical_distribution
         self.self_supervised_learning_loss = self_supervised_learning_loss
         if not self.categorical_distribution:
@@ -98,7 +286,7 @@ class MuZeroModel(nn.Module):
         self.pred_out = pred_out
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
-        self.representation_network = representation_network
+        self.representation_model = representation_model
         self.downsample = downsample
 
         self.action_space_size = action_space_size
@@ -120,10 +308,10 @@ class MuZeroModel(nn.Module):
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
 
-        if self.representation_network is None:
-            if self.representation_network_type == 'identity':
+        if self.representation_model is None:
+            if self.representation_model_type == 'identity':
                 self.representation_network = nn.Identity()
-            elif self.representation_network_type == 'conv_res_blocks':
+            elif self.representation_model_type == 'conv_res_blocks':
                 self.representation_network = RepresentationNetwork(
                     observation_shape,
                     num_res_blocks,
@@ -132,9 +320,9 @@ class MuZeroModel(nn.Module):
                     momentum=batch_norm_momentum,
                 )
         else:
-            self.representation_network = self.representation_network
+            self.representation_network = self.representation_model
 
-        if self.representation_network_type == 'identity':
+        if self.representation_model_type == 'identity':
             self.dynamics_network = DynamicsNetwork(
                 num_res_blocks,
                 observation_shape[0] + 1,  # in_channels=observation_shape[0]
@@ -189,7 +377,7 @@ class MuZeroModel(nn.Module):
 
             if self.self_supervised_learning_loss:
                 # projection
-                if self.representation_network_type == 'identity':
+                if self.representation_model_type == 'identity':
                     self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
                 else:
                     if self.downsample:
@@ -203,13 +391,13 @@ class MuZeroModel(nn.Module):
 
                 self.projection = nn.Sequential(
                     nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
-                    activation, nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
-                    activation, nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
+                    nn.ReLU(inplace=True), nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
+                    nn.ReLU(inplace=True), nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
                 )
                 self.projection_head = nn.Sequential(
                     nn.Linear(self.proj_out, self.pred_hid),
                     nn.BatchNorm1d(self.pred_hid),
-                    activation,
+                    nn.ReLU(inplace=True),
                     nn.Linear(self.pred_hid, self.pred_out),
                 )
 
@@ -299,202 +487,3 @@ class MuZeroModel(nn.Module):
 
     def get_params_mean(self):
         return get_params_mean(self)
-
-
-class DynamicsNetwork(nn.Module):
-
-    def __init__(
-        self,
-        num_res_blocks,
-        num_channels,
-        reward_head_channels,
-        fc_reward_layers,
-        output_support_size,
-        flatten_output_size_for_reward_head,
-        momentum: float = 0.1,
-        last_linear_layer_init_zero: bool = True,
-        activation=nn.ReLU(inplace=True),
-    ):
-        """
-        Overview:
-            Dynamics network. Predict next hidden state given current hidden state and action.
-        Arguments:
-            - num_res_blocks (:obj:`int`): number of res blocks.
-            - num_channels (:obj:`int`): channels of hidden states.
-            - fc_reward_layers (:obj:`list`):  hidden layers of the reward prediction head (MLP head)
-            - output_support_size (:obj:`int`): dim of reward output
-            - flatten_output_size_for_reward_head (:obj:`int`): dim of flatten hidden states
-            - lstm_hidden_size (:obj:`int`): dim of lstm hidden state in dynamics network.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
-            - activation (:obj:`Optional[nn.Module]`): the activation in Dynamics network.
-        """
-        super().__init__()
-        self.num_channels = num_channels
-
-        self.conv = nn.Conv2d(num_channels, num_channels - 1, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn = nn.BatchNorm2d(num_channels - 1, momentum=momentum)
-        self.resblocks = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=num_channels - 1,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(num_res_blocks)
-            ]
-        )
-
-        self.conv1x1_reward = nn.Conv2d(num_channels - 1, reward_head_channels, 1)
-        self.bn_reward = nn.BatchNorm2d(reward_head_channels, momentum=momentum)
-        self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
-        # TODO(pu)
-        self.fc = MLP(
-            self.flatten_output_size_for_reward_head,
-            hidden_channels=fc_reward_layers[0],
-            layer_num=len(fc_reward_layers) + 1,
-            out_channels=output_support_size,
-            activation=activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-        self.activation = activation
-
-    def forward(self, x):
-        # take the state encoding,  x[:, -1, :, :] is action encoding
-        state = x[:, :-1, :, :]
-        x = self.conv(x)
-        x = self.bn(x)
-
-        x += state
-        x = self.activation(x)
-
-        for block in self.resblocks:
-            x = block(x)
-        state = x
-
-        x = self.conv1x1_reward(x)
-        x = self.bn_reward(x)
-        x = self.activation(x)
-
-        x = x.view(-1, self.flatten_output_size_for_reward_head)
-        reward = self.fc(x)
-
-        return state, reward
-
-    def get_dynamic_mean(self):
-        return get_dynamic_mean(self)
-
-    def get_reward_mean(self):
-        return get_reward_mean(self)
-
-
-class PredictionNetwork(nn.Module):
-
-    def __init__(
-        self,
-        action_space_size,
-        num_res_blocks,
-        in_channels,
-        num_channels,
-        value_head_channels,
-        policy_head_channels,
-        fc_value_layers,
-        fc_policy_layers,
-        output_support_size,
-        flatten_output_size_for_value_head,
-        flatten_output_size_for_policy_head,
-        momentum: float = 0.1,
-        last_linear_layer_init_zero: bool = True,
-        activation=nn.ReLU(inplace=True),
-    ):
-        """
-        Overview:
-            Prediction network. Predict the value and policy given hidden state.
-        Arguments:
-            - action_space_size: (:obj:`int`): Action space size, such as 6.
-            - num_res_blocks (:obj:`int`): number of res blocks in model.
-            - in_channels (:obj:`int`): channels of input, if None, then in_channels = num_channels
-            - num_channels (:obj:`int`): channels of hidden states.
-            - value_head_channels (:obj:`int`): channels of value head.
-            - policy_head_channels (:obj:`int`): channels of policy head.
-            - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
-            - output_support_size (:obj:`int`): dim of value output.
-            - flatten_output_size_for_value_head (:obj:`int`): dim of flatten hidden states.
-            - flatten_output_size_for_policy_head (:obj:`int`): dim of flatten hidden states.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
-        """
-        super().__init__()
-        self.in_channels = in_channels
-        if self.in_channels is not None:
-            self.conv_input = nn.Conv2d(in_channels, num_channels, 1)
-
-        self.resblocks = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=num_channels,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(num_res_blocks)
-            ]
-        )
-
-        self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
-        self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
-        self.bn_value = nn.BatchNorm2d(value_head_channels, momentum=momentum)
-        self.bn_policy = nn.BatchNorm2d(policy_head_channels, momentum=momentum)
-        self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
-        self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
-        self.fc_value = MLP(
-            in_channels=self.flatten_output_size_for_value_head,
-            hidden_channels=fc_value_layers[0],
-            out_channels=output_support_size,
-            layer_num=len(fc_value_layers) + 1,
-            activation=activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-        self.fc_policy = MLP(
-            in_channels=self.flatten_output_size_for_policy_head,
-            hidden_channels=fc_policy_layers[0],
-            out_channels=action_space_size,
-            layer_num=len(fc_policy_layers) + 1,
-            activation=activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-
-        self.activation = activation
-
-    def forward(self, x):
-        if self.in_channels is not None:
-            x = self.conv_input(x)
-
-        for block in self.resblocks:
-            x = block(x)
-
-        value = self.conv1x1_value(x)
-        value = self.bn_value(value)
-        value = self.activation(value)
-
-        policy = self.conv1x1_policy(x)
-        policy = self.bn_policy(policy)
-        policy = self.activation(policy)
-
-        value = value.reshape(-1, self.flatten_output_size_for_value_head)
-        policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
-
-        value = self.fc_value(value)
-        policy = self.fc_policy(policy)
-        return policy, value
-
-

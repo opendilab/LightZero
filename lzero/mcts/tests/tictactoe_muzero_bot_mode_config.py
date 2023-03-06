@@ -71,7 +71,7 @@ tictactoe_muzero_config = dict(
             action_space_size=9,
             # whether to use discrete support to represent categorical distribution for value, reward.
             categorical_distribution=True,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             ## small size model
             num_res_blocks=1,
             num_channels=16,

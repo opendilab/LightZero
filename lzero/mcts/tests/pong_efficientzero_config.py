@@ -99,7 +99,7 @@ pong_efficientzero_config = dict(
             activation=torch.nn.ReLU(inplace=True),
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             categorical_distribution=True,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
         # learn_mode config
         learn=dict(
@@ -192,7 +192,7 @@ pong_efficientzero_config = dict(
         root_exploration_fraction=0.25,
         pb_c_base=19652,
         pb_c_init=1.25,
-        discount_factor=0.997,
+        discount=0.997,
         value_delta_max=0.01,
         # ==============================================================
         # end of additional game_config

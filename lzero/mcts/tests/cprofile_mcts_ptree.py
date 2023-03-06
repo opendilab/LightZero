@@ -63,7 +63,7 @@ def check_mcts():
             batch_size=10,
             pb_c_base=1,
             pb_c_init=1,
-            discount_factor=0.9,
+            discount=0.9,
             root_dirichlet_alpha=0.3,
             root_exploration_fraction=0.2,
             dirichlet_alpha=0.3,

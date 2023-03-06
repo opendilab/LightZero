@@ -109,10 +109,6 @@ def train_muzero(
         game_config=game_config
     )
 
-    stop, reward = evaluator.eval(
-        learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-    )
-
     # ==============================================================
     # Main loop
     # ==============================================================

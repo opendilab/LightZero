@@ -1923,7 +1923,7 @@ static const char __pyx_k_values[] = "values";
 static const char __pyx_k_cvalues[] = "cvalues";
 static const char __pyx_k_results[] = "results";
 static const char __pyx_k_to_play[] = "to_play";
-static const char __pyx_k_discount_factor[] = "discount_factor";
+static const char __pyx_k_discount[] = "discount";
 static const char __pyx_k_getstate[] = "__getstate__";
 static const char __pyx_k_policies[] = "policies";
 static const char __pyx_k_root_num[] = "root_num";
@@ -1980,7 +1980,7 @@ static PyObject *__pyx_n_s_continuous_action_space;
 static PyObject *__pyx_n_s_cpolicies;
 static PyObject *__pyx_n_s_cvalue_prefixs;
 static PyObject *__pyx_n_s_cvalues;
-static PyObject *__pyx_n_s_discount_factor;
+static PyObject *__pyx_n_s_discount;
 static PyObject *__pyx_n_s_getstate;
 static PyObject *__pyx_n_s_hidden_state_index_x;
 static PyObject *__pyx_n_s_hidden_state_index_y;
@@ -2056,8 +2056,8 @@ static int __pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_
 static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_4Node_4expand(struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_Node *__pyx_v_self, int __pyx_v_to_play, int __pyx_v_hidden_state_index_x, int __pyx_v_hidden_state_index_y, float __pyx_v_value_prefix, PyObject *__pyx_v_policy_logits); /* proto */
 static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_4Node_6__reduce_cython__(CYTHON_UNUSED struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_Node *__pyx_v_self); /* proto */
 static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_4Node_8__setstate_cython__(CYTHON_UNUSED struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_Node *__pyx_v_self, CYTHON_UNUSED PyObject *__pyx_v___pyx_state); /* proto */
-static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_batch_backpropagate(CYTHON_UNUSED PyObject *__pyx_self, int __pyx_v_hidden_state_index_x, float __pyx_v_discount_factor, PyObject *__pyx_v_value_prefixs, PyObject *__pyx_v_values, PyObject *__pyx_v_policies, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_MinMaxStatsList *__pyx_v_min_max_stats_lst, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_ResultsWrapper *__pyx_v_results, PyObject *__pyx_v_is_reset_lst, PyObject *__pyx_v_to_play_batch); /* proto */
-static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_2batch_traverse(CYTHON_UNUSED PyObject *__pyx_self, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_Roots *__pyx_v_roots, int __pyx_v_pb_c_base, float __pyx_v_pb_c_init, float __pyx_v_discount_factor, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_MinMaxStatsList *__pyx_v_min_max_stats_lst, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_ResultsWrapper *__pyx_v_results, PyObject *__pyx_v_virtual_to_play_batch, bool __pyx_v_continuous_action_space); /* proto */
+static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_batch_backpropagate(CYTHON_UNUSED PyObject *__pyx_self, int __pyx_v_hidden_state_index_x, float __pyx_v_discount, PyObject *__pyx_v_value_prefixs, PyObject *__pyx_v_values, PyObject *__pyx_v_policies, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_MinMaxStatsList *__pyx_v_min_max_stats_lst, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_ResultsWrapper *__pyx_v_results, PyObject *__pyx_v_is_reset_lst, PyObject *__pyx_v_to_play_batch); /* proto */
+static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_2batch_traverse(CYTHON_UNUSED PyObject *__pyx_self, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_Roots *__pyx_v_roots, int __pyx_v_pb_c_base, float __pyx_v_pb_c_init, float __pyx_v_discount, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_MinMaxStatsList *__pyx_v_min_max_stats_lst, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_ResultsWrapper *__pyx_v_results, PyObject *__pyx_v_virtual_to_play_batch, bool __pyx_v_continuous_action_space); /* proto */
 static PyObject *__pyx_tp_new_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_MinMaxStatsList(PyTypeObject *t, PyObject *a, PyObject *k); /*proto*/
 static PyObject *__pyx_tp_new_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_ResultsWrapper(PyTypeObject *t, PyObject *a, PyObject *k); /*proto*/
 static PyObject *__pyx_tp_new_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_Action(PyTypeObject *t, PyObject *a, PyObject *k); /*proto*/
@@ -4268,7 +4268,7 @@ static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
  *         cdef vector[float] cpolicy = policy_logits
  *         self.cnode.expand(to_play, hidden_state_index_x, hidden_state_index_y, value_prefix, cpolicy)             # <<<<<<<<<<<<<<
  * 
- * def batch_backpropagate(int hidden_state_index_x, float discount_factor, list value_prefixs, list values, list policies,
+ * def batch_backpropagate(int hidden_state_index_x, float discount, list value_prefixs, list values, list policies,
  */
   __pyx_v_self->cnode.expand(__pyx_v_to_play, __pyx_v_hidden_state_index_x, __pyx_v_hidden_state_index_y, __pyx_v_value_prefix, __pyx_v_cpolicy);
 
@@ -4408,7 +4408,7 @@ static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
 /* "lzero/mcts/ctree/ctree_sampled_efficientzero/ezs_tree.pyx":106
  *         self.cnode.expand(to_play, hidden_state_index_x, hidden_state_index_y, value_prefix, cpolicy)
  * 
- * def batch_backpropagate(int hidden_state_index_x, float discount_factor, list value_prefixs, list values, list policies,             # <<<<<<<<<<<<<<
+ * def batch_backpropagate(int hidden_state_index_x, float discount, list value_prefixs, list values, list policies,             # <<<<<<<<<<<<<<
  *                          MinMaxStatsList min_max_stats_lst, ResultsWrapper results, list is_reset_lst,
  *                          list to_play_batch):
  */
@@ -4418,7 +4418,7 @@ static PyObject *__pyx_pw_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
 static PyMethodDef __pyx_mdef_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_1batch_backpropagate = {"batch_backpropagate", (PyCFunction)(void*)(PyCFunctionWithKeywords)__pyx_pw_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_1batch_backpropagate, METH_VARARGS|METH_KEYWORDS, 0};
 static PyObject *__pyx_pw_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_1batch_backpropagate(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
   int __pyx_v_hidden_state_index_x;
-  float __pyx_v_discount_factor;
+  float __pyx_v_discount;
   PyObject *__pyx_v_value_prefixs = 0;
   PyObject *__pyx_v_values = 0;
   PyObject *__pyx_v_policies = 0;
@@ -4433,7 +4433,7 @@ static PyObject *__pyx_pw_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("batch_backpropagate (wrapper)", 0);
   {
-    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_hidden_state_index_x,&__pyx_n_s_discount_factor,&__pyx_n_s_value_prefixs,&__pyx_n_s_values,&__pyx_n_s_policies,&__pyx_n_s_min_max_stats_lst,&__pyx_n_s_results,&__pyx_n_s_is_reset_lst,&__pyx_n_s_to_play_batch,0};
+    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_hidden_state_index_x,&__pyx_n_s_discount,&__pyx_n_s_value_prefixs,&__pyx_n_s_values,&__pyx_n_s_policies,&__pyx_n_s_min_max_stats_lst,&__pyx_n_s_results,&__pyx_n_s_is_reset_lst,&__pyx_n_s_to_play_batch,0};
     PyObject* values[9] = {0,0,0,0,0,0,0,0,0};
     if (unlikely(__pyx_kwds)) {
       Py_ssize_t kw_args;
@@ -4467,7 +4467,7 @@ static PyObject *__pyx_pw_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
         else goto __pyx_L5_argtuple_error;
         CYTHON_FALLTHROUGH;
         case  1:
-        if (likely((values[1] = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_discount_factor)) != 0)) kw_args--;
+        if (likely((values[1] = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_discount)) != 0)) kw_args--;
         else {
           __Pyx_RaiseArgtupleInvalid("batch_backpropagate", 1, 9, 9, 1); __PYX_ERR(1, 106, __pyx_L3_error)
         }
@@ -4531,7 +4531,7 @@ static PyObject *__pyx_pw_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
       values[8] = PyTuple_GET_ITEM(__pyx_args, 8);
     }
     __pyx_v_hidden_state_index_x = __Pyx_PyInt_As_int(values[0]); if (unlikely((__pyx_v_hidden_state_index_x == (int)-1) && PyErr_Occurred())) __PYX_ERR(1, 106, __pyx_L3_error)
-    __pyx_v_discount_factor = __pyx_PyFloat_AsFloat(values[1]); if (unlikely((__pyx_v_discount_factor == (float)-1) && PyErr_Occurred())) __PYX_ERR(1, 106, __pyx_L3_error)
+    __pyx_v_discount = __pyx_PyFloat_AsFloat(values[1]); if (unlikely((__pyx_v_discount == (float)-1) && PyErr_Occurred())) __PYX_ERR(1, 106, __pyx_L3_error)
     __pyx_v_value_prefixs = ((PyObject*)values[2]);
     __pyx_v_values = ((PyObject*)values[3]);
     __pyx_v_policies = ((PyObject*)values[4]);
@@ -4555,7 +4555,7 @@ static PyObject *__pyx_pw_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_results), __pyx_ptype_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_ResultsWrapper, 1, "results", 0))) __PYX_ERR(1, 107, __pyx_L1_error)
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_is_reset_lst), (&PyList_Type), 1, "is_reset_lst", 1))) __PYX_ERR(1, 107, __pyx_L1_error)
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_to_play_batch), (&PyList_Type), 1, "to_play_batch", 1))) __PYX_ERR(1, 108, __pyx_L1_error)
-  __pyx_r = __pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_batch_backpropagate(__pyx_self, __pyx_v_hidden_state_index_x, __pyx_v_discount_factor, __pyx_v_value_prefixs, __pyx_v_values, __pyx_v_policies, __pyx_v_min_max_stats_lst, __pyx_v_results, __pyx_v_is_reset_lst, __pyx_v_to_play_batch);
+  __pyx_r = __pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_batch_backpropagate(__pyx_self, __pyx_v_hidden_state_index_x, __pyx_v_discount, __pyx_v_value_prefixs, __pyx_v_values, __pyx_v_policies, __pyx_v_min_max_stats_lst, __pyx_v_results, __pyx_v_is_reset_lst, __pyx_v_to_play_batch);
 
   /* function exit code */
   goto __pyx_L0;
@@ -4566,7 +4566,7 @@ static PyObject *__pyx_pw_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_batch_backpropagate(CYTHON_UNUSED PyObject *__pyx_self, int __pyx_v_hidden_state_index_x, float __pyx_v_discount_factor, PyObject *__pyx_v_value_prefixs, PyObject *__pyx_v_values, PyObject *__pyx_v_policies, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_MinMaxStatsList *__pyx_v_min_max_stats_lst, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_ResultsWrapper *__pyx_v_results, PyObject *__pyx_v_is_reset_lst, PyObject *__pyx_v_to_play_batch) {
+static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_batch_backpropagate(CYTHON_UNUSED PyObject *__pyx_self, int __pyx_v_hidden_state_index_x, float __pyx_v_discount, PyObject *__pyx_v_value_prefixs, PyObject *__pyx_v_values, PyObject *__pyx_v_policies, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_MinMaxStatsList *__pyx_v_min_max_stats_lst, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_ResultsWrapper *__pyx_v_results, PyObject *__pyx_v_is_reset_lst, PyObject *__pyx_v_to_play_batch) {
   std::vector<float>  __pyx_v_cvalue_prefixs;
   std::vector<float>  __pyx_v_cvalues;
   std::vector<std::vector<float> >  __pyx_v_cpolicies;
@@ -4606,17 +4606,17 @@ static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
  *     cdef vector[float] cvalues = values
  *     cdef vector[vector[float]] cpolicies = policies             # <<<<<<<<<<<<<<
  * 
- *     cbatch_backpropagate(hidden_state_index_x, discount_factor, cvalue_prefixs, cvalues, cpolicies,
+ *     cbatch_backpropagate(hidden_state_index_x, discount, cvalue_prefixs, cvalues, cpolicies,
  */
   __pyx_t_2 = __pyx_convert_vector_from_py_std_3a__3a_vector_3c_float_3e___(__pyx_v_policies); if (unlikely(PyErr_Occurred())) __PYX_ERR(1, 112, __pyx_L1_error)
   __pyx_v_cpolicies = __pyx_t_2;
 
   /* "lzero/mcts/ctree/ctree_sampled_efficientzero/ezs_tree.pyx":115
  * 
- *     cbatch_backpropagate(hidden_state_index_x, discount_factor, cvalue_prefixs, cvalues, cpolicies,
+ *     cbatch_backpropagate(hidden_state_index_x, discount, cvalue_prefixs, cvalues, cpolicies,
  *                           min_max_stats_lst.cmin_max_stats_lst, results.cresults, is_reset_lst, to_play_batch)             # <<<<<<<<<<<<<<
  * 
- * def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount_factor, MinMaxStatsList min_max_stats_lst,
+ * def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount, MinMaxStatsList min_max_stats_lst,
  */
   __pyx_t_3 = __pyx_convert_vector_from_py_int(__pyx_v_is_reset_lst); if (unlikely(PyErr_Occurred())) __PYX_ERR(1, 115, __pyx_L1_error)
   __pyx_t_4 = __pyx_convert_vector_from_py_int(__pyx_v_to_play_batch); if (unlikely(PyErr_Occurred())) __PYX_ERR(1, 115, __pyx_L1_error)
@@ -4624,16 +4624,16 @@ static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
   /* "lzero/mcts/ctree/ctree_sampled_efficientzero/ezs_tree.pyx":114
  *     cdef vector[vector[float]] cpolicies = policies
  * 
- *     cbatch_backpropagate(hidden_state_index_x, discount_factor, cvalue_prefixs, cvalues, cpolicies,             # <<<<<<<<<<<<<<
+ *     cbatch_backpropagate(hidden_state_index_x, discount, cvalue_prefixs, cvalues, cpolicies,             # <<<<<<<<<<<<<<
  *                           min_max_stats_lst.cmin_max_stats_lst, results.cresults, is_reset_lst, to_play_batch)
  * 
  */
-  tree::cbatch_backpropagate(__pyx_v_hidden_state_index_x, __pyx_v_discount_factor, __pyx_v_cvalue_prefixs, __pyx_v_cvalues, __pyx_v_cpolicies, __pyx_v_min_max_stats_lst->cmin_max_stats_lst, __pyx_v_results->cresults, __pyx_t_3, __pyx_t_4);
+  tree::cbatch_backpropagate(__pyx_v_hidden_state_index_x, __pyx_v_discount, __pyx_v_cvalue_prefixs, __pyx_v_cvalues, __pyx_v_cpolicies, __pyx_v_min_max_stats_lst->cmin_max_stats_lst, __pyx_v_results->cresults, __pyx_t_3, __pyx_t_4);
 
   /* "lzero/mcts/ctree/ctree_sampled_efficientzero/ezs_tree.pyx":106
  *         self.cnode.expand(to_play, hidden_state_index_x, hidden_state_index_y, value_prefix, cpolicy)
  * 
- * def batch_backpropagate(int hidden_state_index_x, float discount_factor, list value_prefixs, list values, list policies,             # <<<<<<<<<<<<<<
+ * def batch_backpropagate(int hidden_state_index_x, float discount, list value_prefixs, list values, list policies,             # <<<<<<<<<<<<<<
  *                          MinMaxStatsList min_max_stats_lst, ResultsWrapper results, list is_reset_lst,
  *                          list to_play_batch):
  */
@@ -4653,9 +4653,9 @@ static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
 /* "lzero/mcts/ctree/ctree_sampled_efficientzero/ezs_tree.pyx":117
  *                           min_max_stats_lst.cmin_max_stats_lst, results.cresults, is_reset_lst, to_play_batch)
  * 
- * def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount_factor, MinMaxStatsList min_max_stats_lst,             # <<<<<<<<<<<<<<
+ * def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount, MinMaxStatsList min_max_stats_lst,             # <<<<<<<<<<<<<<
  *                    ResultsWrapper results, list virtual_to_play_batch, bool continuous_action_space):
- *     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst.cmin_max_stats_lst, results.cresults,
+ *     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount, min_max_stats_lst.cmin_max_stats_lst, results.cresults,
  */
 
 /* Python wrapper */
@@ -4665,7 +4665,7 @@ static PyObject *__pyx_pw_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
   struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_Roots *__pyx_v_roots = 0;
   int __pyx_v_pb_c_base;
   float __pyx_v_pb_c_init;
-  float __pyx_v_discount_factor;
+  float __pyx_v_discount;
   struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_MinMaxStatsList *__pyx_v_min_max_stats_lst = 0;
   struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_ResultsWrapper *__pyx_v_results = 0;
   PyObject *__pyx_v_virtual_to_play_batch = 0;
@@ -4677,7 +4677,7 @@ static PyObject *__pyx_pw_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("batch_traverse (wrapper)", 0);
   {
-    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_roots,&__pyx_n_s_pb_c_base,&__pyx_n_s_pb_c_init,&__pyx_n_s_discount_factor,&__pyx_n_s_min_max_stats_lst,&__pyx_n_s_results,&__pyx_n_s_virtual_to_play_batch,&__pyx_n_s_continuous_action_space,0};
+    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_roots,&__pyx_n_s_pb_c_base,&__pyx_n_s_pb_c_init,&__pyx_n_s_discount,&__pyx_n_s_min_max_stats_lst,&__pyx_n_s_results,&__pyx_n_s_virtual_to_play_batch,&__pyx_n_s_continuous_action_space,0};
     PyObject* values[8] = {0,0,0,0,0,0,0,0};
     if (unlikely(__pyx_kwds)) {
       Py_ssize_t kw_args;
@@ -4721,7 +4721,7 @@ static PyObject *__pyx_pw_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
         }
         CYTHON_FALLTHROUGH;
         case  3:
-        if (likely((values[3] = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_discount_factor)) != 0)) kw_args--;
+        if (likely((values[3] = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_discount)) != 0)) kw_args--;
         else {
           __Pyx_RaiseArgtupleInvalid("batch_traverse", 1, 8, 8, 3); __PYX_ERR(1, 117, __pyx_L3_error)
         }
@@ -4768,7 +4768,7 @@ static PyObject *__pyx_pw_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
     __pyx_v_roots = ((struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_Roots *)values[0]);
     __pyx_v_pb_c_base = __Pyx_PyInt_As_int(values[1]); if (unlikely((__pyx_v_pb_c_base == (int)-1) && PyErr_Occurred())) __PYX_ERR(1, 117, __pyx_L3_error)
     __pyx_v_pb_c_init = __pyx_PyFloat_AsFloat(values[2]); if (unlikely((__pyx_v_pb_c_init == (float)-1) && PyErr_Occurred())) __PYX_ERR(1, 117, __pyx_L3_error)
-    __pyx_v_discount_factor = __pyx_PyFloat_AsFloat(values[3]); if (unlikely((__pyx_v_discount_factor == (float)-1) && PyErr_Occurred())) __PYX_ERR(1, 117, __pyx_L3_error)
+    __pyx_v_discount = __pyx_PyFloat_AsFloat(values[3]); if (unlikely((__pyx_v_discount == (float)-1) && PyErr_Occurred())) __PYX_ERR(1, 117, __pyx_L3_error)
     __pyx_v_min_max_stats_lst = ((struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_MinMaxStatsList *)values[4]);
     __pyx_v_results = ((struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_ResultsWrapper *)values[5]);
     __pyx_v_virtual_to_play_batch = ((PyObject*)values[6]);
@@ -4786,7 +4786,7 @@ static PyObject *__pyx_pw_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_min_max_stats_lst), __pyx_ptype_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_MinMaxStatsList, 1, "min_max_stats_lst", 0))) __PYX_ERR(1, 117, __pyx_L1_error)
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_results), __pyx_ptype_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_ResultsWrapper, 1, "results", 0))) __PYX_ERR(1, 118, __pyx_L1_error)
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_virtual_to_play_batch), (&PyList_Type), 1, "virtual_to_play_batch", 1))) __PYX_ERR(1, 118, __pyx_L1_error)
-  __pyx_r = __pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_2batch_traverse(__pyx_self, __pyx_v_roots, __pyx_v_pb_c_base, __pyx_v_pb_c_init, __pyx_v_discount_factor, __pyx_v_min_max_stats_lst, __pyx_v_results, __pyx_v_virtual_to_play_batch, __pyx_v_continuous_action_space);
+  __pyx_r = __pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_2batch_traverse(__pyx_self, __pyx_v_roots, __pyx_v_pb_c_base, __pyx_v_pb_c_init, __pyx_v_discount, __pyx_v_min_max_stats_lst, __pyx_v_results, __pyx_v_virtual_to_play_batch, __pyx_v_continuous_action_space);
 
   /* function exit code */
   goto __pyx_L0;
@@ -4797,7 +4797,7 @@ static PyObject *__pyx_pw_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_2batch_traverse(CYTHON_UNUSED PyObject *__pyx_self, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_Roots *__pyx_v_roots, int __pyx_v_pb_c_base, float __pyx_v_pb_c_init, float __pyx_v_discount_factor, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_MinMaxStatsList *__pyx_v_min_max_stats_lst, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_ResultsWrapper *__pyx_v_results, PyObject *__pyx_v_virtual_to_play_batch, bool __pyx_v_continuous_action_space) {
+static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_2batch_traverse(CYTHON_UNUSED PyObject *__pyx_self, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_Roots *__pyx_v_roots, int __pyx_v_pb_c_base, float __pyx_v_pb_c_init, float __pyx_v_discount, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_MinMaxStatsList *__pyx_v_min_max_stats_lst, struct __pyx_obj_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_ResultsWrapper *__pyx_v_results, PyObject *__pyx_v_virtual_to_play_batch, bool __pyx_v_continuous_action_space) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   std::vector<int>  __pyx_t_1;
@@ -4813,7 +4813,7 @@ static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
 
   /* "lzero/mcts/ctree/ctree_sampled_efficientzero/ezs_tree.pyx":120
  *                    ResultsWrapper results, list virtual_to_play_batch, bool continuous_action_space):
- *     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst.cmin_max_stats_lst, results.cresults,
+ *     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount, min_max_stats_lst.cmin_max_stats_lst, results.cresults,
  *                     virtual_to_play_batch, continuous_action_space)             # <<<<<<<<<<<<<<
  * 
  *     return results.cresults.hidden_state_index_x_lst, results.cresults.hidden_state_index_y_lst, results.cresults.last_actions, results.cresults.virtual_to_play_batchs
@@ -4821,13 +4821,13 @@ static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
   __pyx_t_1 = __pyx_convert_vector_from_py_int(__pyx_v_virtual_to_play_batch); if (unlikely(PyErr_Occurred())) __PYX_ERR(1, 120, __pyx_L1_error)
 
   /* "lzero/mcts/ctree/ctree_sampled_efficientzero/ezs_tree.pyx":119
- * def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount_factor, MinMaxStatsList min_max_stats_lst,
+ * def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount, MinMaxStatsList min_max_stats_lst,
  *                    ResultsWrapper results, list virtual_to_play_batch, bool continuous_action_space):
- *     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst.cmin_max_stats_lst, results.cresults,             # <<<<<<<<<<<<<<
+ *     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount, min_max_stats_lst.cmin_max_stats_lst, results.cresults,             # <<<<<<<<<<<<<<
  *                     virtual_to_play_batch, continuous_action_space)
  * 
  */
-  tree::cbatch_traverse(__pyx_v_roots->roots, __pyx_v_pb_c_base, __pyx_v_pb_c_init, __pyx_v_discount_factor, __pyx_v_min_max_stats_lst->cmin_max_stats_lst, __pyx_v_results->cresults, __pyx_t_1, __pyx_v_continuous_action_space);
+  tree::cbatch_traverse(__pyx_v_roots->roots, __pyx_v_pb_c_base, __pyx_v_pb_c_init, __pyx_v_discount, __pyx_v_min_max_stats_lst->cmin_max_stats_lst, __pyx_v_results->cresults, __pyx_t_1, __pyx_v_continuous_action_space);
 
   /* "lzero/mcts/ctree/ctree_sampled_efficientzero/ezs_tree.pyx":122
  *                     virtual_to_play_batch, continuous_action_space)
@@ -4864,9 +4864,9 @@ static PyObject *__pyx_pf_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs
   /* "lzero/mcts/ctree/ctree_sampled_efficientzero/ezs_tree.pyx":117
  *                           min_max_stats_lst.cmin_max_stats_lst, results.cresults, is_reset_lst, to_play_batch)
  * 
- * def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount_factor, MinMaxStatsList min_max_stats_lst,             # <<<<<<<<<<<<<<
+ * def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount, MinMaxStatsList min_max_stats_lst,             # <<<<<<<<<<<<<<
  *                    ResultsWrapper results, list virtual_to_play_batch, bool continuous_action_space):
- *     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst.cmin_max_stats_lst, results.cresults,
+ *     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount, min_max_stats_lst.cmin_max_stats_lst, results.cresults,
  */
 
   /* function exit code */
@@ -7183,7 +7183,7 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_n_s_cpolicies, __pyx_k_cpolicies, sizeof(__pyx_k_cpolicies), 0, 0, 1, 1},
   {&__pyx_n_s_cvalue_prefixs, __pyx_k_cvalue_prefixs, sizeof(__pyx_k_cvalue_prefixs), 0, 0, 1, 1},
   {&__pyx_n_s_cvalues, __pyx_k_cvalues, sizeof(__pyx_k_cvalues), 0, 0, 1, 1},
-  {&__pyx_n_s_discount_factor, __pyx_k_discount_factor, sizeof(__pyx_k_discount_factor), 0, 0, 1, 1},
+  {&__pyx_n_s_discount, __pyx_k_discount, sizeof(__pyx_k_discount), 0, 0, 1, 1},
   {&__pyx_n_s_getstate, __pyx_k_getstate, sizeof(__pyx_k_getstate), 0, 0, 1, 1},
   {&__pyx_n_s_hidden_state_index_x, __pyx_k_hidden_state_index_x, sizeof(__pyx_k_hidden_state_index_x), 0, 0, 1, 1},
   {&__pyx_n_s_hidden_state_index_y, __pyx_k_hidden_state_index_y, sizeof(__pyx_k_hidden_state_index_y), 0, 0, 1, 1},
@@ -7363,11 +7363,11 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   /* "lzero/mcts/ctree/ctree_sampled_efficientzero/ezs_tree.pyx":106
  *         self.cnode.expand(to_play, hidden_state_index_x, hidden_state_index_y, value_prefix, cpolicy)
  * 
- * def batch_backpropagate(int hidden_state_index_x, float discount_factor, list value_prefixs, list values, list policies,             # <<<<<<<<<<<<<<
+ * def batch_backpropagate(int hidden_state_index_x, float discount, list value_prefixs, list values, list policies,             # <<<<<<<<<<<<<<
  *                          MinMaxStatsList min_max_stats_lst, ResultsWrapper results, list is_reset_lst,
  *                          list to_play_batch):
  */
-  __pyx_tuple__13 = PyTuple_Pack(13, __pyx_n_s_hidden_state_index_x, __pyx_n_s_discount_factor, __pyx_n_s_value_prefixs, __pyx_n_s_values, __pyx_n_s_policies, __pyx_n_s_min_max_stats_lst, __pyx_n_s_results, __pyx_n_s_is_reset_lst, __pyx_n_s_to_play_batch, __pyx_n_s_i, __pyx_n_s_cvalue_prefixs, __pyx_n_s_cvalues, __pyx_n_s_cpolicies); if (unlikely(!__pyx_tuple__13)) __PYX_ERR(1, 106, __pyx_L1_error)
+  __pyx_tuple__13 = PyTuple_Pack(13, __pyx_n_s_hidden_state_index_x, __pyx_n_s_discount, __pyx_n_s_value_prefixs, __pyx_n_s_values, __pyx_n_s_policies, __pyx_n_s_min_max_stats_lst, __pyx_n_s_results, __pyx_n_s_is_reset_lst, __pyx_n_s_to_play_batch, __pyx_n_s_i, __pyx_n_s_cvalue_prefixs, __pyx_n_s_cvalues, __pyx_n_s_cpolicies); if (unlikely(!__pyx_tuple__13)) __PYX_ERR(1, 106, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__13);
   __Pyx_GIVEREF(__pyx_tuple__13);
   __pyx_codeobj__14 = (PyObject*)__Pyx_PyCode_New(9, 0, 13, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__13, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_lzero_mcts_ctree_ctree_sampled_e, __pyx_n_s_batch_backpropagate, 106, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__14)) __PYX_ERR(1, 106, __pyx_L1_error)
@@ -7375,11 +7375,11 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   /* "lzero/mcts/ctree/ctree_sampled_efficientzero/ezs_tree.pyx":117
  *                           min_max_stats_lst.cmin_max_stats_lst, results.cresults, is_reset_lst, to_play_batch)
  * 
- * def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount_factor, MinMaxStatsList min_max_stats_lst,             # <<<<<<<<<<<<<<
+ * def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount, MinMaxStatsList min_max_stats_lst,             # <<<<<<<<<<<<<<
  *                    ResultsWrapper results, list virtual_to_play_batch, bool continuous_action_space):
- *     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst.cmin_max_stats_lst, results.cresults,
+ *     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount, min_max_stats_lst.cmin_max_stats_lst, results.cresults,
  */
-  __pyx_tuple__15 = PyTuple_Pack(8, __pyx_n_s_roots, __pyx_n_s_pb_c_base, __pyx_n_s_pb_c_init, __pyx_n_s_discount_factor, __pyx_n_s_min_max_stats_lst, __pyx_n_s_results, __pyx_n_s_virtual_to_play_batch, __pyx_n_s_continuous_action_space); if (unlikely(!__pyx_tuple__15)) __PYX_ERR(1, 117, __pyx_L1_error)
+  __pyx_tuple__15 = PyTuple_Pack(8, __pyx_n_s_roots, __pyx_n_s_pb_c_base, __pyx_n_s_pb_c_init, __pyx_n_s_discount, __pyx_n_s_min_max_stats_lst, __pyx_n_s_results, __pyx_n_s_virtual_to_play_batch, __pyx_n_s_continuous_action_space); if (unlikely(!__pyx_tuple__15)) __PYX_ERR(1, 117, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__15);
   __Pyx_GIVEREF(__pyx_tuple__15);
   __pyx_codeobj__16 = (PyObject*)__Pyx_PyCode_New(8, 0, 8, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__15, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_lzero_mcts_ctree_ctree_sampled_e, __pyx_n_s_batch_traverse, 117, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__16)) __PYX_ERR(1, 117, __pyx_L1_error)
@@ -7772,7 +7772,7 @@ if (!__Pyx_RefNanny) {
   /* "lzero/mcts/ctree/ctree_sampled_efficientzero/ezs_tree.pyx":106
  *         self.cnode.expand(to_play, hidden_state_index_x, hidden_state_index_y, value_prefix, cpolicy)
  * 
- * def batch_backpropagate(int hidden_state_index_x, float discount_factor, list value_prefixs, list values, list policies,             # <<<<<<<<<<<<<<
+ * def batch_backpropagate(int hidden_state_index_x, float discount, list value_prefixs, list values, list policies,             # <<<<<<<<<<<<<<
  *                          MinMaxStatsList min_max_stats_lst, ResultsWrapper results, list is_reset_lst,
  *                          list to_play_batch):
  */
@@ -7784,9 +7784,9 @@ if (!__Pyx_RefNanny) {
   /* "lzero/mcts/ctree/ctree_sampled_efficientzero/ezs_tree.pyx":117
  *                           min_max_stats_lst.cmin_max_stats_lst, results.cresults, is_reset_lst, to_play_batch)
  * 
- * def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount_factor, MinMaxStatsList min_max_stats_lst,             # <<<<<<<<<<<<<<
+ * def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount, MinMaxStatsList min_max_stats_lst,             # <<<<<<<<<<<<<<
  *                    ResultsWrapper results, list virtual_to_play_batch, bool continuous_action_space):
- *     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst.cmin_max_stats_lst, results.cresults,
+ *     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount, min_max_stats_lst.cmin_max_stats_lst, results.cresults,
  */
   __pyx_t_1 = PyCFunction_NewEx(&__pyx_mdef_5lzero_4mcts_5ctree_27ctree_sampled_efficientzero_8ezs_tree_3batch_traverse, NULL, __pyx_n_s_lzero_mcts_ctree_ctree_sampled_e_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 117, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);

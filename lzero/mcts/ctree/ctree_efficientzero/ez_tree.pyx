@@ -80,7 +80,7 @@ cdef class Node:
         self.cnode.expand(to_play, hidden_state_index_x, hidden_state_index_y, value_prefix, cpolicy)
 
 @cython.binding
-def batch_backpropagate(int hidden_state_index_x, float discount_factor, list value_prefixs, list values, list policies,
+def batch_backpropagate(int hidden_state_index_x, float discount, list value_prefixs, list values, list policies,
                          MinMaxStatsList min_max_stats_lst, ResultsWrapper results, list is_reset_lst,
                          list to_play_batch):
     cdef int i
@@ -88,13 +88,13 @@ def batch_backpropagate(int hidden_state_index_x, float discount_factor, list va
     cdef vector[float] cvalues = values
     cdef vector[vector[float]] cpolicies = policies
 
-    cbatch_backpropagate(hidden_state_index_x, discount_factor, cvalue_prefixs, cvalues, cpolicies,
+    cbatch_backpropagate(hidden_state_index_x, discount, cvalue_prefixs, cvalues, cpolicies,
                           min_max_stats_lst.cmin_max_stats_lst, results.cresults, is_reset_lst, to_play_batch)
 
 @cython.binding
-def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount_factor, MinMaxStatsList min_max_stats_lst,
+def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount, MinMaxStatsList min_max_stats_lst,
                    ResultsWrapper results, list virtual_to_play_batch):
-    cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst.cmin_max_stats_lst,
+    cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount, min_max_stats_lst.cmin_max_stats_lst,
                     results.cresults, virtual_to_play_batch)
 
     return results.cresults.hidden_state_index_x_lst, results.cresults.hidden_state_index_y_lst, results.cresults.last_actions, results.cresults.virtual_to_play_batchs

@@ -64,7 +64,7 @@ tictactoe_muzero_config = dict(
             frame_stack_num=1,
             downsample=False,
             categorical_distribution=categorical_distribution,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            representation_model_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # ==============================================================
             # We use the small size model for tictactoe
             # ==============================================================

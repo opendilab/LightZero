@@ -20,9 +20,8 @@ reanalyze_ratio = 0.3
 
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = 500
-threshold_env_steps_for_final_lr = int(2e5)
-# if we set threshold_env_steps_for_final_temperature=0, i.e. we use the fixed final temperature=0.25.
-threshold_env_steps_for_final_temperature = int(0)
+threshold_env_steps_for_final_lr = int(1e6)
+threshold_env_steps_for_final_temperature = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -51,7 +50,7 @@ mspacman_muzero_config = dict(
         model=dict(
             observation_shape=(4, 96, 96),
             action_space_size=9,
-            representation_network_type='conv_res_blocks',
+            representation_model_type='conv_res_blocks',
         ),
         # whether to use the self_supervised_learning_loss.
         self_supervised_learning_loss=False,

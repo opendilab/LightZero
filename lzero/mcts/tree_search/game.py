@@ -1,5 +1,5 @@
 """
-Acknowledgement: The following code is adapted from https://github.com/YeWR/EfficientZero/blob/main/core/game.py
+The following code is adapted from https://github.com/YeWR/EfficientZero/blob/main/core/game.py
 """
 
 import copy
@@ -55,7 +55,7 @@ class GameHistory:
         self.config = config
 
         self.frame_stack_num = config.model.frame_stack_num
-        self.discount_factor = config.discount_factor
+        self.discount = config.discount
         self.action_space_size = config.model.action_space_size
         self.zero_obs_shape = (
             config.model.observation_shape[-2], config.model.observation_shape[-1], config.model.image_channel
