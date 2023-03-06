@@ -2,7 +2,7 @@
 Acknowledgement: The following code is adapted from https://github.com/YeWR/EfficientZero/blob/main/config/atari/model.py
 """
 import math
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -216,7 +216,7 @@ class EfficientZeroModel(nn.Module):
             nn.Linear(self.pred_hid, self.pred_out),
         )
 
-    def initial_inference(self, obs) -> EZNetworkOutput:
+    def initial_inference(self, obs: torch.Tensor) -> EZNetworkOutput:
         num = obs.size(0)
         hidden_state = self.representation(obs)
         policy_logits, value = self.prediction(hidden_state)
@@ -231,11 +231,11 @@ class EfficientZeroModel(nn.Module):
         policy_logits, value = self.prediction(hidden_state)
         return EZNetworkOutput(value, value_prefix, policy_logits, hidden_state, reward_hidden)
 
-    def prediction(self, encoded_state):
+    def prediction(self, encoded_state: torch.Tensor) -> Tuple[torch.Tensor]:
         policy, value = self.prediction_network(encoded_state)
         return policy, value
 
-    def representation(self, observation):
+    def representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
         encoded_state = self.representation_network(observation)
         if not self.state_norm:
             return encoded_state
@@ -243,7 +243,17 @@ class EfficientZeroModel(nn.Module):
             encoded_state_normalized = renormalize(encoded_state)
             return encoded_state_normalized
 
-    def dynamics(self, encoded_state, reward_hidden_state, action):
+    def dynamics(self, encoded_state: torch.Tensor, reward_hidden_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
+        """
+         Overview:
+             Dynamics function. Predict ``next_encoded_state``, ``reward_hidden_state``, ``value_prefix``
+             given current ``encoded_state`` and ``action``.
+         Arguments:
+             - encoded_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+             - reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+             - action (:obj:`torch.Tensor`): (batch_size, action_dim).
+         """
+
         # Stack encoded_state with a game specific one hot encoded action
         action_one_hot = (
             torch.ones((
@@ -271,7 +281,7 @@ class EfficientZeroModel(nn.Module):
             next_encoded_state_normalized = renormalize(next_encoded_state)
             return next_encoded_state_normalized, reward_hidden_state, value_prefix
 
-    def project(self, hidden_state, with_grad=True):
+    def project(self, hidden_state: torch.Tensor, with_grad=True):
         """
         Overview:
             Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
@@ -315,10 +325,10 @@ class DynamicsNetwork(nn.Module):
         fc_reward_layers,
         output_support_size,
         flatten_output_size_for_reward_head,
-        lstm_hidden_size=64,
-        momentum=0.1,
-        last_linear_layer_init_zero=True,
-        activation=nn.ReLU(inplace=True),
+        lstm_hidden_size,
+        momentum: float = 0.1,
+        last_linear_layer_init_zero: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
     ):
         """
         Overview:
@@ -421,9 +431,9 @@ class PredictionNetwork(nn.Module):
         output_support_size,
         flatten_output_size_for_value_head,
         flatten_output_size_for_policy_head,
-        momentum=0.1,
-        last_linear_layer_init_zero=True,
-        activation=nn.ReLU(inplace=True),
+        momentum: float = 0.1,
+        last_linear_layer_init_zero: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
     ):
         """
         Overview:

@@ -3,7 +3,7 @@ The following code is adapted from https://github.com/YeWR/EfficientZero/blob/ma
 """
 
 import math
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -272,7 +272,7 @@ class SampledEfficientZeroModel(nn.Module):
             nn.Linear(self.pred_hid, self.pred_out),
         )
 
-    def initial_inference(self, obs) -> EZNetworkOutput:
+    def initial_inference(self, obs: torch.Tensor) -> EZNetworkOutput:
         num = obs.size(0)
         hidden_state = self.representation(obs)
         policy_logits, value = self.prediction(hidden_state)
@@ -287,11 +287,11 @@ class SampledEfficientZeroModel(nn.Module):
         policy_logits, value = self.prediction(hidden_state)
         return EZNetworkOutput(value, value_prefix, policy_logits, hidden_state, reward_hidden)
 
-    def prediction(self, encoded_state):
+    def prediction(self, encoded_state: torch.Tensor) -> Tuple[torch.Tensor]:
         policy, value = self.prediction_network(encoded_state)
         return policy, value
 
-    def representation(self, observation):
+    def representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
         encoded_state = self.representation_network(observation)
         if not self.state_norm:
             return encoded_state
@@ -299,13 +299,15 @@ class SampledEfficientZeroModel(nn.Module):
             encoded_state_normalized = renormalize(encoded_state)
             return encoded_state_normalized
 
-    def dynamics(self, encoded_state, reward_hidden_state, action):
+    def dynamics(self, encoded_state: torch.Tensor, reward_hidden_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
         """
         Overview:
-        :param encoded_state: (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6)
-        :param reward_hidden_state: (batch_size, 1, 1) e.g. (1, 1, 1)
-        :param action: (batch_size, action_dim)
-        :return:
+            Dynamics function. Predict ``next_encoded_state``, ``reward_hidden_state``, ``value_prefix``
+            given current ``encoded_state`` and ``action``.
+        Arguments:
+            - encoded_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+            - reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+            - action (:obj:`torch.Tensor`): (batch_size, action_dim).
         """
         if not self.continuous_action_space:
             # discrete action space
@@ -376,7 +378,7 @@ class SampledEfficientZeroModel(nn.Module):
             next_encoded_state_normalized = renormalize(next_encoded_state)
             return next_encoded_state_normalized, reward_hidden_state, value_prefix
 
-    def project(self, hidden_state, with_grad=True):
+    def project(self, hidden_state: torch.Tensor, with_grad=True):
         """
         Overview:
             Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
@@ -421,11 +423,11 @@ class DynamicsNetwork(nn.Module):
         fc_reward_layers,
         output_support_size,
         flatten_output_size_for_reward_head,
-        lstm_hidden_size=64,
-        momentum=0.1,
-        last_linear_layer_init_zero=True,
-        norm_type='BN',
-        activation=nn.ReLU(inplace=True),
+        lstm_hidden_size,
+        momentum: float = 0.1,
+        last_linear_layer_init_zero: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        norm_type: str = 'BN',
     ):
         """
         Overview:
@@ -439,6 +441,7 @@ class DynamicsNetwork(nn.Module):
             - lstm_hidden_size (:obj:`int`): dim of lstm hidden state in dynamics network.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): the activation in Dynamics network.
+            - norm_type (:obj:`str`): The type of normalization in networks. default set it to 'BN'.
         """
         super().__init__()
         self.num_channels = num_channels
@@ -493,7 +496,7 @@ class DynamicsNetwork(nn.Module):
         )
         self.activation = activation
 
-    def forward(self, x, reward_hidden_state):
+    def forward(self, x: torch.Tensor, reward_hidden_state: torch.Tensor):
         # take the state encoding
         state = x[:, :-self.action_space_size, :, :]
         x = self.conv(x)
@@ -542,18 +545,22 @@ class PredictionNetwork(nn.Module):
         output_support_size,
         flatten_output_size_for_value_head,
         flatten_output_size_for_policy_head,
-        momentum=0.1,
-        last_linear_layer_init_zero=True,
-        activation=nn.ReLU(inplace=True),
-        sigma_type='fixed',
-        fixed_sigma_value=0.3,
-        bound_type=None,
-        norm_type='BN',
+        momentum: float = 0.1,
+        last_linear_layer_init_zero: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        # ==============================================================
+        # specific sampled related config
+        # ==============================================================
+        sigma_type='conditioned',
+        fixed_sigma_value: float = 0.3,
+        bound_type: str = None,
+        norm_type: str = 'BN',
     ):
         """
         Overview:
             Prediction network. predict the value and policy given hidden states
         Arguments:
+            - continuous_action_space (:obj:`bool`): The type of action space. default set it to False.
             - action_space_size: (:obj:`int`): Action space size, such as 6.
             - num_res_blocks (:obj:`int`): number of res blocks in model.
             - in_channels (:obj:`int`): channels of input, if None, then in_channels = num_channels
@@ -566,6 +573,14 @@ class PredictionNetwork(nn.Module):
             - flatten_output_size_for_value_head (:obj:`int`): dim of flatten hidden states.
             - flatten_output_size_for_policy_head (:obj:`int`): dim of flatten hidden states.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
+            # ==============================================================
+            # specific sampled related config
+            # ==============================================================
+            # see ``ReparameterizationHead`` in ``ding.model.cmmon.head`` for more details about thee following arguments.
+            - sigma_type (:obj:`str`): the type of sigma in policy head of prediction network, options={'conditioned', 'fixed'}.
+            - fixed_sigma_value (:obj:`float`): the fixed sigma value in policy head of prediction network,
+            - bound_type (:obj:`str`): The type of bound in networks.  default set it to None.
+            - norm_type (:obj:`str`): The type of normalization in networks. default set it to 'BN'.
         """
         super().__init__()
         self.in_channels = in_channels
@@ -640,7 +655,7 @@ class PredictionNetwork(nn.Module):
 
         self.activation = activation
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         if self.in_channels is not None:
             x = self.conv_input(x)
 

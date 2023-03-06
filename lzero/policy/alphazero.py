@@ -18,7 +18,7 @@ from ding.rl_utils import get_nstep_return_data, get_train_sample
 class AlphaZeroPolicy(Policy):
     """
     Overview:
-        The policy class for AlphaZero
+        The policy class for AlphaZero.
     """
     config = dict(
         # (string) RL policy register name (refer to function "register_policy").
@@ -26,44 +26,23 @@ class AlphaZeroPolicy(Policy):
         # (bool) Whether to use cuda for network.
         cuda=False,
         # (bool) whether use on-policy training pipeline(behaviour policy and training policy are the same)
-        on_policy=False,  # for a2c strictly on policy algorithm this line should not be seen by users
+        on_policy=False,
         priority=False,
         model=dict(
-            categorical_distribution=False,
-            representation_network_type='conv_res_blocks',
             observation_shape=(3, 6, 6),
-            action_space_size=int(1 * 6 * 6),
-            downsample=False,
-            reward_support_size=1,
-            value_support_size=1,
             num_res_blocks=1,
             num_channels=32,
-            value_head_channels=16,
-            policy_head_channels=16,
-            fc_value_layers=[32],
-            fc_policy_layers=[32],
-            batch_norm_momentum=0.1,
-            last_linear_layer_init_zero=True,
-            state_norm=False,
         ),
         # learn_mode config
         learn=dict(
-            # (bool) Whether to use multi gpu
+            # (bool) Whether to use multi gpu.
             multi_gpu=False,
-            batch_size=64,
+            batch_size=256,
+            optim_type='Adam',
             learning_rate=0.001,
             weight_decay=0.0001,
-            grad_norm=0.5,
+            grad_clip_value=10,
             value_weight=1.0,
-            optim_type='Adam',
-            learner=dict(
-                hook=dict(
-                    load_ckpt_before_run='',
-                    log_show_after_iter=100,
-                    save_ckpt_after_iter=10000,
-                    save_ckpt_after_run=True,
-                )
-            )
         ),
     )
 
@@ -87,16 +66,11 @@ class AlphaZeroPolicy(Policy):
                 lr=self._cfg.learn.learning_rate,
                 momentum=self._cfg.learn.momentum,
                 weight_decay=self._cfg.learn.weight_decay,
-                # grad_clip_type=self._cfg.learn.grad_clip_type,
-                # clip_value=self._cfg.learn.grad_clip_value,
             )
         elif self._cfg.learn.optim_type == 'Adam':
             self._optimizer = optim.Adam(
                 self._model.parameters(), lr=self._cfg.learn.learning_rate, weight_decay=self._cfg.learn.weight_decay
             )
-
-        # Optimizer
-        self._grad_norm = self._cfg.learn.grad_norm
 
         # Algorithm config
         self._value_weight = self._cfg.learn.value_weight
@@ -140,10 +114,7 @@ class AlphaZeroPolicy(Policy):
         self._optimizer.zero_grad()
         total_loss.backward()
 
-        grad_norm = torch.nn.utils.clip_grad_norm_(
-            list(self._model.parameters()),
-            max_norm=self._grad_norm,
-        )
+        grad_norm = torch.nn.utils.clip_grad_norm_(list(self._model.parameters()), max_norm=self._cfg.learn.grad_clip_value,)
         self._optimizer.step()
 
         # =============

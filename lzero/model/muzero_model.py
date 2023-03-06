@@ -3,7 +3,7 @@ Acknowledgement: The following code is adapted from https://github.com/YeWR/MuZe
 """
 
 import math
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -213,7 +213,7 @@ class MuZeroModel(nn.Module):
                     nn.Linear(self.pred_hid, self.pred_out),
                 )
 
-    def initial_inference(self, obs) -> MZNetworkOutput:
+    def initial_inference(self, obs: torch.Tensor) -> MZNetworkOutput:
         num = obs.size(0)
         hidden_state = self.representation(obs)
         policy_logits, value = self.prediction(hidden_state)
@@ -229,11 +229,11 @@ class MuZeroModel(nn.Module):
         policy_logits, value = self.prediction(hidden_state)
         return MZNetworkOutput(value, reward, policy_logits, hidden_state)
 
-    def prediction(self, encoded_state):
+    def prediction(self, encoded_state: torch.Tensor) -> Tuple[torch.Tensor]:
         policy, value = self.prediction_network(encoded_state)
         return policy, value
 
-    def representation(self, observation):
+    def representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
         encoded_state = self.representation_network(observation)
         if not self.state_norm:
             return encoded_state
@@ -241,7 +241,16 @@ class MuZeroModel(nn.Module):
             encoded_state_normalized = renormalize(encoded_state)
             return encoded_state_normalized
 
-    def dynamics(self, encoded_state, action):
+    def dynamics(self, encoded_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
+        """
+         Overview:
+             Dynamics function. Predict ``next_encoded_state``, ``reward``
+             given current ``encoded_state`` and ``action``.
+         Arguments:
+             - encoded_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+             - action (:obj:`torch.Tensor`): (batch_size, action_dim).
+         """
+
         # Stack encoded_state with a game specific one hot encoded action
         action_one_hot = (
             torch.ones((
@@ -268,7 +277,7 @@ class MuZeroModel(nn.Module):
             next_encoded_state_normalized = renormalize(next_encoded_state)
             return next_encoded_state_normalized, reward
 
-    def project(self, hidden_state, with_grad=True):
+    def project(self, hidden_state: torch.Tensor, with_grad=True):
         """
         Overview:
             only used when ``self.self_supervised_learning_loss=True``.
@@ -313,7 +322,7 @@ class DynamicsNetwork(nn.Module):
         flatten_output_size_for_reward_head,
         momentum: float = 0.1,
         last_linear_layer_init_zero: bool = True,
-        activation=nn.ReLU(inplace=True),
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
     ):
         """
         Overview:
@@ -362,7 +371,7 @@ class DynamicsNetwork(nn.Module):
         )
         self.activation = activation
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         # take the state encoding,  x[:, -1, :, :] is action encoding
         state = x[:, :-1, :, :]
         x = self.conv(x)
@@ -475,7 +484,7 @@ class PredictionNetwork(nn.Module):
 
         self.activation = activation
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         if self.in_channels is not None:
             x = self.conv_input(x)
 

@@ -121,5 +121,5 @@ tictactoe_alphazero_create_config = EasyDict(tictactoe_alphazero_create_config)
 create_config = tictactoe_alphazero_create_config
 
 if __name__ == '__main__':
-    from lzero.entry import serial_pipeline_alphazero
-    serial_pipeline_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import train_alphazero
+    train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)

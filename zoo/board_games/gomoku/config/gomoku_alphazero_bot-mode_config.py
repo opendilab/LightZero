@@ -11,18 +11,9 @@ num_simulations = 100
 update_per_collect = 100
 batch_size = 256
 max_env_step = int(2e6)
-prob_random_action_in_bot = 0.1
+prob_random_action_in_bot = 0.5
 
-# board_size = 6  # default_size is 15
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# # num_simulations = 100
-# num_simulations = 50
-# update_per_collect = 50
-# batch_size = 256
-# max_env_step = int(2e6)
-
+# debug config
 # board_size = 6  # default_size is 15
 # collector_env_num = 1
 # n_episode = 1
@@ -31,12 +22,14 @@ prob_random_action_in_bot = 0.1
 # update_per_collect = 2
 # batch_size = 4
 # max_env_step = int(2e6)
+# prob_random_action_in_bot = 0.1
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 gomoku_alphazero_config = dict(
     exp_name=f'data_az_ptree/gomoku_alphazero_bot-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
+        stop_value=2,
         board_size=board_size,
         battle_mode='play_with_bot_mode',
         bot_action_type='v0',
@@ -87,25 +80,19 @@ gomoku_alphazero_config = dict(
             ),
             mcts=dict(num_simulations=num_simulations)
         ),
-        eval=dict(
-            evaluator=dict(
-                n_episode=evaluator_env_num,
-                eval_freq=int(2e3),
-                # stop when reaching max_env_step.
-                stop_value=2,
-                env=dict(
-                    type='gomoku',
-                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
-                ),
+        eval=dict(evaluator=dict(
+            eval_freq=int(2e3),
+            env=dict(
+                type='gomoku',
+                import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
             ),
+        ),
             mcts=dict(num_simulations=num_simulations)
         ),
         other=dict(
             replay_buffer=dict(
                 replay_buffer_size=int(1e6),
-                type='naive',
                 save_episode=False,
-                periodic_thruput_seconds=60,
             )
         ),
     ),
@@ -138,5 +125,6 @@ gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
 create_config = gomoku_alphazero_create_config
 
 if __name__ == '__main__':
-    from lzero.entry import serial_pipeline_alphazero
-    serial_pipeline_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import train_alphazero
+
+    train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)

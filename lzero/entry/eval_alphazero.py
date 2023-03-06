@@ -15,7 +15,7 @@ from tensorboardX import SummaryWriter
 import numpy as np
 
 
-def serial_pipeline_alphazero_eval(
+def train_alphazero_eval(
         input_cfg: Union[str, Tuple[dict, dict]],
         seed: int = 0,
         env_setting: Optional[List[Any]] = None,

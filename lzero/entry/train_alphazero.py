@@ -14,7 +14,7 @@ from ding.worker import create_serial_collector, create_serial_evaluator
 from tensorboardX import SummaryWriter
 
 
-def serial_pipeline_alphazero(
+def train_alphazero(
         input_cfg: Union[str, Tuple[dict, dict]],
         seed: int = 0,
         env_setting: Optional[List[Any]] = None,

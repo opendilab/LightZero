@@ -81,7 +81,6 @@ class EfficientZeroPolicy(Policy):
             ignore_done=False,
             weight_decay=1e-4,
             momentum=0.9,
-            grad_clip_type='clip_norm',
             grad_clip_value=10,
         ),
         # collect_mode config
@@ -117,7 +116,6 @@ class EfficientZeroPolicy(Policy):
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
-        max_grad_norm=10,
         # the weight of different loss
         reward_loss_weight=1,
         value_loss_weight=0.25,

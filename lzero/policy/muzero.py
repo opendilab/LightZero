@@ -34,7 +34,7 @@ class MuZeroPolicy(Policy):
 
     # The default_config for MuZero policy.
     config = dict(
-        type='muzero',
+        # type='muzero',
         # the pretrained model path.
         # Users should add their own model path here. Model path should lead to a model.
         # Absolute path is recommended.
@@ -87,7 +87,6 @@ class MuZeroPolicy(Policy):
             ignore_done=False,
             weight_decay=1e-4,
             momentum=0.9,
-            grad_clip_type='clip_norm',
             grad_clip_value=10,
         ),
         # collect_mode config
@@ -122,7 +121,6 @@ class MuZeroPolicy(Policy):
         discount_factor=0.997,
         td_steps=5,
         num_unroll_steps=5,
-        max_grad_norm=10,
         # the weight of different loss
         reward_loss_weight=1,
         value_loss_weight=0.25,
