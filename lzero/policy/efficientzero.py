@@ -8,7 +8,6 @@ import torch.optim as optim
 import treetensor.torch as ttorch
 from ding.model import model_wrap
 from ding.policy.base_policy import Policy
-from ding.rl_utils import get_nstep_return_data, get_train_sample
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from torch.distributions import Categorical
@@ -275,9 +274,6 @@ class EfficientZeroPolicy(Policy):
         # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
         hidden_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(network_output)
 
-        # TODO(pu): to verify
-        # reward_hidden_state = to_device(reward_hidden_state, self._cfg.device)
-
         # transform the scaled value or its categorical representation to its original value,
         # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
         original_value = self.inverse_scalar_transform_handle(value)
@@ -356,8 +352,6 @@ class EfficientZeroPolicy(Policy):
 
                 consistency_loss += temp_loss
 
-
-
             # NOTE: the target policy, target_value_categorical, target_value_prefix_categorical is calculated in
             # game buffer now.
             # ==============================================================
@@ -431,8 +425,9 @@ class EfficientZeroPolicy(Policy):
         # the core target model update step.
         # ==============================================================
         self._target_model.update(self._learn_model.state_dict())
-
-        loss_data = (
+        
+        # packing loss info for tensorboard logging
+        loss_info = (
             weighted_total_loss.item(), loss.mean().item(), policy_loss.mean().item(), value_prefix_loss.mean().item(),
             value_loss.mean().item(), consistency_loss.mean()
         )
@@ -464,19 +459,21 @@ class EfficientZeroPolicy(Policy):
             return {
                 'collect_mcts_temperature': self.collect_mcts_temperature,
                 'cur_lr': self._optimizer.param_groups[0]['lr'],
-                'weighted_total_loss': loss_data[0],
-                'total_loss': loss_data[1],
-                'policy_loss': loss_data[2],
+                'weighted_total_loss': loss_info[0],
+                'total_loss': loss_info[1],
+                'policy_loss': loss_info[2],
                 'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
                 'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'value_prefix_loss': loss_data[3],
-                'value_loss': loss_data[4],
-                'consistency_loss': loss_data[5] / self._cfg.num_unroll_steps,
-                'value_priority': td_data[0].flatten().mean().item(),
+                'value_prefix_loss': loss_info[3],
+                'value_loss': loss_info[4],
+                'consistency_loss': loss_info[5] / self._cfg.num_unroll_steps,
+
                 # ==============================================================
                 # priority related
-                'value_priority_orig': value_priority,
                 # ==============================================================
+                'value_priority': td_data[0].flatten().mean().item(),
+                'value_priority_orig': value_priority,
+
                 'target_value_prefix': td_data[1].flatten().mean().item(),
                 'target_value': td_data[2].flatten().mean().item(),
                 'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
@@ -489,14 +486,14 @@ class EfficientZeroPolicy(Policy):
             return {
                 'collect_mcts_temperature': self.collect_mcts_temperature,
                 'cur_lr': self._optimizer.param_groups[0]['lr'],
-                'weighted_total_loss': loss_data[0],
-                'total_loss': loss_data[1],
-                'policy_loss': loss_data[2],
+                'weighted_total_loss': loss_info[0],
+                'total_loss': loss_info[1],
+                'policy_loss': loss_info[2],
                 'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
                 'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'value_prefix_loss': loss_data[3],
-                'value_loss': loss_data[4],
-                'consistency_loss': loss_data[5] / self._cfg.num_unroll_steps,
+                'value_prefix_loss': loss_info[3],
+                'value_loss': loss_info[4],
+                'consistency_loss': loss_info[5] / self._cfg.num_unroll_steps,
                 'value_priority': td_data[0].flatten().mean().item(),
                 # ==============================================================
                 # priority related
@@ -558,8 +555,8 @@ class EfficientZeroPolicy(Policy):
                 )
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
-            # cpp mcts_tree
             if self._cfg.mcts_ctree:
+                # cpp mcts_tree
                 if to_play[0] is None:
                     # we use to_play=0 means play_with_bot_mode game in mcts_ctree
                     to_play = [0 for _ in range(active_collect_env_num)]
