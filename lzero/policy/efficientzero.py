@@ -11,15 +11,14 @@ from ding.policy.base_policy import Policy
 from ding.rl_utils import get_nstep_return_data, get_train_sample
 from ding.torch_utils import to_tensor, to_device
 from ding.utils import POLICY_REGISTRY
-from torch.nn import L1Loss
 from torch.distributions import Categorical
+from torch.nn import L1Loss
 
 # python mcts_tree
 import lzero.mcts.ptree.ptree_ez as ptree
 from lzero.mcts import EfficientZeroMCTSCtree as MCTS_ctree
 from lzero.mcts import EfficientZeroMCTSPtree as MCTS_ptree
-from lzero.mcts import Transforms, modified_cross_entropy_loss, value_phi, reward_phi, \
-    DiscreteSupport
+from lzero.mcts import ImageTransforms, modified_cross_entropy_loss, value_phi, reward_phi, DiscreteSupport
 from lzero.mcts import scalar_transform, InverseScalarTransform
 from lzero.mcts import select_action
 # cpp mcts_tree
@@ -163,8 +162,8 @@ class EfficientZeroPolicy(Policy):
             - model_info (:obj:`Tuple[str, List[str]]`): model name and mode import_names
 
         .. note::
-            The user can define and use customized network model but must obey the same inferface definition indicated \
-            by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
+            The user can define and use customized network model but must obey the same interface definition indicated \
+            by import_names path. For EfficientZero, ``lzero.model.efficientzero_model.EfficientZeroModel``
         """
         return 'EfficientZeroModel', ['lzero.model.efficientzero_model']
 
@@ -193,11 +192,10 @@ class EfficientZeroPolicy(Policy):
             update_kwargs={'freq': self._cfg.learn.target_update_freq}
         )
         self._learn_model = model_wrap(self._model, wrapper_name='base')
-        # self._learn_model = self._model
         self._learn_model.reset()
         self._target_model.reset()
         if self._cfg.use_augmentation:
-            self.transforms = Transforms(
+            self.image_transforms = ImageTransforms(
                 self._cfg.augmentation,
                 image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
             )
@@ -251,8 +249,8 @@ class EfficientZeroPolicy(Policy):
 
         # do augmentations
         if self._cfg.use_augmentation:
-            obs_batch = self.transforms.transform(obs_batch)
-            obs_target_batch = self.transforms.transform(obs_target_batch)
+            obs_batch = self.image_transforms.transform(obs_batch)
+            obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
         mask_batch = torch.from_numpy(mask_batch).to(self._cfg.device).float()
@@ -488,8 +486,8 @@ class EfficientZeroPolicy(Policy):
 
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss
+                self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss
         )
         weighted_total_loss = (weights * loss).mean()
 
@@ -517,13 +515,13 @@ class EfficientZeroPolicy(Policy):
         if self._cfg.monitor_statistics:
             # reward l1 loss
             value_prefix_indices_0 = (
-                target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 0
+                    target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 0
             )
             value_prefix_indices_n1 = (
-                target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == -1
+                    target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == -1
             )
             value_prefix_indices_1 = (
-                target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 1
+                    target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1) == 1
             )
 
             target_value_prefix_base = target_value_prefix_cpu[:, :self._cfg.num_unroll_steps].reshape(-1).unsqueeze(-1)
@@ -629,7 +627,8 @@ class EfficientZeroPolicy(Policy):
             self._mcts_collect = MCTS_ptree(self._cfg)
 
     def _forward_collect(
-        self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None, ready_env_id=None
+            self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None,
+            ready_env_id=None
     ):
         """
         Shapes:

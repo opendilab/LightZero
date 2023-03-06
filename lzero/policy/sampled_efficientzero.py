@@ -18,7 +18,7 @@ from torch.nn import L1Loss
 import lzero.mcts.ptree.ptree_sez as ptree
 from lzero.mcts import SampledEfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts import SampledEfficientZeroMCTSPtree as MCTSPtree
-from lzero.mcts import Transforms, modified_cross_entropy_loss, value_phi, reward_phi, DiscreteSupport
+from lzero.mcts import ImageTransforms, modified_cross_entropy_loss, value_phi, reward_phi, DiscreteSupport
 from lzero.mcts import scalar_transform, InverseScalarTransform
 from lzero.mcts import select_action
 # cpp mcts_tree
@@ -194,8 +194,8 @@ class SampledEfficientZeroPolicy(Policy):
             - model_info (:obj:`Tuple[str, List[str]]`): model name and mode import_names
 
         .. note::
-            The user can define and use customized network model but must obey the same inferface definition indicated \
-            by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
+            The user can define and use customized network model but must obey the same interface definition indicated \
+            by import_names path. For Sampled EfficientZero, ``lzero.model.sampled_efficientzero_model.SampledEfficientZeroModel``
         """
         return 'SampledEfficientZeroModel', ['lzero.model.sampled_efficientzero_model']
 
@@ -241,7 +241,7 @@ class SampledEfficientZeroPolicy(Policy):
         self._learn_model.reset()
         self._target_model.reset()
         if self._cfg.use_augmentation:
-            self.transforms = Transforms(
+            self.image_transforms = ImageTransforms(
                 self._cfg.augmentation,
                 image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
             )
@@ -298,8 +298,8 @@ class SampledEfficientZeroPolicy(Policy):
 
         # do augmentations
         if self._cfg.use_augmentation:
-            obs_batch = self.transforms.transform(obs_batch)
-            obs_target_batch = self.transforms.transform(obs_target_batch)
+            obs_batch = self.image_transforms.transform(obs_batch)
+            obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
         # batch_size, num_unroll_steps, action_dim
         # e.g. 4, 5, 1

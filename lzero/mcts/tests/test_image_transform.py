@@ -1,12 +1,12 @@
 import pytest
 import torch
-from lzero.mcts.image_transform import Transforms
+from lzero.mcts.image_transform import ImageTransforms
 
 
 @pytest.mark.unittest
 def test_image_transform():
     img = torch.rand((4, 3, 96, 96))
-    transform = Transforms(['shift', 'intensity'])
+    transform = ImageTransforms(['shift', 'intensity'])
     processed_img = transform.transform(img)
     assert img.shape == (4, 3, 96, 96)
     assert not (img == processed_img).all()

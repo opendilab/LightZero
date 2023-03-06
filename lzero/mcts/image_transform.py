@@ -28,11 +28,11 @@ class RandomCrop(nn.Module):
         return x[..., h: h + H_, w: w + W_]
 
 
-class Transforms(object):
+class ImageTransforms(object):
     def __init__(self, augmentation, shift_delta=4, image_shape=(96, 96)):
         self.augmentation = augmentation
 
-        self.transforms = []
+        self.image_transforms = []
         for aug in self.augmentation:
             if aug == "shift":
                 transformation = nn.Sequential(nn.ReplicationPad2d(shift_delta), RandomCrop(image_shape))
@@ -40,13 +40,13 @@ class Transforms(object):
                 transformation = Intensity(scale=0.05)
             else:
                 raise NotImplementedError("not support augmentation type: {}".format(aug))
-            self.transforms.append(transformation)
+            self.image_transforms.append(transformation)
 
     @torch.no_grad()
     def transform(self, images):
         images = images.float() / 255. if images.dtype == torch.uint8 else images
         processed_images = images.reshape(-1, *images.shape[-3:])
-        for transform in self.transforms:
+        for transform in self.image_transforms:
             processed_images = transform(processed_images)
 
         processed_images = processed_images.view(*images.shape[:-3], *processed_images.shape[1:])

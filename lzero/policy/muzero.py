@@ -16,8 +16,7 @@ from ding.torch_utils import to_tensor
 # python MCTS
 import lzero.mcts.ptree.ptree_mz as ptree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
-from lzero.mcts import Transforms, visit_count_temperature, modified_cross_entropy_loss, value_phi, reward_phi, \
-    DiscreteSupport
+from lzero.mcts import ImageTransforms, modified_cross_entropy_loss, value_phi, reward_phi, DiscreteSupport
 from lzero.mcts import scalar_transform, InverseScalarTransform
 from lzero.mcts import select_action
 # cpp MCTS
@@ -168,8 +167,8 @@ class MuZeroPolicy(Policy):
             - model_info (:obj:`Tuple[str, List[str]]`): model name and mode import_names
 
         .. note::
-            The user can define and use customized network model but must obey the same inferface definition indicated \
-            by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
+            The user can define and use customized network model but must obey the same interface definition indicated \
+            by import_names path. For MuZero, ``lzero.model.muzero_model.MuZeroModel``
         """
         return 'MuZeroModel', ['lzero.model.muzero_model']
 
@@ -200,7 +199,7 @@ class MuZeroPolicy(Policy):
         self._learn_model.reset()
         self._target_model.reset()
         if self._cfg.use_augmentation:
-            self.transforms = Transforms(
+            self.image_transforms = ImageTransforms(
                 self._cfg.augmentation,
                 image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
             )
@@ -254,9 +253,9 @@ class MuZeroPolicy(Policy):
 
         # do augmentations
         if self._cfg.use_augmentation:
-            obs_batch = self.transforms.transform(obs_batch)
+            obs_batch = self.image_transforms.transform(obs_batch)
             if self._cfg.model.self_supervised_learning_loss:
-                obs_target_batch = self.transforms.transform(obs_target_batch)
+                obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
         mask_batch = torch.from_numpy(mask_batch).to(self._cfg.device).float()

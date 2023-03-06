@@ -19,6 +19,7 @@ def train_muzero_eval(
         seed: int = 0,
         env_setting: Optional[List[Any]] = None,
         model: Optional[torch.nn.Module] = None,
+        model_path: Optional[str] = None,
         num_episodes_each_seed: int = 1,
         print_seed_details: int = False,
         max_train_iter: Optional[int] = int(1e10),
@@ -35,6 +36,9 @@ def train_muzero_eval(
         - env_setting (:obj:`Optional[List[Any]]`): A list with 3 elements: \
             ``BaseEnv`` subclass, collector env config, and evaluator env config.
         - model (:obj:`Optional[torch.nn.Module]`): Instance of torch.nn.Module.
+        - model_path (:obj:`Optional[str]`): The pretrained model path, which should
+            point to the ckpt file of the pretrained model, and an absolute path is recommended.
+            In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
         - max_train_iter (:obj:`Optional[int]`): Maximum policy update iterations in training.
         - max_env_step (:obj:`Optional[int]`): Maximum collected environment interaction steps.
     Returns:
@@ -77,8 +81,8 @@ def train_muzero_eval(
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
-    if cfg.policy.get('model_path', None) is not None:
-        policy.learn_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location='cpu'))
+    if model_path is not None:
+        policy.learn_mode.load_state_dict(torch.load(model_path, map_location='cpu'))
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
