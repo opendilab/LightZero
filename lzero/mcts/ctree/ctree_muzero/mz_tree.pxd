@@ -2,11 +2,11 @@
 from libcpp.vector cimport vector
 
 
-cdef extern from "cminimax.cpp":
+cdef extern from "../common_lib/cminimax.cpp":
     pass
 
 
-cdef extern from "cminimax.h" namespace "tools":
+cdef extern from "../common_lib/cminimax.h" namespace "tools":
     cdef cppclass CMinMaxStats:
         CMinMaxStats() except +
         float maximum, minimum, value_delta_max
@@ -24,11 +24,11 @@ cdef extern from "cminimax.h" namespace "tools":
 
         void set_delta(float value_delta_max)
 
-cdef extern from "cnode.cpp":
+cdef extern from "lib/cnode.cpp":
     pass
 
 
-cdef extern from "cnode.h" namespace "tree":
+cdef extern from "lib/cnode.h" namespace "tree":
     cdef cppclass CNode:
         CNode() except +
         CNode(float prior, vector[int] &legal_actions) except +

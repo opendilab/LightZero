@@ -4,14 +4,14 @@
 {
     "distutils": {
         "depends": [
-            "lzero/mcts/ctree/ctree_muzero/cminimax.cpp",
-            "lzero/mcts/ctree/ctree_muzero/cminimax.h",
-            "lzero/mcts/ctree/ctree_muzero/cnode.cpp",
-            "lzero/mcts/ctree/ctree_muzero/cnode.h"
+            "lzero/mcts/ctree/common_lib/cminimax.cpp",
+            "lzero/mcts/ctree/common_lib/cminimax.h",
+            "lzero/mcts/ctree/ctree_muzero/lib/cnode.cpp",
+            "lzero/mcts/ctree/ctree_muzero/lib/cnode.h"
         ],
         "include_dirs": [
             "lzero/mcts/ctree/ctree_muzero",
-            "/private/var/folders/r5/znmp_3cn0_b41yvr2tvld9ys0qypks/T/pip-build-env-rzy737c2/overlay/lib/python3.8/site-packages/numpy/core/include"
+            "/private/var/folders/r5/znmp_3cn0_b41yvr2tvld9ys0qypks/T/pip-build-env-v2q8cdpn/overlay/lib/python3.8/site-packages/numpy/core/include"
         ],
         "language": "c++",
         "name": "lzero.mcts.ctree.ctree_muzero.mz_tree",
@@ -783,10 +783,10 @@ static CYTHON_INLINE float __PYX_NAN() {
 #include "stdexcept"
 #include "typeinfo"
 #include <vector>
-#include "cminimax.cpp"
-#include "cminimax.h"
-#include "cnode.cpp"
-#include "cnode.h"
+#include "../common_lib/cminimax.cpp"
+#include "../common_lib/cminimax.h"
+#include "lib/cnode.cpp"
+#include "lib/cnode.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif /* _OPENMP */
@@ -1419,7 +1419,6 @@ static const char __pyx_k_values[] = "values";
 static const char __pyx_k_cvalues[] = "cvalues";
 static const char __pyx_k_results[] = "results";
 static const char __pyx_k_to_play[] = "to_play";
-static const char __pyx_k_discount_factor[] = "discount_factor";
 static const char __pyx_k_getstate[] = "__getstate__";
 static const char __pyx_k_policies[] = "policies";
 static const char __pyx_k_root_num[] = "root_num";
@@ -1439,6 +1438,7 @@ static const char __pyx_k_ResultsWrapper[] = "ResultsWrapper";
 static const char __pyx_k_batch_traverse[] = "batch_traverse";
 static const char __pyx_k_cvalue_prefixs[] = "cvalue_prefixs";
 static const char __pyx_k_MinMaxStatsList[] = "MinMaxStatsList";
+static const char __pyx_k_discount_factor[] = "discount_factor";
 static const char __pyx_k_setstate_cython[] = "__setstate_cython__";
 static const char __pyx_k_min_max_stats_lst[] = "min_max_stats_lst";
 static const char __pyx_k_value_prefix_pool[] = "value_prefix_pool";

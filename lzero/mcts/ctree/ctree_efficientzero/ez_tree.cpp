@@ -4,14 +4,14 @@
 {
     "distutils": {
         "depends": [
-            "lzero/mcts/ctree/ctree_efficientzero/lib/cminimax.cpp",
-            "lzero/mcts/ctree/ctree_efficientzero/lib/cminimax.h",
+            "lzero/mcts/ctree/common_lib/cminimax.cpp",
+            "lzero/mcts/ctree/common_lib/cminimax.h",
             "lzero/mcts/ctree/ctree_efficientzero/lib/cnode.cpp",
             "lzero/mcts/ctree/ctree_efficientzero/lib/cnode.h"
         ],
         "include_dirs": [
             "lzero/mcts/ctree/ctree_efficientzero",
-            "/private/var/folders/r5/znmp_3cn0_b41yvr2tvld9ys0qypks/T/pip-build-env-rzy737c2/overlay/lib/python3.8/site-packages/numpy/core/include"
+            "/private/var/folders/r5/znmp_3cn0_b41yvr2tvld9ys0qypks/T/pip-build-env-v2q8cdpn/overlay/lib/python3.8/site-packages/numpy/core/include"
         ],
         "language": "c++",
         "name": "lzero.mcts.ctree.ctree_efficientzero.ez_tree",
@@ -783,8 +783,8 @@ static CYTHON_INLINE float __PYX_NAN() {
 #include "stdexcept"
 #include "typeinfo"
 #include <vector>
-#include "lib/cminimax.cpp"
-#include "lib/cminimax.h"
+#include "../common_lib/cminimax.cpp"
+#include "../common_lib/cminimax.h"
 #include "lib/cnode.cpp"
 #include "lib/cnode.h"
 #ifdef _OPENMP
@@ -1490,7 +1490,6 @@ static const char __pyx_k_cvalues[] = "cvalues";
 static const char __pyx_k_prepare[] = "prepare";
 static const char __pyx_k_results[] = "results";
 static const char __pyx_k_to_play[] = "to_play";
-static const char __pyx_k_discount_factor[] = "discount_factor";
 static const char __pyx_k_getstate[] = "__getstate__";
 static const char __pyx_k_policies[] = "policies";
 static const char __pyx_k_root_num[] = "root_num";
@@ -1518,6 +1517,7 @@ static const char __pyx_k_batch_traverse[] = "batch_traverse";
 static const char __pyx_k_cvalue_prefixs[] = "cvalue_prefixs";
 static const char __pyx_k_get_search_len[] = "get_search_len";
 static const char __pyx_k_MinMaxStatsList[] = "MinMaxStatsList";
+static const char __pyx_k_discount_factor[] = "discount_factor";
 static const char __pyx_k_setstate_cython[] = "__setstate_cython__";
 static const char __pyx_k_value_delta_max[] = "value_delta_max";
 static const char __pyx_k_Roots_get_values[] = "Roots.get_values";
