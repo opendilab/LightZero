@@ -131,16 +131,3 @@ def phi_transform(discrete_support, x):
 
 def modified_cross_entropy_loss(prediction, target):
     return -(torch.log_softmax(prediction, dim=1) * target).sum(1)
-
-
-if __name__ == "__main__":
-    import time
-    logit = torch.randn(16, 601)
-    start = time.time()
-    inverse_scalar_transform(logit, 300)
-    print('t1', time.time() - start)
-    logit = torch.randn(16, 601)
-    handle = InverseScalarTransform(300)
-    start = time.time()
-    handle(logit)
-    print('t2', time.time() - start)

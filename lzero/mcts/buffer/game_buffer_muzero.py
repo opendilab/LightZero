@@ -96,7 +96,7 @@ class MuZeroGameBuffer(Buffer):
     )
 
     def __init__(self, cfg: dict):
-        super().__init__(cfg.other.replay_buffer.replay_buffer_size)
+        super().__init__(cfg.replay_buffer_size)
         """
         Overview:
             Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 

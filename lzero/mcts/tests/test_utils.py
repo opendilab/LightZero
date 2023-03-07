@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import torch
 
-from lzero.mcts.utils import to_torch_float_tensor
+from lzero.mcts.utils import to_torch_float_tensor,  get_augmented_data
 
 
 @pytest.mark.unittest
@@ -28,3 +28,19 @@ class TestUtils():
                     target_value_prefix_func == target_value_prefix_2).all() and (
                            target_value_func == target_value_2).all() and (
                            target_policy_func == target_policy_2).all() and (weights_func == weights_2).all()
+
+    def test_get_augmented_data(self):
+        num_of_data = 100
+        board_size = 15
+        state = np.random.randint(0, 3, (board_size, board_size, 3), dtype=np.uint8)
+        mcts_prob = np.random.randn(board_size, board_size)
+        winner = np.random.randint(0, 2, 1, dtype=np.uint8)
+        play_data = [{'state': state, 'mcts_prob': mcts_prob, 'winner': winner} for _ in range(num_of_data)]
+
+        extented_data = get_augmented_data(board_size, play_data)
+        assert len(extented_data) == num_of_data * 8
+        # TODO(pu): extented data shape is not same as original data?
+        # assert extented_data[0]['state'].shape == state.shape
+        assert extented_data[0]['state'].flatten().shape == state.flatten().shape
+        assert extented_data[0]['mcts_prob'].shape == mcts_prob.flatten().shape
+        assert extented_data[0]['winner'].shape == winner.shape

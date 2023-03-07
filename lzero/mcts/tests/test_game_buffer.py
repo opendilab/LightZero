@@ -105,7 +105,7 @@ def test_update():
     meta_new = {'priorities': 0.999}
     buffer.update(0, data, meta_new)
     print(buffer.sample(indices=[0]))
-    assert buffer.priorities[0] == 0.999
+    assert buffer.game_pos_priorities[0] == 0.999
 
     assert buffer.update(200, data, meta_new) is False
 

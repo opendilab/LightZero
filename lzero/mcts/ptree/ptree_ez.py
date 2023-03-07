@@ -41,7 +41,6 @@ class Node:
     ):
         self.to_play = to_play
         if self.legal_actions is None:
-            # TODO
             self.legal_actions = np.arange(len(policy_logits))
 
         self.hidden_state_index_x = hidden_state_index_x
@@ -159,11 +158,10 @@ class Node:
 
 class Roots:
 
-    def __init__(self, root_num: int, pool_size: int, legal_actions_list: Any):
+    def __init__(self, root_num: int, legal_actions_list: Any):
         self.num = root_num
         self.root_num = root_num
         self.legal_actions_list = legal_actions_list  # list of list
-        self.pool_size = pool_size
 
         self.roots = []
         for i in range(self.root_num):

@@ -169,7 +169,7 @@ class AtariLightZeroEnv(BaseEnv):
         return self._reward_space
 
     def __repr__(self) -> str:
-        return "DI-engine Atari MuZero Env({})".format(self.cfg.env_name)
+        return "LightZero Atari Env({})".format(self.cfg.env_name)
 
     @staticmethod
     def create_collector_env_cfg(cfg: dict) -> List[dict]:

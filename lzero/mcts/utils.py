@@ -1,7 +1,3 @@
-"""
-The following code is adapted from https://github.com/YeWR/EfficientZero/core/utils.py
-"""
-
 import os
 import numpy as np
 import torch
