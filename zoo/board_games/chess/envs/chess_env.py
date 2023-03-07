@@ -1,5 +1,5 @@
 """
-Adapt Chess to BaseGameEnv interface from pettingzoo: https://github.com/Farama-Foundation/PettingZoo
+Adapt the Chess environment in PettingZoo (https://github.com/Farama-Foundation/PettingZoo) to the BaseGameEnv interface.
 """
 
 import sys
@@ -25,7 +25,7 @@ class ChessEnv(BaseGameEnv):
 
         self.board = chess.Board()
 
-        self.agents = [f"player_{i+1}" for i in range(2)]
+        self.agents = [f"player_{i + 1}" for i in range(2)]
         self.possible_agents = self.agents[:]
 
         self._agent_selector = agent_selector(self.agents)
@@ -35,7 +35,7 @@ class ChessEnv(BaseGameEnv):
             name: spaces.Dict(
                 {
                     'observation': spaces.Box(low=0, high=1, shape=(8, 8, 111), dtype=bool),
-                    'action_mask': spaces.Box(low=0, high=1, shape=(4672, ), dtype=np.int8)
+                    'action_mask': spaces.Box(low=0, high=1, shape=(4672,), dtype=np.int8)
                 }
             )
             for name in self.agents
@@ -156,8 +156,9 @@ class ChessEnv(BaseGameEnv):
 
     def human_to_action(self):
         """
-        For multiplayer games, ask the user for a legal action
-        and return the corresponding action number.
+        Overview:
+            For multiplayer games, ask the user for a legal action
+            and return the corresponding action number.
         Returns:
             An integer from the action space.
         """
@@ -197,4 +198,4 @@ class ChessEnv(BaseGameEnv):
         pass
 
     def __repr__(self) -> str:
-        return "DI-engine Chess Env"
+        return "LightZero Chess Env"

@@ -38,7 +38,7 @@ class TestGomokuBot:
         print(state)
         print('#' * 15)
         print('\n')
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 action = player_0.get_actions(state, player_index=player_index)
                 player_index = 1
@@ -52,7 +52,7 @@ class TestGomokuBot:
             print('#' * 15)
             print(state)
             print('#' * 15)
-        assert env.have_winner()[1] == 1
+        assert env.get_done_winner()[1] == 1
 
     def test_gomoku_self_play_mode_player1_win(self):
         # player_0  num_simulation=1
@@ -68,7 +68,7 @@ class TestGomokuBot:
         print(state)
         print('#' * 15)
         print('\n')
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 action = player_0.get_actions(state, player_index=player_index)
                 player_index = 1
@@ -82,7 +82,7 @@ class TestGomokuBot:
             print('#' * 15)
             print(state)
             print('#' * 15)
-        assert env.have_winner()[1] == 2
+        assert env.get_done_winner()[1] == 2
 
     def test_gomoku_self_play_mode_draw(self):
         # player_0  num_simulation=1000
@@ -98,7 +98,7 @@ class TestGomokuBot:
         print(state)
         print('#' * 15)
         print('\n')
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 action = player_0.get_actions(state, player_index=player_index)
                 player_index = 1
@@ -112,7 +112,7 @@ class TestGomokuBot:
             print('#' * 15)
             print(state)
             print('#' * 15)
-        assert env.have_winner()[1] == -1
+        assert env.get_done_winner()[1] == -1
 
     def test_gomoku_self_play_mode_case_1(self):
         env = GomokuEnv(EasyDict(cfg))
@@ -134,7 +134,7 @@ class TestGomokuBot:
         print(state)
         print('#' * 15)
         print('\n')
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 action = player_0.get_actions(state, player_index=player_index)
                 player_index = 1
@@ -149,7 +149,7 @@ class TestGomokuBot:
             print(state)
             print('#' * 15)
             row, col = env.action_to_coord(action)
-        assert env.have_winner()[1] == 2
+        assert env.get_done_winner()[1] == 2
         assert state[0, 4] == 2
 
     def test_gomoku_self_play_mode_case_2(self):
@@ -172,7 +172,7 @@ class TestGomokuBot:
         print(state)
         print('#' * 15)
         print('\n')
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 action = player_0.get_actions(state, player_index=player_index)
                 player_index = 1
@@ -187,5 +187,5 @@ class TestGomokuBot:
             print(state)
             print('#' * 15)
             row, col = env.action_to_coord(action)
-        assert env.have_winner()[1] == 1
+        assert env.get_done_winner()[1] == 1
         assert state[4, 4] == 1

@@ -9,6 +9,8 @@ class TestTicTacToeEnv:
     def test_self_play_mode(self):
         cfg = EasyDict(
             battle_mode='self_play_mode',
+            channel_last=True,
+            scale=True,
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
@@ -20,8 +22,8 @@ class TestTicTacToeEnv:
         env.render()
         while True:
             """player 1"""
-            action = env.human_to_action()
-            # action = env.random_action()
+            # action = env.human_to_action()
+            action = env.random_action()
             # action = env.bot_action()
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
@@ -47,6 +49,8 @@ class TestTicTacToeEnv:
     def test_play_with_bot_mode(self):
         cfg = EasyDict(
             battle_mode='play_with_bot_mode',
+            channel_last=True,
+            scale=True,
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,

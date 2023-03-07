@@ -53,12 +53,12 @@ class Node():
     @property
     def is_terminal_node(self):
         self.env.reset_v2(self.start_player_index, init_state=self.board)  # index
-        return self.env.is_game_over()[0]
+        return self.env.get_done_reward()[0]
 
     @property
     def value(self):
         """
-        def is_game_over(self):
+        def get_done_reward(self):
             Overview:
                 To judge game whether over, and get reward
             Returns:
@@ -68,7 +68,7 @@ class Node():
                 if winner = -1 reward = 0
         """
         self.env.reset_v2(self.start_player_index, init_state=self.board)  # index
-        return self.env.is_game_over()[1]
+        return self.env.get_done_reward()[1]
 
     @property
     def estimated_value(self):
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     print('-' * 15)
     print(state)
 
-    while not env.is_game_over()[0]:
+    while not env.get_done_reward()[0]:
         if player_index == 0:
             start = time.time()
             action = player_0.get_best_action(state, player_index=player_index)
@@ -194,11 +194,11 @@ if __name__ == "__main__":
         row, col = env.action_to_coord(action)
 
     ### test from the init empty board ###
-    assert env.have_winner()[0] is False, env.have_winner()[1] == -1
+    assert env.get_done_winner()[0] is False, env.get_done_winner()[1] == -1
 
     ### test from the init specified board ###
     # assert (row == 0, col == 1) or (row == 1, col == 1)
-    # assert env.have_winner()[0] is True, env.have_winner()[1] == 1
+    # assert env.get_done_winner()[0] is True, env.get_done_winner()[1] == 1
     """
 
     ##### Gomoku #####
@@ -238,7 +238,7 @@ if __name__ == "__main__":
     print('-' * 15)
     print(state)
 
-    while not env.is_game_over()[0]:
+    while not env.get_done_reward()[0]:
         if player_index == 0:
             start = time.time()
             action = player_0.get_best_action(state, player_index=player_index)
@@ -254,5 +254,5 @@ if __name__ == "__main__":
         print('-' * 15)
         print(state)
 
-    assert env.have_winner()[0] is False, env.have_winner()[1] == -1
-    # assert env.have_winner()[0] is True, env.have_winner()[1] == 2
+    assert env.get_done_winner()[0] is False, env.get_done_winner()[1] == -1
+    # assert env.get_done_winner()[0] is True, env.get_done_winner()[1] == 2

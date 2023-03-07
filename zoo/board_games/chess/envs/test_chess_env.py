@@ -1,40 +1,41 @@
 import pytest
 
-from zoo.board_games.go.envs.go_env_game import GoEnv
+from zoo.board_games.chess.envs.chess_env import ChessEnv
 
 
 @pytest.mark.envtest
-class TestGoEnv:
+class TestChessEnv:
 
     def test_naive(self):
-        env = GoEnv(board_size=9, komi=7.5)
-        print('NOTE：actions are counted by column, such as action 9, which is the second column and the first row')
+        env = ChessEnv()
         env.reset()
-        # env.render()
+        print('init board state: ')
+        env.render()
         for i in range(100):
             """player 1"""
             # action = env.human_to_action()
             action = env.random_action()
-            print('player 1 (black_0): ', action)
+            print('player 1: ', action)
             obs, reward, done, info = env.step(action)
             assert isinstance(obs, dict)
             assert isinstance(done, bool)
-            assert isinstance(reward, float)
-            env.render()
+            assert isinstance(reward, int)
+            # env.render()
             if done:
-                if reward > 0:
-                    print('player 1 (black_0) win')
-                else:
-                    print('draw')
-                break
+                if done:
+                    if reward > 0:
+                        print('player 1 (human player) win')
+                    else:
+                        print('draw')
+                    break
             """player 2"""
             action = env.random_action()
-            print('player 2 (white_0): ', action)
+            print('player 2 (computer player): ', action)
             obs, reward, done, info = env.step(action)
             # env.render()
             if done:
                 if reward > 0:
-                    print('player 2 (white_0) win')
+                    print('player 2 (computer player) win')
                 else:
                     print('draw')
                 break

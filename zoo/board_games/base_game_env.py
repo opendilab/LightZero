@@ -6,7 +6,7 @@ from ding.envs import BaseEnv
 class BaseGameEnv(BaseEnv):
     """
     Overview:
-        Base game class for MCTS based method
+        Base game class for MCTS based method.
     """
 
     @abstractmethod

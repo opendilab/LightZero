@@ -4,20 +4,20 @@ import pytest
 
 from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 
+cfg = EasyDict(
+    channel_last=True,
+    scale=False,
+    prob_random_agent=0,
+    prob_expert_agent=0,
+    battle_mode='play_with_bot_mode',
+    agent_vs_human=False,
+    bot_action_type='v1',  # {'v0', 'v1', 'alpha_beta_pruning'}
+)
 
 @pytest.mark.envtest
 class TestExpertAction:
 
     def test_bot_action(self):
-        cfg = EasyDict(
-            channel_last=True,
-            scale=False,
-            prob_random_agent=0,
-            prob_expert_agent=0,
-            battle_mode='play_with_bot_mode',
-            agent_vs_human=False,
-            bot_action_type='v1',  # {'v0', 'v1', 'alpha_beta_pruning'}
-        )
         env = TicTacToeEnv(cfg)
         env.reset()
         print('init board state: ')

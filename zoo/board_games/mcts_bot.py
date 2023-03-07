@@ -1,10 +1,10 @@
-import sys
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
 
 import numpy as np
 from easydict import EasyDict
+
 
 class MCTSNode(ABC):
 
@@ -14,10 +14,10 @@ class MCTSNode(ABC):
             Monte Carlo Tree Search Base Node
             https://github.com/int8/monte-carlo-tree-search
         Arguments:
-            env: Class Env, such as 
+            - env: Class Env, such as
                  zoo.board_games.tictactoe.envs.tictactoe_env.TicTacToeEnv,
                  zoo.board_games.gomoku.envs.gomoku_env.GomokuEnv
-            parent: TwoPlayersMCTSNode / MCTSNode
+            - parent: TwoPlayersMCTSNode / MCTSNode
         """
         self.env = env
         self.parent = parent
@@ -133,20 +133,20 @@ class TwoPlayersMCTSNode(MCTSNode):
         return child_node
 
     def is_terminal_node(self):
-        return self.env.is_game_over()[0]
+        return self.env.get_done_reward()[0]
 
     def rollout(self):
         # print('simulation begin')
         current_rollout_env = self.env
         # print(current_rollout_env.board)
-        while not current_rollout_env.is_game_over()[0]:
+        while not current_rollout_env.get_done_reward()[0]:
             possible_actions = current_rollout_env.legal_actions
             action = self.rollout_policy(possible_actions)
             current_rollout_env = current_rollout_env.simulate_action(action)
             # print('\n')
             # print(current_rollout_env.board)
         # print('simulation end \n')
-        return current_rollout_env.is_game_over()[1]
+        return current_rollout_env.get_done_reward()[1]
 
     def backpropagate(self, result):
         self._number_of_visits += 1.
@@ -160,9 +160,9 @@ class MCTSSearchNode(object):
     def __init__(self, node):
         """
         Overview:
-            Monte Carlo Tree Search Node
+            Monte Carlo Tree Search Node.
         Arguments:
-            node : TwoPlayersMCTSNode
+            - node (:obj:`TwoPlayersMCTSNode`):
         """
         self.root = node
 
@@ -171,13 +171,10 @@ class MCTSSearchNode(object):
         Overview:
             By constantly simulating and backpropagating, get the best action and the best children node.
         Arguments:
-            simulations_number : int
-                number of simulations performed to get the best action
-            total_simulation_seconds : float
-                Amount of time the algorithm has to run. Specified in seconds
+            - simulations_number (:obj:`int`): number of simulations performed to get the best action
+            - total_simulation_seconds (:obj:`float`): Amount of time the algorithm has to run. Specified in seconds
         Returns:
             Returns the best children node, and can get action from Node.best_action_index.
-        -------
         """
 
         if simulations_number is None:

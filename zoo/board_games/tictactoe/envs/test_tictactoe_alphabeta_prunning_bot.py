@@ -18,7 +18,6 @@ class TestTicTacToeAlphaBetaPruningBot:
     def test_tictactoe_self_play_mode_draw(self):
         # player_0: AlphaBetaPruningBot
         # player_1: AlphaBetaPruningBot
-        # will draw
         env = TicTacToeEnv(EasyDict(cfg))
         env.reset()
         state = env.board
@@ -29,7 +28,7 @@ class TestTicTacToeAlphaBetaPruningBot:
         print('-' * 15)
         print(state)
 
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 action = player_0.get_best_action(state, player_index=player_index)
                 player_index = 1
@@ -42,7 +41,7 @@ class TestTicTacToeAlphaBetaPruningBot:
             print('-' * 15)
             print(state)
 
-        assert env.have_winner()[0] == False, env.have_winner()[1] == -1
+        assert env.get_done_winner()[0] == False, env.get_done_winner()[1] == -1
 
     def test_tictactoe_self_play_mode_half_case_1(self):
         env = TicTacToeEnv(EasyDict(cfg))
@@ -57,7 +56,7 @@ class TestTicTacToeAlphaBetaPruningBot:
         print('-' * 15)
         print(state)
 
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 action = player_0.get_best_action(state, player_index=player_index)
                 player_index = 1
@@ -71,9 +70,9 @@ class TestTicTacToeAlphaBetaPruningBot:
             print(state)
             row, col = env.action_to_coord(action)
 
-        assert env.have_winner()[1] == 1
+        assert env.get_done_winner()[1] == 1
         assert row == 0, col == 2
-        assert env.have_winner()[0] == True, env.have_winner()[1] == 1
+        assert env.get_done_winner()[0] == True, env.get_done_winner()[1] == 1
 
     def test_tictactoe_self_play_mode_half_case_2(self):
         env = TicTacToeEnv(EasyDict(cfg))
@@ -88,7 +87,7 @@ class TestTicTacToeAlphaBetaPruningBot:
         print('-' * 15)
         print(state)
 
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 action = player_0.get_best_action(state, player_index=player_index)
                 player_index = 1
@@ -102,6 +101,6 @@ class TestTicTacToeAlphaBetaPruningBot:
             print(state)
             row, col = env.action_to_coord(action)
 
-        assert env.have_winner()[1] == 1
+        assert env.get_done_winner()[1] == 1
         assert (row == 0, col == 1) or (row == 1, col == 1)
-        assert env.have_winner()[0] is True, env.have_winner()[1] == 1
+        assert env.get_done_winner()[0] is True, env.get_done_winner()[1] == 1

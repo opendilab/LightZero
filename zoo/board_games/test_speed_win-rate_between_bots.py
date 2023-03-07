@@ -7,15 +7,18 @@ from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 from zoo.board_games.mcts_bot import MCTSBot
 from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 
+cfg = dict(
+    battle_mode='self_play_mode',
+    agent_vs_human=False,
+    bot_action_type=['v0', 'alpha_beta_pruning'],  # {'v0', 'alpha_beta_pruning'}
+    prob_random_agent=0,
+    prob_expert_agent=0,
+    channel_last=True,
+    scale=True,
+)
+
 
 def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
-    cfg = dict(
-        prob_random_agent=0,
-        prob_expert_agent=0,
-        battle_mode='self_play_mode',
-        agent_vs_human=False,
-        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
-    )
     mcts_bot_time_list = []
     bot_action_time_list = []
     winner = []
@@ -27,7 +30,7 @@ def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
         state = env.board
         player = MCTSBot(TicTacToeEnv, cfg, 'a', num_simulations)  # player_index = 0, player = 1
         player_index = 0
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 t1 = time.time()
                 action = env.bot_action()
@@ -48,7 +51,7 @@ def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
             state = env.board
             print(state)
 
-        winner.append(env.have_winner()[1])
+        winner.append(env.get_done_winner()[1])
 
     mcts_bot_mu = np.mean(mcts_bot_time_list)
     mcts_bot_var = np.var(mcts_bot_time_list)
@@ -69,14 +72,8 @@ def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
         )
     )
 
+
 def test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
-    cfg = dict(
-        prob_random_agent=0,
-        prob_expert_agent=0,
-        battle_mode='self_play_mode',
-        agent_vs_human=False,
-        bot_action_type=['v0', 'alpha_beta_pruning'],  # {'v0', 'alpha_beta_pruning'}
-    )
     alphabeta_pruning_time_list = []
     rule_bot_v0_time_list = []
     winner = []
@@ -88,7 +85,7 @@ def test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
         state = env.board
         player = MCTSBot(TicTacToeEnv, cfg, 'a', num_simulations)  # player_index = 0, player = 1
         player_index = 1
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 t1 = time.time()
                 action = env.rule_bot_v0()
@@ -109,10 +106,10 @@ def test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
                 player_index = 0
             env.step(action)
             state = env.board
-            if env.is_game_over()[0]:
+            if env.get_done_reward()[0]:
                 print(state)
 
-        winner.append(env.have_winner()[1])
+        winner.append(env.get_done_winner()[1])
 
     alphabeta_pruning_mu = np.mean(alphabeta_pruning_time_list)
     alphabeta_pruning_var = np.var(alphabeta_pruning_time_list)
@@ -133,14 +130,8 @@ def test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
         )
     )
 
+
 def test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
-    cfg = dict(
-        prob_random_agent=0,
-        prob_expert_agent=0,
-        battle_mode='self_play_mode',
-        agent_vs_human=False,
-        bot_action_type=['v0', 'alpha_beta_pruning'],  # {'v0', 'alpha_beta_pruning'}
-    )
     alphabeta_pruning_time_list = []
     mcts_bot_time_list = []
     winner = []
@@ -152,7 +143,7 @@ def test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
         state = env.board
         player = MCTSBot(TicTacToeEnv, cfg, 'a', num_simulations)  # player_index = 0, player = 1
         player_index = 1
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 t1 = time.time()
                 # action = env.rule_bot_v0()
@@ -173,10 +164,10 @@ def test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
                 player_index = 0
             env.step(action)
             state = env.board
-            if env.is_game_over()[0]:
+            if env.get_done_reward()[0]:
                 print(state)
 
-        winner.append(env.have_winner()[1])
+        winner.append(env.get_done_winner()[1])
 
     alphabeta_pruning_mu = np.mean(alphabeta_pruning_time_list)
     alphabeta_pruning_var = np.var(alphabeta_pruning_time_list)
@@ -197,14 +188,8 @@ def test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
         )
     )
 
+
 def test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
-    cfg = dict(
-        prob_random_agent=0,
-        prob_expert_agent=0,
-        battle_mode='self_play_mode',
-        agent_vs_human=False,
-        bot_action_type=['v0', 'alpha_beta_pruning'],  # {'v0', 'alpha_beta_pruning'}
-    )
     alphabeta_pruning_time_list = []
     rule_bot_v0_time_list = []
     winner = []
@@ -216,7 +201,7 @@ def test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
         state = env.board
         player = MCTSBot(TicTacToeEnv, cfg, 'a', num_simulations)  # player_index = 0, player = 1
         player_index = 0
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 t1 = time.time()
                 action = env.rule_bot_v0()
@@ -237,10 +222,10 @@ def test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
                 player_index = 0
             env.step(action)
             state = env.board
-            if env.is_game_over()[0]:
+            if env.get_done_reward()[0]:
                 print(state)
 
-        winner.append(env.have_winner()[1])
+        winner.append(env.get_done_winner()[1])
 
     alphabeta_pruning_mu = np.mean(alphabeta_pruning_time_list)
     alphabeta_pruning_var = np.var(alphabeta_pruning_time_list)
@@ -261,14 +246,8 @@ def test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
         )
     )
 
+
 def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
-    cfg = dict(
-        prob_random_agent=0,
-        prob_expert_agent=0,
-        battle_mode='self_play_mode',
-        agent_vs_human=False,
-        bot_action_type=['v0', 'alpha_beta_pruning'],  # {'v0', 'alpha_beta_pruning'}
-    )
     alphabeta_pruning_time_list = []
     mcts_bot_time_list = []
     winner = []
@@ -280,7 +259,7 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
         state = env.board
         player = MCTSBot(TicTacToeEnv, cfg, 'a', num_simulations)  # player_index = 0, player = 1
         player_index = 0
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 t1 = time.time()
                 # action = env.mcts_bot()
@@ -301,10 +280,10 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
                 player_index = 0
             env.step(action)
             state = env.board
-            if env.is_game_over()[0]:
+            if env.get_done_reward()[0]:
                 print(state)
 
-        winner.append(env.have_winner()[1])
+        winner.append(env.get_done_winner()[1])
 
     alphabeta_pruning_mu = np.mean(alphabeta_pruning_time_list)
     alphabeta_pruning_var = np.var(alphabeta_pruning_time_list)
@@ -326,26 +305,30 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
     )
 
 
+cfg_gomoku = dict(
+    board_size=5,
+    battle_mode='self_play_mode',
+    bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+    agent_vs_human=False,
+    prob_random_agent=0,
+    channel_last=True,
+    scale=True,
+)
+
+
 def test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
-    cfg = dict(
-        board_size=5,
-        prob_random_agent=0,
-        battle_mode='self_play_mode',
-        agent_vs_human=False,
-        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
-    )
     mcts_bot_time_list = []
     bot_action_time_list = []
     winner = []
 
     for i in range(10):
         print('-' * 10 + str(i) + '-' * 10)
-        env = GomokuEnv(EasyDict(cfg))
+        env = GomokuEnv(EasyDict(cfg_gomoku))
         env.reset()
         state = env.board
-        player = MCTSBot(GomokuEnv, cfg, 'a', num_simulations)  # player_index = 0, player = 1
+        player = MCTSBot(GomokuEnv, cfg_gomoku, 'a', num_simulations)  # player_index = 0, player = 1
         player_index = 0
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 t1 = time.time()
                 action = env.bot_action()
@@ -366,7 +349,7 @@ def test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
             state = env.board
             print(state)
 
-        winner.append(env.have_winner()[1])
+        winner.append(env.get_done_winner()[1])
 
     mcts_bot_mu = np.mean(mcts_bot_time_list)
     mcts_bot_var = np.var(mcts_bot_time_list)
@@ -404,5 +387,4 @@ if __name__ == '__main__':
     # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=100)
     # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=500)
     # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=1000)
-
     # test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=1000)

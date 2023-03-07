@@ -1,5 +1,5 @@
 """
-Adapt Go to BaseGameEnv interface from pettingzoo: https://github.com/Farama-Foundation/PettingZoo
+Adapt the Go environment in PettingZoo (https://github.com/Farama-Foundation/PettingZoo) to the BaseGameEnv interface.
 """
 
 import os
@@ -216,11 +216,13 @@ class GoEnv(BaseGameEnv):
 
     def human_to_action(self):
         """
-        For multiplayer games, ask the user for a legal action
-        and return the corresponding action number.
+        Overview:
+            For multiplayer games, ask the user for a legal action
+            and return the corresponding action number.
         Returns:
             An integer from the action space.
         """
+        # print(self.board)
         while True:
             try:
                 print(f"Current available actions for the player {self.to_play()} are:{self.legal_moves()}")
@@ -317,4 +319,4 @@ class GoEnv(BaseGameEnv):
         pass
 
     def __repr__(self) -> str:
-        return "DI-engine Go Env"
+        return "LightZero Go Env"

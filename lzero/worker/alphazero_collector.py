@@ -175,16 +175,14 @@ class AlphaZeroCollector(ISerialCollector):
                 new_available_env_id = set(obs.keys()).difference(ready_env_id)
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
-                # for debugging
-                # for env_id in ready_env_id:
-                #     print('[collect] env_id = {}'.format(env_id))
-                #     print('board = \n {}'.format(self._env._envs[env_id].board))
                 obs_ = {env_id: obs[env_id] for env_id in ready_env_id}
                 # Policy forward.
                 self._obs_pool.update(obs_)
                 simulation_envs = {}
                 for env_id in ready_env_id:
-                    simulation_envs[env_id] = ENV_REGISTRY.build(self._cfg.env.type, self._env_config)
+                    # create the new simulation env instances from the current collect env using the same env_config.
+                    simulation_envs[env_id] = self._env._env_fn[env_id]()
+
                 policy_output = self._policy.forward(simulation_envs, obs_, temperature)
                 self._policy_output_pool.update(policy_output)
                 # Interact with env.

@@ -169,7 +169,6 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             n_episode = self._default_n_episode
         assert n_episode is not None, "please indicate eval n_episode"
         envstep_count = 0
-        info = {}
         eval_monitor = VectorEvalMonitor(self._env.env_num, n_episode)
         self._env.reset()
         self._policy.reset()
@@ -179,7 +178,9 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                 obs = self._env.ready_obs
                 simulation_envs = {}
                 for env_id in list(obs.keys()):
-                    simulation_envs[env_id] = ENV_REGISTRY.build(self._cfg.env.type, self._env_config)
+                    # create the new simulation env instances from the current evaluate env using the same env_config.
+                    simulation_envs[env_id] = self._env._env_fn[env_id]()
+
                 policy_output = self._policy.forward(simulation_envs, obs)
                 actions = {env_id: output['action'] for env_id, output in policy_output.items()}
                 timesteps = self._env.step(actions)

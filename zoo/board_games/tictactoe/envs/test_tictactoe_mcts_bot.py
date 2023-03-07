@@ -1,25 +1,27 @@
-import sys
-
 from easydict import EasyDict
-sys.path.append('/YOUR/PATH/LightZero')
 from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 from zoo.board_games.mcts_bot import MCTSBot
 
 import pytest
+
+cfg = dict(
+    prob_random_agent=0,
+    prob_expert_agent=0,
+    battle_mode='self_play_mode',
+    agent_vs_human=False,
+    channel_last=True,
+    scale=True,
+    bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+)
 
 
 @pytest.mark.envtest
 class TestTicTacToeBot:
 
     def test_tictactoe_self_play_mode_player0_win(self):
-        # player_0  num_simulation=1000, will win
+        # player_0  num_simulation=1000
         # player_1  num_simulation=1
-        cfg = dict(
-            prob_random_agent=0,
-            prob_expert_agent=0,
-            battle_mode='self_play_mode',
-            agent_vs_human=False,
-        )
+        # player_0 will win in principle
         env = TicTacToeEnv(EasyDict(cfg))
         env.reset()
         state = env.board
@@ -31,7 +33,7 @@ class TestTicTacToeBot:
         print(state)
         print('#' * 15)
         print('\n')
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 action = player_0.get_actions(state, player_index=player_index)
                 player_index = 1
@@ -45,17 +47,12 @@ class TestTicTacToeBot:
             print('#' * 15)
             print(state)
             print('#' * 15)
-        assert env.have_winner()[1] == 1
+        assert env.get_done_winner()[1] == 1
 
     def test_tictactoe_self_play_mode_player1_win(self):
         # player_0  num_simulation=1
-        # player_1  num_simulation=1000, will win
-        cfg = dict(
-            prob_random_agent=0,
-            prob_expert_agent=0,
-            battle_mode='self_play_mode',
-            agent_vs_human=False,
-        )
+        # player_1  num_simulation=1000
+        # player_1 will win in principle
         env = TicTacToeEnv(EasyDict(cfg))
         env.reset()
         state = env.board
@@ -67,7 +64,7 @@ class TestTicTacToeBot:
         print(state)
         print('#' * 15)
         print('\n')
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 action = player_0.get_actions(state, player_index=player_index)
                 player_index = 1
@@ -81,17 +78,12 @@ class TestTicTacToeBot:
             print('#' * 15)
             print(state)
             print('#' * 15)
-        assert env.have_winner()[1] == 2
+        assert env.get_done_winner()[1] == 2
 
     def test_tictactoe_self_play_mode_draw(self):
         # player_0  num_simulation=1000
-        # player_1  num_simulation=1000, will draw
-        cfg = dict(
-            prob_random_agent=0,
-            prob_expert_agent=0,
-            battle_mode='self_play_mode',
-            agent_vs_human=False,
-        )
+        # player_1  num_simulation=1000,
+        # two players will draw in principle
         env = TicTacToeEnv(EasyDict(cfg))
         env.reset()
         state = env.board
@@ -103,7 +95,7 @@ class TestTicTacToeBot:
         print(state)
         print('#' * 15)
         print('\n')
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 action = player_0.get_actions(state, player_index=player_index)
                 player_index = 1
@@ -117,15 +109,9 @@ class TestTicTacToeBot:
             print('#' * 15)
             print(state)
             print('#' * 15)
-        assert env.have_winner()[1] == -1
+        assert env.get_done_winner()[1] == -1
 
     def test_tictactoe_self_play_mode_half_case_1(self):
-        cfg = dict(
-            prob_random_agent=0,
-            prob_expert_agent=0,
-            battle_mode='self_play_mode',
-            agent_vs_human=False,
-        )
         env = TicTacToeEnv(EasyDict(cfg))
         init_state = [[1, 1, 0], [0, 2, 2], [0, 0, 0]]
         player_0 = MCTSBot(TicTacToeEnv, cfg, 'player 1', 1000)  # player_index = 0, player = 1
@@ -139,7 +125,7 @@ class TestTicTacToeBot:
         print(state)
         print('#' * 15)
         print('\n')
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 action = player_0.get_actions(state, player_index=player_index)
                 player_index = 1
@@ -154,16 +140,10 @@ class TestTicTacToeBot:
             print(state)
             print('#' * 15)
             row, col = env.action_to_coord(action)
-        assert env.have_winner()[1] == 1
+        assert env.get_done_winner()[1] == 1
         assert row == 0, col == 2
 
     def test_tictactoe_self_play_mode_half_case_2(self):
-        cfg = dict(
-            prob_random_agent=0,
-            prob_expert_agent=0,
-            battle_mode='self_play_mode',
-            agent_vs_human=False,
-        )
         env = TicTacToeEnv(EasyDict(cfg))
         init_state = [[1, 0, 1], [0, 0, 2], [2, 0, 1]]
         player_0 = MCTSBot(TicTacToeEnv, cfg, 'player 1', 1000)  # player_index = 0, player = 1
@@ -177,7 +157,7 @@ class TestTicTacToeBot:
         print(state)
         print('#' * 15)
         print('\n')
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 action = player_0.get_actions(state, player_index=player_index)
                 player_index = 1
@@ -191,4 +171,4 @@ class TestTicTacToeBot:
             print('#' * 15)
             print(state)
             print('#' * 15)
-        assert env.have_winner()[1] == 1
+        assert env.get_done_winner()[1] == 1

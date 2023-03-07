@@ -128,7 +128,7 @@ class MCTS(object):
             action, node = self._select_child(node)
             simulate_env.step(action)
 
-        end, winner = simulate_env.have_winner()
+        end, winner = simulate_env.get_done_winner()
 
         # the leaf_value is calculated from the perspective of player ``simulate_env.current_player``.
         if not end:

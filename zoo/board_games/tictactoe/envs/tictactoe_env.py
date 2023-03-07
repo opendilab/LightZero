@@ -18,14 +18,15 @@ from zoo.board_games.base_game_env import BaseGameEnv
 
 @ENV_REGISTRY.register('tictactoe')
 class TicTacToeEnv(BaseGameEnv):
+
     config = dict(
-        channel_last=True,
-        scale=True,
+        battle_mode='play_with_bot_mode',
+        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+        agent_vs_human=False,
         prob_random_agent=0,
         prob_expert_agent=0,
-        battle_mode='play_with_bot_mode',
-        agent_vs_human=False,
-        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+        channel_last=True,
+        scale=True,
     )
 
     @classmethod
@@ -52,32 +53,9 @@ class TicTacToeEnv(BaseGameEnv):
         if 'alpha_beta_pruning' in self.bot_action_type:
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 
-    @property
-    def current_player(self):
-        return self._current_player
-
-    @property
-    def current_player_index(self):
-        """
-        current_player_index = 0, current_player = 1
-        current_player_index = 1, current_player = 2
-        """
-        return 0 if self._current_player == 1 else 1
-
-    @property
-    def to_play(self):
-        return self.players[0] if self.current_player == self.players[1] else self.players[1]
-
-    @property
-    def current_player_to_compute_bot_action(self):
-        """
-        Overview: to compute expert action easily.
-        """
-        return -1 if self.current_player == 1 else 1
-
     def reset(self, start_player_index=0, init_state=None):
         """
-        Overview: 
+        Overview:
             Env reset and custom state start by init_state
         Arguments:
             start_player_index: players = [1,2], player_index = [0,1]
@@ -119,7 +97,8 @@ class TicTacToeEnv(BaseGameEnv):
 
     def reset_v2(self, start_player_index=0, init_state=None):
         """
-        for alpha-beta pruning bot
+        Overview:
+            only used in alpha-beta pruning bot.
         """
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
@@ -201,7 +180,7 @@ class TicTacToeEnv(BaseGameEnv):
             self.board[row, col] = self.current_player
 
         # Check whether the game is ended or not and give the winner
-        done, winner = self.have_winner()
+        done, winner = self.get_done_winner()
 
         reward = np.array(float(winner == self.current_player)).astype(np.float32)
         info = {'next player to play': self.to_play}
@@ -224,20 +203,6 @@ class TicTacToeEnv(BaseGameEnv):
             'to_play': self.current_player
         }
         return BaseEnvTimestep(obs, reward, done, info)
-
-    def have_winner(self):
-        have_winner, winner = self._pre_have_winner()
-        if have_winner:
-            done, winner = True, winner
-        elif len(self.legal_actions) == 0:
-            # the agent don't have legal_actions to move, so episode is done
-            # winner=-1 indicates draw
-            done, winner = True, -1
-        else:
-            # episode is not done
-            done, winner = False, -1
-
-        return done, winner
 
     def current_state(self):
         """
@@ -267,21 +232,56 @@ class TicTacToeEnv(BaseGameEnv):
             # (C, W, H)
             return raw_obs, scale_obs
 
-    def coord_to_action(self, i, j):
+    def get_done_winner(self):
         """
         Overview:
-            convert coordinate i, j to action index a in [0, board_size**2)
+             Check if the game is over and who the winner is. Return 'done' and 'winner'.
+        Returns:
+            - outputs (:obj:`Tuple`): Tuple containing 'done' and 'winner',
+                - if player 1 win,     'done' = True, 'winner' = 1
+                - if player 2 win,     'done' = True, 'winner' = 2
+                - if draw,             'done' = True, 'winner' = -1
+                - if game is not over, 'done' = False, 'winner' = -1
         """
-        return i * self.board_size + j
+        have_winner, winner = self._get_have_winner_and_winner()
+        if have_winner:
+            done, winner = True, winner
+        elif len(self.legal_actions) == 0:
+            # the agent don't have legal_actions to move, so the episode is done
+            # winner = -1 indicates draw.
+            done, winner = True, -1
+        else:
+            # episode is not done.
+            done, winner = False, -1
 
-    def action_to_coord(self, a):
+        return done, winner
+
+    def get_done_reward(self):
         """
         Overview:
-            convert action index a in [0, board_size**2) to coordinate (i, j)
+             Check if the game is over and what is the reward in the perspective of player 1.
+             Return 'done' and 'reward'.
+        Returns:
+            - outputs (:obj:`Tuple`): Tuple containing 'done' and 'reward',
+                - if player 1 win,     'done' = True, 'reward' = 1
+                - if player 2 win,     'done' = True, 'reward' = -1
+                - if draw,             'done' = True, 'reward' = 0
+                - if game is not over, 'done' = False,'reward' = None
         """
-        return a // self.board_size, a % self.board_size
+        done, winner = self.get_done_winner()
+        if winner == 1:
+            reward = 1
+        elif winner == 2:
+            reward = -1
+        elif winner == -1 and done:
+            reward = 0
+        elif winner == -1 and not done:
+            # episode is not done
+            reward = None
+        return done, reward
 
-    def _pre_have_winner(self):
+    def _get_have_winner_and_winner(self):
+        # has_legal_actions i.e. not done
         # Horizontal and vertical checks
         for i in range(self.board_size):
             if len(set(self.board[i, :])) == 1 and (self.board[i, 0] != 0):
@@ -295,7 +295,9 @@ class TicTacToeEnv(BaseGameEnv):
         if self.board[2, 0] == self.board[1, 1] == self.board[0, 2] != 0:
             return True, self.board[2, 0]
 
-        return False, -1
+        winner = -1
+        have_winner = False
+        return have_winner, winner
 
     @property
     def legal_actions(self):
@@ -389,6 +391,29 @@ class TicTacToeEnv(BaseGameEnv):
 
         return action
 
+    @property
+    def current_player(self):
+        return self._current_player
+
+    @property
+    def current_player_index(self):
+        """
+        current_player_index = 0, current_player = 1
+        current_player_index = 1, current_player = 2
+        """
+        return 0 if self._current_player == 1 else 1
+
+    @property
+    def to_play(self):
+        return self.players[0] if self.current_player == self.players[1] else self.players[1]
+
+    @property
+    def current_player_to_compute_bot_action(self):
+        """
+        Overview: to compute expert action easily.
+        """
+        return -1 if self.current_player == 1 else 1
+
     def human_to_action(self):
         """
         Overview:
@@ -423,8 +448,19 @@ class TicTacToeEnv(BaseGameEnv):
                 print("Wrong input, try again")
         return choice
 
-    def render(self, mode="human"):
-        print(self.board)
+    def coord_to_action(self, i, j):
+        """
+        Overview:
+            convert coordinate i, j to action index a in [0, board_size**2)
+        """
+        return i * self.board_size + j
+
+    def action_to_coord(self, a):
+        """
+        Overview:
+            convert action index a in [0, board_size**2) to coordinate (i, j)
+        """
+        return a // self.board_size, a % self.board_size
 
     def action_to_string(self, action_number):
         """
@@ -439,38 +475,12 @@ class TicTacToeEnv(BaseGameEnv):
         col = action_number % self.board_size + 1
         return f"Play row {row}, column {col}"
 
-    def is_game_over(self):
-        """
-        Overview:
-            To judge game whether over, and get reward
-        Returns:
-            [game_over, reward]
-            if winner = 1  reward = 1
-            if winner = 2  reward = -1
-            if winner = -1 reward = 0
-        """
-        # Check whether the game is ended or not and give the winner
-        # print('next_to_play={}'.format(self.current_player))
-        have_winner, winner = self._pre_have_winner()
-        # print('winner={}'.format(winner))
-        reward = {1: 1, 2: -1, -1: 0}
-        if have_winner:
-            return True, reward[winner]
-        elif len(self.legal_actions) == 0:
-            # the agent don't have legal_actions to move, so episode is done
-            # winner=-1 indicates draw
-            return True, reward[winner]
-        else:
-            # episode is not done
-            return False, None
-
     def simulate_action(self, action):
         """
         Overview:
-            simulate action and get next_simulator_env
+            execute action and get next_simulator_env. used in AlphaZero.
         Returns:
-            Returns TicTacToeEnv
-        -------
+            Returns TicTacToeEnv instance.
         """
         if action not in self.legal_actions:
             raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
@@ -488,10 +498,10 @@ class TicTacToeEnv(BaseGameEnv):
     def simulate_action_v2(self, board, start_player_index, action):
         """
         Overview:
-            simulate action and get next_simulator_env
+            execute action from board and get new_board, new_legal_actions. used in AlphaZero.
         Returns:
-            Returns TicTacToeEnv
-        -------
+            - new_board (:obj:`np.array`):
+            - new_legal_actions (:obj:`np.array`):
         """
         self.reset(start_player_index, init_state=board)  # index
         if action not in self.legal_actions:
@@ -501,6 +511,17 @@ class TicTacToeEnv(BaseGameEnv):
         new_legal_actions = copy.deepcopy(self.legal_actions)
         new_board = copy.deepcopy(self.board)
         return new_board, new_legal_actions
+
+    def clone(self):
+        return copy.deepcopy(self)
+
+    def seed(self, seed: int, dynamic_seed: bool = True) -> None:
+        self._seed = seed
+        self._dynamic_seed = dynamic_seed
+        np.random.seed(self._seed)
+
+    def render(self, mode="human"):
+        print(self.board)
 
     @property
     def observation_space(self) -> gym.spaces.Space:
@@ -513,14 +534,6 @@ class TicTacToeEnv(BaseGameEnv):
     @property
     def reward_space(self) -> gym.spaces.Space:
         return self._reward_space
-
-    def seed(self, seed: int, dynamic_seed: bool = True) -> None:
-        self._seed = seed
-        self._dynamic_seed = dynamic_seed
-        np.random.seed(self._seed)
-
-    def close(self) -> None:
-        pass
 
     @current_player.setter
     def current_player(self, value):
@@ -545,3 +558,6 @@ class TicTacToeEnv(BaseGameEnv):
 
     def __repr__(self) -> str:
         return "LightZero TicTacToe Env"
+
+    def close(self) -> None:
+        pass

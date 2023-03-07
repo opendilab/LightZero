@@ -20,6 +20,7 @@ from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_c
 
 @ENV_REGISTRY.register('gomoku')
 class GomokuEnv(BaseGameEnv):
+
     config = dict(
         prob_random_agent=0,
         board_size=6,
@@ -59,38 +60,6 @@ class GomokuEnv(BaseGameEnv):
         if self.bot_action_type == 'alpha_beta_pruning':
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 
-    @property
-    def current_player(self):
-        return self._current_player
-
-    @property
-    def current_player_index(self):
-        """
-        current_player_index = 0, current_player = 1
-        current_player_index = 1, current_player = 2
-        """
-        return 0 if self._current_player == 1 else 1
-
-    @property
-    def to_play(self):
-        return self.players[0] if self.current_player == self.players[1] else self.players[1]
-
-    @property
-    def current_player_to_compute_bot_action(self):
-        """
-        Overview: to compute expert action easily.
-        """
-        return -1 if self.current_player == 1 else 1
-
-    @property
-    def legal_actions(self):
-        legal_actions = []
-        for i in range(self.board_size):
-            for j in range(self.board_size):
-                if self.board[i][j] == 0:
-                    legal_actions.append(self.coord_to_action(i, j))
-        return legal_actions
-
     def reset(self, start_player_index=0, init_state=None):
         self._observation_space = gym.spaces.Box(
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.int32
@@ -128,7 +97,8 @@ class GomokuEnv(BaseGameEnv):
 
     def reset_v2(self, start_player_index=0, init_state=None):
         """
-        for alpha-beta pruning bot
+        Overview:
+            only used in alpha-beta pruning bot.
         """
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
@@ -218,7 +188,7 @@ class GomokuEnv(BaseGameEnv):
             self.board[row, col] = self.current_player
 
         # Check whether the game is ended or not and give the winner
-        done, winner = self.have_winner()
+        done, winner = self.get_done_winner()
 
         reward = np.array(float(winner == self.current_player)).astype(np.float32)
         info = {'next player to play': self.to_play}
@@ -264,28 +234,25 @@ class GomokuEnv(BaseGameEnv):
 
         if self.channel_last:
             # move channel dim to last axis
-            # (3,6,6) -> (6,6,3)
-            # return np.moveaxis(raw_obs, 0, 2)
+            # (C, W, H) -> (W, H, C)
+            # e.g. (3,6,6) -> (6,6,3)
             return np.transpose(raw_obs, [1, 2, 0]), np.transpose(scale_obs, [1, 2, 0])
         else:
-            # (3,6,6)
+            # (C, W, H) e.g. (3,6,6)
             return raw_obs, scale_obs
 
-    def coord_to_action(self, i, j):
+    def get_done_winner(self):
         """
         Overview:
-            convert coordinate i, j to action index a in [0, board_size**2)
+             Check if the game is over and who the winner is. Return 'done' and 'winner'.
+        Returns:
+            - outputs (:obj:`Tuple`): Tuple containing 'done' and 'winner',
+                - if player 1 win,     'done' = True, 'winner' = 1
+                - if player 2 win,     'done' = True, 'winner' = 2
+                - if draw,             'done' = True, 'winner' = -1
+                - if game is not over, 'done' = False, 'winner' = -1
         """
-        return i * self.board_size + j
-
-    def action_to_coord(self, a):
-        """
-        Overview:
-            convert action index a in [0, board_size**2) to coordinate (i, j)
-        """
-        return a // self.board_size, a % self.board_size
-
-    def have_winner(self):
+        # has_legal_actions i.e. not done
         has_legal_actions = False
         directions = ((1, -1), (1, 0), (1, 1), (0, 1))
         for i in range(self.board_size):
@@ -314,10 +281,38 @@ class GomokuEnv(BaseGameEnv):
         # if the players don't have legal actions, return done=True
         return not has_legal_actions, -1
 
-    def seed(self, seed: int, dynamic_seed: bool = True) -> None:
-        self._seed = seed
-        self._dynamic_seed = dynamic_seed
-        np.random.seed(self._seed)
+    def get_done_reward(self):
+        """
+        Overview:
+             Check if the game is over and what is the reward in the perspective of player 1.
+             Return 'done' and 'reward'.
+        Returns:
+            - outputs (:obj:`Tuple`): Tuple containing 'done' and 'reward',
+                - if player 1 win,     'done' = True, 'reward' = 1
+                - if player 2 win,     'done' = True, 'reward' = -1
+                - if draw,             'done' = True, 'reward' = 0
+                - if game is not over, 'done' = False,'reward' = None
+        """
+        done, winner = self.get_done_winner()
+        if winner == 1:
+            reward = 1
+        elif winner == 2:
+            reward = -1
+        elif winner == -1 and done:
+            reward = 0
+        elif winner == -1 and not done:
+            # episode is not done
+            reward = None
+        return done, reward
+
+    @property
+    def legal_actions(self):
+        legal_actions = []
+        for i in range(self.board_size):
+            for j in range(self.board_size):
+                if self.board[i][j] == 0:
+                    legal_actions.append(self.coord_to_action(i, j))
+        return legal_actions
 
     def random_action(self):
         action_list = self.legal_actions
@@ -621,6 +616,29 @@ class GomokuEnv(BaseGameEnv):
 
         return action
 
+    @property
+    def current_player(self):
+        return self._current_player
+
+    @property
+    def current_player_index(self):
+        """
+        current_player_index = 0, current_player = 1
+        current_player_index = 1, current_player = 2
+        """
+        return 0 if self._current_player == 1 else 1
+
+    @property
+    def to_play(self):
+        return self.players[0] if self.current_player == self.players[1] else self.players[1]
+
+    @property
+    def current_player_to_compute_bot_action(self):
+        """
+        Overview: to compute expert action easily.
+        """
+        return -1 if self.current_player == 1 else 1
+
     def human_to_action(self):
         """
         Overview:
@@ -653,6 +671,78 @@ class GomokuEnv(BaseGameEnv):
                 print("Wrong input, try again")
         return choice
 
+    def coord_to_action(self, i, j):
+        """
+        Overview:
+            convert coordinate i, j to action index a in [0, board_size**2)
+        """
+        return i * self.board_size + j
+
+    def action_to_coord(self, a):
+        """
+        Overview:
+            convert action index a in [0, board_size**2) to coordinate (i, j)
+        """
+        return a // self.board_size, a % self.board_size
+
+    def action_to_string(self, action_number):
+        """
+        Overview:
+            Convert an action number to a string representing the action.
+        Arguments:
+            - action_number: an integer from the action space.
+        Returns:
+            - String representing the action.
+        """
+        row = action_number // self.board_size + 1
+        col = action_number % self.board_size + 1
+        return f"Play row {row}, column {col}"
+
+    def simulate_action(self, action):
+        """
+        Overview:
+            execute action and get next_simulator_env. used in AlphaZero.
+        Returns:
+            Returns Gomoku instance.
+        """
+        if action not in self.legal_actions:
+            raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
+        new_board = copy.deepcopy(self.board)
+        row, col = self.action_to_coord(action)
+        new_board[row, col] = self.current_player
+        if self.start_player_index == 0:
+            start_player_index = 1  # self.players = [1, 2], start_player = 2, start_player_index = 1
+        else:
+            start_player_index = 0  # self.players = [1, 2], start_player = 1, start_player_index = 0
+        next_simulator_env = copy.deepcopy(self)
+        next_simulator_env.reset(start_player_index, init_state=new_board)  # index
+        return next_simulator_env
+
+    def simulate_action_v2(self, board, start_player_index, action):
+        """
+        Overview:
+            execute action from board and get new_board, new_legal_actions. used in AlphaZero.
+        Returns:
+            - new_board (:obj:`np.array`):
+            - new_legal_actions (:obj:`np.array`):
+        """
+        self.reset(start_player_index, init_state=board)
+        if action not in self.legal_actions:
+            raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
+        row, col = self.action_to_coord(action)
+        self.board[row, col] = self.current_player
+        new_legal_actions = copy.deepcopy(self.legal_actions)
+        new_board = copy.deepcopy(self.board)
+        return new_board, new_legal_actions
+
+    def clone(self):
+        return copy.deepcopy(self)
+
+    def seed(self, seed: int, dynamic_seed: bool = True) -> None:
+        self._seed = seed
+        self._dynamic_seed = dynamic_seed
+        np.random.seed(self._seed)
+
     def render(self, mode="human"):
         marker = "   "
         for i in range(self.board_size):
@@ -676,82 +766,6 @@ class GomokuEnv(BaseGameEnv):
                     print("O", end="  ")
             print()
 
-    def action_to_string(self, action_number):
-        """
-        Overview:
-            Convert an action number to a string representing the action.
-        Arguments:
-            - action_number: an integer from the action space.
-        Returns:
-            - String representing the action.
-        """
-        row = action_number // self.board_size + 1
-        col = action_number % self.board_size + 1
-        return f"Play row {row}, column {col}"
-
-    def is_game_over(self):
-        """
-        Overview:
-            To judge game whether over, and get reward
-        Returns:
-            [game_over, reward]
-            if winner = 1  reward = 1
-            if winner = 2  reward = -1
-            if winner = -1 reward = 0
-        """
-        # Check whether the game is ended or not and give the winner
-        # print('next_to_play={}'.format(self.current_player))
-        have_winner, winner = self.have_winner()
-        # print('winner={}'.format(winner))
-        reward = {1: 1, 2: -1, -1: 0}
-        if have_winner:
-            return True, reward[winner]
-        elif len(self.legal_actions) == 0:
-            # the agent don't have legal_actions to move, so episode is done
-            # winner=-1 indicates draw
-            return True, reward[winner]
-        else:
-            # episode is not done
-            return False, None
-
-    def simulate_action(self, action):
-        """
-        Overview:
-            simulate action and get next_simulator_env
-        Returns:
-            Returns TicTacToeEnv
-        -------
-        """
-        if action not in self.legal_actions:
-            raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
-        new_board = copy.deepcopy(self.board)
-        row, col = self.action_to_coord(action)
-        new_board[row, col] = self.current_player
-        if self.start_player_index == 0:
-            start_player_index = 1  # self.players = [1, 2], start_player = 2, start_player_index = 1
-        else:
-            start_player_index = 0  # self.players = [1, 2], start_player = 1, start_player_index = 0
-        next_simulator_env = copy.deepcopy(self)
-        next_simulator_env.reset(start_player_index, init_state=new_board)  # index
-        return next_simulator_env
-
-    def simulate_action_v2(self, board, start_player_index, action):
-        """
-        Overview:
-            simulate action from board and get new_board, new_legal_actions
-        Returns:
-            Returns new_board, new_legal_actions
-        -------
-        """
-        self.reset(start_player_index, init_state=board)
-        if action not in self.legal_actions:
-            raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
-        row, col = self.action_to_coord(action)
-        self.board[row, col] = self.current_player
-        new_legal_actions = copy.deepcopy(self.legal_actions)
-        new_board = copy.deepcopy(self.board)
-        return new_board, new_legal_actions
-
     @property
     def observation_space(self) -> gym.spaces.Space:
         return self._observation_space
@@ -763,9 +777,6 @@ class GomokuEnv(BaseGameEnv):
     @property
     def reward_space(self) -> gym.spaces.Space:
         return self._reward_space
-
-    def close(self) -> None:
-        pass
 
     @current_player.setter
     def current_player(self, value):
@@ -790,3 +801,6 @@ class GomokuEnv(BaseGameEnv):
 
     def __repr__(self) -> str:
         return "LightZero Gomoku Env"
+
+    def close(self) -> None:
+        pass

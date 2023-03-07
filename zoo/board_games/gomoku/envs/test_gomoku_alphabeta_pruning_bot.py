@@ -32,7 +32,7 @@ class TestGomokuBot:
         print('-' * 15)
         print(state)
 
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 start = time.time()
                 action = player_0.get_best_action(state, player_index=player_index)
@@ -48,7 +48,7 @@ class TestGomokuBot:
             print('-' * 15)
             print(state)
 
-        assert env.have_winner()[0] is False, env.have_winner()[1] == -1
+        assert env.get_done_winner()[0] is False, env.get_done_winner()[1] == -1
 
     def test_gomoku_self_play_mode_case_1(self):
         env = GomokuEnv(EasyDict(cfg))
@@ -67,7 +67,7 @@ class TestGomokuBot:
         print('-' * 15)
         print(state)
 
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 start = time.time()
                 action = player_0.get_best_action(state, player_index=player_index)
@@ -85,7 +85,7 @@ class TestGomokuBot:
         row, col = env.action_to_coord(action)
 
         # the player 2 win when place piece in (0, 4)
-        assert env.have_winner()[1] == 2
+        assert env.get_done_winner()[1] == 2
         assert row == 0, col == 4
 
     def test_gomoku_self_play_mode_case_2(self):
@@ -105,7 +105,7 @@ class TestGomokuBot:
         print('-' * 15)
         print(state)
 
-        while not env.is_game_over()[0]:
+        while not env.get_done_reward()[0]:
             if player_index == 0:
                 start = time.time()
                 action = player_0.get_best_action(state, player_index=player_index)
@@ -123,5 +123,5 @@ class TestGomokuBot:
         row, col = env.action_to_coord(action)
 
         # the player 1 win when place piece in (4, 4)
-        assert env.have_winner()[1] == 1
+        assert env.get_done_winner()[1] == 1
         assert row == 4, col == 4
