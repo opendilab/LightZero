@@ -14,41 +14,29 @@ from ding.worker import create_serial_collector
 from tensorboardX import SummaryWriter
 
 
-def train_muzero_eval(
-        input_cfg: Union[str, Tuple[dict, dict]],
+def eval_muzero(
+        input_cfg: Tuple[dict, dict],
         seed: int = 0,
-        env_setting: Optional[List[Any]] = None,
         model: Optional[torch.nn.Module] = None,
         model_path: Optional[str] = None,
         num_episodes_each_seed: int = 1,
         print_seed_details: int = False,
-        max_train_iter: Optional[int] = int(1e10),
-        max_env_step: Optional[int] = int(1e10),
 ) -> 'Policy':  # noqa
     """
     Overview:
-        Serial pipeline eval entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
+        The eval entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
     Arguments:
-        - input_cfg (:obj:`Union[str, Tuple[dict, dict]]`): Config in dict type. \
-            ``str`` type means config file path. \
+        - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
             ``Tuple[dict, dict]`` type means [user_config, create_cfg].
         - seed (:obj:`int`): Random seed.
-        - env_setting (:obj:`Optional[List[Any]]`): A list with 3 elements: \
-            ``BaseEnv`` subclass, collector env config, and evaluator env config.
         - model (:obj:`Optional[torch.nn.Module]`): Instance of torch.nn.Module.
         - model_path (:obj:`Optional[str]`): The pretrained model path, which should
             point to the ckpt file of the pretrained model, and an absolute path is recommended.
             In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
-        - max_train_iter (:obj:`Optional[int]`): Maximum policy update iterations in training.
-        - max_env_step (:obj:`Optional[int]`): Maximum collected environment interaction steps.
     Returns:
         - policy (:obj:`Policy`): Converged policy.
     """
-    if isinstance(input_cfg, str):
-        cfg, create_cfg = read_config(input_cfg)
-    else:
-        cfg, create_cfg = input_cfg
-
+    cfg, create_cfg = input_cfg
     assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero'], \
         "LightZero noow only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero'"
 
@@ -62,13 +50,9 @@ def train_muzero_eval(
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
         from lzero.worker import SampledEfficientZeroEvaluator as BaseSerialEvaluator
 
-    env_fn = None if env_setting is None else env_setting[0]
-    cfg = compile_config(cfg, seed=seed, env=env_fn, auto=True, create_cfg=create_cfg, save_cfg=True)
+    cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
     # Create main components: env, policy
-    if env_setting is None:
-        env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
-    else:
-        env_fn, collector_env_cfg, evaluator_env_cfg = env_setting
+    env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
     collector_env.seed(cfg.seed)

@@ -63,7 +63,7 @@ class EfficientZeroPolicy(Policy):
             update_per_collect=100,
             # (int) How many samples in a training batch
             batch_size=256,
-            lr_manually=True,
+            lr_piecewise_constant_decay=True,
             optim_type='SGD',
             learning_rate=0.2,  # init lr for manually decay schedule
             # optim_type='Adam',
@@ -183,6 +183,13 @@ class EfficientZeroPolicy(Policy):
                 weight_decay=self._cfg.learn.weight_decay,
             )
 
+        if self._cfg.learn.lr_piecewise_constant_decay:
+            from torch.optim.lr_scheduler import LambdaLR
+            max_step = self._cfg.threshold_training_steps_for_final_lr
+            # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
+            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)
+            self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
+
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
         self._target_model = model_wrap(
@@ -206,7 +213,6 @@ class EfficientZeroPolicy(Policy):
         self.inverse_scalar_transform_handle = InverseScalarTransform(
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
-        self.collect_mcts_temperature = 1
 
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
         self._learn_model.train()
@@ -420,6 +426,8 @@ class EfficientZeroPolicy(Policy):
             self._learn_model.parameters(), self._cfg.learn.grad_clip_value
         )
         self._optimizer.step()
+        if self._cfg.learn.lr_piecewise_constant_decay is True:
+            self.lr_scheduler.step()
 
         # ==============================================================
         # the core target model update step.
@@ -516,6 +524,7 @@ class EfficientZeroPolicy(Policy):
             self._mcts_collect = MCTS_ctree(self._cfg)
         else:
             self._mcts_collect = MCTS_ptree(self._cfg)
+        self.collect_mcts_temperature = 1
 
     def _forward_collect(
         self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None, ready_env_id=None

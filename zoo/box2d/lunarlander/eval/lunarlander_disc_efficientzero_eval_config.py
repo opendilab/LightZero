@@ -85,7 +85,7 @@ lunarlander_disc_efficientzero_config = dict(
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
-            lr_manually=True,
+            lr_piecewise_constant_decay=True,
             optim_type='SGD',
             learning_rate=0.2,  # init lr for manually decay schedule
             # Frequency of target network update.
@@ -127,7 +127,7 @@ lunarlander_disc_efficientzero_config = dict(
 
         ## learn
         num_simulations=num_simulations,
-        lr_manually=True,
+        lr_piecewise_constant_decay=True,
         td_steps=5,
         num_unroll_steps=5,
         lstm_horizon_len=5,
@@ -186,5 +186,5 @@ lunarlander_disc_efficientzero_create_config = EasyDict(lunarlander_disc_efficie
 create_config = lunarlander_disc_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_eval
-    train_muzero_eval([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import eval_muzero
+    eval_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

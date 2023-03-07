@@ -80,7 +80,7 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
-            lr_manually=True,
+            lr_piecewise_constant_decay=True,
             optim_type='SGD',
             learning_rate=0.2,  # init lr for manually decay schedule
             policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}

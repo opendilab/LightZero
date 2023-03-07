@@ -68,8 +68,8 @@ game_config = EasyDict(
         revisit_policy_search_rate=0.99,
 
         # TODO(pu): why not use adam?
-        # lr_manually=True,
-        lr_manually=False,  # use fixed lr
+        # lr_piecewise_constant_decay=True,
+        lr_piecewise_constant_decay=False,  # use fixed lr
 
         # use_priority=False,
         # use_max_priority_for_new_data=True,

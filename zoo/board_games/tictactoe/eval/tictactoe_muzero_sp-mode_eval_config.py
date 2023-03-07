@@ -82,10 +82,10 @@ tictactoe_muzero_config = dict(
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
-            # lr_manually=True,
+            # lr_piecewise_constant_decay=True,
             # optim_type='SGD',
             # learning_rate=0.2,  # init lr for manually decay schedule
-            lr_manually=False,
+            lr_piecewise_constant_decay=False,
             optim_type='Adam',
             learning_rate=0.001,  # lr for Adam optimizer
             # Frequency of target network update.
@@ -183,7 +183,7 @@ tictactoe_muzero_create_config = EasyDict(tictactoe_muzero_create_config)
 create_config = tictactoe_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_eval
+    from lzero.entry import eval_muzero
     import numpy as np
     test_seeds = 10
     test_episodes_each_seed = 2
@@ -191,7 +191,7 @@ if __name__ == "__main__":
     reward_all_seeds = []
     reward_mean_all_seeds = []
     for seed in range(test_seeds):
-        reward_mean, reward_lst = train_muzero_eval(
+        reward_mean, reward_lst = eval_muzero(
             [main_config, create_config], seed=seed, test_episodes=test_episodes_each_seed, max_env_step=int(1e5)
         )
         reward_mean_all_seeds.append(reward_mean)

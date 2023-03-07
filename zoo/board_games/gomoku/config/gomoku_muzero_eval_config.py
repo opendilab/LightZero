@@ -83,7 +83,7 @@ gomoku_muzero_config = dict(
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
-            lr_manually=False,
+            lr_piecewise_constant_decay=False,
             optim_type='Adam',
             learning_rate=0.003,  # lr for Adam optimizer
         ),
@@ -126,7 +126,7 @@ gomoku_muzero_create_config = EasyDict(gomoku_muzero_create_config)
 create_config = gomoku_muzero_create_config
 
 if __name__ == '__main__':
-    from lzero.entry import train_muzero_eval
+    from lzero.entry import eval_muzero
     import numpy as np
 
     returns_mean_seeds = []
@@ -135,7 +135,7 @@ if __name__ == '__main__':
     num_episodes_each_seed = 1
     total_test_episodes = num_episodes_each_seed * len(seeds)
     for seed in seeds:
-        returns_mean, returns = train_muzero_eval([main_config, create_config], seed=seed,
+        returns_mean, returns = eval_muzero([main_config, create_config], seed=seed,
                                                             num_episodes_each_seed=num_episodes_each_seed,
                                                             print_seed_details=True, max_env_step=int(1e5))
         returns_mean_seeds.append(returns_mean)

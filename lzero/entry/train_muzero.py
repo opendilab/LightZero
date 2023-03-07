@@ -18,9 +18,8 @@ from lzero.mcts import visit_count_temperature
 
 
 def train_muzero(
-        input_cfg: Union[str, Tuple[dict, dict]],
+        input_cfg: Tuple[dict, dict],
         seed: int = 0,
-        env_setting: Optional[List[Any]] = None,
         model: Optional[torch.nn.Module] = None,
         model_path: Optional[str] = None,
         max_train_iter: Optional[int] = int(1e10),
@@ -30,12 +29,9 @@ def train_muzero(
     Overview:
         The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
     Arguments:
-        - input_cfg (:obj:`Union[str, Tuple[dict, dict]]`): Config in dict type. \
-            ``str`` type means config file path. \
+        - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
             ``Tuple[dict, dict]`` type means [user_config, create_cfg].
         - seed (:obj:`int`): Random seed.
-        - env_setting (:obj:`Optional[List[Any]]`): A list with 3 elements: \
-            ``BaseEnv`` subclass, collector env config, and evaluator env config.
         - model (:obj:`Optional[torch.nn.Module]`): Instance of torch.nn.Module.
         - model_path (:obj:`Optional[str]`): The pretrained model path, which should
             point to the ckpt file of the pretrained model, and an absolute path is recommended.
@@ -45,11 +41,8 @@ def train_muzero(
     Returns:
         - policy (:obj:`Policy`): Converged policy.
     """
-    if isinstance(input_cfg, str):
-        cfg, create_cfg = read_config(input_cfg)
-    else:
-        cfg, create_cfg = input_cfg
 
+    cfg, create_cfg = input_cfg
     assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero'], \
         "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero'"
 
@@ -63,13 +56,10 @@ def train_muzero(
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
         from lzero.worker import SampledEfficientZeroEvaluator as BaseSerialEvaluator
 
-    env_fn = None if env_setting is None else env_setting[0]
-    cfg = compile_config(cfg, seed=seed, env=env_fn, auto=True, create_cfg=create_cfg, save_cfg=True)
+    cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
     # Create main components: env, policy
-    if env_setting is None:
-        env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
-    else:
-        env_fn, collector_env_cfg, evaluator_env_cfg = env_setting
+    env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
+
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
     collector_env.seed(cfg.seed)
@@ -93,6 +83,7 @@ def train_muzero(
     # MCTS+RL algorithms related core code
     # ==============================================================
     game_config = cfg.policy
+    batch_size = game_config.learn.batch_size
     # specific game buffer for MCTS+RL algorithms
     replay_buffer = GameBuffer(game_config)
     collector = create_serial_collector(
@@ -156,12 +147,12 @@ def train_muzero(
         # Learn policy from collected data.
         for i in range(cfg.policy.learn.update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
-            if replay_buffer.get_num_of_transitions() > learner.policy.get_attribute('batch_size'):
-                train_data = replay_buffer.sample_train_data(learner.policy.get_attribute('batch_size'), policy)
+            if replay_buffer.get_num_of_transitions() > batch_size:
+                train_data = replay_buffer.sample_train_data(batch_size, policy)
             else:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                    f'batch_size: {replay_buffer.get_batch_size()},'
+                    f'batch_size: {batch_size},'
                     f'current buffer statistics is: '
                     f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
                     f'num of game blocks: {replay_buffer.get_num_of_game_blocks()}, '
@@ -175,15 +166,6 @@ def train_muzero(
 
             if cfg.policy.use_priority:
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
-
-            if game_config.learn.lr_manually:
-                # learning rate decay manually like MuZero paper.
-                if learner.train_iter < 0.5 * game_config.threshold_training_steps_for_final_lr:
-                    policy._optimizer.param_groups[0]['lr'] = 0.2
-                elif learner.train_iter < 0.75 * game_config.threshold_training_steps_for_final_lr:
-                    policy._optimizer.param_groups[0]['lr'] = 0.02
-                else:
-                    policy._optimizer.param_groups[0]['lr'] = 0.002
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break

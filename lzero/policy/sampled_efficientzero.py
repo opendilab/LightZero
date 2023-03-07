@@ -87,16 +87,16 @@ class SampledEfficientZeroPolicy(Policy):
             grad_clip_value=10,
 
             # optim_type='Adam',
-            # lr_manually=False,
+            # lr_piecewise_constant_decay=False,
             # cos_lr_scheduler=True,
             # learning_rate=0.0001,  # init lr for Adam optimizer coupled with cos_lr_scheduler
 
-            # lr_manually=False,
+            # lr_piecewise_constant_decay=False,
             # cos_lr_scheduler=False,
             # optim_type='Adam',
             # learning_rate=0.003,  # lr for Adam optimizer
 
-            lr_manually=True,
+            lr_piecewise_constant_decay=True,
             cos_lr_scheduler=False,
             optim_type='SGD',
             learning_rate=0.2,  # init lr for manually decay schedule
@@ -228,7 +228,14 @@ class SampledEfficientZeroPolicy(Policy):
 
         if self._cfg.learn.cos_lr_scheduler is True:
             from torch.optim.lr_scheduler import CosineAnnealingLR
-            self.rl_scheduler = CosineAnnealingLR(self._optimizer, 1e6, eta_min=0, last_epoch=-1)
+            self.lr_scheduler = CosineAnnealingLR(self._optimizer, 1e6, eta_min=0, last_epoch=-1)
+
+        if self._cfg.learn.lr_piecewise_constant_decay:
+            from torch.optim.lr_scheduler import LambdaLR
+            max_step = self._cfg.threshold_training_steps_for_final_lr
+            # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
+            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)
+            self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
@@ -252,7 +259,6 @@ class SampledEfficientZeroPolicy(Policy):
         self.inverse_scalar_transform_handle = InverseScalarTransform(
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
-        self.collect_mcts_temperature = 1
 
     def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
         self._learn_model.train()
@@ -475,7 +481,7 @@ class SampledEfficientZeroPolicy(Policy):
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(self._learn_model.parameters(), self._cfg.learn.grad_clip_value)
         self._optimizer.step()
         if self._cfg.learn.cos_lr_scheduler is True:
-            self.rl_scheduler.step()
+            self.lr_scheduler.step()
 
         # ==============================================================
         # the core target model update step.
@@ -821,6 +827,7 @@ class SampledEfficientZeroPolicy(Policy):
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
+        self.collect_mcts_temperature = 1
 
     def _forward_collect(
             self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None,

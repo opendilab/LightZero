@@ -3,6 +3,7 @@ import os
 from functools import partial
 from typing import Union, Optional, List, Any, Tuple
 
+import numpy as np
 import torch
 from ding.config import read_config, compile_config
 from ding.envs import create_env_manager
@@ -13,11 +14,12 @@ from ding.worker import BaseLearner, create_buffer
 from ding.worker import create_serial_collector, create_serial_evaluator
 from tensorboardX import SummaryWriter
 
+from lzero.mcts import visit_count_temperature
+
 
 def train_alphazero(
-        input_cfg: Union[str, Tuple[dict, dict]],
+        input_cfg: Tuple[dict, dict],
         seed: int = 0,
-        env_setting: Optional[List[Any]] = None,
         model: Optional[torch.nn.Module] = None,
         model_path: Optional[str] = None,
         max_train_iter: Optional[int] = int(1e10),
@@ -25,10 +27,9 @@ def train_alphazero(
 ) -> 'Policy':  # noqa
     """
     Overview:
-        Serial pipeline entry for AlphaZero.
+        The train entry for AlphaZero.
     Arguments:
-        - input_cfg (:obj:`Union[str, Tuple[dict, dict]]`): Config in dict type. \
-            ``str`` type means config file path. \
+        - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
             ``Tuple[dict, dict]`` type means [user_config, create_cfg].
         - seed (:obj:`int`): Random seed.
         - env_setting (:obj:`Optional[List[Any]]`): A list with 3 elements: \
@@ -42,20 +43,12 @@ def train_alphazero(
     Returns:
         - policy (:obj:`Policy`): Converged policy.
     """
-    if isinstance(input_cfg, str):
-        cfg, create_cfg = read_config(input_cfg)
-    else:
-        cfg, create_cfg = input_cfg
-
+    cfg, create_cfg = input_cfg
     create_cfg.policy.type = create_cfg.policy.type
 
-    env_fn = None if env_setting is None else env_setting[0]
-    cfg = compile_config(cfg, seed=seed, env=env_fn, auto=True, create_cfg=create_cfg, save_cfg=True)
+    cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
     # Create main components: env, policy
-    if env_setting is None:
-        env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
-    else:
-        env_fn, collector_env_cfg, evaluator_env_cfg = env_setting
+    env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
     collector_env.seed(cfg.seed)
@@ -72,6 +65,7 @@ def train_alphazero(
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
     replay_buffer = create_buffer(cfg.policy.other.replay_buffer, tb_logger=tb_logger, exp_name=cfg.exp_name)
 
+    game_config = cfg.policy
     env_config = cfg.env
     collector = create_serial_collector(
         cfg.policy.collect.collector,
@@ -91,10 +85,26 @@ def train_alphazero(
         env_config=env_config,
     )
 
+    # ==============================================================
+    # Main loop
+    # ==============================================================
+    # Learner's before_run hook.
     learner.call_hook('before_run')
-
-    # Accumulate plenty of data at the beginning of training.
     while True:
+        collect_kwargs = {}
+        # set temperature for visit count distributions according to the train_iter,
+        # please refer to Appendix D in MuZero paper for details.
+        collect_kwargs['temperature'] = np.array(
+            [
+                visit_count_temperature(
+                    game_config.auto_temperature,
+                    game_config.fixed_temperature_value,
+                    game_config.threshold_training_steps_for_final_temperature,
+                    trained_steps=learner.train_iter
+                ) for _ in range(game_config.collector_env_num)
+            ]
+        )
+
         # Evaluate policy performance
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(
@@ -106,7 +116,7 @@ def train_alphazero(
                 break
 
         # Collect data by default config n_sample/n_episode
-        new_data = collector.collect(train_iter=learner.train_iter)
+        new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         if not cfg.policy.other.replay_buffer.save_episode:
             new_data = sum(new_data, [])
         replay_buffer.push(new_data, cur_collector_envstep=collector.envstep)

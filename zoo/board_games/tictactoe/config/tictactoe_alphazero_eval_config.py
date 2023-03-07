@@ -131,12 +131,12 @@ tictactoe_alphazero_create_config = EasyDict(tictactoe_alphazero_create_config)
 create_config = tictactoe_alphazero_create_config
 
 if __name__ == '__main__':
-    from lzero.entry import train_alphazero_eval
+    from lzero.entry import eval_alphazero
     import numpy as np
 
     seed = 0
     test_episodes = 5
-    reward_mean, reward_lst = train_alphazero_eval(
+    reward_mean, reward_lst = eval_alphazero(
         [main_config, create_config], seed=seed, test_episodes=test_episodes, max_env_step=int(1e5)
     )
 

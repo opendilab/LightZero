@@ -89,10 +89,10 @@ tictactoe_muzero_config = dict(
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
-            # lr_manually=True,
+            # lr_piecewise_constant_decay=True,
             # optim_type='SGD',
             # learning_rate=0.2,  # init lr for manually decay schedule
-            lr_manually=False,
+            lr_piecewise_constant_decay=False,
             optim_type='Adam',
             learning_rate=0.003,  # lr for Adam optimizer
             # Frequency of target network update.

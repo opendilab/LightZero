@@ -256,16 +256,16 @@ class TicTacToeEnv(BaseGameEnv):
         board_to_play = np.full((self.board_size, self.board_size), self.current_player)
         raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
         if self.scale:
-            raw_obs = raw_obs / 2
+            scale_obs = copy.deepcopy(raw_obs / 2)
         else:
-            scale_obs = raw_obs
+            scale_obs = copy.deepcopy(raw_obs)
         if self.channel_last:
             # move channel dim to last axis
             # (C, W, H) -> (W, H, C)
-            return np.transpose(raw_obs, [1, 2, 0]), copy.deepcopy(scale_obs)
+            return np.transpose(raw_obs, [1, 2, 0]), np.transpose(scale_obs, [1, 2, 0])
         else:
             # (C, W, H)
-            return raw_obs, copy.deepcopy(scale_obs)
+            return raw_obs, scale_obs
 
     def coord_to_action(self, i, j):
         """

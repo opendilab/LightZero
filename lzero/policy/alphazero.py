@@ -42,6 +42,20 @@ class AlphaZeroPolicy(Policy):
             grad_clip_value=10,
             value_weight=1.0,
         ),
+        # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
+        # threshold_training_steps_for_final_lr=int(
+        #     threshold_env_steps_for_final_lr / collector_env_num / average_episode_length_when_converge * update_per_collect),
+        threshold_training_steps_for_final_lr=int(5e5),
+        # lr: 0.2 -> 0.02 -> 0.002
+
+        # ``threshold_training_steps_for_final_temperature`` is only used for adjusting temperature manually.
+        # threshold_training_steps_for_final_temperature=int(
+        #     threshold_env_steps_for_final_temperature / collector_env_num / average_episode_length_when_converge * update_per_collect),
+        threshold_training_steps_for_final_temperature=int(1e5),
+        # temperature: 1 -> 0.5 -> 0.25
+        auto_temperature=True,
+        # ``fixed_temperature_value`` is effective only when auto_temperature=False
+        fixed_temperature_value=0.25,
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
@@ -69,6 +83,13 @@ class AlphaZeroPolicy(Policy):
             self._optimizer = optim.Adam(
                 self._model.parameters(), lr=self._cfg.learn.learning_rate, weight_decay=self._cfg.learn.weight_decay
             )
+
+        if self._cfg.learn.lr_piecewise_constant_decay:
+            from torch.optim.lr_scheduler import LambdaLR
+            max_step = self._cfg.threshold_training_steps_for_final_lr
+            # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
+            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)
+            self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
 
         # Algorithm config
         self._value_weight = self._cfg.learn.value_weight
@@ -112,8 +133,10 @@ class AlphaZeroPolicy(Policy):
         self._optimizer.zero_grad()
         total_loss.backward()
 
-        grad_norm = torch.nn.utils.clip_grad_norm_(list(self._model.parameters()), max_norm=self._cfg.learn.grad_clip_value,)
+        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(list(self._model.parameters()), max_norm=self._cfg.learn.grad_clip_value,)
         self._optimizer.step()
+        if self._cfg.learn.lr_piecewise_constant_decay is True:
+            self.lr_scheduler.step()
 
         # =============
         # after update
@@ -124,7 +147,7 @@ class AlphaZeroPolicy(Policy):
             'policy_loss': policy_loss,
             'value_loss': value_loss,
             'entropy_loss': entropy_loss,
-            'grad_norm': grad_norm,
+            'total_grad_norm_before_clip': total_grad_norm_before_clip,
         }
 
     def _init_collect(self) -> None:
@@ -137,17 +160,21 @@ class AlphaZeroPolicy(Policy):
         self._collect_mcts = MCTS(self._cfg.collect.mcts)
         self._collect_model = model_wrap(self._model, wrapper_name='base')
         self._collect_model.reset()
+        self.collect_mcts_temperature = 1
+
 
     @torch.no_grad()
-    def _forward_collect(self, envs, obs):
+    def _forward_collect(self, envs, obs, temperature: list = None):
         r"""
         Overview:
             Forward function for collect mode
         Arguments:
             - data (:obj:`dict`): Dict type data, including at least ['obs'].
+            - temperature: shape: (N, ), where N is the number of collect_env.
         Returns:
             - data (:obj:`dict`): The collected data
         """
+        self.collect_mcts_temperature = temperature[0]
         ready_env_id = list(envs.keys())
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
@@ -161,7 +188,7 @@ class AlphaZeroPolicy(Policy):
                 init_state=init_state[env_id],
             )
             action, mcts_probs = self._collect_mcts.get_next_action(
-                envs[env_id], policy_forward_fn=self._policy_value_fn, temperature=1.0, sample=True
+                envs[env_id], policy_forward_fn=self._policy_value_fn, temperature=self.collect_mcts_temperature, sample=True
             )
             output[env_id] = {
                 'action': action,
@@ -252,5 +279,5 @@ class AlphaZeroPolicy(Policy):
 
     def _monitor_vars_learn(self) -> List[str]:
         return super()._monitor_vars_learn() + [
-            'cur_lr', 'total_loss', 'policy_loss', 'value_loss', 'entropy_loss', 'grad_norm'
+            'cur_lr', 'total_loss', 'policy_loss', 'value_loss', 'entropy_loss', 'total_grad_norm_before_clip'
         ]

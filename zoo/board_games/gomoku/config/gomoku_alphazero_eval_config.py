@@ -132,7 +132,7 @@ gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
 create_config = gomoku_alphazero_create_config
 
 if __name__ == '__main__':
-    from lzero.entry import train_alphazero_eval
+    from lzero.entry import eval_alphazero
     import numpy as np
 
     returns_mean_seeds = []
@@ -141,7 +141,7 @@ if __name__ == '__main__':
     num_episodes_each_seed = 2
     total_test_episodes = num_episodes_each_seed * len(seeds)
     for seed in seeds:
-        returns_mean, returns = train_alphazero_eval([main_config, create_config], seed=seed,
+        returns_mean, returns = eval_alphazero([main_config, create_config], seed=seed,
                                                             num_episodes_each_seed=num_episodes_each_seed,
                                                             print_seed_details=True, max_env_step=int(1e5))
         returns_mean_seeds.append(returns_mean)
