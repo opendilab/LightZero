@@ -64,23 +64,13 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_vs-bot_config.py
 
 ## Benchmark
 
-[comment]: <> (![]&#40;/Users/puyuan/code/LightZero/assets/benchmark/main/pong_main.png&#41; )
-[comment]: <> (<img src="/Users/puyuan/code/LightZero/assets/benchmark/main/qbert_main.png"/>)
+<details open>
+<summary>(Click to Collapse)</summary>
 
 Below are the benchmark results of [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py), [MuZero w/ SSL](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) , [EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/efficientzero.py) and [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) on three discrete action space games in [Atari](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py).
 
-[comment]: <> (<div style="display:flex">)
 
-[comment]: <> (  <img src="assets/benchmark/main/pong_main.png" style="width:33.33%">)
-
-[comment]: <> (  <img src="assets/benchmark/main/qbert_main.png" style="width:33.33%">)
-
-[comment]: <> (  <img src="assets/benchmark/main/mspacman_main.png" style="width:33.33%">)
-
-[comment]: <> (</div>)
-
-
-<div style="text-align:center">
+<section style="text-align:center">
 
 <span style="width:20%;display:inline-block">
 
@@ -102,11 +92,11 @@ Below are the benchmark results of [MuZero](https://github.com/opendilab/LightZe
 
 ![alt](assets/benchmark/ablation/mspacman_sez_K.png)
 
-</span></div>
+</span></section>
 
 Below are the benchmark results of [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) with ``Factored/Gaussian`` policy representation on two continuous action space games: [Pendulum-v1](https://github.com/opendilab/LightZero/blob/main/zoo/classic_control/pendulum/envs/pendulum_lightzero_env.py), [LunarLanderContinuous-v2](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/lunarlander/envs/lunarlander_env.py).
 
-<div style="text-align:center">
+<section style="text-align:center">
 <span style="width:20%;display:inline-block">
 
 ![alt](assets/benchmark/main/pendulum_main.png)
@@ -120,11 +110,11 @@ Below are the benchmark results of [Sampled EfficientZero](https://github.com/op
 <span style="width:20%;display:inline-block">
 
 ![alt](assets/benchmark/main/lunarlander_main.png)
-</span></div>
+</span></section>
 
 Below are the benchmark results of [AlphaZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/alphazero.py) and [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) on two board_games: [TicTacToe](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/tictactoe/envs/tictactoe_env.py), [Gomoku](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py).
 
-<div style="text-align:center">
+<section style="text-align:center">
 <span style="width:20%;display:inline-block">
 
 ![alt](assets/benchmark/main/tictactoe_main.png)
@@ -133,7 +123,9 @@ Below are the benchmark results of [AlphaZero](https://github.com/opendilab/Ligh
 <span style="width:20%;display:inline-block">
 
 ![alt](assets/benchmark/main/gomoku_main.png)
-</span></div>
+</span></section>
+
+</details>
 
 
 ## Awesome-MCTS Notes
