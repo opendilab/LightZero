@@ -30,6 +30,7 @@ tictactoe_alphazero_config = dict(
         env_name='tictactoe',
         cuda=True,
         board_size=3,
+        collector_env_num=collector_env_num,
         model=dict(
             # ==============================================================
             # We use the small size model for tictactoe
@@ -100,8 +101,7 @@ tictactoe_alphazero_create_config = dict(
         type='tictactoe',
         import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
     ),
-    env_manager=dict(type='base'),
-    # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='subprocess'),
     policy=dict(
         type='alphazero',
         import_names=['lzero.policy.alphazero'],
@@ -109,7 +109,6 @@ tictactoe_alphazero_create_config = dict(
     collector=dict(
         type='episode_alphazero',
         get_train_sample=False,
-        # get_train_sample=True,
         import_names=['lzero.worker.alphazero_collector'],
     ),
     evaluator=dict(

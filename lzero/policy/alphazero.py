@@ -36,8 +36,11 @@ class AlphaZeroPolicy(Policy):
             # (bool) Whether to use multi gpu.
             multi_gpu=False,
             batch_size=256,
-            optim_type='Adam',
-            learning_rate=0.001,
+            lr_piecewise_constant_decay=True,
+            optim_type='SGD',
+            learning_rate=0.2,  # init lr for manually decay schedule
+            # optim_type='Adam',
+            # learning_rate=0.001,  # lr for Adam optimizer
             weight_decay=0.0001,
             grad_clip_value=10,
             value_weight=1.0,
@@ -161,7 +164,6 @@ class AlphaZeroPolicy(Policy):
         self._collect_model = model_wrap(self._model, wrapper_name='base')
         self._collect_model.reset()
         self.collect_mcts_temperature = 1
-
 
     @torch.no_grad()
     def _forward_collect(self, envs, obs, temperature: list = None):

@@ -66,6 +66,7 @@ def train_alphazero(
     replay_buffer = create_buffer(cfg.policy.other.replay_buffer, tb_logger=tb_logger, exp_name=cfg.exp_name)
 
     game_config = cfg.policy
+    batch_size = game_config.learn.batch_size
     env_config = cfg.env
     collector = create_serial_collector(
         cfg.policy.collect.collector,
@@ -117,19 +118,20 @@ def train_alphazero(
 
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
-        if not cfg.policy.other.replay_buffer.save_episode:
-            new_data = sum(new_data, [])
+        new_data = sum(new_data, [])
         replay_buffer.push(new_data, cur_collector_envstep=collector.envstep)
 
         # Learn policy from collected data
         for i in range(cfg.policy.learn.update_per_collect):
-            train_data = replay_buffer.sample(learner.policy.get_attribute('batch_size'), learner.train_iter)
-            if cfg.policy.other.replay_buffer.save_episode:
-                train_data = sum(train_data, [])
+            # Learner will train ``update_per_collect`` times in one iteration.
+            train_data = replay_buffer.sample(batch_size, learner.train_iter)
             if train_data is None:
-                # It is possible that replay buffer's data count is too few to train
-                logging.warning("replay buffer's data count is too few to train need more data")
-                continue
+                logging.warning(
+                    f'The data in replay_buffer is not sufficient to sample a mini-batch.'
+                    f'continue to collect now ....'
+                )
+                break
+
             learner.train(train_data, collector.envstep)
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break

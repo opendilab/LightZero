@@ -162,6 +162,7 @@ class AlphaZeroCollector(ISerialCollector):
         assert n_episode >= self._env_num, "Please make sure n_episode >= env_num{}/{}".format(n_episode, self._env_num)
         if policy_kwargs is None:
             policy_kwargs = {}
+        temperature = policy_kwargs['temperature']
         collected_episode = 0
         return_data = []
         ready_env_id = set()
@@ -174,6 +175,7 @@ class AlphaZeroCollector(ISerialCollector):
                 new_available_env_id = set(obs.keys()).difference(ready_env_id)
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
+                # for debugging
                 # for env_id in ready_env_id:
                 #     print('[collect] env_id = {}'.format(env_id))
                 #     print('board = \n {}'.format(self._env._envs[env_id].board))
@@ -183,16 +185,14 @@ class AlphaZeroCollector(ISerialCollector):
                 simulation_envs = {}
                 for env_id in ready_env_id:
                     simulation_envs[env_id] = ENV_REGISTRY.build(self._cfg.env.type, self._env_config)
-                policy_output = self._policy.forward(simulation_envs, obs_)
+                policy_output = self._policy.forward(simulation_envs, obs_, temperature)
                 self._policy_output_pool.update(policy_output)
                 # Interact with env.
                 actions = {env_id: output['action'] for env_id, output in policy_output.items()}
                 actions = to_ndarray(actions)
                 timesteps = self._env.step(actions)
 
-            # TODO(nyz) this duration may be inaccurate in async env
             interaction_duration = self._timer.value / len(timesteps)
-            # TODO(nyz) vectorize this for loop
             for env_id, timestep in timesteps.items():
                 with self._timer:
                     if timestep.info.get('abnormal', False):
@@ -226,16 +226,16 @@ class AlphaZeroCollector(ISerialCollector):
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
                     self._total_episode_count += 1
-                    if timestep.obs['to_play'] == -1:  # one player mode
+                    if timestep.obs['to_play'] == -1:  # vs_bot_mode
                         reward = timestep.info['final_eval_reward']
                     else:
-                        if timestep.obs['to_play'] == 1:  # two player mode
+                        if timestep.obs['to_play'] == 1:  # self_play_mode
                             reward = -timestep.info['final_eval_reward']
                         else:
                             reward = timestep.info['final_eval_reward']
                     reward = timestep.info['final_eval_reward']
                     info = {
-                        'reward': reward,  #only means player1 reward
+                        'reward': reward,  # only means player1 reward
                         'time': self._env_info[env_id]['time'],
                         'step': self._env_info[env_id]['step'],
                     }
