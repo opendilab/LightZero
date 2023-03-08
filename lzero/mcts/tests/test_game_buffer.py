@@ -11,8 +11,11 @@ from lzero.mcts.buffer.game_buffer_efficientzero import EfficientZeroGameBuffer
 
 
 class RateLimit:
-    r"""
-    Add rate limit threshold to push function
+    """
+    Overview:
+        Add rate limit threshold to push function.
+    Interfaces:
+        __init__, __call__, push
     """
 
     def __init__(self, max_rate: int = float("inf"), window_seconds: int = 30) -> None:
@@ -38,9 +41,11 @@ class RateLimit:
 
 def add_10() -> Callable:
     """
-    Transform data on sampling
+    Overview:
+        Transform data on sampling.
+    Interfaces:
+        sample, _subview
     """
-
     def sample(chain: Callable, size: int, replace: bool = False, *args, **kwargs):
         sampled_data = chain(size, replace, *args, **kwargs)
         return [BufferedData(data=item.data + 10, index=item.index, meta=item.meta) for item in sampled_data]
