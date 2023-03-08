@@ -1438,7 +1438,4 @@ events.*
 !/core/rl_utils/**/lib/*.cpp
 !/core/rl_utils/**/lib/*.hpp
 !/core/rl_utils/**/lib/*.h
-
-/lzero/bonus/eval_cpp_cython_jax/eval_cython/ucb_score_cython.cpp
-/lzero/bonus/eval_cpp_cython_jax/eval_cython_cpp/ucb_score_cython_cpp.cpp
-/lzero/bonus/eval_cpp_cython_jax/eval_cython_cpp_openmp/ucb_score_cython_openmp_cpp.cpp
+**/tb/*
