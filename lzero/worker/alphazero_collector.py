@@ -41,6 +41,20 @@ class AlphaZeroCollector(ISerialCollector):
         replay_buffer: 'replay_buffer' = None,  # noqa
         env_config=None,
     ):
+        """
+            Overview:
+                Init the AlphaZero collector according to input arguments.
+            Arguments:
+                - cfg (:obj:`EasyDict`): Config.
+                - env (:obj:`BaseEnvManager`): The env for the collection, the BaseEnvManager object or \
+                    its derivatives are supported.
+                - policy (:obj:`Policy`): The policy to be collected.
+                - tb_logger (:obj:`SummaryWriter`): Logger, defaultly set as 'SummaryWriter' for model summary.
+                - instance_name (:obj:`Optional[str]`): Name of this instance.
+                - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
+                - replay_buffer (:obj:`replay_buffer`): the buffer
+                - env_config: Config of environment
+            """
         self._exp_name = exp_name
         self._instance_name = instance_name
         self._collect_print_freq = cfg.collect_print_freq
@@ -154,6 +168,17 @@ class AlphaZeroCollector(ISerialCollector):
                 n_episode: Optional[int] = None,
                 train_iter: int = 0,
                 policy_kwargs: Optional[dict] = None) -> List[Any]:
+        """
+        Overview:
+            Collect `n_episode` data with policy_kwargs, which is already trained `train_iter` iterations
+        Arguments:
+            - n_episode (:obj:`int`): the number of collecting data episode
+            - train_iter (:obj:`int`): the number of training iteration
+            - policy_kwargs (:obj:`dict`): the keyword args for policy forward
+        Returns:
+            - return_data (:obj:`List`): A list containing collected episodes if not get_train_sample, otherwise, \
+                return train_samples split by unroll_len.
+        """
         if n_episode is None:
             if self._default_n_episode is None:
                 raise RuntimeError("Please specify collect n_episode")
@@ -321,6 +346,12 @@ class AlphaZeroCollector(ISerialCollector):
                 self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
 
     def reward_shaping(self, transitions):
+        """
+        Overview:
+            Shape the reward according to the player.
+        Return:
+            - transitions: data transitions.
+        """
         reward = transitions[-1]['reward']
         to_play = transitions[-1]['obs']['to_play']
         for t in transitions:
