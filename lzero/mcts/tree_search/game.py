@@ -9,7 +9,13 @@ from ding.utils.compression_helper import jpeg_data_decompressor
 
 
 class Game:
-
+    """
+    Overview:
+        Abstract class of Game.
+    Interfaces:
+        __init__, legal_actions, step, reset, close, render
+    """
+    
     def __init__(self, env, action_space_size: int, config=None):
         self.env = env
         self.action_space_size = action_space_size
