@@ -14,6 +14,12 @@ import time
 
 
 class MuZeroModelFake(torch.nn.Module):
+    """
+    Overview:
+        Fake MuZero model just for test EfficientZeroMCTSPtree.
+    Interfaces:
+        __init__, initial_inference, recurrent_inference
+    """
 
     def __init__(self, action_num):
         super().__init__()
@@ -59,6 +65,18 @@ class MuZeroModelFake(torch.nn.Module):
 
 
 def ptree_func(game_config, num_simulations):
+    """
+        Overview:
+            Search on the tree of the Python implementation and record the time spent at different stages.
+        Arguments:
+            - game_config: config of game.
+            - num_simulations: Number of simulations.
+        Returns:
+            - build_time: Type builds take time.
+            - prepare_time: time for prepare.
+            - search_time.
+            - total_time.
+        """
     batch_size = env_nums = game_config.batch_size
     action_space_size = game_config.action_space_size
 
@@ -140,6 +158,18 @@ def ptree_func(game_config, num_simulations):
 
 
 def ctree_func(game_config, num_simulations):
+    """
+        Overview:
+            Search on the tree of the C++ implementation and record the time spent at different stages.
+        Arguments:
+            - game_config: config of game.
+            - num_simulations: Number of simulations.
+        Returns:
+            - build_time: Type builds take time.
+            - prepare_time: time for prepare.
+            - search_time.
+            - total_time.
+        """
     batch_size = env_nums = game_config.batch_size
     action_space_size = game_config.action_space_size
 

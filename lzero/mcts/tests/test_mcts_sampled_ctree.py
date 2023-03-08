@@ -5,7 +5,13 @@ from lzero.mcts import inverse_scalar_transform
 
 
 class MuZeroModelFake(torch.nn.Module):
-
+    """
+    Overview:
+        Fake MuZero model just for test EfficientZeroMCTSPtree.
+    Interfaces:
+        __init__, initial_inference, recurrent_inference
+    """
+    
     def __init__(self, action_num):
         super().__init__()
         self.action_num = action_num

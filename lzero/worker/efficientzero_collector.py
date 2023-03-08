@@ -26,8 +26,13 @@ class EfficientZeroCollector(ISerialCollector):
         envstep
     """
 
-    config = dict(game_block_pool_size=int(1e6), deepcopy_obs=False, transform_obs=False, collect_print_freq=100,
-                  get_train_sample=False)
+    config = dict(
+        game_block_pool_size=int(1e6),
+        deepcopy_obs=False,
+        transform_obs=False,
+        collect_print_freq=100,
+        get_train_sample=False
+        )
 
     def __init__(
             self,
@@ -42,12 +47,16 @@ class EfficientZeroCollector(ISerialCollector):
     ) -> None:
         """
         Overview:
-            Initialization method.
+            Init the EfficientZero collector according to input arguments.
         Arguments:
             - cfg (:obj:`EasyDict`): Config dict
             - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
             - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
             - tb_logger (:obj:`SummaryWriter`): tensorboard handle
+            - instance_name (:obj:`Optional[str]`): Name of this instance.
+            - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
+            - replay_buffer (:obj:`replay_buffer`): the buffer
+            - game_config: Config of game.
         """
         self._exp_name = exp_name
         self._instance_name = instance_name
@@ -203,6 +212,10 @@ class EfficientZeroCollector(ISerialCollector):
         """
         Overview:
             obtain the priorities at index i.
+        Arguments:
+            - i: index.
+            - pred_values_lst: The list of value being predicted.
+            - search_values_lst: The list of value obtained through search.
         """
         if self.game_config.use_priority and not self.game_config.use_max_priority_for_new_data:
             pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.game_config.device).float().view(-1)

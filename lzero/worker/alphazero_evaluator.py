@@ -33,6 +33,19 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         instance_name: Optional[str] = 'evaluator',
         env_config=None,
     ):
+        """
+        Overview:
+            Init the AlphaZero evaluator according to input arguments.
+        Arguments:
+            - cfg (:obj:`EasyDict`): Config.
+            - env (:obj:`BaseEnvManager`): The env for the collection, the BaseEnvManager object or \
+                its derivatives are supported.
+            - policy (:obj:`Policy`): The policy to be collected.
+            - tb_logger (:obj:`SummaryWriter`): Logger, defaultly set as 'SummaryWriter' for model summary.
+            - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
+            - instance_name (:obj:`Optional[str]`): Name of this instance.
+            - env_config: Config of environment
+        """
         self._cfg = cfg
         self._exp_name = exp_name
         self._instance_name = instance_name
@@ -136,6 +149,8 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         Overview:
             Determine whether you need to start the evaluation mode, if the number of training has reached\
                 the maximum number of times to start the evaluator, return True
+        Arguments:
+            - train_iter (:obj:`int`): Current training iteration.
         """
         if train_iter == self._last_eval_iter:
             return False

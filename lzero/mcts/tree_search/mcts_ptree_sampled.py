@@ -18,7 +18,13 @@ import lzero.mcts.ptree.ptree_sez as tree_sez
 
 
 class SampledEfficientZeroMCTSPtree(object):
-
+    """
+    Overview:
+        MCTSPtree(Implemented in python) for SampledEfficientZero.
+    Interfaces:
+        __init__, search
+    """
+    
     # the default_config for SampledEfficientZeroMCTSPtree.
     config = dict(
         support_scale=300,

@@ -58,7 +58,13 @@ class EfficientZeroEvaluator(ISerialEvaluator):
             Init method. Load config and use ``self._cfg`` setting to build common serial evaluator components,
             e.g. logger helper, timer.
         Arguments:
-            - cfg (:obj:`EasyDict`): Configuration EasyDict.
+            - cfg (:obj:`EasyDict`): Config dict
+            - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
+            - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
+            - tb_logger (:obj:`SummaryWriter`): tensorboard handle
+            - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
+            - instance_name (:obj:`Optional[str]`): Name of this instance.
+            - game_config: Config of game.
         """
         self._cfg = cfg
         self._exp_name = exp_name
@@ -164,6 +170,8 @@ class EfficientZeroEvaluator(ISerialEvaluator):
         Overview:
             Determine whether you need to start the evaluation mode, if the number of training has reached\
                 the maximum number of times to start the evaluator, return True
+        Arguments:
+            - train_iter (:obj:`int`): Current training iteration.
         """
         if train_iter == self._last_eval_iter:
             return False
