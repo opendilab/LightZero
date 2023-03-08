@@ -69,23 +69,18 @@ class LunarLanderEnv(BaseEnv):
             self._env.seed(self._seed + np_seed)
         elif hasattr(self, '_seed'):
             self._env.seed(self._seed)
-
         obs = self._env.reset()
         obs = to_ndarray(obs)
         self._final_eval_reward = 0.
         if self._save_replay_gif:
             self._frames = []
-
         if 'Continuous' not in self._env_name:
-            # to be compatible with requirement for data type in LightZero policy
-            # shape: [W, H, C]
+            # to be compatible with LightZero model,shape: [W, H, C]
             obs = obs.reshape(8, 1, 1)
             action_mask = np.ones(4, 'int8')
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
         else:
-            # if 'Continuous' in self._env_name:
-            # to be compatible with requirement for data type in LightZero policy
-            # shape: [W, H, C]
+            # to be compatible with LightZero model,shape: [W, H, C]
             obs = obs.reshape(8, 1, 1)
             action_mask = None
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
@@ -114,20 +109,15 @@ class LunarLanderEnv(BaseEnv):
 
         obs, rew, done, info = self._env.step(action)
         if 'Continuous' not in self._env_name:
-            # to be compatible with requirement for data type in LightZero policy
-            # shape: [W, H, C]
+            # to be compatible with LightZero model,shape: [W, H, C]
             obs = obs.reshape(8, 1, 1)
             action_mask = np.ones(4, 'int8')
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
         else:
-            # if 'Continuous' in self._env_name:
-            # to be compatible with requirement for data type in LightZero policy
-            # shape: [W, H, C]
+            # to be compatible with LightZero model,shape: [W, H, C]
             obs = obs.reshape(8, 1, 1)
             action_mask = None
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
-        # self._env.render()
-        # print(action, obs, rew, done, info)
         self._final_eval_reward += rew
         if done:
             info['final_eval_reward'] = self._final_eval_reward
@@ -140,7 +130,6 @@ class LunarLanderEnv(BaseEnv):
                 self.display_frames_as_gif(self._frames, path)
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
                 self._save_replay_count += 1
-
         obs = to_ndarray(obs)
         rew = to_ndarray([rew]).astype(np.float32)  # wrapped to be transferred to a array with shape (1,)
         return BaseEnvTimestep(obs, rew, done, info)

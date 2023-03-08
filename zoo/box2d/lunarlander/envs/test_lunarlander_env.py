@@ -19,7 +19,11 @@ from dizoo.box2d.lunarlander.envs import LunarLanderEnv
     ]
 )
 class TestLunarLanderEnvEnv:
-
+    """
+        Overview:
+            The env created for testing the LunarLander environment.
+            It is used to check information such as observation space, action space and reward space.
+    """
     def test_naive(self, cfg):
         env = LunarLanderEnv(cfg)
         env.seed(314)

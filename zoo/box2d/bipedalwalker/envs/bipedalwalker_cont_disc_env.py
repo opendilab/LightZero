@@ -20,7 +20,7 @@ class BipedalWalkerDiscEnv(BaseEnv):
             original continuous action into ``each_dim_disc_size`` bins and using their Cartesian product to obtain
             handcrafted discrete actions.
     """
-
+    
     @classmethod
     def default_config(cls: type) -> EasyDict:
         cfg = EasyDict(copy.deepcopy(cls.config))
@@ -51,6 +51,13 @@ class BipedalWalkerDiscEnv(BaseEnv):
         self._save_replay_count = 0
 
     def reset(self) -> np.ndarray:
+        """
+        Overview:
+             During the reset phase, the original environment will be created,
+             and at the same time, the action space will be discretized into "each_dim_disc_size" bins.
+        Returns:
+            - info_dict (:obj:`Dict[str, Any]`): Including observation, action_mask, and to_play label.
+        """     
         if not self._init_flag:
             self._env = gym.make('BipedalWalker-v3')
             self._observation_space = self._env.observation_space
@@ -76,9 +83,7 @@ class BipedalWalkerDiscEnv(BaseEnv):
         self._final_eval_reward = 0
         if self._save_replay_gif:
             self._frames = []
-
-        # ==============================================================
-        # NOTE: disc_to_cont: transform discrete action index to original continuous action
+        # disc_to_cont: transform discrete action index to original continuous action
         self._raw_action_space = self._env.action_space
         self.m = self._raw_action_space.shape[0]
         self.n = self._cfg.each_dim_disc_size
@@ -86,15 +91,10 @@ class BipedalWalkerDiscEnv(BaseEnv):
         self.disc_to_cont = list(product(*[list(range(self.n)) for _ in range(self.m)]))
         # the modified discrete action space
         self._action_space = gym.spaces.Discrete(self.K)
-        # ==============================================================
-
-        # original env: obs_shape: 24, action_shape: 4
-        # to be compatible with LightZero model
-        # shape: [W, H, C]
+        # to be compatible with LightZero model,shape: [W, H, C]
         obs = obs.reshape(24, 1, 1)
         action_mask = np.ones(self.K, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
-
         return obs
 
     def close(self) -> None:
@@ -111,32 +111,33 @@ class BipedalWalkerDiscEnv(BaseEnv):
         np.random.seed(self._seed)
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
-        # ==============================================================
-        # NOTE: disc_to_cont: transform discrete action index to original continuous action
+        """
+        Overview:
+             During the step phase, the environment first converts the discrete action into a continuous action,
+             and then passes it into the original environment.
+        Arguments:
+            - action (:obj:`np.ndarray`): Discrete action
+        Returns:
+            - BaseEnvTimestep (:obj:`tuple`): Including observation, reward, done, and info.
+        """     
+        # disc_to_cont: transform discrete action index to original continuous action
         action = [-1 + 2 / self.n * k for k in self.disc_to_cont[int(action)]]
         action = to_ndarray(action)
-        # ==============================================================
-
         if action.shape == (1, ):
-            action = action.squeeze()  # 0-dim array
+            action = action.squeeze()
         if self._act_scale:
             action = affine_transform(action, min_val=self._raw_action_space.low, max_val=self._raw_action_space.high)
         if self._save_replay_gif:
             self._frames.append(self._env.render(mode='rgb_array'))
-
         obs, rew, done, info = self._env.step(action)
-
-        # to be compatible with LightZero model
-        # shape: [W, H, C]
+        # to be compatible with LightZero model,shape: [W, H, C]
         obs = obs.reshape(24, 1, 1)
         action_mask = None
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
-
         self._final_eval_reward += rew
         if self._rew_clip:
             rew = max(-10, rew)
         rew = np.float32(rew)
-
         if done:
             info['final_eval_reward'] = self._final_eval_reward
             if self._save_replay_gif:
@@ -149,9 +150,8 @@ class BipedalWalkerDiscEnv(BaseEnv):
                 self.display_frames_as_gif(self._frames, path)
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
                 self._save_replay_count += 1
-
         obs = to_ndarray(obs)
-        rew = to_ndarray([rew])  # wrapped to be transferred to a array with shape (1,)
+        rew = to_ndarray([rew]) 
         return BaseEnvTimestep(obs, rew, done, info)
 
     @property
