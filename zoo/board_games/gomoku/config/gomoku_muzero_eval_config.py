@@ -23,7 +23,7 @@ board_size = 6  # default_size is 15
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = int(board_size * board_size/2)
 bot_action_type = 'v0'  # 'v1'
-threshold_env_steps_for_final_lr = int(2e5)
+threshold_env_steps_for_final_lr = int(5e5)
 # if we set threshold_env_steps_for_final_temperature=0, i.e. we use the fixed final temperature=0.25.
 threshold_env_steps_for_final_temperature = int(0)
 # ==============================================================

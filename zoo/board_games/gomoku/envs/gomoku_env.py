@@ -235,10 +235,10 @@ class GomokuEnv(BaseGameEnv):
         if self.channel_last:
             # move channel dim to last axis
             # (C, W, H) -> (W, H, C)
-            # e.g. (3,6,6) -> (6,6,3)
+            # e.g. (3, 6, 6) -> (6, 6, 3)
             return np.transpose(raw_obs, [1, 2, 0]), np.transpose(scale_obs, [1, 2, 0])
         else:
-            # (C, W, H) e.g. (3,6,6)
+            # (C, W, H) e.g. (3, 6, 6)
             return raw_obs, scale_obs
 
     def get_done_winner(self):

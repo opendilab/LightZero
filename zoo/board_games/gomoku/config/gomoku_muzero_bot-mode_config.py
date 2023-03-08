@@ -15,7 +15,7 @@ evaluator_env_num = 5
 num_simulations = 100
 update_per_collect = 100
 batch_size = 256
-max_env_step = int(2e6)
+max_env_step = int(10e6)
 categorical_distribution = False
 reanalyze_ratio = 0.
 
@@ -23,8 +23,8 @@ board_size = 6  # default_size is 15
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = int(board_size * board_size/2)
 bot_action_type = 'v0'  # 'v1'
-prob_random_action_in_bot = 0.1
-threshold_env_steps_for_final_lr = int(2e5)
+prob_random_action_in_bot = 0.5
+threshold_env_steps_for_final_lr = int(1e6)
 threshold_env_steps_for_final_temperature = int(1e6)
 # ==============================================================
 # end of the most frequently changed config specified by the user
