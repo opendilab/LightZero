@@ -3,7 +3,7 @@ import pytest
 import torch
 from torch.cuda.amp import autocast as autocast
 
-from lzero.mcts.tree_search.game import GameHistory
+from lzero.mcts.tree_search.game import GameBlock
 from lzero.mcts.utils import select_action, prepare_observation_list
 
 args = ['EfficientZero', 'MuZero']
@@ -48,7 +48,7 @@ def test_game_block(test_algo):
         init_obses = [env.reset() for env in envs]
         dones = np.array([False for _ in range(config.env.evaluator_env_num)])
         game_blocks = [
-            GameHistory(
+            GameBlock(
                 envs[i].action_space, game_block_length=config.policy.game_block_length, config=config.policy
             ) for i in range(config.env.evaluator_env_num)
         ]

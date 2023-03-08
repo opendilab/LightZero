@@ -8,12 +8,12 @@ import numpy as np
 from ding.utils.compression_helper import jpeg_data_decompressor
 
 
-class GameHistory:
+class GameBlock:
     """
         Overview:
             A block of game history from a full episode trajectories.
             The length of one episode in Atari games are quite large. Split the whole episode trajectory into several
-            ``GameHistory`` blocks.
+            ``GameBlock`` blocks.
         Interfaces:
             ``__init__``, ``__len__``,``init``, ``pad_over``, ``is_full``, ``legal_actions``, ``append``, ``obs``
             ``zero_obs``, ``step_obs``, ``get_targets``, ``game_block_to_array``, ``store_search_stats``.
@@ -22,10 +22,10 @@ class GameHistory:
     def __init__(self, action_space, game_block_length=200, config=None):
         """
         Overview:
-            Init the ``GameHistory`` according to the provided arguments.
+            Init the ``GameBlock`` according to the provided arguments.
         Arguments:
              action_space (:obj:`int`): action space
-            - game_block_length (:obj:`int`): the transition number of one ``GameHistory`` block
+            - game_block_length (:obj:`int`): the transition number of one ``GameBlock`` block
         """
         self.action_space = action_space
         self.game_block_length = game_block_length
@@ -198,7 +198,7 @@ class GameHistory:
     def game_block_to_array(self):
         """
         Overview:
-            post processing the data when a ``GameHistory`` block is full.
+            post processing the data when a ``GameBlock`` block is full.
         Note:
         game_block element shape:
             e.g. game_block_length=20, stack=4, num_unroll_steps=5, td_steps=5

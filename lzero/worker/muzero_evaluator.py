@@ -1,5 +1,5 @@
-import time
 import copy
+import time
 from collections import namedtuple
 from typing import Optional, Callable, Tuple
 
@@ -11,14 +11,13 @@ from ding.utils import build_logger, EasyTimer
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
 from easydict import EasyDict
 
-from lzero.mcts.tree_search.game import GameHistory
 from lzero.mcts.utils import prepare_observation_list
 
 
 class MuZeroEvaluator(ISerialEvaluator):
     """
     Overview:
-        EfficientZero Evaluator.
+        The Evaluator for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
     Interfaces:
         __init__, reset, reset_policy, reset_env, close, should_eval, eval
     Property:
@@ -32,7 +31,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             Get evaluator's default config. We merge evaluator's default config with other default configs\
                 and user's config to get the final config.
         Return:
-            cfg: (:obj:`EasyDict`): evaluator's default config
+            cfg (:obj:`EasyDict`): evaluator's default config
         """
         cfg = EasyDict(copy.deepcopy(cls.config))
         cfg.cfg_type = cls.__name__ + 'Dict'
@@ -58,7 +57,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             Init method. Load config and use ``self._cfg`` setting to build common serial evaluator components,
             e.g. logger helper, timer.
         Arguments:
-            - cfg (:obj:`EasyDict`): Config dict
+            - cfg (:obj:`EasyDict`): Configuration EasyDict.
             - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
             - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
             - tb_logger (:obj:`SummaryWriter`): tensorboard handle
@@ -86,6 +85,8 @@ class MuZeroEvaluator(ISerialEvaluator):
 
         # MuZero
         self.game_config = game_config
+
+
 
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
         """
@@ -145,11 +146,11 @@ class MuZeroEvaluator(ISerialEvaluator):
         self._end_flag = False
 
     def close(self) -> None:
-        # """
-        # Overview:
-        #     Close the evaluator. If end_flag is False, close the environment, flush the tb_logger\
-        #         and close the tb_logger.
-        # """
+        """
+        Overview:
+            Close the evaluator. If end_flag is False, close the environment, flush the tb_logger\
+                and close the tb_logger.
+        """
         if self._end_flag:
             return
         self._end_flag = True
@@ -188,7 +189,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             n_episode: Optional[int] = None,
             config: Optional[dict] = None,
     ) -> Tuple[bool, float]:
-        '''
+        """
         Overview:
             Evaluate policy and store the best policy based on whether it reaches the highest historical reward.
         Arguments:
@@ -199,7 +200,12 @@ class MuZeroEvaluator(ISerialEvaluator):
         Returns:
             - stop_flag (:obj:`bool`): Whether this training program can be ended.
             - eval_reward (:obj:`float`): Current eval_reward.
-        '''
+        """
+        if self.game_config.sampled_algo:
+            from lzero.mcts.tree_search.game_sampled_efficientzero import GameBlock
+        else:
+            from lzero.mcts.tree_search.game import GameBlock
+
         if n_episode is None:
             n_episode = self._default_n_episode
         assert n_episode is not None, "please indicate eval n_episode"
@@ -239,8 +245,9 @@ class MuZeroEvaluator(ISerialEvaluator):
 
         dones = np.array([False for _ in range(env_nums)])
 
+
         game_blocks = [
-            GameHistory(
+            GameBlock(
                 self._env.action_space,
                 game_block_length=self.game_config.game_block_length,
                 config=self.game_config
@@ -256,12 +263,9 @@ class MuZeroEvaluator(ISerialEvaluator):
 
         with self._timer:
             while not eval_monitor.is_finished():
-                # stack_obs = [game_block.step_obs() for game_block in game_blocks]
-
                 # Get current ready env obs.
                 # only for subprocess, to get the ready_env_id
                 obs = self._env.ready_obs
-                # TODO(pu): subprocess
                 new_available_env_id = set(obs.keys()).difference(ready_env_id)
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
@@ -276,8 +280,8 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                 stack_obs = to_ndarray(stack_obs)
                 stack_obs = prepare_observation_list(stack_obs)
-
                 stack_obs = torch.from_numpy(stack_obs).to(self.game_config.device).float()
+
                 if two_player_game:
                     policy_output = self._policy.forward(stack_obs, action_mask, to_play)
                 else:
@@ -285,6 +289,10 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                 actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                 distributions_dict_no_env_id = {k: v['distributions'] for k, v in policy_output.items()}
+                if self.game_config.sampled_algo:
+                    root_sampled_actions_dict_no_env_id = {k: v['root_sampled_actions'] for k, v in
+                                                           policy_output.items()}
+
                 value_dict_no_env_id = {k: v['value'] for k, v in policy_output.items()}
                 pred_value_dict_no_env_id = {k: v['pred_value'] for k, v in policy_output.items()}
                 visit_entropy_dict_no_env_id = {
@@ -295,26 +303,33 @@ class MuZeroEvaluator(ISerialEvaluator):
                 # TODO(pu): subprocess
                 actions = {}
                 distributions_dict = {}
+                if self.game_config.sampled_algo:
+                    root_sampled_actions_dict = {}
+
                 value_dict = {}
                 pred_value_dict = {}
                 visit_entropy_dict = {}
                 for index, env_id in enumerate(ready_env_id):
                     actions[env_id] = actions_no_env_id.pop(index)
                     distributions_dict[env_id] = distributions_dict_no_env_id.pop(index)
+                    if self.game_config.sampled_algo:
+                        root_sampled_actions_dict[env_id] = root_sampled_actions_dict_no_env_id.pop(index)
                     value_dict[env_id] = value_dict_no_env_id.pop(index)
                     pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
                     visit_entropy_dict[env_id] = visit_entropy_dict_no_env_id.pop(index)
 
                 # Interact with env.
                 timesteps = self._env.step(actions)
-                # for debug
-                # if len(timesteps.keys())!=self._env_num:
-                #     print(f'current ready env id is {list(timesteps.keys())}')
 
                 for env_id, t in timesteps.items():
                     i = env_id
                     obs, reward, done, info = t.obs, t.reward, t.done, t.info
-                    game_blocks[i].store_search_stats(distributions_dict[i], value_dict[i])
+                    if self.game_config.sampled_algo:
+                        game_blocks[env_id].store_search_stats(
+                            distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
+                        )
+                    else:
+                        game_blocks[i].store_search_stats(distributions_dict[i], value_dict[i])
                     if two_player_game:
                         # for two_player board games
                         # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
@@ -353,14 +368,14 @@ class MuZeroEvaluator(ISerialEvaluator):
                             if len(init_obs.keys()) != self._env_num:
                                 while env_id not in init_obs.keys():
                                     init_obs = self._env.ready_obs
-                                    print(f'wailt the {env_id} env to reset')
+                                    print(f'wait the {env_id} env to reset')
 
                             init_obs = init_obs[env_id]['observation']
                             init_obs = to_ndarray(init_obs)
                             action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                             to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
 
-                            game_blocks[i] = GameHistory(
+                            game_blocks[i] = GameBlock(
                                 self._env.action_space,
                                 game_block_length=self.game_config.game_block_length,
                                 config=self.game_config

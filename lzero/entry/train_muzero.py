@@ -13,6 +13,7 @@ from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
 from ding.worker import create_serial_collector
 from tensorboardX import SummaryWriter
+from lzero.worker import MuZeroEvaluator as BaseSerialEvaluator
 
 from lzero.mcts import visit_count_temperature
 
@@ -48,13 +49,10 @@ def train_muzero(
 
     if create_cfg.policy.type == 'muzero':
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
-        from lzero.worker import MuZeroEvaluator as BaseSerialEvaluator
     elif create_cfg.policy.type == 'efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
-        from lzero.worker import EfficientZeroEvaluator as BaseSerialEvaluator
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
-        from lzero.worker import SampledEfficientZeroEvaluator as BaseSerialEvaluator
 
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
     # Create main components: env, policy

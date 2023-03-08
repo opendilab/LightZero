@@ -105,9 +105,9 @@ lunarlander_cont_disc_efficientzero_create_config = dict(
         import_names=['lzero.policy.efficientzero'],
     ),
     collector=dict(
-        type='episode_efficientzero',
+        type='episode_muzero',
         get_train_sample=True,
-        import_names=['lzero.worker.efficientzero_collector'],
+        import_names=['lzero.worker.muzero_collector'],
     )
 )
 lunarlander_cont_disc_efficientzero_create_config = EasyDict(lunarlander_cont_disc_efficientzero_create_config)

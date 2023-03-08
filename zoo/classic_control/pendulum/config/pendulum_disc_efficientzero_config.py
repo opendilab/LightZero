@@ -104,9 +104,9 @@ pendulum_disc_efficientzero_create_config = dict(
         import_names=['lzero.policy.efficientzero'],
     ),
     collector=dict(
-        type='episode_efficientzero',
+        type='episode_muzero',
         get_train_sample=True,
-        import_names=['lzero.worker.efficientzero_collector'],
+        import_names=['lzero.worker.muzero_collector'],
     )
 )
 pendulum_disc_efficientzero_create_config = EasyDict(pendulum_disc_efficientzero_create_config)

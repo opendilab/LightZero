@@ -34,6 +34,8 @@ class EfficientZeroPolicy(Policy):
 
     # The default_config for EfficientZero policy.
     config = dict(
+        # ``sampled_algo=True`` means the policy is sampled-based algorithm, which is used in ``collector``.
+        sampled_algo=False,
         # (bool) Whether learning policy is the same as collecting data policy(on-policy)
         on_policy=False,
         model=dict(
