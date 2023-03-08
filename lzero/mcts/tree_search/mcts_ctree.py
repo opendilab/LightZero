@@ -17,7 +17,13 @@ from ..scaling_transform import inverse_scalar_transform
 
 
 class EfficientZeroMCTSCtree(object):
-
+    """
+    Overview:
+        MCTSCtree(Implemented in C++) for EfficientZero.
+    Interfaces:
+        __init__, search
+    """
+    
     config = dict(
         device='cpu',
         support_scale=300,
@@ -170,6 +176,13 @@ from lzero.mcts.ctree.ctree_muzero import mz_tree as tree_muzero
 
 
 class MuZeroMCTSCtree(object):
+    """
+    Overview:
+        MCTSCtree(Implemented in C++) for MuZero.
+    Interfaces:
+        __init__, search
+    """
+
     config = dict(
         device='cpu',
         discount_factor=0.997,

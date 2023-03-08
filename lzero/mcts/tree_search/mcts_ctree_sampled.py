@@ -17,7 +17,13 @@ from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as tree_effici
 
 
 class SampledEfficientZeroMCTSCtree(object):
-
+    """
+    Overview:
+        MCTSCtree(Implemented in C++) for SampledEfficientZero.
+    Interfaces:
+        __init__, search
+    """
+    
     # the default_config for SampledEfficientZeroMCTSCtree.
     config = dict(
         device='cpu',

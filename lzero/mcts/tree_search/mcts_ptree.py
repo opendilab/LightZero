@@ -16,7 +16,13 @@ from ..scaling_transform import inverse_scalar_transform
 
 
 class EfficientZeroMCTSPtree(object):
-    
+    """
+    Overview:
+        MCTSPtree(Implemented in python) for EfficientZero.
+    Interfaces:
+        __init__, search
+    """
+
     # the default_config for EfficientZeroMCTSPtree.
     config = dict(
         support_scale=300,
@@ -199,7 +205,13 @@ import lzero.mcts.ptree.ptree_mz as tree_muzero
 
 
 class MuZeroMCTSPtree(object):
-
+    """
+    Overview:
+        MCTSPtree(Implemented in python) for MuZero.
+    Interfaces:
+        __init__, search
+    """
+    
     # the default_config for MuZeroMCTSPtree.
     config = dict(
         support_scale=300,
