@@ -3,7 +3,6 @@ from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 import torch.optim as optim
 import treetensor.torch as ttorch
 from ding.model import model_wrap
@@ -23,6 +22,7 @@ from lzero.mcts import select_action
 from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
 from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts.utils import to_torch_float_tensor, to_detach_cpu_numpy, mz_network_output_unpack
+from .utlis import negative_cosine_similarity
 
 
 @POLICY_REGISTRY.register('muzero')
@@ -204,9 +204,7 @@ class MuZeroPolicy(Policy):
             update_type='assign',
             update_kwargs={'freq': self._cfg.learn.target_update_freq}
         )
-        self._learn_model = model_wrap(self._model, wrapper_name='base')
-        self._learn_model.reset()
-        self._target_model.reset()
+        self._learn_model = self._model
 
         if self._cfg.use_augmentation:
             self.image_transforms = ImageTransforms(
@@ -336,7 +334,6 @@ class MuZeroPolicy(Policy):
             original_value = self.inverse_scalar_transform_handle(value)
             original_reward = self.inverse_scalar_transform_handle(reward)
 
-
             if self._cfg.model.self_supervised_learning_loss:
                 # ==============================================================
                 # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
@@ -355,55 +352,8 @@ class MuZeroPolicy(Policy):
                     # NOTE: no grad for the representation_state branch
                     dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
                     observation_proj = self._learn_model.project(representation_state, with_grad=False)
-                    temp_loss = self._consist_loss_func(dynamic_proj, observation_proj) * mask_batch[:, step_i]
+                    temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
                     consistency_loss += temp_loss
-
-                    """
-                    # ==============================================================
-                    # test how the consistency_loss change with the board state
-                    # ==============================================================
-
-                    ## first take a minibatch state
-                    # obs_target_batch[:, :, :, :].shape  == (5, 9, 3, 3)
-                    # obs_target_batch[:, beg_index:end_index, :, :].shape  == (5, 3, 3, 3)
-
-                    for state_index in range(5):
-                        obs_target_batch_copy = copy.deepcopy(obs_target_batch)
-                        # obs_target_batch[:, beg_index:end_index, :, :][0] shape: (3,3,3)
-                        # print(obs_target_batch_copy[:, beg_index:end_index, :, :][state_index])
-
-                        network_output_change1bit = self._learn_model.initial_inference(
-                            obs_target_batch_copy[:, beg_index:end_index, :, :])
-                        representation_state_change1bit = network_output_change1bit.hidden_state
-                        representation_state_change1bit = to_tensor(representation_state_change1bit)
-                        observation_proj_change1bit = self._learn_model.project(representation_state_change1bit,
-                                                                                with_grad=False)
-                        # the similarity in state <state_index>
-                        print(f'======the cos similarity in state {state_index}=====')
-                        print(f'the cos similarity after change 0 bits in state {state_index}:',
-                              -self._consist_loss_func(observation_proj_change1bit, observation_proj)[state_index])
-
-                        for i in range(3):
-                            # change one bit in timestep 1
-                            if (obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] == torch.tensor(0)).item() is True:
-                                obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] = torch.tensor(1)
-                                # obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] += torch.tensor(0.1)
-                                # print(obs_target_batch_copy[:, beg_index:end_index, :, :][state_index])
-
-                            elif (obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] == torch.tensor(1)).item() is True:
-                                obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] = torch.tensor(0)
-                                # obs_target_batch_copy[:, beg_index:end_index, :, :][state_index][i][0][0] -= torch.tensor(0.1)
-                                # print(obs_target_batch_copy[:, beg_index:end_index, :, :][state_index])
-
-                            network_output_change1bit = self._learn_model.initial_inference(obs_target_batch_copy[:, beg_index:end_index, :, :])
-                            representation_state_change1bit = network_output_change1bit.hidden_state
-                            representation_state_change1bit = to_tensor(representation_state_change1bit)
-                            observation_proj_change1bit = self._learn_model.project(representation_state_change1bit, with_grad=False)
-                            # the similarity in state <state_index>
-                            print(f'the cos similarity after change {i+1} bits in state {state_index}:', -self._consist_loss_func(observation_proj_change1bit, observation_proj)[state_index])
-                            temp_loss = self._consist_loss_func(dynamic_proj, observation_proj) * mask_batch[:, step_i]
-                            consistency_loss += temp_loss
-                    """
 
             # NOTE: the target policy, target_value_categorical, target_reward_categorical is calculated in
             # game buffer now.
@@ -538,8 +488,7 @@ class MuZeroPolicy(Policy):
             }
 
     def _init_collect(self) -> None:
-        self._collect_model = model_wrap(self._model, 'base')
-        self._collect_model.reset()
+        self._collect_model = self._model
         self._unroll_len = self._cfg.collect.unroll_len
         if self._cfg.mcts_ctree:
             self._mcts_collect = MCTSCtree(self._cfg)
@@ -649,8 +598,7 @@ class MuZeroPolicy(Policy):
         Overview:
             Evaluate mode init method. Called by ``self.__init__``, initialize eval_model.
         """
-        self._eval_model = model_wrap(self._model, wrapper_name='base')
-        self._eval_model.reset()
+        self._eval_model = self._model
         if self._cfg.mcts_ctree:
             self._mcts_eval = MCTSCtree(self._cfg)
         else:
@@ -780,28 +728,6 @@ class MuZeroPolicy(Policy):
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
         self._optimizer.load_state_dict(state_dict['optimizer'])
-
-    @staticmethod
-    def _consist_loss_func(f1, f2):
-        """
-        Overview:
-            consistency loss function: the negative cosine similarity.
-        Arguments:
-            f1 (:obj:`torch.Tensor`): shape (batch_size, dim), e.g. (256, 512)
-            f2 (:obj:`torch.Tensor`): shape (batch_size, dim), e.g. (256, 512)
-        Returns:
-            (f1 * f2).sum(dim=1) is the cosine similarity between vector f1 and f2.
-            The cosine similarity always belongs to the interval [-1, 1].
-            For example, two proportional vectors have a cosine similarity of 1,
-            two orthogonal vectors have a similarity of 0,
-            and two opposite vectors have a similarity of -1.
-             -(f1 * f2).sum(dim=1) is consistency loss, i.e. the negative cosine similarity.
-        Reference:
-            https://en.wikipedia.org/wiki/Cosine_similarity
-        """
-        f1 = F.normalize(f1, p=2., dim=-1, eps=1e-5)
-        f2 = F.normalize(f2, p=2., dim=-1, eps=1e-5)
-        return -(f1 * f2).sum(dim=1)
 
     def _process_transition(
             self, obs: ttorch.Tensor, policy_output: ttorch.Tensor, timestep: ttorch.Tensor

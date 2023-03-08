@@ -25,6 +25,7 @@ from lzero.mcts import select_action
 # cpp mcts_tree
 from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as ctree
 from lzero.mcts.utils import to_torch_float_tensor, ez_network_output_unpack
+from .utlis import negative_cosine_similarity
 
 
 @POLICY_REGISTRY.register('sampled_efficientzero')
@@ -247,9 +248,7 @@ class SampledEfficientZeroPolicy(Policy):
             update_type='assign',
             update_kwargs={'freq': self._cfg.learn.target_update_freq}
         )
-        self._learn_model = model_wrap(self._model, wrapper_name='base')
-        self._learn_model.reset()
-        self._target_model.reset()
+        self._learn_model = self._model
 
         if self._cfg.use_augmentation:
             self.image_transforms = ImageTransforms(
@@ -417,7 +416,7 @@ class SampledEfficientZeroPolicy(Policy):
                 # NOTE: no grad for the presentation_state branch.
                 dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
                 observation_proj = self._learn_model.project(presentation_state, with_grad=False)
-                temp_loss = self._consist_loss_func(dynamic_proj, observation_proj) * mask_batch[:, step_i]
+                temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
 
                 consistency_loss += temp_loss
 
@@ -822,8 +821,7 @@ class SampledEfficientZeroPolicy(Policy):
         return policy_loss, policy_entropy, policy_entropy_loss, target_policy_entropy, target_sampled_actions
 
     def _init_collect(self) -> None:
-        self._collect_model = model_wrap(self._model, 'base')
-        self._collect_model.reset()
+        self._collect_model = self._model
         self._unroll_len = self._cfg.collect.unroll_len
         if self._cfg.mcts_ctree:
             self._mcts_collect = MCTSCtree(self._cfg)
@@ -1012,11 +1010,7 @@ class SampledEfficientZeroPolicy(Policy):
         Overview:
             Evaluate mode init method. Called by ``self.__init__``, initialize eval_model.
         """
-        # self._eval_model = self._learn_model
-        # TODO(pu)
-        self._eval_model = model_wrap(self._model, wrapper_name='base')
-
-        self._eval_model.reset()
+        self._eval_model = self._model
         if self._cfg.mcts_ctree:
             self._mcts_eval = MCTSCtree(self._cfg)
         else:
@@ -1277,21 +1271,6 @@ class SampledEfficientZeroPolicy(Policy):
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
         self._optimizer.load_state_dict(state_dict['optimizer'])
-
-
-    @staticmethod
-    def _consist_loss_func(f1, f2):
-        """
-        Consistency loss function: similarity loss
-        """
-        f1 = F.normalize(f1, p=2., dim=-1, eps=1e-6)
-        f2 = F.normalize(f2, p=2., dim=-1, eps=1e-6)
-        return -(f1 * f2).sum(dim=1)
-
-    @staticmethod
-    def _get_max_entropy(action_shape: int) -> None:
-        p = 1.0 / action_shape
-        return -action_shape * p * np.log2(p)
 
     def _process_transition(
             self, obs: ttorch.Tensor, policy_output: ttorch.Tensor, timestep: ttorch.Tensor

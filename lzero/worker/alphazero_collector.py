@@ -1,14 +1,13 @@
-import os
 from collections import namedtuple
-from ding.envs import BaseEnv
-from ding.worker.collector.base_serial_collector import ISerialCollector, CachePool, TrajBuffer, INF, to_tensor_transitions
 from typing import Optional, Any, List
-from easydict import EasyDict
+
 import numpy as np
 from ding.envs import BaseEnvManager
-from ding.utils.data import default_decollate
-from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, ENV_REGISTRY
-from ding.torch_utils import to_tensor, to_ndarray
+from ding.torch_utils import to_ndarray
+from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
+from ding.worker.collector.base_serial_collector import ISerialCollector, CachePool, TrajBuffer, INF, \
+    to_tensor_transitions
+from easydict import EasyDict
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_alphazero')
@@ -25,7 +24,6 @@ class AlphaZeroCollector(ISerialCollector):
         deepcopy_obs=False,
         transform_obs=False,
         collect_print_freq=100,
-        get_train_sample=False,
         reward_shaping=True,
         augmentation=False
     )
@@ -59,8 +57,6 @@ class AlphaZeroCollector(ISerialCollector):
         self._instance_name = instance_name
         self._collect_print_freq = cfg.collect_print_freq
         self._deepcopy_obs = cfg.deepcopy_obs
-        self._transform_obs = cfg.transform_obs
-        self._use_augmentation = cfg.augmentation
         self._cfg = cfg
         self._timer = EasyTimer()
         self._end_flag = False
@@ -176,8 +172,7 @@ class AlphaZeroCollector(ISerialCollector):
             - train_iter (:obj:`int`): the number of training iteration
             - policy_kwargs (:obj:`dict`): the keyword args for policy forward
         Returns:
-            - return_data (:obj:`List`): A list containing collected episodes if not get_train_sample, otherwise, \
-                return train_samples split by unroll_len.
+            - return_data (:obj:`List`): A list containing collected episodes.
         """
         if n_episode is None:
             if self._default_n_episode is None:
@@ -239,11 +234,7 @@ class AlphaZeroCollector(ISerialCollector):
                         transitions = to_tensor_transitions(self._traj_buffer[env_id])
                         if self._cfg.reward_shaping:
                             transitions = self.reward_shaping(transitions)
-                        if self._cfg.get_train_sample:
-                            train_sample = self._policy.get_train_sample(transitions)
-                            return_data.extend(train_sample)
-                        else:
-                            return_data.append(transitions)
+                        return_data.append(transitions)
                         self._traj_buffer[env_id].clear()
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration

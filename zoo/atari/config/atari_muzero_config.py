@@ -33,24 +33,24 @@ threshold_env_steps_for_final_lr = int(5e5)
 # if we set threshold_env_steps_for_final_temperature=0, i.e. we use the fixed final temperature=0.25.
 threshold_env_steps_for_final_temperature = int(0)
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-num_simulations = 50
-update_per_collect = 1000
-batch_size = 256
-max_env_step = int(1e6)
-reanalyze_ratio = 0.
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# num_simulations = 50
+# update_per_collect = 1000
+# batch_size = 256
+# max_env_step = int(1e6)
+# reanalyze_ratio = 0.
 
 ## debug config
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 5
-# update_per_collect = 2
-# batch_size = 10
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0.3
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+num_simulations = 5
+update_per_collect = 2
+batch_size = 10
+max_env_step = int(1e6)
+reanalyze_ratio = 0.3
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================

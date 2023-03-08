@@ -33,6 +33,8 @@ gomoku_alphazero_config = dict(
         env_name='gomoku',
         cuda=True,
         board_size=board_size,
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
         model=dict(
             # ==============================================================
             # We use the half size model for gomoku

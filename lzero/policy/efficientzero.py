@@ -3,9 +3,7 @@ from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 import torch.optim as optim
-import treetensor.torch as ttorch
 from ding.model import model_wrap
 from ding.policy.base_policy import Policy
 from ding.torch_utils import to_tensor
@@ -22,7 +20,8 @@ from lzero.mcts import scalar_transform, InverseScalarTransform
 from lzero.mcts import select_action
 # cpp mcts_tree
 from lzero.mcts.ctree.ctree_efficientzero import ez_tree as ctree
-from lzero.mcts.utils import to_torch_float_tensor, to_detach_cpu_numpy, ez_network_output_unpack
+from lzero.mcts.utils import to_torch_float_tensor, ez_network_output_unpack
+from .utlis import negative_cosine_similarity
 
 
 @POLICY_REGISTRY.register('efficientzero')
@@ -200,9 +199,7 @@ class EfficientZeroPolicy(Policy):
             update_type='assign',
             update_kwargs={'freq': self._cfg.learn.target_update_freq}
         )
-        self._learn_model = model_wrap(self._model, wrapper_name='base')
-        self._learn_model.reset()
-        self._target_model.reset()
+        self._learn_model = self._model
 
         if self._cfg.use_augmentation:
             self.image_transforms = ImageTransforms(
@@ -216,7 +213,7 @@ class EfficientZeroPolicy(Policy):
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
 
-    def _forward_learn(self, data: ttorch.Tensor) -> Dict[str, Union[float, int]]:
+    def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
         self._learn_model.train()
         self._target_model.train()
 
@@ -356,7 +353,7 @@ class EfficientZeroPolicy(Policy):
                 # NOTE: no grad for the presentation_state branch.
                 dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
                 observation_proj = self._learn_model.project(presentation_state, with_grad=False)
-                temp_loss = self.negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
+                temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
 
                 consistency_loss += temp_loss
 
@@ -519,8 +516,7 @@ class EfficientZeroPolicy(Policy):
             }
 
     def _init_collect(self) -> None:
-        self._collect_model = model_wrap(self._model, 'base')
-        self._collect_model.reset()
+        self._collect_model = self._model
         self._unroll_len = self._cfg.collect.unroll_len
         if self._cfg.mcts_ctree:
             self._mcts_collect = MCTS_ctree(self._cfg)
@@ -529,7 +525,7 @@ class EfficientZeroPolicy(Policy):
         self.collect_mcts_temperature = 1
 
     def _forward_collect(
-        self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None, ready_env_id=None
+        self, data: torch.Tensor, action_mask: list = None, temperature: list = None, to_play=None, ready_env_id=None
     ):
         """
         Overview:
@@ -633,14 +629,13 @@ class EfficientZeroPolicy(Policy):
         Overview:
             Evaluate mode init method. Called by ``self.__init__``, initialize eval_model.
         """
-        self._eval_model = model_wrap(self._model, wrapper_name='base')
-        self._eval_model.reset()
+        self._eval_model = self._model
         if self._cfg.mcts_ctree:
             self._mcts_eval = MCTS_ctree(self._cfg)
         else:
             self._mcts_eval = MCTS_ptree(self._cfg)
 
-    def _forward_eval(self, data: ttorch.Tensor, action_mask: list, to_play: None, ready_env_id=None):
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: None, ready_env_id=None):
         """
         Overview:
             Forward computation graph of eval mode(evaluate policy performance), at most cases, it is similar to \
@@ -775,36 +770,9 @@ class EfficientZeroPolicy(Policy):
         self._target_model.load_state_dict(state_dict['target_model'])
         self._optimizer.load_state_dict(state_dict['optimizer'])
 
-    @staticmethod
-    def negative_cosine_similarity(f1, f2):
-        """
-        Overview:
-            consistency loss function: the negative cosine similarity.
-        Arguments:
-            f1 (:obj:`torch.Tensor`): shape (batch_size, dim), e.g. (256, 512)
-            f2 (:obj:`torch.Tensor`): shape (batch_size, dim), e.g. (256, 512)
-        Returns:
-            (f1 * f2).sum(dim=1) is the cosine similarity between vector f1 and f2.
-            The cosine similarity always belongs to the interval [-1, 1].
-            For example, two proportional vectors have a cosine similarity of 1,
-            two orthogonal vectors have a similarity of 0,
-            and two opposite vectors have a similarity of -1.
-             -(f1 * f2).sum(dim=1) is consistency loss, i.e. the negative cosine similarity.
-        Reference:
-            https://en.wikipedia.org/wiki/Cosine_similarity
-        """
-        f1 = F.normalize(f1, p=2., dim=-1, eps=1e-5)
-        f2 = F.normalize(f2, p=2., dim=-1, eps=1e-5)
-        return -(f1 * f2).sum(dim=1)
-
-    @staticmethod
-    def _get_max_entropy(action_shape: int) -> None:
-        p = 1.0 / action_shape
-        return -action_shape * p * np.log2(p)
-
     def _process_transition(
-            self, obs: ttorch.Tensor, policy_output: ttorch.Tensor, timestep: ttorch.Tensor
-    ) -> ttorch.Tensor:
+            self, obs: torch.Tensor, policy_output: torch.Tensor, timestep: torch.Tensor
+    ) -> torch.Tensor:
         # be compatible with DI-engine base_policy
         pass
 

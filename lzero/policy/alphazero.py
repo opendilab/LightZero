@@ -11,7 +11,6 @@ from lzero.mcts.ptree.ptree_az import MCTS
 from ding.torch_utils import to_device
 from ding.utils import POLICY_REGISTRY
 from ding.utils.data import default_collate
-from ding.rl_utils import get_nstep_return_data, get_train_sample
 
 
 @POLICY_REGISTRY.register('alphazero')
@@ -45,6 +44,8 @@ class AlphaZeroPolicy(Policy):
             grad_clip_value=10,
             value_weight=1.0,
         ),
+        collector_env_num=8,
+        evaluator_env_num=3,
         # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
         # threshold_training_steps_for_final_lr=int(
         #     threshold_env_steps_for_final_lr / collector_env_num / average_episode_length_when_converge * update_per_collect),
@@ -198,31 +199,6 @@ class AlphaZeroPolicy(Policy):
             }
         return output
 
-    def _get_train_sample(self, data: list) -> Union[None, List[Any]]:
-        data = get_nstep_return_data(data, self._nstep, gamma=self._gamma)
-        return get_train_sample(data, self._unroll_len)
-
-    def _process_transition(self, obs: Any, model_output: dict, timestep: namedtuple) -> dict:
-        r"""
-        Overview:
-            Generate dict type transition data from inputs.
-        Arguments:
-            - obs (:obj:`Any`): Env observation
-            - model_output (:obj:`dict`): Output of collect model, including at least ['action']
-            - timestep (:obj:`namedtuple`): Output after env step, including at least ['obs', 'reward', 'done'] \
-                (here 'obs' indicates obs after env step).
-        Returns:
-            - transition (:obj:`dict`): Dict type transition data.
-        """
-        return {
-            'obs': obs,
-            'next_obs': timestep.obs,
-            'action': model_output['action'],
-            'probs': model_output['probs'],
-            'reward': timestep.reward,
-            'done': timestep.done,
-        }
-
     def _init_eval(self) -> None:
         r"""
         Overview:
@@ -283,3 +259,28 @@ class AlphaZeroPolicy(Policy):
         return super()._monitor_vars_learn() + [
             'cur_lr', 'total_loss', 'policy_loss', 'value_loss', 'entropy_loss', 'total_grad_norm_before_clip'
         ]
+
+    def _process_transition(self, obs: Any, model_output: dict, timestep: namedtuple) -> dict:
+        r"""
+        Overview:
+            Generate dict type transition data from inputs.
+        Arguments:
+            - obs (:obj:`Any`): Env observation
+            - model_output (:obj:`dict`): Output of collect model, including at least ['action']
+            - timestep (:obj:`namedtuple`): Output after env step, including at least ['obs', 'reward', 'done'] \
+                (here 'obs' indicates obs after env step).
+        Returns:
+            - transition (:obj:`dict`): Dict type transition data.
+        """
+        return {
+            'obs': obs,
+            'next_obs': timestep.obs,
+            'action': model_output['action'],
+            'probs': model_output['probs'],
+            'reward': timestep.reward,
+            'done': timestep.done,
+        }
+
+    def _get_train_sample(self, data: list) -> Union[None, List[Any]]:
+        # be compatible with DI-engine base_policy
+        pass

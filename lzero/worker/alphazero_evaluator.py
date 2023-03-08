@@ -1,15 +1,12 @@
-import os
 from collections import namedtuple
-from ding.envs import BaseEnv
 from typing import Optional, Callable, Tuple
 
-from easydict import EasyDict
-from ding.envs import BaseEnvManager
 import numpy as np
-from ding.utils.data import default_decollate
-from ding.utils import build_logger, EasyTimer, SERIAL_EVALUATOR_REGISTRY, ENV_REGISTRY
+from ding.envs import BaseEnv
 from ding.envs import BaseEnvManager
+from ding.utils import build_logger, EasyTimer, SERIAL_EVALUATOR_REGISTRY
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
+from easydict import EasyDict
 
 
 @SERIAL_EVALUATOR_REGISTRY.register('alphazero')
@@ -167,7 +164,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             n_episode: Optional[int] = None,
             force_render: bool = False,
     ) -> Tuple[bool, dict]:
-        '''
+        """
         Overview:
             Evaluate policy and store the best policy based on whether it reaches the highest historical reward.
         Arguments:
@@ -178,7 +175,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         Returns:
             - stop_flag (:obj:`bool`): Whether this training program can be ended.
             - return_info (:obj:`dict`): Current evaluation return information.
-        '''
+        """
         stop_flag, return_info = False, []
         if n_episode is None:
             n_episode = self._default_n_episode
