@@ -495,7 +495,7 @@ class EfficientZeroCollector(ISerialCollector):
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
 
-                    # updte stack windows: delete the first obs and append the newest obs
+                    # update stack windows: delete the first obs and append the newest obs
                     del stack_obs_windows[env_id][0]
                     stack_obs_windows[env_id].append(to_ndarray(obs['observation']))
 

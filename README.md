@@ -51,7 +51,7 @@ Train a MuZero agent to play [Pong](https://gymnasium.farama.org/environments/at
 
 ```bash
 cd LightZero
-python3 -u zoo/atari/config/pong_muzero_config.py
+python3 -u zoo/atari/config/atari_muzero_config.py
 ```
 
 
@@ -59,7 +59,7 @@ Train a MuZero agent to play [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-t
 
 ```bash
 cd LightZero
-python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_vs-bot_config.py
+python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 ```
 
 ## Benchmark
