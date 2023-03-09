@@ -574,7 +574,7 @@ class EfficientZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = ctree.Roots(active_collect_env_num, self._cfg.num_simulations, legal_actions)
+                roots = ctree.Roots(active_collect_env_num, legal_actions)
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
@@ -683,7 +683,7 @@ class EfficientZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ctree.Roots(active_eval_env_num, self._cfg.num_simulations, legal_actions)
+                roots = ctree.Roots(active_eval_env_num, legal_actions)
                 roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
 
