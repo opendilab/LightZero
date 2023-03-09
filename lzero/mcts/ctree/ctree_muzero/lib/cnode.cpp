@@ -302,7 +302,6 @@ namespace tree
             Expand the roots and add noises.
         Arguments:
             - root_exploration_fraction: the exploration fraction of roots
-            - legal_action_list: the vector of the legal action of this root.
             - noises: the vector of noise add to the roots.
             - rewards: the vector of rewards of each root.
             - policies: the vector of policy logits of each root.
@@ -437,7 +436,6 @@ namespace tree
                 CNode *child = node->get_child(a);
                 if (child->expanded())
                 {
-                    //                    child->parent_value_prefix = node->value_prefix;
                     node_stack.push(child);
                 }
             }
