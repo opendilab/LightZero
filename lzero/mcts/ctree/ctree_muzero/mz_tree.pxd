@@ -34,7 +34,6 @@ cdef extern from "lib/cnode.h" namespace "tree":
         CNode(float prior, vector[int] &legal_actions) except +
         int visit_count, to_play, hidden_state_index_x, hidden_state_index_y, best_action
         float value_prefixs, prior, value_sum, parent_value_prefix
-        vector[CNode]* ptr_node_pool;
 
         void expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefixs, vector[float] policy_logits)
         void add_exploration_noise(float exploration_fraction, vector[float] noises)
@@ -51,7 +50,6 @@ cdef extern from "lib/cnode.h" namespace "tree":
         CRoots(int root_num, vector[vector[int]] legal_actions_list) except +
         int root_num
         vector[CNode] roots
-        vector[vector[CNode]] node_pools
 
         void prepare(float root_exploration_fraction, const vector[vector[float]] &noises, const vector[float] &value_prefixs, const vector[vector[float]] &policies, vector[int] to_play_batch)
         void prepare_no_noise(const vector[float] &value_prefixs, const vector[vector[float]] &policies, vector[int] to_play_batch)
