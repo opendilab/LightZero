@@ -677,7 +677,12 @@ class EfficientZeroGameBuffer(Buffer):
 
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
                     # roots = ctree_efficientzero.Roots(batch_size, self._cfg.model.action_space_size, self._cfg.num_simulations)
+<<<<<<< HEAD
                     roots = ctree.Roots(batch_size, self._cfg.num_simulations, legal_actions)
+=======
+                    roots = ctree.Roots(batch_size, legal_actions)
+
+>>>>>>> d86d95e42559ae7d98f1a19c2ee700bc6a7e588d
                     noises = [
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
                                             ).astype(np.float32).tolist() for _ in range(batch_size)
@@ -874,7 +879,13 @@ class EfficientZeroGameBuffer(Buffer):
                     ]
                     to_play = [0 for i in range(batch_size)]
                 legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
+<<<<<<< HEAD
                 roots = ctree.Roots(batch_size, self._cfg.num_simulations, legal_actions)
+=======
+                # roots = ctree_efficientzero.Roots(batch_size, self._cfg.model.action_space_size, self._cfg.num_simulations)
+                roots = ctree.Roots(batch_size, legal_actions)
+
+>>>>>>> d86d95e42559ae7d98f1a19c2ee700bc6a7e588d
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
                                         ).astype(np.float32).tolist() for _ in range(batch_size)

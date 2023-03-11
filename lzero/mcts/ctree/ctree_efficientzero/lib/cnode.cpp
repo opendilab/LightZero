@@ -7,10 +7,18 @@ namespace tree
 {
 
     CSearchResults::CSearchResults() {
+        /*
+        Overview:
+            Initialization of CSearchResults, the default result number is set to 0.
+        */
         this->num = 0;
     }
 
     CSearchResults::CSearchResults(int num) {
+        /*
+        Overview:
+            Initialization of CSearchResults with result number.
+        */
         this->num = num;
         for (int i = 0; i < num; ++i) {
             this->search_paths.push_back(std::vector<CNode *>());
@@ -22,6 +30,10 @@ namespace tree
     //*********************************************************
 
     CNode::CNode() {
+        /*
+        Overview:
+            Initialization of CNode.
+        */
         this->prior = 0;
         this->legal_actions = legal_actions;
 
@@ -35,6 +47,13 @@ namespace tree
     }
 
     CNode::CNode(float prior, std::vector<int> &legal_actions) {
+        /*
+        Overview:
+            Initialization of CNode with prior value and legal actions.
+        Arguments:
+            - prior: the prior value of this node.
+            - legal_actions: a vector of legal actions of this node.
+        */
         this->prior = prior;
         this->legal_actions = legal_actions;
 
@@ -52,6 +71,16 @@ namespace tree
     CNode::~CNode() {}
 
     void CNode::expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix, const std::vector<float> &policy_logits) {
+        /*
+        Overview:
+            Expand the child nodes of the current node.
+        Arguments:
+            - to_play: which player to play the game in the current node.
+            - hidden_state_index_x: the index of hidden state vector of the current node.
+            - hidden_state_index_y: the index of hidden state vector of the current node.
+            - value_prefix: the value prefix of the current node.
+            - policy_logits: the logit of the child nodes.
+        */
         this->to_play = to_play;
         this->hidden_state_index_x = hidden_state_index_x;
         this->hidden_state_index_y = hidden_state_index_y;
@@ -88,10 +117,14 @@ namespace tree
     }
 
     void CNode::add_exploration_noise(float exploration_fraction, const std::vector<float> &noises) {
+         /*
+        Overview:
+            Add a noise to the prior of the child nodes.
+        Arguments:
+            - exploration_fraction: the fraction to add noise.
+            - noises: the vector of noises added to each child node.
+        */
         float noise, prior;
-        //        for(auto a: this->legal_actions){
-        //            noise = noises[a];
-        //            CNode* child = this->get_child(a);
         for (int i = 0; i < this->legal_actions.size(); ++i) {
             noise = noises[i];
             CNode *child = this->get_child(this->legal_actions[i]);
@@ -102,6 +135,14 @@ namespace tree
     }
 
     float CNode::compute_mean_q(int isRoot, float parent_q, float discount_factor) {
+        /*
+        Overview:
+            Compute the mean q value of the current node.
+        Arguments:
+            - isRoot: whether the current node is a root node.
+            - parent_q: the q value of the parent node.
+            - discount_factor: the discount_factor of reward.
+        */
         float total_unsigned_q = 0.0;
         int total_visits = 0;
         float parent_value_prefix = this->value_prefix;
@@ -132,10 +173,18 @@ namespace tree
     }
 
     int CNode::expanded() {
+        /*
+        Overview:
+            Return whether the current node is expanded.
+        */
         return this->children.size() > 0;
     }
 
     float CNode::value() {
+        /*
+        Overview:
+            Return the real value of the current tree.
+        */
         float true_value = 0.0;
         if (this->visit_count == 0) {
             return true_value;
@@ -146,6 +195,12 @@ namespace tree
     }
 
     std::vector<int> CNode::get_trajectory() {
+        /*
+        Overview:
+            Find the current best trajectory starts from the current node.
+        Outputs:
+            - traj: a vector of node index, which is the current best trajectory from this node.
+        */
         std::vector<int> traj;
 
         CNode *node = this;
@@ -160,6 +215,12 @@ namespace tree
     }
 
     std::vector<int> CNode::get_children_distribution() {
+        /*
+        Overview:
+            Get the distribution of child nodes in the format of visit_count.
+        Outputs:
+            - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
+        */
         std::vector<int> distribution;
         if (this->expanded()) {
             for (auto a : this->legal_actions) {
@@ -171,19 +232,34 @@ namespace tree
     }
 
     CNode *CNode::get_child(int action) {
+        /*
+        Overview:
+            Get the child node corresponding to the input action.
+        Arguments:
+            - action: the action to get child.
+        */
         return &(this->children[action]);
     }
 
     //*********************************************************
 
     CRoots::CRoots() {
+        /*
+        Overview:
+            The initialization of CRoots.
+        */
         this->root_num = 0;
-        this->pool_size = 0;
     }
 
-    CRoots::CRoots(int root_num, int pool_size, std::vector<std::vector<int> > &legal_actions_list) {
+    CRoots::CRoots(int root_num, std::vector<std::vector<int> > &legal_actions_list) {
+        /*
+        Overview:
+            The initialization of CRoots with root num and legal action lists.
+        Arguments:
+            - root_num: the number of the current root.
+            - legal_action_list: the vector of the legal action of this root.
+        */
         this->root_num = root_num;
-        this->pool_size = pool_size;
         this->legal_actions_list = legal_actions_list;
 
         for (int i = 0; i < root_num; ++i) {
@@ -194,6 +270,16 @@ namespace tree
     CRoots::~CRoots() {}
 
     void CRoots::prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch) {
+        /*
+        Overview:
+            Expand the roots and add noises.
+        Arguments:
+            - root_exploration_fraction: the exploration fraction of roots
+            - noises: the vector of noise add to the roots.
+            - value_prefixs: the vector of value prefixs of each root.
+            - policies: the vector of policy logits of each root.
+            - to_play_batch: the vector of the player side of each root.
+        */
         for (int i = 0; i < this->root_num; ++i) {
             this->roots[i].expand(to_play_batch[i], 0, i, value_prefixs[i], policies[i]);
             this->roots[i].add_exploration_noise(root_exploration_fraction, noises[i]);
@@ -202,6 +288,14 @@ namespace tree
     }
 
     void CRoots::prepare_no_noise(const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch) {
+        /*
+        Overview:
+            Expand the roots without noise.
+        Arguments:
+            - value_prefixs: the vector of value prefixs of each root.
+            - policies: the vector of policy logits of each root.
+            - to_play_batch: the vector of the player side of each root.
+        */
         for (int i = 0; i < this->root_num; ++i) {
             this->roots[i].expand(to_play_batch[i], 0, i, value_prefixs[i], policies[i]);
             this->roots[i].visit_count += 1;
@@ -209,10 +303,20 @@ namespace tree
     }
 
     void CRoots::clear() {
+        /*
+        Overview:
+            Clear the roots vector.
+        */
         this->roots.clear();
     }
 
     std::vector<std::vector<int> > CRoots::get_trajectories() {
+        /*
+        Overview:
+            Find the current best trajectory starts from each root.
+        Outputs:
+            - traj: a vector of node index, which is the current best trajectory from each root.
+        */
         std::vector<std::vector<int> > trajs;
         trajs.reserve(this->root_num);
 
@@ -223,6 +327,12 @@ namespace tree
     }
 
     std::vector<std::vector<int> > CRoots::get_distributions() {
+        /*
+        Overview:
+            Get the children distribution of each root.
+        Outputs:
+            - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
+        */
         std::vector<std::vector<int> > distributions;
         distributions.reserve(this->root_num);
 
@@ -233,6 +343,10 @@ namespace tree
     }
 
     std::vector<float> CRoots::get_values() {
+        /*
+        Overview:
+            Return the real value of each root.
+        */
         std::vector<float> values;
         for (int i = 0; i < this->root_num; ++i) {
             values.push_back(this->roots[i].value());
@@ -240,14 +354,19 @@ namespace tree
         return values;
     }
 
-    // visualize related code
-    //     CNode* CRoots::get_root(int index){
-    //        return &(this->roots[index]);
-    //     }
 
     //*********************************************************
     //
     void update_tree_q(CNode *root, tools::CMinMaxStats &min_max_stats, float discount_factor, int players) {
+        /*
+        Overview:
+            Update the q value of the root and its child nodes.
+        Arguments:
+            - root: the root that update q value from.
+            - min_max_stats: a tool used to min-max normalize the q value.
+            - discount_factor: the discount factor of reward.
+            - players: the number of players.
+        */
         std::stack<CNode *> node_stack;
         node_stack.push(root);
         float parent_value_prefix = 0.0;
@@ -289,6 +408,16 @@ namespace tree
     }
 
     void cbackpropagate(std::vector<CNode *> &search_path, tools::CMinMaxStats &min_max_stats, int to_play, float value, float discount_factor) {
+        /*
+        Overview:
+            Update the value sum and visit count of nodes along the search path.
+        Arguments:
+            - search_path: a vector of nodes on the search path.
+            - min_max_stats: a tool used to min-max normalize the q value.
+            - to_play: which player to play the game in the current node.
+            - value: the value to propagate along the search path.
+            - discount_factor: the discount factor of reward.
+        */
         if (to_play == 0) {
             float bootstrap_value = value;
             int path_len = search_path.size();
@@ -303,8 +432,6 @@ namespace tree
                     CNode *parent = search_path[i - 1];
                     parent_value_prefix = parent->value_prefix;
                     is_reset = parent->is_reset;
-                    //                float qsa = (node->value_prefix - parent_value_prefix) + discount_factor * node->value();
-                    //                min_max_stats.update(qsa);
                 }
 
                 float true_reward = node->value_prefix - parent_value_prefix;
@@ -352,15 +479,25 @@ namespace tree
                 } else {
                     bootstrap_value = true_reward + discount_factor * bootstrap_value;
                 }
-                //                if(node->to_play == to_play)
-                //                    bootstrap_value = true_reward + discount_factor * bootstrap_value;
-                //                else
-                //                    bootstrap_value = - true_reward + discount_factor * bootstrap_value;
             }
         }
     }
 
     void cbatch_backpropagate(int hidden_state_index_x, float discount_factor, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> is_reset_lst, std::vector<int> &to_play_batch) {
+        /*
+        Overview:
+            Expand the nodes along the search path and update the infos.
+        Arguments:
+            - hidden_state_index_x: the index of hidden state vector.
+            - discount_factor: the discount factor of reward.
+            - value_prefixs: the value prefixs of nodes along the search path.
+            - values: the values to propagate along the search path.
+            - policies: the policy logits of nodes along the search path.
+            - min_max_stats: a tool used to min-max normalize the q value.
+            - results: the search results.
+            - is_reset_lst: the vector of is_reset nodes along the search path, where is_reset represents for whether the parent value prefix needs to be reset.
+            - to_play_batch: the batch of which player is playing on this node.
+        */
         for (int i = 0; i < results.num; ++i) {
             results.nodes[i]->expand(to_play_batch[i], hidden_state_index_x, i, value_prefixs[i], policies[i]);
             // reset
@@ -371,6 +508,20 @@ namespace tree
     }
 
     int cselect_child(CNode *root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount_factor, float mean_q, int players) {
+        /*
+        Overview:
+            Select the child node of the roots according to ucb scores.
+        Arguments:
+            - root: the roots to select the child node.
+            - min_max_stats: a tool used to min-max normalize the score.
+            - pb_c_base: constants c2 in muzero.
+            - pb_c_init: constants c1 in muzero.
+            - disount_factor: the discount factor of reward.
+            - mean_q: the mean q value of the parent node.
+            - players: the number of players.
+        Outputs:
+            - action: the action to select.
+        */
         float max_score = FLOAT_MIN;
         const float epsilon = 0.000001;
         std::vector<int> max_index_lst;
@@ -397,6 +548,23 @@ namespace tree
     }
 
     float cucb_score(CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, int is_reset, float total_children_visit_counts, float parent_value_prefix, float pb_c_base, float pb_c_init, float discount_factor, int players) {
+        /*
+        Overview:
+            Compute the ucb score of the child.
+        Arguments:
+            - child: the child node to compute ucb score.
+            - min_max_stats: a tool used to min-max normalize the score.
+            - parent_mean_q: the mean q value of the parent node.
+            - is_reset: whether the value prefix needs to be reset.
+            - total_children_visit_counts: the total visit counts of the child nodes of the parent node.
+            - parent_value_prefix: the value prefix of parent node.
+            - pb_c_base: constants c2 in muzero.
+            - pb_c_init: constants c1 in muzero.
+            - disount_factor: the discount factor of reward.
+            - players: the number of players.
+        Outputs:
+            - ucb_value: the ucb score of the child.
+        */
         float pb_c = 0.0, prior_score = 0.0, value_score = 0.0;
         pb_c = log((total_children_visit_counts + pb_c_base + 1) / pb_c_base) + pb_c_init;
         pb_c *= (sqrt(total_children_visit_counts) / (child->visit_count + 1));
@@ -429,6 +597,18 @@ namespace tree
     }
 
     void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount_factor, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &virtual_to_play_batch) {
+        /*
+        Overview:
+            Search node path from the roots.
+        Arguments:
+            - roots: the roots that search from.
+            - pb_c_base: constants c2 in muzero.
+            - pb_c_init: constants c1 in muzero.
+            - disount_factor: the discount factor of reward.
+            - min_max_stats: a tool used to min-max normalize the score.
+            - results: the search results.
+            - virtual_to_play_batch: the batch of which player is playing on this node.
+        */
         // set seed
         timeval t1;
         gettimeofday(&t1, NULL);

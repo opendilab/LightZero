@@ -20,9 +20,7 @@ namespace tree {
         public:
             int visit_count, to_play, hidden_state_index_x, hidden_state_index_y, best_action;
             float reward, prior, value_sum;
-//            float parent_value_prefix;
             std::vector<int> children_index;
-            // std::vector<CNode>* ptr_node_pool;
             std::map<int, CNode> children;
 
             std::vector<int> legal_actions;
@@ -49,7 +47,6 @@ namespace tree {
         public:
             int root_num;
             std::vector<CNode> roots;
-            // std::vector<std::vector<CNode> > node_pools;
             std::vector<std::vector<int> > legal_actions_list;
 
             CRoots();

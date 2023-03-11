@@ -21,7 +21,6 @@ namespace tree {
             float value_prefix, prior, value_sum;
             float parent_value_prefix;
             std::vector<int> children_index;
-            // std::vector<CNode>* ptr_node_pool;
             std::map<int, CNode> children;
 
             std::vector<int> legal_actions;
@@ -46,13 +45,12 @@ namespace tree {
 
     class CRoots{
         public:
-            int root_num, pool_size;
+            int root_num;
             std::vector<CNode> roots;
-            // std::vector<std::vector<CNode> > node_pools;
             std::vector<std::vector<int> > legal_actions_list;
 
             CRoots();
-            CRoots(int root_num, int pool_size, std::vector<std::vector<int> > &legal_actions_list);
+            CRoots(int root_num, std::vector<std::vector<int> > &legal_actions_list);
             ~CRoots();
 
             void prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch);

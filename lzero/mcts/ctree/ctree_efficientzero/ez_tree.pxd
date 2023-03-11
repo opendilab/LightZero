@@ -34,7 +34,6 @@ cdef extern from "lib/cnode.h" namespace "tree":
         CNode(float prior, vector[int] & legal_actions) except +
         int visit_count, to_play, hidden_state_index_x, hidden_state_index_y, best_action
         float value_prefixs, prior, value_sum, parent_value_prefix
-        vector[CNode] * ptr_node_pool;
 
         void expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefixs,
                     vector[float] policy_logits)
@@ -49,10 +48,9 @@ cdef extern from "lib/cnode.h" namespace "tree":
 
     cdef cppclass CRoots:
         CRoots() except +
-        CRoots(int root_num, int pool_size, vector[vector[int]] legal_actions_list) except +
-        int root_num, pool_size
+        CRoots(int root_num, vector[vector[int]] legal_actions_list) except +
+        int root_num
         vector[CNode] roots
-        vector[vector[CNode]] node_pools
 
         void prepare(float root_exploration_fraction, const vector[vector[float]] & noises,
                      const vector[float] & value_prefixs, const vector[vector[float]] & policies,
@@ -92,7 +90,6 @@ cdef class ResultsWrapper:
 
 cdef class Roots:
     cdef readonly int root_num
-    cdef readonly int pool_size
     cdef CRoots *roots
 
 cdef class Node:

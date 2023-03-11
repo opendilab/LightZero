@@ -25,10 +25,9 @@ cdef class ResultsWrapper:
 
 cdef class Roots:
     @cython.binding
-    def __cinit__(self, int root_num, int pool_size, vector[vector[int]] legal_actions_list):
+    def __cinit__(self, int root_num, vector[vector[int]] legal_actions_list):
         self.root_num = root_num
-        self.pool_size = pool_size
-        self.roots = new CRoots(root_num, self.pool_size, legal_actions_list)
+        self.roots = new CRoots(root_num, legal_actions_list)
 
     @cython.binding
     def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool,
