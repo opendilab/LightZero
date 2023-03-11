@@ -366,7 +366,12 @@ class EfficientZeroGameBuffer(Buffer):
         # +1e-6 for numerical stability
         probs = self.game_pos_priorities ** self._alpha + 1e-6
         probs /= probs.sum()
+        # TODO(pu): sample data in PER way
+        # sample according to transition index
+        # TODO(pu): replace=True
+        # batch_index_list = np.random.choice(total, batch_size, p=probs, replace=True)
         batch_index_list = np.random.choice(total, batch_size, p=probs, replace=False)
+        # TODO(pu): reanalyze the outdated data according to their generated time
         if self._cfg.reanalyze_outdated is True:
             batch_index_list.sort()
         weights = (total * probs[batch_index_list]) ** (-beta)
@@ -433,6 +438,11 @@ class EfficientZeroGameBuffer(Buffer):
         )
         # only reanalyze recent reanalyze_ratio (e.g. 50%) data
         reanalyze_num = int(batch_size * reanalyze_ratio)
+        # if self._cfg.reanalyze_outdated is True:
+        # batch_index_list is sorted according to its generated enn_steps
+
+        # 0:reanalyze_num -> reanalyzed policy, reanalyze_num:end -> non reanalyzed policy
+        # reanalyzed policy
         if reanalyze_num > 0:
             # obtain the context of reanalyzed policy targets
             policy_re_context = self.prepare_policy_reanalyzed_context(
@@ -758,6 +768,7 @@ class EfficientZeroGameBuffer(Buffer):
                     horizon_id += 1
                     if current_index < traj_len_non_re:
                         target_values.append(value_lst[value_index])
+                        # Since the horizon is small and the discount_factor is close to 1.
                         # Compute the reward sum to approximate the value prefix for simplification
                         value_prefix += reward_lst[current_index
                                                    ]  # * self._cfg.discount_factor ** (current_index - base_index)

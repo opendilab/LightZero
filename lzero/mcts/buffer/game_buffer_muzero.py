@@ -167,7 +167,12 @@ class MuZeroGameBuffer(Buffer):
     def push_games(self, data: Any, meta):
         """
         Overview:
-            save a list of game histories
+            Push game data and it's meta information in buffer.
+            Save a game history block
+        Arguments:
+            - data (:obj:`Any`): The data which will be pushed into buffer.
+                                 i.e. a game history block
+            - meta (:obj:`dict`): Meta information
         """
         for (data_game, meta_game) in zip(data, meta):
             self.push(data_game, meta_game)
@@ -248,7 +253,11 @@ class MuZeroGameBuffer(Buffer):
     def get_transition(self, idx):
         """
         Overview:
-            sample one transition according to the idx
+            Sample one transition according to the idx
+        Arguments:
+            - idx: transition index
+        Returns:
+            - transition (:obj:`tuple`): One transition of pushed data.
         """
         game_block_idx, pos_in_game_block = self.game_block_game_pos_look_up[idx]
         game_block_idx -= self.base_idx
@@ -256,6 +265,14 @@ class MuZeroGameBuffer(Buffer):
         return transition
 
     def get(self, idx: int) -> BufferedData:
+        """
+        Overview:
+            Get one game according to the idx
+        Arguments:
+            - idx: game index
+        Returns:
+            - game: (:obj:`GameHistory`): One game history of pushed data.
+        """
         return self.get_game(idx)
 
     def get_game(self, idx):
@@ -264,9 +281,8 @@ class MuZeroGameBuffer(Buffer):
             sample one game history according to the idx
         Arguments:
             - idx: transition index
-            - return the game history including this transition
-            - game_block_idx is the index of this game history in the self.game_block_buffer list
-            - pos_in_game_block is the relative position of this transition in this game history
+        Returns:
+            - game: (:obj:`GameHistory`): One game history of pushed data.
         """
 
         game_block_idx, pos_in_game_block = self.game_block_game_pos_look_up[idx]
@@ -313,9 +329,13 @@ class MuZeroGameBuffer(Buffer):
                 self.game_pos_priorities[idx] = prio
 
     def update_priority(self, train_data, batch_priorities) -> None:
-        # update priority in replay_buffer
-        # current_batch, targets_batch, replay_buffer = train_data
-        # obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
+        """
+        Overview:
+            Update the priority of training data.
+        Arguments:
+            - train_data (:obj:`Optional[List[Optional[np.ndarray]]]`): training data to be updated priority.
+            - batch_priorities (:obj:`batch_priorities`): priorities to update to.
+        """
         self.batch_update(indices=train_data[0][3],
                           metas={'make_time': train_data[0][5], 'batch_priorities': batch_priorities})
 
@@ -340,7 +360,9 @@ class MuZeroGameBuffer(Buffer):
     def _remove(self, num_excess_games):
         """
         Overview:
-            delete game histories in index [0: num_excess_games]
+            delete game histories in index [0: excess_game_block_index]
+        Arguments:
+            - excess_game_block_index (:obj:`List[str]`): Index of data.
         """
         excess_games_steps = sum([len(game) for game in self.game_block_buffer[:num_excess_games]])
         del self.game_block_buffer[:num_excess_games]
@@ -456,6 +478,8 @@ class MuZeroGameBuffer(Buffer):
         Arguments:
             batch_context: Any batch context from replay buffer
             ratio: float ratio of reanalyzed policy (value is 100% reanalyzed)
+        Returns:
+            - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch
         """
         # obtain the batch context from replay buffer
         game_block_list, pos_in_game_block_list, batch_index_list, weights_list, make_time_list = batch_context
@@ -544,6 +568,9 @@ class MuZeroGameBuffer(Buffer):
             - game_block_list (:obj:`list`): list of game histories
             - pos_in_game_block_list (:obj:`list`): list of transition index in game_block
             - total_transitions (:obj:`int`): number of collected transitions
+        Returns:
+            - reward_value_context (:obj:`list`): value_obs_lst, value_mask, state_index_lst, rewards_lst, traj_lens, 
+              td_steps_lst, action_mask_history, to_play_history
         """
         zero_obs = game_block_list[0].zero_obs()
         value_obs_list = []
@@ -612,6 +639,8 @@ class MuZeroGameBuffer(Buffer):
             - batch_index_list (:obj:`list`): the index of start transition of sampled minibatch in replay buffer
             - game_block_list (:obj:`list`): list of game histories
             - pos_in_game_block_list (:obj:`list`): list transition index in game
+        Returns:
+            - policy_non_re_context (:obj:`list`): state_index_lst, child_visits, traj_lens, action_mask_history, to_play_history
         """
         child_visits = []
         traj_lens = []
@@ -640,6 +669,9 @@ class MuZeroGameBuffer(Buffer):
             - batch_index_list (:obj:'list'): start transition index in the replay buffer
             - game_block_list (:obj:'list'): list of game histories
             - pos_in_game_block_list (:obj:'list'): position of transition index in one game history
+        Returns:
+            - policy_re_context (:obj:`list`): policy_obs_lst, policy_mask, state_index_lst, indices,
+              child_visits, traj_lens, action_mask_history, to_play_history
         """
         zero_obs = game_block_list[0].zero_obs()
 
@@ -684,6 +716,12 @@ class MuZeroGameBuffer(Buffer):
         """
         Overview:
             prepare reward and value targets from the context of rewards and values.
+        Arguments:
+            - reward_value_context (:obj:'list'): the reward value context
+            - model (:obj:'torch.tensor'):model of the target model
+        Returns:
+            - batch_value_prefixs (:obj:'np.ndarray): batch of value prefix
+            - batch_values (:obj:'np.ndarray): batch of value estimation
         """
         value_obs_list, value_mask, pos_in_game_block_list, rewards_list, traj_lens, td_steps_list, action_mask_history, \
         to_play_history = reward_value_context
@@ -868,7 +906,12 @@ class MuZeroGameBuffer(Buffer):
     # @profile
     def compute_target_policy_reanalyzed(self, policy_re_context, model):
         """
-        compute policy targets from the reanalyzed context of policies
+        Overview:
+            prepare policy targets from the reanalyzed context of policies
+        Arguments:
+            - policy_re_context (:obj:`List`): List of policy context to reanalyzed
+        Returns:
+            - batch_target_policies_re
         """
         batch_target_policies_re = []
         if policy_re_context is None:
@@ -1198,6 +1241,11 @@ class MuZeroGameBuffer(Buffer):
         """
         Overview:
             sample data from ``GameBuffer`` and prepare the current and target batch for training
+        Arguments:
+            - batch_size (:obj:`int`): batch size
+            - policy (:obj:`torch.tensor`): model of policy
+        Returns:
+            - train_data (:obj:`List`): List of train data
         """
         policy._target_model.to(self._cfg.device)
         policy._target_model.eval()
