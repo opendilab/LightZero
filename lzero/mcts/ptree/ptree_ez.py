@@ -15,7 +15,6 @@ class Node:
          the node base class for tree_search.
      Arguments:
      """
-
     def __init__(self, prior: float, legal_actions: Any = None, action_space_size=9):
         self.prior = prior
         self.legal_actions = legal_actions
@@ -39,6 +38,16 @@ class Node:
         self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, value_prefix: float,
         policy_logits: List[float]
     ):
+        """
+        Overview:
+            expand the node.
+        Arguments:
+            - to_play (:obj:`Class int`): 
+            - hidden_state_index_x (:obj:`Class int`): 
+            - hidden_state_index_y (:obj:`Class int`): 
+            - value_prefix: (:obj:`Class float`):
+            - policy_logits: (:obj:`Class List`):
+        """
         self.to_play = to_play
         if self.legal_actions is None:
             self.legal_actions = np.arange(len(policy_logits))
@@ -356,6 +365,20 @@ def batch_backpropagate(
         is_reset_lst: List,
         to_play: list = None
 ) -> None:
+    """
+    Overview:
+        Backpropagation along the search path to update the attributes.
+    Arguments:
+        - hidden_state_index_x (:obj:`Class Node`): 
+        - discount_factor (:obj:`Class Float`): discount_factor factor used i calculating bootstrapped value, if env is board_games, we set discount_factor=1.
+        - value_prefixs (:obj:`Class List`): 
+        - values (:obj:`Class List`):
+        - policies (:obj:`Class List`):
+        - min_max_stats_lst (:obj:`Class List`):
+        - results (:obj:`Class List`):
+        - is_reset_lst (:obj:`Class List`): 
+        - to_play (:obj:`Class List`): 
+    """
     for i in range(results.num):
 
         ### expand the leaf node
@@ -377,6 +400,19 @@ def batch_backpropagate(
 def select_child(
         root: Node, min_max_stats, pb_c_base: int, pb_c_int: float, discount_factor: float, mean_q: float, players: int
 ) -> int:
+    """
+    Overview:
+        TODO
+    Arguments:
+        - min_max_stats (:obj:`Class Node`): 
+        - pb_c_base (:obj:`Class Int`): constant c1 used in pUCT rule, typically 1.25.
+        - pb_c_int (:obj:`Class Float`): constant c2 used in pUCT rule, typically 19652.
+        - discount_factor (:obj:`Class Float`): discount_factor factor used i calculating bootstrapped value, if env is board_games, we set discount_factor=1.
+        - mean_q (:obj:`Class Float`): the mean of q.
+        - players (:obj:`Class Float`): one/two_player mode board games.
+    Returns:
+        - action (:obj:`Int`): Choose the action with the highest ucb score.
+    """
     max_score = -np.inf
     epsilon = 0.000001
     max_index_lst = []
@@ -416,8 +452,10 @@ def compute_ucb_score(
     Overview:
         calculate the pUCB score.
     Arguments:
-        - child (:obj:`Any`): a child node
-        - players (:obj:`int`): one/two_player mode board games
+        - child (:obj:`Any`): a child node.
+        - players (:obj:`int`): one/two_player mode board games.
+    Returns:
+        - score (:obj:`Bool`): The UCB score.
     """
     pb_c = math.log((total_children_visit_counts + pb_c_base + 1) / pb_c_base) + pb_c_init
     pb_c *= (math.sqrt(total_children_visit_counts) / (child.visit_count + 1))
@@ -452,13 +490,18 @@ def batch_traverse(
         traverse, also called expandsion. process a batch roots parallely
     Arguments:
         - roots (:obj:`Any`): a batch of root nodes to be expanded.
-        - pb_c_base (:obj:`int`): constant c1 used in pUCT rule, typically 1.25
-        - pb_c_init (:obj:`int`): constant c2 used in pUCT rule, typically 19652
-        - discount_factor (:obj:`int`): discount_factor factor used i calculating bootstrapped value, if env is board_games, we set discount_factor=1
+        - pb_c_base (:obj:`int`): constant c1 used in pUCT rule, typically 1.25.
+        - pb_c_init (:obj:`int`): constant c2 used in pUCT rule, typically 19652.
+        - discount_factor (:obj:`int`): discount_factor factor used i calculating bootstrapped value, if env is board_games, we set discount_factor=1.
+        - virtual_to_play (:obj:`list`): the to_play list used in self_play collecting and trainin gin board games,
+            `virtual` is to emphasize that actions are performed on an imaginary hidden state.
+    Returns:
+        - hidden_state_index_x_lst (:obj:`list`): TODO
+        - hidden_state_index_y_lst (:obj:`list`): TODO
+        - last_actions (:obj:`list`): the action performed by the previous node.
         - virtual_to_play (:obj:`list`): the to_play list used in self_play collecting and trainin gin board games,
             `virtual` is to emphasize that actions are performed on an imaginary hidden state.
     """
-
     last_action = 0
     parent_q = 0.0
     results.search_lens = [None for i in range(results.num)]
