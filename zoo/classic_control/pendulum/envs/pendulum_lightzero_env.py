@@ -82,16 +82,13 @@ class PendulumEnv(BaseEnv):
         obs = self._env.reset()
         obs = to_ndarray(obs).astype(np.float32)
         self._final_eval_reward = 0.
-
-        # to be compatible with MuZero/EfficientZero policy
-        # shape: [W, H, C]
+        # to be compatible with LightZero model,shape: [W, H, C]
         obs = obs.reshape(obs.shape[0], 1, 1)
         if not self._continuous:
             action_mask = np.ones(self._discrete_action_num, 'int8')
         else:
             action_mask = None
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
-
         return obs
 
     def close(self) -> None:
@@ -107,33 +104,26 @@ class PendulumEnv(BaseEnv):
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
         if isinstance(action, int):
             action = np.array(action)
-        # assert isinstance(action, np.ndarray), type(action)
         # if require discrete env, convert actions to [-1 ~ 1] float actions
         if not self._continuous:
             action = (action / (self._discrete_action_num - 1)) * 2 - 1
         # scale into [-2, 2]
         if self._act_scale:
             action = affine_transform(action, min_val=self._env.action_space.low, max_val=self._env.action_space.high)
-
         obs, rew, done, info = self._env.step(action)
-
         self._final_eval_reward += rew
         obs = to_ndarray(obs).astype(np.float32)
         # wrapped to be transferred to a array with shape (1,)
         rew = to_ndarray([rew]).astype(np.float32)
         if done:
             info['final_eval_reward'] = self._final_eval_reward
-
-        # to be compatible with requirement for data type in LightZero policy
-        # shape: [W, H, C]
+        # to be compatible with LightZero model,shape: [W, H, C]
         obs = obs.reshape(obs.shape[0], 1, 1)
         if not self._continuous:
             action_mask = np.ones(self._discrete_action_num, 'int8')
         else:
             action_mask = None
-
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
-
         return BaseEnvTimestep(obs, rew, done, info)
 
     def enable_save_replay(self, replay_path: Optional[str] = None) -> None:

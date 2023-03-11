@@ -165,7 +165,12 @@ class SampledEfficientZeroGameBuffer(Buffer):
     def push_games(self, data: Any, meta):
         """
         Overview:
-            save a list of game histories
+            Push game data and it's meta information in buffer.
+            Save a game history block
+        Arguments:
+            - data (:obj:`Any`): The data which will be pushed into buffer.
+                                 i.e. a game history block
+            - meta (:obj:`dict`): Meta information
         """
         for (data_game, meta_game) in zip(data, meta):
             self.push(data_game, meta_game)
@@ -180,12 +185,20 @@ class SampledEfficientZeroGameBuffer(Buffer):
             groupby: str = None,
             rolling_window: int = None
     ) -> Union[List[BufferedData], List[List[BufferedData]]]:
+        """
+        Overview:
+            To be compatible with Buffer class
+        """
         pass
 
     def get_transition(self, idx):
         """
         Overview:
-            sample one transition according to the idx
+            Sample one transition according to the idx
+        Arguments:
+            - idx: transition index
+        Returns:
+            - transition (:obj:`tuple`): One transition of pushed data.
         """
         game_block_idx, game_block_pos = self.game_block_game_pos_look_up[idx]
         game_block_idx -= self.base_idx
@@ -193,6 +206,14 @@ class SampledEfficientZeroGameBuffer(Buffer):
         return transition
 
     def get(self, idx: int) -> BufferedData:
+        """
+        Overview:
+            Get one game according to the idx
+        Arguments:
+            - idx: game index
+        Returns:
+            - game: (:obj:`GameHistory`): One game history of pushed data.
+        """
         return self.get_game(idx)
 
     def get_game(self, idx):
@@ -204,6 +225,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
             - return the game history including this transition
             - game_block_idx is the index of this game history in the self.game_block_buffer list
             - game_block_pos is the relative position of this transition in this game history
+        Returns:
+            - game: (:obj:`GameHistory`): One game history of pushed data.
         """
 
         game_block_idx, game_block_pos = self.game_block_game_pos_look_up[idx]
@@ -242,6 +265,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
         Arguments:
             - indices (:obj:`List[str]`): Index of data.
             - metas (:obj:`Optional[List[Optional[dict]]]`): Meta information.
+        Returns:
+            - success (:obj:`bool`): Success or not, if data with the index not exist in buffer, return false.
         """
         # only update the priorities for data still in replay buffer
         for i in range(len(indices)):
@@ -250,10 +275,13 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 self.game_pos_priorities[idx] = prio
 
     def update_priority(self, train_data, batch_priorities) -> None:
-        # update priority in replay_buffer
-        # current_batch, targets_batch = data
-        # obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights, make_time = current_batch
-        # target_value_prefix, target_value, target_policy = targets_batch
+        """
+        Overview:
+            Update the priority of training data.
+        Arguments:
+            - train_data (:obj:`Optional[List[Optional[np.ndarray]]]`): training data to be updated priority.
+            - batch_priorities (:obj:`batch_priorities`): priorities to update to.
+        """
         self.batch_update(indices=train_data[0][4],
                           metas={'make_time': train_data[0][6], 'batch_priorities': batch_priorities})
 
@@ -340,6 +368,9 @@ class SampledEfficientZeroGameBuffer(Buffer):
         Arguments:
             - batch_size: int batch size
             - beta: float the parameter in PER for calculating the priority
+        Returns:
+            - context (:obj:`Tuple`): Context information of a batch, including game_list, game_pos,
+              batch_index_list, weights and make_time.
         """
         assert beta > 0
 
@@ -396,6 +427,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
         Arguments:
             batch_context: Any batch context from replay buffer
              reanalyze_ratio: float ratio of reanalyzed policy (value is 100% reanalyzed)
+        Returns:
+            - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch
         """
         # obtain the batch context from replay buffer
         game_lst, game_block_pos_lst, batch_index_list, weights, make_time_lst = batch_context
@@ -521,6 +554,9 @@ class SampledEfficientZeroGameBuffer(Buffer):
             - games (:obj:`list`): list of game histories
             - state_index_lst (:obj:`list`): list of transition index in game_block
             - total_transitions (:obj:`int`): number of collected transitions
+        Returns:
+            - reward_value_context (:obj:`list`): value_obs_lst, value_mask, state_index_lst, rewards_lst, traj_lens, 
+              td_steps_lst, action_mask_history, to_play_history
         """
         zero_obs = games[0].zero_obs()
         config = self._cfg
@@ -590,6 +626,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
             - indices (:obj:`list`): transition index in replay buffer
             - games (:obj:`list`): list of game histories
             - state_index_lst (:obj:`list`): list transition index in game
+        Returns:
+            - policy_non_re_context (:obj:`list`): state_index_lst, child_visits, traj_lens, action_mask_history, to_play_history
         """
         child_visits = []
         traj_lens = []
@@ -616,6 +654,9 @@ class SampledEfficientZeroGameBuffer(Buffer):
             - indices (:obj:'list'):transition index in replay buffer
             - games (:obj:'list'):list of game histories
             - state_index_lst (:obj:'list'): transition index in game
+        Returns:
+            - policy_re_context (:obj:`list`): policy_obs_lst, policy_mask, state_index_lst, indices,
+              child_visits, traj_lens, action_mask_history, to_play_history
         """
         zero_obs = games[0].zero_obs()
         config = self._cfg
@@ -660,6 +701,12 @@ class SampledEfficientZeroGameBuffer(Buffer):
         """
         Overview:
             prepare reward and value targets from the context of rewards and values.
+        Arguments:
+            - reward_value_context (:obj:'list'): the reward value context
+            - model (:obj:'torch.tensor'):model of the target model
+        Returns:
+            - batch_value_prefixs (:obj:'np.ndarray): batch of value prefix
+            - batch_values (:obj:'np.ndarray): batch of value estimation
         """
         value_obs_lst, value_mask, state_index_lst, rewards_lst, traj_lens, td_steps_lst, action_mask_history, \
         to_play_history = reward_value_context
@@ -888,7 +935,12 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
     def compute_target_policy_reanalyzed(self, policy_re_context, model):
         """
-        compute policy targets from the reanalyzed context of policies.
+        Overview:
+            prepare policy targets from the reanalyzed context of policies
+        Arguments:
+            - policy_re_context (:obj:`List`): List of policy context to reanalyzed
+        Returns:
+            - batch_target_policies_re
         """
         batch_target_policies_re = []
         if policy_re_context is None:
@@ -1248,6 +1300,11 @@ class SampledEfficientZeroGameBuffer(Buffer):
         """
         Overview:
             sample data from ``GameBuffer`` and prepare the current and target batch for training
+        Arguments:
+            - batch_size (:obj:`int`): batch size
+            - policy (:obj:`torch.tensor`): model of policy
+        Returns:
+            - train_data (:obj:`List`): List of train data
         """
 
         policy._target_model.to(self._cfg.device)
