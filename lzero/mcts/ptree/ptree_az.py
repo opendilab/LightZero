@@ -9,9 +9,8 @@ import torch.nn as nn
 class Node(object):
     """
     Overview:
-        the node base class for tree_search.
+        The node base class for tree_search.
     """
-
     def __init__(self, parent, prior_p: float):
         self._parent = parent
         self._children = {}
@@ -23,17 +22,31 @@ class Node(object):
     def value(self):
         """
         Overview:
-            return current value, used to compute ucb score.
+            The value of the current node.
+        Returns:
+            - output (:obj:`Int`): Current value, used to compute ucb score.
         """
         if self._visit_count == 0:
             return 0
         return self._value_sum / self._visit_count
 
     def update(self, value):
+        """
+        Overview:
+            Updata the current node information, such as visit_count and value_sum.
+        Arguments:
+            - value (:obj:`Int`): The value of the node.
+        """
         self._visit_count += 1
         self._value_sum += value
 
     def update_recursive(self, leaf_value):
+        """
+        Overview:
+            Update node information recursively.
+        Arguments:
+            - leaf_value (:obj:`Int`): The value of the node.
+        """
         if not self.is_root():
             self._parent.update_recursive(-leaf_value)
         self.update(leaf_value)
@@ -42,6 +55,8 @@ class Node(object):
         """
         Overview:
             Check if the current node is a leaf node or not.
+        Returns:
+            - output (:obj:`Dict`): Dict type children node.
         """
         return self._children == {}
 
@@ -49,6 +64,8 @@ class Node(object):
         """
         Overview:
             Check if the current node is a root node or not.
+        Returns:
+            - output (:obj:`Bool`): Whether it is the parent node.
         """
         return self._parent is None
 
@@ -66,7 +83,10 @@ class Node(object):
 
 
 class MCTS(object):
-
+    """
+    Overview:
+        MCTS search process.
+    """
     def __init__(self, cfg):
         self._cfg = cfg
 
@@ -87,8 +107,15 @@ class MCTS(object):
         """
         Overview:
             calculate the move probabilities based on visit counts at the root node.
+        Arguments:
+            - simulate_env (:obj:`Class BaseGameEnv`): The class of simulate env.
+            - policy_forward_fn (:obj:`Function`): The function to compute the action probs and state value.
+            - temperature (:obj:`Int`): Temperature is a parameter that controls the "softness" of the probability distribution..
+            - sample (:obj:`Bool`): The value of the node.
+        Returns:
+            - action (:obj:`Bool`): Select the action with the most visits as the final action.
+            - action_probs (:obj:`List`): The output probability of each action.
         """
-
         root = Node(None, 1.0)
         self._expand_leaf_node(root, simulate_env, policy_forward_fn)
         if sample:
@@ -123,6 +150,10 @@ class MCTS(object):
         Overview:
             Run a single playout from the root to the leaf, getting a value at the leaf and propagating it back through its parents.
             State is modified in-place, so a deepcopy must be provided.
+        Arguments:
+            - node (:obj:`Class Node`): Current node when performing mcts search.
+            - simulate_env (:obj:`Class BaseGameEnv`): The class of simulate env.
+            - policy_forward_fn (:obj:`Function`): The function to compute the action probs and state value.
         """
         while not node.is_leaf():
             action, node = self._select_child(node)
@@ -147,6 +178,11 @@ class MCTS(object):
         """
         Overview:
             Select the child with the highest UCB score.
+        Arguments:
+            - node (:obj:`Class Node`): Current node.
+        Returns:
+            - action (:obj:`Int`): choose the action with the highest ucb score.
+            - child (:obj:`Node`): the child node reached by executing the action with the highest ucb score.
         """
         _, action, child = max((self._ucb_score(node, child), action, child) for action, child in node.children.items())
         return action, child
@@ -155,6 +191,12 @@ class MCTS(object):
         """
         Overview:
             expand the node with the policy_forward_fn.
+        Arguments:
+            - node (:obj:`Class Node`): current node when performing mcts search.
+            - simulate_env (:obj:`Class BaseGameEnv`): the class of simulate env.
+            - policy_forward_fn (:obj:`Function`): the function to compute the action probs and state value.
+        Returns:
+            - leaf_value (:obj:`Bool`): the leaf node's value.
         """
         action_probs_dict, leaf_value = policy_forward_fn(simulate_env)
         for action, prior_p in action_probs_dict.items():
@@ -168,6 +210,15 @@ class MCTS(object):
     # The score for a node is based on its value, plus an exploration bonus based on
     # the prior.
     def _ucb_score(self, parent: Node, child: Node):
+        """
+        Overview:
+            Compute UCB score.
+        Arguments:
+            - parent (:obj:`Class Node`): Current node.
+            - child (:obj:`Class Node`): Current node's child.
+        Returns:
+            - score (:obj:`Bool`): The UCB score.
+        """
         pb_c = math.log((parent.visit_count + self._pb_c_base + 1) / self._pb_c_base) + self._pb_c_init
         pb_c *= math.sqrt(parent.visit_count) / (child.visit_count + 1)
 
@@ -176,6 +227,12 @@ class MCTS(object):
         return prior_score + value_score
 
     def _add_exploration_noise(self, node):
+        """
+        Overview:
+            Add exploration noise.
+        Arguments:
+            - node (:obj:`Class Node`): Current node.
+        """
         actions = node.children.keys()
         noise = np.random.gamma(self._root_dirichlet_alpha, 1, len(actions))
         frac = self._root_exploration_fraction
