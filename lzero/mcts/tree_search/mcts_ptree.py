@@ -1,5 +1,5 @@
 """
-The following code is adapted from https://github.com/werner-duvaud/muzero-general
+Acknowledgement: The following code is adapted from https://github.com/werner-duvaud/muzero-general
 """
 import copy
 
@@ -18,7 +18,7 @@ from ..scaling_transform import inverse_scalar_transform
 class EfficientZeroMCTSPtree(object):
     """
     Overview:
-        MCTSPtree(Implemented in python) for EfficientZero.
+        MCTSPtree for EfficientZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in python.
     Interfaces:
         __init__, search
     """
@@ -100,10 +100,10 @@ class EfficientZeroMCTSPtree(object):
                 # prepare a result wrapper to transport results between python and c++ parts
                 results = tree.SearchResults(num=num)
 
-                # traverse to select actions for each root hidden_state_index_x_lst: the first index of leaf node
-                # states in hidden_state_pool, i.e. the search deepth; index hidden_state_index_y_lst: the second
-                # index of leaf node states in hidden_state_pool, i.e. the batch root node index, max is env_num,the
-                # hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
+                # traverse to select actions for each root.
+                # hidden_state_index_x_lst: the first index of leaf node states in hidden_state_pool, i.e. the search depth.
+                # index hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool, i.e. the batch root node index, maximum is ``env_num``.
+                # the hidden state of the leaf node is hidden_state_pool[x, y]; the index of value prefix hidden state of the leaf node are in the same manner.
 
                 # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
                 # simulation reaches a leaf node s_l.
@@ -207,7 +207,7 @@ import lzero.mcts.ptree.ptree_mz as tree_muzero
 class MuZeroMCTSPtree(object):
     """
     Overview:
-        MCTSPtree(Implemented in python) for MuZero.
+        MCTSPtree for MuZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in python.
     Interfaces:
         __init__, search
     """

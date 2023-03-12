@@ -1,3 +1,7 @@
+"""
+The Node and MCTS class for AlphaZero.
+"""
+
 import copy
 import math
 
@@ -201,18 +205,12 @@ class MCTS(object):
         action_probs_dict, leaf_value = policy_forward_fn(simulate_env)
         for action, prior_p in action_probs_dict.items():
             node.children[action] = Node(parent=node, prior_p=prior_p)
-        # if list(node.children.keys()) == [0, 1, 2, 4, 6, 7, 8]:
-        #     print('debug')
-        # if list(node.children.keys()) != simulate_env.legal_actions:
-        #     print('debug')
         return leaf_value
 
-    # The score for a node is based on its value, plus an exploration bonus based on
-    # the prior.
     def _ucb_score(self, parent: Node, child: Node):
         """
         Overview:
-            Compute UCB score.
+            Compute UCB score. The score for a node is based on its value, plus an exploration bonus based on the prior.
         Arguments:
             - parent (:obj:`Class Node`): Current node.
             - child (:obj:`Class Node`): Current node's child.

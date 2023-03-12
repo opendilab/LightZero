@@ -1,3 +1,5 @@
+// Some of the following annotations are modified from the answer provided by ChatGPT.
+
 #include <iostream>
 #include "cnode.h"
 #include <algorithm>
@@ -17,10 +19,18 @@
 
 
 template <class T>
-size_t hash_combine(std::size_t &seed, const T &v)
+size_t hash_combine(std::size_t &seed, const T &val)
 {
-    std::hash<T> hasher;
-    seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    /*
+    Overview:
+        Combines a hash value with a new value using a bitwise XOR and a rotation.
+        This function is used to create a hash value for multiple values.
+    Arguments:
+        - seed The current hash value to be combined with.
+        - val The new value to be hashed and combined with the seed.
+    */
+    std::hash<T> hasher;  // Create a hash object for the new value.
+    seed ^= hasher(val) + 0x9e3779b9 + (seed << 6) + (seed >> 2);  // Combine the new hash value with the seed.
     return seed;
 }
 
@@ -36,19 +46,34 @@ namespace tree
 
     CAction::CAction()
     {
+        /*
+        Overview:
+            Initialization of CAction. Parameterized constructor.
+        */
         this->is_root_action = 0;
     }
 
     CAction::CAction(std::vector<float> value, int is_root_action)
     {
+        /*
+        Overview:
+            Initialization of CAction with value and is_root_action. Default constructor.
+        Arguments:
+            - value: a multi-dimensional action.
+            - is_root_action: whether value is a root node.
+        */
         this->value = value;
         this->is_root_action = is_root_action;
     }
 
-    CAction::~CAction() {}
+    CAction::~CAction() {} // Destructors.
 
     std::vector<size_t> CAction::get_hash(void)
     {
+        /*
+        Overview:
+            get a hash value for each dimension in the multi-dimensional action.
+        */
         std::vector<size_t> hash;
         for (int i = 0; i < this->value.size(); ++i)
         {
@@ -59,11 +84,15 @@ namespace tree
     }
     size_t CAction::get_combined_hash(void)
     {
-
+        /*
+        Overview:
+            get the final combined hash value from the hash values of each dimension of the multi-dimensional action.
+        */
         std::vector<size_t> hash = this->get_hash();
         size_t combined_hash = hash[0];
 
-        if (hash.size()>=1){
+        if (hash.size() >= 1)
+        {
             for (int i = 1; i < hash.size(); ++i)
             {
                 combined_hash = hash_combine(combined_hash, hash[i]);
@@ -77,11 +106,19 @@ namespace tree
 
     CSearchResults::CSearchResults()
     {
+        /*
+        Overview:
+            Initialization of CSearchResults, the default result number is set to 0.
+        */
         this->num = 0;
     }
 
     CSearchResults::CSearchResults(int num)
     {
+        /*
+        Overview:
+            Initialization of CSearchResults with result number.
+        */
         this->num = num;
         for (int i = 0; i < num; ++i)
         {
@@ -95,6 +132,10 @@ namespace tree
 
     CNode::CNode()
     {
+        /*
+        Overview:
+            Initialization of CNode.
+        */
         this->prior = 0;
         this->action_space_size = 9;
         this->num_of_sampled_actions = 20;
@@ -113,6 +154,16 @@ namespace tree
 
     CNode::CNode(float prior, std::vector<CAction> &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space)
     {
+        /*
+        Overview:
+            Initialization of CNode with prior, legal actions, action_space_size, num_of_sampled_actions, continuous_action_space.
+        Arguments:
+            - prior: the prior value of this node.
+            - legal_actions: a vector of legal actions of this node.
+            - action_space_size: the size of action space of the current env.
+            - num_of_sampled_actions: the number of sampled actions, i.e. K in the Sampled MuZero papers.
+            - continuous_action_space: whether the action space is continous in current env.
+        */
         this->prior = prior;
         this->legal_actions = legal_actions;
 
@@ -131,8 +182,19 @@ namespace tree
 
     CNode::~CNode() {}
 
+
     void CNode::expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix, const std::vector<float> &policy_logits)
     {
+        /*
+        Overview:
+            Expand the child nodes of the current node.
+        Arguments:
+            - to_play: which player to play the game in the current node.
+            - hidden_state_index_x: the x/first index of hidden state vector of the current node, i.e. the search depth.
+            - hidden_state_index_y: the y/second index of hidden state vector of the current node, i.e. the index of batch root node, its maximum is ``batch_size``/``env_num``.
+            - value_prefix: the value prefix of the current node.
+            - policy_logits: the logit of the child nodes.
+        */
         this->to_play = to_play;
         this->hidden_state_index_x = hidden_state_index_x;
         this->hidden_state_index_y = hidden_state_index_y;
@@ -152,12 +214,15 @@ namespace tree
         std::vector<float> sampled_actions_probs;
         std::vector<float> probs;
 
+        /*
+        Overview:
+            When the currennt env has continuous action space, sampled K actions from continuous gaussia distribution policy.
+            When the currennt env has discrete action space, sampled K actions from discrete categirical distribution policy.
 
-        // sampled from gaussia distribution in continuous action space
-        // sampled from categirical distribution in discrete action space
+        */
         if (this->continuous_action_space == true)
         {
-            // continuous action space for sampled ez
+            // continuous action space for sampled algo..
             this->action_space_size = policy_logits.size() / 2;
             std::vector<float> mu;
             std::vector<float> sigma;
@@ -172,7 +237,6 @@ namespace tree
 
             // SAC-like tanh, pleasee refer to paper https://arxiv.org/abs/1801.01290.
             std::vector<std::vector<float> > sampled_actions_before_tanh;
-            // std::vector<std::vector<float> > sampled_actions_after_tanh;
 
             float sampled_action_one_dim_before_tanh;
             std::vector<float> sampled_actions_log_probs_before_tanh;
@@ -205,7 +269,7 @@ namespace tree
         }
         else
         {
-            // discrete action space for sampled ez
+            // discrete action space for sampled algo..
 
             //========================================================
             // python code
@@ -256,7 +320,7 @@ namespace tree
 
             unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
 
-            //    cout << "sampled_action[0]:" << sampled_action[0] <<endl;
+            // cout << "sampled_action[0]:" << sampled_action[0] <<endl;
 
             // std::vector<int> sampled_actions;
             // std::vector<float> sampled_actions_log_probs;
@@ -290,17 +354,15 @@ namespace tree
             std::vector<double> disturbed_probs;
             std::vector<std::pair<int, double> > disc_action_with_probs;
 
-            // 把概率值作为指数，从均匀分布采样的随机数作为底数：
-            // 相当于给原始概率值增加了均匀的随机扰动
+            // Use the reciprocal of the probability value as the exponent and a random number sampled from a uniform distribution as the base:
+            // Equivalent to adding a uniform random disturbance to the original probability value.
             for (auto prob : probs)
             {
                 disturbed_probs.push_back(std::pow(uniform_distribution(generator), 1. / prob));
             }
 
-            // std::cout << "position 4" << std::endl;
-
-            // 按照扰动后的概率值从大到小排序:
-            // 排序后第一个向量为索引，第二个向量为从大到小排序的扰动后的概率值
+            // Sort from large to small according to the probability value after the disturbance:
+            // After sorting, the first vector is the index, and the second vector is the probability value after perturbation sorted from large to small.
             for (size_t iter = 0; iter < disturbed_probs.size(); iter++)
             {
                 #ifdef __APPLE__
@@ -309,16 +371,8 @@ namespace tree
                     disc_action_with_probs.emplace_back(std::make_pair(iter, disturbed_probs[iter]));
                 #endif
             }
-            // std::sort(disc_action_with_probs.begin(), disc_action_with_probs.end(), [](auto x, auto y)
-            //           { return x.second > y.second; });
 
             std::sort(disc_action_with_probs.begin(), disc_action_with_probs.end(), cmp);
-
-            // for (int j = 0; j < policy_logits.size(); ++j)
-            // {
-            //     std::cout << "disc_action_with_probs[i].first " << disc_action_with_probs[j].first << " "
-            //               << "disc_action_with_probs[j].second " << disc_action_with_probs[j].second << std::endl;
-            // }
 
             // take the fist ``num_of_sampled_actions`` actions
             for (int k = 0; k < num_of_sampled_actions; ++k)
@@ -328,22 +382,19 @@ namespace tree
                 // sampled_actions_probs.push_back(disc_action_with_probs[k].second);
                 sampled_actions_probs.push_back(probs[disc_action_with_probs[k].first]);
 
-            // TODO(pu): logging
-            // std::cout << "sampled_actions[k]： " << sampled_actions[k] << std::endl;
-            // std::cout << "sampled_actions_probs[k]： " << sampled_actions_probs[k] << std::endl;
+                // TODO(pu): logging
+                // std::cout << "sampled_actions[k]： " << sampled_actions[k] << std::endl;
+                // std::cout << "sampled_actions_probs[k]： " << sampled_actions_probs[k] << std::endl;
             }
-            
+
             // TODO(pu): fixed k, only for debugging
-            //  取前 num_of_sampled_actions个动作: k=0,1,...,K-1
+            //  Take the first ``num_of_sampled_actions`` actions: k=0,1,...,K-1
             // for (int k = 0; k < num_of_sampled_actions; ++k)
             // {
             //     sampled_actions.push_back(k);
             //     // disc_action_with_probs[k].second is disturbed_probs
             //     // sampled_actions_probs.push_back(disc_action_with_probs[k].second);
             //     sampled_actions_probs.push_back(probs[k]);
-            // // TODO(pu): logging
-            // // std::cout << "sampled_actions[k]： " << sampled_actions[k] << std::endl;
-            // // std::cout << "sampled_actions_probs[k]： " << sampled_actions_probs[k] << std::endl;
             // }
 
             disturbed_probs.clear();        // Empty the collection to prepare for the next sampling.
@@ -374,11 +425,17 @@ namespace tree
                 this->legal_actions.push_back(action);
             }
         }
-
     }
 
     void CNode::add_exploration_noise(float exploration_fraction, const std::vector<float> &noises)
     {
+        /*
+        Overview:
+            Add a noise to the prior of the child nodes.
+        Arguments:
+            - exploration_fraction: the fraction to add noise.
+            - noises: the vector of noises added to each child node.
+        */
         float noise, prior;
         for (int i = 0; i < this->num_of_sampled_actions; ++i)
         {
@@ -386,12 +443,14 @@ namespace tree
             noise = noises[i];
             CNode *child = this->get_child(this->legal_actions[i]);
             prior = child->prior;
-            if (this->continuous_action_space == true){
-                // prior is log_prob
+            if (this->continuous_action_space == true)
+            {
+                // if prior is log_prob
                 child->prior = log(exp(prior) * (1 - exploration_fraction) + noise * exploration_fraction + 1e-6);
             }
-            else{
-                // prior is prob
+            else
+            {
+                // if prior is prob
                 child->prior = prior * (1 - exploration_fraction) + noise * exploration_fraction;
             }
         }
@@ -399,6 +458,14 @@ namespace tree
 
     float CNode::compute_mean_q(int isRoot, float parent_q, float discount_factor)
     {
+        /*
+        Overview:
+            Compute the mean q value of the current node.
+        Arguments:
+            - isRoot: whether the current node is a root node.
+            - parent_q: the q value of the parent node.
+            - discount_factor: the discount_factor of reward.
+        */
         float total_unsigned_q = 0.0;
         int total_visits = 0;
         float parent_value_prefix = this->value_prefix;
@@ -437,11 +504,19 @@ namespace tree
 
     int CNode::expanded()
     {
+        /*
+        Overview:
+            Return whether the current node is expanded.
+        */
         return this->children.size() > 0;
     }
 
     float CNode::value()
     {
+        /*
+        Overview:
+            Return the real value of the current tree.
+        */
         float true_value = 0.0;
         if (this->visit_count == 0)
         {
@@ -456,6 +531,12 @@ namespace tree
 
     std::vector<std::vector<float> > CNode::get_trajectory()
     {
+        /*
+        Overview:
+            Find the current best trajectory starts from the current node.
+        Outputs:
+            - traj: a vector of node index, which is the current best trajectory from this node.
+        */
         std::vector<CAction> traj;
 
         CNode *node = this;
@@ -477,6 +558,12 @@ namespace tree
 
     std::vector<int> CNode::get_children_distribution()
     {
+        /*
+        Overview:
+            Get the distribution of child nodes in the format of visit_count.
+        Outputs:
+            - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
+        */
         std::vector<int> distribution;
         if (this->expanded())
         {
@@ -491,9 +578,15 @@ namespace tree
 
     CNode *CNode::get_child(CAction action)
     {
-        // return &(this->children[action]);
+        /*
+        Overview:
+            Get the child node corresponding to the input action.
+        Arguments:
+            - action: the action to get child.
+        */
         return &(this->children[action.get_combined_hash()]);
         // TODO(pu): no hash
+        // return &(this->children[action]);
         // return &(this->children[action.value[0]]);
     }
 
@@ -507,6 +600,16 @@ namespace tree
 
     CRoots::CRoots(int root_num, std::vector<std::vector<float> > legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space)
     {
+        /*
+        Overview:
+            Initialization of CNode with root_num, legal_actions_list, action_space_size, num_of_sampled_actions, continuous_action_space.
+        Arguments:
+            - root_num: the number of the current root.
+            - legal_action_list: the vector of the legal action of this root.
+            - action_space_size: the size of action space of the current env.
+            - num_of_sampled_actions: the number of sampled actions, i.e. K in the Sampled MuZero papers.
+            - continuous_action_space: whether the action space is continous in current env.
+        */
         this->root_num = root_num;
         this->legal_actions_list = legal_actions_list;
         this->continuous_action_space = continuous_action_space;
@@ -519,14 +622,13 @@ namespace tree
         {
             if (this->continuous_action_space == true and this->legal_actions_list[0][0] == -1)
             {
-                //  continous action space
+                // continous action space
                 std::vector<CAction> legal_actions;
                 this->roots.push_back(CNode(0, legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space));
-
             }
             else if (this->continuous_action_space == false or this->legal_actions_list[0][0] == -1)
             {
-                //  sampled
+                // sampled
                 // discrete action space without action mask
                 std::vector<CAction> legal_actions;
                 this->roots.push_back(CNode(0, legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space));
@@ -535,7 +637,6 @@ namespace tree
             else
             {
                 // TODO(pu): discrete action space
-
                 std::vector<CAction> c_legal_actions;
                 for (int i = 0; i < this->legal_actions_list.size(); ++i)
                 {
@@ -543,7 +644,6 @@ namespace tree
                     c_legal_actions.push_back(c_legal_action);
                 }
                 this->roots.push_back(CNode(0, c_legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space));
-
             }
         }
     }
@@ -552,6 +652,17 @@ namespace tree
 
     void CRoots::prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch)
     {
+        /*
+        Overview:
+            Expand the roots and add noises.
+        Arguments:
+            - root_exploration_fraction: the exploration fraction of roots
+            - noises: the vector of noise add to the roots.
+            - value_prefixs: the vector of value prefixs of each root.
+            - policies: the vector of policy logits of each root.
+            - to_play_batch: the vector of the player side of each root.
+        */
+
         // sampled related core code
         for (int i = 0; i < this->root_num; ++i)
         {
@@ -563,6 +674,14 @@ namespace tree
 
     void CRoots::prepare_no_noise(const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch)
     {
+        /*
+        Overview:
+            Expand the roots without noise.
+        Arguments:
+            - value_prefixs: the vector of value prefixs of each root.
+            - policies: the vector of policy logits of each root.
+            - to_play_batch: the vector of the player side of each root.
+        */
         for (int i = 0; i < this->root_num; ++i)
         {
             this->roots[i].expand(to_play_batch[i], 0, i, value_prefixs[i], policies[i]);
@@ -578,7 +697,12 @@ namespace tree
 
     std::vector<std::vector<std::vector<float> > > CRoots::get_trajectories()
     {
-
+        /*
+        Overview:
+            Find the current best trajectory starts from each root.
+        Outputs:
+            - traj: a vector of node index, which is the current best trajectory from each root.
+        */
         std::vector<std::vector<std::vector<float> > > trajs;
         trajs.reserve(this->root_num);
 
@@ -591,6 +715,12 @@ namespace tree
 
     std::vector<std::vector<int> > CRoots::get_distributions()
     {
+        /*
+        Overview:
+            Get the children distribution of each root.
+        Outputs:
+            - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
+        */
         std::vector<std::vector<int> > distributions;
         distributions.reserve(this->root_num);
 
@@ -604,6 +734,13 @@ namespace tree
     // sampled related core code
     std::vector<std::vector<std::vector<float> > > CRoots::get_sampled_actions()
     {
+        /*
+        Overview:
+            Get the sampled_actions of each root.
+        Outputs:
+            - python_sampled_actions: a vector of sampled_actions for each root, e.g. the size of original action space is 6, the K=3, 
+            python_sampled_actions = [[1,3,0], [2,4,0], [5,4,1]].
+        */
         std::vector<std::vector<CAction> > sampled_actions;
         std::vector<std::vector<std::vector<float> > > python_sampled_actions;
 
@@ -627,6 +764,10 @@ namespace tree
 
     std::vector<float> CRoots::get_values()
     {
+        /*
+        Overview:
+            Return the estimated value of each root.
+        */
         std::vector<float> values;
         for (int i = 0; i < this->root_num; ++i)
         {
@@ -639,6 +780,15 @@ namespace tree
     //
     void update_tree_q(CNode *root, tools::CMinMaxStats &min_max_stats, float discount_factor, int players)
     {
+        /*
+        Overview:
+            Update the q value of the root and its child nodes.
+        Arguments:
+            - root: the root that update q value from.
+            - min_max_stats: a tool used to min-max normalize the q value.
+            - discount_factor: the discount factor of reward.
+            - players: the number of players.
+        */
         std::stack<CNode *> node_stack;
         node_stack.push(root);
         float parent_value_prefix = 0.0;
@@ -685,6 +835,16 @@ namespace tree
 
     void cbackpropagate(std::vector<CNode *> &search_path, tools::CMinMaxStats &min_max_stats, int to_play, float value, float discount_factor)
     {
+        /*
+        Overview:
+            Update the value sum and visit count of nodes along the search path.
+        Arguments:
+            - search_path: a vector of nodes on the search path.
+            - min_max_stats: a tool used to min-max normalize the q value.
+            - to_play: which player to play the game in the current node.
+            - value: the value to propagate along the search path.
+            - discount_factor: the discount factor of reward.
+        */
         if (to_play == 0)
         {
             float bootstrap_value = value;
@@ -758,7 +918,21 @@ namespace tree
     }
 
     void cbatch_backpropagate(int hidden_state_index_x, float discount_factor, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> is_reset_lst, std::vector<int> &to_play_batch)
-    {
+    {        
+        /*
+        Overview:
+            Expand the nodes along the search path and update the infos.
+        Arguments:
+            - hidden_state_index_x: the index of hidden state vector.
+            - discount_factor: the discount factor of reward.
+            - value_prefixs: the value prefixs of nodes along the search path.
+            - values: the values to propagate along the search path.
+            - policies: the policy logits of nodes along the search path.
+            - min_max_stats: a tool used to min-max normalize the q value.
+            - results: the search results.
+            - is_reset_lst: the vector of is_reset nodes along the search path, where is_reset represents for whether the parent value prefix needs to be reset.
+            - to_play_batch: the batch of which player is playing on this node.
+        */
         for (int i = 0; i < results.num; ++i)
         {
             results.nodes[i]->expand(to_play_batch[i], hidden_state_index_x, i, value_prefixs[i], policies[i]);
@@ -771,6 +945,21 @@ namespace tree
 
     CAction cselect_child(CNode *root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount_factor, float mean_q, int players, bool continuous_action_space)
     {
+        /*
+        Overview:
+            Select the child node of the roots according to ucb scores.
+        Arguments:
+            - root: the roots to select the child node.
+            - min_max_stats: a tool used to min-max normalize the score.
+            - pb_c_base: constants c2 in muzero.
+            - pb_c_init: constants c1 in muzero.
+            - disount_factor: the discount factor of reward.
+            - mean_q: the mean q value of the parent node.
+            - players: the number of players.
+            - continuous_action_space: whether the action space is continous in current env.
+        Outputs:
+            - action: the action to select.
+        */
         // sampled related core code
         // TODO(pu): Progressive widening (See https://hal.archives-ouvertes.fr/hal-00542673v2/document)
         float max_score = FLOAT_MIN;
@@ -808,8 +997,25 @@ namespace tree
 
     // sampled related core code
     float cucb_score(CNode *parent, CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, int is_reset, float total_children_visit_counts, float parent_value_prefix, float pb_c_base, float pb_c_init, float discount_factor, int players, bool continuous_action_space)
-
     {
+        /*
+        Overview:
+            Compute the ucb score of the child.
+        Arguments:
+            - child: the child node to compute ucb score.
+            - min_max_stats: a tool used to min-max normalize the score.
+            - parent_mean_q: the mean q value of the parent node.
+            - is_reset: whether the value prefix needs to be reset.
+            - total_children_visit_counts: the total visit counts of the child nodes of the parent node.
+            - parent_value_prefix: the value prefix of parent node.
+            - pb_c_base: constants c2 in muzero.
+            - pb_c_init: constants c1 in muzero.
+            - disount_factor: the discount factor of reward.
+            - players: the number of players.
+            - continuous_action_space: whether the action space is continous in current env.
+        Outputs:
+            - ucb_value: the ucb score of the child.
+        */
         float pb_c = 0.0, prior_score = 0.0, value_score = 0.0;
         pb_c = log((total_children_visit_counts + pb_c_base + 1) / pb_c_base) + pb_c_init;
         pb_c *= (sqrt(total_children_visit_counts) / (child->visit_count + 1));
@@ -876,6 +1082,19 @@ namespace tree
 
     void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount_factor, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &virtual_to_play_batch, bool continuous_action_space)
     {
+        /*
+        Overview:
+            Search node path from the roots.
+        Arguments:
+            - roots: the roots that search from.
+            - pb_c_base: constants c2 in muzero.
+            - pb_c_init: constants c1 in muzero.
+            - disount_factor: the discount factor of reward.
+            - min_max_stats: a tool used to min-max normalize the score.
+            - results: the search results.
+            - virtual_to_play_batch: the batch of which player is playing on this node.
+            - continuous_action_space: whether the action space is continous in current env.
+        */
         // set seed
         timeval t1;
         gettimeofday(&t1, NULL);

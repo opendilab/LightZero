@@ -19,7 +19,7 @@ from ..scaling_transform import inverse_scalar_transform
 class EfficientZeroMCTSCtree(object):
     """
     Overview:
-        MCTSCtree(Implemented in C++) for EfficientZero.
+        MCTSCtree for EfficientZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in C++.
     Interfaces:
         __init__, search
     """
@@ -95,9 +95,12 @@ class EfficientZeroMCTSCtree(object):
                 results = tree_efficientzero.ResultsWrapper(num=num)
 
                 # traverse to select actions for each root
-                # hidden_state_index_x_lst: the first index of leaf node states in hidden_state_pool
-                # hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool
-                # the hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
+                # hidden_state_index_x_lst: the first index of leaf node states in hidden_state_pool, i.e. the search depth.
+                # index hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool, i.e. the batch root node index, maximum is ``env_num``.
+                # the hidden state of the leaf node is hidden_state_pool[x, y]; the index of value prefix hidden state of the leaf node are in the same manner.
+
+                # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
+                # simulation reaches a leaf node s_l.
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play_batch)
                 )
@@ -113,10 +116,16 @@ class EfficientZeroMCTSCtree(object):
                 hidden_states = torch.from_numpy(np.asarray(hidden_states)).to(self._cfg.device).float()
                 hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(self._cfg.device).unsqueeze(0)
                 hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(self._cfg.device).unsqueeze(0)
-                # only for discrete action
+                # .long() only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
 
+                # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are
+                # computed by the dynamics function
+
                 # evaluation for leaf nodes
+
+                # Inside the search ctree we use the dynamics function to obtain the next hidden
+                # state given an action and the previous hidden state
                 network_output = model.recurrent_inference(
                     hidden_states, (hidden_states_c_reward, hidden_states_h_reward), last_actions
                 )
@@ -161,6 +170,9 @@ class EfficientZeroMCTSCtree(object):
                 reward_hidden_state_h_pool.append(reward_hidden_state_nodes[1])
                 hidden_state_index_x += 1
 
+                # MCTS stage 3:
+                # Backup: At the end of the simulation, the statistics along the trajectory are updated.
+
                 # backpropagation along the search path to update the attributes
                 tree_efficientzero.batch_backpropagate(
                     hidden_state_index_x, discount_factor, value_prefix_pool, value_pool, policy_logits_pool,
@@ -178,7 +190,8 @@ from lzero.mcts.ctree.ctree_muzero import mz_tree as tree_muzero
 class MuZeroMCTSCtree(object):
     """
     Overview:
-        MCTSCtree(Implemented in C++) for MuZero.
+        MCTSCtree for MuZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in C++.
+
     Interfaces:
         __init__, search
     """
@@ -241,21 +254,20 @@ class MuZeroMCTSCtree(object):
 
             for index_simulation in range(self._cfg.num_simulations):
                 hidden_states = []
-                hidden_states_c_reward = []
-                hidden_states_h_reward = []
 
                 # prepare a result wrapper to transport results between python and c++ parts
                 results = tree_muzero.ResultsWrapper(num=num)
 
-                # traverse to select actions for each root
-                # hidden_state_index_x_lst: the first index of leaf node states in hidden_state_pool
-                # hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool
-                # the hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
+                # traverse to select actions for each root.
+                # hidden_state_index_x_lst: the first index of leaf node states in hidden_state_pool, i.e. the search depth.
+                # index hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool, i.e. the batch root node index, maximum is ``env_num``.
+                # the hidden state of the leaf node is hidden_state_pool[x, y]; the index of value prefix hidden state of the leaf node are in the same manner.
+
+                # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
+                # simulation reaches a leaf node s_l.
                 hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play_batch)
                 )
-                # obtain the search horizon for leaf nodes
-                search_lens = results.get_search_len()
 
                 # obtain the states for leaf nodes
                 for ix, iy in zip(hidden_state_index_x_lst, hidden_state_index_y_lst):
@@ -265,7 +277,13 @@ class MuZeroMCTSCtree(object):
                 # only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
 
+                # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are
+                # computed by the dynamics function
+
                 # evaluation for leaf nodes
+
+                # Inside the search ctree we use the dynamics function to obtain the next hidden
+                # state given an action and the previous hidden state
                 network_output = model.recurrent_inference(hidden_states, last_actions)
                 # TODO(pu)
                 if not model.training:
@@ -290,6 +308,9 @@ class MuZeroMCTSCtree(object):
 
                 hidden_state_pool.append(hidden_state_nodes)
                 hidden_state_index_x += 1
+
+                # MCTS stage 3:
+                # Backup: At the end of the simulation, the statistics along the trajectory are updated.
 
                 # backpropagation along the search path to update the attributes
                 tree_muzero.batch_backpropagate(

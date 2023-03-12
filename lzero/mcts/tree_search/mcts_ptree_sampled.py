@@ -20,7 +20,7 @@ import lzero.mcts.ptree.ptree_sez as tree_sez
 class SampledEfficientZeroMCTSPtree(object):
     """
     Overview:
-        MCTSPtree(Implemented in python) for SampledEfficientZero.
+        MCTSPtree for Sampled EfficientZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in python.
     Interfaces:
         __init__, search
     """
