@@ -336,6 +336,7 @@ class GomokuEnv(BaseGameEnv):
     def rule_bot_v1(self):
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
+        # NOTE: we use the original raw_obs for ``gomoku_rule_bot_v1.get_action()``
         obs = {'observation': self.current_state()[0], 'action_mask': action_mask}
         return self.gomoku_rule_bot_v1.get_action(obs)
 

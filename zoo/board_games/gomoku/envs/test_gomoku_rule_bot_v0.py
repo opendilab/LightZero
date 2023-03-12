@@ -8,10 +8,10 @@ cfg = EasyDict(
     board_size=6,
     battle_mode='self_play_mode',
     channel_last=False,
-    scale=False,
+    scale=True,
     agent_vs_human=False,
     bot_action_type='v0',  # {'v0', 'v1', 'alpha_beta_pruning'}
-    prob_random_action_in_bot=0.,
+    prob_random_action_in_bot=0.5,
     check_action_to_connect4_in_bot_v0=False,
 )
 

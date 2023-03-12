@@ -51,13 +51,18 @@ gomoku_muzero_config = dict(
         env_type='board_games',
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
+        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
+        td_steps=int(board_size * board_size/2),
+        reward_loss_weight=0,  # default=1
+        value_loss_weight=0.25,
+        policy_loss_weight=1,
+        self_supervised_learning_loss=False,
+        ssl_loss_weight=0,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         cvt_string=False,
         gray_scale=False,
         use_augmentation=False,
         game_block_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
-        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
-        td_steps=int(board_size * board_size/2),
         model=dict(
             observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
             action_space_size=int(board_size * board_size),
