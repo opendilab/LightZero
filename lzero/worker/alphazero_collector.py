@@ -202,12 +202,17 @@ class AlphaZeroCollector(ISerialCollector):
                 for env_id in ready_env_id:
                     # create the new simulation env instances from the current collect env using the same env_config.
                     simulation_envs[env_id] = self._env._env_fn[env_id]()
-
+                # ==============================================================
+                # policy forward
+                # ==============================================================
                 policy_output = self._policy.forward(simulation_envs, obs_, temperature)
                 self._policy_output_pool.update(policy_output)
                 # Interact with env.
                 actions = {env_id: output['action'] for env_id, output in policy_output.items()}
                 actions = to_ndarray(actions)
+                # ==============================================================
+                # Interact with env.
+                # ==============================================================
                 timesteps = self._env.step(actions)
 
             interaction_duration = self._timer.value / len(timesteps)

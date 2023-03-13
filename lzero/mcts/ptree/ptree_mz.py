@@ -297,8 +297,6 @@ def update_tree_q(root: Node, min_max_stats, discount_factor: float, players=1):
                 node_stack.append(child)
 
 
-
-
 def select_child(
         root: Node, min_max_stats, pb_c_base: int, pb_c_int: float, discount_factor: float, mean_q: float, players: int
 ) -> int:
@@ -440,7 +438,8 @@ def batch_traverse(
             parent_q = mean_q
 
             # select action according to the pUCT rule
-            action = select_child(node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players)
+            action = select_child(node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q,
+                                  players)
             if virtual_to_play is not None and virtual_to_play[i] is not None:
                 # Players play turn by turn
                 if virtual_to_play[i] == 1:
@@ -521,7 +520,8 @@ def backpropagate(search_path, min_max_stats, to_play, value: float, discount_fa
             # to_play related
             # true_reward is in the perspective of current player of node
             # bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount_factor * bootstrap_value
-            bootstrap_value = (-true_reward if node.to_play == to_play else true_reward) + discount_factor * bootstrap_value
+            bootstrap_value = (
+                                  -true_reward if node.to_play == to_play else true_reward) + discount_factor * bootstrap_value
 
 
 def batch_backpropagate(
@@ -547,4 +547,5 @@ def batch_backpropagate(
         if to_play is None:
             backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], 0, values[i], discount_factor)
         else:
-            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], to_play[i], values[i], discount_factor)
+            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], to_play[i], values[i],
+                          discount_factor)

@@ -329,8 +329,6 @@ def update_tree_q(root: Node, min_max_stats, discount_factor: float, players=1, 
                 node_stack.append(child)
 
 
-
-
 def select_child(
         root: Node, min_max_stats, pb_c_base: int, pb_c_int: float, discount_factor: float, mean_q: float, players: int
 ) -> int:
@@ -502,6 +500,7 @@ def batch_traverse(
             results.nodes[i] = node
 
     return results.hidden_state_index_x_lst, results.hidden_state_index_y_lst, results.last_actions, virtual_to_play
+
 
 def backpropagate(search_path, min_max_stats, to_play, value: float, discount_factor: float):
     """

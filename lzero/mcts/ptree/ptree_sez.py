@@ -17,12 +17,12 @@ class Node:
      """
 
     def __init__(
-        self,
-        prior: Union[list, float],
-        legal_actions: Any = None,
-        action_space_size=9,
-        num_of_sampled_actions=20,
-        continuous_action_space=False
+            self,
+            prior: Union[list, float],
+            legal_actions: Any = None,
+            action_space_size=9,
+            num_of_sampled_actions=20,
+            continuous_action_space=False
     ):
         self.prior = prior
         self.mu = None
@@ -44,8 +44,8 @@ class Node:
         self.hidden_state_index_y = 0
 
     def expand(
-        self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, value_prefix: float,
-        policy_logits: List[float]
+            self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, value_prefix: float,
+            policy_logits: List[float]
     ):
         """
         Overview:
@@ -145,7 +145,7 @@ class Node:
                 self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
 
     def add_exploration_noise_to_sample_distribution(
-        self, exploration_fraction: float, noises: List[float], policy_logits: List[float]
+            self, exploration_fraction: float, noises: List[float], policy_logits: List[float]
     ):
         """
         Overview:
@@ -282,12 +282,12 @@ class Node:
 class Roots:
 
     def __init__(
-        self,
-        root_num: int,
-        legal_actions_list: Any,
-        action_space_size: int = 9,
-        num_of_sampled_actions=20,
-        continuous_action_space=False
+            self,
+            root_num: int,
+            legal_actions_list: Any,
+            action_space_size: int = 9,
+            num_of_sampled_actions=20,
+            continuous_action_space=False
     ):
         self.num = root_num
         self.root_num = root_num
@@ -531,18 +531,18 @@ def select_child(
 
 
 def compute_ucb_score(
-    parent: Node,
-    child: Node,
-    min_max_stats,
-    parent_mean_q,
-    is_reset: int,
-    total_children_visit_counts: float,
-    parent_value_prefix: float,
-    pb_c_base: float,
-    pb_c_init: float,
-    discount_factor: float,
-    players=1,
-    continuous_action_space=False,
+        parent: Node,
+        child: Node,
+        min_max_stats,
+        parent_mean_q,
+        is_reset: int,
+        total_children_visit_counts: float,
+        parent_value_prefix: float,
+        pb_c_base: float,
+        pb_c_init: float,
+        discount_factor: float,
+        players=1,
+        continuous_action_space=False,
 ):
     """
     Overview:
@@ -580,7 +580,7 @@ def compute_ucb_score(
         if continuous_action_space:
             # prior is log_prob
             prior_score = pb_c * (
-                torch.exp(child.prior) / (sum([torch.exp(node.prior) for node in parent.children.values()]) + 1e-6)
+                    torch.exp(child.prior) / (sum([torch.exp(node.prior) for node in parent.children.values()]) + 1e-6)
             )
         else:
             # prior is prob
@@ -611,14 +611,14 @@ def compute_ucb_score(
 
 
 def batch_traverse(
-    roots,
-    pb_c_base: int,
-    pb_c_init: float,
-    discount_factor: float,
-    min_max_stats_lst,
-    results: SearchResults,
-    virtual_to_play,
-    continuous_action_space=False
+        roots,
+        pb_c_base: int,
+        pb_c_init: float,
+        discount_factor: float,
+        min_max_stats_lst,
+        results: SearchResults,
+        virtual_to_play,
+        continuous_action_space=False
 ):
     """
     Overview:
@@ -765,7 +765,8 @@ def backpropagate(search_path, min_max_stats, to_play, value: float, discount_fa
 
             # to_play related
             # true_reward is in the perspective of current player of node
-            bootstrap_value = (-true_reward if node.to_play == to_play else true_reward) + discount_factor * bootstrap_value
+            bootstrap_value = (
+                                  -true_reward if node.to_play == to_play else true_reward) + discount_factor * bootstrap_value
 
 
 def batch_backpropagate(
@@ -807,8 +808,8 @@ def batch_backpropagate(
         if to_play is None:
             backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], 0, values[i], discount_factor)
         else:
-            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], to_play[i], values[i], discount_factor)
-
+            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], to_play[i], values[i],
+                          discount_factor)
 
 
 class Action:
@@ -829,7 +830,6 @@ class Action:
 
     def __repr__(self):
         return str(self.value)
-
 
 # class Action:
 #     def __init__(self, value):

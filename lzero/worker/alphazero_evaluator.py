@@ -193,8 +193,14 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                     # create the new simulation env instances from the current evaluate env using the same env_config.
                     simulation_envs[env_id] = self._env._env_fn[env_id]()
 
+                # ==============================================================
+                # policy forward
+                # ==============================================================
                 policy_output = self._policy.forward(simulation_envs, obs)
                 actions = {env_id: output['action'] for env_id, output in policy_output.items()}
+                # ==============================================================
+                # Interact with env.
+                # ==============================================================
                 timesteps = self._env.step(actions)
                 for env_id, t in timesteps.items():
                     if t.info.get('abnormal', False):

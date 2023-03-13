@@ -124,7 +124,7 @@ def ptree_func(game_config, num_simulations):
         for i in range(env_nums):
             assert action_num[i] == len(legal_actions_list[i])
         t1 = time.time()
-        roots = ptree.Roots(env_nums, n_s, legal_actions_list)
+        roots = ptree.Roots(env_nums, legal_actions_list)
         build_time.append(time.time() - t1)
         noises = [
             np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -218,7 +218,7 @@ def ctree_func(game_config, num_simulations):
             assert action_num[i] == len(legal_actions_list[i])
 
         t1 = time.time()
-        roots = ctree.Roots(env_nums, n_s, legal_actions_list)
+        roots = ctree.Roots(env_nums, legal_actions_list)
         build_time.append(time.time() - t1)
         noises = [
             np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))

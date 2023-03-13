@@ -114,8 +114,6 @@ def test_mcts():
     policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
     legal_actions_list = [[-1 for i in range(5)] for _ in range(env_nums)]
-    # game_config.num_simulations
-    # roots = ctree_efficientzero.Roots(env_nums, legal_actions_list, action_space_size=2, num_of_sampled_actions=20)
     roots = ctree.Roots(env_nums, legal_actions_list, game_config.model.action_space_size, game_config.num_of_sampled_actions, continuous_action_space=True)
 
     noises = [
