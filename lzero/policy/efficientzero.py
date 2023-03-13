@@ -371,10 +371,10 @@ class EfficientZeroPolicy(Policy):
             policy_entropy += dist.entropy().mean()
             target_normalized_visit_count = target_policy[:, step_i + 1]
             try:
-                # if there is zero in target_normalized_visit_count
                 target_dist = Categorical(target_normalized_visit_count)
                 target_policy_entropy += target_dist.entropy().mean()
             except Exception as error:
+                # if there is zero in target_normalized_visit_count
                 target_policy_entropy += 0
 
             if self._cfg.model.categorical_distribution:

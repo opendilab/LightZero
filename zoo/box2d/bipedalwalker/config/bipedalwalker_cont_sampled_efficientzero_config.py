@@ -30,7 +30,7 @@ threshold_env_steps_for_final_temperature = int(0)
 # ==============================================================
 
 bipedalwalker_cont_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/bipedalwalker_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez_ctree/bipedalwalker_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_tesfl{threshold_env_steps_for_final_lr}_tesft{threshold_env_steps_for_final_temperature}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name='BipedalWalker-v3',

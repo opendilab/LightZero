@@ -221,7 +221,7 @@ class EfficientZeroModel(nn.Module):
         hidden_state = self.representation(obs)
         policy_logits, value = self.prediction(hidden_state)
         # zero initialization for reward hidden states
-        reward_hidden = (torch.zeros(1, num, self.lstm_hidden_size), torch.zeros(1, num, self.lstm_hidden_size))
+        reward_hidden = (torch.zeros(1, num, self.lstm_hidden_size).to(obs.device), torch.zeros(1, num, self.lstm_hidden_size).to(obs.device))
         return EZNetworkOutput(value, [0. for _ in range(num)], policy_logits, hidden_state, reward_hidden)
 
     def recurrent_inference(

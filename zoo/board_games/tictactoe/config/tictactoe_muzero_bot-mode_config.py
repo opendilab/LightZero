@@ -9,6 +9,7 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 5
@@ -19,6 +20,17 @@ max_env_step = int(2e5)
 reanalyze_ratio = 0.3
 categorical_distribution = False
 
+# debug config
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 5
+# num_simulations = 2
+# update_per_collect = 2
+# batch_size = 256
+# max_env_step = int(2e5)
+# reanalyze_ratio = 0.3
+# categorical_distribution = False
+
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = 5
 threshold_env_steps_for_final_lr = int(5e4)
@@ -28,7 +40,7 @@ threshold_env_steps_for_final_temperature = int(1e5)
 # ==============================================================
 
 tictactoe_muzero_config = dict(
-    exp_name=f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd{categorical_distribution}_seed0',
+    exp_name=f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd{categorical_distribution}_tesfl{threshold_env_steps_for_final_lr}_tesft{threshold_env_steps_for_final_temperature}_seed0',
     env=dict(
         stop_value=int(2),
         battle_mode='play_with_bot_mode',

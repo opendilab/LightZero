@@ -1,3 +1,4 @@
+import time
 from collections import deque, namedtuple
 from typing import Optional, Any, List
 
@@ -310,6 +311,17 @@ class MuZeroCollector(ISerialCollector):
 
         # initializations
         init_obs = self._env.ready_obs
+
+        retry_waiting_time = 0.001
+        while len(init_obs.keys()) != self._env_num:
+            # In order to be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
+            # len(self._env.ready_obs), especially in tictactoe env.
+            self._logger.info('The current init_obs.keys() is {}'.format(init_obs.keys()))
+            self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
+            time.sleep(retry_waiting_time)
+            self._logger.info('='*10 + 'Wait for all environments (subprocess) to finish resetting.' + '='*10)
+            self._logger.info('After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time, self._env._env_states))
+            init_obs = self._env.ready_obs
 
         action_mask = [to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)]
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
