@@ -137,7 +137,7 @@ lunarlander_disc_efficientzero_config = dict(
         value_loss_weight=0.25,
         policy_loss_weight=1,
         ssl_loss_weight=2,
-        # ``fixed_temperature_value`` is effective only when ``auto_temperature=False``.
+        # ``fixed_temperature_value`` is effective only when ``manual_temperature_decay=False``.
         # the size/capacity of replay_buffer
         replay_buffer_size=int(1e6),
         # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.

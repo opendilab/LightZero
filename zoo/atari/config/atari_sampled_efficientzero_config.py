@@ -28,11 +28,6 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# only used for adjusting temperature/lr manually
-threshold_env_steps_for_final_lr = int(1e6)
-# if we set threshold_env_steps_for_final_temperature=0, i.e. we use the fixed final temperature=0.25.
-threshold_env_steps_for_final_temperature = int(0)
-
 continuous_action_space = False
 K = 5  # num_of_sampled_actions
 collector_env_num = 8
@@ -43,19 +38,6 @@ update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.3
-
-## debug config
-# continuous_action_space = False
-# K = 3  # num_of_sampled_actions
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# num_simulations = 5
-# update_per_collect = 2
-# batch_size = 10
-# max_env_step = int(1e4)
-# reanalyze_ratio = 0.1
-
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -79,6 +61,9 @@ atari_sampled_efficientzero_config = dict(
         game_block_length=400,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
+        manual_temperature_decay=True,
+        # ``fixed_temperature_value`` is effective only when manual_temperature_decay=False
+        fixed_temperature_value=0.25,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         model=dict(
             observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
@@ -96,15 +81,8 @@ atari_sampled_efficientzero_config = dict(
             learning_rate=0.2,  # init lr for manually decay schedule
             policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
         ),
-        collect=dict(n_episode=n_episode, ),  # Get "n_episode" episodes per collect.
-        # If the eval cost is expensive, we could set eval_freq larger.
+        collect=dict(n_episode=n_episode, ),
         eval=dict(evaluator=dict(eval_freq=int(2e3), )),
-        # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
-        threshold_training_steps_for_final_lr=int(
-            threshold_env_steps_for_final_lr / collector_env_num / average_episode_length_when_converge * update_per_collect),
-        # ``threshold_training_steps_for_final_temperature`` is only used for adjusting temperature manually.
-        threshold_training_steps_for_final_temperature=int(
-            threshold_env_steps_for_final_temperature / collector_env_num / average_episode_length_when_converge * update_per_collect),
     ),
 )
 atari_sampled_efficientzero_config = EasyDict(atari_sampled_efficientzero_config)
@@ -122,7 +100,6 @@ atari_sampled_efficientzero_create_config = dict(
     ),
     collector=dict(
         type='episode_muzero',
-        get_train_sample=True,
         import_names=['lzero.worker.muzero_collector'],
     )
 )

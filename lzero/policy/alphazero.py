@@ -57,8 +57,8 @@ class AlphaZeroPolicy(Policy):
         #     threshold_env_steps_for_final_temperature / collector_env_num / average_episode_length_when_converge * update_per_collect),
         threshold_training_steps_for_final_temperature=int(1e5),
         # temperature: 1 -> 0.5 -> 0.25
-        auto_temperature=True,
-        # ``fixed_temperature_value`` is effective only when auto_temperature=False
+        manual_temperature_decay=True,
+        # ``fixed_temperature_value`` is effective only when manual_temperature_decay=False
         fixed_temperature_value=0.25,
         collect=dict(
             unroll_len=1,

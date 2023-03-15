@@ -8,13 +8,11 @@ from easydict import EasyDict
 lunarlander_cont_sac_config = dict(
     exp_name='lunarlander_cont_sac_seed0',
     env=dict(
+        stop_value=int(1e6),
         env_name='LunarLanderContinuous-v2',
         collector_env_num=8,
         evaluator_env_num=8,
-        # (bool) Scale output action into legal range.
-        act_scale=True,
         n_evaluator_episode=8,
-        stop_value=int(1e6),
     ),
     policy=dict(
         cuda=True,

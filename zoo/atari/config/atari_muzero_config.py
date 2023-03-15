@@ -29,11 +29,6 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# only used for adjusting temperature/lr manually
-threshold_env_steps_for_final_lr = int(1e6)
-# if we set threshold_env_steps_for_final_temperature=0, i.e. we use the fixed final temperature=0.25.
-threshold_env_steps_for_final_temperature = int(0)
-
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
@@ -75,15 +70,17 @@ atari_muzero_config = dict(
         game_block_length=400,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
+        manual_temperature_decay=False,
+        fixed_temperature_value=0.25,
+        # whether to use the self_supervised_learning_loss.
+        self_supervised_learning_loss=True,  # default is False
+        ssl_loss_weight=2,  # default is 0
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         model=dict(
             observation_shape=(4, 96, 96),
             action_space_size=action_space_size,
             representation_network_type='conv_res_blocks',
         ),
-        # whether to use the self_supervised_learning_loss.
-        self_supervised_learning_loss=True,  # default is False
-        ssl_loss_weight=2,  # default is 0
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
@@ -91,15 +88,8 @@ atari_muzero_config = dict(
             optim_type='SGD',
             learning_rate=0.2,  # init lr for manually decay schedule
         ),
-        collect=dict(n_episode=n_episode, ),  # Get "n_episode" episodes per collect.
-        # If the eval cost is expensive, we could set eval_freq larger.
+        collect=dict(n_episode=n_episode, ),
         eval=dict(evaluator=dict(eval_freq=int(2e3), )),
-        # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
-        threshold_training_steps_for_final_lr=int(
-            threshold_env_steps_for_final_lr / collector_env_num / average_episode_length_when_converge * update_per_collect),
-        # ``threshold_training_steps_for_final_temperature`` is only used for adjusting temperature manually.
-        threshold_training_steps_for_final_temperature=int(
-            threshold_env_steps_for_final_temperature / collector_env_num / average_episode_length_when_converge * update_per_collect),
     ),
 )
 atari_muzero_config = EasyDict(atari_muzero_config)
@@ -117,7 +107,6 @@ atari_muzero_create_config = dict(
     ),
     collector=dict(
         type='episode_muzero',
-        get_train_sample=True,
         import_names=['lzero.worker.muzero_collector'],
     )
 )

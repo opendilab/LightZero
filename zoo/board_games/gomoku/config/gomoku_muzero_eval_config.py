@@ -20,12 +20,7 @@ categorical_distribution = False
 reanalyze_ratio = 0.3
 
 board_size = 6  # default_size is 15
-# only used for adjusting temperature/lr manually
-average_episode_length_when_converge = int(board_size * board_size/2)
 bot_action_type = 'v0'  # 'v1'
-threshold_env_steps_for_final_lr = int(5e5)
-# if we set threshold_env_steps_for_final_temperature=0, i.e. we use the fixed final temperature=0.25.
-threshold_env_steps_for_final_temperature = int(0)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -50,13 +45,11 @@ gomoku_muzero_config = dict(
         game_block_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
-        cvt_string=False,
-        gray_scale=False,
         use_augmentation=False,
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=9,
         num_unroll_steps=3,
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         model=dict(
             observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
             action_space_size=int(board_size * board_size),
@@ -94,12 +87,6 @@ gomoku_muzero_config = dict(
         ),
         # If the eval cost is expensive, we could set eval_freq larger.
         eval=dict(evaluator=dict(eval_freq=int(2e3), )),
-        # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
-        threshold_training_steps_for_final_lr=int(
-            threshold_env_steps_for_final_lr / collector_env_num / average_episode_length_when_converge * update_per_collect),
-        # ``threshold_training_steps_for_final_temperature`` is only used for adjusting temperature manually.
-        threshold_training_steps_for_final_temperature=int(
-            threshold_env_steps_for_final_temperature / collector_env_num / average_episode_length_when_converge * update_per_collect),
     ),
 )
 gomoku_muzero_config = EasyDict(gomoku_muzero_config)
@@ -118,7 +105,6 @@ gomoku_muzero_create_config = dict(
     ),
     collector=dict(
         type='episode_muzero',
-        get_train_sample=True,
         import_names=['lzero.worker.muzero_collector'],
     )
 )

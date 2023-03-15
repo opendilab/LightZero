@@ -64,11 +64,13 @@ class EfficientZeroPolicy(Policy):
             update_per_collect=100,
             # (int) How many samples in a training batch
             batch_size=256,
+            # (bool) Whether to use piecewise constant decayed learning rate
             lr_piecewise_constant_decay=True,
             optim_type='SGD',
             learning_rate=0.2,  # init lr for manually decay schedule
+            # lr_piecewise_constant_decay=False,
             # optim_type='Adam',
-            # learning_rate=0.001,  # lr for Adam optimizer
+            # learning_rate=0.003,  # lr for Adam optimizer
             # (int) Frequency of target network update.
             target_update_freq=100,
             # (bool) Whether ignore done(usually for max step termination env)
@@ -119,16 +121,18 @@ class EfficientZeroPolicy(Policy):
         # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
         # threshold_training_steps_for_final_lr=int(
         #     threshold_env_steps_for_final_lr / collector_env_num / average_episode_length_when_converge * update_per_collect),
-        threshold_training_steps_for_final_lr=int(1e5),
-        # lr: 0.2 -> 0.02 -> 0.002
+        # lr_piecewise_constant_decay: lr: 0.2 -> 0.02 -> 0.002
+        threshold_training_steps_for_final_lr=int(2e5),
 
         # ``threshold_training_steps_for_final_temperature`` is only used for adjusting temperature manually.
         # threshold_training_steps_for_final_temperature=int(
         #     threshold_env_steps_for_final_temperature / collector_env_num / average_episode_length_when_converge * update_per_collect),
-        threshold_training_steps_for_final_temperature=int(1e5),
-        # temperature: 1 -> 0.5 -> 0.25
-        auto_temperature=True,
-        # ``fixed_temperature_value`` is effective only when auto_temperature=False
+        # manual_temperature_decay: temperature: 1 -> 0.5 -> 0.25
+        threshold_training_steps_for_final_temperature=int(2e5),
+
+        # (bool) Whether to use manually decayed temperature
+        manual_temperature_decay=False,
+        # ``fixed_temperature_value`` is effective only when manual_temperature_decay=False
         fixed_temperature_value=0.25,
 
         ## reanalyze

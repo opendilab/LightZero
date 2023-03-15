@@ -114,7 +114,7 @@ def train_muzero(
         collect_kwargs['temperature'] = np.array(
             [
                 visit_count_temperature(
-                    game_config.auto_temperature,
+                    game_config.manual_temperature_decay,
                     game_config.fixed_temperature_value,
                     game_config.threshold_training_steps_for_final_temperature,
                     trained_steps=learner.train_iter

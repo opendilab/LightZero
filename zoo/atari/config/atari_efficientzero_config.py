@@ -75,12 +75,9 @@ atari_efficientzero_config = dict(
         game_block_length=400,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
+        manual_temperature_decay=False,
+        fixed_temperature_value=0.25,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
-        model=dict(
-            observation_shape=(4, 96, 96),
-            action_space_size=action_space_size,
-            representation_network_type='conv_res_blocks',
-        ),
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
@@ -88,16 +85,13 @@ atari_efficientzero_config = dict(
             optim_type='SGD',
             learning_rate=0.2,  # init lr for manually decay schedule
         ),
-        collect=dict(n_episode=n_episode, ),  # Get "n_episode" episodes per collect.
-        # If the eval cost is expensive, we could set eval_freq larger.
+        model=dict(
+            observation_shape=(4, 96, 96),
+            action_space_size=action_space_size,
+            representation_network_type='conv_res_blocks',
+        ),
+        collect=dict(n_episode=n_episode, ),
         eval=dict(evaluator=dict(eval_freq=int(2e3), )),
-        # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
-        threshold_training_steps_for_final_lr=int(
-            threshold_env_steps_for_final_lr / collector_env_num / average_episode_length_when_converge * update_per_collect),
-        # ``threshold_training_steps_for_final_temperature`` is only used for adjusting temperature manually.
-        threshold_training_steps_for_final_temperature=int(
-            threshold_env_steps_for_final_temperature / collector_env_num / average_episode_length_when_converge * update_per_collect),
-
     ),
 )
 atari_efficientzero_config = EasyDict(atari_efficientzero_config)
@@ -115,7 +109,6 @@ atari_efficientzero_create_config = dict(
     ),
     collector=dict(
         type='episode_muzero',
-        get_train_sample=True,
         import_names=['lzero.worker.muzero_collector'],
     )
 )

@@ -90,8 +90,8 @@ class InverseScalarTransform:
         return output
 
 
-def visit_count_temperature(auto_temperature, fixed_temperature_value, threshold_training_steps_for_final_lr_temperature, trained_steps):
-    if auto_temperature:
+def visit_count_temperature(manual_temperature_decay, fixed_temperature_value, threshold_training_steps_for_final_lr_temperature, trained_steps):
+    if manual_temperature_decay:
         if trained_steps < 0.5 * threshold_training_steps_for_final_lr_temperature:
             return 1.0
         elif trained_steps < 0.75 * threshold_training_steps_for_final_lr_temperature:

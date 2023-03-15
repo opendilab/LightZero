@@ -78,8 +78,8 @@ game_config = EasyDict(
 
         # TODO(pu): only used for adjust temperature manually
         threshold_training_steps_for_final_lr_temperature=int(threshold_env_steps_for_final_lr_temperature/collector_env_num/average_episode_length_when_converge * update_per_collect),
-        auto_temperature=False,
-        # only effective when auto_temperature=False
+        manual_temperature_decay=False,
+        # only effective when manual_temperature_decay=False
         fixed_temperature_value=0.25,
         # TODO(pu): whether to use root value in reanalyzing?
         use_root_value=False,

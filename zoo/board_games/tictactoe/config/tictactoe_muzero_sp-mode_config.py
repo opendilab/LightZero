@@ -17,11 +17,6 @@ update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
 reanalyze_ratio = 0.3
-
-# only used for adjusting temperature/lr manually
-average_episode_length_when_converge = 9
-threshold_env_steps_for_final_lr = int(5e4)
-threshold_env_steps_for_final_temperature = int(1e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -44,7 +39,6 @@ tictactoe_muzero_config = dict(
         env_type='board_games',
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         cvt_string=False,
         gray_scale=False,
         use_augmentation=False,
@@ -52,7 +46,10 @@ tictactoe_muzero_config = dict(
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=9,
         num_unroll_steps=3,
+        manual_temperature_decay=True,
+        replay_buffer_size=int(3e3),  # the size/capacity of replay_buffer, in the terms of transitions.
         model=dict(
+            self_supervised_learning_loss=False,
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 3, 3, 3] -> [12, 3, 3]
@@ -64,14 +61,9 @@ tictactoe_muzero_config = dict(
             downsample=False,
             categorical_distribution=True,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            # ==============================================================
             # We use the small size model for tictactoe
-            # ==============================================================
             num_res_blocks=1,
             num_channels=16,
-            reward_head_channels=16,
-            value_head_channels=16,
-            policy_head_channels=16,
             fc_reward_layers=[8],
             fc_value_layers=[8],
             fc_policy_layers=[8],
@@ -82,23 +74,13 @@ tictactoe_muzero_config = dict(
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
-            lr_piecewise_constant_decay=True,
-            optim_type='SGD',
-            learning_rate=0.2,  # init lr for manually decay schedule
+            lr_piecewise_constant_decay=False,
+            optim_type='Adam',
+            learning_rate=0.003,  # lr for Adam optimizer
+            grad_clip_value=0.5,
         ),
-        # collect_mode config
-        collect=dict(
-            # Get "n_episode" episodes per collect.
-            n_episode=n_episode,
-        ),
-        # If the eval cost is expensive, we could set eval_freq larger.
+        collect=dict(n_episode=n_episode, ),
         eval=dict(evaluator=dict(eval_freq=int(2e3), )),
-        # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
-        threshold_training_steps_for_final_lr=int(
-            threshold_env_steps_for_final_lr / collector_env_num / average_episode_length_when_converge * update_per_collect),
-        # ``threshold_training_steps_for_final_temperature`` is only used for adjusting temperature manually.
-        threshold_training_steps_for_final_temperature=int(
-            threshold_env_steps_for_final_temperature / collector_env_num / average_episode_length_when_converge * update_per_collect),
     ),
 )
 tictactoe_muzero_config = EasyDict(tictactoe_muzero_config)
