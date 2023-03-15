@@ -73,28 +73,17 @@ gomoku_alphazero_config = dict(
         collect=dict(
             unroll_len=1,
             n_episode=n_episode,
-            collector=dict(
-                env=dict(
-                    type='gomoku',
-                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
-                ),
-                augmentation=True,
-            ),
+            collector=dict(augmentation=True,),
             mcts=dict(num_simulations=num_simulations)
         ),
         eval=dict(evaluator=dict(
             eval_freq=int(2e3),
-            env=dict(
-                type='gomoku',
-                import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
-            ),
         ),
             mcts=dict(num_simulations=num_simulations)
         ),
         other=dict(
             replay_buffer=dict(
                 replay_buffer_size=int(1e6),
-                save_episode=False,
             )
         ),
     ),

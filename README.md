@@ -183,10 +183,11 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 #### LightZero Implemented series
 
 - [2018 _Science_ AlphaZero: A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play](https://www.science.org/doi/10.1126/science.aar6404)
-- [2019 MuZero](https://arxiv.org/abs/1911.08265)
-- [2021 EfficientZero](https://arxiv.org/abs/2111.00210)
-- [2021 Sampled MuZero](https://arxiv.org/abs/2104.06303)
-- [2022 Gumbel MuZero](https://openreview.net/pdf?id=bERaNdoegnO)
+- [2019 MuZero: Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model](https://arxiv.org/abs/1911.08265)
+- [2021 EfficientZero: Mastering Atari Games with Limited Data](https://arxiv.org/abs/2111.00210)
+- [2021 Sampled MuZero: Learning and Planning in Complex Action Spaces](https://arxiv.org/abs/2104.06303)
+
+[comment]: <> (- [2022 Gumbel MuZero: Policy Improoveemenet by Planning with Gumbel]&#40;https://openreview.net/pdf?id=bERaNdoegnO&#41;)
 
 #### AlphaGo series
 

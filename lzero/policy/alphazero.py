@@ -60,6 +60,23 @@ class AlphaZeroPolicy(Policy):
         auto_temperature=True,
         # ``fixed_temperature_value`` is effective only when auto_temperature=False
         fixed_temperature_value=0.25,
+        collect=dict(
+            unroll_len=1,
+            n_episode=8,
+            collector=dict(augmentation=True, ),
+            mcts=dict(num_simulations=50)
+        ),
+        eval=dict(evaluator=dict(
+            eval_freq=int(2e3),
+        ),
+            mcts=dict(num_simulations=50)
+        ),
+        other=dict(
+            replay_buffer=dict(
+                replay_buffer_size=int(1e6),
+                save_episode=False,
+            )
+        ),
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
