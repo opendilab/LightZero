@@ -1,7 +1,3 @@
-"""
-Acknowledgement: The following code is adapted from https://github.com/YeWR/EfficientZero/core/model.py
-"""
-
 from typing import List, Optional
 from dataclasses import dataclass
 import torch.nn as nn

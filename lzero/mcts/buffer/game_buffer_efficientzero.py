@@ -1,6 +1,3 @@
-"""
-Acknowledgement: The following code is adapted from https://github.com/YeWR/EfficientZero/core/replay_buffer.py
-"""
 import copy
 import time
 from collections import deque, namedtuple

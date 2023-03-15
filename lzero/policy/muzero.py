@@ -22,7 +22,7 @@ from lzero.mcts import select_action
 from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
 from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts.utils import to_torch_float_tensor, to_detach_cpu_numpy, mz_network_output_unpack
-from .utlis import negative_cosine_similarity
+from .utils import negative_cosine_similarity
 
 
 @POLICY_REGISTRY.register('muzero')

@@ -1,6 +1,3 @@
-"""
-Acknowledgement: The following code is adapted from https://github.com/YeWR/EfficientZero/core/mcts.py
-"""
 import copy
 
 import numpy as np

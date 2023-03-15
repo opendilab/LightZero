@@ -109,7 +109,7 @@ def eval_muzero(
         returns = []
         for i in range(num_episodes_each_seed):
             stop, reward = evaluator.eval(
-                learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
+                learner.save_checkpoint, learner.train_iter, config=game_config
             )
             returns.append(reward)
         returns = np.array(returns)

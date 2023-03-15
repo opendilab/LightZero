@@ -1,6 +1,3 @@
-"""
-The following code is adapted from https://github.com/werner-duvaud/muzero-general
-"""
 import copy
 
 import numpy as np

@@ -14,11 +14,11 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 5
 num_simulations = 25
-update_per_collect = 50
+update_per_collect = 40
 batch_size = 256
-max_env_step = int(2e5)
+max_env_step = int(2e6)
 reanalyze_ratio = 0.3
-categorical_distribution = False
+categorical_distribution = True
 
 # debug config
 # collector_env_num = 8
@@ -33,14 +33,14 @@ categorical_distribution = False
 
 # only used for adjusting temperature/lr manually
 average_episode_length_when_converge = 5
-threshold_env_steps_for_final_lr = int(5e4)
-threshold_env_steps_for_final_temperature = int(1e5)
+threshold_env_steps_for_final_lr = int(5e5)
+threshold_env_steps_for_final_temperature = int(5e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 tictactoe_muzero_config = dict(
-    exp_name=f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd{categorical_distribution}_tesfl{threshold_env_steps_for_final_lr}_tesft{threshold_env_steps_for_final_temperature}_seed0',
+    exp_name=f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd{categorical_distribution}_adam3e-3_tesft{threshold_env_steps_for_final_temperature}_rbs3e3_seed0',
     env=dict(
         stop_value=int(2),
         battle_mode='play_with_bot_mode',
@@ -57,7 +57,7 @@ tictactoe_muzero_config = dict(
         env_type='board_games',
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(3e3),  # the size/capacity of replay_buffer, in the terms of transitions.
         cvt_string=False,
         gray_scale=False,
         use_augmentation=False,
@@ -65,7 +65,12 @@ tictactoe_muzero_config = dict(
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=9,
         num_unroll_steps=3,
+        reward_loss_weight=1,  # default=1
+        value_loss_weight=0.25,
+        policy_loss_weight=1,
+        ssl_loss_weight=0,
         model=dict(
+            self_supervised_learning_loss=False,
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 3, 3, 3] -> [12, 3, 3]
@@ -82,9 +87,6 @@ tictactoe_muzero_config = dict(
             # ==============================================================
             num_res_blocks=1,
             num_channels=16,
-            reward_head_channels=16,
-            value_head_channels=16,
-            policy_head_channels=16,
             fc_reward_layers=[8],
             fc_value_layers=[8],
             fc_policy_layers=[8],
@@ -95,9 +97,13 @@ tictactoe_muzero_config = dict(
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
-            lr_piecewise_constant_decay=True,
-            optim_type='SGD',
-            learning_rate=0.2,  # init lr for manually decay schedule
+            # lr_piecewise_constant_decay=True,
+            # optim_type='SGD',
+            # learning_rate=0.2,  # init lr for manually decay schedule
+            lr_piecewise_constant_decay=False,
+            optim_type='Adam',
+            learning_rate=0.003,  # lr for Adam optimizer
+            grad_clip_value=0.5,
         ),
         # collect_mode config
         collect=dict(

@@ -1,6 +1,3 @@
-"""
-Acknowledgement: The following code is adapted from https://github.com/YeWR/EfficientZero/core/model.py
-"""
 import torch
 import numpy as np
 

@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from lzero.policy.utlis import negative_cosine_similarity
+from lzero.policy.utils import negative_cosine_similarity
 
 
 @pytest.mark.unittest

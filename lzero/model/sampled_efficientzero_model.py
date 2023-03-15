@@ -1,7 +1,3 @@
-"""
-The following code is adapted from https://github.com/YeWR/EfficientZero/blob/main/config/atari/model.py
-"""
-
 import math
 from typing import Optional, Tuple
 

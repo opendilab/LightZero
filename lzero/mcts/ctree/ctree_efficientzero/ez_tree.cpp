@@ -11,7 +11,7 @@
         ],
         "include_dirs": [
             "lzero/mcts/ctree/ctree_efficientzero",
-            "/private/var/folders/r5/znmp_3cn0_b41yvr2tvld9ys0qypks/T/pip-build-env-mv9y21_z/overlay/lib/python3.8/site-packages/numpy/core/include"
+            "/private/var/folders/r5/znmp_3cn0_b41yvr2tvld9ys0qypks/T/pip-build-env-g5le5v6q/overlay/lib/python3.8/site-packages/numpy/core/include"
         ],
         "language": "c++",
         "name": "lzero.mcts.ctree.ctree_efficientzero.ez_tree",

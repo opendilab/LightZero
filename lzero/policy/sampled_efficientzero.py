@@ -25,7 +25,7 @@ from lzero.mcts import select_action
 # cpp mcts_tree
 from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as ctree
 from lzero.mcts.utils import to_torch_float_tensor, ez_network_output_unpack
-from .utlis import negative_cosine_similarity
+from .utils import negative_cosine_similarity
 
 
 @POLICY_REGISTRY.register('sampled_efficientzero')

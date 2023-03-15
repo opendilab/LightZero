@@ -12,12 +12,15 @@ else:
 collector_env_num = 32
 n_episode = 32
 evaluator_env_num = 5
+# num_simulations = 50
+# update_per_collect = 50
 num_simulations = 100
-update_per_collect = 100
+update_per_collect = 200
+categorical_distribution = True
+# categorical_distribution = False
+reanalyze_ratio = 0.3
 batch_size = 256
 max_env_step = int(10e6)
-categorical_distribution = False
-reanalyze_ratio = 0.
 
 board_size = 6  # default_size is 15
 # only used for adjusting temperature/lr manually
@@ -31,8 +34,8 @@ threshold_env_steps_for_final_temperature = int(1e6)
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_b{board_size}_rand{prob_random_action_in_bot}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_lm-true_'
-             f'tesfl{threshold_env_steps_for_final_lr}_tesft{threshold_env_steps_for_final_temperature}_rbs1e6_seed0',
+    exp_name=f'data_mz_ctree/gomoku_b{board_size}_rand{prob_random_action_in_bot}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_cd-{categorical_distribution}_'
+             f'adam3e-3_tesft{threshold_env_steps_for_final_temperature}_rbs1e4_seed0',
     env=dict(
         stop_value=int(2),
         board_size=board_size,
@@ -51,19 +54,19 @@ gomoku_muzero_config = dict(
         env_type='board_games',
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
-        td_steps=int(board_size * board_size/2),
-        reward_loss_weight=0,  # default=1
-        value_loss_weight=0.25,
-        policy_loss_weight=1,
-        self_supervised_learning_loss=False,
-        ssl_loss_weight=0,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e4),  # the size/capacity of replay_buffer, in the terms of transitions.
         cvt_string=False,
         gray_scale=False,
         use_augmentation=False,
         game_block_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
+        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
+        td_steps=int(board_size * board_size / 2),
+        reward_loss_weight=1,  # default=1
+        value_loss_weight=0.25,
+        policy_loss_weight=1,
+        ssl_loss_weight=0,
         model=dict(
+            self_supervised_learning_loss=False,
             observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
             action_space_size=int(board_size * board_size),
             image_channel=3,
@@ -83,9 +86,13 @@ gomoku_muzero_config = dict(
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
-            lr_piecewise_constant_decay=True,
-            optim_type='SGD',
-            learning_rate=0.2,  # init lr for manually decay schedule
+            # lr_piecewise_constant_decay=True,
+            # optim_type='SGD',
+            # learning_rate=0.2,  # init lr for manually decay schedule
+            lr_piecewise_constant_decay=False,
+            optim_type='Adam',
+            learning_rate=0.003,  # lr for Adam optimizer
+            grad_clip_value=0.5,
         ),
         # collect_mode config
         collect=dict(
