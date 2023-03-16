@@ -71,7 +71,7 @@ def test_naive_push_sample():
     buffer = EfficientZeroGameBuffer(config)
     # fake data
     data = [[1, 1, 1] for _ in range(10)]  # (s,a,r)
-    meta = {'end_tag': True, 'unroll_plus_td_stepss': 5, 'priorities': np.array([0.9 for i in range(10)])}
+    meta = {'done': True, 'unroll_plus_td_steps': 5, 'priorities': np.array([0.9 for i in range(10)])}
 
     # push
     for i in range(20):
@@ -79,7 +79,7 @@ def test_naive_push_sample():
     assert buffer.count() == 20
 
     # push games
-    buffer.push_games([data, data], [meta, meta])
+    buffer.push_game_blocks([data, data], [meta, meta])
     assert buffer.count() == 22
 
     # Clear
@@ -99,7 +99,7 @@ def test_update():
     buffer = EfficientZeroGameBuffer(config)
     # fake data
     data = [[1, 1, 1] for _ in range(10)]  # (s,a,r)
-    meta = {'end_tag': True, 'unroll_plus_td_stepss': 5, 'priorities': np.array([0.9 for i in range(10)])}
+    meta = {'done': True, 'unroll_plus_td_steps': 5, 'priorities': np.array([0.9 for i in range(10)])}
 
     # push
     for i in range(20):
@@ -120,7 +120,7 @@ def test_rate_limit_push_sample():
     buffer = EfficientZeroGameBuffer(config).use(RateLimit(max_rate=5))
     # fake data
     data = [[1, 1, 1] for i in range(10)]  # (s,a,r)
-    meta = {'end_tag': True, 'unroll_plus_td_stepss': 5, 'priorities': np.array([0.9 for i in range(10)])}
+    meta = {'done': True, 'unroll_plus_td_steps': 5, 'priorities': np.array([0.9 for i in range(10)])}
 
     # push
     for i in range(20):
@@ -137,10 +137,10 @@ def test_prepare_batch_context():
 
     # fake data
     data_1 = [[1, 1, 1] for i in range(10)]  # (s,a,r)
-    meta_1 = {'end_tag': True, 'unroll_plus_td_stepss': 5, 'priorities': np.array([0.9 for i in range(10)])}
+    meta_1 = {'done': True, 'unroll_plus_td_steps': 5, 'priorities': np.array([0.9 for i in range(10)])}
 
     data_2 = [[1, 1, 1] for i in range(10, 20)]  # (s,a,r)
-    meta_2 = {'end_tag': True, 'unroll_plus_td_stepss': 5, 'priorities': np.array([0.9 for i in range(10)])}
+    meta_2 = {'done': True, 'unroll_plus_td_steps': 5, 'priorities': np.array([0.9 for i in range(10)])}
 
     # push
     buffer.push(data_1, meta_1)
@@ -157,7 +157,7 @@ def test_buffer_view():
 
     # fake data
     data = [[1, 1, 1] for _ in range(10)]  # (s,a,r)
-    meta = {'end_tag': True, 'unroll_plus_td_stepss': 5, 'priorities': np.array([0.9 for i in range(10)])}
+    meta = {'done': True, 'unroll_plus_td_steps': 5, 'priorities': np.array([0.9 for i in range(10)])}
 
     # push
     buf1.push(data, meta)

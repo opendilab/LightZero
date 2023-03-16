@@ -51,7 +51,7 @@ class EfficientZeroMCTSPtree(object):
         default_config.update(cfg)
         self._cfg = default_config
 
-    def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=None):
+    def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=-1):
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
@@ -240,7 +240,7 @@ class MuZeroMCTSPtree(object):
         default_config.update(cfg)
         self._cfg = default_config
 
-    def search(self, roots, model, hidden_state_roots, to_play=None):
+    def search(self, roots, model, hidden_state_roots, to_play=-1):
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.

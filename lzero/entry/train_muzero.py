@@ -133,7 +133,7 @@ def train_muzero(
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         # save returned new_data collected by the collector
-        replay_buffer.push_games(new_data[0], new_data[1])
+        replay_buffer.push_game_blocks(new_data)
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 

@@ -2,6 +2,7 @@
 #include "cnode.h"
 #include <algorithm>
 #include <map>
+#include <cassert>
 
 namespace tree
 {
@@ -454,8 +455,10 @@ namespace tree
             - value: the value to propagate along the search path.
             - discount_factor: the discount factor of reward.
         */
-        if (to_play == 0)
-        {
+        assert(to_play == -1 || to_play == 1 || to_play == 2);
+        if (to_play == -1)
+        {           
+            // for 1 player mode
             float bootstrap_value = value;
             int path_len = search_path.size();
             for (int i = path_len - 1; i >= 0; --i)
@@ -473,6 +476,7 @@ namespace tree
         }
         else
         {
+            // for 2 player mode
             float bootstrap_value = value;
             int path_len = search_path.size();
             for (int i = path_len - 1; i >= 0; --i)
@@ -640,7 +644,7 @@ namespace tree
 
         int players = 0;
         int largest_element = *max_element(virtual_to_play_batch.begin(), virtual_to_play_batch.end()); // 0 or 2
-        if (largest_element == 0)
+        if (largest_element == -1)
             players = 1;
         else
             players = 2;
@@ -661,6 +665,7 @@ namespace tree
                 int action = cselect_child(node, min_max_stats_lst->stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players);
                 if (players > 1)
                 {
+                    assert(virtual_to_play_batch[i] == 1 || virtual_to_play_batch[i] == 2);
                     if (virtual_to_play_batch[i] == 1)
                         virtual_to_play_batch[i] = 2;
                     else

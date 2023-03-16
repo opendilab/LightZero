@@ -1,6 +1,5 @@
 import copy
 import time
-from collections import deque, namedtuple
 from typing import Any, List, Optional, Union
 
 import numpy as np
@@ -124,20 +123,20 @@ class EfficientZeroGameBuffer(Buffer):
             - data (:obj:`Any`): The data which will be pushed into buffer.
                                  i.e. a game history block
             - meta (:obj:`dict`): Meta information, e.g. priority, count, staleness.
-                - end_tag: bool
+                - done: bool
                     True -> the game is finished. (always True)
-                - unroll_plus_td_stepss: int
+                - unroll_plus_td_steps: int
                     if the game is not finished, we only save the transitions that can be computed
                 - priorities: list
                     the priorities corresponding to the transitions in the game history
         Returns:
             - buffered_data (:obj:`BufferedData`): The pushed data.
         """
-        if meta['end_tag']:
+        if meta['done']:
             self._eps_collected += 1
             valid_len = len(data)
         else:
-            valid_len = len(data) - meta['unroll_plus_td_stepss']
+            valid_len = len(data) - meta['unroll_plus_td_steps']
 
         if meta['priorities'] is None:
             max_prio = self.game_pos_priorities.max() if self.game_block_buffer else 1
@@ -153,16 +152,17 @@ class EfficientZeroGameBuffer(Buffer):
         self.game_block_buffer.append(data)
         self.game_block_game_pos_look_up += [(self.base_idx + len(self.game_block_buffer) - 1, step_pos) for step_pos in range(len(data))]
 
-    def push_games(self, data: Any, meta):
+    def push_game_blocks(self, data_and_meta: Any):
         """
         Overview:
             Push game data and it's meta information in buffer.
             Save a game history block
-        Arguments:
+        Keys:
             - data (:obj:`Any`): The data which will be pushed into buffer.
                                  i.e. a game history block
             - meta (:obj:`dict`): Meta information
         """
+        data, meta = data_and_meta
         for (data_game, meta_game) in zip(data, meta):
             self.push(data_game, meta_game)
 
@@ -191,12 +191,12 @@ class EfficientZeroGameBuffer(Buffer):
         Returns:
             - transition (:obj:`tuple`): One transition of pushed data.
         """
-        game_block_idx, game_block_pos = self.game_block_game_pos_look_up[idx]
+        game_block_idx, pos_in_game_block = self.game_block_game_pos_look_up[idx]
         game_block_idx -= self.base_idx
-        transition = self.game_block_buffer[game_block_idx][game_block_pos]
+        transition = self.game_block_buffer[game_block_idx][pos_in_game_block]
         return transition
 
-    def get(self, idx: int) -> BufferedData:
+    def get_game_block_from_idx(self, idx: int) -> BufferedData:
         """
         Overview:
             Get one game according to the idx
@@ -216,7 +216,7 @@ class EfficientZeroGameBuffer(Buffer):
         Returns:
             - game: (:obj:`GameHistory`): One game history of pushed data.
         """
-        game_block_idx, game_block_pos = self.game_block_game_pos_look_up[idx]
+        game_block_idx, pos_in_game_block = self.game_block_game_pos_look_up[idx]
         game_block_idx -= self.base_idx
         game = self.game_block_buffer[game_block_idx]
         return game
@@ -236,10 +236,10 @@ class EfficientZeroGameBuffer(Buffer):
         if index < self.get_num_of_transitions():
             prio = meta['priorities']
             self.game_pos_priorities[index] = prio
-            game_block_idx, game_block_pos = self.game_block_game_pos_look_up[index]
+            game_block_idx, pos_in_game_block = self.game_block_game_pos_look_up[index]
             game_block_idx -= self.base_idx
             # update one transition
-            self.game_block_buffer[game_block_idx][game_block_pos] = data
+            self.game_block_buffer[game_block_idx][pos_in_game_block] = data
             success = True
         return success
 
@@ -343,7 +343,7 @@ class EfficientZeroGameBuffer(Buffer):
         Overview:
             Prepare a batch context that contains:
             game_lst: a list of game histories
-            game_block_pos_lst: transition index in game (relative index)
+            pos_in_game_block_lst: transition index in game (relative index)
             batch_index_list: transition index in replay buffer
             weights: the weight concerning the priority
             make_time: the time the batch is made (for correctly updating replay buffer
@@ -374,18 +374,18 @@ class EfficientZeroGameBuffer(Buffer):
         weights = (total * probs[batch_index_list]) ** (-beta)
         weights /= weights.max()
         game_lst = []
-        game_block_pos_lst = []
+        pos_in_game_block_lst = []
         for idx in batch_index_list:
             try:
-                game_block_idx, game_block_pos = self.game_block_game_pos_look_up[idx]
+                game_block_idx, pos_in_game_block = self.game_block_game_pos_look_up[idx]
             except Exception as error:
                 print(error)
             game_block_idx -= self.base_idx
             game = self.game_block_buffer[game_block_idx]
             game_lst.append(game)
-            game_block_pos_lst.append(game_block_pos)
+            pos_in_game_block_lst.append(pos_in_game_block)
         make_time = [time.time() for _ in range(len(batch_index_list))]
-        context = (game_lst, game_block_pos_lst, batch_index_list, weights, make_time)
+        context = (game_lst, pos_in_game_block_lst, batch_index_list, weights, make_time)
         return context
 
     def make_batch(self, batch_context, reanalyze_ratio):
@@ -403,14 +403,14 @@ class EfficientZeroGameBuffer(Buffer):
             - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch
         """
         # obtain the batch context from replay buffer
-        game_lst, game_block_pos_lst, batch_index_list, weights, make_time_lst = batch_context
+        game_lst, pos_in_game_block_lst, batch_index_list, weights, make_time_lst = batch_context
         batch_size = len(batch_index_list)
         obs_lst, action_lst, mask_lst = [], [], []
         # prepare the inputs of a batch
         for i in range(batch_size):
             game = game_lst[i]
-            game_block_pos = game_block_pos_lst[i]
-            _actions = game.action_history[game_block_pos:game_block_pos + self._cfg.num_unroll_steps].tolist()
+            pos_in_game_block = pos_in_game_block_lst[i]
+            _actions = game.action_history[pos_in_game_block:pos_in_game_block + self._cfg.num_unroll_steps].tolist()
             # add mask for invalid actions (out of trajectory)
             _mask = [1. for i in range(len(_actions))]
             _mask += [0. for _ in range(self._cfg.num_unroll_steps - len(_mask))]
@@ -419,7 +419,7 @@ class EfficientZeroGameBuffer(Buffer):
                 np.random.randint(0, game.action_space_size) for _ in range(self._cfg.num_unroll_steps - len(_actions))
             ]
             # obtain the input observations, pad if length of obs in game_block is less than stack+num_unroll_steps
-            obs_lst.append(game_lst[i].obs(game_block_pos_lst[i], extra_len=self._cfg.num_unroll_steps, padding=True))
+            obs_lst.append(game_lst[i].obs(pos_in_game_block_lst[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True))
             action_lst.append(_actions)
             mask_lst.append(_mask)
         # formalize the input observations
@@ -431,19 +431,18 @@ class EfficientZeroGameBuffer(Buffer):
         total_transitions = self.get_num_of_transitions()
         # obtain the context of value targets
         reward_value_context = self.prepare_reward_value_context(
-            batch_index_list, game_lst, game_block_pos_lst, total_transitions
+            batch_index_list, game_lst, pos_in_game_block_lst, total_transitions
         )
         # only reanalyze recent reanalyze_ratio (e.g. 50%) data
         reanalyze_num = int(batch_size * reanalyze_ratio)
-        # if self._cfg.reanalyze_outdated is True:
-        # batch_index_list is sorted according to its generated enn_steps
+        # if ``self._cfg.reanalyze_outdated``= True, batch_index_list is sorted according to its generated enn_steps
 
         # 0:reanalyze_num -> reanalyzed policy, reanalyze_num:end -> non reanalyzed policy
         # reanalyzed policy
         if reanalyze_num > 0:
             # obtain the context of reanalyzed policy targets
             policy_re_context = self.prepare_policy_reanalyzed_context(
-                batch_index_list[:reanalyze_num], game_lst[:reanalyze_num], game_block_pos_lst[:reanalyze_num]
+                batch_index_list[:reanalyze_num], game_lst[:reanalyze_num], pos_in_game_block_lst[:reanalyze_num]
             )
         else:
             policy_re_context = None
@@ -451,7 +450,7 @@ class EfficientZeroGameBuffer(Buffer):
         if reanalyze_num < batch_size:
             # obtain the context of non-reanalyzed policy targets
             policy_non_re_context = self.prepare_policy_non_reanalyzed_context(
-                batch_index_list[reanalyze_num:], game_lst[reanalyze_num:], game_block_pos_lst[reanalyze_num:]
+                batch_index_list[reanalyze_num:], game_lst[reanalyze_num:], pos_in_game_block_lst[reanalyze_num:]
             )
         else:
             policy_non_re_context = None
@@ -600,7 +599,7 @@ class EfficientZeroGameBuffer(Buffer):
         device = self._cfg.device
         batch_size = len(value_obs_lst)
         game_block_batch_size = len(state_index_lst)
-        if to_play_history[0][0] is not None:
+        if to_play_history[0][0] in [1,2]:
             # for two_player board games
             to_play = []
             for bs in range(game_block_batch_size):
@@ -609,7 +608,7 @@ class EfficientZeroGameBuffer(Buffer):
                 )
                 if len(to_play_tmp) < self._cfg.num_unroll_steps + 1:
                     # effective play index is {1,2}
-                    to_play_tmp += [0 for _ in range(self._cfg.num_unroll_steps + 1 - len(to_play_tmp))]
+                    to_play_tmp += [1 for _ in range(self._cfg.num_unroll_steps + 1 - len(to_play_tmp))]
                 to_play.append(to_play_tmp)
             tmp = []
             for i in to_play:
@@ -665,12 +664,12 @@ class EfficientZeroGameBuffer(Buffer):
                 policy_logits_pool = policy_logits_pool.tolist()
                 if self._cfg.mcts_ctree:
                     ## cpp mcts_tree
-                    if to_play_history[0][0] is None:
+                    if to_play_history[0][0] in [None, -1]:
                         # for one_player atari games
                         action_mask = [
                             list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                         ]
-                        to_play = [0 for i in range(batch_size)]
+                        to_play = [-1 for i in range(batch_size)]
 
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
                     # roots = ctree_efficientzero.Roots(batch_size, self._cfg.model.action_space_size, self._cfg.num_simulations)
@@ -687,7 +686,7 @@ class EfficientZeroGameBuffer(Buffer):
                     MCTS_ctree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 else:
                     ## python mcts_tree
-                    if to_play_history[0][0] is None:
+                    if to_play_history[0][0] in [None, -1]:
                         # for one_player atari games
                         action_mask = [
                             list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
@@ -698,17 +697,17 @@ class EfficientZeroGameBuffer(Buffer):
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(batch_size)
                     ]
-                    if to_play_history[0][0] is None:
+                    if to_play_history[0][0] in [None, -1]:
                         roots.prepare(
                             self._cfg.root_exploration_fraction,
                             noises,
                             value_prefix_pool,
                             policy_logits_pool,
-                            to_play=None
+                            to_play=-1
                         )
                         # do MCTS for a new policy with the recent target model
                         MCTS_ptree(self._cfg).search(
-                            roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=None
+                            roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=-1
                         )
                     else:
                         roots.prepare(
@@ -728,7 +727,7 @@ class EfficientZeroGameBuffer(Buffer):
                 # use the predicted values
                 value_lst = concat_output_value(network_output)
             # get last state value
-            if to_play_history[0][0] is not None:
+            if to_play_history[0][0] in [1, 2]:
                 # TODO(pu): board_games
                 value_lst = value_lst.reshape(-1) * np.array(
                     [
@@ -752,7 +751,7 @@ class EfficientZeroGameBuffer(Buffer):
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_lst[value_index]
                     for i, reward in enumerate(reward_lst[current_index:bootstrap_index]):
-                        if to_play_history[0][0] is not None:
+                        if to_play_history[0][0] in [1, 2]:
                             if to_play_list[current_index] == to_play_list[i]:
                                 value_lst[value_index] += reward * self._cfg.discount_factor ** i
                             else:
@@ -808,7 +807,7 @@ class EfficientZeroGameBuffer(Buffer):
                 )
                 if len(to_play_tmp) < self._cfg.num_unroll_steps + 1:
                     # effective play index is {1,2}
-                    to_play_tmp += [0 for _ in range(self._cfg.num_unroll_steps + 1 - len(to_play_tmp))]
+                    to_play_tmp += [1 for _ in range(self._cfg.num_unroll_steps + 1 - len(to_play_tmp))]
                 to_play.append(to_play_tmp)
             tmp = []
             for i in to_play:
@@ -865,12 +864,12 @@ class EfficientZeroGameBuffer(Buffer):
             policy_logits_pool = policy_logits_pool.tolist()
             if self._cfg.mcts_ctree:
                 ## cpp mcts_tree
-                if to_play_history[0][0] is None:
+                if to_play_history[0][0] in [None, -1]:
                     # for one_player atari games
                     action_mask = [
                         list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                     ]
-                    to_play = [0 for i in range(batch_size)]
+                    to_play = [-1 for i in range(batch_size)]
                 legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
                 # roots = ctree_efficientzero.Roots(batch_size, self._cfg.model.action_space_size, self._cfg.num_simulations)
                 roots = ctree.Roots(batch_size, legal_actions)
@@ -888,7 +887,7 @@ class EfficientZeroGameBuffer(Buffer):
 
             else:
                 ## python mcts_tree
-                if to_play_history[0][0] is None:
+                if to_play_history[0][0] in [None, -1]:
                     # for one_player atari games
                     action_mask = [
                         list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
@@ -900,17 +899,17 @@ class EfficientZeroGameBuffer(Buffer):
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(batch_size)
                 ]
-                if to_play_history[0][0] is None:
+                if to_play_history[0][0] in [None, -1]:
                     roots.prepare(
                         self._cfg.root_exploration_fraction,
                         noises,
                         value_prefix_pool,
                         policy_logits_pool,
-                        to_play=None
+                        to_play=-1
                     )
                     # do MCTS for a new policy with the recent target model
                     MCTS_ptree(self._cfg).search(
-                        roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=None
+                        roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=-1
                     )
                 else:
                     roots.prepare(
@@ -942,7 +941,7 @@ class EfficientZeroGameBuffer(Buffer):
                         else:
                             if self._cfg.mcts_ctree:
                                 ## cpp mcts_tree
-                                if to_play_history[0][0] is None:
+                                if to_play_history[0][0] in [None, -1]:
                                     sum_visits = sum(distributions)
                                     policy = [visit_count / sum_visits for visit_count in distributions]
                                     target_policies.append(policy)
@@ -957,7 +956,7 @@ class EfficientZeroGameBuffer(Buffer):
                                     target_policies.append(policy_tmp)
                             else:
                                 # python mcts_tree
-                                if to_play_history[0][0] is None:
+                                if to_play_history[0][0] in [None, -1]:
                                     sum_visits = sum(distributions)
                                     policy = [visit_count / sum_visits for visit_count in distributions]
                                     target_policies.append(policy)
@@ -1099,20 +1098,12 @@ class EfficientZeroGameBuffer(Buffer):
         train_data = [current_batch, targets_batch]
         return train_data
 
-    def save_data(self, file_name: str):
-        """
-        Overview:
-            Save buffer data into a file.
-        Arguments:
-            - file_name (:obj:`str`): file name of buffer data
-        """
+    # the following is to be compatible with Buffer class.
+    def save_data(self):
         pass
 
-    def load_data(self, file_name: str):
-        """
-        Overview:
-            Load buffer data from a file.
-        Arguments:
-            - file_name (:obj:`str`): file name of buffer data
-        """
+    def load_data(self):
+        pass
+
+    def get(self):
         pass

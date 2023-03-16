@@ -17,6 +17,14 @@ update_per_collect = 40
 batch_size = 256
 max_env_step = int(2e6)
 reanalyze_ratio = 0.3
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 5
+# num_simulations = 5
+# update_per_collect = 4
+# batch_size = 4
+# max_env_step = int(2e6)
+# reanalyze_ratio = 0.3
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -43,6 +51,7 @@ tictactoe_muzero_config = dict(
         game_block_length=5,
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=9,
+        discount_factor=1,
         num_unroll_steps=3,
         reward_loss_weight=1,
         value_loss_weight=0.25,

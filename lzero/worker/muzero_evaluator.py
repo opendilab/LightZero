@@ -202,7 +202,7 @@ class MuZeroEvaluator(ISerialEvaluator):
         if self.game_config.sampled_algo:
             from lzero.mcts.tree_search.game_sampled_efficientzero import GameBlock
         else:
-            from lzero.mcts.tree_search.game import GameBlock
+            from lzero.mcts.buffer.game_block import GameBlock
 
         if n_episode is None:
             n_episode = self._default_n_episode

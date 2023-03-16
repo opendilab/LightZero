@@ -335,7 +335,7 @@ class Roots:
                     )
                 )
 
-    def prepare(self, root_exploration_fraction, noises, value_prefixs, policies, to_play=None):
+    def prepare(self, root_exploration_fraction, noises, value_prefixs, policies, to_play=-1):
         """
         Overview:
             Expand the roots and add noises.
@@ -366,7 +366,7 @@ class Roots:
 
             self.roots[i].visit_count += 1
 
-    def prepare_no_noise(self, value_prefixs, policies, to_play=None):
+    def prepare_no_noise(self, value_prefixs, policies, to_play=-1):
         """
         Overview:
             Expand the roots without noise.
@@ -645,9 +645,9 @@ def batch_traverse(
     results.nodes = [None for i in range(results.num)]
     results.hidden_state_index_x_lst = [None for i in range(results.num)]
     results.hidden_state_index_y_lst = [None for i in range(results.num)]
-    if virtual_to_play is not None and virtual_to_play[0] is not None:
+    if virtual_to_play in [1, 2] or virtual_to_play[0] in [1, 2]:
         players = 2
-    else:
+    elif virtual_to_play in [-1, None] or virtual_to_play[0] in [-1, None]:
         players = 1
 
     results.search_paths = {i: [] for i in range(results.num)}
@@ -672,7 +672,7 @@ def batch_traverse(
                 continuous_action_space
             )
 
-            if virtual_to_play is not None and virtual_to_play[i] is not None:
+            if players == 2:
                 # Players play turn by turn
                 if virtual_to_play[i] == 1:
                     virtual_to_play[i] = 2
@@ -712,7 +712,8 @@ def backpropagate(search_path, min_max_stats, to_play, value: float, discount_fa
         - value: the value to propagate along the search path.
         - discount_factor: the discount factor of reward.
     """
-    if to_play is None or to_play == 0:
+    assert to_play is None or to_play in [-1, 1, 2]
+    if to_play is None or to_play == -1:
         # for 1 player mode
         bootstrap_value = value
         path_len = len(search_path)

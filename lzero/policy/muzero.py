@@ -501,7 +501,7 @@ class MuZeroPolicy(Policy):
 
 
     def _forward_collect(
-        self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None, ready_env_id=None
+        self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=-1, ready_env_id=None
     ):
         """
         Overview:
@@ -538,9 +538,9 @@ class MuZeroPolicy(Policy):
 
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
-                if to_play[0] is None:
+                if to_play[0] in [None, -1]:
                     # we use to_play=0 means play_with_bot_mode game
-                    to_play = [0 for i in range(active_collect_env_num)]
+                    to_play = [-1 for i in range(active_collect_env_num)]
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
@@ -636,9 +636,9 @@ class MuZeroPolicy(Policy):
 
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
-                if to_play[0] is None:
+                if to_play[0] in [None, -1]:
                     # we use to_play=0 means play_with_bot_mode game
-                    to_play = [0 for i in range(active_eval_env_num)]
+                    to_play = [-1 for i in range(active_eval_env_num)]
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]

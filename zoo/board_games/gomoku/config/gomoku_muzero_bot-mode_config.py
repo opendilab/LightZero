@@ -53,6 +53,7 @@ gomoku_muzero_config = dict(
         game_block_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=int(board_size * board_size / 2),
+        discount_factor=1,
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,

@@ -29,10 +29,6 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# only used for adjusting temperature/lr manually
-threshold_env_steps_for_final_lr = int(1e6)
-# if we set threshold_env_steps_for_final_temperature=0, i.e. we use the fixed final temperature=0.25.
-threshold_env_steps_for_final_temperature = int(0)
 
 # collector_env_num = 8
 # n_episode = 8
@@ -57,7 +53,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 atari_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/{env_name[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_tesfl{threshold_env_steps_for_final_lr}_tesft{threshold_env_steps_for_final_temperature}_seed0',
+    exp_name=f'data_ez_ctree/{env_name[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,

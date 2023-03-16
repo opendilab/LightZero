@@ -832,7 +832,7 @@ class SampledEfficientZeroPolicy(Policy):
         self.collect_mcts_temperature = 1
 
     def _forward_collect(
-            self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=None,
+            self, data: ttorch.Tensor, action_mask: list = None, temperature: list = None, to_play=-1,
             ready_env_id=None
     ):
         """
@@ -875,9 +875,9 @@ class SampledEfficientZeroPolicy(Policy):
                 # ==============================================================
                 # sampled related core code
                 # ==============================================================
-                if to_play[0] is None:
+                if to_play[0] in [None, -1]:
                     # we use to_play=0 means play_with_bot_mode game in mcts_ctree
-                    to_play = [0 for i in range(active_collect_env_num)]
+                    to_play = [-1 for i in range(active_collect_env_num)]
                 if action_mask[0] is None:
                     # continuous action space env: all -1
                     legal_actions = [
@@ -908,8 +908,8 @@ class SampledEfficientZeroPolicy(Policy):
                 # ==============================================================
                 # sampled related core code
                 # ==============================================================
-                if to_play[0] is None:
-                    # we use to_play=None means play_with_bot_mode game in mcts_ptree
+                if to_play[0] in [None, -1]:
+                    # we use to_play=-1 means play_with_bot_mode game in mcts_ptree
                     to_play = [None for i in range(active_collect_env_num)]
                 if action_mask[0] is None:
                     # continuous action space
@@ -1053,9 +1053,9 @@ class SampledEfficientZeroPolicy(Policy):
                 # ==============================================================
                 # sampled related core code
                 # ==============================================================
-                if to_play[0] is None:
+                if to_play[0] in [None, -1]:
                     # we use to_play=0 means play_with_bot_mode game in mcts_ctree
-                    to_play = [0 for i in range(active_eval_env_num)]
+                    to_play = [-1 for i in range(active_eval_env_num)]
                 if action_mask[0] is None:
                     # continuous action space env: all -1
                     legal_actions = [
@@ -1080,8 +1080,8 @@ class SampledEfficientZeroPolicy(Policy):
                 # ==============================================================
                 # sampled related core code
                 # ==============================================================
-                if to_play[0] is None:
-                    # we use to_play=None means play_with_bot_mode game
+                if to_play[0] in [None, -1]:
+                    # we use to_play=-1 means play_with_bot_mode game
                     to_play = [None for i in range(active_eval_env_num)]
                 if action_mask[0] is None:
                     # continuous action space

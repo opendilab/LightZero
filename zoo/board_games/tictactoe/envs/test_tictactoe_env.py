@@ -51,6 +51,8 @@ class TestTicTacToeEnv:
             battle_mode='play_with_bot_mode',
             channel_last=True,
             scale=True,
+            # channel_last=False,
+            # scale=False,
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
@@ -63,7 +65,8 @@ class TestTicTacToeEnv:
         while True:
             """player 1"""
             # action = env.human_to_action()
-            action = env.random_action()
+            # action = env.random_action()
+            action = env.legal_actions[-1]
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
             # reward is in the perspective of player1
@@ -79,4 +82,4 @@ class TestTicTacToeEnv:
 
 
 test = TestTicTacToeEnv()
-test.test_self_play_mode()
+test.test_play_with_bot_mode()

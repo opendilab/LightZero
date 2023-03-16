@@ -161,11 +161,16 @@ def prepare_observation_list(observation_lst):
     # B, S, W, H, C
     observation_lst = np.array(observation_lst)
     # 1, 4, 8, 1, 1 -> 1, 4, 1, 8, 1
-    #   [B, S, W, H, C] -> [B, S x C, W, H]
+    #   [B, S, W, H, C] -> [B, S, C, W, H]
     observation_lst = np.transpose(observation_lst, (0, 1, 4, 2, 3))
+
+    # 1, 4, 8, 1, 1 -> 1, 4, 1, 8, 1
+    # observation_lst = np.moveaxis(observation_lst, -1, 2)
 
     shape = observation_lst.shape
     # 1, 4, 1, 8, 1 -> 1, 4*1, 8, 1
+    #  [B, S, C, W, H] -> [B, S*C, W, H]
+
     observation_lst = observation_lst.reshape((shape[0], -1, shape[-2], shape[-1]))
 
     return observation_lst

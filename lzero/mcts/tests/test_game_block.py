@@ -1,9 +1,8 @@
 import numpy as np
 import pytest
 import torch
-from torch.cuda.amp import autocast as autocast
 
-from lzero.mcts.tree_search.game import GameBlock
+from lzero.mcts.buffer.game_block import GameBlock
 from lzero.mcts.utils import select_action, prepare_observation_list
 
 args = ['EfficientZero', 'MuZero']
