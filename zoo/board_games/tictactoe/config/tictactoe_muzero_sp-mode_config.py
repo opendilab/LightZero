@@ -26,7 +26,6 @@ tictactoe_muzero_config = dict(
     env=dict(
         stop_value=int(2),
         battle_mode='self_play_mode',
-        channel_last=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -39,8 +38,6 @@ tictactoe_muzero_config = dict(
         env_type='board_games',
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        cvt_string=False,
-        gray_scale=False,
         use_augmentation=False,
         game_block_length=9,
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
@@ -59,7 +56,6 @@ tictactoe_muzero_config = dict(
             image_channel=3,
             frame_stack_num=1,
             downsample=False,
-            categorical_distribution=True,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # We use the small size model for tictactoe
             num_res_blocks=1,
@@ -98,7 +94,6 @@ tictactoe_muzero_create_config = dict(
     ),
     collector=dict(
         type='episode_muzero',
-        get_train_sample=True,
         import_names=['lzero.worker.muzero_collector'],
     )
 )

@@ -12,11 +12,8 @@ else:
 collector_env_num = 32
 n_episode = 32
 evaluator_env_num = 5
-# num_simulations = 50
-# update_per_collect = 50
-num_simulations = 100
-update_per_collect = 200
-# categorical_distribution = False
+num_simulations = 50
+update_per_collect = 50
 reanalyze_ratio = 0.3
 batch_size = 256
 max_env_step = int(10e6)
@@ -30,7 +27,7 @@ prob_random_action_in_bot = 0.5
 
 gomoku_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/gomoku_b{board_size}_rand{prob_random_action_in_bot}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}__seed0',
+    f'data_mz_ctree/gomoku_b{board_size}_rand{prob_random_action_in_bot}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(2),
         board_size=board_size,
@@ -58,7 +55,7 @@ gomoku_muzero_config = dict(
         value_loss_weight=0.25,
         policy_loss_weight=1,
         manual_temperature_decay=True,
-        replay_buffer_size=int(1e4),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e5),  # the size/capacity of replay_buffer, in the terms of transitions.
         model=dict(
             observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
             action_space_size=int(board_size * board_size),
