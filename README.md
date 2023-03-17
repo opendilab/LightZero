@@ -64,66 +64,33 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 
 ## Benchmark
 
-<details open>
-<summary>(Click to Collapse)</summary>
+<details closed>
+<summary>(Click to Expand)</summary>
 
 Below are the benchmark results of [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py), [MuZero w/ SSL](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) , [EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/efficientzero.py) and [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) on three discrete action space games in [Atari](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py).
 
+<p align="center">
+  <img src="assets/benchmark/main/pong_main.png" alt="Image Description 1" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/qbert_main.png" alt="Image Description 2" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/mspacman_main.png" alt="Image Description 3" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/ablation/mspacman_sez_K.png" alt="Image Description 4" width="23%" height="auto" style="margin: 0 1%;">
+</p>
 
-<section style="text-align:center">
-
-<span style="width:20%;display:inline-block">
-
-![alt](assets/benchmark/main/pong_main.png)
-
-</span>
-<span style="width:20%;display:inline-block">
-
-![alt](assets/benchmark/main/qbert_main.png)
-
-</span>
-<span style="width:20%;display:inline-block">
-
-![alt](assets/benchmark/main/mspacman_main.png)
-
-
-</span>
-<span style="width:20%;display:inline-block">
-
-![alt](assets/benchmark/ablation/mspacman_sez_K.png)
-
-</span></section>
 
 Below are the benchmark results of [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) with ``Factored/Gaussian`` policy representation on two continuous action space games: [Pendulum-v1](https://github.com/opendilab/LightZero/blob/main/zoo/classic_control/pendulum/envs/pendulum_lightzero_env.py), [LunarLanderContinuous-v2](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/lunarlander/envs/lunarlander_env.py).
 
-<section style="text-align:center">
-<span style="width:20%;display:inline-block">
-
-![alt](assets/benchmark/main/pendulum_main.png)
-
-</span>
-<span style="width:20%;display:inline-block">
-
-![alt](assets/benchmark/ablation/pendulum_sez_K.png)
-
-</span>
-<span style="width:20%;display:inline-block">
-
-![alt](assets/benchmark/main/lunarlander_main.png)
-</span></section>
+<p align="center">
+  <img src="assets/benchmark/main/pendulum_main.png" alt="Image Description 1" width="30%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/ablation/pendulum_sez_K.png" alt="Image Description 2" width="30%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/lunarlander_main.png" alt="Image Description 3" width="30%" height="auto" style="margin: 0 1%;">
+</p>
 
 Below are the benchmark results of [AlphaZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/alphazero.py) and [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) on two board_games: [TicTacToe](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/tictactoe/envs/tictactoe_env.py), [Gomoku](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py).
 
-<section style="text-align:center">
-<span style="width:20%;display:inline-block">
-
-![alt](assets/benchmark/main/tictactoe_main.png)
-
-</span>
-<span style="width:20%;display:inline-block">
-
-![alt](assets/benchmark/main/gomoku_main.png)
-</span></section>
+<p align="center">
+  <img src="assets/benchmark/main/tictactoe_main.png" alt="Image Description 1" width="45%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/gomoku_main.png" alt="Image Description 2" width="45%" height="auto" style="margin: 0 1%;">
+</p>
 
 </details>
 
@@ -134,8 +101,8 @@ Below are the benchmark results of [AlphaZero](https://github.com/opendilab/Ligh
 
 The following are the overview MCTS principle diagrams of the above algorithms:
 
-<details open>
-<summary>(Click to Collapse)</summary>
+<details closed>
+<summary>(Click to Expand)</summary>
 
 ![mcts](assets/algo_overview/mcts.png)
 
@@ -154,8 +121,8 @@ The following are the overview MCTS principle diagrams of the above algorithms:
 ### Paper Notes
 The following are the detailed paper notes of the above algorithms:
 
-<details open>
-<summary>(Click to Collapse)</summary>
+<details closed>
+<summary>(Click to Expand)</summary>
 
 ![alphazero](assets/paper_notes/alphazero.pdf)
 
@@ -177,8 +144,8 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 ### Key Papers
 
-<details open>
-<summary>(Click to Collapse)</summary>
+<details closed>
+<summary>(Click to Expand)</summary>
 
 #### LightZero Implemented series
 
@@ -217,8 +184,8 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 ### Other Papers
 
-<details open>
-<summary>(Click to Collapse)</summary>
+<details closed>
+<summary>(Click to Expand)</summary>
 
 #### ICML
 - [Efficient Learning for AlphaZero via Path Consistency](https://proceedings.mlr.press/v162/zhao22h/zhao22h.pdf) 2022
