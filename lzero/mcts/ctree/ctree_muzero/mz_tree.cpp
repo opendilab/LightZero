@@ -11,12 +11,12 @@
         ],
         "include_dirs": [
             "lzero/mcts/ctree/ctree_muzero",
-            "/private/var/folders/r5/znmp_3cn0_b41yvr2tvld9ys0qypks/T/pip-build-env-g5le5v6q/overlay/lib/python3.8/site-packages/numpy/core/include"
+            "/tmp/pip-build-env-z5q7ikn1/overlay/lib/python3.8/site-packages/numpy/core/include"
         ],
         "language": "c++",
         "name": "lzero.mcts.ctree.ctree_muzero.mz_tree",
         "sources": [
-            "/Users/puyuan/code/LightZero/lzero/mcts/ctree/ctree_muzero/mz_tree.pyx"
+            "/mnt/lustre/yangzhenjie/code/LightZero/lzero/mcts/ctree/ctree_muzero/mz_tree.pyx"
         ]
     },
     "module_name": "lzero.mcts.ctree.ctree_muzero.mz_tree"
