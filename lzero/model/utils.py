@@ -1,3 +1,9 @@
+"""
+Overview:
+    In this file, we provide a set of utility functions for probing network parameters and gradients,
+    which can be helpful in analyzing and debugging the inner workings of various models.
+"""
+
 import torch
 import numpy as np
 

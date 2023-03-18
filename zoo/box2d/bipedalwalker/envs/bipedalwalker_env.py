@@ -72,7 +72,7 @@ class BipedalWalkerEnv(BaseEnv):
         # to be compatible with LightZero model,shape: [W, H, C]
         obs = obs.reshape(24, 1, 1)
         action_mask = None
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
         return obs
 
@@ -102,7 +102,7 @@ class BipedalWalkerEnv(BaseEnv):
         # to be compatible with LightZero model,shape: [W, H, C]
         obs = obs.reshape(24, 1, 1)
         action_mask = None
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
         self._final_eval_reward += rew
         if self._rew_clip:

@@ -5,7 +5,7 @@ import torch
 from easydict import EasyDict
 
 from lzero.mcts.ctree.ctree_efficientzero import ez_tree as tree_efficientzero
-from ..scaling_transform import inverse_scalar_transform
+from lzero.policy.scaling_transform import inverse_scalar_transform
 
 
 # ==============================================================
@@ -52,6 +52,18 @@ class EfficientZeroMCTSCtree(object):
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
+
+    @classmethod
+    def Roots(cls, active_collect_env_num, legal_actions):
+        """
+        Overview:
+            The initialization of CRoots with root num and legal action lists.
+        Arguments:
+            - root_num: the number of the current root.
+            - legal_action_list: the vector of the legal action of this root.
+        """
+        from lzero.mcts.ctree.ctree_efficientzero import ez_tree as ctree
+        return ctree.Roots(active_collect_env_num, legal_actions)
 
     def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play_batch):
         """
@@ -223,6 +235,18 @@ class MuZeroMCTSCtree(object):
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
+
+    @classmethod
+    def Roots(cls, active_collect_env_num, legal_actions):
+        """
+        Overview:
+            The initialization of CRoots with root num and legal action lists.
+        Arguments:
+            - root_num: the number of the current root.
+            - legal_action_list: the vector of the legal action of this root.
+        """
+        from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
+        return ctree.Roots(active_collect_env_num, legal_actions)
 
     def search(self, roots, model, hidden_state_roots, to_play_batch):
         """

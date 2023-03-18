@@ -102,7 +102,7 @@ class LunarLanderDiscEnv(BaseEnv):
         # to be compatible with LightZero model,shape: [W, H, C]
         obs = obs.reshape(8, 1, 1)
         action_mask = np.ones(self.K, 'int8')
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         return obs
 
     def close(self) -> None:
@@ -140,7 +140,7 @@ class LunarLanderDiscEnv(BaseEnv):
         # to be compatible with LightZero model,shape: [W, H, C]
         obs = obs.reshape(8, 1, 1)
         action_mask = np.ones(self._action_space.n, 'int8')
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         self._final_eval_reward += rew
         if done:
             info['final_eval_reward'] = self._final_eval_reward

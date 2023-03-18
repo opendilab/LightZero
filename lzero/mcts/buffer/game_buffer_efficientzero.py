@@ -10,10 +10,10 @@ from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
 
 from ..ctree.ctree_efficientzero import ez_tree as ctree
-from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTS_ctree
-from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree as MCTS_ptree
-from lzero.mcts.utils import prepare_observation_list, concat_output, concat_output_value
-from lzero.mcts.scaling_transform import inverse_scalar_transform
+from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTSCtree
+from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree as MCTSPtree
+from lzero.mcts.utils import prepare_observation_list
+from lzero.policy import concat_output, concat_output_value, inverse_scalar_transform
 
 
 from lzero.mcts.utils import BufferedData
@@ -673,7 +673,7 @@ class EfficientZeroGameBuffer(Buffer):
 
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
                     # roots = ctree_efficientzero.Roots(batch_size, self._cfg.model.action_space_size, self._cfg.num_simulations)
-                    roots = ctree.Roots(batch_size, legal_actions)
+                    roots = MCTSCtree.Roots(batch_size, legal_actions)
 
                     noises = [
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
@@ -683,7 +683,7 @@ class EfficientZeroGameBuffer(Buffer):
                         self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ctree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                    MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 else:
                     ## python mcts_tree
                     if to_play_history[0][0] in [None, -1]:
@@ -692,7 +692,7 @@ class EfficientZeroGameBuffer(Buffer):
                             list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                         ]
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
-                    roots = ptree_efficientzero.Roots(batch_size, self._cfg.num_simulations, legal_actions)
+                    roots = MCTSPtree.Roots(batch_size, self._cfg.num_simulations, legal_actions)
                     noises = [
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(batch_size)
@@ -706,7 +706,7 @@ class EfficientZeroGameBuffer(Buffer):
                             to_play=-1
                         )
                         # do MCTS for a new policy with the recent target model
-                        MCTS_ptree(self._cfg).search(
+                        MCTSPtree(self._cfg).search(
                             roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=-1
                         )
                     else:
@@ -718,7 +718,7 @@ class EfficientZeroGameBuffer(Buffer):
                             to_play=to_play
                         )
                         # do MCTS for a new policy with the recent target model
-                        MCTS_ptree(self._cfg).search(
+                        MCTSPtree(self._cfg).search(
                             roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play
                         )
                 roots_values = roots.get_values()
@@ -872,7 +872,7 @@ class EfficientZeroGameBuffer(Buffer):
                     to_play = [-1 for i in range(batch_size)]
                 legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
                 # roots = ctree_efficientzero.Roots(batch_size, self._cfg.model.action_space_size, self._cfg.num_simulations)
-                roots = ctree.Roots(batch_size, legal_actions)
+                roots = MCTSCtree.Roots(batch_size, legal_actions)
 
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
@@ -882,7 +882,7 @@ class EfficientZeroGameBuffer(Buffer):
                     self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
                 )
                 # do MCTS for a new policy with the recent target model
-                MCTS_ctree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 roots_legal_actions_list = legal_actions
 
             else:
@@ -894,7 +894,7 @@ class EfficientZeroGameBuffer(Buffer):
                     ]
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
-                roots = ptree_efficientzero.Roots(batch_size, self._cfg.num_simulations, legal_actions)
+                roots = MCTSPtree.Roots(batch_size, self._cfg.num_simulations, legal_actions)
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(batch_size)
@@ -908,7 +908,7 @@ class EfficientZeroGameBuffer(Buffer):
                         to_play=-1
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ptree(self._cfg).search(
+                    MCTSPtree(self._cfg).search(
                         roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=-1
                     )
                 else:
@@ -920,7 +920,7 @@ class EfficientZeroGameBuffer(Buffer):
                         to_play=to_play
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ptree(self._cfg).search(
+                    MCTSPtree(self._cfg).search(
                         roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play
                     )
                 roots_legal_actions_list = roots.legal_actions_list

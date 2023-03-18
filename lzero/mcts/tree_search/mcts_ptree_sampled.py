@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from easydict import EasyDict
 
-from ..scaling_transform import inverse_scalar_transform
+from lzero.policy.scaling_transform import inverse_scalar_transform
 from lzero.mcts.ptree import MinMaxStatsList
 
 ###########################################################
@@ -54,7 +54,26 @@ class SampledEfficientZeroMCTSPtree(object):
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
-        
+
+    @classmethod
+    def Roots(cls, root_num, legal_action_lis, action_space_size,
+                    num_of_sampled_actions, continuous_action_space):
+        """
+        Overview:
+            Initialization of CNode with root_num, legal_actions_list, action_space_size, num_of_sampled_actions, continuous_action_space.
+        Arguments:
+            - root_num: the number of the current root.
+            - legal_action_list: the vector of the legal action of this root.
+            - action_space_size: the size of action space of the current env.
+            - num_of_sampled_actions: the number of sampled actions, i.e. K in the Sampled MuZero papers.
+            - continuous_action_space: whether the action space is continous in current env.
+        """
+        import lzero.mcts.ptree.ptree_sez as ptree
+        return ptree.Roots(
+                    root_num, legal_action_lis, action_space_size,
+                    num_of_sampled_actions, continuous_action_space
+                )
+
     def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=-1):
         """
         Overview:

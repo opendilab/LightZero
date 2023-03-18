@@ -1,16 +1,17 @@
 from collections import namedtuple
 from typing import List, Dict, Any, Tuple, Union
 
+import numpy as np
 import torch.distributions
 import torch.nn.functional as F
 import torch.optim as optim
-
 from ding.model import model_wrap
 from ding.policy.base_policy import Policy
-from lzero.mcts.ptree.ptree_az import MCTS
 from ding.torch_utils import to_device
 from ding.utils import POLICY_REGISTRY
 from ding.utils.data import default_collate
+
+from lzero.mcts.ptree.ptree_az import MCTS
 
 
 @POLICY_REGISTRY.register('alphazero')
@@ -154,7 +155,8 @@ class AlphaZeroPolicy(Policy):
         self._optimizer.zero_grad()
         total_loss.backward()
 
-        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(list(self._model.parameters()), max_norm=self._cfg.learn.grad_clip_value,)
+        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(list(self._model.parameters()),
+                                                                     max_norm=self._cfg.learn.grad_clip_value, )
         self._optimizer.step()
         if self._cfg.learn.lr_piecewise_constant_decay is True:
             self.lr_scheduler.step()
@@ -184,7 +186,7 @@ class AlphaZeroPolicy(Policy):
         self.collect_mcts_temperature = 1
 
     @torch.no_grad()
-    def _forward_collect(self, envs, obs, temperature: list = None):
+    def _forward_collect(self, envs, obs, temperature: np.ndarray = 1):
         r"""
         Overview:
             Forward function for collect mode
@@ -194,7 +196,7 @@ class AlphaZeroPolicy(Policy):
         Returns:
             - data (:obj:`dict`): The collected data
         """
-        self.collect_mcts_temperature = temperature[0]
+        self.collect_mcts_temperature = temperature
         ready_env_id = list(envs.keys())
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
@@ -208,7 +210,8 @@ class AlphaZeroPolicy(Policy):
                 init_state=init_state[env_id],
             )
             action, mcts_probs = self._collect_mcts.get_next_action(
-                envs[env_id], policy_forward_fn=self._policy_value_fn, temperature=self.collect_mcts_temperature, sample=True
+                envs[env_id], policy_forward_fn=self._policy_value_fn, temperature=self.collect_mcts_temperature,
+                sample=True
             )
             output[env_id] = {
                 'action': action,
@@ -266,7 +269,8 @@ class AlphaZeroPolicy(Policy):
         """
         legal_actions = env.legal_actions
         current_state, current_state_scale = env.current_state()
-        current_state_scale = torch.from_numpy(current_state_scale).to(device=self._device, dtype=torch.float).unsqueeze(0)
+        current_state_scale = torch.from_numpy(current_state_scale).to(device=self._device,
+                                                                       dtype=torch.float).unsqueeze(0)
         with torch.no_grad():
             action_probs, value = self._policy_model.compute_prob_value(current_state_scale)
         action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))

@@ -49,6 +49,7 @@ tictactoe_muzero_config = dict(
         stop_value=int(1e6),
     ),
     policy=dict(
+        sampled_algo=False,
         device=device,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

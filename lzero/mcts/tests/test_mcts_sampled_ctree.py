@@ -1,7 +1,7 @@
 import pytest
 import torch
 from easydict import EasyDict
-from lzero.mcts import inverse_scalar_transform
+from lzero.policy import inverse_scalar_transform
 
 
 class MuZeroModelFake(torch.nn.Module):
@@ -60,9 +60,8 @@ class MuZeroModelFake(torch.nn.Module):
 
 @pytest.mark.unittest
 def test_mcts():
-    from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as ctree
     import numpy as np
-    from lzero.mcts.tree_search.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTS
+    from lzero.mcts.tree_search.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTSCtree
 
     game_config = EasyDict(
         dict(
@@ -114,7 +113,7 @@ def test_mcts():
     policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
     legal_actions_list = [[-1 for i in range(5)] for _ in range(env_nums)]
-    roots = ctree.Roots(env_nums, legal_actions_list, game_config.model.action_space_size, game_config.num_of_sampled_actions, continuous_action_space=True)
+    roots = MCTSCtree.Roots(env_nums, legal_actions_list, game_config.model.action_space_size, game_config.num_of_sampled_actions, continuous_action_space=True)
 
     noises = [
         np.random.dirichlet([game_config.root_dirichlet_alpha] * game_config.num_of_sampled_actions

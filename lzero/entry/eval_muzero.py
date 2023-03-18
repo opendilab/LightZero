@@ -1,10 +1,10 @@
 import os
 from functools import partial
-from typing import Union, Optional, List, Any, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
-from ding.config import read_config, compile_config
+from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
@@ -78,15 +78,6 @@ def eval_muzero(
     game_config = cfg.policy
     # specific game buffer for MCTS+RL algorithms
     replay_buffer = GameBuffer(game_config)
-    collector = create_serial_collector(
-        cfg.policy.collect.collector,
-        env=collector_env,
-        policy=policy.collect_mode,
-        tb_logger=tb_logger,
-        exp_name=cfg.exp_name,
-        replay_buffer=replay_buffer,
-        game_config=game_config
-    )
     evaluator = BaseSerialEvaluator(
         cfg.policy.eval.evaluator,
         evaluator_env,

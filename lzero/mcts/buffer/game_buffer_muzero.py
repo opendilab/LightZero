@@ -12,16 +12,12 @@ from ding.torch_utils.data_helper import to_ndarray, to_list
 from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
 
-# python mcts_tree
-import lzero.mcts.ptree.ptree_mz as ptree
-# cpp mcts_tree
-from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
-from lzero.mcts.scaling_transform import inverse_scalar_transform
-from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTS_ctree
-from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTS_ptree
+from lzero.policy.scaling_transform import inverse_scalar_transform
+from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
+from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import BufferedData
-from lzero.mcts.utils import prepare_observation_list, concat_output, concat_output_value
-from lzero.mcts.utils import to_detach_cpu_numpy
+from lzero.mcts.utils import prepare_observation_list
+from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value
 
 
 @BUFFER_REGISTRY.register('game_buffer_muzero')
@@ -551,7 +547,7 @@ class MuZeroGameBuffer(Buffer):
                         to_play = [-1 for i in range(transition_batch_size)]
 
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
-                    roots = ctree.Roots(transition_batch_size, legal_actions)
+                    roots = MCTSCtree.Roots(transition_batch_size, legal_actions)
 
                     noises = [
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
@@ -559,7 +555,7 @@ class MuZeroGameBuffer(Buffer):
                     ]
                     roots.prepare(self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ctree(self._cfg).search(roots, model, hidden_state_roots, to_play)
+                    MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, to_play)
                 else:
                     # python mcts_tree
                     if to_play_history[0][0] in [None, -1]:
@@ -568,7 +564,7 @@ class MuZeroGameBuffer(Buffer):
                             list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
                         ]
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
-                    roots = ptree.Roots(transition_batch_size, legal_actions, self._cfg.num_simulations)
+                    roots = MCTSPtree.Roots(transition_batch_size, legal_actions, self._cfg.num_simulations)
                     noises = [
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(transition_batch_size)
@@ -739,7 +735,7 @@ class MuZeroGameBuffer(Buffer):
                     to_play = [-1 for i in range(transition_batch_size)]
 
                 legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
-                roots = ctree.Roots(transition_batch_size, legal_actions)
+                roots = MCTSCtree.Roots(transition_batch_size, legal_actions)
 
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
@@ -747,7 +743,7 @@ class MuZeroGameBuffer(Buffer):
                 ]
                 roots.prepare(self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTS_ctree(self._cfg).search(roots, model, hidden_state_roots, to_play)
+                MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, to_play)
                 # roots_legal_actions_list = roots.legal_actions_list
                 roots_legal_actions_list = legal_actions
             else:
@@ -759,7 +755,7 @@ class MuZeroGameBuffer(Buffer):
                     ]
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
 
-                roots = ptree.Roots(transition_batch_size, legal_actions, self._cfg.num_simulations)
+                roots = MCTSPtree.Roots(transition_batch_size, legal_actions, self._cfg.num_simulations)
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(transition_batch_size)

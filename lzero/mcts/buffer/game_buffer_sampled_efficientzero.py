@@ -9,15 +9,11 @@ from ding.torch_utils.data_helper import to_ndarray
 from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
 
-# python mcts_tree
-import lzero.mcts.ptree.ptree_sez as ptree
-from lzero.mcts.scaling_transform import inverse_scalar_transform
-from lzero.mcts.tree_search.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTS_ctree
-from lzero.mcts.tree_search.mcts_ptree_sampled import SampledEfficientZeroMCTSPtree as MCTS_ptree
+from lzero.mcts.tree_search.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTSCtree
+from lzero.mcts.tree_search.mcts_ptree_sampled import SampledEfficientZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import BufferedData
-from lzero.mcts.utils import prepare_observation_list, concat_output, concat_output_value
-# cpp mcts_tree
-from ..ctree.ctree_sampled_efficientzero import ezs_tree as ctree
+from lzero.mcts.utils import prepare_observation_list
+from lzero.policy import concat_output, concat_output_value, inverse_scalar_transform
 
 
 @BUFFER_REGISTRY.register('game_buffer_sampled_efficientzero')
@@ -145,7 +141,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
             max_prio = self.game_pos_priorities.max() if self.game_block_buffer else 1
             # if no 'priorities' provided, set the valid part of the new-added game history the max_prio
             self.game_pos_priorities = np.concatenate(
-                (self.game_pos_priorities, [max_prio for _ in range(valid_len)] + [0. for _ in range(valid_len, len(data))])
+                (self.game_pos_priorities,
+                 [max_prio for _ in range(valid_len)] + [0. for _ in range(valid_len, len(data))])
             )
         else:
             print('==' * 20)
@@ -157,7 +154,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
             self.game_pos_priorities = np.concatenate((self.game_pos_priorities, priorities))
 
         self.game_block_buffer.append(data)
-        self.game_block_game_pos_look_up += [(self.base_idx + len(self.game_block_buffer) - 1, step_pos) for step_pos in range(len(data))]
+        self.game_block_game_pos_look_up += [(self.base_idx + len(self.game_block_buffer) - 1, step_pos) for step_pos in
+                                             range(len(data))]
 
     def push_game_blocks(self, data_and_meta: Any):
         """
@@ -443,7 +441,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
             actions_tmp = game.action_history[pos_in_game_block:pos_in_game_block + self._cfg.num_unroll_steps].tolist()
 
             # NOTE: self._cfg.num_unroll_steps + 1, TODO(pu): why +1
-            root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_block:pos_in_game_block + self._cfg.num_unroll_steps + 1]
+            root_sampled_actions_tmp = game.root_sampled_actions[
+                                       pos_in_game_block:pos_in_game_block + self._cfg.num_unroll_steps + 1]
             # root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_block:pos_in_game_block + self._cfg.num_unroll_steps]
 
             # add mask for invalid actions (out of trajectory)
@@ -485,7 +484,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
             # obtain the input observations
             # stack+num_unroll_steps  4+5
             # pad if length of obs in game_block is less than stack+num_unroll_steps
-            obs_lst.append(game_lst[i].obs(pos_in_game_block_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True))
+            obs_lst.append(
+                game_lst[i].obs(pos_in_game_block_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True))
             action_lst.append(actions_tmp)
             root_sampled_actions_lst.append(root_sampled_actions_tmp)
 
@@ -498,7 +498,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         ######################
         # formalize the inputs of a batch
         current_batch = [obs_lst, action_lst, root_sampled_actions_lst, mask_lst, batch_index_list, weights,
-                        make_time_lst]
+                         make_time_lst]
 
         try:
             root_sampled_actions_lst = np.concatenate([root_sampled_actions_lst])
@@ -712,7 +712,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         batch_size = len(value_obs_lst)
         game_block_batch_size = len(state_index_lst)
 
-        if to_play_history[0][0] in [1,2]:
+        if to_play_history[0][0] in [1, 2]:
             # for two_player board games
             # to_play
             to_play = []
@@ -791,7 +791,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     cpp mcts_tree
                     """
                     if to_play_history[0][0] in [None, -1]:
-                        # we use to_play=0 means play_with_bot_mode game
+                        # we use to_play=-1 means play_with_bot_mode game
                         to_play = [-1 for i in range(batch_size)]
                         # if action_mask_history[0][0] is None:
                         # continuous action space env: all -1
@@ -801,7 +801,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     else:
                         legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
-                    roots = ctree.Roots(
+                    roots = MCTSCtree.Roots(
                         batch_size, legal_actions, self._cfg.model.action_space_size,
                         self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                     )
@@ -813,7 +813,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ctree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                    MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 else:
                     """
                     python mcts_tree
@@ -824,7 +824,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                             list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
                         ]
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
-                    roots = ptree.Roots(
+                    roots = MCTSPtree.Roots(
                         batch_size, legal_actions, num_of_sampled_actions=self._cfg.model.num_of_sampled_actions
                     )
                     noises = [
@@ -864,12 +864,13 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 value_lst = concat_output_value(network_output)
 
             # get last state value
-            if to_play_history[0][0] in [1,2]:
+            if to_play_history[0][0] in [1, 2]:
                 # TODO(pu): board_games
                 value_lst = value_lst.reshape(-1) * np.array(
                     [
                         self._cfg.discount_factor ** td_steps_lst[i] if int(td_steps_lst[i]) %
-                                                                 2 == 0 else -self._cfg.discount_factor ** td_steps_lst[i] for
+                                                                        2 == 0 else -self._cfg.discount_factor **
+                                                                                     td_steps_lst[i] for
                         i in range(batch_size)
                     ]
                 )
@@ -894,7 +895,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     bootstrap_index = current_index + td_steps_lst[value_index]
                     # for i, reward in enumerate(game.rewards[current_index:bootstrap_index]):
                     for i, reward in enumerate(reward_lst[current_index:bootstrap_index]):
-                        if to_play_history[0][0] in [1,2]:
+                        if to_play_history[0][0] in [1, 2]:
                             # TODO(pu): board_games
                             if to_play_list[current_index] == to_play_list[i]:
                                 value_lst[value_index] += reward * self._cfg.discount_factor ** i
@@ -916,7 +917,8 @@ class SampledEfficientZeroGameBuffer(Buffer):
                         target_values.append(value_lst[value_index])
                         # Since the horizon is small and the discount_factor is close to 1.
                         # Compute the reward sum to approximate the value prefix for simplification
-                        value_prefix += reward_lst[current_index]  # * config.discount_factor ** (current_index - base_index)
+                        value_prefix += reward_lst[
+                            current_index]  # * config.discount_factor ** (current_index - base_index)
                         target_value_prefixs.append(value_prefix)
                     else:
                         target_values.append(0)
@@ -1032,7 +1034,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 cpp mcts_tree
                 """
                 if to_play_history[0][0] in [None, -1]:
-                    # we use to_play=0 means play_with_bot_mode game
+                    # we use to_play=-1 means play_with_bot_mode game
                     to_play = [-1 for i in range(batch_size)]
                     # if action_mask_history[0][0] is None:
                     # continuous action space env: all -1
@@ -1040,7 +1042,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 else:
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
-                roots = ctree.Roots(
+                roots = MCTSCtree.Roots(
                     batch_size, legal_actions, self._cfg.model.action_space_size,
                     self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
@@ -1052,7 +1054,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
                 )
                 # do MCTS for a new policy with the recent target model
-                MCTS_ctree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
             else:
                 """
                 python mcts_tree
@@ -1072,7 +1074,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                     # if board_games, we have action_mask
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
-                roots = ptree.Roots(
+                roots = MCTSPtree.Roots(
                     batch_size,
                     legal_actions,
                     action_space_size=self._cfg.model.action_space_size,
