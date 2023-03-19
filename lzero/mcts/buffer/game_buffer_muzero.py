@@ -575,7 +575,7 @@ class MuZeroGameBuffer(Buffer):
                             self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play=-1
                         )
                         # do MCTS for a new policy with the recent target model
-                        MCTS_ptree(self._cfg).search(roots, model, hidden_state_roots, to_play=-1)
+                        MCTSPtree(self._cfg).search(roots, model, hidden_state_roots, to_play=-1)
                     else:
                         roots.prepare(
                             self._cfg.root_exploration_fraction,
@@ -585,7 +585,7 @@ class MuZeroGameBuffer(Buffer):
                             to_play=to_play
                         )
                         # do MCTS for a new policy with the recent target model
-                        MCTS_ptree(self._cfg).search(roots, model, hidden_state_roots, to_play=to_play)
+                        MCTSPtree(self._cfg).search(roots, model, hidden_state_roots, to_play=to_play)
 
                 roots_values = roots.get_values()
                 value_list = np.array(roots_values)
@@ -765,13 +765,13 @@ class MuZeroGameBuffer(Buffer):
                         self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play=-1
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ptree(self._cfg).search(roots, model, hidden_state_roots, to_play=-1)
+                    MCTSPtree(self._cfg).search(roots, model, hidden_state_roots, to_play=-1)
                 else:
                     roots.prepare(
                         self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play=to_play
                     )
                     # do MCTS for a new policy with the recent target model
-                    MCTS_ptree(self._cfg).search(roots, model, hidden_state_roots, to_play=to_play)
+                    MCTSPtree(self._cfg).search(roots, model, hidden_state_roots, to_play=to_play)
                 roots_legal_actions_list = roots.legal_actions_list
 
             roots_distributions = roots.get_distributions()
