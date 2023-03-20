@@ -44,16 +44,33 @@ class Node(object):
         self._visit_count += 1
         self._value_sum += value
 
-    def update_recursive(self, leaf_value):
+    def update_recursive(self, leaf_value, mcts_mode):
         """
         Overview:
             Update node information recursively.
         Arguments:
             - leaf_value (:obj:`Int`): The value of the node.
         """
-        if not self.is_root():
-            self._parent.update_recursive(-leaf_value)
-        self.update(leaf_value)
+        if mcts_mode == 'self_play_mode':
+            self.update(leaf_value)
+            if self.is_root():
+                return
+            self._parent.update_recursive(-leaf_value, mcts_mode)
+        if mcts_mode == 'play_with_bot_mode':
+            self.update(leaf_value)
+            if self.is_root():
+                return
+            self._parent.update_recursive(leaf_value, mcts_mode)
+
+        # if mcts_mode == 'self_play_mode':
+        #     if not self.is_root():
+        #         self._parent.update_recursive(leaf_value, mcts_mode)
+        #     self.update(-leaf_value)
+        #
+        # if mcts_mode == 'play_with_bot_mode':
+        #     if not self.is_root():
+        #         self._parent.update_recursive(leaf_value, mcts_mode)
+        #     self.update(leaf_value)
 
     def is_leaf(self):
         """
@@ -128,14 +145,16 @@ class MCTS(object):
         # print('value= {}'.format([(k, v.value) for k,v in root.children.items()]))
         # print('visit_count= {}'.format([(k, v.visit_count) for k,v in root.children.items()]))
         # print('legal_action= {}',format(simulate_env.legal_actions))
-        
+
         for n in range(self._num_simulations):
             # import pdb;pdb.set_trace()
             simulate_env_copy = copy.deepcopy(simulate_env)
             # in MCTS search, when we input a action to the ``simulate_env``,
             # the ``simulate_env`` only execute the action, don't execute the built-in bot action,
             # i.e. the AlphaZero agent do self-play when do MCTS search.
+
             simulate_env_copy.battle_mode = simulate_env_copy.mcts_mode
+
             # root_copy = copy.deepcopy(root)
             self._simulate(root, simulate_env_copy, policy_forward_fn)
         # print('after simulation')
@@ -172,27 +191,29 @@ class MCTS(object):
         while not node.is_leaf():
             # print(node.children.keys())
             action, node = self._select_child(node, simulate_env)
-            if action == None:
+            if action is None:
                 break
             # print('legal_action={}'.format(simulate_env.legal_actions))
             # print('action={}'.format(action))
             simulate_env.step(action)
             # print(node.is_leaf())
 
-        end, winner = simulate_env.get_done_winner()
+        done, winner = simulate_env.get_done_winner()
 
         # the leaf_value is calculated from the perspective of player ``simulate_env.current_player``.
-        if not end:
+        if not done:
             leaf_value = self._expand_leaf_node(node, simulate_env, policy_forward_fn)
             # leaf_value = self._expand_leaf_node(node, simulate_env_deepcopy, policy_forward_fn)
         else:
+            # import pdb;pdb.set_trace()
             if winner == -1:
                 leaf_value = 0
             else:
                 leaf_value = 1 if simulate_env.current_player == winner else -1
 
         # Update value and visit count of nodes in this traversal.
-        node.update_recursive(-leaf_value)
+        # leaf_value= -1
+        node.update_recursive(leaf_value, simulate_env.mcts_mode)
 
     def _select_child(self, node, simulate_env):
         """

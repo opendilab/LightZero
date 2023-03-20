@@ -3,11 +3,11 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 32
-n_episode = 32
-evaluator_env_num = 16
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 5
 num_simulations = 50
-update_per_collect = 100
+update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e5)
 # ==============================================================
@@ -30,7 +30,6 @@ tictactoe_alphazero_config = dict(
         cuda=True,
         board_size=3,
         model=dict(
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),
             downsample=False,
@@ -41,6 +40,9 @@ tictactoe_alphazero_config = dict(
             policy_head_channels=16,
             fc_value_layers=[8],
             fc_policy_layers=[8],
+            last_linear_layer_init_zero=True,
+            categorical_distribution=False,
+            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
         learn=dict(
             update_per_collect=update_per_collect,

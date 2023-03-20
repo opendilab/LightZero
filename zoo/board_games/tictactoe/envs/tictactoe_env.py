@@ -21,6 +21,7 @@ class TicTacToeEnv(BaseGameEnv):
 
     config = dict(
         battle_mode='play_with_bot_mode',
+        mcts_mode='play_with_bot_mode',
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
         agent_vs_human=False,
         prob_random_agent=0,
@@ -39,6 +40,7 @@ class TicTacToeEnv(BaseGameEnv):
         self.channel_last = cfg.channel_last
         self.scale = cfg.scale
         self.battle_mode = cfg.battle_mode
+        self.mcts_mode = cfg.mcts_mode
         self.board_size = 3
         self.players = [1, 2]
         self.total_num_actions = 9
@@ -126,7 +128,7 @@ class TicTacToeEnv(BaseGameEnv):
             timestep_player1 = self._player_step(action)
             # self.env.render()
             if timestep_player1.done:
-                # in play_with_bot_mode, we set to_play as None/-1, because we don't consider the alternation between players
+                # in play_with_bot_mode, we set to_play as -1, because we don't consider the alternation between players
                 timestep_player1.obs['to_play'] = -1
                 return timestep_player1
 
@@ -139,7 +141,7 @@ class TicTacToeEnv(BaseGameEnv):
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
             timestep = timestep_player2
-            # in play_with_bot_mode, we set to_play as None/-1, because we don't consider the alternation between players
+            # in play_with_bot_mode, we set to_play as -1, because we don't consider the alternation between players
             timestep.obs['to_play'] = -1
             return timestep
         elif self.battle_mode == 'eval_mode':

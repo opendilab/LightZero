@@ -245,13 +245,7 @@ class AlphaZeroCollector(ISerialCollector):
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
                     self._total_episode_count += 1
-                    if timestep.obs['to_play'] == -1:  # vs_bot_mode
-                        reward = timestep.info['final_eval_reward']
-                    else:
-                        if timestep.obs['to_play'] == 1:  # self_play_mode
-                            reward = -timestep.info['final_eval_reward']
-                        else:
-                            reward = timestep.info['final_eval_reward']
+                    # the final_eval_reward is calculated from Player 1's perspective
                     reward = timestep.info['final_eval_reward']
                     info = {
                         'reward': reward,  # only means player1 reward
@@ -351,8 +345,13 @@ class AlphaZeroCollector(ISerialCollector):
         reward = transitions[-1]['reward']
         to_play = transitions[-1]['obs']['to_play']
         for t in transitions:
-            if t['obs']['to_play'] == to_play:
+            if t['obs']['to_play'] == -1:
+                # play_with_bot_mode
                 t['reward'] = int(reward)
             else:
-                t['reward'] = int(-reward)
+                # self_play_mode
+                if t['obs']['to_play'] == to_play:
+                    t['reward'] = int(reward)
+                else:
+                    t['reward'] = int(-reward)
         return transitions
