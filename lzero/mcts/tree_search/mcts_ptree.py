@@ -1,9 +1,14 @@
 import copy
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 from easydict import EasyDict
 from lzero.mcts.ptree import MinMaxStatsList
+
+if TYPE_CHECKING:
+    import lzero.mcts.ptree.ptree_ez as ez_ptree
+    import lzero.mcts.ptree.ptree_mz as mz_ptree
 
 ###########################################################
 # EfficientZero
@@ -52,7 +57,7 @@ class EfficientZeroMCTSPtree(object):
         self._cfg = default_config
 
     @classmethod
-    def Roots(cls, root_num, legal_actions):
+    def Roots(cls, root_num, legal_actions) -> ez_ptree.Roots :
         """
         Overview:
             The initialization of CRoots with root num and legal action lists.
@@ -241,7 +246,7 @@ class MuZeroMCTSPtree(object):
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
-    def __init__(self, cfg=None):
+    def __init__(self, cfg=None) -> None:
         """
         Overview:
             Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
@@ -253,7 +258,7 @@ class MuZeroMCTSPtree(object):
         self._cfg = default_config
 
     @classmethod
-    def Roots(cls, root_num, legal_actions):
+    def Roots(cls, root_num, legal_actions) -> mz_ptree.Roots:
         """
         Overview:
             The initialization of CRoots with root num and legal action lists.
@@ -264,7 +269,7 @@ class MuZeroMCTSPtree(object):
         import lzero.mcts.ptree.ptree_mz as ptree
         return ptree.Roots(root_num, legal_actions)
 
-    def search(self, roots, model, hidden_state_roots, to_play=-1):
+    def search(self, roots, model, hidden_state_roots, to_play=-1) -> None:
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.

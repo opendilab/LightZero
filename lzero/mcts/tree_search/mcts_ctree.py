@@ -1,4 +1,5 @@
 import copy
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -7,6 +8,9 @@ from easydict import EasyDict
 from lzero.mcts.ctree.ctree_efficientzero import ez_tree as tree_efficientzero
 from lzero.policy.scaling_transform import inverse_scalar_transform
 
+if TYPE_CHECKING:
+    from lzero.mcts.ctree.ctree_efficientzero import ez_tree as ez_ctree
+    from lzero.mcts.ctree.ctree_muzero import mz_tree as mz_ctree
 
 # ==============================================================
 # EfficientZero
@@ -42,7 +46,7 @@ class EfficientZeroMCTSCtree(object):
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
-    def __init__(self, cfg=None):
+    def __init__(self, cfg=None) -> None:
         """
         Overview:
             Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
@@ -54,7 +58,7 @@ class EfficientZeroMCTSCtree(object):
         self._cfg = default_config
 
     @classmethod
-    def Roots(cls, active_collect_env_num, legal_actions):
+    def Roots(cls, active_collect_env_num, legal_actions) -> ez_ctree.Roots:
         """
         Overview:
             The initialization of CRoots with root num and legal action lists.
@@ -65,7 +69,7 @@ class EfficientZeroMCTSCtree(object):
         from lzero.mcts.ctree.ctree_efficientzero import ez_tree as ctree
         return ctree.Roots(active_collect_env_num, legal_actions)
 
-    def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play_batch):
+    def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play_batch) -> None:
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
@@ -225,7 +229,7 @@ class MuZeroMCTSCtree(object):
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
-    def __init__(self, cfg=None):
+    def __init__(self, cfg=None) -> None:
         """
         Overview:
             Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
@@ -237,7 +241,7 @@ class MuZeroMCTSCtree(object):
         self._cfg = default_config
 
     @classmethod
-    def Roots(cls, active_collect_env_num, legal_actions):
+    def Roots(cls, active_collect_env_num, legal_actions) -> mz_ctree:
         """
         Overview:
             The initialization of CRoots with root num and legal action lists.
@@ -248,7 +252,7 @@ class MuZeroMCTSCtree(object):
         from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
         return ctree.Roots(active_collect_env_num, legal_actions)
 
-    def search(self, roots, model, hidden_state_roots, to_play_batch):
+    def search(self, roots, model, hidden_state_roots, to_play_batch) -> None:
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
