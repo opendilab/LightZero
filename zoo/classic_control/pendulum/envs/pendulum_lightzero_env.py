@@ -88,7 +88,7 @@ class PendulumEnv(BaseEnv):
             action_mask = np.ones(self._discrete_action_num, 'int8')
         else:
             action_mask = None
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         return obs
 
     def close(self) -> None:
@@ -123,7 +123,7 @@ class PendulumEnv(BaseEnv):
             action_mask = np.ones(self._discrete_action_num, 'int8')
         else:
             action_mask = None
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': None}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         return BaseEnvTimestep(obs, rew, done, info)
 
     def enable_save_replay(self, replay_path: Optional[str] = None) -> None:

@@ -11,6 +11,7 @@ from ding.worker.collector.base_serial_collector import ISerialCollector
 from easydict import EasyDict
 from torch.nn import L1Loss
 
+from lzero.mcts.buffer.game_block import GameBlock
 from lzero.mcts.utils import prepare_observation_list
 
 
@@ -25,12 +26,7 @@ class MuZeroCollector(ISerialCollector):
         envstep
     """
 
-    config = dict(
-        game_block_pool_size=int(1e6),
-        deepcopy_obs=False,
-        collect_print_freq=100,
-        get_train_sample=False
-    )
+    config = dict(game_block_pool_size=int(1e6), deepcopy_obs=False, collect_print_freq=100, get_train_sample=False)
 
     def __init__(
             self,
@@ -45,7 +41,7 @@ class MuZeroCollector(ISerialCollector):
     ) -> None:
         """
         Overview:
-            Init the EfficientZero collector according to input arguments.
+            Init the collector according to input arguments.
         Arguments:
             - cfg (:obj:`EasyDict`): Config dict
             - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
@@ -111,9 +107,7 @@ class MuZeroCollector(ISerialCollector):
             self._policy = _policy
             self._default_n_episode = _policy.get_attribute('cfg').collect.get('n_episode', None)
             self._logger.debug(
-                'Set default n_episode mode(n_episode({}), env_num({}))'.format(
-                    self._default_n_episode, self._env_num
-                )
+                'Set default n_episode mode(n_episode({}), env_num({}))'.format(self._default_n_episode, self._env_num)
             )
         self._policy.reset()
 
@@ -220,7 +214,7 @@ class MuZeroCollector(ISerialCollector):
     def pad_and_save_last_trajectory(self, i, last_game_blocks, last_game_priorities, game_blocks, done):
         """
         Overview:
-            put the last game history into the pool if the current game is finished
+            put the last game block into the pool if the current game is finished
         Arguments:
             - last_game_blocks (:obj:`list`): list of the last game histories
             - last_game_priorities (:obj:`list`): list of the last game priorities
@@ -252,7 +246,6 @@ class MuZeroCollector(ISerialCollector):
 
         # pad over and save
         last_game_blocks[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
-
         """
         Note:
             game_block element shape:
@@ -267,7 +260,7 @@ class MuZeroCollector(ISerialCollector):
 
         last_game_blocks[i].game_block_to_array()
 
-        # put the game history into the pool
+        # put the game block into the pool
         self.game_block_pool.append((last_game_blocks[i], last_game_priorities[i], done[i]))
 
         # reset last game_blocks
@@ -282,20 +275,15 @@ class MuZeroCollector(ISerialCollector):
                 policy_kwargs: Optional[dict] = None) -> List[Any]:
         """
         Overview:
-            Collect `n_episode` data with policy_kwargs, which is already trained `train_iter` iterations
+            Collect `n_episode` data with policy_kwargs, which is already trained `train_iter` iterations.
         Arguments:
-            - n_episode (:obj:`int`): the number of collecting data episode
-            - train_iter (:obj:`int`): the number of training iteration
-            - policy_kwargs (:obj:`dict`): the keyword args for policy forward
+            - n_episode (:obj:`int`): the number of collecting data episode.
+            - train_iter (:obj:`int`): the number of training iteration.
+            - policy_kwargs (:obj:`dict`): the keyword args for policy forward.
         Returns:
             - return_data (:obj:`List`): A list containing collected episodes if not get_train_sample, otherwise, \
                 return train_samples split by unroll_len.
         """
-        if self.game_config.sampled_algo:
-            from lzero.mcts.tree_search.game_sampled_efficientzero import GameBlock
-        else:
-            from lzero.mcts.tree_search.game import GameBlock
-
         if n_episode is None:
             if self._default_n_episode is None:
                 raise RuntimeError("Please specify collect n_episode")
@@ -319,36 +307,32 @@ class MuZeroCollector(ISerialCollector):
             self._logger.info('The current init_obs.keys() is {}'.format(init_obs.keys()))
             self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
             time.sleep(retry_waiting_time)
-            self._logger.info('='*10 + 'Wait for all environments (subprocess) to finish resetting.' + '='*10)
-            self._logger.info('After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time, self._env._env_states))
+            self._logger.info('=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
+            self._logger.info(
+                'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time, self._env._env_states)
+            )
             init_obs = self._env.ready_obs
 
-        action_mask = [to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)]
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
-
-        to_play = [to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)]
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
 
         game_blocks = [
             GameBlock(
-                self._env.action_space,
-                game_block_length=self.game_config.game_block_length,
-                config=self.game_config
+                self._env.action_space, game_block_length=self.game_config.game_block_length, config=self.game_config
             ) for _ in range(env_nums)
         ]
-
         # stacked observation windows in reset stage for init game_blocks
-        stack_obs_windows = [[] for _ in range(env_nums)]
+        observation_window_stack = [[] for _ in range(env_nums)]
         for i in range(env_nums):
-            stack_obs_windows[i] = [
+            observation_window_stack[i] = deque([
                 to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)
-            ]
-            game_blocks[i].init(stack_obs_windows[i])
+            ], maxlen=self.game_config.model.frame_stack_num)
+
+            game_blocks[i].init(observation_window_stack[i])
 
         dones = np.array([False for _ in range(env_nums)])
         last_game_blocks = [None for _ in range(env_nums)]
         last_game_priorities = [None for _ in range(env_nums)]
-
         # for priorities in self-play
         search_values_lst = [[] for _ in range(env_nums)]
         pred_values_lst = [[] for _ in range(env_nums)]
@@ -367,9 +351,7 @@ class MuZeroCollector(ISerialCollector):
         while True:
             with self._timer:
                 # Get current ready env obs.
-                # only for subprocess, to get the ready_env_id
                 obs = self._env.ready_obs
-                # TODO(pu): subprocess
                 new_available_env_id = set(obs.keys()).difference(ready_env_id)
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
@@ -379,12 +361,12 @@ class MuZeroCollector(ISerialCollector):
 
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
                 to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
+
                 action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
 
                 stack_obs = to_ndarray(stack_obs)
                 stack_obs = prepare_observation_list(stack_obs)
-
                 stack_obs = torch.from_numpy(stack_obs).to(self.game_config.device).float()
 
                 # ==============================================================
@@ -395,8 +377,10 @@ class MuZeroCollector(ISerialCollector):
                 actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                 distributions_dict_no_env_id = {k: v['distributions'] for k, v in policy_output.items()}
                 if self.game_config.sampled_algo:
-                    root_sampled_actions_dict_no_env_id = {k: v['root_sampled_actions'] for k, v in
-                                                           policy_output.items()}
+                    root_sampled_actions_dict_no_env_id = {
+                        k: v['root_sampled_actions']
+                        for k, v in policy_output.items()
+                    }
                 value_dict_no_env_id = {k: v['value'] for k, v in policy_output.items()}
                 pred_value_dict_no_env_id = {k: v['pred_value'] for k, v in policy_output.items()}
                 visit_entropy_dict_no_env_id = {
@@ -469,19 +453,18 @@ class MuZeroCollector(ISerialCollector):
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
 
-                    # update stack windows: delete the first obs and append the newest obs
-                    del stack_obs_windows[env_id][0]
-                    stack_obs_windows[env_id].append(to_ndarray(obs['observation']))
+                    # append the newest obs
+                    observation_window_stack[env_id].append(to_ndarray(obs['observation']))
 
                     # ==============================================================
-                    # we will save a game history if it is the end of the game or the next game history is finished.
+                    # we will save a game block if it is the end of the game or the next game block is finished.
                     # ==============================================================
 
-                    # if game history is full, we will save the last game history
+                    # if game block is full, we will save the last game block
                     if game_blocks[env_id].is_full():
                         # pad over last block trajectory
                         if last_game_blocks[env_id] is not None:
-                            # TODO(pu): return the one game history
+                            # TODO(pu): return the one game block
                             self.pad_and_save_last_trajectory(
                                 i, last_game_blocks, last_game_priorities, game_blocks, dones
                             )
@@ -501,7 +484,7 @@ class MuZeroCollector(ISerialCollector):
                             game_block_length=self.game_config.game_block_length,
                             config=self.game_config
                         )
-                        game_blocks[env_id].init(stack_obs_windows[env_id])
+                        game_blocks[env_id].init(observation_window_stack[env_id])
                         # TODO(pu): return data
 
                     self._env_info[env_id]['step'] += 1
@@ -522,24 +505,22 @@ class MuZeroCollector(ISerialCollector):
                     self._episode_info.append(info)
 
                     # ==============================================================
-                    # if it is the end of the game, we will save the game history
+                    # if it is the end of the game, we will save the game block
                     # ==============================================================
 
-                    # NOTE: put the penultimate game history in one episode into the trajectory_pool
+                    # NOTE: put the penultimate game block in one episode into the trajectory_pool
                     # pad over 2th last game_block using the last game_block
                     if last_game_blocks[env_id] is not None:
-                        self.pad_and_save_last_trajectory(
-                            i, last_game_blocks, last_game_priorities, game_blocks, dones
-                        )
+                        self.pad_and_save_last_trajectory(i, last_game_blocks, last_game_priorities, game_blocks, dones)
 
                     # store current block trajectory
                     priorities = self.get_priorities(i, pred_values_lst, search_values_lst)
 
-                    # NOTE: put the last game history in one episode into the trajectory_pool
+                    # NOTE: put the last game block in one episode into the trajectory_pool
                     game_blocks[env_id].game_block_to_array()
 
                     # assert len(game_blocks[env_id]) == len(priorities)
-                    # NOTE: save the last game history in one episode into the trajectory_pool if it's not null
+                    # NOTE: save the last game block in one episode into the trajectory_pool if it's not null
                     if len(game_blocks[env_id].reward_history) != 0:
                         self.game_block_pool.append((game_blocks[env_id], priorities, dones[env_id]))
 
@@ -558,8 +539,8 @@ class MuZeroCollector(ISerialCollector):
                             game_block_length=self.game_config.game_block_length,
                             config=self.game_config
                         )
-                        stack_obs_windows[env_id] = [init_obs for _ in range(self.game_config.model.frame_stack_num)]
-                        game_blocks[env_id].init(stack_obs_windows[env_id])
+                        observation_window_stack[env_id] = deque([init_obs for _ in range(self.game_config.model.frame_stack_num)], maxlen=self.game_config.model.frame_stack_num)
+                        game_blocks[env_id].init(observation_window_stack[env_id])
                         last_game_blocks[env_id] = None
                         last_game_priorities[env_id] = None
 
@@ -577,15 +558,15 @@ class MuZeroCollector(ISerialCollector):
                     # Env reset is done by env_manager automatically
                     self._policy.reset([env_id])
                     self._reset_stat(env_id)
-                    # TODO(pu): subprocess
                     ready_env_id.remove(env_id)
 
             if collected_episode >= n_episode:
+                # [data, meta_data]
                 return_data = [self.game_block_pool[i][0] for i in range(len(self.game_block_pool))], [
                     {
                         'priorities': self.game_block_pool[i][1],
-                        'end_tag': self.game_block_pool[i][2],
-                        'unroll_plus_td_stepss': self.unroll_plus_td_steps
+                        'done': self.game_block_pool[i][2],
+                        'unroll_plus_td_steps': self.unroll_plus_td_steps
                     } for i in range(len(self.game_block_pool))
                 ]
                 """
@@ -595,34 +576,7 @@ class MuZeroCollector(ISerialCollector):
                     
                 for i in range(len(return_data[0])):
                     print(return_data[0][i].reward_history)
-    
                 """
-                # ==============================================================
-                # save the game histories and clear the pool
-                # ==============================================================
-                # self.game_block_pool: list of (game_block, priority)
-                # self.replay_buffer.push_games(
-                #     [self.game_block_pool[i][0] for i in range(len(self.game_block_pool))], [
-                #         {
-                #             'priorities': self.game_block_pool[i][1],
-                #             'end_tag': self.game_block_pool[i][2],
-                #             'unroll_plus_td_stepss': self.unroll_plus_td_steps
-                #         } for i in range(len(self.game_block_pool))
-                #     ]
-                # )
-
-                # ==============================================================
-                # save the buffer to .npy file
-                # ==============================================================
-                # np.save('/Users/puyuan/code/DI-engine/dizoo/board_games/atari/config/one_episode_replay_buffer_img',
-                #         self.replay_buffer.buffer)
-                # one_episode_replay_buffer_img = np.load('/Users/puyuan/code/DI-engine/dizoo/board_games/atari/config/one_episode_replay_buffer_img.npy',
-                #         allow_pickle=True)
-
-                # np.save('/Users/puyuan/code/DI-engine/dizoo/board_games/tictactoe/config/one_episode_replay_buffer_tictactoe_2-player-mode',
-                #         self.replay_buffer.buffer)
-                # one_episode_replay_buffer_tictactoe_2playermode = np.load('/Users/puyuan/code/DI-engine/dizoo/board_games/tictactoe/config/one_episode_replay_buffer_tictactoe_2-player-mode.npy', allow_pickle=True)
-
                 break
         # log
         self._output_log(train_iter)

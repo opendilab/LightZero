@@ -63,9 +63,14 @@ class TicTacToeEnv(BaseGameEnv):
             start_player_index: players = [1,2], player_index = [0,1]
             init_state: custom start state.
         """
-        self._observation_space = gym.spaces.Box(
-            low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.uint8
-        )
+        if self.scale:
+            self._observation_space = gym.spaces.Box(
+                low=0, high=1, shape=(self.board_size, self.board_size, 3), dtype=np.float32
+            )
+        else:
+            self._observation_space = gym.spaces.Box(
+                low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.uint8
+            )
         self._action_space = gym.spaces.Discrete(self.board_size ** 2)
         self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1, ), dtype=np.float32)
         self.start_player_index = start_player_index
@@ -172,7 +177,6 @@ class TicTacToeEnv(BaseGameEnv):
             row, col = self.action_to_coord(action)
             self.board[row, col] = self.current_player
         else:
-            # import pdb;pdb.set_trace()
             logging.warning(
                 f"You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
                 f"Now we randomly choice a action from self.legal_actions."
@@ -346,6 +350,7 @@ class TicTacToeEnv(BaseGameEnv):
 
         # first random sample a action from legal_actions
         action = np.random.choice(self.legal_actions)
+
         # Horizontal and vertical checks
         for i in range(3):
             if abs(sum(board[i, :])) == 2:

@@ -1,10 +1,11 @@
 import numpy as np
 import pytest
 import torch
-from torch.cuda.amp import autocast as autocast
 
-from lzero.mcts.tree_search.game import GameBlock
-from lzero.mcts.utils import select_action, prepare_observation_list
+from lzero.mcts.buffer.game_block import GameBlock
+from lzero.mcts.utils import prepare_observation_list
+from lzero.policy import select_action
+
 
 args = ['EfficientZero', 'MuZero']
 # args = ['MuZero']
@@ -15,16 +16,14 @@ args = ['EfficientZero', 'MuZero']
 def test_game_block(test_algo):
     # import different modules according to ``test_algo``
     if test_algo == 'EfficientZero':
-        from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTS
-        from lzero.mcts.ctree.ctree_efficientzero import ez_tree
+        from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTSCtree
         from lzero.model.efficientzero_model import EfficientZeroModel as Model
         from lzero.mcts.tests.pong_efficientzero_config_test import pong_efficientzero_config as config
         from zoo.atari.envs.atari_lightzero_env import AtariLightZeroEnv
         envs = [AtariLightZeroEnv(config.env) for _ in range(config.env.evaluator_env_num)]
 
     elif test_algo == 'MuZero':
-        from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTS
-        from lzero.mcts.ctree.ctree_muzero import mz_tree
+        from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
         from lzero.model.muzero_model import MuZeroModel as Model
         from lzero.mcts.tests.tictactoe_muzero_bot_mode_config_test import tictactoe_muzero_config as config
         from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
@@ -91,15 +90,15 @@ def test_game_block(test_algo):
             to_play = [-1 for _ in range(config.env.evaluator_env_num)]
 
             if test_algo == 'EfficientZero':
-                roots = ez_tree.Roots(config.env.evaluator_env_num,
+                roots = MCTSCtree.Roots(config.env.evaluator_env_num,
                                       legal_actions_list)
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
-                MCTS(config.policy).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                MCTSCtree(config.policy).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
 
             elif test_algo == 'MuZero':
-                roots = mz_tree.Roots(config.env.evaluator_env_num, legal_actions_list)
+                roots = MCTSCtree.Roots(config.env.evaluator_env_num, legal_actions_list)
                 roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
-                MCTS(config.policy).search(roots, model, hidden_state_roots, to_play)
+                MCTSCtree(config.policy).search(roots, model, hidden_state_roots, to_play)
 
             roots_distributions = roots.get_distributions()
             roots_values = roots.get_values()

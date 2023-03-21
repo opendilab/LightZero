@@ -11,16 +11,11 @@ from ding.utils import POLICY_REGISTRY
 from torch.distributions import Categorical
 from torch.nn import L1Loss
 
-# python mcts_tree
-import lzero.mcts.ptree.ptree_ez as ptree
-from lzero.mcts import EfficientZeroMCTSCtree as MCTS_ctree
-from lzero.mcts import EfficientZeroMCTSPtree as MCTS_ptree
-from lzero.mcts import ImageTransforms, modified_cross_entropy_loss, phi_transform, DiscreteSupport
-from lzero.mcts import scalar_transform, InverseScalarTransform
-from lzero.mcts import select_action
-# cpp mcts_tree
-from lzero.mcts.ctree.ctree_efficientzero import ez_tree as ctree
-from lzero.mcts.utils import to_torch_float_tensor, ez_network_output_unpack
+from lzero.mcts import EfficientZeroMCTSCtree as MCTSCtree
+from lzero.mcts import EfficientZeroMCTSPtree as MCTSPtree
+from lzero.model import ImageTransforms
+from lzero.policy import scalar_transform, InverseScalarTransform, modified_cross_entropy_loss, phi_transform, \
+    DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack
 from .utils import negative_cosine_similarity
 
 
@@ -270,11 +265,10 @@ class EfficientZeroPolicy(Policy):
         # i.e. h(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
         transformed_target_value_prefix = scalar_transform(target_value_prefix)
         transformed_target_value = scalar_transform(target_value)
-        if self._cfg.model.categorical_distribution:
-            # transform a scalar to its categorical_distribution. After this transformation, each scalar is
-            # represented as the linear combination of its two adjacent supports.
-            target_value_prefix_categorical = phi_transform(self.reward_support, transformed_target_value_prefix)
-            target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+        # transform a scalar to its categorical_distribution. After this transformation, each scalar is
+        # represented as the linear combination of its two adjacent supports.
+        target_value_prefix_categorical = phi_transform(self.reward_support, transformed_target_value_prefix)
+        target_value_categorical = phi_transform(self.value_support, transformed_target_value)
 
         # ==============================================================
         # the core initial_inference in EfficientZero policy.
@@ -317,10 +311,7 @@ class EfficientZeroPolicy(Policy):
         except Exception as error:
             target_policy_entropy = 0
 
-        if self._cfg.model.categorical_distribution:
-            value_loss = modified_cross_entropy_loss(value, target_value_categorical[:, 0])
-        else:
-            value_loss = torch.nn.MSELoss(reduction='none')(value.squeeze(-1), transformed_target_value[:, 0])
+        value_loss = modified_cross_entropy_loss(value, target_value_categorical[:, 0])
 
         value_prefix_loss = torch.zeros(self._cfg.learn.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.learn.batch_size, device=self._cfg.device)
@@ -335,7 +326,8 @@ class EfficientZeroPolicy(Policy):
             network_output = self._learn_model.recurrent_inference(
                 hidden_state, reward_hidden_state, action_batch[:, step_i]
             )
-            hidden_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(network_output)
+            hidden_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(
+                network_output)
 
             # transform the scaled value or its categorical representation to its original value,
             # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -381,17 +373,10 @@ class EfficientZeroPolicy(Policy):
                 # if there is zero in target_normalized_visit_count
                 target_policy_entropy += 0
 
-            if self._cfg.model.categorical_distribution:
-                value_loss += modified_cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
-                value_prefix_loss += modified_cross_entropy_loss(
-                    value_prefix, target_value_prefix_categorical[:, step_i]
-                )
-            else:
-                value_loss += torch.nn.MSELoss(reduction='none'
-                                               )(value.squeeze(-1), transformed_target_value[:, step_i + 1])
-                value_prefix_loss += torch.nn.MSELoss(
-                    reduction='none'
-                )(value_prefix.squeeze(-1), transformed_target_value_prefix[:, step_i])
+            value_loss += modified_cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
+            value_prefix_loss += modified_cross_entropy_loss(
+                value_prefix, target_value_prefix_categorical[:, step_i]
+            )
 
             # reset hidden states every ``lstm_horizon_len`` unroll steps.
             if (step_i + 1) % self._cfg.lstm_horizon_len == 0:
@@ -416,8 +401,8 @@ class EfficientZeroPolicy(Policy):
         # ==============================================================
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss
+                self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss
         )
         weighted_total_loss = (weights * loss).mean()
         # TODO(pu): test the effect
@@ -436,7 +421,7 @@ class EfficientZeroPolicy(Policy):
         # the core target model update step.
         # ==============================================================
         self._target_model.update(self._learn_model.state_dict())
-        
+
         # packing loss info for tensorboard logging
         loss_info = (
             weighted_total_loss.item(), loss.mean().item(), policy_loss.mean().item(), value_prefix_loss.mean().item(),
@@ -447,89 +432,55 @@ class EfficientZeroPolicy(Policy):
             predicted_value_prefixs = torch.stack(predicted_value_prefixs).transpose(1, 0).squeeze(-1)
             predicted_value_prefixs = predicted_value_prefixs.reshape(-1).unsqueeze(-1)
 
-            if self._cfg.model.categorical_distribution:
-                td_data = (
-                    value_priority, target_value_prefix.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
-                    transformed_target_value_prefix.detach().cpu().numpy(),
-                    transformed_target_value.detach().cpu().numpy(),
-                    target_value_prefix_categorical.detach().cpu().numpy(),
-                    target_value_categorical.detach().cpu().numpy(), predicted_value_prefixs.detach().cpu().numpy(),
-                    predicted_values.detach().cpu().numpy(), target_policy.detach().cpu().numpy(),
-                    predicted_policies.detach().cpu().numpy(), hidden_state_list
-                )
-            else:
-                td_data = (
-                    value_priority, target_value_prefix.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
-                    transformed_target_value_prefix.detach().cpu().numpy(),
-                    transformed_target_value.detach().cpu().numpy(), predicted_value_prefixs.detach().cpu().numpy(),
-                    predicted_values.detach().cpu().numpy(), target_policy.detach().cpu().numpy(),
-                    predicted_policies.detach().cpu().numpy(), hidden_state_list
-                )
+            td_data = (
+                value_priority, target_value_prefix.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
+                transformed_target_value_prefix.detach().cpu().numpy(),
+                transformed_target_value.detach().cpu().numpy(),
+                target_value_prefix_categorical.detach().cpu().numpy(),
+                target_value_categorical.detach().cpu().numpy(), predicted_value_prefixs.detach().cpu().numpy(),
+                predicted_values.detach().cpu().numpy(), target_policy.detach().cpu().numpy(),
+                predicted_policies.detach().cpu().numpy(), hidden_state_list
+            )
 
-        if self._cfg.model.categorical_distribution:
-            return {
-                'collect_mcts_temperature': self.collect_mcts_temperature,
-                'cur_lr': self._optimizer.param_groups[0]['lr'],
-                'weighted_total_loss': loss_info[0],
-                'total_loss': loss_info[1],
-                'policy_loss': loss_info[2],
-                'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'value_prefix_loss': loss_info[3],
-                'value_loss': loss_info[4],
-                'consistency_loss': loss_info[5] / self._cfg.num_unroll_steps,
+        return {
+            'collect_mcts_temperature': self.collect_mcts_temperature,
+            'cur_lr': self._optimizer.param_groups[0]['lr'],
+            'weighted_total_loss': loss_info[0],
+            'total_loss': loss_info[1],
+            'policy_loss': loss_info[2],
+            'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+            'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+            'value_prefix_loss': loss_info[3],
+            'value_loss': loss_info[4],
+            'consistency_loss': loss_info[5] / self._cfg.num_unroll_steps,
 
-                # ==============================================================
-                # priority related
-                # ==============================================================
-                'value_priority': td_data[0].flatten().mean().item(),
-                'value_priority_orig': value_priority,
+            # ==============================================================
+            # priority related
+            # ==============================================================
+            'value_priority': td_data[0].flatten().mean().item(),
+            'value_priority_orig': value_priority,
 
-                'target_value_prefix': td_data[1].flatten().mean().item(),
-                'target_value': td_data[2].flatten().mean().item(),
-                'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
-                'transformed_target_value': td_data[4].flatten().mean().item(),
-                'predicted_value_prefixs': td_data[7].flatten().mean().item(),
-                'predicted_values': td_data[8].flatten().mean().item(),
-                'total_grad_norm_before_clip': total_grad_norm_before_clip
-            }
-        else:
-            return {
-                'collect_mcts_temperature': self.collect_mcts_temperature,
-                'cur_lr': self._optimizer.param_groups[0]['lr'],
-                'weighted_total_loss': loss_info[0],
-                'total_loss': loss_info[1],
-                'policy_loss': loss_info[2],
-                'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'value_prefix_loss': loss_info[3],
-                'value_loss': loss_info[4],
-                'consistency_loss': loss_info[5] / self._cfg.num_unroll_steps,
-                'value_priority': td_data[0].flatten().mean().item(),
-                # ==============================================================
-                # priority related
-                'value_priority_orig': value_priority,
-                # ==============================================================
-                'target_value_prefix': td_data[1].flatten().mean().item(),
-                'target_value': td_data[2].flatten().mean().item(),
-                'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
-                'transformed_target_value': td_data[4].flatten().mean().item(),
-                'predicted_value_prefixs': td_data[5].flatten().mean().item(),
-                'predicted_values': td_data[6].flatten().mean().item(),
-                'total_grad_norm_before_clip': total_grad_norm_before_clip
-            }
+            'target_value_prefix': td_data[1].flatten().mean().item(),
+            'target_value': td_data[2].flatten().mean().item(),
+            'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
+            'transformed_target_value': td_data[4].flatten().mean().item(),
+            'predicted_value_prefixs': td_data[7].flatten().mean().item(),
+            'predicted_values': td_data[8].flatten().mean().item(),
+            'total_grad_norm_before_clip': total_grad_norm_before_clip
+        }
 
     def _init_collect(self) -> None:
         self._collect_model = self._model
         self._unroll_len = self._cfg.collect.unroll_len
         if self._cfg.mcts_ctree:
-            self._mcts_collect = MCTS_ctree(self._cfg)
+            self._mcts_collect = MCTSCtree(self._cfg)
         else:
-            self._mcts_collect = MCTS_ptree(self._cfg)
+            self._mcts_collect = MCTSPtree(self._cfg)
         self.collect_mcts_temperature = 1
 
     def _forward_collect(
-        self, data: torch.Tensor, action_mask: list = None, temperature: list = None, to_play=None, ready_env_id=None
+            self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1,
+            ready_env_id=None
     ):
         """
         Overview:
@@ -549,7 +500,7 @@ class EfficientZeroPolicy(Policy):
             - optional: ``logit``
         """
         self._collect_model.eval()
-        self.collect_mcts_temperature = temperature[0]
+        self.collect_mcts_temperature = temperature
         active_collect_env_num = data.shape[0]
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
@@ -568,13 +519,10 @@ class EfficientZeroPolicy(Policy):
 
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
-                if to_play[0] is None:
-                    # we use to_play=0 means play_with_bot_mode game in mcts_ctree
-                    to_play = [0 for _ in range(active_collect_env_num)]
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = ctree.Roots(active_collect_env_num, legal_actions)
+                roots = MCTSCtree.Roots(active_collect_env_num, legal_actions)
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
@@ -588,7 +536,7 @@ class EfficientZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = ptree.Roots(active_collect_env_num, self._cfg.num_simulations, legal_actions)
+                roots = MCTSPtree.Roots(active_collect_env_num, legal_actions)
                 # the only difference between collect and eval is the dirichlet noise.
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -604,19 +552,18 @@ class EfficientZeroPolicy(Policy):
 
             data_id = [i for i in range(active_collect_env_num)]
             output = {i: None for i in data_id}
-            # TODO
             if ready_env_id is None:
                 ready_env_id = np.arange(active_collect_env_num)
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                # TODO(pu):
-                # only legal actions have visit counts.
-                action, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=temperature[i], deterministic=False
+                # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                # the index within the legal action set, rather than the index in the entire action set.
+                action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                    distributions, temperature=self.collect_mcts_temperature, deterministic=False
                 )
-                # NOTE: transform to the real action index in legal action set.
-                action = np.where(action_mask[i] == 1.0)[0][action]
+                # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
+                action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,
@@ -635,11 +582,11 @@ class EfficientZeroPolicy(Policy):
         """
         self._eval_model = self._model
         if self._cfg.mcts_ctree:
-            self._mcts_eval = MCTS_ctree(self._cfg)
+            self._mcts_eval = MCTSCtree(self._cfg)
         else:
-            self._mcts_eval = MCTS_ptree(self._cfg)
+            self._mcts_eval = MCTSPtree(self._cfg)
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: None, ready_env_id=None):
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id=None):
         """
         Overview:
             Forward computation graph of eval mode(evaluate policy performance), at most cases, it is similar to \
@@ -676,13 +623,13 @@ class EfficientZeroPolicy(Policy):
 
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
-                if to_play[0] is None:
-                    # we use to_play=0 means play_with_bot_mode game in mcts_ctree
-                    to_play = [0 for i in range(active_eval_env_num)]
+                if to_play[0] in [-1]:
+                    # we use to_play=-1 means play_with_bot_mode in mcts_ctree
+                    to_play = [-1 for i in range(active_eval_env_num)]
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ctree.Roots(active_eval_env_num, legal_actions)
+                roots = MCTSCtree.Roots(active_eval_env_num, legal_actions)
                 roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
 
@@ -691,7 +638,7 @@ class EfficientZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = ptree.Roots(active_eval_env_num, self._cfg.num_simulations, legal_actions)
+                roots = MCTSPtree.Roots(active_eval_env_num, legal_actions)
 
                 roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
@@ -706,12 +653,14 @@ class EfficientZeroPolicy(Policy):
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                # ``deterministic=True`` means selecting the argmax action, not sampling in eval phase.
-                action, visit_count_distribution_entropy = select_action(
+                # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                # the index within the legal action set, rather than the index in the entire action set.
+                #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than sampling during the evaluation phase.
+                action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                     distributions, temperature=1, deterministic=True
                 )
-                # NOTE: transform to the real action index in legal action set.
-                action = np.where(action_mask[i] == 1.0)[0][action]
+                # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
+                action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,
@@ -783,4 +732,3 @@ class EfficientZeroPolicy(Policy):
     def _get_train_sample(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         # be compatible with DI-engine base_policy
         pass
-

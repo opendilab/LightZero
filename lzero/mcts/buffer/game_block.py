@@ -4,6 +4,35 @@ import numpy as np
 from ding.utils.compression_helper import jpeg_data_decompressor
 
 
+class Game:
+    """
+    Overview:
+        Abstract class of Game.
+    Interfaces:
+        __init__, legal_actions, step, reset, close, render
+    """
+    
+    def __init__(self, env, action_space_size: int, config=None):
+        self.env = env
+        self.action_space_size = action_space_size
+        self.config = config
+
+    def legal_actions(self):
+        raise NotImplementedError
+
+    def step(self, action):
+        raise NotImplementedError
+
+    def reset(self):
+        raise NotImplementedError()
+
+    def close(self, *args, **kwargs):
+        self.env.close(*args, **kwargs)
+
+    def render(self, *args, **kwargs):
+        self.env.render(*args, **kwargs)
+
+
 class GameBlock:
     """
         Overview:
@@ -48,7 +77,8 @@ class GameBlock:
         self.target_rewards = []
         self.target_policies = []
 
-        self.root_sampled_actions = []
+        if self.config.sampled_algo:
+            self.root_sampled_actions = []
 
     def __len__(self):
         return len(self.action_history)
@@ -81,12 +111,12 @@ class GameBlock:
         Overview:
             check whether current game history block is full, i.e. larger than self.game_block_length
         """
-        return self.__len__() >= self.game_block_length
+        return len(self.action_history) >= self.game_block_length
 
     def legal_actions(self):
         return [_ for _ in range(self.action_space.n)]
 
-    def append(self, action, obs, reward, action_mask=None, to_play=None):
+    def append(self, action, obs, reward, action_mask=None, to_play=-1):
         """
         Overview:
             append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
@@ -130,18 +160,18 @@ class GameBlock:
         for child_visits in next_block_child_visits:
             self.child_visit_history.append(child_visits)
 
-    def obs(self, index, extra_len=0, padding=False):
+    def obs(self, index, num_unroll_steps=0, padding=False):
         """
         Overview:
             To obtain an observation of correct format: o[t, t + stack frames + extra len]
         Arguments:
             - index: int time step
-            - extra_len: int extra len of the obs frames
+            - num_unroll_steps: int extra len of the obs frames
             - padding: bool True -> padding frames if (t + stack frames) are out of trajectory
         """
-        frames = self.obs_history[index:index + self.frame_stack_num + extra_len]
+        frames = self.obs_history[index:index + self.frame_stack_num + num_unroll_steps]
         if padding:
-            pad_len = self.frame_stack_num + extra_len - len(frames)
+            pad_len = self.frame_stack_num + num_unroll_steps - len(frames)
             if pad_len > 0:
                 pad_frames = np.array([frames[-1] for _ in range(pad_len)])
                 frames = np.concatenate((frames, pad_frames))
@@ -154,7 +184,7 @@ class GameBlock:
         Overview:
             return a zero obs frame
         """
-        return [np.zeros(self.zero_obs_shape, dtype=np.uint8) for _ in range(self.frame_stack_num)]
+        return [np.zeros(self.zero_obs_shape, dtype=np.float32) for _ in range(self.frame_stack_num)]
 
     def step_obs(self):
         """
@@ -174,7 +204,7 @@ class GameBlock:
         """
         return self.target_values[i], self.target_rewards[i], self.target_policies[i]
 
-    def store_search_stats(self, visit_counts, root_value, root_sampled_actions, idx: int = None):
+    def store_search_stats(self, visit_counts, root_value, root_sampled_actions=None, idx: int = None):
         """
         Overview:
             store the visit count distributions and value of the root node after MCTS.
@@ -183,10 +213,11 @@ class GameBlock:
         if idx is None:
             self.child_visit_history.append([visit_count / sum_visits for visit_count in visit_counts])
             self.root_value_history.append(root_value)
-            self.root_sampled_actions.append(root_sampled_actions)
-            # self.root_sampled_actions.append(
-            #     np.array([action.value for action in root.children.keys()])
-            # )
+            if self.config.sampled_algo:
+                self.root_sampled_actions.append(root_sampled_actions)
+                # self.root_sampled_actions.append(
+                #     np.array([action.value for action in root.children.keys()])
+                # )
         else:
             self.child_visit_history[idx] = [visit_count / sum_visits for visit_count in visit_counts]
             self.root_value_history[idx] = root_value
@@ -202,7 +233,7 @@ class GameBlock:
             obs:            game_block_length + stack + num_unroll_steps, 20+4+5
             action:         game_block_length -> 20
             reward:         game_block_length + num_unroll_steps + td_steps -1  20+5+5-1
-            root_values:    game_block_length + num_unroll_steps + td_steps -> 20 +5+5
+            root_values:    game_block_length + num_unroll_steps + td_steps -> 20+5+5
             child_visits：  game_block_length + num_unroll_steps -> 20+5
             to_play:        game_block_length -> 20
             action_mask:    game_block_length -> 20
@@ -219,16 +250,13 @@ class GameBlock:
                  ----...----|------|-----|
         game_block_t+1:
             rew:             20        5    4
-                        ----...----|-----|-----|
+                        ----...----|------|-----|
         """
         self.obs_history = np.array(self.obs_history)
         self.action_history = np.array(self.action_history)
         self.reward_history = np.array(self.reward_history)
 
         self.child_visit_history = np.array(self.child_visit_history)
-
-        # self.root_sampled_actions = np.array(self.root_sampled_actions)
-
         self.root_value_history = np.array(self.root_value_history)
 
         self.action_mask_history = np.array(self.action_mask_history)

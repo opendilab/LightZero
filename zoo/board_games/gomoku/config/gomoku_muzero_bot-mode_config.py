@@ -27,7 +27,7 @@ prob_random_action_in_bot = 0.5
 
 gomoku_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/gomoku_b{board_size}_rand{prob_random_action_in_bot}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}__seed0',
+    f'data_mz_ctree/gomoku_b{board_size}_rand{prob_random_action_in_bot}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(2),
         board_size=board_size,
@@ -50,11 +50,12 @@ gomoku_muzero_config = dict(
         game_block_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=int(board_size * board_size / 2),
+        discount_factor=1,
         reward_loss_weight=1,
         value_loss_weight=0.25,
         policy_loss_weight=1,
         manual_temperature_decay=True,
-        replay_buffer_size=int(1e4),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e5),  # the size/capacity of replay_buffer, in the terms of transitions.
         model=dict(
             observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
             action_space_size=int(board_size * board_size),

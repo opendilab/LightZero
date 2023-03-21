@@ -1,6 +1,6 @@
 import pytest
 import torch
-from lzero.mcts.image_transform import ImageTransforms
+from lzero.model import ImageTransforms
 
 
 @pytest.mark.unittest

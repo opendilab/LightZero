@@ -9,7 +9,7 @@ from lzero.mcts.ptree import MinMaxStatsList
 # EfficientZero
 ###########################################################
 import lzero.mcts.ptree.ptree_ez as tree
-from ..scaling_transform import inverse_scalar_transform
+from lzero.policy.scaling_transform import inverse_scalar_transform
 
 
 class EfficientZeroMCTSPtree(object):
@@ -51,7 +51,19 @@ class EfficientZeroMCTSPtree(object):
         default_config.update(cfg)
         self._cfg = default_config
 
-    def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=None):
+    @classmethod
+    def Roots(cls, root_num, legal_actions):
+        """
+        Overview:
+            The initialization of CRoots with root num and legal action lists.
+        Arguments:
+            - root_num: the number of the current root.
+            - legal_action_list: the vector of the legal action of this root.
+        """
+        import lzero.mcts.ptree.ptree_ez as ptree
+        return ptree.Roots(root_num, legal_actions)
+
+    def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=-1):
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
@@ -240,7 +252,19 @@ class MuZeroMCTSPtree(object):
         default_config.update(cfg)
         self._cfg = default_config
 
-    def search(self, roots, model, hidden_state_roots, to_play=None):
+    @classmethod
+    def Roots(cls, root_num, legal_actions):
+        """
+        Overview:
+            The initialization of CRoots with root num and legal action lists.
+        Arguments:
+            - root_num: the number of the current root.
+            - legal_action_list: the vector of the legal action of this root.
+        """
+        import lzero.mcts.ptree.ptree_mz as ptree
+        return ptree.Roots(root_num, legal_actions)
+
+    def search(self, roots, model, hidden_state_roots, to_play=-1):
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.

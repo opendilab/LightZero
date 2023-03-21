@@ -1,15 +1,11 @@
 import torch
 from easydict import EasyDict
-from lzero.mcts import inverse_scalar_transform
-from lzero.mcts import select_action
+from lzero.policy import inverse_scalar_transform, select_action
 import numpy as np
 import random
 
-import lzero.mcts.ptree.ptree_ez as ptree
-from lzero.mcts.ctree.ctree_efficientzero import ez_tree as ctree
-
-from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree
-from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree
+from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree as MCTSPtree
+from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTSCtree
 import time
 
 
@@ -105,7 +101,7 @@ def ptree_func(game_config, num_simulations):
         policy_logits_pool = network_output['policy_logits']
 
         # network output process
-        pred_values_pool = inverse_scalar_transform(pred_values_pool, game_config.support_scale).detach().cpu().numpy()
+        pred_values_pool = inverse_scalar_transform(pred_values_pool, game_config.model.support_scale).detach().cpu().numpy()
         hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
         reward_hidden_state_state = (
             reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
@@ -118,13 +114,13 @@ def ptree_func(game_config, num_simulations):
 
         action_num = [int(np.array(action_mask[i]).sum()) for i in range(env_nums)]
         legal_actions_list = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(env_nums)]
-        to_play = [random.randint(1, 3) for i in range(env_nums)]
+        to_play = [np.random.randint(1, 3) for i in range(env_nums)]
         assert len(to_play) == batch_size
         # ============================================ptree=====================================#
         for i in range(env_nums):
             assert action_num[i] == len(legal_actions_list[i])
         t1 = time.time()
-        roots = ptree.Roots(env_nums, legal_actions_list)
+        roots = MCTSPtree.Roots(env_nums, legal_actions_list)
         build_time.append(time.time() - t1)
         noises = [
             np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -134,7 +130,7 @@ def ptree_func(game_config, num_simulations):
         roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
         prepare_time.append(time.time() - t1)
         t1 = time.time()
-        EfficientZeroMCTSPtree(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
+        MCTSPtree(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
         search_time.append(time.time() - t1)
         total_time.append(time.time() - t0)
         roots_distributions = roots.get_distributions()
@@ -198,7 +194,7 @@ def ctree_func(game_config, num_simulations):
         policy_logits_pool = network_output['policy_logits']
 
         # network output process
-        pred_values_pool = inverse_scalar_transform(pred_values_pool, game_config.support_scale).detach().cpu().numpy()
+        pred_values_pool = inverse_scalar_transform(pred_values_pool, game_config.model.support_scale).detach().cpu().numpy()
         hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
         reward_hidden_state_state = (
             reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
@@ -211,14 +207,14 @@ def ctree_func(game_config, num_simulations):
 
         action_num = [int(np.array(action_mask[i]).sum()) for i in range(env_nums)]
         legal_actions_list = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(env_nums)]
-        to_play = [random.randint(1, 3) for i in range(env_nums)]
+        to_play = [np.random.randint(1, 3) for i in range(env_nums)]
         assert len(to_play) == batch_size
         # ============================================ctree=====================================#
         for i in range(env_nums):
             assert action_num[i] == len(legal_actions_list[i])
 
         t1 = time.time()
-        roots = ctree.Roots(env_nums, legal_actions_list)
+        roots = MCTSCtree.Roots(env_nums, legal_actions_list)
         build_time.append(time.time() - t1)
         noises = [
             np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -228,7 +224,7 @@ def ctree_func(game_config, num_simulations):
         roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
         prepare_time.append(time.time() - t1)
         t1 = time.time()
-        EfficientZeroMCTSCtree(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
+        MCTSCtree(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
         search_time.append(time.time() - t1)
         total_time.append(time.time() - t0)
         roots_distributions = roots.get_distributions()
@@ -298,7 +294,10 @@ if __name__ == "__main__":
     game_config = EasyDict(
         dict(
             lstm_horizon_len=5,
-            support_scale=300,
+            model=dict(
+                support_scale=300,
+                categorical_distribution=True,
+            ),
             action_space_size=100,
             num_simulations=100,
             batch_size=512,

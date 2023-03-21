@@ -1,7 +1,7 @@
 import torch
 from easydict import EasyDict
 
-from lzero.mcts.scaling_transform import inverse_scalar_transform
+from lzero.policy.scaling_transform import inverse_scalar_transform
 
 
 class MuZeroModelFake(torch.nn.Module):
@@ -56,9 +56,8 @@ class MuZeroModelFake(torch.nn.Module):
 
 
 def check_mcts():
-    import lzero.mcts.ptree.ptree_ez as tree
     import numpy as np
-    from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree as MCTS
+    from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree as MCTSPtree
 
     game_config = EasyDict(
         dict(
@@ -109,13 +108,13 @@ def check_mcts():
     policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
     legal_actions_list = [[i for i in range(game_config.model.action_space_size)] for _ in range(env_nums)]  # all action
-    roots = tree.Roots(env_nums, legal_actions_list)
+    roots = MCTSPtree.Roots(env_nums, legal_actions_list)
     noises = [
         np.random.dirichlet([game_config.root_dirichlet_alpha] * game_config.model.action_space_size
                             ).astype(np.float32).tolist() for _ in range(env_nums)
     ]
     roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
-    MCTS(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state)
+    MCTSPtree(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state)
     roots_distributions = roots.get_distributions()
     assert np.array(roots_distributions).shape == (game_config.batch_size, game_config.model.action_space_size)
 

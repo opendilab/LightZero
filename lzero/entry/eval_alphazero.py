@@ -1,18 +1,16 @@
-import logging
 import os
 from functools import partial
-from typing import Union, Optional, List, Any, Tuple
+from typing import Optional, Tuple
 
+import numpy as np
 import torch
-from ding.config import read_config, compile_config
+from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
-from ding.worker import BaseLearner, create_buffer
-from ding.worker import create_serial_collector, create_serial_evaluator
+from ding.worker import create_serial_evaluator
 from tensorboardX import SummaryWriter
-import numpy as np
 
 
 def eval_alphazero(
