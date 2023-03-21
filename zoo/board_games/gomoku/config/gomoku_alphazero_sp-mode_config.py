@@ -6,22 +6,23 @@ from easydict import EasyDict
 board_size = 6  # default_size is 15
 collector_env_num = 32
 n_episode = 32
-evaluator_env_num = 3
-num_simulations = 100
-update_per_collect = 100
+evaluator_env_num = 5
+num_simulations = 50
+update_per_collect = 50
 batch_size = 256
-max_env_step = int(2e6)
-prob_random_action_in_bot = 0.5
+max_env_step = int(1e6)
+prob_random_action_in_bot = 0.
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 gomoku_alphazero_config = dict(
-    exp_name=f'data_az_ptree/gomoku_alphazero_sp-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_az_ptree/gomoku_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         stop_value=2,
         board_size=board_size,
         battle_mode='self_play_mode',
+        mcts_mode='self_play_mode',
         bot_action_type='v0',
         prob_random_action_in_bot=prob_random_action_in_bot,
         channel_last=False,  # NOTE

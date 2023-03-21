@@ -6,12 +6,12 @@ from easydict import EasyDict
 board_size = 6  # default_size is 15
 collector_env_num = 32
 n_episode = 32
-evaluator_env_num = 3
-num_simulations = 100
-update_per_collect = 100
+evaluator_env_num = 5
+num_simulations = 50
+update_per_collect = 50
 batch_size = 256
-max_env_step = int(2e6)
-prob_random_action_in_bot = 0.5
+max_env_step = int(1e6)
+prob_random_action_in_bot = 0.
 
 # debug config
 # board_size = 6  # default_size is 15

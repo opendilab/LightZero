@@ -43,7 +43,7 @@ src/
 *.bin
 .metadata
 bin/
-tmp/
+bc/
 *.tmp
 *.bak
 *.swp

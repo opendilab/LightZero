@@ -15,6 +15,7 @@ class Node(object):
     Overview:
         The node base class for tree_search.
     """
+
     def __init__(self, parent, prior_p: float):
         self._parent = parent
         self._children = {}
@@ -44,16 +45,23 @@ class Node(object):
         self._visit_count += 1
         self._value_sum += value
 
-    def update_recursive(self, leaf_value):
+    def update_recursive(self, leaf_value, mcts_mode):
         """
         Overview:
             Update node information recursively.
         Arguments:
             - leaf_value (:obj:`Int`): The value of the node.
         """
-        if not self.is_root():
-            self._parent.update_recursive(-leaf_value)
-        self.update(leaf_value)
+        if mcts_mode == 'self_play_mode':
+            self.update(leaf_value)
+            if self.is_root():
+                return
+            self._parent.update_recursive(-leaf_value, mcts_mode)
+        if mcts_mode == 'play_with_bot_mode':
+            self.update(leaf_value)
+            if self.is_root():
+                return
+            self._parent.update_recursive(leaf_value, mcts_mode)
 
     def is_leaf(self):
         """
@@ -91,6 +99,7 @@ class MCTS(object):
     Overview:
         MCTS search process.
     """
+
     def __init__(self, cfg):
         self._cfg = cfg
 
@@ -124,13 +133,22 @@ class MCTS(object):
         self._expand_leaf_node(root, simulate_env, policy_forward_fn)
         if sample:
             self._add_exploration_noise(root)
+
+        # for debugging
+        # print(simulate_env.board)
+        # print('value= {}'.format([(k, v.value) for k,v in root.children.items()]))
+        # print('visit_count= {}'.format([(k, v.visit_count) for k,v in root.children.items()]))
+        # print('legal_action= {}',format(simulate_env.legal_actions))
+
         for n in range(self._num_simulations):
             simulate_env_copy = copy.deepcopy(simulate_env)
-            # in MCTS search, when we input a action to the ``simulate_env``,
-            # the ``simulate_env`` only execute the action, don't execute the built-in bot action,
-            # i.e. the AlphaZero agent do self-play when do MCTS search.
-            simulate_env_copy.battle_mode = 'self_play_mode'
+            simulate_env_copy.battle_mode = simulate_env_copy.mcts_mode
             self._simulate(root, simulate_env_copy, policy_forward_fn)
+
+        # for debugging
+        # print('after simulation')
+        # print('value= {}'.format([(k, v.value) for k,v in root.children.items()]))
+        # print('visit_count= {}'.format([(k, v.visit_count) for k,v in root.children.items()]))
 
         action_visits = []
         for action in range(simulate_env.action_space.n):
@@ -140,13 +158,12 @@ class MCTS(object):
                 action_visits.append((action, 0))
 
         actions, visits = zip(*action_visits)
-        action_probs = nn.functional.softmax(
-            1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0
-        ).numpy()  # prob =
+        action_probs = nn.functional.softmax(1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0).numpy()
         if sample:
             action = np.random.choice(actions, p=action_probs)
         else:
             action = actions[np.argmax(action_probs)]
+        # print(action)
         return action, action_probs
 
     def _simulate(self, node, simulate_env, policy_forward_fn):
@@ -160,25 +177,55 @@ class MCTS(object):
             - policy_forward_fn (:obj:`Function`): The function to compute the action probs and state value.
         """
         while not node.is_leaf():
-            action, node = self._select_child(node)
+            # print(node.children.keys())
+            action, node = self._select_child(node, simulate_env)
+            if action is None:
+                break
+            # print('legal_action={}'.format(simulate_env.legal_actions))
+            # print('action={}'.format(action))
             simulate_env.step(action)
+            # print(node.is_leaf())
 
-        end, winner = simulate_env.get_done_winner()
+        done, winner = simulate_env.get_done_winner()
 
-        # the leaf_value is calculated from the perspective of player ``simulate_env.current_player``.
-        if not end:
+        """
+        in ``self_play_mode``, the leaf_value is calculated from the perspective of player ``simulate_env.current_player``.
+        in ``play_with_bot_mode``, the leaf_value is calculated from the perspective of player 1.
+        """
+
+        if not done:
             leaf_value = self._expand_leaf_node(node, simulate_env, policy_forward_fn)
-            # leaf_value = self._expand_leaf_node(node, simulate_env_deepcopy, policy_forward_fn)
         else:
-            if winner == -1:
-                leaf_value = 0
-            else:
-                leaf_value = 1 if simulate_env.current_player == winner else -1
+            if simulate_env.mcts_mode == 'self_play_mode':
+                if winner == -1:
+                    leaf_value = 0
+                else:
+                    leaf_value = 1 if simulate_env.current_player == winner else -1
+
+            if simulate_env.mcts_mode == 'play_with_bot_mode':
+                # in ``play_with_bot_mode``, the leaf_value should be transformed to the perspective of player 1.
+                if winner == -1:
+                    leaf_value = 0
+                elif winner == 1:
+                    leaf_value = 1
+                elif winner == 2:
+                    leaf_value = -1
 
         # Update value and visit count of nodes in this traversal.
-        node.update_recursive(-leaf_value)
+        if simulate_env.mcts_mode == 'play_with_bot_mode':
+            node.update_recursive(leaf_value, simulate_env.mcts_mode)
+        elif simulate_env.mcts_mode == 'self_play_mode':
+            # NOTE: e.g.
+            #       to_play: 1  ---------->  2  ---------->  1  ----------> 2
+            #         state: s1 ---------->  s2 ---------->  s3 ----------> s4
+            #                                     action    node
+            #                                            leaf_value
+            # leaf_value is calculated from the perspective of player 1, leaf_value = value_func(s3),
+            # but node.value should be the value of E[q(s2, action)], i.e. calculated from the perspective of player 2.
+            # thus we add the negative when call update_recursive().
+            node.update_recursive(-leaf_value, simulate_env.mcts_mode)
 
-    def _select_child(self, node):
+    def _select_child(self, node, simulate_env):
         """
         Overview:
             Select the child with the highest UCB score.
@@ -188,7 +235,20 @@ class MCTS(object):
             - action (:obj:`Int`): choose the action with the highest ucb score.
             - child (:obj:`Node`): the child node reached by executing the action with the highest ucb score.
         """
-        _, action, child = max((self._ucb_score(node, child), action, child) for action, child in node.children.items())
+        action = None
+        child = None
+        best_score = -9999999
+        for action_tmp, child_tmp in node.children.items():
+            # print(a, simulate_env.legal_actions)
+            if action_tmp in simulate_env.legal_actions:
+                score = self._ucb_score(node, child_tmp)
+                if score > best_score:
+                    best_score = score
+                    action = action_tmp
+                    child = child_tmp
+        if child is None:
+            child = node  # child==None, node is leaf node in play_with_bot_mode.
+
         return action, child
 
     def _expand_leaf_node(self, node, simulate_env, policy_forward_fn):
@@ -204,7 +264,8 @@ class MCTS(object):
         """
         action_probs_dict, leaf_value = policy_forward_fn(simulate_env)
         for action, prior_p in action_probs_dict.items():
-            node.children[action] = Node(parent=node, prior_p=prior_p)
+            if action in simulate_env.legal_actions:
+                node.children[action] = Node(parent=node, prior_p=prior_p)
         return leaf_value
 
     def _ucb_score(self, parent: Node, child: Node):
