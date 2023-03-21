@@ -238,7 +238,7 @@ class AlphaZeroCollector(ISerialCollector):
                     if timestep.done:
                         transitions = to_tensor_transitions(self._traj_buffer[env_id])
                         if self._cfg.reward_shaping:
-                            transitions = self.reward_shaping(transitions)
+                            transitions = self.reward_shaping(transitions, timestep.info['final_eval_reward'])
                         return_data.append(transitions)
                         self._traj_buffer[env_id].clear()
 
@@ -335,7 +335,7 @@ class AlphaZeroCollector(ISerialCollector):
                     continue
                 self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
 
-    def reward_shaping(self, transitions):
+    def reward_shaping(self, transitions, final_eval_reward):
         """
         Overview:
             Shape the reward according to the player.
@@ -347,7 +347,8 @@ class AlphaZeroCollector(ISerialCollector):
         for t in transitions:
             if t['obs']['to_play'] == -1:
                 # play_with_bot_mode
-                t['reward'] = int(reward)
+                # the final_eval_reward is calculated from Player 1's perspective
+                t['reward'] = final_eval_reward
             else:
                 # self_play_mode
                 if t['obs']['to_play'] == to_play:

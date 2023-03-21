@@ -12,14 +12,11 @@ else:
 collector_env_num = 32
 n_episode = 32
 evaluator_env_num = 5
-# num_simulations = 50
-# update_per_collect = 50
-num_simulations = 100
-update_per_collect = 200
-# categorical_distribution = False
+num_simulations = 50
+update_per_collect = 50
 reanalyze_ratio = 0.3
 batch_size = 256
-max_env_step = int(10e6)
+max_env_step = int(2e6)
 
 board_size = 6  # default_size is 15
 bot_action_type = 'v0'  # 'v1'

@@ -6,7 +6,7 @@ from easydict import EasyDict
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 5
-num_simulations = 50
+num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e5)
@@ -21,7 +21,8 @@ tictactoe_alphazero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         board_size=3,
         battle_mode='self_play_mode',
-        channel_last=False,
+        mcts_mode='self_play_mode',
+        channel_last=False,  # NOTE
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
