@@ -29,7 +29,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         exp_name: Optional[str] = 'default_experiment',
         instance_name: Optional[str] = 'evaluator',
         env_config=None,
-    ):
+    ) -> None:
         """
         Overview:
             Init the AlphaZero evaluator according to input arguments.
@@ -133,7 +133,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             self._tb_logger.flush()
             self._tb_logger.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         """
         Overview:
             Execute the close command and close the evaluator. __del__ is automatically called \
