@@ -18,13 +18,13 @@ num_simulations = 100
 update_per_collect = 200
 batch_size = 256
 max_env_step = int(5e6)
-reanalyze_ratio = 0.3
+reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 bipedalwalker_cont_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/bipedalwalker_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez_ctree/bipedalwalker_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_gcv05_tslr5e4_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name='BipedalWalker-v3',
@@ -63,7 +63,6 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
             num_channels=32,
             lstm_hidden_size=256,
         ),
-        # learn_mode config
         learn=dict(
             update_per_collect=update_per_collect,
             batch_size=batch_size,
@@ -71,6 +70,8 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
             optim_type='SGD',
             learning_rate=0.2,  # init lr for manually decay schedule
             policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
+            threshold_training_steps_for_final_lr=int(5e4),
+            grad_clip_value=0.5,
         ),
         collect=dict(n_episode=n_episode, ),
         eval=dict(evaluator=dict(eval_freq=int(2e3), )),
