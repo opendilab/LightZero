@@ -11,7 +11,7 @@ num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
-prob_random_action_in_bot = 0.
+prob_random_action_in_bot = 0.5
 
 # debug config
 # board_size = 6  # default_size is 15

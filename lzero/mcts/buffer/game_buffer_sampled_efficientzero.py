@@ -1,6 +1,6 @@
 import copy
 import time
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional, Union, Tuple
 
 import numpy as np
 import torch
@@ -115,7 +115,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         self.base_idx = 0
         self.clear_time = 0
 
-    def push(self, data: Any, meta: Optional[dict] = None):
+    def push(self, data: Any, meta: Optional[dict] = None) -> None:
         """
         Overview:
             Push data and it's meta information in buffer.
@@ -157,7 +157,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         self.game_block_game_pos_look_up += [(self.base_idx + len(self.game_block_buffer) - 1, step_pos) for step_pos in
                                              range(len(data))]
 
-    def push_game_blocks(self, data_and_meta: Any):
+    def push_game_blocks(self, data_and_meta: Any) -> None:
         """
         Overview:
             Push game data and it's meta information in buffer.
@@ -187,7 +187,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         """
         pass
 
-    def get_transition(self, idx):
+    def get_transition(self, idx: int) -> Tuple[Any]:
         """
         Overview:
             Sample one transition according to the idx
@@ -212,7 +212,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         """
         return self.get_game(idx)
 
-    def get_game(self, idx):
+    def get_game(self, idx: int) -> Any:
         """
         Overview:
             sample one game history according to the idx
@@ -230,7 +230,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         game = self.game_block_buffer[game_block_idx]
         return game
 
-    def update(self, index, data: Optional[Any] = None, meta: Optional[dict] = None) -> bool:
+    def update(self, index: str, data: Optional[Any] = None, meta: Optional[dict] = None) -> bool:
         """
         Overview:
             Update data and meta by index
@@ -270,7 +270,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
                 idx, prio = indices[i], metas['batch_priorities'][i]
                 self.game_pos_priorities[idx] = prio
 
-    def update_priority(self, train_data, batch_priorities) -> None:
+    def update_priority(self, train_data: Optional[List[Optional[np.ndarray]]], batch_priorities: Optional[Any]) -> None:
         """
         Overview:
             Update the priority of training data.
@@ -281,7 +281,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         self.batch_update(indices=train_data[0][4],
                           metas={'make_time': train_data[0][6], 'batch_priorities': batch_priorities})
 
-    def remove_oldest_data_to_fit(self):
+    def remove_oldest_data_to_fit(self) -> None:
         """
         Overview:
             remove some oldest data if the replay buffer is full.
@@ -299,7 +299,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             if total_transition >= self._cfg.learn.batch_size:
                 self._remove(index + 1)
 
-    def _remove(self, num_excess_games):
+    def _remove(self, num_excess_games: List[int]) -> None:
         """
         Overview:
             delete game histories in index [0: num_excess_games]
@@ -312,7 +312,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
         self.clear_time = time.time()
 
-    def delete(self, index: str):
+    def delete(self, index: str) -> None:
         """
         Overview:
             Delete one data sample by index
@@ -324,13 +324,13 @@ class SampledEfficientZeroGameBuffer(Buffer):
     def clear(self) -> None:
         del self.game_block_buffer[:]
 
-    def get_batch_size(self):
+    def get_batch_size(self) -> int:
         return self.batch_size
 
-    def get_priorities(self):
+    def get_priorities(self) -> List[float]:
         return self.game_pos_priorities
 
-    def get_num_of_episodes(self):
+    def get_num_of_episodes(self) -> int:
         # number of collected episodes
         return self._eps_collected
 
@@ -338,11 +338,11 @@ class SampledEfficientZeroGameBuffer(Buffer):
         # number of games, i.e. num of game history blocks
         return len(self.game_block_buffer)
 
-    def count(self):
+    def count(self) -> int:
         # number of games, i.e. num of game history blocks
         return len(self.game_block_buffer)
 
-    def get_num_of_transitions(self):
+    def get_num_of_transitions(self) -> int:
         # total number of transitions
         return len(self.game_pos_priorities)
 
@@ -351,7 +351,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         buffer.storage = self.game_block_buffer
         return buffer
 
-    def prepare_batch_context(self, batch_size, beta):
+    def prepare_batch_context(self, batch_size: int, beta: float) -> Tuple[Any]:
         """
         Overview:
             Prepare a batch context that contains:
@@ -412,7 +412,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         context = (game_lst, pos_in_game_block_list, batch_index_list, weights, make_time)
         return context
 
-    def make_batch(self, batch_context, reanalyze_ratio):
+    def make_batch(self, batch_context: Any, reanalyze_ratio: float) -> Tuple[Any]:
         """
         Overview:
             prepare the context of a batch
@@ -543,7 +543,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         context = reward_value_context, policy_re_context, policy_non_re_context, current_batch
         return context
 
-    def prepare_reward_value_context(self, indices, games, state_index_lst, total_transitions):
+    def prepare_reward_value_context(self, indices: List[str], games: List[Any], state_index_lst: List[Any], total_transitions: int) -> List[Any]:
         """
         Overview:
             prepare the context of rewards and values for calculating TD value target in reanalyzing part.
@@ -616,7 +616,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         ]
         return reward_value_context
 
-    def prepare_policy_non_reanalyzed_context(self, indices, games, state_index_lst):
+    def prepare_policy_non_reanalyzed_context(self, indices: List[int], games: List[Any], state_index_lst: List[int]) -> List[Any]:
         """
         Overview:
             prepare the context of policies for calculating policy target in non-reanalyzing part, just return the policy in self-play
@@ -644,7 +644,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         policy_non_re_context = [state_index_lst, child_visits, traj_lens, action_mask_history, to_play_history]
         return policy_non_re_context
 
-    def prepare_policy_reanalyzed_context(self, indices, games, state_index_lst):
+    def prepare_policy_reanalyzed_context(self, indices: List[str], games: List[Any], state_index_lst: List[str]) -> List[Any]:
         """
         Overview:
             prepare the context of policies for calculating policy target in reanalyzing part.
@@ -695,7 +695,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         ]
         return policy_re_context
 
-    def compute_target_reward_value(self, reward_value_context, model):
+    def compute_target_reward_value(self, reward_value_context: List[Any], model: Any) -> List[np.ndarray]:
         """
         Overview:
             prepare reward and value targets from the context of rewards and values.
@@ -933,7 +933,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         batch_values = np.asarray(batch_values)
         return batch_value_prefixs, batch_values
 
-    def compute_target_policy_reanalyzed(self, policy_re_context, model):
+    def compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any) -> np.ndarray:
         """
         Overview:
             prepare policy targets from the reanalyzed context of policies
@@ -1178,7 +1178,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
         return batch_target_policies_re, root_sampled_actions
 
-    def compute_target_policy_non_reanalyzed(self, policy_non_re_context):
+    def compute_target_policy_non_reanalyzed(self, policy_non_re_context: List[Any]) -> np.ndarray:
         """
         Overview:
             prepare policy targets from the non-reanalyzed context of policies
@@ -1296,7 +1296,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         batch_target_policies_non_re = np.asarray(batch_target_policies_non_re)
         return batch_target_policies_non_re
 
-    def sample_train_data(self, batch_size, policy):
+    def sample_train_data(self, batch_size: int, policy: Any) -> List[Any]:
         """
         Overview:
             sample data from ``GameBuffer`` and prepare the current and target batch for training
@@ -1355,11 +1355,11 @@ class SampledEfficientZeroGameBuffer(Buffer):
         return train_data
 
     # the following is to be compatible with Buffer class.
-    def save_data(self):
+    def save_data(self) -> None:
         pass
 
-    def load_data(self):
+    def load_data(self) -> None:
         pass
 
-    def get(self):
+    def get(self) -> None:
         pass

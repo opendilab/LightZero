@@ -26,7 +26,6 @@ class AtariLightZeroEnv(BaseEnv):
         obs_shape=(4, 96, 96),
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
-        max_episode_steps=int(1.08e5),
         gray_scale=True,
         frame_skip=4,
         episode_life=True,
