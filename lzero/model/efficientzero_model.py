@@ -322,7 +322,7 @@ class DynamicsNetwork(nn.Module):
         fc_reward_layers,
         output_support_size,
         flatten_output_size_for_reward_head,
-        lstm_hidden_size,
+        lstm_hidden_size: int = 512,
         momentum: float = 0.1,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),

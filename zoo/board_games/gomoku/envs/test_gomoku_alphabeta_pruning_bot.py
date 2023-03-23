@@ -10,9 +10,12 @@ cfg = dict(
     prob_random_agent=0,
     prob_expert_agent=0,
     battle_mode='self_play_mode',
+    scale=True,
     channel_last=True,
     agent_vs_human=False,
     bot_action_type='alpha_beta_pruning',  # options: {'v0', 'alpha_beta_pruning'}
+    prob_random_action_in_bot=0.,
+    check_action_to_connect4_in_bot_v0=False,
 )
 
 

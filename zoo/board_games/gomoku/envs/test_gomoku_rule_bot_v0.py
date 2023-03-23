@@ -15,6 +15,7 @@ cfg = EasyDict(
     check_action_to_connect4_in_bot_v0=False,
 )
 
+
 @pytest.mark.envtest
 class TestExpertActionV0:
 

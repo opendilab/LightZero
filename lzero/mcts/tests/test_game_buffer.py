@@ -79,7 +79,7 @@ def test_naive_push_sample():
     assert buffer.count() == 20
 
     # push games
-    buffer.push_game_blocks([data, data], [meta, meta])
+    buffer.push_game_blocks([[data, data], [meta, meta]])
     assert buffer.count() == 22
 
     # Clear
