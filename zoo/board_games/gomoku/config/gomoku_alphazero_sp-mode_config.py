@@ -41,9 +41,6 @@ gomoku_alphazero_config = dict(
         model=dict(
             observation_shape=(3, board_size, board_size),
             action_space_size=int(1 * board_size * board_size),
-            downsample=False,
-            last_linear_layer_init_zero=True,
-            categorical_distribution=False,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # ==============================================================
             # We use the half size model for gomoku
@@ -52,6 +49,7 @@ gomoku_alphazero_config = dict(
             num_channels=32,
         ),
         learn=dict(
+            lr_piecewise_constant_decay=False,
             update_per_collect=update_per_collect,
             batch_size=batch_size,
             optim_type='Adam',

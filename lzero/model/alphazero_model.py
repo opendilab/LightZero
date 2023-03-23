@@ -10,6 +10,146 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 from .common import RepresentationNetwork
 
 
+@MODEL_REGISTRY.register('AlphaZeroModel')
+class AlphaZeroModel(nn.Module):
+
+    def __init__(
+        self,
+        observation_shape: SequenceType = (12, 96, 96),
+        action_space_size: int = 6,
+        representation_network_type: str = 'conv_res_blocks',
+        categorical_distribution: bool = False,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        representation_network: nn.Module = None,
+        batch_norm_momentum: float = 0.1,
+        last_linear_layer_init_zero: bool = True,
+        state_norm: bool = False,
+        downsample: bool = False,
+        num_res_blocks: int = 1,
+        num_channels: int = 64,
+        value_head_channels: int = 16,
+        policy_head_channels: int = 16,
+        fc_value_layers: SequenceType = [32],
+        fc_policy_layers: SequenceType = [32],
+        value_support_size: int = 601,
+    ):
+        """
+        Overview:
+            AlphaZero model.
+        Arguments:
+            - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96].
+            - action_space_size: (:obj:`int`): Action space size, such as 6.
+            - representation_network_type (:obj:`Optional[str]`): The type of representation_network in AlphaZero model. options={'conv_res_blocks', 'identity'}.
+            - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
+            - activation (:obj:`Optional[nn.Module]`): the activation in AlphaZero model.
+            - representation_network (:obj:`nn.Module`): the user-defined representation_network.
+            - batch_norm_momentum (:obj:`float`):  Momentum of BN
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
+            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to True.
+            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, default set it to True. \
+                But sometimes, we do not need, e.g. board games.
+            - num_res_blocks (:obj:`int`): number of res blocks in AlphaZero model.
+            - num_channels (:obj:`int`): channels of hidden states.
+            - value_head_channels (:obj:`int`): channels of value head.
+            - policy_head_channels (:obj:`int`): channels of policy head.
+            - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
+            - value_support_size (:obj:`int`): dim of value output.
+        """
+        super(AlphaZeroModel, self).__init__()
+        self.categorical_distribution = categorical_distribution
+        self.observation_shape = observation_shape
+        if self.categorical_distribution:
+            self.value_support_size = value_support_size
+        else:
+            self.value_support_size = 1
+
+        self.last_linear_layer_init_zero = last_linear_layer_init_zero
+        self.state_norm = state_norm
+        self.representation_network_type = representation_network_type
+        self.representation_network = representation_network
+        self.downsample = downsample
+
+        self.action_space_size = action_space_size
+        flatten_output_size_for_value_head = (
+            (value_head_channels * math.ceil(self.observation_shape[1] / 16) *
+             math.ceil(self.observation_shape[2] / 16)) if downsample else
+            (value_head_channels * self.observation_shape[1] * self.observation_shape[2])
+        )
+
+        flatten_output_size_for_policy_head = (
+            (policy_head_channels * math.ceil(self.observation_shape[1] / 16) *
+             math.ceil(self.observation_shape[2] / 16)) if downsample else
+            (policy_head_channels * self.observation_shape[1] * self.observation_shape[2])
+        )
+
+        if self.representation_network_type == 'identity':
+            self.prediction_network = PredictionNetwork(
+                action_space_size,
+                num_res_blocks,
+                self.observation_shape[0],  # in_channels
+                num_channels,
+                value_head_channels,
+                policy_head_channels,
+                fc_value_layers,
+                fc_policy_layers,
+                self.value_support_size,
+                flatten_output_size_for_value_head,
+                flatten_output_size_for_policy_head,
+                momentum=batch_norm_momentum,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                activation=activation,
+            )
+        else:
+            self.prediction_network = PredictionNetwork(
+                action_space_size,
+                num_res_blocks,
+                None,  # in_channels
+                num_channels,
+                value_head_channels,
+                policy_head_channels,
+                fc_value_layers,
+                fc_policy_layers,
+                self.value_support_size,
+                flatten_output_size_for_value_head,
+                flatten_output_size_for_policy_head,
+                momentum=batch_norm_momentum,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                activation=activation,
+            )
+
+        if self.representation_network is None:
+            if self.representation_network_type == 'identity':
+                self.representation_network = nn.Identity()
+            elif self.representation_network_type == 'conv_res_blocks':
+                self.representation_network = RepresentationNetwork(
+                    self.observation_shape,
+                    num_res_blocks,
+                    num_channels,
+                    downsample,
+                    momentum=batch_norm_momentum,
+                    activation=activation,
+                )
+        else:
+            self.representation_network = self.representation_network
+
+    def forward(self, encoded_state: torch.Tensor):
+        encoded_state = self.representation_network(encoded_state)
+        logit, value = self.prediction_network(encoded_state)
+        return logit, value
+
+    def compute_prob_value(self, state_batch: torch.Tensor):
+        logits, values = self.forward(state_batch)
+        dist = torch.distributions.Categorical(logits=logits)
+        probs = dist.probs
+        return probs, values
+
+    def compute_logp_value(self, state_batch: torch.Tensor):
+        logits, values = self.forward(state_batch)
+        log_probs = F.log_softmax(logits, dim=-1)
+        return log_probs, values
+
+
 class PredictionNetwork(nn.Module):
 
     def __init__(
@@ -110,143 +250,3 @@ class PredictionNetwork(nn.Module):
         value = self.fc_value(value)
         policy = self.fc_policy(policy)
         return policy, value
-
-
-@MODEL_REGISTRY.register('AlphaZeroModel')
-class AlphaZeroModel(nn.Module):
-
-    def __init__(
-        self,
-        observation_shape: SequenceType = (12, 96, 96),
-        action_space_size: int = 6,
-        representation_network_type: str = 'conv_res_blocks',
-        categorical_distribution: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-        representation_network: nn.Module = None,
-        batch_norm_momentum: float = 0.1,
-        last_linear_layer_init_zero: bool = True,
-        state_norm: bool = False,
-        downsample: bool = True,
-        num_res_blocks: int = 1,
-        num_channels: int = 64,
-        value_head_channels: int = 16,
-        policy_head_channels: int = 16,
-        fc_value_layers: SequenceType = [32],
-        fc_policy_layers: SequenceType = [32],
-        value_support_size: int = 601,
-    ):
-        """
-        Overview:
-            AlphaZero model.
-        Arguments:
-            - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96].
-            - action_space_size: (:obj:`int`): Action space size, such as 6.
-            - representation_network_type (:obj:`Optional[str]`): The type of representation_network in EfficientZero model. options={'conv_res_blocks', 'identity'}.
-            - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
-            - activation (:obj:`Optional[nn.Module]`): the activation in EfficientZero model.
-            - representation_network (:obj:`nn.Module`): the user-defined representation_network.
-            - batch_norm_momentum (:obj:`float`):  Momentum of BN
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to True.
-            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, default set it to True. \
-                But sometimes, we do not need, e.g. board games.
-            - num_res_blocks (:obj:`int`): number of res blocks in EfficientZero model.
-            - num_channels (:obj:`int`): channels of hidden states.
-            - value_head_channels (:obj:`int`): channels of value head.
-            - policy_head_channels (:obj:`int`): channels of policy head.
-            - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
-            - value_support_size (:obj:`int`): dim of value output.
-        """
-        super(AlphaZeroModel, self).__init__()
-        self.categorical_distribution = categorical_distribution
-        self.observation_shape = observation_shape
-        if self.categorical_distribution:
-            self.value_support_size = value_support_size
-        else:
-            self.value_support_size = 1
-
-        self.last_linear_layer_init_zero = last_linear_layer_init_zero
-        self.state_norm = state_norm
-        self.representation_network_type = representation_network_type
-        self.representation_network = representation_network
-        self.downsample = downsample
-
-        self.action_space_size = action_space_size
-        flatten_output_size_for_value_head = (
-            (value_head_channels * math.ceil(self.observation_shape[1] / 16) *
-             math.ceil(self.observation_shape[2] / 16)) if downsample else
-            (value_head_channels * self.observation_shape[1] * self.observation_shape[2])
-        )
-
-        flatten_output_size_for_policy_head = (
-            (policy_head_channels * math.ceil(self.observation_shape[1] / 16) *
-             math.ceil(self.observation_shape[2] / 16)) if downsample else
-            (policy_head_channels * self.observation_shape[1] * self.observation_shape[2])
-        )
-
-        if self.representation_network_type == 'identity':
-            self.prediction_network = PredictionNetwork(
-                action_space_size,
-                num_res_blocks,
-                self.observation_shape[0],  # in_channels
-                num_channels,
-                value_head_channels,
-                policy_head_channels,
-                fc_value_layers,
-                fc_policy_layers,
-                self.value_support_size,
-                flatten_output_size_for_value_head,
-                flatten_output_size_for_policy_head,
-                momentum=batch_norm_momentum,
-                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-                activation=activation,
-            )
-        else:
-            self.prediction_network = PredictionNetwork(
-                action_space_size,
-                num_res_blocks,
-                None,  # in_channels
-                num_channels,
-                value_head_channels,
-                policy_head_channels,
-                fc_value_layers,
-                fc_policy_layers,
-                self.value_support_size,
-                flatten_output_size_for_value_head,
-                flatten_output_size_for_policy_head,
-                momentum=batch_norm_momentum,
-                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-                activation=activation,
-            )
-
-        if self.representation_network is None:
-            if self.representation_network_type == 'identity':
-                self.representation_network = nn.Identity()
-            elif self.representation_network_type == 'conv_res_blocks':
-                self.representation_network = RepresentationNetwork(
-                    self.observation_shape,
-                    num_res_blocks,
-                    num_channels,
-                    downsample,
-                    momentum=batch_norm_momentum,
-                    activation=activation,
-                )
-        else:
-            self.representation_network = self.representation_network
-
-    def forward(self, encoded_state: torch.Tensor):
-        encoded_state = self.representation_network(encoded_state)
-        logit, value = self.prediction_network(encoded_state)
-        return logit, value
-
-    def compute_prob_value(self, state_batch: torch.Tensor):
-        logits, values = self.forward(state_batch)
-        dist = torch.distributions.Categorical(logits=logits)
-        probs = dist.probs
-        return probs, values
-
-    def compute_logp_value(self, state_batch: torch.Tensor):
-        logits, values = self.forward(state_batch)
-        log_probs = F.log_softmax(logits, dim=-1)
-        return log_probs, values

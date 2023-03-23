@@ -34,6 +34,7 @@ tictactoe_muzero_config = dict(
         evaluator_env_num=3,
         n_evaluator_episode=3,
         battle_mode='play_with_bot_mode',
+        mcts_mode='play_with_bot_mode',
         channel_last=True,
         scale=True,
         prob_random_agent=0,

@@ -32,6 +32,7 @@ gomoku_alphazero_config = dict(
         stop_value=2,
         board_size=board_size,
         battle_mode='play_with_bot_mode',
+        mcts_mode='play_with_bot_mode',
         bot_action_type='v0',
         prob_random_action_in_bot=prob_random_action_in_bot,
         channel_last=False,  # NOTE
@@ -50,9 +51,6 @@ gomoku_alphazero_config = dict(
         model=dict(
             observation_shape=(3, board_size, board_size),
             action_space_size=int(1 * board_size * board_size),
-            downsample=False,
-            last_linear_layer_init_zero=True,
-            categorical_distribution=False,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # ==============================================================
             # We use the half size model for gomoku
@@ -61,6 +59,7 @@ gomoku_alphazero_config = dict(
             num_channels=32,
         ),
         learn=dict(
+            lr_piecewise_constant_decay=False,
             update_per_collect=update_per_collect,
             batch_size=batch_size,
             optim_type='Adam',
