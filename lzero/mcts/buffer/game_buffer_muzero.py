@@ -121,7 +121,7 @@ class MuZeroGameBuffer(Buffer):
         self._beta = self._cfg.priority_prob_beta
         self.clear_time = 0
 
-    def sample_train_data(self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]):
+    def sample_train_data(self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]) -> List[Any]:
         """
         Overview:
             sample data from ``GameBuffer`` and prepare the current and target batch for training.
@@ -156,7 +156,7 @@ class MuZeroGameBuffer(Buffer):
         train_data = [current_batch, targets_batch]
         return train_data
 
-    def make_batch(self, ori_data, ratio):
+    def make_batch(self, ori_data: Any, ratio: float) -> Tuple[Any]:
         """
         Overview:
             prepare the context of a batch
@@ -301,8 +301,8 @@ class MuZeroGameBuffer(Buffer):
         return context
 
     def prepare_reward_value_context(
-            self, batch_index_list, game_block_list, pos_in_game_block_list, total_transitions
-    ):
+            self, batch_index_list: List[str], game_block_list: List[Any], pos_in_game_block_list: List[Any], total_transitions: int
+    ) -> List[Any]:
         """
         Overview:
             prepare the context of rewards and values for calculating TD value target in reanalyzing part.
@@ -374,7 +374,7 @@ class MuZeroGameBuffer(Buffer):
         ]
         return reward_value_context
 
-    def prepare_policy_non_reanalyzed_context(self, batch_index_list, game_block_list, pos_in_game_block_list):
+    def prepare_policy_non_reanalyzed_context(self, batch_index_list: List[int], game_block_list: List[Any], pos_in_game_block_list: List[int]) -> List[Any]:
         """
         Overview:
             prepare the context of policies for calculating policy target in non-reanalyzing part, just return the policy in self-play
@@ -404,7 +404,7 @@ class MuZeroGameBuffer(Buffer):
         ]
         return policy_non_re_context
 
-    def prepare_policy_reanalyzed_context(self, batch_index_list, game_block_list, pos_in_game_block_list):
+    def prepare_policy_reanalyzed_context(self, batch_index_list: List[str], game_block_list: List[Any], pos_in_game_block_list: List[str]) -> List[Any]:
         """
         Overview:
             prepare the context of policies for calculating policy target in reanalyzing part.
@@ -454,7 +454,7 @@ class MuZeroGameBuffer(Buffer):
         ]
         return policy_re_context
 
-    def compute_target_reward_value(self, reward_value_context, model):
+    def compute_target_reward_value(self, reward_value_context: List[Any], model: Any) -> List[np.ndarray]:
         """
         Overview:
             prepare reward and value targets from the context of rewards and values.
@@ -637,7 +637,7 @@ class MuZeroGameBuffer(Buffer):
         batch_target_values = np.asarray(batch_target_values)
         return batch_rewards, batch_target_values
 
-    def compute_target_policy_reanalyzed(self, policy_re_context, model):
+    def compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any) -> np.ndarray:
         """
         Overview:
             prepare policy targets from the reanalyzed context of policies
@@ -841,7 +841,7 @@ class MuZeroGameBuffer(Buffer):
 
         return batch_target_policies_re
 
-    def compute_target_policy_non_reanalyzed(self, policy_non_re_context):
+    def compute_target_policy_non_reanalyzed(self, policy_non_re_context: List[Any]) -> np.ndarray:
         """
         Overview:
             prepare policy targets from the non-reanalyzed context of policies
@@ -957,7 +957,7 @@ class MuZeroGameBuffer(Buffer):
         batch_target_policies_non_re = np.asarray(batch_target_policies_non_re)
         return batch_target_policies_non_re
 
-    def push_game_blocks(self, data_and_meta: Any):
+    def push_game_blocks(self, data_and_meta: Any) -> None:
         """
         Overview:
             Push game data and it's meta information in buffer.
@@ -971,7 +971,7 @@ class MuZeroGameBuffer(Buffer):
         for (data_game, meta_game) in zip(data, meta):
             self.push_game_block(data_game, meta_game)
 
-    def push_game_block(self, data: Any, meta: Optional[dict] = None):
+    def push_game_block(self, data: Any, meta: Optional[dict] = None) -> None:
         """
         Overview:
             Push data and it's meta information in buffer.
@@ -1008,7 +1008,7 @@ class MuZeroGameBuffer(Buffer):
         self.game_block_game_pos_look_up += [(self.base_idx + len(self.game_block_buffer) - 1, step_pos) for step_pos in
                                              range(len(data))]
 
-    def get_transition(self, idx):
+    def get_transition(self, idx: int) -> Tuple[Any]:
         """
         Overview:
             Sample one transition according to the idx
@@ -1033,7 +1033,7 @@ class MuZeroGameBuffer(Buffer):
         """
         return self.get_game_block(idx)
 
-    def get_game_block(self, idx):
+    def get_game_block(self, idx: int) -> Any:
         """
         Overview:
             sample one game history according to the idx
@@ -1085,7 +1085,7 @@ class MuZeroGameBuffer(Buffer):
 
         return success
 
-    def update_priority(self, train_data, batch_priorities) -> None:
+    def update_priority(self, train_data: Optional[List[Optional[np.ndarray]]], batch_priorities: Optional[Any]) -> None:
         """
         Overview:
             Update the priority of training data.
@@ -1096,7 +1096,7 @@ class MuZeroGameBuffer(Buffer):
         self.batch_update(indices=train_data[0][3],
                           metas={'make_time': train_data[0][5], 'batch_priorities': batch_priorities})
 
-    def remove_oldest_data_to_fit(self):
+    def remove_oldest_data_to_fit(self) -> None:
         """
         Overview:
             remove some oldest data if the replay buffer is full.
@@ -1114,7 +1114,7 @@ class MuZeroGameBuffer(Buffer):
             if total_transition >= self._cfg.learn.batch_size:
                 self._remove(index + 1)
 
-    def _remove(self, num_excess_game_blocks):
+    def _remove(self, num_excess_game_blocks: List[int]) -> None:
         """
         Overview:
             delete game histories in index [0: excess_game_block_index]
@@ -1129,7 +1129,7 @@ class MuZeroGameBuffer(Buffer):
 
         self.clear_time = time.time()
 
-    def delete(self, index: str):
+    def delete(self, index: str) -> None:
         """
         Overview:
             Delete one data sample by index
@@ -1141,13 +1141,13 @@ class MuZeroGameBuffer(Buffer):
     def clear(self) -> None:
         del self.game_block_buffer[:]
 
-    def get_batch_size(self):
+    def get_batch_size(self) -> int:
         return self.batch_size
 
-    def get_priorities(self):
+    def get_priorities(self) -> List[float]:
         return self.game_pos_priorities
 
-    def get_num_of_episodes(self):
+    def get_num_of_episodes(self) -> int:
         # number of collected episodes
         return self._eps_collected
 
@@ -1155,11 +1155,11 @@ class MuZeroGameBuffer(Buffer):
         # number of games, i.e. num of game blocks
         return len(self.game_block_buffer)
 
-    def count(self):
+    def count(self) -> int:
         # number of games, i.e. num of game blocks
         return len(self.game_block_buffer)
 
-    def get_num_of_transitions(self):
+    def get_num_of_transitions(self) -> int:
         # total number of transitions
         return len(self.game_pos_priorities)
 
@@ -1242,14 +1242,14 @@ class MuZeroGameBuffer(Buffer):
 
         return sampled_data
 
-    def save_data(self):
+    def save_data(self) -> None:
         pass
 
-    def load_data(self):
+    def load_data(self) -> None:
         pass
 
-    def get(self):
+    def get(self) -> None:
         pass
 
-    def push(self):
+    def push(self) -> None:
         pass
