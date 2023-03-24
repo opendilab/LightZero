@@ -9,7 +9,7 @@
 #include <time.h>
 #include <cmath>
 #include <sys/timeb.h>
-#include <sys/time.h>
+#include <time.h>
 #include <map>
 
 const int DEBUG_MODE = 0;
