@@ -119,6 +119,7 @@ class AlphaZeroPolicy(Policy):
         # Main and target models
         self._learn_model = model_wrap(self._model, wrapper_name='base')
         self._learn_model.reset()
+        self.collect_mcts_temperature = 1
 
     def _forward_learn(self, inputs: dict) -> Dict[str, Any]:
         inputs = default_collate(inputs)
@@ -171,6 +172,7 @@ class AlphaZeroPolicy(Policy):
             'value_loss': value_loss,
             'entropy_loss': entropy_loss,
             'total_grad_norm_before_clip': total_grad_norm_before_clip,
+            'collect_mcts_temperature': self.collect_mcts_temperature,
         }
 
     def _init_collect(self) -> None:
@@ -278,7 +280,7 @@ class AlphaZeroPolicy(Policy):
 
     def _monitor_vars_learn(self) -> List[str]:
         return super()._monitor_vars_learn() + [
-            'cur_lr', 'total_loss', 'policy_loss', 'value_loss', 'entropy_loss', 'total_grad_norm_before_clip'
+            'cur_lr', 'total_loss', 'policy_loss', 'value_loss', 'entropy_loss', 'total_grad_norm_before_clip', 'collect_mcts_temperature'
         ]
 
     def _process_transition(self, obs: Any, model_output: dict, timestep: namedtuple) -> dict:

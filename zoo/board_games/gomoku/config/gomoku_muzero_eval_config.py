@@ -9,18 +9,19 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 32
-n_episode = 32
-evaluator_env_num = 5
-num_simulations = 100
-update_per_collect = 100
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 50
+update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e6)
-categorical_distribution = False
+categorical_distribution = True
 reanalyze_ratio = 0.3
 
 board_size = 6  # default_size is 15
 bot_action_type = 'v0'  # 'v1'
+prob_random_action_in_bot = 0.5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -30,7 +31,9 @@ gomoku_muzero_config = dict(
     env=dict(
         stop_value=int(2),
         battle_mode='play_with_bot_mode',
-        agent_vs_human=False,
+        prob_random_action_in_bot=prob_random_action_in_bot,
+        # agent_vs_human=False,
+        agent_vs_human=True,
         channel_last=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -98,7 +101,7 @@ gomoku_muzero_create_config = dict(
         import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
     ),
     # env_manager=dict(type='subprocess'),
-    env_manager=dict(type='base'),     # if agent_vs_human=True
+    env_manager=dict(type='base'), # if agent_vs_human=True
     policy=dict(
         type='muzero',
         import_names=['lzero.policy.muzero'],
@@ -114,16 +117,23 @@ create_config = gomoku_muzero_create_config
 if __name__ == '__main__':
     from lzero.entry import eval_muzero
     import numpy as np
+    """ 
+    model_path (:obj:`Optional[str]`): The pretrained model path, which should
+    point to the ckpt file of the pretrained model, and an absolute path is recommended.
+    In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
+     """
+    # model_path='/Users/puyuan/code/LightZero/zoo/board_games/gomoku/gomoku_b6_rand0.5_muzero_bot-mode_type-v0_ns50_upc50_rr0.3_rbs1e5_seed0/ckpt/ckpt_best.pth.tar'
+    model_path='/Users/puyuan/code/LightZero/zoo/board_games/gomoku/gomoku_b6_rand0.0_muzero_bot-mode_type-v0_ns50_upc50_rr0.3_seed0/ckpt/ckpt_best.pth.tar'
 
     returns_mean_seeds = []
     returns_seeds = []
     seeds = [0]
-    num_episodes_each_seed = 1
+    num_episodes_each_seed = 5
     total_test_episodes = num_episodes_each_seed * len(seeds)
     for seed in seeds:
         returns_mean, returns = eval_muzero([main_config, create_config], seed=seed,
                                                             num_episodes_each_seed=num_episodes_each_seed,
-                                                            print_seed_details=True, max_env_step=int(1e5))
+                                                            print_seed_details=True, model_path=model_path)
         returns_mean_seeds.append(returns_mean)
         returns_seeds.append(returns)
 

@@ -497,6 +497,7 @@ class SampledEfficientZeroPolicy(Policy):
         if self._cfg.model.continuous_action_space:
             return {
                 'cur_lr': self._optimizer.param_groups[0]['lr'],
+                'collect_mcts_temperature': self.collect_mcts_temperature,
                 'weighted_total_loss': loss_data[0],
                 'total_loss': loss_data[1],
                 'policy_loss': loss_data[2],
@@ -537,6 +538,7 @@ class SampledEfficientZeroPolicy(Policy):
         else:
             return {
                 'cur_lr': self._optimizer.param_groups[0]['lr'],
+                'collect_mcts_temperature': self.collect_mcts_temperature,
                 'weighted_total_loss': loss_data[0],
                 'total_loss': loss_data[1],
                 'policy_loss': loss_data[2],

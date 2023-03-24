@@ -6,22 +6,23 @@ from easydict import EasyDict
 board_size = 6  # default_size is 15
 collector_env_num = 32
 n_episode = 32
-evaluator_env_num = 3
-num_simulations = 100
-update_per_collect = 100
+evaluator_env_num = 5
+num_simulations = 50
+update_per_collect = 50
 batch_size = 256
-max_env_step = int(2e6)
+max_env_step = int(1e6)
 prob_random_action_in_bot = 0.5
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 gomoku_alphazero_config = dict(
-    exp_name=f'data_az_ptree/gomoku_alphazero_sp-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_az_ptree/gomoku_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         stop_value=2,
         board_size=board_size,
         battle_mode='self_play_mode',
+        mcts_mode='self_play_mode',
         bot_action_type='v0',
         prob_random_action_in_bot=prob_random_action_in_bot,
         channel_last=False,  # NOTE
@@ -40,9 +41,6 @@ gomoku_alphazero_config = dict(
         model=dict(
             observation_shape=(3, board_size, board_size),
             action_space_size=int(1 * board_size * board_size),
-            downsample=False,
-            last_linear_layer_init_zero=True,
-            categorical_distribution=False,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # ==============================================================
             # We use the half size model for gomoku
@@ -51,6 +49,7 @@ gomoku_alphazero_config = dict(
             num_channels=32,
         ),
         learn=dict(
+            lr_piecewise_constant_decay=False,
             update_per_collect=update_per_collect,
             batch_size=batch_size,
             optim_type='Adam',

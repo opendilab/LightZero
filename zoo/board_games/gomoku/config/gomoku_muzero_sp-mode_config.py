@@ -12,24 +12,26 @@ else:
 collector_env_num = 32
 n_episode = 32
 evaluator_env_num = 5
-num_simulations = 100
-update_per_collect = 100
+num_simulations = 50
+update_per_collect = 50
 batch_size = 256
-max_env_step = int(2e6)
-categorical_distribution = False
+max_env_step = int(1e6)
 reanalyze_ratio = 0.3
 
 board_size = 6  # default_size is 15
 bot_action_type = 'v0'  # 'v1'
+prob_random_action_in_bot = 0.5
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_mz_ctree/gomoku_muzero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(2),
         battle_mode='self_play_mode',
+        prob_random_action_in_bot=prob_random_action_in_bot,
         channel_last=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -55,7 +57,6 @@ gomoku_muzero_config = dict(
             image_channel=3,
             frame_stack_num=1,
             downsample=False,
-            categorical_distribution=categorical_distribution,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # ==============================================================
             # We use the half size model for gomoku

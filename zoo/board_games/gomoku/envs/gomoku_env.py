@@ -25,6 +25,7 @@ class GomokuEnv(BaseGameEnv):
         prob_random_agent=0,
         board_size=6,
         battle_mode='play_with_bot_mode',
+        mcts_mode='play_with_bot_mode',
         channel_last=False,
         scale=True,
         agent_vs_human=False,
@@ -42,6 +43,7 @@ class GomokuEnv(BaseGameEnv):
     def __init__(self, cfg: dict = None):
         self.cfg = cfg
         self.battle_mode = cfg.battle_mode
+        self.mcts_mode = cfg.mcts_mode
         self.board_size = cfg.board_size
         self.prob_random_agent = cfg.prob_random_agent
         self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
