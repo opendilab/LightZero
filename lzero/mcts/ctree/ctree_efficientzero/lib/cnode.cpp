@@ -76,6 +76,10 @@ namespace tree
 
     CNode::~CNode() {}
 
+    // constexpr int get_action_num(const std::vector<float> &policy_logits) {
+    //     return policy_logits.size();
+    // }
+
     void CNode::expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix, const std::vector<float> &policy_logits)
     {
         /*
@@ -104,6 +108,8 @@ namespace tree
         float temp_policy;
         float policy_sum = 0.0;
         float policy[action_num];
+        // float policy[get_action_num(policy_logits)]; // for win compatibility, but need version >=C++11
+        
         float policy_max = FLOAT_MIN;
         for (auto a : this->legal_actions)
         {
