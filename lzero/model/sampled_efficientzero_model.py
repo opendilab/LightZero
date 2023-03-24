@@ -627,7 +627,7 @@ class PredictionNetwork(nn.Module):
 
         if self.continuous_action_space:
             self.sampled_fc_policy = ReparameterizationHead(
-                input_size=self.flatten_output_size_for_policy_head,
+                # input_size=self.flatten_output_size_for_policy_head,
                 hidden_size=self.flatten_output_size_for_policy_head,  # 256,
                 output_size=action_space_size,
                 layer_num=len(fc_policy_layers) + 1,
