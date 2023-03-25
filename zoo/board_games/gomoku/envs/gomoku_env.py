@@ -5,13 +5,12 @@ from typing import List
 
 import gym
 import numpy as np
-from ding.envs import BaseEnvTimestep
+from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
-from zoo.board_games.base_game_env import BaseGameEnv
 from zoo.board_games.gomoku.envs.gomoku_rule_bot_v1 import GomokuRuleBotV1
 from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_case1, \
     check_action_to_special_connect4_case2, \
@@ -19,19 +18,20 @@ from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_c
 
 
 @ENV_REGISTRY.register('gomoku')
-class GomokuEnv(BaseGameEnv):
+class GomokuEnv(BaseEnv):
 
     config = dict(
         prob_random_agent=0,
         board_size=6,
-        battle_mode='play_with_bot_mode',
-        mcts_mode='play_with_bot_mode',
+        battle_mode='self_play_mode',
+        mcts_mode='self_play_mode',  # only used in AlphaZero
         channel_last=False,
         scale=True,
         agent_vs_human=False,
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
         prob_random_action_in_bot=0.,
         check_action_to_connect4_in_bot_v0=False,
+        stop_value=1,
     )
 
     @classmethod
@@ -43,7 +43,8 @@ class GomokuEnv(BaseGameEnv):
     def __init__(self, cfg: dict = None):
         self.cfg = cfg
         self.battle_mode = cfg.battle_mode
-        self.mcts_mode = cfg.mcts_mode
+        # ``self.mcts_mode`` is only used in AlphaZero
+        self.mcts_mode = cfg.get('mcts_mode', cfg.battle_mode)
         self.board_size = cfg.board_size
         self.prob_random_agent = cfg.prob_random_agent
         self.prob_random_action_in_bot = cfg.prob_random_action_in_bot

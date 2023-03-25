@@ -1,33 +1,29 @@
-"""
-Adapt TicTacToe to BaseGameEnv interface from https://github.com/werner-duvaud/muzero-general
-"""
 import copy
 import sys
 from typing import List
 
 import gym
 import numpy as np
-from ding.envs.env.base_env import BaseEnvTimestep
+from ding.envs.env.base_env import BaseEnv, BaseEnvTimestep
 from ding.utils.registry_factory import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
 
-from zoo.board_games.base_game_env import BaseGameEnv
-
 
 @ENV_REGISTRY.register('tictactoe')
-class TicTacToeEnv(BaseGameEnv):
+class TicTacToeEnv(BaseEnv):
 
     config = dict(
-        battle_mode='play_with_bot_mode',
-        mcts_mode='play_with_bot_mode',
+        battle_mode='self_play_mode',
+        mcts_mode='self_play_mode',  # only used in AlphaZero
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
         agent_vs_human=False,
         prob_random_agent=0,
         prob_expert_agent=0,
         channel_last=True,
         scale=True,
+        stop_value=1,
     )
 
     @classmethod
@@ -37,10 +33,12 @@ class TicTacToeEnv(BaseGameEnv):
         return cfg
 
     def __init__(self, cfg=None):
+        self.cfg = cfg
         self.channel_last = cfg.channel_last
         self.scale = cfg.scale
         self.battle_mode = cfg.battle_mode
-        self.mcts_mode = cfg.mcts_mode
+        # ``self.mcts_mode`` is only used in AlphaZero
+        self.mcts_mode = cfg.get('mcts_mode', cfg.battle_mode)
         self.board_size = 3
         self.players = [1, 2]
         self.total_num_actions = 9

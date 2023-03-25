@@ -21,7 +21,6 @@ tictactoe_alphazero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         board_size=3,
         battle_mode='self_play_mode',
-        mcts_mode='self_play_mode',
         channel_last=False,  # NOTE
         manager=dict(shared_memory=False, ),
     ),

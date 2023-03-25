@@ -41,18 +41,6 @@ gomoku_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        device=device,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
-        env_type='board_games',
-        game_block_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
-        num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
-        use_augmentation=False,
-        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
-        td_steps=9,
-        num_unroll_steps=3,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         model=dict(
             observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
             action_space_size=int(board_size * board_size),
@@ -61,35 +49,33 @@ gomoku_muzero_config = dict(
             downsample=False,
             categorical_distribution=categorical_distribution,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            # ==============================================================
             # We use the half size model for gomoku
-            # ==============================================================
             num_res_blocks=1,
             num_channels=32,
-            reward_head_channels=16,
-            value_head_channels=16,
-            policy_head_channels=16,
-            fc_reward_layers=[32],
-            fc_value_layers=[32],
-            fc_policy_layers=[32],
             support_scale=10,
             reward_support_size=21,
             value_support_size=21,
         ),
-        learn=dict(
-            update_per_collect=update_per_collect,
-            batch_size=batch_size,
-            lr_piecewise_constant_decay=False,
-            optim_type='Adam',
-            learning_rate=0.003,  # lr for Adam optimizer
-        ),
-        # collect_mode config
-        collect=dict(
-            # Get "n_episode" episodes per collect.
-            n_episode=n_episode,
-        ),
+        device=device,
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
+        env_type='board_games',
+        game_segment_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
+        use_augmentation=False,
+        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
+        td_steps=9,
+        num_unroll_steps=3,
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        update_per_collect=update_per_collect,
+        batch_size=batch_size,
+        lr_piecewise_constant_decay=False,
+        optim_type='Adam',
+        learning_rate=0.003,  # lr for Adam optimizer
+        n_episode=n_episode,
         # If the eval cost is expensive, we could set eval_freq larger.
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        eval_freq=int(2e3),
     ),
 )
 gomoku_muzero_config = EasyDict(gomoku_muzero_config)

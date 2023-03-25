@@ -43,62 +43,29 @@ gomoku_alphazero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        type='alphazero',
-        env_name='gomoku',
         cuda=True,
         board_size=board_size,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
         model=dict(
+            # We use the half size model for gomoku
             observation_shape=(3, board_size, board_size),
             action_space_size=int(1 * board_size * board_size),
-            downsample=False,
-            last_linear_layer_init_zero=True,
-            categorical_distribution=False,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            # ==============================================================
-            # We use the half size model for gomoku
-            # ==============================================================
             num_res_blocks=1,
             num_channels=32,
         ),
-        learn=dict(
-            update_per_collect=update_per_collect,
-            batch_size=batch_size,
-            optim_type='Adam',
-            learning_rate=0.003,
-            weight_decay=0.0001,
-            grad_norm=0.5,
-            value_weight=1.0,
-            entropy_weight=0.0,
-        ),
-        collect=dict(
-            unroll_len=1,
-            n_episode=n_episode,
-            collector=dict(
-                env=dict(
-                    type='gomoku',
-                    import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
-                ),
-                augmentation=True,
-            ),
-            mcts=dict(num_simulations=num_simulations)
-        ),
-        eval=dict(evaluator=dict(
-            eval_freq=int(2e3),
-            env=dict(
-                type='gomoku',
-                import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
-            ),
-        ),
-            mcts=dict(num_simulations=num_simulations)
-        ),
-        other=dict(
-            replay_buffer=dict(
-                replay_buffer_size=int(1e6),
-                save_episode=False,
-            )
-        ),
+        update_per_collect=update_per_collect,
+        batch_size=batch_size,
+        optim_type='Adam',
+        learning_rate=0.003,
+        weight_decay=0.0001,
+        grad_norm=0.5,
+        value_weight=1.0,
+        entropy_weight=0.0,
+        n_episode=n_episode,
+        eval_freq=int(2e3),
+        mcts=dict(num_simulations=num_simulations),
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
     ),
 )
 
@@ -132,12 +99,13 @@ create_config = gomoku_alphazero_create_config
 if __name__ == '__main__':
     from lzero.entry import eval_alphazero
     import numpy as np
+
     """ 
     model_path (:obj:`Optional[str]`): The pretrained model path, which should
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
      """
-    model_path='/Users/puyuan/code/LightZero/zoo/board_games/gomoku/gomoku_alphazero_bot-mode_rand0.5_ns50_upc50_rr0.3_rbs1e5_seed0/ckpt/ckpt_best.pth.tar'
+    model_path = '/Users/puyuan/code/LightZero/zoo/board_games/gomoku/gomoku_alphazero_bot-mode_rand0.5_ns50_upc50_rr0.3_rbs1e5_seed0/ckpt/ckpt_best.pth.tar'
 
     returns_mean_seeds = []
     returns_seeds = []
@@ -146,8 +114,8 @@ if __name__ == '__main__':
     total_test_episodes = num_episodes_each_seed * len(seeds)
     for seed in seeds:
         returns_mean, returns = eval_alphazero([main_config, create_config], seed=seed,
-                                                            num_episodes_each_seed=num_episodes_each_seed,
-                                                            print_seed_details=True, model_path=model_path)
+                                               num_episodes_each_seed=num_episodes_each_seed,
+                                               print_seed_details=True, model_path=model_path)
         returns_mean_seeds.append(returns_mean)
         returns_seeds.append(returns)
 
@@ -158,5 +126,6 @@ if __name__ == '__main__':
     print(f'We eval total {len(seeds)} seeds. In each seed, we eval {num_episodes_each_seed} episodes.')
     print(f'In seeds {seeds}, returns_mean_seeds is {returns_mean_seeds}, returns is {returns_seeds}')
     print('In all seeds, reward_mean:', returns_mean_seeds.mean(), end='. ')
-    print(f'win rate: {len(np.where(returns_seeds == 1.)[0]) / total_test_episodes}, draw rate: {len(np.where(returns_seeds == 0.)[0]) / total_test_episodes}, lose rate: {len(np.where(returns_seeds == -1.)[0]) / total_test_episodes}')
+    print(
+        f'win rate: {len(np.where(returns_seeds == 1.)[0]) / total_test_episodes}, draw rate: {len(np.where(returns_seeds == 0.)[0]) / total_test_episodes}, lose rate: {len(np.where(returns_seeds == -1.)[0]) / total_test_episodes}')
     print("=" * 20)

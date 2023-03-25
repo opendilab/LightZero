@@ -10,6 +10,13 @@ num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 4
+# update_per_collect = 2
+# batch_size = 4
+# max_env_step = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -21,16 +28,10 @@ tictactoe_alphazero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         board_size=3,
         battle_mode='play_with_bot_mode',
-        mcts_mode='play_with_bot_mode',
         channel_last=False,  # NOTE
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        type='alphazero',
-        env_name='tictactoe',
-        cuda=True,
-        board_size=3,
-        collector_env_num=collector_env_num,
         model=dict(
             # ==============================================================
             # We use the small size model for tictactoe
@@ -48,48 +49,21 @@ tictactoe_alphazero_config = dict(
             categorical_distribution=False,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
-        learn=dict(
-            update_per_collect=update_per_collect,
-            batch_size=batch_size,
-            optim_type='Adam',
-            learning_rate=0.003,
-            weight_decay=0.0001,
-            grad_norm=0.5,
-            value_weight=1.0,
-            entropy_weight=0.0,
-        ),
-        collect=dict(
-            unroll_len=1,
-            n_episode=n_episode,
-            collector=dict(
-                env=dict(
-                    type='tictactoe',
-                    import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
-                ),
-                augmentation=True,
-            ),
-            mcts=dict(num_simulations=num_simulations)
-        ),
-        eval=dict(
-            evaluator=dict(
-                n_episode=evaluator_env_num,
-                eval_freq=int(500),
-                stop_value=2,
-                env=dict(
-                    type='tictactoe',
-                    import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
-                ),
-            ),
-            mcts=dict(num_simulations=num_simulations)
-        ),
-        other=dict(
-            replay_buffer=dict(
-                replay_buffer_size=int(1e6),
-                type='naive',
-                save_episode=False,
-                periodic_thruput_seconds=60,
-            )
-        ),
+        stop_value=2,
+        cuda=True,
+        board_size=3,
+        collector_env_num=collector_env_num,
+        update_per_collect=update_per_collect,
+        batch_size=batch_size,
+        optim_type='Adam',
+        learning_rate=0.003,
+        weight_decay=0.0001,
+        grad_norm=0.5,
+        value_weight=1.0,
+        entropy_weight=0.0,
+        n_episode=n_episode,
+        eval_freq=int(2e3),
+        mcts=dict(num_simulations=num_simulations),
     ),
 )
 

@@ -61,7 +61,7 @@ tictactoe_muzero_config = dict(
         cvt_string=False,
         gray_scale=False,
         use_augmentation=False,
-        game_block_length=5,
+        game_segment_length=5,
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=9,
         num_unroll_steps=3,
@@ -99,9 +99,9 @@ tictactoe_muzero_config = dict(
             optim_type='SGD',
             learning_rate=0.2,  # init lr for manually decay schedule
         ),
-        collect=dict(n_episode=n_episode, ),  # Get "n_episode" episodes per collect.
+        n_episode=n_episode,   # Get "n_episode" episodes per collect.
         # If the eval cost is expensive, we could set eval_freq larger.
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        eval_freq=int(2e3),
         # ==============================================================
         # begin of additional game_config
         # ==============================================================
