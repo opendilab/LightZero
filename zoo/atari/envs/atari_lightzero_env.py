@@ -73,7 +73,7 @@ class AtariLightZeroEnv(BaseEnv):
 
         obs = self._env.reset()
         self.obs = to_ndarray(obs)
-        self._final_eval_reward = 0.
+        self._eval_episode_return = 0.
         self.has_reset = True
         obs = self.observe()
         # obs.shape: 96,96,1
@@ -99,10 +99,10 @@ class AtariLightZeroEnv(BaseEnv):
         # self._env.render()
         self.obs = to_ndarray(obs)
         self.reward = np.array(reward).astype(np.float32)
-        self._final_eval_reward += self.reward
+        self._eval_episode_return += self.reward
         observation = self.observe()
         if done:
-            info['final_eval_reward'] = self._final_eval_reward
+            info['eval_episode_return'] = self._eval_episode_return
 
         return BaseEnvTimestep(observation, self.reward, done, info)
 

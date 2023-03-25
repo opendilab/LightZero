@@ -85,7 +85,9 @@ pendulum_disc_efficientzero_create_config = dict(
         type='pendulum_lightzero',
         import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
     ),
-    env_manager=dict(type='subprocess'),
+    # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
+
     policy=dict(
         type='efficientzero',
         import_names=['lzero.policy.efficientzero'],
@@ -99,5 +101,18 @@ pendulum_disc_efficientzero_create_config = EasyDict(pendulum_disc_efficientzero
 create_config = pendulum_disc_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import train_muzero_v2
+    from zoo.classic_control.pendulum.envs.lightzero_env_wrapper import ObsActionMaskToPlayWrapper
+    from ding.envs import DingEnvWrapper
+    import gym
+
+    env_fn = DingEnvWrapper(
+        gym.make('Pendulum-v1'),
+        cfg={
+            'env_wrapper': [
+                lambda env: ObsActionMaskToPlayWrapper(env, main_config.env),
+            ]
+        }
+    )
+
+    train_muzero_v2([main_config, create_config], env_fn=env_fn, seed=0, max_env_step=max_env_step)

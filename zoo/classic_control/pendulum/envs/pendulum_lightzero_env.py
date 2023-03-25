@@ -3,7 +3,6 @@ from typing import Optional
 
 import gym
 import numpy as np
-import torch
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.envs.common.common_function import affine_transform
 from ding.torch_utils import to_ndarray
@@ -11,7 +10,7 @@ from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
 
 
-@ENV_REGISTRY.register('pendulum')
+@ENV_REGISTRY.register('pendulum_lightzero')
 class PendulumEnv(BaseEnv):
 
     @classmethod
@@ -81,7 +80,7 @@ class PendulumEnv(BaseEnv):
             self._action_space.seed(self._seed)
         obs = self._env.reset()
         obs = to_ndarray(obs).astype(np.float32)
-        self._final_eval_reward = 0.
+        self._eval_episode_return = 0.
         # to be compatible with LightZero model,shape: [W, H, C]
         obs = obs.reshape(obs.shape[0], 1, 1)
         if not self._continuous:
@@ -111,12 +110,12 @@ class PendulumEnv(BaseEnv):
         if self._act_scale:
             action = affine_transform(action, min_val=self._env.action_space.low, max_val=self._env.action_space.high)
         obs, rew, done, info = self._env.step(action)
-        self._final_eval_reward += rew
+        self._eval_episode_return += rew
         obs = to_ndarray(obs).astype(np.float32)
         # wrapped to be transferred to a array with shape (1,)
         rew = to_ndarray([rew]).astype(np.float32)
         if done:
-            info['final_eval_reward'] = self._final_eval_reward
+            info['eval_episode_return'] = self._eval_episode_return
         # to be compatible with LightZero model,shape: [W, H, C]
         obs = obs.reshape(obs.shape[0], 1, 1)
         if not self._continuous:
@@ -152,19 +151,4 @@ class PendulumEnv(BaseEnv):
         return self._reward_space
 
     def __repr__(self) -> str:
-        return "DI-engine Pendulum Env({})".format(self._cfg.env_id)
-
-
-@ENV_REGISTRY.register('mbpendulum')
-class MBPendulumEnv(PendulumEnv):
-
-    def termination_fn(self, next_obs: torch.Tensor) -> torch.Tensor:
-        """
-        Overview:
-            This function determines whether each state is a terminated state
-        .. note::
-            Done is always false for pendulum, according to\
-            <https://github.com/openai/gym/blob/master/gym/envs/classic_control/pendulum.py>.
-        """
-        done = torch.zeros_like(next_obs.sum(-1)).bool()
-        return done
+        return "LightZero Pendulum Env({})".format(self._cfg.env_id)

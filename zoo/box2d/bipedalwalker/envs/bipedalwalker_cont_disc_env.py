@@ -80,7 +80,7 @@ class BipedalWalkerDiscEnv(BaseEnv):
             )
         obs = self._env.reset()
         obs = to_ndarray(obs).astype(np.float32)
-        self._final_eval_reward = 0
+        self._eval_episode_return = 0
         if self._save_replay_gif:
             self._frames = []
         # disc_to_cont: transform discrete action index to original continuous action
@@ -134,12 +134,12 @@ class BipedalWalkerDiscEnv(BaseEnv):
         obs = obs.reshape(24, 1, 1)
         action_mask = None
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
-        self._final_eval_reward += rew
+        self._eval_episode_return += rew
         if self._rew_clip:
             rew = max(-10, rew)
         rew = np.float32(rew)
         if done:
-            info['final_eval_reward'] = self._final_eval_reward
+            info['eval_episode_return'] = self._eval_episode_return
             if self._save_replay_gif:
                 if not os.path.exists(self._replay_path_gif):
                     os.makedirs(self._replay_path_gif)

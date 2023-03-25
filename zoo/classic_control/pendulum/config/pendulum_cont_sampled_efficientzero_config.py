@@ -36,7 +36,7 @@ pendulum_sampled_efficientzero_config = dict(
     policy=dict(
         model=dict(
             observation_shape=(1, 3, 1),  # if frame_stack_num=1
-            action_space_size=2,
+            action_space_size=1,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             categorical_distribution=True,

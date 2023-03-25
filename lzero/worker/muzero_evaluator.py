@@ -328,7 +328,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                     if t.done:
                         # Env reset is done by env_manager automatically.
                         self._policy.reset([env_id])
-                        reward = t.info['final_eval_reward']
+                        reward = t.info['eval_episode_return']
                         if 'episode_info' in t.info:
                             eval_monitor.update_info(env_id, t.info['episode_info'])
                         eval_monitor.update_reward(env_id, reward)
