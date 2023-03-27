@@ -9,7 +9,7 @@ on:
       - test/*
 
 jobs:
-  unittest:
+  unittest_on_ubuntu_macos:
     name: Code test on ubuntu and macos
     runs-on: ${{ matrix.os }}
     if: "!contains(github.event.head_commit.message, 'ci skip')"
@@ -103,7 +103,8 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
- name: Code test on windows
+  unittest_on_windows:
+    name: Code test on windows
     runs-on: ${{ matrix.os }}
     if: "!contains(github.event.head_commit.message, 'ci skip')"
     strategy:
@@ -144,7 +145,7 @@ jobs:
         run: |
           choco install tree cloc wget curl make zip graphviz
           dot -V
-
+      # TODO
       - name: Set up MSVC 2019 Environment
         uses: microsoft/setup-msbuild@v1.0.2
         with:
