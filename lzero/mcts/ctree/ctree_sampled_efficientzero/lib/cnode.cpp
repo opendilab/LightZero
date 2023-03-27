@@ -1,3 +1,5 @@
+// C++11
+
 #include <iostream>
 #include "cnode.h"
 #include <algorithm>
@@ -17,7 +19,7 @@
 #include <cassert>
 
 #ifdef _WIN32
-#include "lzero/mcts/ctree/common_lib/utils.cpp"
+#include "..\..\common_lib\utils.cpp"
 #else
 #include "../../common_lib/utils.cpp"
 #endif
