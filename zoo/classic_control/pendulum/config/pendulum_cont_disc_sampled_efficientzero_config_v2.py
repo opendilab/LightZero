@@ -12,25 +12,31 @@ else:
 # collector_env_num = 8
 # n_episode = 8
 # evaluator_env_num = 3
+# continuous_action_space = False
+# K = 5  # num_of_sampled_actions
 # num_simulations = 50
 # update_per_collect = 200
 # batch_size = 256
 # max_env_step = int(1e6)
-# reanalyze_ratio = 0
+# reanalyze_ratio = 0.3
+
+# debug config
 collector_env_num = 2
 n_episode = 2
 evaluator_env_num = 2
+continuous_action_space = False
+K = 5  # num_of_sampled_actions
 num_simulations = 5
 update_per_collect = 2
 batch_size = 4
 max_env_step = int(1e6)
-reanalyze_ratio = 0
+reanalyze_ratio = 0.3
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-pendulum_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/pendulum_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+pendulum_sampled_efficientzero_config = dict(
+    exp_name=f'data_sez_ctree/pendulum_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name='Pendulum-v1',
@@ -45,11 +51,13 @@ pendulum_disc_efficientzero_config = dict(
         model=dict(
             observation_shape=(1, 3, 1),  # if frame_stack_num=1
             action_space_size=11,
+            continuous_action_space=continuous_action_space,
+            num_of_sampled_actions=K,
+            image_channel=1,
+            downsample=False,
+            frame_stack_num=1,
             categorical_distribution=True,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            image_channel=1,
-            frame_stack_num=1,
-            downsample=False,
             # We use the small size model for pendulum.
             num_res_blocks=1,
             num_channels=16,
@@ -67,6 +75,7 @@ pendulum_disc_efficientzero_config = dict(
         use_augmentation=False,
         policy_entropy_loss_weight=0,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         lr_piecewise_constant_decay=True,
@@ -78,29 +87,26 @@ pendulum_disc_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
     ),
 )
+pendulum_sampled_efficientzero_config = EasyDict(pendulum_sampled_efficientzero_config)
+main_config = pendulum_sampled_efficientzero_config
 
-pendulum_disc_efficientzero_config = EasyDict(pendulum_disc_efficientzero_config)
-main_config = pendulum_disc_efficientzero_config
-
-pendulum_disc_efficientzero_create_config = dict(
+pendulum_sampled_efficientzero_create_config = dict(
     env=dict(
-        type='pendulum_lightzero',
+        type='pendulum',
         import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
     ),
-    # env_manager=dict(type='subprocess'),
-    env_manager=dict(type='base'),
-
+    env_manager=dict(type='subprocess'),
     policy=dict(
-        type='efficientzero',
-        import_names=['lzero.policy.efficientzero'],
+        type='sampled_efficientzero',
+        import_names=['lzero.policy.sampled_efficientzero'],
     ),
     collector=dict(
         type='episode_muzero',
         import_names=['lzero.worker.muzero_collector'],
     )
 )
-pendulum_disc_efficientzero_create_config = EasyDict(pendulum_disc_efficientzero_create_config)
-create_config = pendulum_disc_efficientzero_create_config
+pendulum_sampled_efficientzero_create_config = EasyDict(pendulum_sampled_efficientzero_create_config)
+create_config = pendulum_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero_v2

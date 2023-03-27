@@ -5,6 +5,8 @@ import gym
 import numpy as np
 from ding.envs import BaseEnvTimestep
 from ding.utils import ENV_WRAPPER_REGISTRY
+from itertools import product
+from ding.torch_utils import to_ndarray, to_list
 
 
 @ENV_WRAPPER_REGISTRY.register('obs_plus_action_mask_to_play')
@@ -29,12 +31,17 @@ class ObsActionMaskToPlayWrapper(gym.ObservationWrapper):
             - env (:obj:`gym.Env`): the environment to wrap.
         """
         super().__init__(env)
-        self._continuous = cfg.continuous
-        if self._continuous:
-            self._action_space = gym.spaces.Box(low=-2.0, high=2.0, shape=(1, ), dtype=np.float32)
-        else:
-            self._discrete_action_num = 11
-            self._action_space = gym.spaces.Discrete(self._discrete_action_num)
+        self._env = env
+        self.cfg = cfg
+        self.env_name = cfg.env_name
+        self.continuous = cfg.continuous
+        if self.continuous:
+            if self.env_name == "Pendulum-v1":
+                self._action_space = gym.spaces.Box(low=-2.0, high=2.0, shape=(1, ), dtype=np.float32)
+            elif self.env_name == "LunarLanderContinuous-v2":
+                self._action_space = env.action_space
+            elif self.env_name == "BipedalWalker-v3":
+                self._action_space = env.action_space
 
     def step(self, action):
         """
@@ -56,12 +63,19 @@ class ObsActionMaskToPlayWrapper(gym.ObservationWrapper):
         """
         if isinstance(action, int):
             action = np.array(action)
-        # if require discrete env, convert actions to [-1 ~ 1] float actions
-        if not self._continuous:
-            action = (action / (self._discrete_action_num - 1)) * 2 - 1
-            if action.shape in [0, ()]:
-                # to be compatiable with pendulum
-                action = np.array([action])
+        if self.env_name == "Pendulum-v1":
+            if self.cfg.discretization:
+                # if require discrete env, convert actions to [-1 ~ 1] float actions
+                action = (action / (self.discrete_action_num - 1)) * 2 - 1
+                if action.shape in [0, ()]:
+                    # to be compatiable with pendulum
+                    action = np.array([action])
+        if self.env_name in ["LunarLanderContinuous-v2", "BipedalWalker-v3"]:
+            if self.cfg.discretization:
+                action = [-1 + 2 / self.n * k for k in self.disc_to_cont[int(action)]]
+                action = to_ndarray(action)
+                if action.shape == (1,):
+                    action = action.item()  # 0-dim array
 
         obs, rew, done, info = self.env.step(action)
 
@@ -69,11 +83,33 @@ class ObsActionMaskToPlayWrapper(gym.ObservationWrapper):
         if done:
             info['eval_episode_return'] = self._eval_episode_return
 
-        obs = obs.reshape(obs.shape[0], 1, 1)
-        if not self._continuous:
-            action_mask = np.ones(self._discrete_action_num, 'int8')
-        else:
-            action_mask = None
+        self._raw_obs_space = self._env.observation_space
+        if self.env_name == "Pendulum-v1":
+            self.discrete_action_num = 11
+            if self.cfg.discretization:
+                action_mask = np.ones(self.discrete_action_num, 'int8')
+            else:
+                action_mask = None
+        elif self.env_name in ["LunarLander-v2"]:
+            self.raw_action_space = self._env.action_space
+            action_mask = np.ones(self.raw_action_space.n, 'int8')
+        elif self.env_name in ["LunarLanderContinuous-v2", "BipedalWalker-v3"]:
+            if self.cfg.discretization:
+                # disc_to_cont: transform discrete action index to original continuous action
+                self.raw_action_space = self._env.action_space
+                self.m = self.raw_action_space.shape[0]
+                self.n = self.cfg.each_dim_disc_size
+                self.K = self.n ** self.m
+                self.disc_to_cont = list(product(*[list(range(self.n)) for dim in range(self.m)]))
+                # the modified discrete action space
+                self._action_space = gym.spaces.Discrete(self.K)
+                action_mask = np.ones(self.K, 'int8')
+            else:
+                action_mask = None
+
+        # to be compatible with LightZero model,shape: [W, H, C]
+        obs = obs.reshape(self._raw_obs_space.shape[0], 1, 1)
+
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         return BaseEnvTimestep(obs, rew, done, info)
 
@@ -89,12 +125,35 @@ class ObsActionMaskToPlayWrapper(gym.ObservationWrapper):
         """
         obs = self.env.reset(**kwargs)
         self._eval_episode_return = 0.
+        self._raw_obs_space = self._env.observation_space
+
+        if self.env_name == "Pendulum-v1":
+            self.discrete_action_num = 11
+            self._action_space = gym.spaces.Discrete(self.discrete_action_num)
+            if self.cfg.discretization:
+                action_mask = np.ones(self.discrete_action_num, 'int8')
+            else:
+                action_mask = None
+        elif self.env_name in ["LunarLander-v2"]:
+            self.raw_action_space = self._env.action_space
+            action_mask = np.ones(self.raw_action_space.n, 'int8')
+        elif self.env_name in ["LunarLanderContinuous-v2", "BipedalWalker-v3"]:
+            if self.cfg.discretization:
+                # disc_to_cont: transform discrete action index to original continuous action
+                self.raw_action_space = self._env.action_space
+                self.m = self.raw_action_space.shape[0]
+                self.n = self.cfg.each_dim_disc_size
+                self.K = self.n ** self.m
+                self.disc_to_cont = list(product(*[list(range(self.n)) for dim in range(self.m)]))
+                # the modified discrete action space
+                self._action_space = gym.spaces.Discrete(self.K)
+                action_mask = np.ones(self.K, 'int8')
+            else:
+                action_mask = None
+
         # to be compatible with LightZero model,shape: [W, H, C]
-        obs = obs.reshape(obs.shape[0], 1, 1)
-        if not self._continuous:
-            action_mask = np.ones(self._discrete_action_num, 'int8')
-        else:
-            action_mask = None
+        obs = obs.reshape(self._raw_obs_space.shape[0], 1, 1)
+
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         return obs
 

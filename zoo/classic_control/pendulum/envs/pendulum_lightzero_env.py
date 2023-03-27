@@ -50,8 +50,8 @@ class PendulumEnv(BaseEnv):
         if self._continuous:
             self._action_space = gym.spaces.Box(low=-2.0, high=2.0, shape=(1, ), dtype=np.float32)
         else:
-            self._discrete_action_num = 11
-            self._action_space = gym.spaces.Discrete(self._discrete_action_num)
+            self.discrete_action_num = 11
+            self._action_space = gym.spaces.Discrete(self.discrete_action_num)
         self._action_space.seed(0)  # default seed
         self._reward_space = gym.spaces.Box(
             low=-1 * (3.14 * 3.14 + 0.1 * 8 * 8 + 0.001 * 2 * 2), high=0.0, shape=(1, ), dtype=np.float32
@@ -84,7 +84,7 @@ class PendulumEnv(BaseEnv):
         # to be compatible with LightZero model,shape: [W, H, C]
         obs = obs.reshape(obs.shape[0], 1, 1)
         if not self._continuous:
-            action_mask = np.ones(self._discrete_action_num, 'int8')
+            action_mask = np.ones(self.discrete_action_num, 'int8')
         else:
             action_mask = None
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
@@ -105,7 +105,7 @@ class PendulumEnv(BaseEnv):
             action = np.array(action)
         # if require discrete env, convert actions to [-1 ~ 1] float actions
         if not self._continuous:
-            action = (action / (self._discrete_action_num - 1)) * 2 - 1
+            action = (action / (self.discrete_action_num - 1)) * 2 - 1
         # scale into [-2, 2]
         if self._act_scale:
             action = affine_transform(action, min_val=self._env.action_space.low, max_val=self._env.action_space.high)
@@ -119,7 +119,7 @@ class PendulumEnv(BaseEnv):
         # to be compatible with LightZero model,shape: [W, H, C]
         obs = obs.reshape(obs.shape[0], 1, 1)
         if not self._continuous:
-            action_mask = np.ones(self._discrete_action_num, 'int8')
+            action_mask = np.ones(self.discrete_action_num, 'int8')
         else:
             action_mask = None
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
