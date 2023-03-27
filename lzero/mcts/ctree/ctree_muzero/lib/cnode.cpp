@@ -3,7 +3,13 @@
 #include <algorithm>
 #include <map>
 #include <cassert>
+
+#ifdef _WIN32
+#include "lzero/mcts/ctree/common_lib/utils.cpp"
+#else
 #include "../../common_lib/utils.cpp"
+#endif
+
 
 namespace tree
 {

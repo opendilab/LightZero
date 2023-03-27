@@ -3,7 +3,13 @@
 #include <algorithm>
 #include <map>
 #include <cassert>
+
+#ifdef _WIN32
+#include "lzero/mcts/ctree/common_lib/utils.cpp"
+#else
 #include "../../common_lib/utils.cpp"
+#endif
+
 
 namespace tree
 {
@@ -104,7 +110,7 @@ namespace tree
         }
         float temp_policy;
         float policy_sum = 0.0;
-        
+
         #ifdef _WIN32
         float policy[get_action_num(policy_logits)]; // for win compatibility, but need version >=C++11
         #else
