@@ -15,6 +15,7 @@
 #include <sys/timeb.h>
 #include <time.h>
 #include <cassert>
+#include "../../common_lib/utils.cpp"
 
 
 template <class T>
@@ -199,6 +200,12 @@ namespace tree
         this->hidden_state_index_y = hidden_state_index_y;
         this->value_prefix = value_prefix;
         int action_num = policy_logits.size();
+        
+        #ifdef _WIN32
+        float policy[get_action_num(policy_logits)]; // for win compatibility, but need version >=C++11
+        #else
+        float policy[action_num];
+        #endif
 
         std::vector<int> all_actions;
         for (int i = 0; i < action_num; ++i)
@@ -1098,9 +1105,7 @@ namespace tree
             - continuous_action_space: whether the action space is continous in current env.
         */
         // set seed
-        timeval t1;
-        gettimeofday(&t1, NULL);
-        srand(t1.tv_usec);
+        get_time();
 
         std::vector<float> null_value;
         for (int i = 0; i < 1; ++i)

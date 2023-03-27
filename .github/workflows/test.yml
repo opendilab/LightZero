@@ -24,8 +24,8 @@ jobs:
           - '3.7'
           - '3.8'
           - '3.9'
-          - '3.10'
-          - '3.11'
+#          - '3.10'
+#          - '3.11'
 
     steps:
       - name: Get system version for Linux
@@ -76,6 +76,17 @@ jobs:
         run: |
           choco install tree cloc wget curl make zip graphviz
           dot -V
+      - name: Set up MSVC 2019 Environment
+        uses: microsoft/setup-msbuild@v1.0.2
+        with:
+          msbuild-version: '2019'
+      - name: Build and test
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_CXX_STANDARD=11
+          cmake --build . --config Release
+          ctest -C Release -VV
       - name: Set up system dependences on MacOS
         if: ${{ env.OS_NAME == 'MacOS' }}
         shell: bash

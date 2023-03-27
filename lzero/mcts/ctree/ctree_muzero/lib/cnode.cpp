@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <map>
 #include <cassert>
+#include "../../common_lib/utils.cpp"
 
 namespace tree
 {
@@ -98,7 +99,11 @@ namespace tree
         }
         float temp_policy;
         float policy_sum = 0.0;
+        #ifdef _WIN32
+        float policy[get_action_num(policy_logits)]; // for win compatibility, but need version >=C++11
+        #else
         float policy[action_num];
+        #endif
         float policy_max = FLOAT_MIN;
         for (auto a : this->legal_actions)
         {
@@ -634,9 +639,7 @@ namespace tree
             - virtual_to_play_batch: the batch of which player is playing on this node.
         */
         // set seed
-        timeval t1;
-        gettimeofday(&t1, NULL);
-        srand(t1.tv_usec);
+        get_time();
 
         int last_action = -1;
         float parent_q = 0.0;
