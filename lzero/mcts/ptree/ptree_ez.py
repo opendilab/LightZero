@@ -3,9 +3,7 @@ The Node, Roots class and related core functions for EfficientZero.
 """
 import math
 import random
-from typing import List, Dict, Any, Tuple, Union, TYPE_CHECKING
-if TYPE_CHECKING:
-    from ding.framework import OnlineRLContext
+from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch

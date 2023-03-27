@@ -9,9 +9,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 from easydict import EasyDict
-from typing import List, Dict, Any, Tuple, Union, TYPE_CHECKING
-if TYPE_CHECKING:
-    from ding.framework import OnlineRLContext
+from typing import List, Dict, Any, Tuple, Union
+
 
 
 class Node(object):
