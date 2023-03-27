@@ -8,6 +8,9 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
+from easydict import EasyDict
+from typing import List, Dict, Any, Tuple, Union
+
 
 
 class Node(object):
@@ -16,7 +19,7 @@ class Node(object):
         The node base class for tree_search.
     """
 
-    def __init__(self, parent, prior_p: float):
+    def __init__(self, parent: Node, prior_p: float) -> None:
         self._parent = parent
         self._children = {}
         self._visit_count = 0
@@ -24,7 +27,7 @@ class Node(object):
         self.prior_p = prior_p
 
     @property
-    def value(self):
+    def value(self) -> float:
         """
         Overview:
             The value of the current node.
@@ -35,7 +38,7 @@ class Node(object):
             return 0
         return self._value_sum / self._visit_count
 
-    def update(self, value):
+    def update(self, value: float) -> None:
         """
         Overview:
             Updata the current node information, such as visit_count and value_sum.
@@ -45,7 +48,7 @@ class Node(object):
         self._visit_count += 1
         self._value_sum += value
 
-    def update_recursive(self, leaf_value, mcts_mode):
+    def update_recursive(self, leaf_value: float, mcts_mode: str) -> None:
         """
         Overview:
             Update node information recursively.
@@ -63,7 +66,7 @@ class Node(object):
                 return
             self._parent.update_recursive(leaf_value, mcts_mode)
 
-    def is_leaf(self):
+    def is_leaf(self) -> Dict:
         """
         Overview:
             Check if the current node is a leaf node or not.
@@ -72,7 +75,7 @@ class Node(object):
         """
         return self._children == {}
 
-    def is_root(self):
+    def is_root(self) -> bool:
         """
         Overview:
             Check if the current node is a root node or not.
@@ -82,15 +85,15 @@ class Node(object):
         return self._parent is None
 
     @property
-    def parent(self):
+    def parent(self) -> None:
         return self._parent
 
     @property
-    def children(self):
+    def children(self) -> None:
         return self._children
 
     @property
-    def visit_count(self):
+    def visit_count(self) -> None:
         return self._visit_count
 
 
@@ -100,7 +103,7 @@ class MCTS(object):
         MCTS search process.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg: EasyDict) -> None:
         self._cfg = cfg
 
         self._max_moves = self._cfg.get('max_moves', 512)  # for chess and shogi, 722 for Go.
@@ -116,7 +119,7 @@ class MCTS(object):
         )  # 0.3  # for chess, 0.03 for Go and 0.15 for shogi.
         self._root_exploration_fraction = self._cfg.get('root_exploration_fraction', 0.25)  # 0.25
 
-    def get_next_action(self, simulate_env, policy_forward_fn, temperature=1.0, sample=True):
+    def get_next_action(self, simulate_env: BaseEnv, policy_forward_fn: function, temperature: int = 1.0, sample: bool = True) -> Tuple[int, List[float]]:
         """
         Overview:
             calculate the move probabilities based on visit counts at the root node.
@@ -166,7 +169,7 @@ class MCTS(object):
         # print(action)
         return action, action_probs
 
-    def _simulate(self, node, simulate_env, policy_forward_fn):
+    def _simulate(self, node: Node, simulate_env: BaseEnv, policy_forward_fn: function) -> None:
         """
         Overview:
             Run a single playout from the root to the leaf, getting a value at the leaf and propagating it back through its parents.
@@ -225,7 +228,7 @@ class MCTS(object):
             # thus we add the negative when call update_recursive().
             node.update_recursive(-leaf_value, simulate_env.mcts_mode)
 
-    def _select_child(self, node, simulate_env):
+    def _select_child(self, node: Node, simulate_env: BaseEnv) -> Tuple[Union[int, float], Node]:
         """
         Overview:
             Select the child with the highest UCB score.
@@ -251,7 +254,7 @@ class MCTS(object):
 
         return action, child
 
-    def _expand_leaf_node(self, node, simulate_env, policy_forward_fn):
+    def _expand_leaf_node(self, node: Node, simulate_env: BaseEnv, policy_forward_fn: function) -> float:
         """
         Overview:
             expand the node with the policy_forward_fn.
@@ -268,7 +271,7 @@ class MCTS(object):
                 node.children[action] = Node(parent=node, prior_p=prior_p)
         return leaf_value
 
-    def _ucb_score(self, parent: Node, child: Node):
+    def _ucb_score(self, parent: Node, child: Node) -> float:
         """
         Overview:
             Compute UCB score. The score for a node is based on its value, plus an exploration bonus based on the prior.
@@ -285,7 +288,7 @@ class MCTS(object):
         value_score = child.value
         return prior_score + value_score
 
-    def _add_exploration_noise(self, node):
+    def _add_exploration_noise(self, node: Node) -> None:
         """
         Overview:
             Add exploration noise.
