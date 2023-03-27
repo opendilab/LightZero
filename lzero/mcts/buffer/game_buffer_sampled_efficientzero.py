@@ -99,7 +99,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         self._cfg = default_config
         assert self._cfg.env_type in ['not_board_games', 'board_games']
 
-        self.batch_size = self._cfg.learn.batch_size
+        self.batch_size = self._cfg.batch_size
         self.replay_buffer_size = self._cfg.replay_buffer_size
         self._alpha = self._cfg.priority_prob_alpha
 
@@ -107,9 +107,9 @@ class SampledEfficientZeroGameBuffer(Buffer):
         self.model_index = 0
         self.model_update_interval = 10
 
-        self.game_block_buffer = []
+        self.game_segment_buffer = []
         self.game_pos_priorities = []
-        self.game_block_game_pos_look_up = []
+        self.game_segment_game_pos_look_up = []
 
         self._eps_collected = 0
         self.base_idx = 0
@@ -119,10 +119,10 @@ class SampledEfficientZeroGameBuffer(Buffer):
         """
         Overview:
             Push data and it's meta information in buffer.
-            Save a game history block
+            Save a game segment
         Arguments:
             - data (:obj:`Any`): The data which will be pushed into buffer.
-                                 i.e. a game history block
+                                 i.e. a game segment
             - meta (:obj:`dict`): Meta information, e.g. priority, count, staleness.
                 - done: bool
                     True -> the game is finished. (always True)
@@ -138,7 +138,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         valid_len = len(data)
 
         if meta['priorities'] is None:
-            max_prio = self.game_pos_priorities.max() if self.game_block_buffer else 1
+            max_prio = self.game_pos_priorities.max() if self.game_segment_buffer else 1
             # if no 'priorities' provided, set the valid part of the new-added game history the max_prio
             self.game_pos_priorities = np.concatenate(
                 (self.game_pos_priorities,
@@ -153,18 +153,18 @@ class SampledEfficientZeroGameBuffer(Buffer):
             priorities[valid_len:len(data)] = 0.
             self.game_pos_priorities = np.concatenate((self.game_pos_priorities, priorities))
 
-        self.game_block_buffer.append(data)
-        self.game_block_game_pos_look_up += [(self.base_idx + len(self.game_block_buffer) - 1, step_pos) for step_pos in
+        self.game_segment_buffer.append(data)
+        self.game_segment_game_pos_look_up += [(self.base_idx + len(self.game_segment_buffer) - 1, step_pos) for step_pos in
                                              range(len(data))]
 
-    def push_game_blocks(self, data_and_meta: Any) -> None:
+    def push_game_segments(self, data_and_meta: Any) -> None:
         """
         Overview:
             Push game data and it's meta information in buffer.
-            Save a game history block
+            Save a game segment
         Keys:
             - data (:obj:`Any`): The data which will be pushed into buffer.
-                                 i.e. a game history block
+                                 i.e. a game segment
             - meta (:obj:`dict`): Meta information
         """
         data, meta = data_and_meta
@@ -196,12 +196,12 @@ class SampledEfficientZeroGameBuffer(Buffer):
         Returns:
             - transition (:obj:`tuple`): One transition of pushed data.
         """
-        game_block_idx, pos_in_game_block = self.game_block_game_pos_look_up[idx]
-        game_block_idx -= self.base_idx
-        transition = self.game_block_buffer[game_block_idx][pos_in_game_block]
+        game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
+        game_segment_idx -= self.base_idx
+        transition = self.game_segment_buffer[game_segment_idx][pos_in_game_segment]
         return transition
 
-    def get_game_block_from_idx(self, idx: int) -> BufferedData:
+    def get_game_segment_from_idx(self, idx: int) -> BufferedData:
         """
         Overview:
             Get one game according to the idx
@@ -219,15 +219,15 @@ class SampledEfficientZeroGameBuffer(Buffer):
         Arguments:
             - idx: transition index
             - return the game history including this transition
-            - game_block_idx is the index of this game history in the self.game_block_buffer list
-            - pos_in_game_block is the relative position of this transition in this game history
+            - game_segment_idx is the index of this game history in the self.game_segment_buffer list
+            - pos_in_game_segment is the relative position of this transition in this game history
         Returns:
             - game: (:obj:`GameHistory`): One game history of pushed data.
         """
 
-        game_block_idx, pos_in_game_block = self.game_block_game_pos_look_up[idx]
-        game_block_idx -= self.base_idx
-        game = self.game_block_buffer[game_block_idx]
+        game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
+        game_segment_idx -= self.base_idx
+        game = self.game_segment_buffer[game_segment_idx]
         return game
 
     def update(self, index: str, data: Optional[Any] = None, meta: Optional[dict] = None) -> bool:
@@ -246,10 +246,10 @@ class SampledEfficientZeroGameBuffer(Buffer):
         if index < self.get_num_of_transitions():
             prio = meta['priorities']
             self.game_pos_priorities[index] = prio
-            game_block_idx, pos_in_game_block = self.game_block_game_pos_look_up[index]
-            game_block_idx -= self.base_idx
+            game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[index]
+            game_segment_idx -= self.base_idx
             # update one transition
-            self.game_block_buffer[game_block_idx][pos_in_game_block] = data
+            self.game_segment_buffer[game_segment_idx][pos_in_game_segment] = data
             success = True
 
         return success
@@ -286,17 +286,17 @@ class SampledEfficientZeroGameBuffer(Buffer):
         Overview:
             remove some oldest data if the replay buffer is full.
         """
-        nums_of_game_histoty = self.get_num_of_game_blocks()
+        nums_of_game_histoty = self.get_num_of_game_segments()
         total_transition = self.get_num_of_transitions()
         if total_transition > self.replay_buffer_size:
             index = 0
             for i in range(nums_of_game_histoty):
-                total_transition -= len(self.game_block_buffer[i])
+                total_transition -= len(self.game_segment_buffer[i])
                 if total_transition <= self.replay_buffer_size * self.keep_ratio:
                     index = i
                     break
 
-            if total_transition >= self._cfg.learn.batch_size:
+            if total_transition >= self._cfg.batch_size:
                 self._remove(index + 1)
 
     def _remove(self, num_excess_games: List[int]) -> None:
@@ -304,10 +304,10 @@ class SampledEfficientZeroGameBuffer(Buffer):
         Overview:
             delete game histories in index [0: num_excess_games]
         """
-        excess_games_steps = sum([len(game) for game in self.game_block_buffer[:num_excess_games]])
-        del self.game_block_buffer[:num_excess_games]
+        excess_games_steps = sum([len(game) for game in self.game_segment_buffer[:num_excess_games]])
+        del self.game_segment_buffer[:num_excess_games]
         self.game_pos_priorities = self.game_pos_priorities[excess_games_steps:]
-        del self.game_block_game_pos_look_up[:excess_games_steps]
+        del self.game_segment_game_pos_look_up[:excess_games_steps]
         self.base_idx += num_excess_games
 
         self.clear_time = time.time()
@@ -322,7 +322,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         pass
 
     def clear(self) -> None:
-        del self.game_block_buffer[:]
+        del self.game_segment_buffer[:]
 
     def get_batch_size(self) -> int:
         return self.batch_size
@@ -334,13 +334,13 @@ class SampledEfficientZeroGameBuffer(Buffer):
         # number of collected episodes
         return self._eps_collected
 
-    def get_num_of_game_blocks(self) -> int:
-        # number of games, i.e. num of game history blocks
-        return len(self.game_block_buffer)
+    def get_num_of_game_segments(self) -> int:
+        # number of games, i.e. num of game segments
+        return len(self.game_segment_buffer)
 
     def count(self) -> int:
-        # number of games, i.e. num of game history blocks
-        return len(self.game_block_buffer)
+        # number of games, i.e. num of game segments
+        return len(self.game_segment_buffer)
 
     def get_num_of_transitions(self) -> int:
         # total number of transitions
@@ -348,7 +348,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
     def __copy__(self) -> "GameBuffer":
         buffer = type(self)(cfg=self._cfg)
-        buffer.storage = self.game_block_buffer
+        buffer.storage = self.game_segment_buffer
         return buffer
 
     def prepare_batch_context(self, batch_size: int, beta: float) -> Tuple[Any]:
@@ -356,7 +356,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         Overview:
             Prepare a batch context that contains:
             game_lst: a list of game histories
-            pos_in_game_block_list: transition index in game (relative index)
+            pos_in_game_segment_list: transition index in game (relative index)
             batch_index_list: transition index in replay buffer
             weights: the weight concerning the priority
             make_time: the time the batch is made (for correctly updating replay buffer
@@ -394,22 +394,22 @@ class SampledEfficientZeroGameBuffer(Buffer):
         weights /= weights.max()
 
         game_lst = []
-        pos_in_game_block_list = []
+        pos_in_game_segment_list = []
 
         for idx in batch_index_list:
             try:
-                game_block_idx, pos_in_game_block = self.game_block_game_pos_look_up[idx]
+                game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
             except Exception as error:
                 print(error)
-            game_block_idx -= self.base_idx
-            game = self.game_block_buffer[game_block_idx]
+            game_segment_idx -= self.base_idx
+            game = self.game_segment_buffer[game_segment_idx]
 
             game_lst.append(game)
-            pos_in_game_block_list.append(pos_in_game_block)
+            pos_in_game_segment_list.append(pos_in_game_segment)
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
 
-        context = (game_lst, pos_in_game_block_list, batch_index_list, weights, make_time)
+        context = (game_lst, pos_in_game_segment_list, batch_index_list, weights, make_time)
         return context
 
     def make_batch(self, batch_context: Any, reanalyze_ratio: float) -> Tuple[Any]:
@@ -427,23 +427,23 @@ class SampledEfficientZeroGameBuffer(Buffer):
             - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch
         """
         # obtain the batch context from replay buffer
-        game_lst, pos_in_game_block_list, batch_index_list, weights, make_time_lst = batch_context
+        game_lst, pos_in_game_segment_list, batch_index_list, weights, make_time_lst = batch_context
         batch_size = len(batch_index_list)
         obs_lst, action_lst, mask_lst = [], [], []
         root_sampled_actions_lst = []
         # prepare the inputs of a batch
         for i in range(batch_size):
             game = game_lst[i]
-            pos_in_game_block = pos_in_game_block_list[i]
+            pos_in_game_segment = pos_in_game_segment_list[i]
             ######################
             # sampled related core code
             ######################
-            actions_tmp = game.action_history[pos_in_game_block:pos_in_game_block + self._cfg.num_unroll_steps].tolist()
+            actions_tmp = game.action_history[pos_in_game_segment:pos_in_game_segment + self._cfg.num_unroll_steps].tolist()
 
             # NOTE: self._cfg.num_unroll_steps + 1, TODO(pu): why +1
             root_sampled_actions_tmp = game.root_sampled_actions[
-                                       pos_in_game_block:pos_in_game_block + self._cfg.num_unroll_steps + 1]
-            # root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_block:pos_in_game_block + self._cfg.num_unroll_steps]
+                                       pos_in_game_segment:pos_in_game_segment + self._cfg.num_unroll_steps + 1]
+            # root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_segment:pos_in_game_segment + self._cfg.num_unroll_steps]
 
             # add mask for invalid actions (out of trajectory)
             # mask_tmp = [1. for i in range(len(_actions))]
@@ -483,9 +483,9 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
             # obtain the input observations
             # stack+num_unroll_steps  4+5
-            # pad if length of obs in game_block is less than stack+num_unroll_steps
+            # pad if length of obs in game_segment is less than stack+num_unroll_steps
             obs_lst.append(
-                game_lst[i].obs(pos_in_game_block_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True))
+                game_lst[i].obs(pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True))
             action_lst.append(actions_tmp)
             root_sampled_actions_lst.append(root_sampled_actions_tmp)
 
@@ -512,7 +512,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
         # obtain the context of value targets
         reward_value_context = self.prepare_reward_value_context(
-            batch_index_list, game_lst, pos_in_game_block_list, total_transitions
+            batch_index_list, game_lst, pos_in_game_segment_list, total_transitions
         )
         """
         only reanalyze recent reanalyze_ratio (e.g. 50%) data
@@ -526,7 +526,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         if reanalyze_num > 0:
             # obtain the context of reanalyzed policy targets
             policy_re_context = self.prepare_policy_reanalyzed_context(
-                batch_index_list[:reanalyze_num], game_lst[:reanalyze_num], pos_in_game_block_list[:reanalyze_num]
+                batch_index_list[:reanalyze_num], game_lst[:reanalyze_num], pos_in_game_segment_list[:reanalyze_num]
             )
         else:
             policy_re_context = None
@@ -535,7 +535,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         if reanalyze_num < batch_size:
             # obtain the context of non-reanalyzed policy targets
             policy_non_re_context = self.prepare_policy_non_reanalyzed_context(
-                batch_index_list[reanalyze_num:], game_lst[reanalyze_num:], pos_in_game_block_list[reanalyze_num:]
+                batch_index_list[reanalyze_num:], game_lst[reanalyze_num:], pos_in_game_segment_list[reanalyze_num:]
             )
         else:
             policy_non_re_context = None
@@ -550,7 +550,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         Arguments:
             - indices (:obj:`list`): transition index in replay buffer
             - games (:obj:`list`): list of game histories
-            - state_index_lst (:obj:`list`): list of transition index in game_block
+            - state_index_lst (:obj:`list`): list of transition index in game_segment
             - total_transitions (:obj:`int`): number of collected transitions
         Returns:
             - reward_value_context (:obj:`list`): value_obs_lst, value_mask, state_index_lst, rewards_lst, traj_lens, 
@@ -710,13 +710,13 @@ class SampledEfficientZeroGameBuffer(Buffer):
         to_play_history = reward_value_context
         device = self._cfg.device
         batch_size = len(value_obs_lst)
-        game_block_batch_size = len(state_index_lst)
+        game_segment_batch_size = len(state_index_lst)
 
         if to_play_history[0][0] in [1, 2]:
             # for two_player board games
             # to_play
             to_play = []
-            for bs in range(game_block_batch_size):
+            for bs in range(game_segment_batch_size):
                 to_play_tmp = list(
                     to_play_history[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
                 )
@@ -731,7 +731,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             to_play = tmp
             # action_mask
             action_mask = []
-            for bs in range(game_block_batch_size):
+            for bs in range(game_segment_batch_size):
                 action_mask_tmp = list(
                     action_mask_history[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
                 )
@@ -950,7 +950,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
         policy_obs_lst, policy_mask, state_index_lst, indices, child_visits, traj_lens, action_mask_history, \
         to_play_history = policy_re_context
         batch_size = len(policy_obs_lst)
-        game_block_batch_size = len(state_index_lst)
+        game_segment_batch_size = len(state_index_lst)
 
         device = self._cfg.device
 
@@ -958,7 +958,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             # for two_player board games
             # to_play
             to_play = []
-            for bs in range(game_block_batch_size):
+            for bs in range(game_segment_batch_size):
                 to_play_tmp = list(
                     to_play_history[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
                 )
@@ -973,7 +973,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             to_play = tmp
             # action_mask
             action_mask = []
-            for bs in range(game_block_batch_size):
+            for bs in range(game_segment_batch_size):
                 action_mask_tmp = list(
                     action_mask_history[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
                 )
@@ -1198,13 +1198,13 @@ class SampledEfficientZeroGameBuffer(Buffer):
 
         state_index_lst, child_visits, traj_lens, action_mask_history, to_play_history = policy_non_re_context
 
-        game_block_batch_size = len(state_index_lst)
+        game_segment_batch_size = len(state_index_lst)
 
         if self._cfg.env_type == 'board_games':
             # for two_player board games
             # action_mask
             action_mask = []
-            for bs in range(game_block_batch_size):
+            for bs in range(game_segment_batch_size):
                 action_mask_tmp = list(
                     action_mask_history[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
                 )
@@ -1223,7 +1223,7 @@ class SampledEfficientZeroGameBuffer(Buffer):
             # the minimal size is <self._cfg. num_unroll_steps+1>
             legal_actions = [
                 [i for i, x in enumerate(action_mask[j]) if x == 1]
-                for j in range(game_block_batch_size * (self._cfg.num_unroll_steps + 1))
+                for j in range(game_segment_batch_size * (self._cfg.num_unroll_steps + 1))
             ]
 
         with torch.no_grad():

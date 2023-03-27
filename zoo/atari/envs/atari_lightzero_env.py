@@ -1,7 +1,3 @@
-"""
-Adapt Atari to BaseGameEnv interface
-"""
-
 import copy
 import sys
 from typing import List
@@ -35,7 +31,6 @@ class AtariLightZeroEnv(BaseEnv):
         scale=True,
         warp_frame=True,
         save_video=False,
-        # trade memory for speed
         cvt_string=False,
         game_wrapper=True,
         manager=dict(shared_memory=False, ),

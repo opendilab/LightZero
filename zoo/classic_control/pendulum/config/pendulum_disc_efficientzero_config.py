@@ -32,17 +32,6 @@ pendulum_disc_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        device=device,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
-        env_type='not_board_games',
-        game_block_length=50,
-        num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
-        downsample=False,
-        use_augmentation=False,
-        policy_entropy_loss_weight=0,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         model=dict(
             observation_shape=(1, 3, 1),  # if frame_stack_num=1
             action_space_size=11,
@@ -59,15 +48,24 @@ pendulum_disc_efficientzero_config = dict(
             reward_support_size=51,
             value_support_size=51,
         ),
-        learn=dict(
-            update_per_collect=update_per_collect,
-            batch_size=batch_size,
-            lr_piecewise_constant_decay=True,
-            optim_type='SGD',
-            learning_rate=0.2,  # init lr for manually decay schedule
-        ),
-        collect=dict(n_episode=n_episode, ),
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        device=device,
+        env_type='not_board_games',
+        game_segment_length=50,
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
+        downsample=False,
+        use_augmentation=False,
+        policy_entropy_loss_weight=0,
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        update_per_collect=update_per_collect,
+        batch_size=batch_size,
+        lr_piecewise_constant_decay=True,
+        optim_type='SGD',
+        learning_rate=0.2,  # init lr for manually decay schedule
+        n_episode=n_episode,
+        eval_freq=int(2e3),
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
     ),
 )
 

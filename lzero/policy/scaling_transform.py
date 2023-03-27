@@ -129,5 +129,5 @@ def phi_transform(discrete_support, x):
     return target
 
 
-def modified_cross_entropy_loss(prediction, target):
+def cross_entropy_loss(prediction, target):
     return -(torch.log_softmax(prediction, dim=1) * target).sum(1)

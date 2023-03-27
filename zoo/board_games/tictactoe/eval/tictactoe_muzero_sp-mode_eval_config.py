@@ -97,7 +97,7 @@ tictactoe_muzero_config = dict(
             n_episode=n_episode,
         ),
         # If the eval cost is expensive, we could set eval_freq larger.
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        eval_freq=int(2e3),
         # command_mode config
         other=dict(
             # NOTE: the replay_buffer_size is ineffective,
@@ -113,7 +113,7 @@ tictactoe_muzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='board_games',
-        game_block_length=5,
+        game_segment_length=5,
 
         ## observation
         # NOTE: the key difference setting between image-input and vector input

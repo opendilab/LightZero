@@ -103,8 +103,7 @@ class AlphaZeroCollector(ISerialCollector):
         assert hasattr(self, '_env'), "please set env first"
         if _policy is not None:
             self._policy = _policy
-            self._default_n_episode = _policy.get_attribute('cfg').collect.get('n_episode', None)
-            self._unroll_len = _policy.get_attribute('unroll_len')
+            self._default_n_episode = _policy.get_attribute('cfg').get('n_episode', None)
             self._on_policy = _policy.get_attribute('cfg').on_policy
             self._traj_len = INF
             self._logger.debug(

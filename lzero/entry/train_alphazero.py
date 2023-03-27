@@ -66,7 +66,7 @@ def train_alphazero(
     replay_buffer = create_buffer(cfg.policy.other.replay_buffer, tb_logger=tb_logger, exp_name=cfg.exp_name)
 
     game_config = cfg.policy
-    batch_size = game_config.learn.batch_size
+    batch_size = game_config.batch_size
     env_config = cfg.env
     collector = create_serial_collector(
         cfg.policy.collect.collector,
@@ -78,7 +78,9 @@ def train_alphazero(
         env_config=env_config,
     )
     evaluator = create_serial_evaluator(
-        cfg.policy.eval.evaluator,
+        # cfg.policy.eval.evaluator,
+        cfg.policy,
+        # cfg.env.stop_value,
         env=evaluator_env,
         policy=policy.eval_mode,
         tb_logger=tb_logger,
@@ -118,7 +120,7 @@ def train_alphazero(
         replay_buffer.push(new_data, cur_collector_envstep=collector.envstep)
 
         # Learn policy from collected data
-        for i in range(cfg.policy.learn.update_per_collect):
+        for i in range(cfg.policy.update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
             train_data = replay_buffer.sample(batch_size, learner.train_iter)
             if train_data is None:

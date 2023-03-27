@@ -18,20 +18,15 @@ tictactoe_alphazero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         board_size=board_size,
         battle_mode='self_play_mode',
-        # NOTE
-        channel_last=False,
+        channel_last=False,  # NOTE
         agent_vs_human=agent_vs_human,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        model_path='',
-        type='alphazero',
-        env_name='tictactoe',
         cuda=True,
         board_size=board_size,
         model=dict(
             categorical_distribution=False,
-            # representation_network_type='identity',
             representation_network_type='conv_res_blocks',
             observation_shape=(3, board_size, board_size),
             action_space_size=int(1 * board_size * board_size),
@@ -48,57 +43,18 @@ tictactoe_alphazero_config = dict(
             last_linear_layer_init_zero=True,
             state_norm=False,
         ),
-        learn=dict(
-            multi_gpu=False,
-            batch_size=batch_size,
-            learning_rate=0.001,
-            weight_decay=0.0001,
-            update_per_collect=update_per_collect,
-            grad_norm=0.5,
-            value_weight=1.0,
-            entropy_weight=0.0,
-            optim_type='Adam',
-            learner=dict(
-                hook=dict(
-                    load_ckpt_before_run='',
-                    log_show_after_iter=1,
-                    save_ckpt_after_iter=10000,
-                    save_ckpt_after_run=True,
-                ),
-            )
-        ),
-        collect=dict(
-            unroll_len=1,
-            n_episode=n_episode,
-            collector=dict(
-                env=dict(
-                    type='tictactoe',
-                    import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
-                ),
-                augmentation=True,
-            ),
-            mcts=dict(num_simulations=num_simulations)
-        ),
-        eval=dict(
-            evaluator=dict(
-                n_episode=evaluator_env_num,
-                eval_freq=int(100),
-                stop_value=1,
-                env=dict(
-                    type='tictactoe',
-                    import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
-                ),
-            ),
-            mcts=dict(num_simulations=num_simulations)
-        ),
-        other=dict(
-            replay_buffer=dict(
-                replay_buffer_size=int(1e6),
-                type='naive',
-                save_episode=False,
-                periodic_thruput_seconds=60,
-            )
-        ),
+        multi_gpu=False,
+        batch_size=batch_size,
+        optim_type='Adam',
+        learning_rate=0.003,
+        weight_decay=0.0001,
+        update_per_collect=update_per_collect,
+        grad_norm=0.5,
+        value_weight=1.0,
+        entropy_weight=0.0,
+        n_episode=n_episode,
+        eval_freq=int(2e3),
+        mcts=dict(num_simulations=num_simulations),
     ),
 )
 
@@ -119,7 +75,6 @@ tictactoe_alphazero_create_config = dict(
     collector=dict(
         type='episode_alphazero',
         get_train_sample=False,
-        # get_train_sample=True,
         import_names=['lzero.worker.alphazero_collector'],
     ),
     evaluator=dict(

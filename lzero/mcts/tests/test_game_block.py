@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import torch
 
-from lzero.mcts.buffer.game_block import GameBlock
+from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation_list
 from lzero.policy import select_action
 
@@ -13,7 +13,7 @@ args = ['EfficientZero', 'MuZero']
 
 @pytest.mark.unittest
 @pytest.mark.parametrize('test_algo', args)
-def test_game_block(test_algo):
+def test_game_segment(test_algo):
     # import different modules according to ``test_algo``
     if test_algo == 'EfficientZero':
         from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTSCtree
@@ -32,7 +32,7 @@ def test_game_block(test_algo):
     # set config for test
     config.env.evaluator_env_num = 2
     config.env.num_simulations = 2
-    config.env.game_block_length = 20
+    config.env.game_segment_length = 20
     # config.env.render_mode_human = True
 
     # create model
@@ -44,17 +44,17 @@ def test_game_block(test_algo):
         # initializations
         init_observations = [env.reset() for env in envs]
         dones = np.array([False for _ in range(config.env.evaluator_env_num)])
-        game_blocks = [
-            GameBlock(
-                envs[i].action_space, game_block_length=config.policy.game_block_length, config=config.policy
+        game_segments = [
+            GameSegment(
+                envs[i].action_space, game_segment_length=config.policy.game_segment_length, config=config.policy
             ) for i in range(config.env.evaluator_env_num)
         ]
         for i in range(config.env.evaluator_env_num):
-            game_blocks[i].init([init_observations[i]['observation'] for _ in range(config.policy.model.frame_stack_num)])
+            game_segments[i].init([init_observations[i]['observation'] for _ in range(config.policy.model.frame_stack_num)])
         episode_rewards = np.zeros(config.env.evaluator_env_num)
 
         while not dones.all():
-            stack_obs = [game_block.step_obs() for game_block in game_blocks]
+            stack_obs = [game_segment.step_obs() for game_segment in game_segments]
             stack_obs = prepare_observation_list(stack_obs)
             stack_obs = torch.from_numpy(np.array(stack_obs)).to(config.policy.device)
 
@@ -113,8 +113,8 @@ def test_game_block(test_algo):
                 obs, reward, done, info = env.step(action)
                 obs = obs['observation']
 
-                game_blocks[i].store_search_stats(distributions, value)
-                game_blocks[i].append(action, obs, reward)
+                game_segments[i].store_search_stats(distributions, value)
+                game_segments[i].append(action, obs, reward)
 
                 dones[i] = done
                 episode_rewards[i] += reward
@@ -126,4 +126,4 @@ def test_game_block(test_algo):
 
 
 # debug
-test_game_block('EfficientZero')
+test_game_segment('EfficientZero')

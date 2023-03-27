@@ -7,7 +7,9 @@ else:
     device = 'cpu'
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_name = 'PongNoFrameskip-v4'
+# env_name = 'PongNoFrameskip-v4'
+env_name = 'BreakoutNoFrameskip-v4'
+
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -30,24 +32,24 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 50
-# update_per_collect = 1000
-# batch_size = 256
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0.
-
-## debug config
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-num_simulations = 5
-update_per_collect = 2
-batch_size = 10
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 50
+update_per_collect = 800
+batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
+
+## debug config
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 5
+# update_per_collect = 2
+# batch_size = 10
+# max_env_step = int(1e6)
+# reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -64,30 +66,28 @@ atari_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        device=device,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
-        env_type='not_board_games',
-        game_block_length=400,
-        num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
-        manual_temperature_decay=False,
-        fixed_temperature_value=0.25,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
-        learn=dict(
-            update_per_collect=update_per_collect,
-            batch_size=batch_size,
-            lr_piecewise_constant_decay=True,
-            optim_type='SGD',
-            learning_rate=0.2,  # init lr for manually decay schedule
-        ),
         model=dict(
             observation_shape=(4, 96, 96),
             action_space_size=action_space_size,
             representation_network_type='conv_res_blocks',
         ),
-        collect=dict(n_episode=n_episode, ),
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        device=device,
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
+        env_type='not_board_games',
+        game_segment_length=400,
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
+        manual_temperature_decay=False,
+        fixed_temperature_value=0.25,
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        update_per_collect=update_per_collect,
+        batch_size=batch_size,
+        lr_piecewise_constant_decay=True,
+        optim_type='SGD',
+        learning_rate=0.2,  # init lr for manually decay schedule
+        n_episode=n_episode,
+        eval_freq=int(2e3),
     ),
 )
 atari_efficientzero_config = EasyDict(atari_efficientzero_config)

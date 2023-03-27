@@ -1,5 +1,5 @@
 """
-Adapt the Go environment in PettingZoo (https://github.com/Farama-Foundation/PettingZoo) to the BaseGameEnv interface.
+Adapt the Go environment in PettingZoo (https://github.com/Farama-Foundation/PettingZoo) to the BaseEnv interface.
 """
 
 import os
@@ -7,13 +7,11 @@ import sys
 
 import numpy as np
 import pygame
-from ding.envs import BaseEnvTimestep
+from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from gym import spaces
 from pettingzoo.classic.go import coords, go
 from pettingzoo.utils.agent_selector import agent_selector
-
-from zoo.board_games.base_game_env import BaseGameEnv
 
 
 def get_image(path):
@@ -28,7 +26,7 @@ def get_image(path):
 
 
 @ENV_REGISTRY.register('Go')
-class GoEnv(BaseGameEnv):
+class GoEnv(BaseEnv):
 
     def __init__(self, board_size: int = 19, komi: float = 7.5):
         # board_size: a int, representing the board size (board has a board_size x board_size shape)

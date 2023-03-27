@@ -9,22 +9,22 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 5
-# num_simulations = 25
-# update_per_collect = 50
-# batch_size = 256
-# max_env_step = int(2e6)
-# reanalyze_ratio = 0.3
-collector_env_num = 2
-n_episode = 2
+collector_env_num = 8
+n_episode = 8
 evaluator_env_num = 5
-num_simulations = 5
-update_per_collect = 4
-batch_size = 4
+num_simulations = 25
+update_per_collect = 50
+batch_size = 256
 max_env_step = int(2e6)
 reanalyze_ratio = 0.3
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 5
+# num_simulations = 5
+# update_per_collect = 4
+# batch_size = 4
+# max_env_step = int(2e6)
+# reanalyze_ratio = 0.3
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -41,19 +41,6 @@ tictactoe_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        device=device,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
-        env_type='board_games',
-        num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
-        use_augmentation=False,
-        game_block_length=5,
-        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
-        td_steps=9,
-        discount_factor=1,
-        num_unroll_steps=3,
-        replay_buffer_size=int(1e4),  # the size/capacity of replay_buffer, in the terms of transitions.
         model=dict(
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
@@ -75,16 +62,27 @@ tictactoe_muzero_config = dict(
             reward_support_size=21,
             value_support_size=21,
         ),
-        learn=dict(
-            update_per_collect=update_per_collect,
-            batch_size=batch_size,
-            lr_piecewise_constant_decay=False,
-            optim_type='Adam',
-            learning_rate=0.003,
-            grad_clip_value=0.5,
-        ),
-        collect=dict(n_episode=n_episode, ),
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        device=device,
+        env_type='board_games',
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
+        use_augmentation=False,
+        game_segment_length=5,
+        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
+        td_steps=9,
+        discount_factor=1,
+        num_unroll_steps=3,
+        replay_buffer_size=int(1e4),  # the size/capacity of replay_buffer, in the terms of transitions.
+        update_per_collect=update_per_collect,
+        batch_size=batch_size,
+        lr_piecewise_constant_decay=False,
+        optim_type='Adam',
+        learning_rate=0.003,
+        grad_clip_value=0.5,
+        n_episode=n_episode, 
+        eval_freq=int(2e3),
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
     ),
 )
 tictactoe_muzero_config = EasyDict(tictactoe_muzero_config)

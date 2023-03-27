@@ -32,19 +32,18 @@ class AlphaZeroPolicy(Policy):
             num_channels=32,
         ),
         # learn_mode config
-        learn=dict(
-            # (bool) Whether to use multi gpu.
-            multi_gpu=False,
-            batch_size=256,
-            lr_piecewise_constant_decay=True,
-            optim_type='SGD',
-            learning_rate=0.2,  # init lr for manually decay schedule
-            # optim_type='Adam',
-            # learning_rate=0.001,  # lr for Adam optimizer
-            weight_decay=0.0001,
-            grad_clip_value=10,
-            value_weight=1.0,
-        ),
+        batch_size=256,
+        lr_piecewise_constant_decay=True,
+        optim_type='SGD',
+        learning_rate=0.2,  # init lr for manually decay schedule
+        # optim_type='Adam',
+        # learning_rate=0.001,  # lr for Adam optimizer
+        weight_decay=1e-4,
+        momentum=0.9,
+
+        grad_clip_value=10,
+        value_weight=1.0,
+        
         collector_env_num=8,
         evaluator_env_num=3,
         # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
@@ -61,17 +60,7 @@ class AlphaZeroPolicy(Policy):
         manual_temperature_decay=True,
         # ``fixed_temperature_value`` is effective only when manual_temperature_decay=False
         fixed_temperature_value=0.25,
-        collect=dict(
-            unroll_len=1,
-            n_episode=8,
-            collector=dict(augmentation=True, ),
-            mcts=dict(num_simulations=50)
-        ),
-        eval=dict(evaluator=dict(
-            eval_freq=int(2e3),
-        ),
-            mcts=dict(num_simulations=50)
-        ),
+        mcts=dict(num_simulations=50),
         other=dict(
             replay_buffer=dict(
                 replay_buffer_size=int(1e6),
@@ -94,19 +83,19 @@ class AlphaZeroPolicy(Policy):
         return 'AlphaZeroModel', ['lzero.model.alphazero_model']
 
     def _init_learn(self):
-        if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
+        if 'optim_type' not in self._cfg.learn.keys() or self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
                 self._model.parameters(),
-                lr=self._cfg.learn.learning_rate,
-                momentum=self._cfg.learn.momentum,
-                weight_decay=self._cfg.learn.weight_decay,
+                lr=self._cfg.learning_rate,
+                momentum=self._cfg.momentum,
+                weight_decay=self._cfg.weight_decay,
             )
-        elif self._cfg.learn.optim_type == 'Adam':
+        elif self._cfg.optim_type == 'Adam':
             self._optimizer = optim.Adam(
-                self._model.parameters(), lr=self._cfg.learn.learning_rate, weight_decay=self._cfg.learn.weight_decay
+                self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
 
-        if self._cfg.learn.lr_piecewise_constant_decay:
+        if self._cfg.lr_piecewise_constant_decay:
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
             # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
@@ -114,8 +103,8 @@ class AlphaZeroPolicy(Policy):
             self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
 
         # Algorithm config
-        self._value_weight = self._cfg.learn.value_weight
-        self._entropy_weight = self._cfg.learn.entropy_weight
+        self._value_weight = self._cfg.value_weight
+        self._entropy_weight = self._cfg.entropy_weight
         # Main and target models
         self._learn_model = model_wrap(self._model, wrapper_name='base')
         self._learn_model.reset()
@@ -157,9 +146,9 @@ class AlphaZeroPolicy(Policy):
         total_loss.backward()
 
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(list(self._model.parameters()),
-                                                                     max_norm=self._cfg.learn.grad_clip_value, )
+                                                                     max_norm=self._cfg.grad_clip_value, )
         self._optimizer.step()
-        if self._cfg.learn.lr_piecewise_constant_decay is True:
+        if self._cfg.lr_piecewise_constant_decay is True:
             self.lr_scheduler.step()
 
         # =============
@@ -181,8 +170,8 @@ class AlphaZeroPolicy(Policy):
             Collect mode init method. Called by ``self.__init__``.
             Init traj and unroll length, collect model.
         """
-        self._unroll_len = self._cfg.collect.unroll_len
-        self._collect_mcts = MCTS(self._cfg.collect.mcts)
+
+        self._collect_mcts = MCTS(self._cfg.mcts)
         self._collect_model = model_wrap(self._model, wrapper_name='base')
         self._collect_model.reset()
         self.collect_mcts_temperature = 1
@@ -227,7 +216,7 @@ class AlphaZeroPolicy(Policy):
             Evaluate mode init method. Called by ``self.__init__``.
             Init eval model with argmax strategy.
         """
-        self._eval_mcts = MCTS(self._cfg.eval.mcts)
+        self._eval_mcts = MCTS(self._cfg.mcts)
         self._eval_model = model_wrap(self._model, wrapper_name='base')
         self._eval_model.reset()
 

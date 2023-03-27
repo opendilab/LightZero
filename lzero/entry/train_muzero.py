@@ -15,7 +15,7 @@ from ding.worker import create_serial_collector
 from tensorboardX import SummaryWriter
 
 from lzero.policy import visit_count_temperature
-from lzero.worker import MuZeroEvaluator as BaseSerialEvaluator
+from lzero.worker import MuZeroEvaluator
 
 
 def train_muzero(
@@ -81,7 +81,7 @@ def train_muzero(
     # MCTS+RL algorithms related core code
     # ==============================================================
     game_config = cfg.policy
-    batch_size = game_config.learn.batch_size
+    batch_size = game_config.batch_size
     # specific game buffer for MCTS+RL algorithms
     replay_buffer = GameBuffer(game_config)
     collector = create_serial_collector(
@@ -93,8 +93,9 @@ def train_muzero(
         replay_buffer=replay_buffer,
         game_config=game_config
     )
-    evaluator = BaseSerialEvaluator(
-        cfg.policy.eval.evaluator,
+    evaluator = MuZeroEvaluator(
+        cfg.policy,
+        cfg.env.stop_value,
         evaluator_env,
         policy.eval_mode,
         tb_logger,
@@ -129,12 +130,12 @@ def train_muzero(
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         # save returned new_data collected by the collector
-        replay_buffer.push_game_blocks(new_data)
+        replay_buffer.push_game_segments(new_data)
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
         # Learn policy from collected data.
-        for i in range(cfg.policy.learn.update_per_collect):
+        for i in range(cfg.policy.update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
             if replay_buffer.get_num_of_transitions() > batch_size:
                 train_data = replay_buffer.sample_train_data(batch_size, policy)
@@ -144,7 +145,7 @@ def train_muzero(
                     f'batch_size: {batch_size},'
                     f'current buffer statistics is: '
                     f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
-                    f'num of game blocks: {replay_buffer.get_num_of_game_blocks()}, '
+                    f'num of game blocks: {replay_buffer.get_num_of_game_segments()}, '
                     f'number of transitions: {replay_buffer.get_num_of_transitions()}, '
                     f'continue to collect now ....'
                 )

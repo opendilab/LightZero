@@ -62,6 +62,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         self._timer = EasyTimer()
         self._default_n_episode = self._cfg.n_episode
         self._stop_value = self._cfg.stop_value
+        # self._stop_value = self._cfg.stop_value
 
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
         """

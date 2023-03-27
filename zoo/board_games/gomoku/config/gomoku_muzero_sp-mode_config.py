@@ -39,18 +39,6 @@ gomoku_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        device=device,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
-        env_type='board_games',
-        num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
-        use_augmentation=False,
-        manual_temperature_decay=True,
-        game_block_length=int(board_size * board_size),  # for battle_mode='self_play_mode'
-        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
-        td_steps=int(board_size * board_size),
         model=dict(
             observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
             action_space_size=int(board_size * board_size),
@@ -73,20 +61,26 @@ gomoku_muzero_config = dict(
             reward_support_size=21,
             value_support_size=21,
         ),
-        learn=dict(
-            update_per_collect=update_per_collect,
-            batch_size=batch_size,
-            lr_piecewise_constant_decay=True,
-            optim_type='SGD',
-            learning_rate=0.2,  # init lr for manually decay schedule
-        ),
-        # collect_mode config
-        collect=dict(
-            # Get "n_episode" episodes per collect.
-            n_episode=n_episode,
-        ),
+        device=device,
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
+        env_type='board_games',
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        use_augmentation=False,
+        manual_temperature_decay=True,
+        game_segment_length=int(board_size * board_size),  # for battle_mode='self_play_mode'
+        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
+        td_steps=int(board_size * board_size),
+        update_per_collect=update_per_collect,
+        batch_size=batch_size,
+        lr_piecewise_constant_decay=True,
+        optim_type='SGD',
+        learning_rate=0.2,  # init lr for manually decay schedule
+        n_episode=n_episode,
         # If the eval cost is expensive, we could set eval_freq larger.
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        eval_freq=int(2e3),
     ),
 )
 gomoku_muzero_config = EasyDict(gomoku_muzero_config)
