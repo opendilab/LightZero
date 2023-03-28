@@ -9,7 +9,7 @@
 #include <sys/time.h>
 #endif
 
-uint64_t get_time_and_set_rand_seed()
+void get_time_and_set_rand_seed()
 {
 #ifdef _WIN32
   FILETIME ft;
