@@ -210,7 +210,8 @@ namespace tree
         int action_num = policy_logits.size();
 
         #ifdef _WIN32
-        float policy[get_action_num(policy_logits)]; // for win compatibility, but need version >=C++11
+        // 创建动态数组
+        float* policy = new float[action_num];
         #else
         float policy[action_num];
         #endif
@@ -439,6 +440,12 @@ namespace tree
                 this->legal_actions.push_back(action);
             }
         }
+        
+        #ifdef _WIN32
+        // 释放数组内存
+        delete[] policy;
+        #else
+        #endif
     }
 
     void CNode::add_exploration_noise(float exploration_fraction, const std::vector<float> &noises)
@@ -1113,7 +1120,7 @@ namespace tree
             - continuous_action_space: whether the action space is continous in current env.
         */
         // set seed
-        get_time();
+        get_time_and_set_rand_seed();
 
         std::vector<float> null_value;
         for (int i = 0; i < 1; ++i)

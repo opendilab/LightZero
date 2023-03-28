@@ -114,7 +114,8 @@ namespace tree
         float policy_sum = 0.0;
 
         #ifdef _WIN32
-        float policy[get_action_num(policy_logits)]; // for win compatibility, but need version >=C++11
+        // 创建动态数组
+        float* policy = new float[action_num];
         #else
         float policy[action_num];
         #endif
@@ -142,6 +143,11 @@ namespace tree
             std::vector<int> tmp_empty;
             this->children[a] = CNode(prior, tmp_empty); // only for muzero/efficient zero, not support alphazero
         }
+        #ifdef _WIN32
+        // 释放数组内存
+        delete[] policy;
+        #else
+        #endif
     }
 
     void CNode::add_exploration_noise(float exploration_fraction, const std::vector<float> &noises)
@@ -720,7 +726,7 @@ namespace tree
             - virtual_to_play_batch: the batch of which player is playing on this node.
         */
         // set seed
-        get_time();
+        get_time_and_set_rand_seed();
 
         int last_action = -1;
         float parent_q = 0.0;
