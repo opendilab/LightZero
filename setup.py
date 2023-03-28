@@ -54,8 +54,7 @@ def find_cython_extensions(path=None):
         extensions.append(Extension(
             extname, [item],
             include_dirs=[np.get_include()],
-            extra_compile_args=["-std=c++11"],
-            extra_link_args=["-std=c++11"],
+            language="c++",
         ))
 
     return extensions
