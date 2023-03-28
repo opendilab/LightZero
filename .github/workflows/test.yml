@@ -120,7 +120,6 @@ jobs:
           LINETRACE: 1
         shell: bash
         run: |
-#          choco install -y mingw
           set PATH=C:\tools\mingw64\bin;%PATH%
           set CC=gcc
           set CXX=g++
