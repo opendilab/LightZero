@@ -64,11 +64,12 @@ jobs:
         run: |
           choco install tree cloc wget curl make zip graphviz
           dot -V
-	  - name: Set up MinGW
+      - name: Set up MinGW
         if: ${{ env.OS_NAME == 'Windows' }}
 	    uses: egor-tensin/setup-mingw@v2
 	    with:
 		  platform: x64
+      - name: Set up system dependences on MacOS
         if: ${{ env.OS_NAME == 'MacOS' }}
         shell: bash
         run: |
