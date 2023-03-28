@@ -104,19 +104,26 @@ jobs:
           cloc lzero
           cloc test
 
-      - name: Set compiler flags
-        if: ${{ env.OS_NAME == 'Windows' }}
-        env:
-          CFLAGS: /std:c++11
-          CXXFLAGS: /std:c++11
-
-      - name: Run unittest
+      - name: Run unittest on MacOS or Linux
+        if: ${{ env.OS_NAME == 'MacOS' or env.OS_NAME == 'Linux'}}
         env:
           CI: 'true'
           LINETRACE: 1
         shell: bash
         run: |
           make clean build unittest
+
+      - name: Run unittest on Windows
+        if: ${{ env.OS_NAME == 'Windows' }}
+        env:
+          CI: 'true'
+          LINETRACE: 1
+          CFLAGS: /std:c++11
+          CXXFLAGS: /std:c++11
+        shell: bash
+        run: |
+          make clean build unittest
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
