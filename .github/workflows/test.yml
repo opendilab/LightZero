@@ -24,8 +24,6 @@ jobs:
           - '3.7'
           - '3.8'
           - '3.9'
-#          - '3.10'
-#          - '3.11'
 
     steps:
       - name: Get system version for Linux
@@ -49,16 +47,6 @@ jobs:
           echo "OS_NAME=MacOS" >> $GITHUB_ENV
           echo "IS_WIN=" >> $GITHUB_ENV
           echo "IS_MAC=1" >> $GITHUB_ENV
-      - name: Set environment for Cpython
-        if: ${{ !contains(matrix.python-version, 'pypy') }}
-        shell: bash
-        run: |
-          echo "IS_PYPY=" >> $GITHUB_ENV
-      - name: Set environment for PyPy
-        if: ${{ contains(matrix.python-version, 'pypy') }}
-        shell: bash
-        run: |
-          echo "IS_PYPY=1" >> $GITHUB_ENV
       - name: Checkout code
         uses: actions/checkout@v3
         with:
@@ -120,20 +108,7 @@ jobs:
           LINETRACE: 1
         shell: bash
         run: |
-          set PATH=C:\tools\mingw64\bin;%PATH%
-          set CC=gcc
-          set CXX=g++
           make clean build unittest
-
-#      - name: Run unittest
-#        env:
-#          CI: 'true'
-#          LINETRACE: 1
-#          CC: gcc
-#          CXX: g++
-#        shell: bash
-#        run: |
-#          make clean build unittest
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
