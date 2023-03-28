@@ -107,6 +107,8 @@ jobs:
         env:
           CI: 'true'
           LINETRACE: 1
+          CC: gcc
+          CXX: g++
         shell: bash
         run: |
           make clean build unittest
