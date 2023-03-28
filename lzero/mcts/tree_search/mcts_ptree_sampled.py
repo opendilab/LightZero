@@ -1,4 +1,5 @@
 import copy
+from typing import TYPE_CHECKING, List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch
@@ -6,6 +7,9 @@ from easydict import EasyDict
 
 from lzero.policy.scaling_transform import inverse_scalar_transform
 from lzero.mcts.ptree import MinMaxStatsList
+
+if TYPE_CHECKING:
+    import lzero.mcts.ptree.ptree_sez as ptree
 
 ###########################################################
 # Sampled EfficientZero
@@ -44,7 +48,7 @@ class SampledEfficientZeroMCTSPtree(object):
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
-    def __init__(self, cfg=None):
+    def __init__(self, cfg: EasyDict = None) -> None:
         """
         Overview:
             Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
@@ -56,17 +60,17 @@ class SampledEfficientZeroMCTSPtree(object):
         self._cfg = default_config
 
     @classmethod
-    def Roots(cls, root_num, legal_action_lis, action_space_size,
-                    num_of_sampled_actions, continuous_action_space):
+    def Roots(cls: int, root_num: int, legal_action_lis: List[Any], action_space_size: int,
+                    num_of_sampled_actions: int, continuous_action_space: bool) -> ptree.Roots:
         """
         Overview:
             Initialization of CNode with root_num, legal_actions_list, action_space_size, num_of_sampled_actions, continuous_action_space.
         Arguments:
-            - root_num: the number of the current root.
-            - legal_action_list: the vector of the legal action of this root.
-            - action_space_size: the size of action space of the current env.
-            - num_of_sampled_actions: the number of sampled actions, i.e. K in the Sampled MuZero papers.
-            - continuous_action_space: whether the action space is continous in current env.
+            - root_num (:obj:'int'): the number of the current root.
+            - legal_action_lis (:obj:'List'): the vector of the legal action of this root.
+            - action_space_size (:obj:'int'): the size of action space of the current env.
+            - num_of_sampled_actions (:obj:'int'): the number of sampled actions, i.e. K in the Sampled MuZero papers.
+            - continuous_action_space (:obj:'bool'): whether the action space is continous in current env.
         """
         import lzero.mcts.ptree.ptree_sez as ptree
         return ptree.Roots(
@@ -74,7 +78,7 @@ class SampledEfficientZeroMCTSPtree(object):
                     num_of_sampled_actions, continuous_action_space
                 )
 
-    def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=-1):
+    def search(self, roots: Any, model: torch.nn.Module, hidden_state_roots: List[Any], reward_hidden_state_roots: List[Any], to_play: Union[int, List[Any]]=-1) -> None:
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
