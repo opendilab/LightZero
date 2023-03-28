@@ -10,7 +10,8 @@ from lzero.policy.scaling_transform import inverse_scalar_transform
 from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as tree_efficientzero
 
 if TYPE_CHECKING:
-    from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as ctree
+    from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as ezs_ctree
+
 # ==============================================================
 # Sampled EfficientZero
 # ==============================================================
@@ -47,7 +48,7 @@ class SampledEfficientZeroMCTSCtree(object):
 
     @classmethod
     def Roots(cls: int, root_num: int, legal_action_lis: List[Any], action_space_size: int,
-                    num_of_sampled_actions: int, continuous_action_space: bool) -> ctree.Roots:
+                    num_of_sampled_actions: int, continuous_action_space: bool) -> "ezs_ctree.Roots":
         """
         Overview:
             Initialization of CNode with root_num, legal_actions_list, action_space_size, num_of_sampled_actions, continuous_action_space.

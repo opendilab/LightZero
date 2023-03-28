@@ -61,7 +61,7 @@ class SampledEfficientZeroMCTSPtree(object):
 
     @classmethod
     def Roots(cls: int, root_num: int, legal_action_lis: List[Any], action_space_size: int,
-                    num_of_sampled_actions: int, continuous_action_space: bool) -> ptree.Roots:
+                    num_of_sampled_actions: int, continuous_action_space: bool) -> "ptree.Roots":
         """
         Overview:
             Initialization of CNode with root_num, legal_actions_list, action_space_size, num_of_sampled_actions, continuous_action_space.
@@ -135,7 +135,6 @@ class SampledEfficientZeroMCTSPtree(object):
                     self._cfg.model.continuous_action_space
                 )
                 # obtain the search horizon for leaf nodes (not expanded)
-                # TODO(pu)
                 search_lens = results.search_lens
 
                 # obtain the states for leaf nodes

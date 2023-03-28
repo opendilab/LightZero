@@ -3,8 +3,9 @@ import os
 from functools import partial
 from typing import Optional, Tuple
 
-import numpy as np
 import torch
+from tensorboardX import SummaryWriter
+
 from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
@@ -12,8 +13,6 @@ from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner, create_buffer
 from ding.worker import create_serial_collector, create_serial_evaluator
-from tensorboardX import SummaryWriter
-
 from lzero.policy import visit_count_temperature
 
 
@@ -78,9 +77,7 @@ def train_alphazero(
         env_config=env_config,
     )
     evaluator = create_serial_evaluator(
-        # cfg.policy.eval.evaluator,
         cfg.policy,
-        # cfg.env.stop_value,
         env=evaluator_env,
         policy=policy.eval_mode,
         tb_logger=tb_logger,
@@ -98,11 +95,11 @@ def train_alphazero(
         # set temperature for visit count distributions according to the train_iter,
         # please refer to Appendix D in MuZero paper for details.
         collect_kwargs['temperature'] = visit_count_temperature(
-                    game_config.manual_temperature_decay,
-                    game_config.fixed_temperature_value,
-                    game_config.threshold_training_steps_for_final_temperature,
-                    trained_steps=learner.train_iter
-                )
+            game_config.manual_temperature_decay,
+            game_config.fixed_temperature_value,
+            game_config.threshold_training_steps_for_final_temperature,
+            trained_steps=learner.train_iter
+        )
 
         # Evaluate policy performance
         if evaluator.should_eval(learner.train_iter):

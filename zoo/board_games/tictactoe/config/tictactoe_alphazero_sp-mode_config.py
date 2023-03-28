@@ -25,15 +25,11 @@ tictactoe_alphazero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        type='alphazero',
-        env_name='tictactoe',
-        cuda=True,
-        board_size=3,
         model=dict(
+            # We use the small size model for tictactoe
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),
             downsample=False,
-            # We use the small size model for tictactoe
             num_res_blocks=1,
             num_channels=16,
             value_head_channels=16,
@@ -44,35 +40,21 @@ tictactoe_alphazero_config = dict(
             categorical_distribution=False,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
-        learn=dict(
-            update_per_collect=update_per_collect,
-            batch_size=batch_size,
-            optim_type='Adam',
-            learning_rate=0.003,
-            weight_decay=0.0001,
-            grad_norm=0.5,
-            value_weight=1.0,
-            entropy_weight=0.0,
-        ),
-        collect=dict(
-            unroll_len=1,
-            n_episode=n_episode,
-            collector=dict(augmentation=True,),
-            mcts=dict(num_simulations=num_simulations)
-        ),
-        eval=dict(
-            evaluator=dict(
-                n_episode=evaluator_env_num,
-                eval_freq=int(100),
-                stop_value=1,
-            ),
-            mcts=dict(num_simulations=num_simulations)
-        ),
-        other=dict(
-            replay_buffer=dict(
-                replay_buffer_size=int(1e6),
-            )
-        ),
+        stop_value=2,
+        cuda=True,
+        board_size=3,
+        collector_env_num=collector_env_num,
+        update_per_collect=update_per_collect,
+        batch_size=batch_size,
+        optim_type='Adam',
+        learning_rate=0.003,
+        weight_decay=0.0001,
+        grad_norm=0.5,
+        value_weight=1.0,
+        entropy_weight=0.0,
+        n_episode=n_episode,
+        eval_freq=int(2e3),
+        mcts=dict(num_simulations=num_simulations),
     ),
 )
 

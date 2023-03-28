@@ -5,6 +5,29 @@ The following is an overview of the historical evolution of the Monte Carlo Tree
 
 English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README.zh.md)
 
+## Overview
+> LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm library that combines Monte Carlo Tree Search (MCTS) and Reinforcement Learning (RL).
+
+### Features
+
+**Lightweight**: LightZero integrates multiple MCTS algorithm families and can solve decision-making problems with various attributes in a lightweight framework.
+
+**Efficient**: LightZero uses mixed heterogeneous computing programming to improve computational efficiency for the most time-consuming part of MCTS algorithms.
+
+**Easy-to-understand**: LightZero provides detailed documentation and algorithm framework diagrams for all integrated algorithms to help users understand the algorithm's core and compare the differences and similarities between algorithms under the same paradigm. LightZero also provides function call graphs and network structure diagrams for algorithm code implementation, making it easier for users to locate critical code.
+
+### Framework Structure
+To understand the framework structure of LightZero, the following important components need to be understood:
+
+**Model**
+``Model`` is used to define the network structure, including the ``__init__`` function for initializing the network structure and the ``forward`` function for computing the network's forward propagation.
+
+**Policy**
+``Policy`` defines the way the network is updated and interacts with the environment, including three processes: the ``learning`` process, the ``collecting`` process, and the ``evaluation`` process.
+
+**MCTS**
+``MCTS`` defines the structure of the Monte Carlo search tree and the way it interacts with the Policy. The implementation of MCTS includes two languages: Python and C++, implemented in ``ptree`` and ``ctree``, respectively.
+
 ## Introduction to LightZero
 LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of MCTS algorithms (sometimes combined with cython and cpp), including:
 - [AlphaZero](https://www.science.org/doi/10.1126/science.aar6404)
@@ -88,8 +111,8 @@ Below are the benchmark results of [Sampled EfficientZero](https://github.com/op
 Below are the benchmark results of [AlphaZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/alphazero.py) and [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) on two board_games: [TicTacToe](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/tictactoe/envs/tictactoe_env.py), [Gomoku](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py).
 
 <p align="center">
-  <img src="assets/benchmark/main/tictactoe_main.png" alt="Image Description 1" width="45%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/gomoku_main.png" alt="Image Description 2" width="45%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/tictactoe_bot-mode_main.png" alt="Image Description 1" width="45%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/gomoku_bot-mode_main.png" alt="Image Description 2" width="45%" height="auto" style="margin: 0 1%;">
 </p>
 
 </details>
@@ -124,15 +147,10 @@ The following are the detailed paper notes of the above algorithms:
 <details closed>
 <summary>(Click to Expand)</summary>
 
-![alphazero](assets/paper_notes/alphazero.pdf)
-
-![muzero](assets/paper_notes/muzero.pdf)
-
-![efficientzero](assets/paper_notes/efficientzero.pdf))
-
-![sampled muzero](assets/paper_notes/sampled_muzero.pdf)
-
-[comment]: <> (![gumbel muzero]&#40;assets/paper_notes/gumbel_muzero.pdf&#41;)
+[AlphaZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/AlphaZero.pdf)
+[MuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/MuZero.pdf)
+[EfficientZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/EfficientZero.pdf)
+[SampledMuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/SampledMuZero.pdf)
 
 </details>
 

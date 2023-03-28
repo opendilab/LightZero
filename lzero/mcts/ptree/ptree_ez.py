@@ -3,10 +3,12 @@ The Node, Roots class and related core functions for EfficientZero.
 """
 import math
 import random
-from typing import List, Dict, Any, Tuple, Union
+from typing import List, Any, Tuple, Union
 
 import numpy as np
 import torch
+
+from .minimax import MinMaxStats
 
 
 class Node:
@@ -143,7 +145,7 @@ class Node:
             distribution = [v for k, v in distribution.items()]
         return distribution
 
-    def get_child(self, action: Union[int, float]) -> Node:
+    def get_child(self, action: Union[int, float]) -> "Node":
         """
         Overview:
             get children node according to the input action.
@@ -188,7 +190,8 @@ class Roots:
 
                 self.roots.append(Node(0, np.arange(legal_actions_list), action_space_size=self.action_space_size))
 
-    def prepare(self, root_exploration_fraction: float, noises: List[float], value_prefixs: List[float], policies: List[List[float]], to_play: int = -1) -> None:
+    def prepare(self, root_exploration_fraction: float, noises: List[float], value_prefixs: List[float],
+                policies: List[List[float]], to_play: int = -1) -> None:
         """
         Overview:
             Expand the roots and add noises.
@@ -212,7 +215,7 @@ class Roots:
             self.roots[i].add_exploration_noise(root_exploration_fraction, noises[i])
             self.roots[i].visit_count += 1
 
-    def prepare_no_noise(self, value_prefixs: List[float], policies: List[List[float]], to_play: int=-1) -> None:
+    def prepare_no_noise(self, value_prefixs: List[float], policies: List[List[float]], to_play: int = -1) -> None:
         """
         Overview:
             Expand the roots without noise.
@@ -232,7 +235,7 @@ class Roots:
     def clear(self) -> None:
         self.roots.clear()
 
-    def get_trajectories(self) -> List[List[Union[int, float]]:]:
+    def get_trajectories(self) -> List[List[Union[int, float]]]:
         """
         Overview:
             Find the current best trajectory starts from each root.
@@ -244,7 +247,7 @@ class Roots:
             trajs.append(self.roots[i].get_trajectory())
         return trajs
 
-    def get_distributions(self) -> List[List[Union[int, float]]:]:
+    def get_distributions(self) -> List[List[Union[int, float]]]:
         """
         Overview:
             Get the children distribution of each root.
@@ -281,7 +284,8 @@ class SearchResults:
 
 
 # not used now
-def update_tree_q(root: Node, min_max_stats: MinMaxStats, discount_factor: float, players: int = 1, to_play: int = 0) -> None:
+def update_tree_q(root: Node, min_max_stats: MinMaxStats, discount_factor: float, players: int = 1,
+                  to_play: int = 0) -> None:
     """
     Overview:
         Update the q value of the root and its child nodes.
@@ -330,7 +334,8 @@ def update_tree_q(root: Node, min_max_stats: MinMaxStats, discount_factor: float
 
 
 def select_child(
-        root: Node, min_max_stats: MinMaxStats, pb_c_base: float, pb_c_int: float, discount_factor: float, mean_q: float, players: int
+        root: Node, min_max_stats: MinMaxStats, pb_c_base: float, pb_c_int: float, discount_factor: float,
+        mean_q: float, players: int
 ) -> Union[int, float]:
     """
     Overview:
@@ -424,7 +429,8 @@ def compute_ucb_score(
 
 
 def batch_traverse(
-        roots: Any, pb_c_base: float, pb_c_init: float, discount_factor: float, min_max_stats_lst: List[MinMaxStats], results: SearchResults,
+        roots: Any, pb_c_base: float, pb_c_init: float, discount_factor: float, min_max_stats_lst: List[MinMaxStats],
+        results: SearchResults,
         virtual_to_play: List,
 ) -> Tuple[List[int], List[int], List[Union[int, float]], List]:
     """
@@ -502,7 +508,8 @@ def batch_traverse(
     return results.hidden_state_index_x_lst, results.hidden_state_index_y_lst, results.last_actions, virtual_to_play
 
 
-def backpropagate(search_path: List[Node], min_max_stats: MinMaxStats, to_play: int, value: float, discount_factor: float) -> None:
+def backpropagate(search_path: List[Node], min_max_stats: MinMaxStats, to_play: int, value: float,
+                  discount_factor: float) -> None:
     """
     Overview:
         Update the value sum and visit count of nodes along the search path.

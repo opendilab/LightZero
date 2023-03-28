@@ -9,7 +9,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 from easydict import EasyDict
-from typing import List, Dict, Any, Tuple, Union
+from typing import List, Dict, Any, Tuple, Union, Callable, Type
+from ding.envs import BaseEnv
 
 
 
@@ -19,7 +20,7 @@ class Node(object):
         The node base class for tree_search.
     """
 
-    def __init__(self, parent: Node, prior_p: float) -> None:
+    def __init__(self, parent: "Node", prior_p: float) -> None:
         self._parent = parent
         self._children = {}
         self._visit_count = 0
@@ -119,13 +120,13 @@ class MCTS(object):
         )  # 0.3  # for chess, 0.03 for Go and 0.15 for shogi.
         self._root_exploration_fraction = self._cfg.get('root_exploration_fraction', 0.25)  # 0.25
 
-    def get_next_action(self, simulate_env: BaseEnv, policy_forward_fn: function, temperature: int = 1.0, sample: bool = True) -> Tuple[int, List[float]]:
+    def get_next_action(self, simulate_env: Type[BaseEnv], policy_forward_fn: Callable, temperature: int = 1.0, sample: bool = True) -> Tuple[int, List[float]]:
         """
         Overview:
             calculate the move probabilities based on visit counts at the root node.
         Arguments:
             - simulate_env (:obj:`Class BaseGameEnv`): The class of simulate env.
-            - policy_forward_fn (:obj:`Function`): The function to compute the action probs and state value.
+            - policy_forward_fn (:obj:`Function`): The Callable to compute the action probs and state value.
             - temperature (:obj:`Int`): Temperature is a parameter that controls the "softness" of the probability distribution..
             - sample (:obj:`Bool`): The value of the node.
         Returns:
@@ -169,7 +170,7 @@ class MCTS(object):
         # print(action)
         return action, action_probs
 
-    def _simulate(self, node: Node, simulate_env: BaseEnv, policy_forward_fn: function) -> None:
+    def _simulate(self, node: Node, simulate_env: Type[BaseEnv], policy_forward_fn: Callable) -> None:
         """
         Overview:
             Run a single playout from the root to the leaf, getting a value at the leaf and propagating it back through its parents.
@@ -177,7 +178,7 @@ class MCTS(object):
         Arguments:
             - node (:obj:`Class Node`): Current node when performing mcts search.
             - simulate_env (:obj:`Class BaseGameEnv`): The class of simulate env.
-            - policy_forward_fn (:obj:`Function`): The function to compute the action probs and state value.
+            - policy_forward_fn (:obj:`Function`): The Callable to compute the action probs and state value.
         """
         while not node.is_leaf():
             # print(node.children.keys())
@@ -228,7 +229,7 @@ class MCTS(object):
             # thus we add the negative when call update_recursive().
             node.update_recursive(-leaf_value, simulate_env.mcts_mode)
 
-    def _select_child(self, node: Node, simulate_env: BaseEnv) -> Tuple[Union[int, float], Node]:
+    def _select_child(self, node: Node, simulate_env: Type[BaseEnv]) -> Tuple[Union[int, float], Node]:
         """
         Overview:
             Select the child with the highest UCB score.
@@ -254,14 +255,14 @@ class MCTS(object):
 
         return action, child
 
-    def _expand_leaf_node(self, node: Node, simulate_env: BaseEnv, policy_forward_fn: function) -> float:
+    def _expand_leaf_node(self, node: Node, simulate_env: Type[BaseEnv], policy_forward_fn: Callable) -> float:
         """
         Overview:
             expand the node with the policy_forward_fn.
         Arguments:
             - node (:obj:`Class Node`): current node when performing mcts search.
             - simulate_env (:obj:`Class BaseGameEnv`): the class of simulate env.
-            - policy_forward_fn (:obj:`Function`): the function to compute the action probs and state value.
+            - policy_forward_fn (:obj:`Function`): the Callable to compute the action probs and state value.
         Returns:
             - leaf_value (:obj:`Bool`): the leaf node's value.
         """

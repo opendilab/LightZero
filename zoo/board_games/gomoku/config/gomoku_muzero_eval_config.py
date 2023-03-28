@@ -27,10 +27,11 @@ prob_random_action_in_bot = 0.5
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_mz_ctree/gomoku_b{board_size}_rand{prob_random_action_in_bot}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(2),
         battle_mode='play_with_bot_mode',
+        bot_action_type=bot_action_type,
         prob_random_action_in_bot=prob_random_action_in_bot,
         # agent_vs_human=False,
         agent_vs_human=True,
@@ -87,7 +88,7 @@ gomoku_muzero_create_config = dict(
         import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
     ),
     # env_manager=dict(type='subprocess'),
-    env_manager=dict(type='base'), # if agent_vs_human=True
+    env_manager=dict(type='base'),  # if agent_vs_human=True
     policy=dict(
         type='muzero',
         import_names=['lzero.policy.muzero'],
@@ -108,8 +109,8 @@ if __name__ == '__main__':
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
      """
-    # model_path='/Users/puyuan/code/LightZero/zoo/board_games/gomoku/gomoku_b6_rand0.5_muzero_bot-mode_type-v0_ns50_upc50_rr0.3_rbs1e5_seed0/ckpt/ckpt_best.pth.tar'
-    model_path='/Users/puyuan/code/LightZero/zoo/board_games/gomoku/gomoku_b6_rand0.0_muzero_bot-mode_type-v0_ns50_upc50_rr0.3_seed0/ckpt/ckpt_best.pth.tar'
+    # model_path='/Users/user/code/LightZero/zoo/board_games/gomoku/gomoku_b6_rand0.5_muzero_bot-mode_type-v0_ns50_upc50_rr0.3_rbs1e5_seed0/ckpt/ckpt_best.pth.tar'
+    model_path='/Users/user/code/LightZero/zoo/board_games/gomoku/gomoku_b6_rand0.0_muzero_bot-mode_type-v0_ns50_upc50_rr0.3_seed0/ckpt/ckpt_best.pth.tar'
 
     returns_mean_seeds = []
     returns_seeds = []

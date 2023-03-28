@@ -8,6 +8,8 @@ from typing import List, Dict, Any, Tuple, Union
 import numpy as np
 import torch
 
+from .minimax import MinMaxStats
+
 
 class Node:
     """
@@ -135,7 +137,7 @@ class Node:
             distribution = [v for k, v in distribution.items()]
         return distribution
 
-    def get_child(self, action: Union[int, float]) -> Node:
+    def get_child(self, action: Union[int, float]) -> "Node":
         """
         Overview:
             get children node according to the input action.
