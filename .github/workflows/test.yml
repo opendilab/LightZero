@@ -66,9 +66,9 @@ jobs:
           dot -V
       - name: Set up MinGW
         if: ${{ env.OS_NAME == 'Windows' }}
-	    uses: egor-tensin/setup-mingw@v2
-	    with:
-		  platform: x64
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x64
       - name: Set up system dependences on MacOS
         if: ${{ env.OS_NAME == 'MacOS' }}
         shell: bash
