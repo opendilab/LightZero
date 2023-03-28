@@ -22,6 +22,7 @@ class BipedalWalkerEnv(BaseEnv):
         return cfg
 
     config = dict(
+        env_name="BipedalWalker-v3",
         save_replay_gif=False,
         replay_path_gif=None,
         replay_path=None,

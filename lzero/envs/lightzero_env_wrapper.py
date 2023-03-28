@@ -7,22 +7,22 @@ from ding.envs import BaseEnvTimestep
 from ding.utils import ENV_WRAPPER_REGISTRY
 from itertools import product
 from ding.torch_utils import to_ndarray, to_list
+from easydict import EasyDict
 
 
-@ENV_WRAPPER_REGISTRY.register('obs_plus_action_mask_to_play')
-class ObsActionMaskToPlayWrapper(gym.ObservationWrapper):
+@ENV_WRAPPER_REGISTRY.register('lightzero_env_wrapper')
+class LightZeroEnvWrapper(gym.ObservationWrapper):
     """
     Overview:
-       Normalize observations according to running mean and std.
+       Package the classic_contol, box2d environment into the format required by LightZero.
+       Wrap obs as a dict, containing keys: obs, action_mask and to_play.
     Interface:
-        ``__init__``, ``step``, ``reset``, ``observation``, ``new_shape``
+        ``__init__``, ``step``, ``reset``
     Properties:
         - env (:obj:`gym.Env`): the environment to wrap.
-
-        - ``data_count``, ``clip_range``, ``rms``
     """
     
-    def __init__(self, env, cfg):
+    def __init__(self, env: gym.Env, cfg: EasyDict) -> None:
         """
         Overview:
             Initialize ``self.`` See ``help(type(self))`` for accurate signature;  \
@@ -31,6 +31,24 @@ class ObsActionMaskToPlayWrapper(gym.ObservationWrapper):
             - env (:obj:`gym.Env`): the environment to wrap.
         """
         super().__init__(env)
+        assert 'is_train' in cfg, '`is_train` flag must set in the config of env'
+        self.is_train = cfg.is_train
+        if self.is_train:  # set member variables which are enabled when is_train = True
+            self.is_train_enabled_varaible = True
+        else:  # else case
+            self.is_train_enabled_varaible = False
+        self.env_type = cfg.get("env_type", None)
+        if self.is_train_enabled_varaible:
+            if self.env_type is not None and self.env_type == "Atari":
+                cfg.max_episode_steps = cfg.collect_max_episode_steps
+                cfg.episode_life = True
+                cfg.clip_rewards = True
+        else:
+            if self.env_type is not None and self.env_type == "Atari":
+                cfg.max_episode_steps = cfg.eval_max_episode_steps
+                cfg.episode_life = False
+                cfg.clip_rewards = False
+            
         self._env = env
         self.cfg = cfg
         self.env_name = cfg.env_name
@@ -159,17 +177,3 @@ class ObsActionMaskToPlayWrapper(gym.ObservationWrapper):
 
     def __repr__(self) -> str:
         return "LightZero Env."
-
-    @staticmethod
-    def create_collector_env_cfg(cfg: dict) -> List[dict]:
-        collector_env_num = cfg.pop('collector_env_num')
-        cfg = copy.deepcopy(cfg)
-        cfg.max_episode_steps = cfg.collect_max_episode_steps
-        return [cfg for _ in range(collector_env_num)]
-
-    @staticmethod
-    def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
-        evaluator_env_num = cfg.pop('evaluator_env_num')
-        cfg = copy.deepcopy(cfg)
-        cfg.max_episode_steps = cfg.eval_max_episode_steps
-        return [cfg for _ in range(evaluator_env_num)]

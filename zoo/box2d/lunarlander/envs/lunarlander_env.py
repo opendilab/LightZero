@@ -16,6 +16,7 @@ from easydict import EasyDict
 class LunarLanderEnv(BaseEnv):
 
     config = dict(
+        env_name="LunarLander-v2",
         save_replay_gif=False,
         replay_path_gif=None,
         replay_path=None,

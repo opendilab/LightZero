@@ -82,7 +82,7 @@ main_config = pendulum_sampled_efficientzero_config
 
 pendulum_sampled_efficientzero_create_config = dict(
     env=dict(
-        type='pendulum',
+        type='pendulum_lightzero',
         import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
     ),
     # env_manager=dict(type='subprocess'),

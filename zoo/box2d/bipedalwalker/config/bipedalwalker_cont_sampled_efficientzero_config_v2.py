@@ -99,5 +99,5 @@ bipedalwalker_cont_sampled_efficientzero_create_config = EasyDict(bipedalwalker_
 create_config = bipedalwalker_cont_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import train_muzero_v2
+    train_muzero_v2([main_config, create_config], seed=0, max_env_step=max_env_step)

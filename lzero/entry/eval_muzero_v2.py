@@ -1,22 +1,21 @@
 import os
-from functools import partial
-from typing import Optional, Tuple
+from typing import Optional
+from typing import Tuple
 
 import numpy as np
 import torch
+from tensorboardX import SummaryWriter
+
 from ding.config import compile_config
-from ding.envs import create_env_manager
-from ding.envs import get_vec_env_setting
+from ding.envs import DingEnvWrapper, BaseEnvManager
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
-from ding.worker import create_serial_collector
-from tensorboardX import SummaryWriter
+from lzero.envs.get_wrapped_env import get_wrappered_env
 
 
-def eval_muzero(
+def eval_muzero_v2(
         input_cfg: Tuple[dict, dict],
-        env_fn,
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
         model_path: Optional[str] = None,
@@ -53,9 +52,12 @@ def eval_muzero(
 
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
 
-    # Create main components: env, policy
-    collector_env = create_env_manager(cfg.env.manager, [lambda: env_fn for _ in range(cfg.env.collector_env_num)])
-    evaluator_env = create_env_manager(cfg.env.manager, [lambda: env_fn for _ in range(cfg.env.evaluator_env_num)])
+    collector_env_cfg = DingEnvWrapper.create_collector_env_cfg(cfg.env)
+    evaluator_env_cfg = DingEnvWrapper.create_evaluator_env_cfg(cfg.env)
+    collector_env = BaseEnvManager([get_wrappered_env(c, cfg.env.env_name) for c in collector_env_cfg],
+                                   cfg=BaseEnvManager.default_config())
+    evaluator_env = BaseEnvManager([get_wrappered_env(c, cfg.env.env_name) for c in evaluator_env_cfg],
+                                   cfg=BaseEnvManager.default_config())
 
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
@@ -110,7 +112,8 @@ def eval_muzero(
         if print_seed_details:
             print("=" * 20)
             print(f'In seed {seed}, returns: {returns}')
-            print(f'win rate: {len(np.where(returns == 1.)[0])/ num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0])/num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0])/ num_episodes_each_seed}')
+            print(
+                f'win rate: {len(np.where(returns == 1.)[0]) / num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0]) / num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0]) / num_episodes_each_seed}')
             print("=" * 20)
 
         return returns.mean(), returns

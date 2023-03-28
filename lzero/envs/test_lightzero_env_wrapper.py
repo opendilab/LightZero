@@ -3,13 +3,13 @@ import numpy as np
 from ding.envs import DingEnvWrapper
 from easydict import EasyDict
 
-from zoo.classic_control.pendulum.envs.lightzero_env_wrapper import ObsActionMaskToPlayWrapper
+from lzero.envs.lightzero_env_wrapper import LightZeroEnvWrapper
 
 lightzero_env = DingEnvWrapper(
     gym.make('Pendulum-v1'),
     cfg={
         'env_wrapper': [
-            lambda env: ObsActionMaskToPlayWrapper(env),
+            lambda env: LightZeroEnvWrapper(env),
         ]
     }
 )

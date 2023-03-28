@@ -21,6 +21,7 @@ from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_c
 class GomokuEnv(BaseEnv):
 
     config = dict(
+        env_name="Gomoku",
         prob_random_agent=0,
         board_size=6,
         battle_mode='self_play_mode',
@@ -796,10 +797,11 @@ class GomokuEnv(BaseEnv):
     def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
         evaluator_env_num = cfg.pop('evaluator_env_num')
         cfg = copy.deepcopy(cfg)
-        # When we collect and train agent in ``self_play_mode`` or ``play_with_bot_mode``, in eval phase,
-        # we use ``eval_mode`` to make agent play with the built-in bot to
+        # When we collect and train agent in ``self_play_mode``, in eval phase,
+        # we use ``eval_mode`` to make agent paly with the built-in bot to
         # evaluate the performance of the current agent.
-        cfg.battle_mode = 'eval_mode'
+        if cfg.battle_mode == 'self_play_mode':
+            cfg.battle_mode = 'eval_mode'
 
         return [cfg for _ in range(evaluator_env_num)]
 

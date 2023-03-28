@@ -19,6 +19,7 @@ class AtariLightZeroEnv(BaseEnv):
         evaluator_env_num=3,
         n_evaluator_episode=3,
         env_name='PongNoFrameskip-v4',
+        env_type='Atari',
         obs_shape=(4, 96, 96),
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
@@ -170,6 +171,8 @@ class AtariLightZeroEnv(BaseEnv):
         collector_env_num = cfg.pop('collector_env_num')
         cfg = copy.deepcopy(cfg)
         cfg.max_episode_steps = cfg.collect_max_episode_steps
+        cfg.episode_life = True
+        cfg.clip_rewards = True
         return [cfg for _ in range(collector_env_num)]
 
     @staticmethod

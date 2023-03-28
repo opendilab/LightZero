@@ -15,6 +15,7 @@ from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
 class TicTacToeEnv(BaseEnv):
 
     config = dict(
+        env_name="TicTacToe",
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',  # only used in AlphaZero
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
