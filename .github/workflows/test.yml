@@ -76,6 +76,8 @@ jobs:
         run: |
           choco install tree cloc wget curl make zip graphviz
           dot -V
+          echo ::set-env name=CFLAGS::"/std:c++11"
+          echo ::set-env name=CXXFLAGS::"/std:c++11"
       - name: Set up system dependences on MacOS
         if: ${{ env.OS_NAME == 'MacOS' }}
         shell: bash
