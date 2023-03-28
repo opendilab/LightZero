@@ -1,5 +1,7 @@
 # LightZero
 
+## 背景
+
 下图为蒙特卡洛树搜索（MCTS）算法族的发展历史：
 ![pipeline](assets/mcts_rl_evolution_overview.png)
 
@@ -18,8 +20,8 @@
 - [快速开始](#快速开始)
 - [基线算法比较](#基线算法比较)
 - [MCTS相关笔记](#MCTS-相关笔记)
-    - [算法框架图](#算法框架图)
     - [论文笔记](#论文笔记)
+    - [算法框架图](#算法框架图)
 - [MCTS相关论文](#MCTS-相关论文)
     - [重要论文](#重要论文)
     - [其他论文](#其他论文)
@@ -83,8 +85,8 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 
 ## 基线算法比较
 
-<details closed>
-<summary>(Click to Expand)</summary>
+<details expanded>
+<summary>(点击关闭)</summary>
 
 以下是几种算法在 [Atari](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py) 上三个的离散动作空间环境上的基线比较结果，包括 [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py), [MuZero w/ SSL](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py),[EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/efficientzero.py) 和 [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py)：
 
@@ -114,12 +116,31 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 
 ## MCTS 相关笔记
 
+### 论文笔记
+
+以下是 LightZero 中集成算法的中文详细文档：
+
+<details expanded>
+<summary>(点击关闭)</summary>
+
+[AlphaZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/AlphaZero.pdf)
+
+[MuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/MuZero.pdf)
+
+[EfficientZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/EfficientZero.pdf)
+
+[SampledMuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/SampledMuZero.pdf)
+
+[算法概览图符号表](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/SymbolTable.pdf)
+
+</details>
+
 ### 算法框架图
 
 以下是 LightZero 中集成算法的框架概览图：
 
 <details closed>
-<summary>(Click to Expand)</summary>
+<summary>(点击查看更多)</summary>
 
 ![mcts](assets/algo_overview/mcts.png)
 
@@ -135,20 +156,6 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 
 </details>
 
-### 论文笔记
-
-以下是 LightZero 中集成算法的详细文档：
-
-<details closed>
-<summary>(Click to Expand)</summary>
-
-[AlphaZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/AlphaZero.pdf)
-[MuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/MuZero.pdf)
-[EfficientZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/EfficientZero.pdf)
-[SampledMuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/SampledMuZero.pdf)
-
-</details>
-
 ## MCTS 相关论文
 
 以下是关于 **MCTS** 相关的论文集合，[这一部分](#MCTS-相关论文) 将会持续更新，追踪 MCTS 的前沿动态。
@@ -156,7 +163,7 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 ### 重要论文
 
 <details closed>
-<summary>(Click to Expand)</summary>
+<summary>(点击查看更多)</summary>
 
 #### LightZero Implemented series
 
@@ -196,7 +203,7 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 ### 其他论文
 
 <details closed>
-<summary>(Click to Expand)</summary>
+<summary>(点击查看更多)</summary>
 
 #### ICML
 - [Efficient Learning for AlphaZero via Path Consistency](https://proceedings.mlr.press/v162/zhao22h/zhao22h.pdf) 2022
