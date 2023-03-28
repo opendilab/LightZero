@@ -91,9 +91,9 @@ jobs:
         if: ${{ env.OS_NAME == 'Windows' }}
         shell: bash
         run: |
-          echo "PATH=$PATH:C:\msys64\mingw64\bin" >> $GITHUB_ENV
-          make CC=clang
+          echo "PATH=C:\msys64\mingw64\bin:$PATH" >> $GITHUB_ENV
           clang --version
+          set CC=clang
       - name: Run unittest on MacOS or Linux
         if: ${{ env.OS_NAME == 'MacOS' || env.OS_NAME == 'Linux'}}
         env:
