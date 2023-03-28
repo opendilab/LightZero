@@ -76,8 +76,6 @@ jobs:
         run: |
           choco install tree cloc wget curl make zip graphviz
           dot -V
-          echo ::set-env name=CFLAGS::"/std:c++11"
-          echo ::set-env name=CXXFLAGS::"/std:c++11"
       - name: Set up system dependences on MacOS
         if: ${{ env.OS_NAME == 'MacOS' }}
         shell: bash
@@ -105,6 +103,13 @@ jobs:
           tree .
           cloc lzero
           cloc test
+
+      - name: Set compiler flags
+        if: ${{ env.OS_NAME == 'Windows' }}
+        env:
+          CFLAGS: /std:c++11
+          CXXFLAGS: /std:c++11
+
       - name: Run unittest
         env:
           CI: 'true'
