@@ -156,7 +156,7 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 
 # MCTS 相关论文
 
-以下是关于 **MCTS** 相关的论文集合，[这一部分]（#MCTS-相关论文）将会持续更新，追踪 MCTS 的前沿动态。
+以下是关于 **MCTS** 相关的论文集合，[这一部分](#MCTS-相关论文) 将会持续更新，追踪 MCTS 的前沿动态。
 
 ## 重要论文
 
