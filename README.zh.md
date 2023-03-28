@@ -3,7 +3,7 @@
 下图为蒙特卡洛树搜索（MCTS）算法族的发展历史：
 ![pipeline](assets/mcts_rl_evolution_overview.png)
 
-[English](https://github.com/opendilab/LightZero/blob/main/README.md)|简体中文
+[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文
 
 # 概览
 > LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库
@@ -17,10 +17,10 @@
 - [安装方法](#安装方法)
 - [快速开始](#快速开始)
 - [基线算法比较](#基线算法比较)
-- [MCTS相关笔记](#MCTS 相关笔记)
+- [MCTS相关笔记](#MCTS相关笔记)
     - [算法框架图](#算法框架图)
     - [论文笔记](#论文笔记)
-- [MCTS相关论文](#MCTS 相关论文)
+- [MCTS相关论文](#MCTS相关论文)
     - [重要论文](#重要论文)
     - [其他论文](#其他论文)
 - [反馈意见和贡献](#反馈意见和贡献)

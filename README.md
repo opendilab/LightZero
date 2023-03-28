@@ -3,7 +3,7 @@
 The following is an overview of the historical evolution of the Monte Carlo Tree Search (MCTS) algorithm series:
 ![pipeline](assets/mcts_rl_evolution_overview.png)
 
-English|[简体中文](https://github.com/opendilab/LightZero/blob/main/README.zh.md)
+English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README.zh.md)
 
 ## Introduction to LightZero
 LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of MCTS algorithms (sometimes combined with cython and cpp), including:
