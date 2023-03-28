@@ -69,13 +69,6 @@ jobs:
       #   uses: egor-tensin/setup-mingw@v2
       #   with:
       #     platform: x64
-      - name: Set up compiler on Windows
-        if: ${{ env.OS_NAME == 'Windows' }}
-        shell: bash
-        run: |
-          echo "PATH=$PATH:C:\msys64\mingw64\bin" >> $GITHUB_ENV
-          make CC=clang
-          clang --version
       - name: Set up system dependences on MacOS
         if: ${{ env.OS_NAME == 'MacOS' }}
         shell: bash
@@ -94,6 +87,13 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-build.txt
           pip install -r requirements-test.txt
+      - name: Set up compiler on Windows
+        if: ${{ env.OS_NAME == 'Windows' }}
+        shell: bash
+        run: |
+          echo "PATH=$PATH:C:\msys64\mingw64\bin" >> $GITHUB_ENV
+          make CC=clang
+          clang --version
       - name: Run unittest on MacOS or Linux
         if: ${{ env.OS_NAME == 'MacOS' || env.OS_NAME == 'Linux'}}
         env:
