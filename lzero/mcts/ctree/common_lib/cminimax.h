@@ -1,3 +1,5 @@
+// C++11
+
 #ifndef CMINIMAX_H
 #define CMINIMAX_H
 

@@ -1,3 +1,5 @@
+// C++11
+
 #ifndef CNODE_H
 #define CNODE_H
 
