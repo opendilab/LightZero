@@ -107,7 +107,7 @@ setup(
             linetrace=_LINETRACE,
         ),
     ),
-    cmdclass={"build_ext": custom_build_ext},
+    #cmdclass={"build_ext": custom_build_ext},
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         "Intended Audience :: Science/Research",
