@@ -106,6 +106,8 @@ setup(
         compiler_directives=dict(
             linetrace=_LINETRACE,
         ),
+        extra_compile_args=["/std:c++latest"],
+        extra_link_args=["/std:c++latest"],
     ),
     #cmdclass={"build_ext": custom_build_ext},
     classifiers=[
