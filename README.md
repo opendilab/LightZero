@@ -8,7 +8,7 @@ The following is an overview of the historical evolution of the Monte Carlo Tree
 English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README.zh.md)
 
 ## Overview
-> LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm library that combines Monte Carlo Tree Search (MCTS) and Reinforcement Learning (RL).
+> LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkits that combines Monte Carlo Tree Search (MCTS) and Reinforcement Learning (RL).
 
 ### Outline
 
@@ -21,16 +21,16 @@ English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README
 - [Quick Start](#quick-start)
 - [Benchmark](#benchmark)
 - [Awesome-MCTS Notes](#awesome-mcts-notes)
-  - [&#8627; Paper Notes](#paper-notes)
-  - [&#8627; Algo. Overview](#algo-overview)
+  - [Paper Notes](#paper-notes)
+  - [Algo. Overview](#algo-overview)
 - [Awesome-MCTS Papers](#awesome-mcts-papers)
-  - [&#8627; Key Papers](#key-ppers)
-  - [&#8627; Other Papers](#other-ppers)
+  - [Key Papers](#key-ppers)
+  - [Other Papers](#other-ppers)
 - [Feedback and Contribution](#feedback-and-contribution)
 - [Citation](#citation)
 - [Acknowledgments](#acknowledgments)
 - [License](#license)
-- 
+
 ### Features
 
 **Lightweight**: LightZero integrates multiple MCTS algorithm families and can solve decision-making problems with various attributes in a lightweight framework.
@@ -42,13 +42,13 @@ English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README
 ### Framework Structure
 To understand the framework structure of LightZero, the following important components need to be understood:
 
-**Model**
+**Model**:
 ``Model`` is used to define the network structure, including the ``__init__`` function for initializing the network structure and the ``forward`` function for computing the network's forward propagation.
 
-**Policy**
+**Policy**:
 ``Policy`` defines the way the network is updated and interacts with the environment, including three processes: the ``learning`` process, the ``collecting`` process, and the ``evaluation`` process.
 
-**MCTS**
+**MCTS**:
 ``MCTS`` defines the structure of the Monte Carlo search tree and the way it interacts with the Policy. The implementation of MCTS includes two languages: Python and C++, implemented in ``ptree`` and ``ctree``, respectively.
 
 ### Integrated Algorithms
@@ -92,8 +92,7 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 
 ## Benchmark
 
-<details expanded>
-<summary>(Click to Close)</summary>
+<details open><summary>Click to collapse</summary>
 
 Below are the benchmark results of [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py), [MuZero w/ SSL](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) , [EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/efficientzero.py) and [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) on three discrete action space games in [Atari](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py).
 
@@ -128,17 +127,12 @@ Below are the benchmark results of [AlphaZero](https://github.com/opendilab/Ligh
 ### Paper Notes
 The following are the detailed paper notes (in Chinese) of the above algorithms:
 
-<details expanded>
-<summary>(Click to Close)</summary>
+<details open><summary>Click to collapse</summary>
 
 [AlphaZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/AlphaZero.pdf)
-
 [MuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/MuZero.pdf)
-
 [EfficientZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/EfficientZero.pdf)
-
 [SampledMuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/SampledMuZero.pdf)
-
 [SymbolTable](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/SymbolTable.pdf)
 
 </details>
@@ -147,8 +141,7 @@ The following are the detailed paper notes (in Chinese) of the above algorithms:
 
 The following are the overview MCTS principle diagrams of the above algorithms:
 
-<details closed>
-<summary>(Click to Expand)</summary>
+<details><summary>Click to expand</summary>
 
 ![mcts](assets/algo_overview/mcts.png)
 
@@ -171,8 +164,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 ### Key Papers
 
-<details closed>
-<summary>(Click to Expand)</summary>
+<details><summary>Click to expand</summary>
 
 #### LightZero Implemented series
 
@@ -211,8 +203,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 ### Other Papers
 
-<details closed>
-<summary>(Click to Expand)</summary>
+<details><summary>Click to expand</summary>
 
 #### ICML
 - [Efficient Learning for AlphaZero via Path Consistency](https://proceedings.mlr.press/v162/zhao22h/zhao22h.pdf) 2022
@@ -343,7 +334,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 ## Citation
 ```latex
 @misc{lightzero,
-    title={{LightZero: OpenDILab} A lightweight and efficient MCTS/MuZero algorithm toolkits.},
+    title={{LightZero: OpenDILab} A lightweight and efficient MCTS/AlphaZero/MuZero algorithm toolkits.},
     author={LightZero Contributors},
     publisher = {GitHub},
     howpublished = {\url{https://github.com/opendilab/LightZero}},
