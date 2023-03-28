@@ -14,8 +14,9 @@ from ding.worker import BaseLearner
 from lzero.envs.get_wrapped_env import get_wrappered_env
 
 
-def eval_muzero_v2(
+def eval_muzero_with_gym_env(
         input_cfg: Tuple[dict, dict],
+        env_name: str,
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
         model_path: Optional[str] = None,
@@ -25,9 +26,12 @@ def eval_muzero_v2(
     """
     Overview:
         The eval entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
+        We create a gym environment using env_name parameter, and then convert it to the format required by LightZero using LightZeroEnvWrapper class. 
+        Please refer to the get_wrappered_env method for more details.
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
             ``Tuple[dict, dict]`` type means [user_config, create_cfg].
+        - env_name (:obj:`str`): The name of the environment to create.
         - seed (:obj:`int`): Random seed.
         - model (:obj:`Optional[torch.nn.Module]`): Instance of torch.nn.Module.
         - model_path (:obj:`Optional[str]`): The pretrained model path, which should
@@ -52,13 +56,13 @@ def eval_muzero_v2(
 
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
 
+    # Create main components: env, policy
     collector_env_cfg = DingEnvWrapper.create_collector_env_cfg(cfg.env)
     evaluator_env_cfg = DingEnvWrapper.create_evaluator_env_cfg(cfg.env)
     collector_env = BaseEnvManager([get_wrappered_env(c, cfg.env.env_name) for c in collector_env_cfg],
                                    cfg=BaseEnvManager.default_config())
     evaluator_env = BaseEnvManager([get_wrappered_env(c, cfg.env.env_name) for c in evaluator_env_cfg],
                                    cfg=BaseEnvManager.default_config())
-
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     if cfg.policy.device == 'cuda' and torch.cuda.is_available():

@@ -102,5 +102,5 @@ pendulum_disc_efficientzero_create_config = EasyDict(pendulum_disc_efficientzero
 create_config = pendulum_disc_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_v2
-    train_muzero_v2([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import train_muzero_with_gym_env
+    train_muzero_with_gym_env([main_config, create_config], env_name=main_config.env.env_name, seed=0, max_env_step=max_env_step)

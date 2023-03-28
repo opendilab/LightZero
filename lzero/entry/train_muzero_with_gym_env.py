@@ -17,8 +17,9 @@ from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroEvaluator
 
 
-def train_muzero_v2(
+def train_muzero_with_gym_env(
         input_cfg: Tuple[dict, dict],
+        env_name: str,
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
         model_path: Optional[str] = None,
@@ -28,9 +29,12 @@ def train_muzero_v2(
     """
     Overview:
         The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
+        We create a gym environment using env_name parameter, and then convert it to the format required by LightZero using LightZeroEnvWrapper class.
+        Please refer to the get_wrappered_env method for more details.
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
             ``Tuple[dict, dict]`` type means [user_config, create_cfg].
+        - env_name (:obj:`str`): The name of the environment to create.
         - seed (:obj:`int`): Random seed.
         - model (:obj:`Optional[torch.nn.Module]`): Instance of torch.nn.Module.
         - model_path (:obj:`Optional[str]`): The pretrained model path, which should
@@ -58,14 +62,12 @@ def train_muzero_v2(
     # Create main components: env, policy
     collector_env_cfg = DingEnvWrapper.create_collector_env_cfg(cfg.env)
     evaluator_env_cfg = DingEnvWrapper.create_evaluator_env_cfg(cfg.env)
-    cfg.env.env_type = cfg.env.get('env_type', cfg.env.env_name)
     collector_env = BaseEnvManager(
-        [get_wrappered_env(c, cfg.env.env_name, cfg.env.env_type) for c in collector_env_cfg],
+        [get_wrappered_env(c, env_name) for c in collector_env_cfg],
         cfg=BaseEnvManager.default_config())
     evaluator_env = BaseEnvManager(
-        [get_wrappered_env(c, cfg.env.env_name, cfg.env.env_type) for c in evaluator_env_cfg],
+        [get_wrappered_env(c, env_name) for c in evaluator_env_cfg],
         cfg=BaseEnvManager.default_config())
-
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     if cfg.policy.device == 'cuda' and torch.cuda.is_available():

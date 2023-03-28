@@ -5,10 +5,16 @@ from ding.envs import DingEnvWrapper
 from lzero.envs.lightzero_env_wrapper import LightZeroEnvWrapper
 
 
-def get_wrappered_env(wrapper_cfg: EasyDict, env_name: str, env_type: str):
-    assert env_type != "Atari" and env_type != "board_games", "Now we only support classic_control and box2d env " \
-                                                              "and don't support Atari and board_games in LightZeroEnvWrapper! Please use the " \
-                                                              "zoo/atari/envs/atari_lightzero_env.py and zoo/board_games/*/envs/*_env.py instead."
+def get_wrappered_env(wrapper_cfg: EasyDict, env_name: str):
+    """
+    Overview:
+        Returns a new environment with one or more wrappers applied to it.
+    Arguments:
+        - wrapper_cfg (:obj:`EasyDict`): A dictionary containing configuration settings for the wrappers.
+       -  env_name (:obj:`str`): The name of the environment to create.
+    Returns:
+        A callable that creates the wrapped environment.
+    """
     return lambda: DingEnvWrapper(
         gym.make(env_name),
         cfg={

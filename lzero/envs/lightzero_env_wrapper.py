@@ -33,22 +33,6 @@ class LightZeroEnvWrapper(gym.ObservationWrapper):
         super().__init__(env)
         assert 'is_train' in cfg, '`is_train` flag must set in the config of env'
         self.is_train = cfg.is_train
-        if self.is_train:  # set member variables which are enabled when is_train = True
-            self.is_train_enabled_varaible = True
-        else:  # else case
-            self.is_train_enabled_varaible = False
-        self.env_type = cfg.get("env_type", None)
-        if self.is_train_enabled_varaible:
-            if self.env_type is not None and self.env_type == "Atari":
-                cfg.max_episode_steps = cfg.collect_max_episode_steps
-                cfg.episode_life = True
-                cfg.clip_rewards = True
-        else:
-            if self.env_type is not None and self.env_type == "Atari":
-                cfg.max_episode_steps = cfg.eval_max_episode_steps
-                cfg.episode_life = False
-                cfg.clip_rewards = False
-            
         self._env = env
         self.cfg = cfg
         self.env_name = cfg.env_name
@@ -139,7 +123,6 @@ class LightZeroEnvWrapper(gym.ObservationWrapper):
             - kwargs (:obj:`Dict`): Reset with this key argumets
         Returns:
             - observation (:obj:`Any`): New observation after reset
-
         """
         obs = self.env.reset(**kwargs)
         self._eval_episode_return = 0.
@@ -169,7 +152,7 @@ class LightZeroEnvWrapper(gym.ObservationWrapper):
             else:
                 action_mask = None
 
-        # to be compatible with LightZero model,shape: [W, H, C]
+        # to be compatible with LightZero model shape: [W, H, C]
         obs = obs.reshape(self._raw_obs_space.shape[0], 1, 1)
 
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
