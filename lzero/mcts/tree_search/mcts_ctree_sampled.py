@@ -1,5 +1,5 @@
 import copy
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch
@@ -46,17 +46,17 @@ class SampledEfficientZeroMCTSCtree(object):
         return cfg
 
     @classmethod
-    def Roots(cls, root_num, legal_action_lis, action_space_size,
-                    num_of_sampled_actions, continuous_action_space) -> ctree.Roots:
+    def Roots(cls: int, root_num: int, legal_action_lis: List[Any], action_space_size: int,
+                    num_of_sampled_actions: int, continuous_action_space: bool) -> ctree.Roots:
         """
         Overview:
             Initialization of CNode with root_num, legal_actions_list, action_space_size, num_of_sampled_actions, continuous_action_space.
         Arguments:
-            - root_num: the number of the current root.
-            - legal_action_list: the vector of the legal action of this root.
-            - action_space_size: the size of action space of the current env.
-            - num_of_sampled_actions: the number of sampled actions, i.e. K in the Sampled MuZero papers.
-            - continuous_action_space: whether the action space is continous in current env.
+            - root_num (:obj:'int'): the number of the current root.
+            - legal_action_list (:obj:'List'): the vector of the legal action of this root.
+            - action_space_size (:obj:'int'): the size of action space of the current env.
+            - num_of_sampled_actions (:obj:'int'): the number of sampled actions, i.e. K in the Sampled MuZero papers.
+            - continuous_action_space (:obj:'bool'): whether the action space is continous in current env.
         """
         from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as ctree
         return ctree.Roots(
@@ -64,7 +64,7 @@ class SampledEfficientZeroMCTSCtree(object):
                     num_of_sampled_actions, continuous_action_space
                 )
 
-    def __init__(self, cfg=None) -> None:
+    def __init__(self, cfg: EasyDict = None) -> None:
         """
         Overview:
             Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
@@ -75,13 +75,14 @@ class SampledEfficientZeroMCTSCtree(object):
         default_config.update(cfg)
         self._cfg = default_config
 
-    def search(self, roots, model, hidden_state_roots, reward_hidden_state_roots, to_play_batch) -> None:
+    def search(self, roots: Any, model: torch.nn.Module, hidden_state_roots: List[Any], reward_hidden_state_roots: List[Any], to_play_batch: Union[int, List[Any]]) -> None:
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
              Use the cpp ctree.
         Arguments:
             - roots (:obj:`Any`): a batch of expanded root nodes
+            - model (:obj:`torch.nn.Module`): Instance of torch.nn.Module.
             - hidden_state_roots (:obj:`list`): the hidden states of the roots
             - reward_hidden_state_roots (:obj:`list`): the value prefix hidden states in LSTM of the roots
             - to_play_batch (:obj:`list`): the to_play_batch list used in two_player mode board games
