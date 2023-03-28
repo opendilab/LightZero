@@ -68,6 +68,8 @@ def find_cython_extensions(path=None):
             extname, [item],
             include_dirs=[np.get_include()],
             language="c++",
+            extra_compile_args=["/std:c++latest"],
+            extra_link_args=["/std:c++latest"],
         ))
 
     return extensions
@@ -106,8 +108,6 @@ setup(
         compiler_directives=dict(
             linetrace=_LINETRACE,
         ),
-        extra_compile_args=["/std:c++latest"],
-        extra_link_args=["/std:c++latest"],
     ),
     #cmdclass={"build_ext": custom_build_ext},
     classifiers=[
