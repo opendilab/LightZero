@@ -105,7 +105,7 @@ jobs:
           cloc test
 
       - name: Run unittest on MacOS or Linux
-        if: ${{ env.OS_NAME == 'MacOS' or env.OS_NAME == 'Linux'}}
+        if: ${{ env.OS_NAME == 'MacOS' || env.OS_NAME == 'Linux'}}
         env:
           CI: 'true'
           LINETRACE: 1
