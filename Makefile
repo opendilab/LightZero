@@ -28,7 +28,7 @@ COMPILE_PLATFORM ?= manylinux_2_24_x86_64
 
 
 build:
-	$(PYTHON) setup.py build_ext --inplace \
+	$(PYTHON) CC=gcc CXX=g++ setup.py build_ext --inplace \
 					$(if ${LINETRACE},--define CYTHON_TRACE,)
 
 zip:
