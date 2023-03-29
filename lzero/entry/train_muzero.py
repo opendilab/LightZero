@@ -142,10 +142,7 @@ def train_muzero(
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
                     f'batch_size: {batch_size},'
-                    f'current buffer statistics is: '
-                    f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
-                    f'num of game blocks: {replay_buffer.get_num_of_game_segments()}, '
-                    f'number of transitions: {replay_buffer.get_num_of_transitions()}, '
+                    f'{replay_buffer}'
                     f'continue to collect now ....'
                 )
                 break

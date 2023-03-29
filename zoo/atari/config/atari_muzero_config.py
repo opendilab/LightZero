@@ -6,8 +6,7 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-env_name = 'PongNoFrameskip-v4'
-# options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
+env_name = 'PongNoFrameskip-v4'  # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -112,4 +111,5 @@ create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
+
     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

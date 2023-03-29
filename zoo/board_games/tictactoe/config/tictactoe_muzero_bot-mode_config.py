@@ -32,6 +32,7 @@ tictactoe_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        # mcts_ctree=False,
         model=dict(
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]

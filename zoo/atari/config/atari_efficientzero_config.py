@@ -6,10 +6,7 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-# options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-# env_name = 'PongNoFrameskip-v4'
-env_name = 'BreakoutNoFrameskip-v4'
-
+env_name = 'PongNoFrameskip-v4'  # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -26,7 +23,6 @@ elif env_name == 'SpaceInvadersNoFrameskip-v4':
 elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
     average_episode_length_when_converge = 800
-
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -65,6 +61,7 @@ atari_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        mcts_ctree=True,
         model=dict(
             observation_shape=(4, 96, 96),
             action_space_size=action_space_size,

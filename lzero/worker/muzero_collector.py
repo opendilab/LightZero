@@ -143,7 +143,6 @@ class MuZeroCollector(ISerialCollector):
         # A game_segment_pool implementation based on the deque structure.
         self.game_segment_pool = deque(maxlen=self._cfg.game_segment_pool_size)
         self.unroll_plus_td_steps = self.game_config.num_unroll_steps + self.game_config.td_steps
-        self.last_model_index = -1
 
     def _reset_stat(self, env_id: int) -> None:
         """
@@ -190,7 +189,7 @@ class MuZeroCollector(ISerialCollector):
     # ==============================================================
     # MCTS+RL related core code
     # ==============================================================
-    def get_priorities(self, i, pred_values_lst, search_values_lst):
+    def _compute_priorities(self, i, pred_values_lst, search_values_lst):
         """
         Overview:
             obtain the priorities at index i.
@@ -217,9 +216,9 @@ class MuZeroCollector(ISerialCollector):
         Overview:
             put the last game block into the pool if the current game is finished
         Arguments:
-            - last_game_segments (:obj:`list`): list of the last game histories
+            - last_game_segments (:obj:`list`): list of the last game segments
             - last_game_priorities (:obj:`list`): list of the last game priorities
-            - game_segments (:obj:`list`): list of the current game histories
+            - game_segments (:obj:`list`): list of the current game segments
         Note:
             (last_game_segments[i].obs_segment[-4:][j] == game_segments[i].obs_segment[:4][j]).all() is True
         """
@@ -471,7 +470,7 @@ class MuZeroCollector(ISerialCollector):
                             )
 
                         # calculate priority
-                        priorities = self.get_priorities(i, pred_values_lst, search_values_lst)
+                        priorities = self._compute_priorities(i, pred_values_lst, search_values_lst)
                         pred_values_lst[env_id] = []
                         search_values_lst[env_id] = []
 
@@ -515,7 +514,7 @@ class MuZeroCollector(ISerialCollector):
                         self.pad_and_save_last_trajectory(i, last_game_segments, last_game_priorities, game_segments, dones)
 
                     # store current block trajectory
-                    priorities = self.get_priorities(i, pred_values_lst, search_values_lst)
+                    priorities = self._compute_priorities(i, pred_values_lst, search_values_lst)
 
                     # NOTE: put the last game block in one episode into the trajectory_pool
                     game_segments[env_id].game_segment_to_array()

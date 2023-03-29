@@ -4,14 +4,16 @@ from typing import Optional, Tuple
 
 import numpy as np
 import torch
+from tensorboardX import SummaryWriter
+
 from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
-from ding.worker import create_serial_collector
-from tensorboardX import SummaryWriter
+from lzero.mcts import MuZeroGameBuffer as GameBuffer
+from lzero.worker import MuZeroEvaluator as BaseSerialEvaluator
 
 
 def eval_muzero(
@@ -38,17 +40,7 @@ def eval_muzero(
     """
     cfg, create_cfg = input_cfg
     assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero'], \
-        "LightZero noow only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero'"
-
-    if create_cfg.policy.type == 'muzero':
-        from lzero.mcts import MuZeroGameBuffer as GameBuffer
-        from lzero.worker import MuZeroEvaluator as BaseSerialEvaluator
-    elif create_cfg.policy.type == 'efficientzero':
-        from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
-        from lzero.worker import EfficientZeroEvaluator as BaseSerialEvaluator
-    elif create_cfg.policy.type == 'sampled_efficientzero':
-        from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
-        from lzero.worker import SampledEfficientZeroEvaluator as BaseSerialEvaluator
+        "LightZero now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero'"
 
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
     # Create main components: env, policy
@@ -108,7 +100,8 @@ def eval_muzero(
         if print_seed_details:
             print("=" * 20)
             print(f'In seed {seed}, returns: {returns}')
-            print(f'win rate: {len(np.where(returns == 1.)[0])/ num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0])/num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0])/ num_episodes_each_seed}')
+            print(
+                f'win rate: {len(np.where(returns == 1.)[0]) / num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0]) / num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0]) / num_episodes_each_seed}')
             print("=" * 20)
 
         return returns.mean(), returns
