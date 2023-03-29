@@ -5,3 +5,44 @@ requires = [
     "Cython",
     "numpy>=1.18.0",
 ]
+
+[tool.cibuildwheel]
+skip = ["pp*"] # Do not build for PyPy
+
+## Windows build configuration
+[tool.cibuildwheel.windows]
+archs = ["x86", 'AMD64']
+before-test = [# Unittest for windows
+    "pip install -r \"{project}\\requirements-test.txt\"",
+]
+test-command = [
+    #    "xcopy /e /i \"{project}\\lzero\" lzero",
+    "copy \"{project}\\pytest.ini\" pytest.ini",
+    "pytest lzero -sv -m unittest --log-level=DEBUG",
+]
+
+## macOS build configuration
+[tool.cibuildwheel.macos]
+archs = ["x86_64", "arm64"] # Build for x86_64 and arm64
+before-test = [# Unittest for macos
+    "pip install -r {project}/requirements-test.txt",
+]
+test-command = [
+    #    "cp -rf {project}/lzero lzero",
+    "cp {project}/pytest.ini pytest.ini",
+    "pytest lzero -sv -m unittest --log-level=DEBUG",
+]
+
+
+## Linux build configuration
+[tool.cibuildwheel.linux]
+archs = ["x86_64", "aarch64"] # Build for x86_64 and arm64
+skip = ["pp* *musllinux*"] # dependencies do not build for musl
+before-test = [# Unittest for linux
+    "pip install -r {project}/requirements-test.txt",
+]
+test-command = [
+    #    "cp -rf {project}/lzero lzero",
+    "cp {project}/pytest.ini pytest.ini",
+    "pytest lzero -sv -m unittest --log-level=DEBUG",
+]
