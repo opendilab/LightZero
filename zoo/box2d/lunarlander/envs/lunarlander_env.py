@@ -37,9 +37,9 @@ class LunarLanderEnv(BaseEnv):
         self._init_flag = False
         # env_name options = {'LunarLander-v2', 'LunarLanderContinuous-v2'}
         self._env_name = cfg.env_name
-        self._replay_path = cfg.replay_path
-        self._replay_path_gif = cfg.replay_path_gif
-        self._save_replay_gif = cfg.save_replay_gif
+        self._replay_path = cfg.get('replay_path', None)
+        self._replay_path_gif = cfg.get('replay_path_gif', None)
+        self._save_replay_gif = cfg.get('save_replay_gif', False)
         self._save_replay_count = 0
         if 'Continuous' in self._env_name:
             self._act_scale = cfg.act_scale  # act_scale only works in continuous env

@@ -205,8 +205,8 @@ class Roots:
         for i in range(self.root_num):
             #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
             # TODO(pu): why hidden_state_index_x=0, hidden_state_index_y=i?
-            if to_play is None:
-                self.roots[i].expand(0, 0, i, value_prefixs[i], policies[i])
+            if to_play in [-1, None]:
+                self.roots[i].expand(-1, 0, i, value_prefixs[i], policies[i])
             elif to_play is [None]:
                 print('debug')
             else:
@@ -225,8 +225,8 @@ class Roots:
             - to_play_batch: the vector of the player side of each root.
         """
         for i in range(self.root_num):
-            if to_play is None:
-                self.roots[i].expand(0, 0, i, value_prefixs[i], policies[i])
+            if to_play in [-1, None]:
+                self.roots[i].expand(-1, 0, i, value_prefixs[i], policies[i])
             else:
                 self.roots[i].expand(to_play[i], 0, i, value_prefixs[i], policies[i])
 
@@ -457,10 +457,16 @@ def batch_traverse(
     results.nodes = [None for i in range(results.num)]
     results.hidden_state_index_x_lst = [None for i in range(results.num)]
     results.hidden_state_index_y_lst = [None for i in range(results.num)]
-    if virtual_to_play in [1, 2] or virtual_to_play[0] in [1, 2]:
-        players = 2
-    elif virtual_to_play in [-1, None] or virtual_to_play[0] in [-1, None]:
-        players = 1
+    if isinstance(virtual_to_play, int):
+        if virtual_to_play in [1, 2]:
+            players = 2
+        elif virtual_to_play in [-1, None]:
+            players = 1
+    elif isinstance(virtual_to_play, list):
+        if virtual_to_play[0] in [1, 2]:
+            players = 2
+        elif virtual_to_play[0] in [-1, None]:
+            players = 1
 
     results.search_paths = {i: [] for i in range(results.num)}
     for i in range(results.num):
@@ -520,7 +526,7 @@ def backpropagate(search_path: List[Node], min_max_stats: MinMaxStats, to_play: 
         - value: the value to propagate along the search path.
         - discount_factor: the discount factor of reward.
     """
-    assert to_play is None or to_play in [-1, 1, 2]
+    assert to_play is None or to_play in [-1, 1, 2], f'to_play is {to_play}!'
     if to_play is None or to_play == -1:
         # for 1 player mode
         bootstrap_value = value
@@ -612,16 +618,16 @@ def batch_backpropagate(
     for i in range(results.num):
         # expand the leaf node
         #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
-        if to_play is None:
-            # set to_play=0, because two_player mode to_play = {1,2}
-            results.nodes[i].expand(0, hidden_state_index_x, i, value_prefixs[i], policies[i])
+        if to_play in [-1, None]:
+            # set to_play=-1, because two_player mode to_play = {1,2}
+            results.nodes[i].expand(-1, hidden_state_index_x, i, value_prefixs[i], policies[i])
         else:
             results.nodes[i].expand(to_play[i], hidden_state_index_x, i, value_prefixs[i], policies[i])
 
         # reset
         results.nodes[i].is_reset = is_reset_lst[i]
-        if to_play is None:
-            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], 0, values[i], discount_factor)
+        if to_play in [-1, None]:
+            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], -1, values[i], discount_factor)
         else:
             backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], to_play[i], values[i],
                           discount_factor)

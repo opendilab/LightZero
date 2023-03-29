@@ -1,8 +1,17 @@
+// C++11
+
 #include <iostream>
 #include "cnode.h"
 #include <algorithm>
 #include <map>
 #include <cassert>
+
+#ifdef _WIN32
+#include "..\..\common_lib\utils.cpp"
+#else
+#include "../../common_lib/utils.cpp"
+#endif
+
 
 namespace tree
 {
@@ -103,7 +112,14 @@ namespace tree
         }
         float temp_policy;
         float policy_sum = 0.0;
+
+        #ifdef _WIN32
+        // 创建动态数组
+        float* policy = new float[action_num];
+        #else
         float policy[action_num];
+        #endif
+        
         float policy_max = FLOAT_MIN;
         for (auto a : this->legal_actions)
         {
@@ -127,6 +143,11 @@ namespace tree
             std::vector<int> tmp_empty;
             this->children[a] = CNode(prior, tmp_empty); // only for muzero/efficient zero, not support alphazero
         }
+        #ifdef _WIN32
+        // 释放数组内存
+        delete[] policy;
+        #else
+        #endif
     }
 
     void CNode::add_exploration_noise(float exploration_fraction, const std::vector<float> &noises)
@@ -705,9 +726,7 @@ namespace tree
             - virtual_to_play_batch: the batch of which player is playing on this node.
         */
         // set seed
-        timeval t1;
-        gettimeofday(&t1, NULL);
-        srand(t1.tv_usec);
+        get_time_and_set_rand_seed();
 
         int last_action = -1;
         float parent_q = 0.0;
