@@ -48,18 +48,18 @@ class GomokuEnv(BaseEnv):
         self.board_size = cfg.board_size
         self.prob_random_agent = cfg.prob_random_agent
         self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
-
         self.channel_last = cfg.channel_last
         self.scale = cfg.scale
-        self.check_action_to_connect4_in_bot_v0 = self.cfg.check_action_to_connect4_in_bot_v0
+        self.check_action_to_connect4_in_bot_v0 = cfg.check_action_to_connect4_in_bot_v0
+        self.agent_vs_human = cfg.agent_vs_human
+        self.bot_action_type = cfg.bot_action_type
 
         self.players = [1, 2]
         self.board_markers = [str(i + 1) for i in range(self.board_size)]
         self.total_num_actions = self.board_size * self.board_size
         self.gomoku_rule_bot_v1 = GomokuRuleBotV1()
         self._env = self
-        self.agent_vs_human = cfg.agent_vs_human
-        self.bot_action_type = cfg.bot_action_type
+
         if self.bot_action_type == 'alpha_beta_pruning':
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 

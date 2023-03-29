@@ -1,3 +1,5 @@
+// C++11
+
 #include "cminimax.h"
 
 namespace tools{

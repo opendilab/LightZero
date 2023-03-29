@@ -1,0 +1,17 @@
+Jinja2~=3.0.0
+sphinx~=3.2.0
+sphinx_rtd_theme~=0.4.3
+enum_tools
+sphinx-toolbox
+plantumlcli>=0.0.4
+packaging
+sphinx-multiversion~=0.2.4
+where~=1.0.2
+numpy>=1.19,<2
+easydict>=1.7,<2
+scikit-learn>=0.24.2
+nbsphinx>=0.8.8
+ipython>=7.16.3
+psutil>=5.8.0
+ipykernel>=6.15
+py-cpuinfo>=8.0.0

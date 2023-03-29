@@ -1,0 +1,150 @@
+name: Release Test
+
+on:
+  #  push:
+  workflow_dispatch:
+
+jobs:
+  source_build:
+    name: Try package the source
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - 'ubuntu-20.04'
+        python-version:
+          - '3.8'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 20
+      - name: Set up python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Set up python dependences
+        run: |
+          pip install --upgrade pip
+          pip install --upgrade flake8 setuptools wheel twine
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-build.txt ]; then pip install -r requirements-build.txt; fi
+          if [ -f requirements-test.txt ]; then pip install -r requirements-test.txt; fi
+          pip install --upgrade build
+      - name: Build packages
+        run: |
+          make zip
+          ls -al dist
+      - name: Upload packed files to artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: build-artifacts-source-pack
+          path: ./dist/*
+      - name: Upload packed files to artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: build-artifacts-all
+          path: ./dist/*
+
+  wheel_build:
+    name: Try build the wheels
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - 'ubuntu-20.04'
+          #          - 'windows-2019'
+          - 'macos-12'
+        python:
+          - '3.7'
+          - '3.8'
+          - '3.9'
+        #          - '3.10'
+        #          - '3.11'
+        architecture:
+          - x86_64
+          - arm64
+          - aarch64
+          - x86
+          - AMD64
+        exclude:
+          - os: ubuntu-20.04
+            architecture: arm64
+          - os: ubuntu-20.04
+            architecture: x86
+          - os: ubuntu-20.04
+            architecture: AMD64
+          - os: windows-2019
+            architecture: x86_64
+          - os: windows-2019
+            architecture: arm64
+          - os: windows-2019
+            architecture: aarch64
+          - os: macos-12
+            architecture: aarch64
+          - os: macos-12
+            architecture: x86
+          - os: macos-12
+            architecture: AMD64
+          - python: '3.7'
+            architecture: arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 20
+
+      - name: Set up QEMU
+        if: ${{ runner.os == 'Linux' }}
+        uses: docker/setup-qemu-action@v1
+        with:
+          platforms: all
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.11.4
+        env:
+          CIBW_SKIP: "pp* *musllinux*"
+          CIBW_ARCHS: ${{ matrix.architecture }}
+          CIBW_PROJECT_REQUIRES_PYTHON: ~=${{ matrix.python }}.0
+      - name: Show the buildings
+        shell: bash
+        run: |
+          ls -al ./wheelhouse
+          mv wheelhouse dist
+      - name: Upload packed files to artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-artifacts-${{ runner.os }}-cp${{ matrix.python }}-${{ matrix.architecture }}
+          path: ./dist/*
+      - name: Upload packed files to artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: build-artifacts-all
+          path: ./dist/*
+
+  # the publishing can only be processed on linux system
+  fake_publish:
+    name: Fake Publish
+    runs-on: ubuntu-20.04
+    needs:
+      - wheel_build
+      - source_build
+    strategy:
+      fail-fast: false
+      matrix:
+        python:
+          - '3.8'
+
+    steps:
+      - name: Download packed files to artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts-all
+          path: ./dist
+      - name: Show the buildings
+        shell: bash
+        run: |
+          ls -al ./dist
