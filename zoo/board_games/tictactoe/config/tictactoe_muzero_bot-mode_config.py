@@ -17,14 +17,6 @@ update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e6)
 reanalyze_ratio = 0.3
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 5
-# num_simulations = 5
-# update_per_collect = 4
-# batch_size = 4
-# max_env_step = int(2e6)
-# reanalyze_ratio = 0.3
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -34,7 +26,6 @@ tictactoe_muzero_config = dict(
     env=dict(
         stop_value=int(2),
         battle_mode='play_with_bot_mode',
-        scale=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,

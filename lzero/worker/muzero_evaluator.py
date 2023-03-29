@@ -4,12 +4,13 @@ from typing import Optional, Callable, Tuple
 
 import numpy as np
 import torch
+from easydict import EasyDict
+
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
-from easydict import EasyDict
-
+from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation_list
 
 
@@ -200,11 +201,6 @@ class MuZeroEvaluator(ISerialEvaluator):
             - stop_flag (:obj:`bool`): Whether this training program can be ended.
             - eval_reward (:obj:`float`): Current eval_reward.
         """
-        if self.game_config.sampled_algo:
-            from lzero.mcts.tree_search.game_sampled_efficientzero import GameSegment
-        else:
-            from lzero.mcts.buffer.game_segment import GameSegment
-
         if n_episode is None:
             n_episode = self._default_n_episode
         assert n_episode is not None, "please indicate eval n_episode"

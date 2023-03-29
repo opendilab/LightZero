@@ -21,7 +21,6 @@ reanalyze_ratio = 0.3
 board_size = 6  # default_size is 15
 bot_action_type = 'v0'  # 'v1'
 prob_random_action_in_bot = 0.5
-
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -31,6 +30,7 @@ gomoku_muzero_config = dict(
     env=dict(
         stop_value=int(2),
         battle_mode='self_play_mode',
+        bot_action_type=bot_action_type,
         prob_random_action_in_bot=prob_random_action_in_bot,
         channel_last=True,
         collector_env_num=collector_env_num,

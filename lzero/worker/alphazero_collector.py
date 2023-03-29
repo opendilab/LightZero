@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Dict
 
 import numpy as np
 from ding.envs import BaseEnvManager
@@ -38,7 +38,7 @@ class AlphaZeroCollector(ISerialCollector):
         instance_name: Optional[str] = 'collector',
         replay_buffer: 'replay_buffer' = None,  # noqa
         env_config=None,
-    ):
+    ) -> None:
         """
             Overview:
                 Init the AlphaZero collector according to input arguments.

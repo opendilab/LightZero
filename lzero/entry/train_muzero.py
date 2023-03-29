@@ -3,8 +3,9 @@ import os
 from functools import partial
 from typing import Optional, Tuple
 
-import numpy as np
 import torch
+from tensorboardX import SummaryWriter
+
 from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
@@ -12,8 +13,6 @@ from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
 from ding.worker import create_serial_collector
-from tensorboardX import SummaryWriter
-
 from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroEvaluator
 
@@ -113,11 +112,11 @@ def train_muzero(
         # set temperature for visit count distributions according to the train_iter,
         # please refer to Appendix D in MuZero paper for details.
         collect_kwargs['temperature'] = visit_count_temperature(
-                    game_config.manual_temperature_decay,
-                    game_config.fixed_temperature_value,
-                    game_config.threshold_training_steps_for_final_temperature,
-                    trained_steps=learner.train_iter
-                )
+            game_config.manual_temperature_decay,
+            game_config.fixed_temperature_value,
+            game_config.threshold_training_steps_for_final_temperature,
+            trained_steps=learner.train_iter
+        )
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):

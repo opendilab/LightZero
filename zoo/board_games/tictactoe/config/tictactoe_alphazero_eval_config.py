@@ -5,13 +5,13 @@ board_size = 3  # fixed
 collector_env_num = 1
 n_episode = 1
 evaluator_env_num = 1
-num_simulations = 50
-update_per_collect = 100
+num_simulations = 25
+update_per_collect = 50
 batch_size = 256
 agent_vs_human = False
 
 tictactoe_alphazero_config = dict(
-    exp_name='data_ez_ptree/tictactoe_self-play_alphazero',
+    exp_name='data_ez_ptree/tictactoe_eval',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -23,32 +23,30 @@ tictactoe_alphazero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        cuda=True,
-        board_size=board_size,
         model=dict(
-            categorical_distribution=False,
-            representation_network_type='conv_res_blocks',
-            observation_shape=(3, board_size, board_size),
-            action_space_size=int(1 * board_size * board_size),
+            # We use the small size model for tictactoe
+            observation_shape=(3, 3, 3),
+            action_space_size=int(1 * 3 * 3),
             downsample=False,
-            reward_support_size=1,
-            value_support_size=1,
             num_res_blocks=1,
             num_channels=16,
             value_head_channels=16,
             policy_head_channels=16,
             fc_value_layers=[8],
             fc_policy_layers=[8],
-            batch_norm_momentum=0.1,
             last_linear_layer_init_zero=True,
-            state_norm=False,
+            categorical_distribution=False,
+            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
-        multi_gpu=False,
+        stop_value=2,
+        cuda=True,
+        board_size=3,
+        collector_env_num=collector_env_num,
+        update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
         learning_rate=0.003,
         weight_decay=0.0001,
-        update_per_collect=update_per_collect,
         grad_norm=0.5,
         value_weight=1.0,
         entropy_weight=0.0,
@@ -66,8 +64,8 @@ tictactoe_alphazero_create_config = dict(
         type='tictactoe',
         import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
     ),
-    env_manager=dict(type='base'),
     # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),  # if agent_vs_human=True
     policy=dict(
         type='alphazero',
         import_names=['lzero.policy.alphazero'],
@@ -89,19 +87,31 @@ if __name__ == '__main__':
     from lzero.entry import eval_alphazero
     import numpy as np
 
-    seed = 0
-    test_episodes = 5
-    reward_mean, reward_lst = eval_alphazero(
-        [main_config, create_config], seed=seed, test_episodes=test_episodes, max_env_step=int(1e5)
-    )
+    """ 
+    model_path (:obj:`Optional[str]`): The pretrained model path, which should
+    point to the ckpt file of the pretrained model, and an absolute path is recommended.
+    In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
+     """
+    model_path = '/Users/user/code/LightZero/zoo/board_games/tictactoe/tictactoe_alphazero_bot-mode_ns25_upc50_rr0.3_seed0/ckpt/ckpt_best.pth.tar'
+    returns_mean_seeds = []
+    returns_seeds = []
+    seeds = [0]
+    num_episodes_each_seed = 3
+    total_test_episodes = num_episodes_each_seed * len(seeds)
+    for seed in seeds:
+        returns_mean, returns = eval_alphazero([main_config, create_config], seed=seed,
+                                               num_episodes_each_seed=num_episodes_each_seed,
+                                               print_seed_details=True, model_path=model_path)
+        returns_mean_seeds.append(returns_mean)
+        returns_seeds.append(returns)
 
-    reward_lst = np.array(reward_lst)
-    reward_mean = np.array(reward_mean)
+    returns_mean_seeds = np.array(returns_mean_seeds)
+    returns_seeds = np.array(returns_seeds)
 
     print("=" * 20)
-    print(f'we eval total {seed} seed. In each seed, we test {test_episodes} episodes.')
-    print('reward_mean:', reward_mean)
+    print(f'We eval total {len(seeds)} seeds. In each seed, we eval {num_episodes_each_seed} episodes.')
+    print(f'In seeds {seeds}, returns_mean_seeds is {returns_mean_seeds}, returns is {returns_seeds}')
+    print('In all seeds, reward_mean:', returns_mean_seeds.mean(), end='. ')
     print(
-        f'win rate: {len(np.where(reward_lst == 1.)[0]) / test_episodes}, draw rate: {len(np.where(reward_lst == 0.)[0]) / test_episodes}, lose rate: {len(np.where(reward_lst == -1.)[0]) / test_episodes}'
-    )
+        f'win rate: {len(np.where(returns_seeds == 1.)[0]) / total_test_episodes}, draw rate: {len(np.where(returns_seeds == 0.)[0]) / total_test_episodes}, lose rate: {len(np.where(returns_seeds == -1.)[0]) / total_test_episodes}')
     print("=" * 20)

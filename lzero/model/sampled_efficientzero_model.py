@@ -626,16 +626,28 @@ class PredictionNetwork(nn.Module):
         ######################
 
         if self.continuous_action_space:
-            self.sampled_fc_policy = ReparameterizationHead(
-                input_size=self.flatten_output_size_for_policy_head,  # 256,
-                output_size=action_space_size,
-                layer_num=len(fc_policy_layers) + 1,
-                sigma_type=self.sigma_type,
-                fixed_sigma_value=self.fixed_sigma_value,
-                activation=nn.ReLU(),
-                norm_type=None,
-                bound_type=self.bound_type  # TODO(pu)
-            )
+            try:
+                self.sampled_fc_policy = ReparameterizationHead(
+                    input_size=self.flatten_output_size_for_policy_head,  # 256,
+                    output_size=action_space_size,
+                    layer_num=len(fc_policy_layers) + 1,
+                    sigma_type=self.sigma_type,
+                    fixed_sigma_value=self.fixed_sigma_value,
+                    activation=nn.ReLU(),
+                    norm_type=None,
+                    bound_type=self.bound_type  # TODO(pu)
+                )
+            except:
+                self.sampled_fc_policy = ReparameterizationHead(
+                    hidden_size=self.flatten_output_size_for_policy_head,  # 256,
+                    output_size=action_space_size,
+                    layer_num=len(fc_policy_layers) + 1,
+                    sigma_type=self.sigma_type,
+                    fixed_sigma_value=self.fixed_sigma_value,
+                    activation=nn.ReLU(),
+                    norm_type=None,
+                    bound_type=self.bound_type  # TODO(pu)
+                )
         else:
             self.sampled_fc_policy = MLP(
                 in_channels=self.flatten_output_size_for_policy_head,

@@ -9,13 +9,14 @@ from lzero.model.efficientzero_model import PredictionNetwork, DynamicsNetwork
 batch_size = [100, 10]
 num_res_blocks = [3]
 num_channels = [3]
+lstm_hidden_size = [64]
 reward_head_channels = [2]
 fc_reward_layers = [[16, 8]]
 output_support_size = [2]
 flatten_output_size_for_reward_head = [180]
 dynamics_network_args = list(
     product(
-        batch_size, num_res_blocks, num_channels, reward_head_channels, fc_reward_layers, output_support_size,
+        batch_size, num_res_blocks, num_channels, lstm_hidden_size, reward_head_channels, fc_reward_layers, output_support_size,
         flatten_output_size_for_reward_head
     )
 )
@@ -91,11 +92,11 @@ class TestEfficientZeroModel:
         assert value.shape == torch.Size([batch_size, output_support_size])
 
     @pytest.mark.parametrize(
-        'batch_size, num_res_blocks, num_channels, reward_head_channels, fc_reward_layers, output_support_size,'
+        'batch_size, num_res_blocks, num_channels, lstm_hidden_size, reward_head_channels, fc_reward_layers, output_support_size,'
         'flatten_output_size_for_reward_head', dynamics_network_args
     )
     def test_dynamics_network(
-        self, batch_size, num_res_blocks, num_channels, reward_head_channels, fc_reward_layers, output_support_size,
+        self, batch_size, num_res_blocks, num_channels, lstm_hidden_size, reward_head_channels, fc_reward_layers, output_support_size,
         flatten_output_size_for_reward_head
     ):
         observation_shape = [1, 3, 3]
@@ -105,17 +106,18 @@ class TestEfficientZeroModel:
         dynamics_network = DynamicsNetwork(
             num_res_blocks=num_res_blocks,
             num_channels=num_channels,
+            lstm_hidden_size=lstm_hidden_size,
             reward_head_channels=reward_head_channels,
             fc_reward_layers=fc_reward_layers,
             output_support_size=output_support_size,
             flatten_output_size_for_reward_head=flatten_output_size_for_reward_head
         )
         next_state, reward_hidden, value_prefix = dynamics_network(
-            state_action_embedding, (torch.randn(1, batch_size, 64), torch.randn(1, batch_size, 64))
+            state_action_embedding, (torch.randn(1, batch_size, lstm_hidden_size), torch.randn(1, batch_size, 64))
         )
         assert next_state.shape == torch.Size([batch_size, num_channels - action_space_size, 3, 3])
-        assert reward_hidden[0].shape == torch.Size([1, batch_size, 64])
-        assert reward_hidden[1].shape == torch.Size([1, batch_size, 64])
+        assert reward_hidden[0].shape == torch.Size([1, batch_size, lstm_hidden_size])
+        assert reward_hidden[1].shape == torch.Size([1, batch_size, lstm_hidden_size])
         assert value_prefix.shape == torch.Size([batch_size, output_support_size])
 
 
@@ -123,6 +125,7 @@ if __name__ == "__main__":
     batch_size = 2
     num_res_blocks = 3
     num_channels = 10
+    lstm_hidden_size = 64
     action_space_size = 5
     reward_head_channels = 2
     fc_reward_layers = [16]
@@ -141,9 +144,9 @@ if __name__ == "__main__":
         flatten_output_size_for_reward_head=flatten_output_size_for_reward_head
     )
     next_state, reward_hidden, value_prefix = dynamics_network(
-        state_action_embedding, (torch.randn(1, batch_size, 64), torch.randn(1, batch_size, 64))
+        state_action_embedding, (torch.randn(1, batch_size, lstm_hidden_size), torch.randn(1, batch_size, lstm_hidden_size))
     )
     assert next_state.shape == torch.Size([batch_size, num_channels - action_space_size, 3, 3])
-    assert reward_hidden[0].shape == torch.Size([1, batch_size, 64])
-    assert reward_hidden[1].shape == torch.Size([1, batch_size, 64])
+    assert reward_hidden[0].shape == torch.Size([1, batch_size, lstm_hidden_size])
+    assert reward_hidden[1].shape == torch.Size([1, batch_size, lstm_hidden_size])
     assert value_prefix.shape == torch.Size([batch_size, output_support_size])

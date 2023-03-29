@@ -212,7 +212,7 @@ class MuZeroCollector(ISerialCollector):
 
         return priorities
 
-    def pad_and_save_last_trajectory(self, i, last_game_segments, last_game_priorities, game_segments, done):
+    def pad_and_save_last_trajectory(self, i, last_game_segments, last_game_priorities, game_segments, done) -> None:
         """
         Overview:
             put the last game block into the pool if the current game is finished

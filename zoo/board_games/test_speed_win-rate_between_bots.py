@@ -7,7 +7,7 @@ from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 from zoo.board_games.mcts_bot import MCTSBot
 from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 
-cfg = dict(
+cfg_tictactoe = dict(
     battle_mode='self_play_mode',
     agent_vs_human=False,
     bot_action_type=['v0', 'alpha_beta_pruning'],  # {'v0', 'alpha_beta_pruning'}
@@ -15,6 +15,7 @@ cfg = dict(
     prob_expert_agent=0,
     channel_last=True,
     scale=True,
+    prob_random_action_in_bot=0.,
 )
 
 
@@ -25,10 +26,10 @@ def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
 
     for i in range(100):
         print('-' * 10 + str(i) + '-' * 10)
-        env = TicTacToeEnv(EasyDict(cfg))
+        env = TicTacToeEnv(EasyDict(cfg_tictactoe))
         env.reset()
         state = env.board
-        player = MCTSBot(TicTacToeEnv, cfg, 'a', num_simulations)  # player_index = 0, player = 1
+        player = MCTSBot(TicTacToeEnv, cfg_tictactoe, 'a', num_simulations)  # player_index = 0, player = 1
         player_index = 0
         while not env.get_done_reward()[0]:
             if player_index == 0:
@@ -80,10 +81,10 @@ def test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
 
     for i in range(10):
         print('-' * 10 + str(i) + '-' * 10)
-        env = TicTacToeEnv(EasyDict(cfg))
+        env = TicTacToeEnv(EasyDict(cfg_tictactoe))
         env.reset()
         state = env.board
-        player = MCTSBot(TicTacToeEnv, cfg, 'a', num_simulations)  # player_index = 0, player = 1
+        player = MCTSBot(TicTacToeEnv, cfg_tictactoe, 'a', num_simulations)  # player_index = 0, player = 1
         player_index = 1
         while not env.get_done_reward()[0]:
             if player_index == 0:
@@ -138,10 +139,10 @@ def test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
 
     for i in range(10):
         print('-' * 10 + str(i) + '-' * 10)
-        env = TicTacToeEnv(EasyDict(cfg))
+        env = TicTacToeEnv(EasyDict(cfg_tictactoe))
         env.reset()
         state = env.board
-        player = MCTSBot(TicTacToeEnv, cfg, 'a', num_simulations)  # player_index = 0, player = 1
+        player = MCTSBot(TicTacToeEnv, cfg_tictactoe, 'a', num_simulations)  # player_index = 0, player = 1
         player_index = 1
         while not env.get_done_reward()[0]:
             if player_index == 0:
@@ -196,10 +197,10 @@ def test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
 
     for i in range(10):
         print('-' * 10 + str(i) + '-' * 10)
-        env = TicTacToeEnv(EasyDict(cfg))
+        env = TicTacToeEnv(EasyDict(cfg_tictactoe))
         env.reset()
         state = env.board
-        player = MCTSBot(TicTacToeEnv, cfg, 'a', num_simulations)  # player_index = 0, player = 1
+        player = MCTSBot(TicTacToeEnv, cfg_tictactoe, 'a', num_simulations)  # player_index = 0, player = 1
         player_index = 0
         while not env.get_done_reward()[0]:
             if player_index == 0:
@@ -254,10 +255,10 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
 
     for i in range(10):
         print('-' * 10 + str(i) + '-' * 10)
-        env = TicTacToeEnv(EasyDict(cfg))
+        env = TicTacToeEnv(EasyDict(cfg_tictactoe))
         env.reset()
         state = env.board
-        player = MCTSBot(TicTacToeEnv, cfg, 'a', num_simulations)  # player_index = 0, player = 1
+        player = MCTSBot(TicTacToeEnv, cfg_tictactoe, 'a', num_simulations)  # player_index = 0, player = 1
         player_index = 0
         while not env.get_done_reward()[0]:
             if player_index == 0:
@@ -313,6 +314,8 @@ cfg_gomoku = dict(
     prob_random_agent=0,
     channel_last=True,
     scale=True,
+    prob_random_action_in_bot=0.,
+    check_action_to_connect4_in_bot_v0=False,
 )
 
 

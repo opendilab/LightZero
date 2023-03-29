@@ -10,7 +10,11 @@ cfg = dict(
     battle_mode='self_play_mode',
     agent_vs_human=False,
     bot_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
+    prob_random_action_in_bot=0.,
+    channel_last=True,
+    scale=True,
 )
+
 
 @pytest.mark.envtest
 class TestTicTacToeAlphaBetaPruningBot:
@@ -41,7 +45,7 @@ class TestTicTacToeAlphaBetaPruningBot:
             print('-' * 15)
             print(state)
 
-        assert env.get_done_winner()[0] == False, env.get_done_winner()[1] == -1
+        assert env.get_done_winner()[0] is True, env.get_done_winner()[1] == -1
 
     def test_tictactoe_self_play_mode_half_case_1(self):
         env = TicTacToeEnv(EasyDict(cfg))
@@ -72,7 +76,7 @@ class TestTicTacToeAlphaBetaPruningBot:
 
         assert env.get_done_winner()[1] == 1
         assert row == 0, col == 2
-        assert env.get_done_winner()[0] == True, env.get_done_winner()[1] == 1
+        assert env.get_done_winner()[0] is True, env.get_done_winner()[1] == 1
 
     def test_tictactoe_self_play_mode_half_case_2(self):
         env = TicTacToeEnv(EasyDict(cfg))
@@ -104,3 +108,8 @@ class TestTicTacToeAlphaBetaPruningBot:
         assert env.get_done_winner()[1] == 1
         assert (row == 0, col == 1) or (row == 1, col == 1)
         assert env.get_done_winner()[0] is True, env.get_done_winner()[1] == 1
+
+
+
+test = TestTicTacToeAlphaBetaPruningBot()
+test.test_tictactoe_self_play_mode_draw()
