@@ -75,17 +75,6 @@ def prepare_observation_list(observation_lst):
     return observation_lst
 
 
-def mask_nan(x: torch.Tensor) -> torch.Tensor:
-    nan_part = torch.isnan(x)
-    x[nan_part] = 0.
-    return x
-
-
-def get_max_entropy(action_shape: int) -> None:
-    p = 1.0 / action_shape
-    return -action_shape * p * np.log2(p)
-
-
 def obtain_tree_topology(root, to_play=0):
     node_stack = []
     edge_topology_list = []

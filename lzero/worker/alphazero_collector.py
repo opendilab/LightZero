@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Dict
 
 import numpy as np
 from ding.envs import BaseEnvManager
@@ -38,7 +38,7 @@ class AlphaZeroCollector(ISerialCollector):
         instance_name: Optional[str] = 'collector',
         replay_buffer: 'replay_buffer' = None,  # noqa
         env_config=None,
-    ):
+    ) -> None:
         """
             Overview:
                 Init the AlphaZero collector according to input arguments.
@@ -103,8 +103,7 @@ class AlphaZeroCollector(ISerialCollector):
         assert hasattr(self, '_env'), "please set env first"
         if _policy is not None:
             self._policy = _policy
-            self._default_n_episode = _policy.get_attribute('cfg').collect.get('n_episode', None)
-            self._unroll_len = _policy.get_attribute('unroll_len')
+            self._default_n_episode = _policy.get_attribute('cfg').get('n_episode', None)
             self._on_policy = _policy.get_attribute('cfg').on_policy
             self._traj_len = INF
             self._logger.debug(
@@ -335,7 +334,7 @@ class AlphaZeroCollector(ISerialCollector):
                     continue
                 self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
 
-    def reward_shaping(self, transitions, final_eval_reward):
+    def reward_shaping(self, transitions, final_eval_reward) -> List[Dict[str, Any]]:
         """
         Overview:
             Shape the reward according to the player.

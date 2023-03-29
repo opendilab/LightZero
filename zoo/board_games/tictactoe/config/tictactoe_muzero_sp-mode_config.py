@@ -39,7 +39,7 @@ tictactoe_muzero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         use_augmentation=False,
-        game_block_length=9,
+        game_segment_length=9,
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=9,
         num_unroll_steps=3,
@@ -75,8 +75,8 @@ tictactoe_muzero_config = dict(
             learning_rate=0.003,  # lr for Adam optimizer
             grad_clip_value=0.5,
         ),
-        collect=dict(n_episode=n_episode, ),
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        n_episode=n_episode, 
+        eval_freq=int(2e3),
     ),
 )
 tictactoe_muzero_config = EasyDict(tictactoe_muzero_config)

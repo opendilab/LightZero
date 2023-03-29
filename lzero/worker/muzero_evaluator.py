@@ -4,12 +4,13 @@ from typing import Optional, Callable, Tuple
 
 import numpy as np
 import torch
+from easydict import EasyDict
+
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
-from easydict import EasyDict
-
+from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation_list
 
 
@@ -44,6 +45,7 @@ class MuZeroEvaluator(ISerialEvaluator):
     def __init__(
             self,
             cfg: dict,
+            stop_value: int = 1e6,
             env: BaseEnvManager = None,
             policy: namedtuple = None,
             tb_logger: 'SummaryWriter' = None,  # noqa
@@ -80,7 +82,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
         self._timer = EasyTimer()
         self._default_n_episode = cfg.n_episode
-        self._stop_value = cfg.stop_value
+        self._stop_value = stop_value
 
         # ==============================================================
         # MCTS+RL related core code
@@ -199,11 +201,6 @@ class MuZeroEvaluator(ISerialEvaluator):
             - stop_flag (:obj:`bool`): Whether this training program can be ended.
             - eval_reward (:obj:`float`): Current eval_reward.
         """
-        if self.game_config.sampled_algo:
-            from lzero.mcts.tree_search.game_sampled_efficientzero import GameBlock
-        else:
-            from lzero.mcts.buffer.game_block import GameBlock
-
         if n_episode is None:
             n_episode = self._default_n_episode
         assert n_episode is not None, "please indicate eval n_episode"
@@ -224,15 +221,15 @@ class MuZeroEvaluator(ISerialEvaluator):
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
         dones = np.array([False for _ in range(env_nums)])
 
-        game_blocks = [
-            GameBlock(
+        game_segments = [
+            GameSegment(
                 self._env.action_space,
-                game_block_length=self.game_config.game_block_length,
+                game_segment_length=self.game_config.game_segment_length,
                 config=self.game_config
             ) for _ in range(env_nums)
         ]
         for i in range(env_nums):
-            game_blocks[i].init(
+            game_segments[i].init(
                 [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)]
             )
 
@@ -248,7 +245,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
 
-                stack_obs = {env_id: game_blocks[env_id].step_obs() for env_id in ready_env_id}
+                stack_obs = {env_id: game_segments[env_id].step_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
 
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
@@ -304,15 +301,15 @@ class MuZeroEvaluator(ISerialEvaluator):
                     i = env_id
                     obs, reward, done, info = t.obs, t.reward, t.done, t.info
                     if self.game_config.sampled_algo:
-                        game_blocks[env_id].store_search_stats(
+                        game_segments[env_id].store_search_stats(
                             distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
                         )
                     else:
-                        game_blocks[i].store_search_stats(distributions_dict[i], value_dict[i])
+                        game_segments[i].store_search_stats(distributions_dict[i], value_dict[i])
                     # for two_player board games
                     # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
-                    # in ``game_blocks[env_id].init``, we have append o_{t} in ``self.obs_history``
-                    game_blocks[i].append(
+                    # in ``game_segments[env_id].init``, we have append o_{t} in ``self.obs_history``
+                    game_segments[i].append(
                         actions[i], to_ndarray(obs['observation']), reward, action_mask_dict[i],
                         to_play_dict[i]
                     )
@@ -350,13 +347,13 @@ class MuZeroEvaluator(ISerialEvaluator):
                             action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                             to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
 
-                            game_blocks[i] = GameBlock(
+                            game_segments[i] = GameSegment(
                                 self._env.action_space,
-                                game_block_length=self.game_config.game_block_length,
+                                game_segment_length=self.game_config.game_segment_length,
                                 config=self.game_config
                             )
 
-                            game_blocks[i].init(
+                            game_segments[i].init(
                                 [init_obs[i]['observation'] for _ in range(self.game_config.model.frame_stack_num)]
                             )
 

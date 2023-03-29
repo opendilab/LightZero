@@ -4,56 +4,27 @@ import numpy as np
 from ding.utils.compression_helper import jpeg_data_decompressor
 
 
-class Game:
-    """
-    Overview:
-        Abstract class of Game.
-    Interfaces:
-        __init__, legal_actions, step, reset, close, render
-    """
-    
-    def __init__(self, env, action_space_size: int, config=None):
-        self.env = env
-        self.action_space_size = action_space_size
-        self.config = config
-
-    def legal_actions(self):
-        raise NotImplementedError
-
-    def step(self, action):
-        raise NotImplementedError
-
-    def reset(self):
-        raise NotImplementedError()
-
-    def close(self, *args, **kwargs):
-        self.env.close(*args, **kwargs)
-
-    def render(self, *args, **kwargs):
-        self.env.render(*args, **kwargs)
-
-
-class GameBlock:
+class GameSegment:
     """
         Overview:
-            A block of game history from a full episode trajectories.
+            A game segment from a full episode trajectories.
             The length of one episode in Atari games are quite large. Split the whole episode trajectory into several
-            ``GameBlock`` blocks.
+            ``GameSegment`` blocks.
         Interfaces:
             ``__init__``, ``__len__``,``init``, ``pad_over``, ``is_full``, ``legal_actions``, ``append``, ``obs``
-            ``zero_obs``, ``step_obs``, ``get_targets``, ``game_block_to_array``, ``store_search_stats``.
+            ``zero_obs``, ``step_obs``, ``get_targets``, ``game_segment_to_array``, ``store_search_stats``.
     """
 
-    def __init__(self, action_space, game_block_length=200, config=None):
+    def __init__(self, action_space, game_segment_length=200, config=None):
         """
         Overview:
-            Init the ``GameBlock`` according to the provided arguments.
+            Init the ``GameSegment`` according to the provided arguments.
         Arguments:
              action_space (:obj:`int`): action space
-            - game_block_length (:obj:`int`): the transition number of one ``GameBlock`` block
+            - game_segment_length (:obj:`int`): the transition number of one ``GameSegment`` block
         """
         self.action_space = action_space
-        self.game_block_length = game_block_length
+        self.game_segment_length = game_segment_length
         self.config = config
 
         self.frame_stack_num = config.model.frame_stack_num
@@ -86,7 +57,7 @@ class GameBlock:
     def init(self, init_observations):
         """
         Overview:
-            Initialize the game history block using ``init_observations``,
+            Initialize the game segment using ``init_observations``,
             which is the previous ``frame_stack_num`` stacked frames.
         Arguments:
             - init_observations (:obj:`list`): list of the stack observations in the previous time steps.
@@ -109,9 +80,9 @@ class GameBlock:
     def is_full(self):
         """
         Overview:
-            check whether current game history block is full, i.e. larger than self.game_block_length
+            check whether current game segment is full, i.e. larger than self.game_segment_length
         """
-        return len(self.action_history) >= self.game_block_length
+        return len(self.action_history) >= self.game_segment_length
 
     def legal_actions(self):
         return [_ for _ in range(self.action_space.n)]
@@ -222,33 +193,33 @@ class GameBlock:
             self.child_visit_history[idx] = [visit_count / sum_visits for visit_count in visit_counts]
             self.root_value_history[idx] = root_value
 
-    def game_block_to_array(self):
+    def game_segment_to_array(self):
         """
         Overview:
-            post processing the data when a ``GameBlock`` block is full.
+            post processing the data when a ``GameSegment`` block is full.
         Note:
-        game_block element shape:
-            e.g. game_block_length=20, stack=4, num_unroll_steps=5, td_steps=5
+        game_segment element shape:
+            e.g. game_segment_length=20, stack=4, num_unroll_steps=5, td_steps=5
 
-            obs:            game_block_length + stack + num_unroll_steps, 20+4+5
-            action:         game_block_length -> 20
-            reward:         game_block_length + num_unroll_steps + td_steps -1  20+5+5-1
-            root_values:    game_block_length + num_unroll_steps + td_steps -> 20+5+5
-            child_visits：  game_block_length + num_unroll_steps -> 20+5
-            to_play:        game_block_length -> 20
-            action_mask:    game_block_length -> 20
+            obs:            game_segment_length + stack + num_unroll_steps, 20+4+5
+            action:         game_segment_length -> 20
+            reward:         game_segment_length + num_unroll_steps + td_steps -1  20+5+5-1
+            root_values:    game_segment_length + num_unroll_steps + td_steps -> 20+5+5
+            child_visits：  game_segment_length + num_unroll_steps -> 20+5
+            to_play:        game_segment_length -> 20
+            action_mask:    game_segment_length -> 20
 
-        game_block_t:
+        game_segment_t:
             obs:  4       20        5
                  ----|----...----|-----|
-        game_block_t+1:
+        game_segment_t+1:
             obs:               4       20        5
                              ----|----...----|-----|
 
-        game_block_t:
+        game_segment_t:
             rew:     20        5      4
                  ----...----|------|-----|
-        game_block_t+1:
+        game_segment_t+1:
             rew:             20        5    4
                         ----...----|------|-----|
         """

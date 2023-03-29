@@ -4,24 +4,24 @@ FLOAT_MIN = -float('inf')
 
 class MinMaxStats:
 
-    def __init__(self, ):
+    def __init__(self) -> None:
         self.clear()
         self.value_delta_max = 0
 
-    def set_delta(self, value_delta_max: float):
+    def set_delta(self, value_delta_max: float) -> None:
         self.value_delta_max = value_delta_max
 
-    def update(self, value: float):
+    def update(self, value: float) -> None:
         if value > self.maximum:
             self.maximum = value
         if value < self.minimum:
             self.minimum = value
 
-    def clear(self):
+    def clear(self) -> None:
         self.minimum = FLOAT_MAX
         self.maximum = FLOAT_MIN
 
-    def normalize(self, value: float):
+    def normalize(self, value: float) -> float:
         norm_value = value
         delta = self.maximum - self.minimum
         if delta > 0:
@@ -34,10 +34,10 @@ class MinMaxStats:
 
 class MinMaxStatsList:
 
-    def __init__(self, num):
+    def __init__(self, num: int) -> None:
         self.num = num
         self.stats_lst = [MinMaxStats() for _ in range(self.num)]
 
-    def set_delta(self, value_delta_max: float):
+    def set_delta(self, value_delta_max: float) -> None:
         for i in range(self.num):
             self.stats_lst[i].set_delta(value_delta_max)

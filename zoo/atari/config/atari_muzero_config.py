@@ -63,11 +63,16 @@ atari_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        model=dict(
+            observation_shape=(4, 96, 96),
+            action_space_size=action_space_size,
+            representation_network_type='conv_res_blocks',
+        ),
         device=device,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
-        game_block_length=400,
+        game_segment_length=400,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         manual_temperature_decay=False,
@@ -76,20 +81,13 @@ atari_muzero_config = dict(
         self_supervised_learning_loss=True,  # default is False
         ssl_loss_weight=2,  # default is 0
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
-        model=dict(
-            observation_shape=(4, 96, 96),
-            action_space_size=action_space_size,
-            representation_network_type='conv_res_blocks',
-        ),
-        learn=dict(
-            update_per_collect=update_per_collect,
-            batch_size=batch_size,
-            lr_piecewise_constant_decay=True,
-            optim_type='SGD',
-            learning_rate=0.2,  # init lr for manually decay schedule
-        ),
-        collect=dict(n_episode=n_episode, ),
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        update_per_collect=update_per_collect,
+        batch_size=batch_size,
+        lr_piecewise_constant_decay=True,
+        optim_type='SGD',
+        learning_rate=0.2,  # init lr for manually decay schedule
+        n_episode=n_episode,
+        eval_freq=int(2e3),
     ),
 )
 atari_muzero_config = EasyDict(atari_muzero_config)
