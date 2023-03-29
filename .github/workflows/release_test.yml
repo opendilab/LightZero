@@ -1,6 +1,8 @@
 name: Release Test
 
-on: workflow_dispatch
+on:
+  push:
+  workflow_dispatch:
 
 jobs:
   source_build:
