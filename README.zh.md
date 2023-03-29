@@ -1,69 +1,64 @@
 # LightZero
 
-## Background
+## 背景
 
-The following is an overview of the historical evolution of the Monte Carlo Tree Search (MCTS) algorithm series:
+下图为蒙特卡洛树搜索（MCTS）算法族的发展历史：
 ![pipeline](assets/mcts_rl_evolution_overview.png)
 
-English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README.zh.md)
+[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文
 
-## Overview
-> LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkits that combines Monte Carlo Tree Search (MCTS) and Reinforcement Learning (RL).
+## 概览
+> LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库
 
-### Outline
+### 导航
+- [概览](#概览)
+    - [导航](#导航)
+    - [特点](#特点)
+    - [框架结构](#框架结构)
+    - [集成算法](#集成算法)
+- [安装方法](#安装方法)
+- [快速开始](#快速开始)
+- [基线算法比较](#基线算法比较)
+- [MCTS相关笔记](#MCTS-相关笔记)
+    - [论文笔记](#论文笔记)
+    - [算法框架图](#算法框架图)
+- [MCTS相关论文](#MCTS-相关论文)
+    - [重要论文](#重要论文)
+    - [其他论文](#其他论文)
+- [反馈意见和贡献](#反馈意见和贡献)
+- [引用](#引用)
+- [致谢](#致谢)
+- [许可证](#许可证)
 
-- [Overview](#overview)
-- [Features](#features)
-- [Framework Structure](#framework-structure)
-- [Integrated Algorithms](#integrated-algorithms)
-- [Outline](#outline)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Benchmark](#benchmark)
-- [Awesome-MCTS Notes](#awesome-mcts-notes)
-  - [Paper Notes](#paper-notes)
-  - [Algo. Overview](#algo-overview)
-- [Awesome-MCTS Papers](#awesome-mcts-papers)
-  - [Key Papers](#key-ppers)
-  - [Other Papers](#other-ppers)
-- [Feedback and Contribution](#feedback-and-contribution)
-- [Citation](#citation)
-- [Acknowledgments](#acknowledgments)
-- [License](#license)
+### 特点
+**轻量**：LightZero 中集成了多种 MCTS 族算法，能够在同一框架下轻量化地解决多种属性的决策问题。
 
-### Features
+**高效**：LightZero 针对 MCTS 族算法中耗时最长的环节，采用混合异构计算编程提高计算效率。
 
-**Lightweight**: LightZero integrates multiple MCTS algorithm families and can solve decision-making problems with various attributes in a lightweight framework.
+**易懂**：LightZero 为所有集成的算法提供了详细文档和算法框架图，帮助用户理解算法内核，在同一范式下比较算法之间的异同。同时，LightZero 也为算法的代码实现提供了函数调用图和网络结构图，便于用户定位关键代码。
 
-**Efficient**: LightZero uses mixed heterogeneous computing programming to improve computational efficiency for the most time-consuming part of MCTS algorithms.
-
-**Easy-to-understand**: LightZero provides detailed documentation and algorithm framework diagrams for all integrated algorithms to help users understand the algorithm's core and compare the differences and similarities between algorithms under the same paradigm. LightZero also provides function call graphs and network structure diagrams for algorithm code implementation, making it easier for users to locate critical code.
-
-### Framework Structure
-To understand the framework structure of LightZero, the following important components need to be understood:
+### 框架结构
+为了理解 LightZero 的框架结构，需要了解的重要组件如下：
 
 **Model**:
-``Model`` is used to define the network structure, including the ``__init__`` function for initializing the network structure and the ``forward`` function for computing the network's forward propagation.
+``Model`` 用于定义网络结构，包含``__init__``函数用于初始化网络结构，和``forward``函数用于计算网络的前向传播。
 
 **Policy**:
-``Policy`` defines the way the network is updated and interacts with the environment, including three processes: the ``learning`` process, the ``collecting`` process, and the ``evaluation`` process.
+``Policy`` 定义了对网络的更新方式和与环境交互的方式，包括三个过程，分别是训练过程（learn）、采样过程（collect）和评估过程（evaluate）。
 
 **MCTS**:
-``MCTS`` defines the structure of the Monte Carlo search tree and the way it interacts with the Policy. The implementation of MCTS includes two languages: Python and C++, implemented in ``ptree`` and ``ctree``, respectively.
+``MCTS`` 定义了蒙特卡洛搜索树的结构和与``Policy``的交互方式。``MCTS``的实现包括 python 和 cpp 两种，分别在``ptree``和``ctree``中实现。
 
-### Integrated Algorithms
-LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of MCTS algorithms (sometimes combined with cython and cpp), including:
+### 集成算法
+LightZero 是基于 [PyTorch](https://pytorch.org/) 实现的 MCTS 算法库，在 MCTS 的实现中也用到了 cython 和 cpp。同时，LightZero 的框架主要基于 [DI-engine](https://github.com/opendilab/DI-engine) 实现。目前 LightZero 中集成的算法包括：
 - [AlphaZero](https://www.science.org/doi/10.1126/science.aar6404)
 - [MuZero](https://arxiv.org/abs/1911.08265)
 - [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Sampled MuZero](https://arxiv.org/abs/2104.06303)
 
-[comment]: <> (- [Gumbel MuZero]&#40;https://openreview.net/pdf?id=bERaNdoegnO&#41;)
-Our implementation is mainly based on [DI-engine](https://github.com/opendilab/DI-engie).
+## 安装方法
 
-## Installation
-
-You can install latest LightZero in development from the GitHub source codes with the following command:
+可以用以下命令从 Github 的源码中安装最新版的 LightZero：
 
 ```bash
 git clone https://github.com/opendilab/LightZero.git
@@ -71,30 +66,28 @@ cd LightZero
 pip3 install -e .
 ```
 
-[comment]: <> (- [AlphaGo Zero]&#40;https://www.nature.com/articles/nature24270&#41; )
 
-## Quick Start
+## 快速开始
 
-Train a MuZero agent to play [Pong](https://gymnasium.farama.org/environments/atari/pong/):
+使用如下代码在 [Pong](https://gymnasium.farama.org/environments/atari/pong/) 环境上快速训练一个 MuZero 智能体：
 
 ```bash
 cd LightZero
 python3 -u zoo/atari/config/atari_muzero_config.py
 ```
 
-
-Train a MuZero agent to play [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-toe):
+使用如下代码在 [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-toe) 环境上快速训练一个 MuZero 智能体：
 
 ```bash
 cd LightZero
 python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 ```
 
-## Benchmark
+## 基线算法比较
 
-<details open><summary>Click to collapse</summary>
+<details open><summary>点击折叠</summary>
 
-Below are the benchmark results of [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py), [MuZero w/ SSL](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) , [EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/efficientzero.py) and [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) on three discrete action space games in [Atari](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py).
+以下是几种算法在 [Atari](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py) 上三个的离散动作空间环境上的基线比较结果，包括 [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py), [MuZero w/ SSL](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py),[EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/efficientzero.py) 和 [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py)：
 
 <p align="center">
   <img src="assets/benchmark/main/pong_main.png" alt="Image Description 1" width="23%" height="auto" style="margin: 0 1%;">
@@ -103,8 +96,7 @@ Below are the benchmark results of [MuZero](https://github.com/opendilab/LightZe
   <img src="assets/benchmark/ablation/mspacman_sez_K.png" alt="Image Description 4" width="23%" height="auto" style="margin: 0 1%;">
 </p>
 
-
-Below are the benchmark results of [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) with ``Factored/Gaussian`` policy representation on two continuous action space games: [Pendulum-v1](https://github.com/opendilab/LightZero/blob/main/zoo/classic_control/pendulum/envs/pendulum_lightzero_env.py), [LunarLanderContinuous-v2](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/lunarlander/envs/lunarlander_env.py).
+以下是使用 ``Factored/Gaussian`` 策略表征方法的 [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) 在两个连续动作空间上的基线效果：[Pendulum-v1](https://github.com/opendilab/LightZero/blob/main/zoo/classic_control/pendulum/envs/pendulum_lightzero_env.py) 和 [LunarLanderContinuous-v2](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/lunarlander/envs/lunarlander_env.py)：
 
 <p align="center">
   <img src="assets/benchmark/main/pendulum_main.png" alt="Image Description 1" width="30%" height="auto" style="margin: 0 1%;">
@@ -112,7 +104,7 @@ Below are the benchmark results of [Sampled EfficientZero](https://github.com/op
   <img src="assets/benchmark/main/lunarlander_main.png" alt="Image Description 3" width="30%" height="auto" style="margin: 0 1%;">
 </p>
 
-Below are the benchmark results of [AlphaZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/alphazero.py) and [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) on two board_games: [TicTacToe](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/tictactoe/envs/tictactoe_env.py), [Gomoku](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py).
+以下是在两个棋类游戏（[TicTacToe(井字棋)](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/tictactoe/envs/tictactoe_env.py) 和 [Gomoku(五子棋)](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py)上 [AlphaZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/alphazero.py) 和 [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) 的基线效果：
 
 <p align="center">
   <img src="assets/benchmark/main/tictactoe_bot-mode_main.png" alt="Image Description 1" width="45%" height="auto" style="margin: 0 1%;">
@@ -121,27 +113,32 @@ Below are the benchmark results of [AlphaZero](https://github.com/opendilab/Ligh
 
 </details>
 
+## MCTS 相关笔记
 
-## Awesome-MCTS Notes
+### 论文笔记
 
-### Paper Notes
-The following are the detailed paper notes (in Chinese) of the above algorithms:
+以下是 LightZero 中集成算法的中文详细文档：
 
-<details open><summary>Click to collapse</summary>
+<details open><summary>点击折叠</summary>
 
 [AlphaZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/AlphaZero.pdf)
+
 [MuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/MuZero.pdf)
+
 [EfficientZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/EfficientZero.pdf)
+
 [SampledMuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/SampledMuZero.pdf)
-[SymbolTable](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/SymbolTable.pdf)
+
+[算法概览图符号表](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/SymbolTable.pdf)
 
 </details>
 
-### Algo. Overview
+### 算法框架图
 
-The following are the overview MCTS principle diagrams of the above algorithms:
+以下是 LightZero 中集成算法的框架概览图：
 
-<details><summary>Click to expand</summary>
+<details closed>
+<summary>(点击查看更多)</summary>
 
 ![mcts](assets/algo_overview/mcts.png)
 
@@ -157,14 +154,14 @@ The following are the overview MCTS principle diagrams of the above algorithms:
 
 </details>
 
-## Awesome-MCTS Papers
+## MCTS 相关论文
 
-Here is a collection of research papers about **Monte Carlo Tree Search**.
-[This Section](#awesome-msts-papers) will be continuously updated to track the frontier of MCTS. 
+以下是关于 **MCTS** 相关的论文集合，[这一部分](#MCTS-相关论文) 将会持续更新，追踪 MCTS 的前沿动态。
 
-### Key Papers
+### 重要论文
 
-<details><summary>Click to expand</summary>
+<details closed>
+<summary>(点击查看更多)</summary>
 
 #### LightZero Implemented series
 
@@ -201,9 +198,10 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 </details>
 
-### Other Papers
+### 其他论文
 
-<details><summary>Click to expand</summary>
+<details closed>
+<summary>(点击查看更多)</summary>
 
 #### ICML
 - [Efficient Learning for AlphaZero via Path Consistency](https://proceedings.mlr.press/v162/zhao22h/zhao22h.pdf) 2022
@@ -294,44 +292,15 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 - [Sample-Efficient Neural Architecture Search by Learning Actions for Monte Carlo Tree Search](https://arxiv.org/pdf/1906.06832) IEEE Transactions on Pattern Analysis and Machine Intelligence 2022.
 </details>
 
+## 反馈意见和贡献
+- 有任何疑问或意见都可以在 github 上直接 [提出 issue](https://github.com/opendilab/LightZero/issues/new/choose)
+- 或者联系我们的邮箱 (opendilab@pjlab.org.cn)
+
+- 感谢所有的反馈意见，包括对算法和系统设计。这些反馈意见和建议都会让 LightZero 变得更好。 
 
 
-[comment]: <> (The paper has been accepted by CoRL 2022 and we will release the code soon.)
+## 引用
 
-
-
-[comment]: <> (## Citation)
-
-[comment]: <> (If you find our repo, dataset or paper useful, please cite us as)
-
-[comment]: <> (```bibtex)
-
-[comment]: <> (@article{shao2022interfuser,)
-
-[comment]: <> ( title={Safety-Enhanced Autonomous Driving Using Interpretable Sensor Fusion Transformer},)
-
-[comment]: <> ( author={Hao Shao and Letian Wang and RuoBing Chen and Hongsheng Li and Yu Liu},)
-
-[comment]: <> ( journal={arXiv preprint arXiv:2207.14024},)
-
-[comment]: <> ( year={2022},)
-
-[comment]: <> (})
-
-[comment]: <> (```)
-
-## Feedback and Contribution
-- [File an issue](https://github.com/opendilab/LightZero/issues/new/choose) on Github
-- Contact our email (opendilab@pjlab.org.cn)
-
-- We appreciate all the feedbacks and contributions to improve LightZero, both algorithms and system designs. 
-
-[comment]: <> (- Contributes to our future plan [Roadmap]&#40;https://github.com/opendilab/LightZero/projects&#41;)
-
-[comment]: <> (And `CONTRIBUTING.md` offers some necessary information.)
-
-
-## Citation
 ```latex
 @misc{lightzero,
     title={{LightZero: OpenDILab} A lightweight and efficient MCTS/AlphaZero/MuZero algorithm toolkits.},
@@ -342,17 +311,18 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 }
 ```
 
-## Acknowledgments
+## 致谢
 
-This repo is partially based on the following repo, many thanks to their pioneering work:
+本算法库的实现部分基于以下 github 库，非常感谢这些开创性工作：
 
 - https://github.com/opendilab/DI-engine
 - https://github.com/YeWR/EfficientZero
 - https://github.com/werner-duvaud/muzero-general
 
-A special thanks to [@PaParaZz1](https://github.com/PaParaZz1), [@karroyan](https://github.com/karroyan), [@nighood](https://github.com/nighood), 
-[@jayyoung0802](https://github.com/jayyoung0802), [@timothijoe](https://github.com/timothijoe), [@TuTuHuss](https://github.com/TuTuHuss), [@puyuan1996](https://github.com/puyuan1996), [@HansBug](https://github.com/HansBug) for their contributions and support.
+特别感谢 [@PaParaZz1](https://github.com/PaParaZz1), [@karroyan](https://github.com/karroyan), [@nighood](https://github.com/nighood), 
+[@jayyoung0802](https://github.com/jayyoung0802), [@timothijoe](https://github.com/timothijoe), [@TuTuHuss](https://github.com/TuTuHuss), [@puyuan1996](https://github.com/puyuan1996), [@HansBug](https://github.com/HansBug) 在本算法库中的贡献和支持。
 
 
-## License
-All code within this repository is under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+## 许可证
+
+本仓库中的所有代码都符合 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)。

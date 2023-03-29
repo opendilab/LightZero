@@ -90,7 +90,7 @@ gomoku_efficientzero_config = dict(
             n_episode=n_episode,
         ),
         # the eval cost is expensive, so we set eval_freq larger
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        eval_freq=int(2e3),
         # command_mode config
         other=dict(
             # the replay_buffer_size is ineffective, we specify it in game config

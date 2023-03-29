@@ -1,7 +1,3 @@
-"""
-Adapt Atari to BaseGameEnv interface
-"""
-
 import copy
 import sys
 from typing import List
@@ -26,7 +22,6 @@ class AtariLightZeroEnv(BaseEnv):
         obs_shape=(4, 96, 96),
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
-        max_episode_steps=int(1.08e5),
         gray_scale=True,
         frame_skip=4,
         episode_life=True,
@@ -36,7 +31,6 @@ class AtariLightZeroEnv(BaseEnv):
         scale=True,
         warp_frame=True,
         save_video=False,
-        # trade memory for speed
         cvt_string=False,
         game_wrapper=True,
         manager=dict(shared_memory=False, ),

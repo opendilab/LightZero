@@ -15,7 +15,7 @@ from torch.nn import L1Loss
 from lzero.mcts import SampledEfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts import SampledEfficientZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
-from lzero.policy import scalar_transform, InverseScalarTransform, modified_cross_entropy_loss, phi_transform, \
+from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, ez_network_output_unpack, select_action
 from .utils import negative_cosine_similarity
 
@@ -62,53 +62,47 @@ class SampledEfficientZeroPolicy(Policy):
             fixed_sigma_value=0.3,
         ),
         # learn_mode config
-        learn=dict(
-            # (bool) Whether to use multi gpu
-            multi_gpu=False,
-            # How many updates(iterations) to train after collector's one collection.
-            # Bigger "update_per_collect" means bigger off-policy.
-            # collect data -> update policy-> collect data -> ...
-            # For different env, we have different episode_length,
-            # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
-            update_per_collect=100,
-            # (int) How many samples in a training batch
-            batch_size=256,
-            # (int) Frequency of target network update.
-            target_update_freq=100,
-            # (bool) Whether ignore done(usually for max step termination env)
-            ignore_done=False,
-            weight_decay=2e-5,
-            momentum=0.9,
-            grad_clip_value=10,
+        # How many updates(iterations) to train after collector's one collection.
+        # Bigger "update_per_collect" means bigger off-policy.
+        # collect data -> update policy-> collect data -> ...
+        # For different env, we have different episode_length,
+        # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
+        update_per_collect=100,
+        # (int) How many samples in a training batch
+        batch_size=256,
+        # (int) Frequency of target network update.
+        target_update_freq=100,
+        # (bool) Whether ignore done(usually for max step termination env)
+        ignore_done=False,
+        weight_decay=2e-5,
+        momentum=0.9,
+        grad_clip_value=10,
 
-            # optim_type='Adam',
-            # lr_piecewise_constant_decay=False,
-            # cos_lr_scheduler=True,
-            # learning_rate=0.0001,  # init lr for Adam optimizer coupled with cos_lr_scheduler
+        # optim_type='Adam',
+        # lr_piecewise_constant_decay=False,
+        # cos_lr_scheduler=True,
+        # learning_rate=0.0001,  # init lr for Adam optimizer coupled with cos_lr_scheduler
 
-            # lr_piecewise_constant_decay=False,
-            # cos_lr_scheduler=False,
-            # optim_type='Adam',
-            # learning_rate=0.003,  # lr for Adam optimizer
+        # lr_piecewise_constant_decay=False,
+        # cos_lr_scheduler=False,
+        # optim_type='Adam',
+        # learning_rate=0.003,  # lr for Adam optimizer
 
-            lr_piecewise_constant_decay=True,
-            cos_lr_scheduler=False,
-            optim_type='SGD',
-            learning_rate=0.2,  # init lr for manually decay schedule
+        lr_piecewise_constant_decay=True,
+        cos_lr_scheduler=False,
+        optim_type='SGD',
+        learning_rate=0.2,  # init lr for manually decay schedule
 
-            # (float) Weight uniform initialization range in the last output layer
-            init_w=3e-3,
+        # (float) Weight uniform initialization range in the last output layer
+        init_w=3e-3,
 
-            normalize_prob_of_sampled_actions=False,
-            policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
-        ),
+        normalize_prob_of_sampled_actions=False,
+        policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
+        
         # collect_mode config
-        collect=dict(
-            # You can use either "n_sample" or "n_episode" in collector.collect.
-            # Get "n_episode" episodes per collect.
-            n_episode=8,
-            unroll_len=1,
-        ),
+        # You can use either "n_sample" or "n_episode" in collector.collect.
+        # Get "n_episode" episodes per collect.
+        n_episode=8,
 
         # ==============================================================
         # begin of additional game_config
@@ -122,7 +116,7 @@ class SampledEfficientZeroPolicy(Policy):
         battle_mode='play_with_bot_mode',
         game_wrapper=True,
         monitor_statistics=True,
-        game_block_length=200,
+        game_segment_length=200,
 
         ## observation
         # the key difference setting between image-input and vector input.
@@ -201,7 +195,7 @@ class SampledEfficientZeroPolicy(Policy):
     def _init_learn(self) -> None:
         if self._cfg.model.continuous_action_space:
             # Weight Init for the last output layer of gaussian policy head in prediction network.
-            init_w = self._cfg.learn.init_w
+            init_w = self._cfg.init_w
             self._model.prediction_network.sampled_fc_policy.mu.weight.data.uniform_(-init_w, init_w)
             self._model.prediction_network.sampled_fc_policy.mu.bias.data.uniform_(-init_w, init_w)
             self._model.prediction_network.sampled_fc_policy.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
@@ -210,24 +204,24 @@ class SampledEfficientZeroPolicy(Policy):
             except Exception as exception:
                 logging.warning(exception)
 
-        if 'optim_type' not in self._cfg.learn.keys() or self._cfg.learn.optim_type == 'SGD':
+        if 'optim_type' not in self._cfg.learn.keys() or self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
                 self._model.parameters(),
-                lr=self._cfg.learn.learning_rate,
-                momentum=self._cfg.learn.momentum,
-                weight_decay=self._cfg.learn.weight_decay,
+                lr=self._cfg.learning_rate,
+                momentum=self._cfg.momentum,
+                weight_decay=self._cfg.weight_decay,
             )
 
-        elif self._cfg.learn.optim_type == 'Adam':
+        elif self._cfg.optim_type == 'Adam':
             self._optimizer = optim.Adam(
-                self._model.parameters(), lr=self._cfg.learn.learning_rate, weight_decay=self._cfg.learn.weight_decay
+                self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
 
-        if self._cfg.learn.cos_lr_scheduler is True:
+        if self._cfg.cos_lr_scheduler is True:
             from torch.optim.lr_scheduler import CosineAnnealingLR
             self.lr_scheduler = CosineAnnealingLR(self._optimizer, 1e6, eta_min=0, last_epoch=-1)
 
-        if self._cfg.learn.lr_piecewise_constant_decay:
+        if self._cfg.lr_piecewise_constant_decay:
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
             # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
@@ -240,7 +234,7 @@ class SampledEfficientZeroPolicy(Policy):
             self._target_model,
             wrapper_name='target',
             update_type='assign',
-            update_kwargs={'freq': self._cfg.learn.target_update_freq}
+            update_kwargs={'freq': self._cfg.target_update_freq}
         )
         self._learn_model = self._model
 
@@ -307,10 +301,10 @@ class SampledEfficientZeroPolicy(Policy):
         # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim, 1), e.g. (4, 6, 5, 1, 1)
         child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device).unsqueeze(-1)
 
-        target_value_prefix = target_value_prefix.view(self._cfg.learn.batch_size, -1)
-        target_value = target_value.view(self._cfg.learn.batch_size, -1)
+        target_value_prefix = target_value_prefix.view(self._cfg.batch_size, -1)
+        target_value = target_value.view(self._cfg.batch_size, -1)
 
-        assert obs_batch.size(0) == self._cfg.learn.batch_size == target_value_prefix.size(0)
+        assert obs_batch.size(0) == self._cfg.batch_size == target_value_prefix.size(0)
 
         # ``scalar_transform`` to transform the original value to the scaled value,
         # i.e. h(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -350,9 +344,9 @@ class SampledEfficientZeroPolicy(Policy):
         # ==============================================================
         # calculate policy and value loss for the first step.
         # ==============================================================
-        value_loss = modified_cross_entropy_loss(value, target_value_categorical[:, 0])
+        value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
-        policy_loss = torch.zeros(self._cfg.learn.batch_size, device=self._cfg.device)
+        policy_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         # ==============================================================
         # sampled related core code: calculate policy loss, typically cross_entropy_loss
         # ==============================================================
@@ -366,8 +360,8 @@ class SampledEfficientZeroPolicy(Policy):
                 policy_loss, policy_logits, target_policy, mask_batch, child_sampled_actions_batch,
                 unroll_step=0)
 
-        value_prefix_loss = torch.zeros(self._cfg.learn.batch_size, device=self._cfg.device)
-        consistency_loss = torch.zeros(self._cfg.learn.batch_size, device=self._cfg.device)
+        value_prefix_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+        consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
 
         target_value_prefix_cpu = target_value_prefix.detach().cpu()
         gradient_scale = 1 / self._cfg.num_unroll_steps
@@ -429,15 +423,15 @@ class SampledEfficientZeroPolicy(Policy):
                     policy_loss, policy_logits, target_policy, mask_batch, child_sampled_actions_batch,
                     unroll_step=step_i + 1)
 
-            value_loss += modified_cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
-            value_prefix_loss += modified_cross_entropy_loss(value_prefix,
+            value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
+            value_prefix_loss += cross_entropy_loss(value_prefix,
                                                              target_value_prefix_categorical[:, step_i])
 
             # reset hidden states every ``lstm_horizon_len`` unroll steps.
             if (step_i + 1) % self._cfg.lstm_horizon_len == 0:
                 reward_hidden_state = (
-                    torch.zeros(1, self._cfg.learn.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
-                    torch.zeros(1, self._cfg.learn.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
+                    torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
+                    torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
                 )
 
             if self._cfg.monitor_statistics:
@@ -466,9 +460,9 @@ class SampledEfficientZeroPolicy(Policy):
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(self._learn_model.parameters(),
-                                                                     self._cfg.learn.grad_clip_value)
+                                                                     self._cfg.grad_clip_value)
         self._optimizer.step()
-        if self._cfg.learn.cos_lr_scheduler is True:
+        if self._cfg.cos_lr_scheduler is True:
             self.lr_scheduler.step()
 
         # ==============================================================
@@ -629,7 +623,7 @@ class SampledEfficientZeroPolicy(Policy):
         # shape: (batch_size, num_of_sampled_actions) e.g. (4,20)
         log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
 
-        if self._cfg.learn.normalize_prob_of_sampled_actions:
+        if self._cfg.normalize_prob_of_sampled_actions:
             # normalize the prob of sampled actions
             prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(
                 log_prob_sampled_actions
@@ -639,13 +633,13 @@ class SampledEfficientZeroPolicy(Policy):
             log_prob_sampled_actions = torch.log(prob_sampled_actions_norm + 1e-6)
 
         # NOTE: the +=.
-        if self._cfg.learn.policy_loss_type == 'KL':
+        if self._cfg.policy_loss_type == 'KL':
             # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
             policy_loss += (
                                    torch.exp(target_log_prob_sampled_actions.detach()) *
                                    (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
                            ).sum(-1) * mask_batch[:, unroll_step]
-        elif self._cfg.learn.policy_loss_type == 'cross_entropy':
+        elif self._cfg.policy_loss_type == 'cross_entropy':
             # cross_entropy loss: - sum(p * log (q) )
             policy_loss += -torch.sum(
                 torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
@@ -699,7 +693,7 @@ class SampledEfficientZeroPolicy(Policy):
         # (batch_size, num_of_sampled_actions) e.g. (4,20)
         log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
 
-        if self._cfg.learn.normalize_prob_of_sampled_actions:
+        if self._cfg.normalize_prob_of_sampled_actions:
             # normalize the prob of sampled actions
             prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(
                 log_prob_sampled_actions
@@ -709,13 +703,13 @@ class SampledEfficientZeroPolicy(Policy):
             log_prob_sampled_actions = torch.log(prob_sampled_actions_norm + 1e-6)
 
         # NOTE: the +=.
-        if self._cfg.learn.policy_loss_type == 'KL':
+        if self._cfg.policy_loss_type == 'KL':
             # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
             policy_loss += (
                                    torch.exp(target_log_prob_sampled_actions.detach()) *
                                    (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
                            ).sum(-1) * mask_batch[:, unroll_step]
-        elif self._cfg.learn.policy_loss_type == 'cross_entropy':
+        elif self._cfg.policy_loss_type == 'cross_entropy':
             # cross_entropy loss: - sum(p * log (q) )
             policy_loss += -torch.sum(
                 torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
@@ -725,7 +719,7 @@ class SampledEfficientZeroPolicy(Policy):
 
     def _init_collect(self) -> None:
         self._collect_model = self._model
-        self._unroll_len = self._cfg.collect.unroll_len
+
         if self._cfg.mcts_ctree:
             self._mcts_collect = MCTSCtree(self._cfg)
         else:

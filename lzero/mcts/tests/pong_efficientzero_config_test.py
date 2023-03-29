@@ -69,7 +69,7 @@ pong_efficientzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
-        game_block_length=400,
+        game_segment_length=400,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
@@ -116,9 +116,9 @@ pong_efficientzero_config = dict(
             optim_type='SGD',
             learning_rate=0.2,  # init lr for manually decay schedule
         ),
-        collect=dict(n_episode=n_episode, ),  # Get "n_episode" episodes per collect.
+        n_episode=n_episode,   # Get "n_episode" episodes per collect.
         # If the eval cost is expensive, we could set eval_freq larger.
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        eval_freq=int(2e3),
         # ==============================================================
         # begin of additional game_config
         # ==============================================================

@@ -214,50 +214,87 @@ class EfficientZeroModel(nn.Module):
         )
 
     def initial_inference(self, obs: torch.Tensor) -> EZNetworkOutput:
+        """
+         Overview:
+             To perform the initial inference, we first use the representation network to obtain the "latent_state" of the observation.
+             We then use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
+         Arguments:
+             - obs (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+             - reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+             - action (:obj:`torch.Tensor`): (batch_size, action_dim).
+        Returns:
+             EZNetworkOutput
+                - value (:obj:`torch.Tensor`): (batch_size, 1).
+                - policy_logits (:obj:`torch.Tensor`): (batch_size, action_dim).
+                - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+                - reward_hidden (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+         """
         num = obs.size(0)
-        hidden_state = self.representation(obs)
-        policy_logits, value = self.prediction(hidden_state)
+        latent_state = self.representation(obs)
+        policy_logits, value = self.prediction(latent_state)
         # zero initialization for reward hidden states
         reward_hidden = (torch.zeros(1, num, self.lstm_hidden_size).to(obs.device), torch.zeros(1, num, self.lstm_hidden_size).to(obs.device))
-        return EZNetworkOutput(value, [0. for _ in range(num)], policy_logits, hidden_state, reward_hidden)
+        return EZNetworkOutput(value, [0. for _ in range(num)], policy_logits, latent_state, reward_hidden)
 
     def recurrent_inference(
-            self, hidden_state: torch.Tensor, reward_hidden: torch.Tensor, action: torch.Tensor
+            self, latent_state: torch.Tensor, reward_hidden: torch.Tensor, action: torch.Tensor
     ) -> EZNetworkOutput:
-        hidden_state, reward_hidden, value_prefix = self.dynamics(hidden_state, reward_hidden, action)
-        policy_logits, value = self.prediction(hidden_state)
-        return EZNetworkOutput(value, value_prefix, policy_logits, hidden_state, reward_hidden)
+        """
+         Overview:
+             To perform the recurrent inference, we first use the dynamics network to predict ``next_latent_state``, ``reward_hidden_state``, ``value_prefix``
+             given current ``latent_state`` and ``action``.
+             We then use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
+         Arguments:
+             - obs (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+             - reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+             - action (:obj:`torch.Tensor`): (batch_size, action_dim).
+        Returns:
+             EZNetworkOutput
+                - value (:obj:`torch.Tensor`): (batch_size, 1).
+                - policy_logits (:obj:`torch.Tensor`): (batch_size, action_dim).
+                - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+                - reward_hidden (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+         """
+        latent_state, reward_hidden, value_prefix = self.dynamics(latent_state, reward_hidden, action)
+        policy_logits, value = self.prediction(latent_state)
+        return EZNetworkOutput(value, value_prefix, policy_logits, latent_state, reward_hidden)
 
-    def prediction(self, encoded_state: torch.Tensor) -> Tuple[torch.Tensor]:
-        policy, value = self.prediction_network(encoded_state)
+    def prediction(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor]:
+        policy, value = self.prediction_network(latent_state)
         return policy, value
 
     def representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
-        encoded_state = self.representation_network(observation)
-        if not self.state_norm:
-            return encoded_state
-        else:
-            encoded_state_normalized = renormalize(encoded_state)
-            return encoded_state_normalized
+        """
+        Overview:
+            Representation network. Encode the observations into hidden state.
+        Arguments:
 
-    def dynamics(self, encoded_state: torch.Tensor, reward_hidden_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
+        """
+        latent_state = self.representation_network(observation)
+        if not self.state_norm:
+            return latent_state
+        else:
+            latent_state_normalized = renormalize(latent_state)
+            return latent_state_normalized
+
+    def dynamics(self, latent_state: torch.Tensor, reward_hidden_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
         """
          Overview:
-             Dynamics function. Predict ``next_encoded_state``, ``reward_hidden_state``, ``value_prefix``
-             given current ``encoded_state`` and ``action``.
+             Dynamics function. Predict ``next_latent_state``, ``reward_hidden_state``, ``value_prefix``
+             given current ``latent_state`` and ``action``.
          Arguments:
-             - encoded_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+             - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
              - reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
              - action (:obj:`torch.Tensor`): (batch_size, action_dim).
          """
 
-        # Stack encoded_state with a game specific one hot encoded action
+        # Stack latent_state with a game specific one hot encoded action
         action_one_hot = (
             torch.ones((
-                encoded_state.shape[0],
+                latent_state.shape[0],
                 1,
-                encoded_state.shape[2],
-                encoded_state.shape[3],
+                latent_state.shape[2],
+                latent_state.shape[3],
             )).to(action.device).float()
         )
         if len(action.shape) == 1:
@@ -269,16 +306,16 @@ class EfficientZeroModel(nn.Module):
         # action[:, :, None, None] shape:  (batch_size, 1, 1, 1)
         action_one_hot = (action[:, :, None, None] * action_one_hot / self.action_space_size)
 
-        x = torch.cat((encoded_state, action_one_hot), dim=1)
+        x = torch.cat((latent_state, action_one_hot), dim=1)
         # NOTE: the key difference with MuZero
-        next_encoded_state, reward_hidden_state, value_prefix = self.dynamics_network(x, reward_hidden_state)
+        next_latent_state, reward_hidden_state, value_prefix = self.dynamics_network(x, reward_hidden_state)
         if not self.state_norm:
-            return next_encoded_state, reward_hidden_state, value_prefix
+            return next_latent_state, reward_hidden_state, value_prefix
         else:
-            next_encoded_state_normalized = renormalize(next_encoded_state)
-            return next_encoded_state_normalized, reward_hidden_state, value_prefix
+            next_latent_state_normalized = renormalize(next_latent_state)
+            return next_latent_state_normalized, reward_hidden_state, value_prefix
 
-    def project(self, hidden_state: torch.Tensor, with_grad=True):
+    def project(self, latent_state: torch.Tensor, with_grad=True):
         """
         Overview:
             Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
@@ -287,20 +324,20 @@ class EfficientZeroModel(nn.Module):
             # for lunarlander:
             # observation_shape = (4, 8, 1),  # stack=4
             # self.projection_input_dim = 64*8*1
-            # hidden_state.shape: (batch_size, num_channel, obs_shape[1], obs_shape[2])  256,64,8,1
+            # latent_state.shape: (batch_size, num_channel, obs_shape[1], obs_shape[2])  256,64,8,1
             # 256,64,8,1 -> 256,64*8*1
 
             # for atari:
             # observation_shape = (12, 96, 96),  # 3,96,96 stack=4
             # self.projection_input_dim = 3*6*6 = 108
-            # hidden_state.shape: (batch_size, num_channel, obs_shape[1]/16, obs_shape[2]/16)  256,64,96/16,96/16 = 256,64,6,6
+            # latent_state.shape: (batch_size, num_channel, obs_shape[1]/16, obs_shape[2]/16)  256,64,96/16,96/16 = 256,64,6,6
             # 256, 64, 6, 6 -> 256,64*6*6
         """
 
-        # hidden_state.shape[0] = batch_size
-        hidden_state = hidden_state.reshape(hidden_state.shape[0], -1)
+        # latent_state.shape[0] = batch_size
+        latent_state = latent_state.reshape(latent_state.shape[0], -1)
 
-        proj = self.projection(hidden_state)
+        proj = self.projection(latent_state)
 
         # with grad, use proj_head
         if with_grad:

@@ -20,9 +20,9 @@ game_config = EasyDict(
         #  when env_num>1, the action mask for different env may be different.
         mcts_ctree=False,
         battle_mode='self_play_mode',
-        game_block_length=36,
+        game_segment_length=36,
         # battle_mode='play_with_bot_mode',
-        # game_block_length=18,
+        # game_segment_length=18,
         image_based=False,
         cvt_string=False,
         clip_rewards=True,

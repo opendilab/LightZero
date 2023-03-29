@@ -35,18 +35,6 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        device=device,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
-        env_type='not_board_games',
-        game_block_length=200,
-        num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
-        downsample=False,
-        use_augmentation=False,
-        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in thee original Sampled MuZero paper.
-        policy_entropy_loss_weight=5e-3,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         model=dict(
             observation_shape=(1, 24, 1),  # if frame_stack_num=1
             action_space_size=4,
@@ -63,18 +51,28 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
             num_channels=32,
             lstm_hidden_size=256,
         ),
-        learn=dict(
-            update_per_collect=update_per_collect,
-            batch_size=batch_size,
-            lr_piecewise_constant_decay=True,
-            optim_type='SGD',
-            learning_rate=0.2,  # init lr for manually decay schedule
-            policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
-            threshold_training_steps_for_final_lr=int(5e4),
-            grad_clip_value=0.5,
-        ),
-        collect=dict(n_episode=n_episode, ),
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        device=device,
+        env_type='not_board_games',
+        game_segment_length=200,
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
+        downsample=False,
+        use_augmentation=False,
+        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in thee original Sampled MuZero paper.
+        policy_entropy_loss_weight=5e-3,
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        update_per_collect=update_per_collect,
+        batch_size=batch_size,
+        lr_piecewise_constant_decay=True,
+        optim_type='SGD',
+        learning_rate=0.2,  # init lr for manually decay schedule
+        policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
+        threshold_training_steps_for_final_lr=int(5e4),
+        grad_clip_value=0.5,
+        n_episode=n_episode,
+        eval_freq=int(2e3),
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
     ),
 )
 bipedalwalker_cont_sampled_efficientzero_config = EasyDict(bipedalwalker_cont_sampled_efficientzero_config)

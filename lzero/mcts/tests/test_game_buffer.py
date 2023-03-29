@@ -21,7 +21,7 @@ class RateLimit:
     def __init__(self, max_rate: int = float("inf"), window_seconds: int = 30) -> None:
         self.max_rate = max_rate
         self.window_seconds = window_seconds
-        self.game_block_buffered = []
+        self.game_segment_buffered = []
 
     def __call__(self, action: str, chain: Callable, *args, **kwargs):
         if action == "push":
@@ -31,9 +31,9 @@ class RateLimit:
     def push(self, chain, data, *args, **kwargs) -> None:
         current = time.time()
         # Cut off stale records
-        self.game_block_buffered = [t for t in self.game_block_buffered if t > current - self.window_seconds]
-        if len(self.game_block_buffered) < self.max_rate:
-            self.game_block_buffered.append(current)
+        self.game_segment_buffered = [t for t in self.game_segment_buffered if t > current - self.window_seconds]
+        if len(self.game_segment_buffered) < self.max_rate:
+            self.game_segment_buffered.append(current)
             return chain(data, *args, **kwargs)
         else:
             return None
@@ -79,7 +79,7 @@ def test_naive_push_sample():
     assert buffer.count() == 20
 
     # push games
-    buffer.push_game_blocks([[data, data], [meta, meta]])
+    buffer.push_game_segments([data, data], [meta, meta])
     assert buffer.count() == 22
 
     # Clear

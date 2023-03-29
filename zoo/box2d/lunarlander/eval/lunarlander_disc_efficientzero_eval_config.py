@@ -97,7 +97,7 @@ lunarlander_disc_efficientzero_config = dict(
             n_episode=n_episode,
         ),
         # If the eval cost is expensive, we could set eval_freq larger.
-        eval=dict(evaluator=dict(eval_freq=int(2e3), )),
+        eval_freq=int(2e3),
         other=dict(
             # NOTE: the replay_buffer_size is ineffective,
             # we specify it using ``replay_buffer_size`` in the following game config
@@ -112,7 +112,7 @@ lunarlander_disc_efficientzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
-        game_block_length=200,
+        game_segment_length=200,
 
         ## observation
         # the key difference setting between image-input and vector input.
