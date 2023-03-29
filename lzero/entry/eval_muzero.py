@@ -12,8 +12,7 @@ from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
-from lzero.mcts import MuZeroGameBuffer as GameBuffer
-from lzero.worker import MuZeroEvaluator as BaseSerialEvaluator
+from lzero.worker import MuZeroEvaluator
 
 
 def eval_muzero(
@@ -68,10 +67,10 @@ def eval_muzero(
     # MCTS+RL algorithms related core code
     # ==============================================================
     game_config = cfg.policy
-    # specific game buffer for MCTS+RL algorithms
-    replay_buffer = GameBuffer(game_config)
-    evaluator = BaseSerialEvaluator(
-        cfg.policy.eval.evaluator,
+    evaluator = MuZeroEvaluator(
+        cfg.policy,
+        cfg.env.n_evaluator_episode,
+        cfg.env.stop_value,
         evaluator_env,
         policy.eval_mode,
         tb_logger,

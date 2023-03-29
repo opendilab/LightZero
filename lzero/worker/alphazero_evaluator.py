@@ -23,6 +23,8 @@ class AlphaZeroEvaluator(ISerialEvaluator):
     def __init__(
         self,
         cfg: EasyDict,
+        n_evaluator_episode: int = 3,
+        stop_value: int = 1e6,
         env: BaseEnv = None,
         policy: namedtuple = None,
         tb_logger: 'SummaryWriter' = None,  # noqa
@@ -35,6 +37,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             Init the AlphaZero evaluator according to input arguments.
         Arguments:
             - cfg (:obj:`EasyDict`): Config.
+            - n_evaluator_episode (:obj:`int`): the number of episodes to eval in total.
             - env (:obj:`BaseEnvManager`): The env for the collection, the BaseEnvManager object or \
                 its derivatives are supported.
             - policy (:obj:`Policy`): The policy to be collected.
@@ -60,9 +63,8 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         self.reset(policy, env)
 
         self._timer = EasyTimer()
-        self._default_n_episode = self._cfg.n_episode
-        self._stop_value = self._cfg.stop_value
-        # self._stop_value = self._cfg.stop_value
+        self._default_n_episode = n_evaluator_episode
+        self._stop_value = stop_value
 
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
         """

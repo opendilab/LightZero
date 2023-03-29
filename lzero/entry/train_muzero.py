@@ -94,6 +94,7 @@ def train_muzero(
     )
     evaluator = MuZeroEvaluator(
         cfg.policy,
+        cfg.env.n_evaluator_episode,
         cfg.env.stop_value,
         evaluator_env,
         policy.eval_mode,

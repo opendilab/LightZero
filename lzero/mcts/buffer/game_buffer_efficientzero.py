@@ -104,7 +104,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         self.game_segment_game_pos_look_up = []
 
         self.keep_ratio = 1
-        self._eps_collected = 0
+        self.num_of_collected_episodes = 0
         self.base_idx = 0
         self.clear_time = 0
 

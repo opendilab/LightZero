@@ -105,7 +105,6 @@ class MuZeroCollector(ISerialCollector):
         assert hasattr(self, '_env'), "please set env first"
         if _policy is not None:
             self._policy = _policy
-            # self._default_n_episode = _policy.get_attribute('cfg').collect.get('n_episode', None)
             self._default_n_episode = _policy.get_attribute('cfg').get('n_episode', None)
             self._logger.debug(
                 'Set default n_episode mode(n_episode({}), env_num({}))'.format(self._default_n_episode, self._env_num)
@@ -323,12 +322,12 @@ class MuZeroCollector(ISerialCollector):
         ]
         # stacked observation windows in reset stage for init game_segments
         observation_window_stack = [[] for _ in range(env_nums)]
-        for i in range(env_nums):
-            observation_window_stack[i] = deque([
-                to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)
+        for env_id in range(env_nums):
+            observation_window_stack[env_id] = deque([
+                to_ndarray(init_obs[env_id]['observation']) for _ in range(self.game_config.model.frame_stack_num)
             ], maxlen=self.game_config.model.frame_stack_num)
 
-            game_segments[i].reset(observation_window_stack[i])
+            game_segments[env_id].reset(observation_window_stack[env_id])
 
         dones = np.array([False for _ in range(env_nums)])
         last_game_segments = [None for _ in range(env_nums)]
@@ -361,7 +360,6 @@ class MuZeroCollector(ISerialCollector):
 
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
                 to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
-
                 action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
 
@@ -422,7 +420,6 @@ class MuZeroCollector(ISerialCollector):
                         self._reset_stat(env_id)
                         self._logger.info('Env{} returns a abnormal step, its info is {}'.format(env_id, timestep.info))
                         continue
-                    i = env_id
                     obs, reward, done, info = timestep.obs, timestep.reward, timestep.done, timestep.info
 
                     if self.game_config.sampled_algo:
@@ -466,11 +463,11 @@ class MuZeroCollector(ISerialCollector):
                         if last_game_segments[env_id] is not None:
                             # TODO(pu): return the one game block
                             self.pad_and_save_last_trajectory(
-                                i, last_game_segments, last_game_priorities, game_segments, dones
+                                env_id, last_game_segments, last_game_priorities, game_segments, dones
                             )
 
                         # calculate priority
-                        priorities = self._compute_priorities(i, pred_values_lst, search_values_lst)
+                        priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
                         pred_values_lst[env_id] = []
                         search_values_lst[env_id] = []
 
@@ -485,7 +482,6 @@ class MuZeroCollector(ISerialCollector):
                             config=self.game_config
                         )
                         game_segments[env_id].reset(observation_window_stack[env_id])
-                        # TODO(pu): return data
 
                     self._env_info[env_id]['step'] += 1
                     self._total_envstep_count += 1
@@ -511,10 +507,10 @@ class MuZeroCollector(ISerialCollector):
                     # NOTE: put the penultimate game block in one episode into the trajectory_pool
                     # pad over 2th last game_segment using the last game_segment
                     if last_game_segments[env_id] is not None:
-                        self.pad_and_save_last_trajectory(i, last_game_segments, last_game_priorities, game_segments, dones)
+                        self.pad_and_save_last_trajectory(env_id, last_game_segments, last_game_priorities, game_segments, dones)
 
                     # store current block trajectory
-                    priorities = self._compute_priorities(i, pred_values_lst, search_values_lst)
+                    priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
 
                     # NOTE: put the last game block in one episode into the trajectory_pool
                     game_segments[env_id].game_segment_to_array()
@@ -527,10 +523,28 @@ class MuZeroCollector(ISerialCollector):
                     # print(game_segments[env_id].reward_segment)
                     # reset the finished env and init game_segments
                     if n_episode > self._env_num:
+                        # Get current ready env obs.
                         init_obs = self._env.ready_obs
-                        init_obs = init_obs[env_id]['observation']
-                        #  init_obs [0]['observation']
-                        init_obs = to_ndarray(init_obs)
+                        retry_waiting_time = 0.001
+                        while len(init_obs.keys()) != self._env_num:
+                            # In order to be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
+                            # len(self._env.ready_obs), especially in tictactoe env.
+                            self._logger.info('The current init_obs.keys() is {}'.format(init_obs.keys()))
+                            self._logger.info(
+                                'Before sleeping, the _env_states is {}'.format(self._env._env_states))
+                            time.sleep(retry_waiting_time)
+                            self._logger.info(
+                                '=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
+                            self._logger.info(
+                                'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time,
+                                                                                           self._env._env_states)
+                            )
+                            init_obs = self._env.ready_obs
+
+                        new_available_env_id = set(init_obs.keys()).difference(ready_env_id)
+                        ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
+                        remain_episode -= min(len(new_available_env_id), remain_episode)
+
                         action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                         to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
 
@@ -539,7 +553,7 @@ class MuZeroCollector(ISerialCollector):
                             game_segment_length=self.game_config.game_segment_length,
                             config=self.game_config
                         )
-                        observation_window_stack[env_id] = deque([init_obs for _ in range(self.game_config.model.frame_stack_num)], maxlen=self.game_config.model.frame_stack_num)
+                        observation_window_stack[env_id] = deque([init_obs[env_id]['observation'] for _ in range(self.game_config.model.frame_stack_num)], maxlen=self.game_config.model.frame_stack_num)
                         game_segments[env_id].reset(observation_window_stack[env_id])
                         last_game_segments[env_id] = None
                         last_game_priorities[env_id] = None
@@ -558,6 +572,8 @@ class MuZeroCollector(ISerialCollector):
                     # Env reset is done by env_manager automatically
                     self._policy.reset([env_id])
                     self._reset_stat(env_id)
+                    # TODO(pu): subprocess mode, when n_episode > self._env_num, occasionally the ready_env_id=()
+                    # and the stack_obs is np.array(None, dtype=object)
                     ready_env_id.remove(env_id)
 
             if collected_episode >= n_episode:

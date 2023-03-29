@@ -32,7 +32,7 @@ class GameBuffer(ABC, object):
         self.game_segment_game_pos_look_up = []
 
         self.keep_ratio = 1
-        self._eps_collected = 0
+        self.num_of_collected_episodes = 0
         self.base_idx = 0
         self.clear_time = 0
 
@@ -229,7 +229,8 @@ class GameBuffer(ABC, object):
         pass
 
     @abstractmethod
-    def _compute_target_policy_non_reanalyzed(self, policy_non_re_context: List[Any], policy_shape: Optional[int]) -> np.ndarray:
+    def _compute_target_policy_non_reanalyzed(self, policy_non_re_context: List[Any],
+                                              policy_shape: Optional[int]) -> np.ndarray:
         """
         Overview:
             prepare policy targets from the non-reanalyzed context of policies
@@ -286,7 +287,7 @@ class GameBuffer(ABC, object):
             - buffered_data (:obj:`BufferedData`): The pushed data.
         """
         if meta['done']:
-            self.episodes_collected += 1
+            self.num_of_collected_episodes += 1
             valid_len = len(data)
         else:
             valid_len = len(data) - meta['unroll_plus_td_steps']
@@ -344,7 +345,7 @@ class GameBuffer(ABC, object):
 
     def get_num_of_episodes(self) -> int:
         # number of collected episodes
-        return self.episodes_collected
+        return self.num_of_collected_episodes
 
     def get_num_of_game_segments(self) -> int:
         # num of game segments
@@ -355,4 +356,4 @@ class GameBuffer(ABC, object):
         return len(self.game_pos_priorities)
 
     def __repr__(self):
-        return f'current buffer statistics is: num_of_episodes: {self.episodes_collected}, num of game segments: {len(self.game_segment_buffer)}, number of transitions: {len(self.game_pos_priorities)}'
+        return f'current buffer statistics is: num_of_episodes: {self.num_of_collected_episodes}, num of game segments: {len(self.game_segment_buffer)}, number of transitions: {len(self.game_pos_priorities)}'

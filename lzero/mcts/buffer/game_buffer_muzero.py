@@ -104,15 +104,13 @@ class MuZeroGameBuffer(GameBuffer):
 
         self.keep_ratio = 1
         self.model_update_interval = 10
-        self._episode_collected = 0
+        self.num_of_collected_episodes = 0
         self.base_idx = 0
         self.clear_time = 0
 
         self.game_segment_buffer = []
         self.game_pos_priorities = []
         self.game_segment_game_pos_look_up = []
-
-
 
     def sample(self, batch_size: int,
                policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]) -> List[Any]:
@@ -129,13 +127,15 @@ class MuZeroGameBuffer(GameBuffer):
         policy._target_model.eval()
 
         # obtain the current_batch and prepare target context
-        reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(batch_size,  self._cfg.reanalyze_ratio)
+        reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(batch_size,
+                                                                                                         self._cfg.reanalyze_ratio)
         # target reward, target value
         batch_rewards, batch_target_values = self._compute_target_reward_value(reward_value_context,
                                                                                policy._target_model)
         # target policy
         batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
-        batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(policy_non_re_context, self._cfg.model.action_space_size)
+        batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(policy_non_re_context,
+                                                                                  self._cfg.model.action_space_size)
 
         # fusion of batch_target_policies_re and batch_target_policies_non_re to batch_target_policies
         if 0 < self._cfg.reanalyze_ratio < 1:
@@ -410,7 +410,7 @@ class MuZeroGameBuffer(GameBuffer):
         game_segment_batch_size = len(pos_in_game_segment_list)
 
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
-                                             action_mask_segment, pos_in_game_segment_list)
+                                                                        action_mask_segment, pos_in_game_segment_list)
 
         batch_target_values, batch_rewards = [], []
         with torch.no_grad():
@@ -501,9 +501,9 @@ class MuZeroGameBuffer(GameBuffer):
             if to_play_segment[0][0] in [1, 2]:
                 # TODO(pu): for board_games, very important, to check
                 value_list = value_list.reshape(-1) * np.array([self._cfg.discount_factor ** td_steps_list[i]
-                                                              if int(td_steps_list[i]) % 2 == 0
-                                                              else -self._cfg.discount_factor ** td_steps_list[i]
-                                                              for i in range(transition_batch_size)])
+                                                                if int(td_steps_list[i]) % 2 == 0
+                                                                else -self._cfg.discount_factor ** td_steps_list[i]
+                                                                for i in range(transition_batch_size)])
             else:
                 value_list = value_list.reshape(-1) * (
                         np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list
@@ -514,7 +514,8 @@ class MuZeroGameBuffer(GameBuffer):
             horizon_id, value_index = 0, 0
 
             for game_segment_len_non_re, reward_list, state_index, to_play_list in zip(game_segment_lens, rewards_list,
-                                                                         pos_in_game_segment_list, to_play_segment):
+                                                                                       pos_in_game_segment_list,
+                                                                                       to_play_segment):
                 target_values = []
                 target_rewards = []
                 base_index = state_index
@@ -570,7 +571,7 @@ class MuZeroGameBuffer(GameBuffer):
         game_segment_batch_size = len(pos_in_game_segment_list)
 
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
-                                             action_mask_segment, pos_in_game_segment_list)
+                                                                        action_mask_segment, pos_in_game_segment_list)
 
         with torch.no_grad():
             policy_obs_list = prepare_observation_list(policy_obs_list)
@@ -625,7 +626,7 @@ class MuZeroGameBuffer(GameBuffer):
                     ]
 
                 legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
-                                     range(transition_batch_size)]
+                                 range(transition_batch_size)]
 
                 roots = MCTSPtree.Roots(transition_batch_size, legal_actions)
                 noises = [
@@ -700,7 +701,8 @@ class MuZeroGameBuffer(GameBuffer):
 
         return batch_target_policies_re
 
-    def _compute_target_policy_non_reanalyzed(self, policy_non_re_context: List[Any], policy_shape: Optional[int]) -> np.ndarray:
+    def _compute_target_policy_non_reanalyzed(self, policy_non_re_context: List[Any],
+                                              policy_shape: Optional[int]) -> np.ndarray:
         """
         Overview:
             prepare policy targets from the non-reanalyzed context of policies
@@ -724,7 +726,7 @@ class MuZeroGameBuffer(GameBuffer):
         game_segment_batch_size = len(pos_in_game_segment_list)
 
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
-                                         action_mask_segment, pos_in_game_segment_list)
+                                                                        action_mask_segment, pos_in_game_segment_list)
         # TODO: check
         legal_actions = [
             [i for i, x in enumerate(action_mask[j]) if x == 1]
