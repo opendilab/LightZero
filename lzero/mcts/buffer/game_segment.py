@@ -1,21 +1,37 @@
 import copy
+from typing import List, Tuple
 
 import numpy as np
+from easydict import EasyDict
+
 from ding.utils.compression_helper import jpeg_data_decompressor
 
 
 class GameSegment:
     """
-        Overview:
-            A game segment from a full episode trajectories.
-            The length of one episode in Atari games are quite large. Split the whole episode trajectory into several
-            ``GameSegment`` blocks.
-        Interfaces:
-            ``__init__``, ``__len__``,``init``, ``pad_over``, ``is_full``, ``legal_actions``, ``append``, ``obs``
-            ``zero_obs``, ``step_obs``, ``get_targets``, ``game_segment_to_array``, ``store_search_stats``.
+    Overview:
+        A game segment from a full episode trajectory.
+
+        The length of one episode in (Atari) games is often quite large. This class represents a single game segment
+        within a larger trajectory, split into several blocks.
+
+    Interfaces:
+        - __init__
+        - __len__
+        - reset
+        - pad_over
+        - is_full
+        - legal_actions
+        - append
+        - get_observation
+        - zero_obs
+        - step_obs
+        - get_targets
+        - game_segment_to_array
+        - store_search_stats
     """
 
-    def __init__(self, action_space, game_segment_length=200, config=None):
+    def __init__(self, action_space: int, game_segment_length: int = 200, config: EasyDict = None) -> None:
         """
         Overview:
             Init the ``GameSegment`` according to the provided arguments.
@@ -34,15 +50,15 @@ class GameSegment:
             config.model.observation_shape[-2], config.model.observation_shape[-1], config.model.image_channel
         )
 
-        self.obs_history = []
-        self.action_history = []
-        self.reward_history = []
+        self.obs_segment = []
+        self.action_segment = []
+        self.reward_segment = []
 
-        self.child_visit_history = []
-        self.root_value_history = []
+        self.child_visit_segment = []
+        self.root_value_segment = []
 
-        self.action_mask_history = []
-        self.to_play_history = []
+        self.action_mask_segment = []
+        self.to_play_segment = []
 
         self.target_values = []
         self.target_rewards = []
@@ -51,152 +67,119 @@ class GameSegment:
         if self.config.sampled_algo:
             self.root_sampled_actions = []
 
-    def __len__(self):
-        return len(self.action_history)
-
-    def init(self, init_observations):
+    def get_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
         """
         Overview:
-            Initialize the game segment using ``init_observations``,
-            which is the previous ``frame_stack_num`` stacked frames.
+            Get an observation of the correct format: o[t, t + stack frames + num_unroll_steps].
         Arguments:
-            - init_observations (:obj:`list`): list of the stack observations in the previous time steps.
+            - timestep (int): The time step.
+            - num_unroll_steps (int): The extra length of the observation frames.
+            - padding (bool): If True, pad frames if (t + stack frames) is outside of the trajectory.
         """
-        self.obs_history = []
-        self.action_history = []
-        self.reward_history = []
+        stacked_obs = self.obs_segment[timestep:timestep + self.frame_stack_num + num_unroll_steps]
+        if padding:
+            pad_len = self.frame_stack_num + num_unroll_steps - len(stacked_obs)
+            if pad_len > 0:
+                pad_frames = np.array([stacked_obs[-1] for _ in range(pad_len)])
+                stacked_obs = np.concatenate((stacked_obs, pad_frames))
+        if self.config.cvt_string:
+            stacked_obs = [jpeg_data_decompressor(obs, self.config.gray_scale) for obs in stacked_obs]
+        return stacked_obs
 
-        self.child_visit_history = []
-        self.root_value_history = []
-
-        self.action_mask_history = []
-        self.to_play_history = []
-
-        assert len(init_observations) == self.frame_stack_num
-
-        for observation in init_observations:
-            self.obs_history.append(copy.deepcopy(observation))
-
-    def is_full(self):
+    def zero_obs(self) -> List:
         """
         Overview:
-            check whether current game segment is full, i.e. larger than self.game_segment_length
+            Return an observation frame filled with zeros.
+        Returns:
+            ndarray: An array filled with zeros.
         """
-        return len(self.action_history) >= self.game_segment_length
+        return [np.zeros(self.zero_obs_shape, dtype=np.float32) for _ in range(self.frame_stack_num)]
 
-    def legal_actions(self):
-        return [_ for _ in range(self.action_space.n)]
+    def step_obs(self) -> List:
+        """
+        Overview:
+            Return an observation in the correct format for model inference.
+        Returns:
+              stacked_obs (List): An observation in the correct format for model inference.
+          """
+        timestep = len(self.reward_segment)
+        stacked_obs = self.obs_segment[timestep:timestep + self.frame_stack_num]
+        if self.config.cvt_string:
+            stacked_obs = [jpeg_data_decompressor(obs, self.config.gray_scale) for obs in stacked_obs]
+        return stacked_obs
 
-    def append(self, action, obs, reward, action_mask=None, to_play=-1):
+    def append(self, action: np.ndarray, obs: np.ndarray, reward: np.ndarray, action_mask: np.ndarray = None, to_play: int = -1) -> None:
         """
         Overview:
             append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
         """
-        self.action_history.append(action)
-        self.obs_history.append(obs)
-        self.reward_history.append(reward)
+        self.action_segment.append(action)
+        self.obs_segment.append(obs)
+        self.reward_segment.append(reward)
 
-        self.action_mask_history.append(action_mask)
-        self.to_play_history.append(to_play)
+        self.action_mask_segment.append(action_mask)
+        self.to_play_segment.append(to_play)
 
-    def pad_over(self, next_block_observations, next_block_rewards, next_block_root_values, next_block_child_visits):
+    def pad_over(self, next_segment_observations: List, next_segment_rewards: List, next_segment_root_values: List,
+                 next_segment_child_visits: List) -> None:
         """
         Overview:
-            To make sure the correction of value targets, we need to add (o_t, r_t, etc) from the next history block
-            , which is necessary for the bootstrapped values at the end states of this history block.
-            Eg: len = 100; target value v_100 = r_100 + gamma^1 r_101 + ... + gamma^4 r_104 + gamma^5 v_105,
-            but r_101, r_102, ... are from the next history block.
+            To make sure the correction of value targets, we need to add (o_t, r_t, etc) from the next game_segment
+            , which is necessary for the bootstrapped values at the end states of previous game_segment.
+            e.g: len = 100; target value v_100 = r_100 + gamma^1 r_101 + ... + gamma^4 r_104 + gamma^5 v_105,
+            but r_101, r_102, ... are from the next game_segment.
         Arguments:
-            - next_block_observations (:obj:`list`):  list o_t from the next history block
-            - next_block_rewards (:obj:`list`): list r_t from the next history block
-            - next_block_root_values (:obj:`list`): list root values of MCTS from the next history block
-            - next_block_child_visits (:obj:`list`): list root visit count distributions of MCTS from
-            the next history block
+            - next_segment_observations (:obj:`list`): o_t from the next game_segment
+            - next_segment_rewards (:obj:`list`): r_t from the next game_segment
+            - next_segment_root_values (:obj:`list`): root values of MCTS from the next game_segment
+            - next_segment_child_visits (:obj:`list`): root visit count distributions of MCTS from the next game_segment
         """
-        assert len(next_block_observations) <= self.config.num_unroll_steps
-        assert len(next_block_child_visits) <= self.config.num_unroll_steps
-        assert len(next_block_root_values) <= self.config.num_unroll_steps + self.config.td_steps
-        assert len(next_block_rewards) <= self.config.num_unroll_steps + self.config.td_steps - 1
+        assert len(next_segment_observations) <= self.config.num_unroll_steps
+        assert len(next_segment_child_visits) <= self.config.num_unroll_steps
+        assert len(next_segment_root_values) <= self.config.num_unroll_steps + self.config.td_steps
+        assert len(next_segment_rewards) <= self.config.num_unroll_steps + self.config.td_steps - 1
 
         # NOTE: next block observation should start from (stacked_observation - 1) in next trajectory
-        for observation in next_block_observations:
-            self.obs_history.append(copy.deepcopy(observation))
+        for observation in next_segment_observations:
+            self.obs_segment.append(copy.deepcopy(observation))
 
-        for reward in next_block_rewards:
-            self.reward_history.append(reward)
+        for reward in next_segment_rewards:
+            self.reward_segment.append(reward)
 
-        for value in next_block_root_values:
-            self.root_value_history.append(value)
+        for value in next_segment_root_values:
+            self.root_value_segment.append(value)
 
-        for child_visits in next_block_child_visits:
-            self.child_visit_history.append(child_visits)
+        for child_visits in next_segment_child_visits:
+            self.child_visit_segment.append(child_visits)
 
-    def obs(self, index, num_unroll_steps=0, padding=False):
+    def get_targets(self, timestep: int) -> Tuple:
         """
         Overview:
-            To obtain an observation of correct format: o[t, t + stack frames + extra len]
-        Arguments:
-            - index: int time step
-            - num_unroll_steps: int extra len of the obs frames
-            - padding: bool True -> padding frames if (t + stack frames) are out of trajectory
+            return the value/reward/policy targets at step timestep
         """
-        frames = self.obs_history[index:index + self.frame_stack_num + num_unroll_steps]
-        if padding:
-            pad_len = self.frame_stack_num + num_unroll_steps - len(frames)
-            if pad_len > 0:
-                pad_frames = np.array([frames[-1] for _ in range(pad_len)])
-                frames = np.concatenate((frames, pad_frames))
-        if self.config.cvt_string:
-            frames = [jpeg_data_decompressor(obs, self.config.gray_scale) for obs in frames]
-        return frames
+        return self.target_values[timestep], self.target_rewards[timestep], self.target_policies[timestep]
 
-    def zero_obs(self):
-        """
-        Overview:
-            return a zero obs frame
-        """
-        return [np.zeros(self.zero_obs_shape, dtype=np.float32) for _ in range(self.frame_stack_num)]
-
-    def step_obs(self):
-        """
-        Overview:
-            return an observation in correct format for model inference
-        """
-        index = len(self.reward_history)
-        frames = self.obs_history[index:index + self.frame_stack_num]
-        if self.config.cvt_string:
-            frames = [jpeg_data_decompressor(obs, self.config.gray_scale) for obs in frames]
-        return frames
-
-    def get_targets(self, i):
-        """
-        Overview:
-            return the value/reward/policy targets at step i
-        """
-        return self.target_values[i], self.target_rewards[i], self.target_policies[i]
-
-    def store_search_stats(self, visit_counts, root_value, root_sampled_actions=None, idx: int = None):
+    def store_search_stats(self, visit_counts: List, root_value: List, root_sampled_actions=None,
+                           idx: int = None) -> None:
         """
         Overview:
             store the visit count distributions and value of the root node after MCTS.
         """
         sum_visits = sum(visit_counts)
         if idx is None:
-            self.child_visit_history.append([visit_count / sum_visits for visit_count in visit_counts])
-            self.root_value_history.append(root_value)
+            self.child_visit_segment.append([visit_count / sum_visits for visit_count in visit_counts])
+            self.root_value_segment.append(root_value)
             if self.config.sampled_algo:
                 self.root_sampled_actions.append(root_sampled_actions)
-                # self.root_sampled_actions.append(
-                #     np.array([action.value for action in root.children.keys()])
-                # )
         else:
-            self.child_visit_history[idx] = [visit_count / sum_visits for visit_count in visit_counts]
-            self.root_value_history[idx] = root_value
+            self.child_visit_segment[idx] = [visit_count / sum_visits for visit_count in visit_counts]
+            self.root_value_segment[idx] = root_value
 
-    def game_segment_to_array(self):
+    def game_segment_to_array(self) -> None:
         """
         Overview:
             post processing the data when a ``GameSegment`` block is full.
+        
         Note:
         game_segment element shape:
             e.g. game_segment_length=20, stack=4, num_unroll_steps=5, td_steps=5
@@ -223,12 +206,50 @@ class GameSegment:
             rew:             20        5    4
                         ----...----|------|-----|
         """
-        self.obs_history = np.array(self.obs_history)
-        self.action_history = np.array(self.action_history)
-        self.reward_history = np.array(self.reward_history)
+        self.obs_segment = np.array(self.obs_segment)
+        self.action_segment = np.array(self.action_segment)
+        self.reward_segment = np.array(self.reward_segment)
 
-        self.child_visit_history = np.array(self.child_visit_history)
-        self.root_value_history = np.array(self.root_value_history)
+        self.child_visit_segment = np.array(self.child_visit_segment)
+        self.root_value_segment = np.array(self.root_value_segment)
 
-        self.action_mask_history = np.array(self.action_mask_history)
-        self.to_play_history = np.array(self.to_play_history)
+        self.action_mask_segment = np.array(self.action_mask_segment)
+        self.to_play_segment = np.array(self.to_play_segment)
+
+    def reset(self, init_observations: np.ndarray) -> None:
+        """
+        Overview:
+            Initialize the game segment using ``init_observations``,
+            which is the previous ``frame_stack_num`` stacked frames.
+        Arguments:
+            - init_observations (:obj:`list`): list of the stack observations in the previous time steps.
+        """
+        self.obs_segment = []
+        self.action_segment = []
+        self.reward_segment = []
+
+        self.child_visit_segment = []
+        self.root_value_segment = []
+
+        self.action_mask_segment = []
+        self.to_play_segment = []
+
+        assert len(init_observations) == self.frame_stack_num
+
+        for observation in init_observations:
+            self.obs_segment.append(copy.deepcopy(observation))
+
+    def is_full(self) -> bool:
+        """
+        Overview:
+            Check whether the current game segment is full, i.e. larger than the segment length.
+        Returns:
+            bool: True if the game segment is full, False otherwise.
+        """
+        return len(self.action_segment) >= self.game_segment_length
+
+    def legal_actions(self):
+        return [_ for _ in range(self.action_space.n)]
+
+    def __len__(self):
+        return len(self.action_segment)

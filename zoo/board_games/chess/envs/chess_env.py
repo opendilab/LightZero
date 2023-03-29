@@ -80,7 +80,7 @@ class ChessEnv(BaseEnv):
         return obs
 
     def observe(self, agent):
-        observation = chess_utils.get_observation(self.board, self.possible_agents.index(agent))
+        observation = chess_utils.get_obs(self.board, self.possible_agents.index(agent))
         observation = np.dstack((observation[:, :, :7], self.board_history))
         action_mask = self.legal_actions
 
@@ -102,7 +102,7 @@ class ChessEnv(BaseEnv):
         current_index = self.agents.index(current_agent)
         self.current_player_index = current_index
 
-        next_board = chess_utils.get_observation(self.board, current_agent)
+        next_board = chess_utils.get_obs(self.board, current_agent)
         self.board_history = np.dstack((next_board[:, :, 7:], self.board_history[:, :, :-13]))
         chosen_move = chess_utils.action_to_move(self.board, action, current_index)
         assert chosen_move in self.board.legal_moves

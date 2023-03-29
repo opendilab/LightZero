@@ -137,7 +137,7 @@ def train_muzero(
         for i in range(cfg.policy.update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
             if replay_buffer.get_num_of_transitions() > batch_size:
-                train_data = replay_buffer.sample_train_data(batch_size, policy)
+                train_data = replay_buffer.sample(batch_size, policy)
             else:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '

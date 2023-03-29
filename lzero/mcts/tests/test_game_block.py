@@ -50,7 +50,7 @@ def test_game_segment(test_algo):
             ) for i in range(config.env.evaluator_env_num)
         ]
         for i in range(config.env.evaluator_env_num):
-            game_segments[i].init([init_observations[i]['observation'] for _ in range(config.policy.model.frame_stack_num)])
+            game_segments[i].reset([init_observations[i]['observation'] for _ in range(config.policy.model.frame_stack_num)])
         episode_rewards = np.zeros(config.env.evaluator_env_num)
 
         while not dones.all():

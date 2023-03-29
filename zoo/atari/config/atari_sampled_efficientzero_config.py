@@ -28,14 +28,26 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+# continuous_action_space = False
+# K = 5  # num_of_sampled_actions
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# num_simulations = 50
+# update_per_collect = 1000
+# batch_size = 256
+# max_env_step = int(1e6)
+# reanalyze_ratio = 0.3
+
+# debug
 continuous_action_space = False
 K = 5  # num_of_sampled_actions
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-num_simulations = 50
-update_per_collect = 1000
-batch_size = 256
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+num_simulations = 5
+update_per_collect = 2
+batch_size = 4
 max_env_step = int(1e6)
 reanalyze_ratio = 0.3
 # ==============================================================

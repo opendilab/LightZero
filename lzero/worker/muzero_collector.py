@@ -221,7 +221,7 @@ class MuZeroCollector(ISerialCollector):
             - last_game_priorities (:obj:`list`): list of the last game priorities
             - game_segments (:obj:`list`): list of the current game histories
         Note:
-            (last_game_segments[i].obs_history[-4:][j] == game_segments[i].obs_history[:4][j]).all() is True
+            (last_game_segments[i].obs_segment[-4:][j] == game_segments[i].obs_segment[:4][j]).all() is True
         """
         # pad over last block trajectory
         beg_index = self.game_config.model.frame_stack_num
@@ -229,21 +229,21 @@ class MuZeroCollector(ISerialCollector):
 
         # the start <frame_stack_num> obs is init zero obs, so we take the [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
         # e.g. the start 4 obs is init zero obs, the num_unroll_steps is 5, so we take the [4:9] obs as the pad obs
-        pad_obs_lst = game_segments[i].obs_history[beg_index:end_index]
-        pad_child_visits_lst = game_segments[i].child_visit_history[:self.game_config.num_unroll_steps]
+        pad_obs_lst = game_segments[i].obs_segment[beg_index:end_index]
+        pad_child_visits_lst = game_segments[i].child_visit_segment[:self.game_config.num_unroll_steps]
         # EfficientZero original repo bug:
-        # pad_child_visits_lst = game_segments[i].child_visit_history[beg_index:end_index]
+        # pad_child_visits_lst = game_segments[i].child_visit_segment[beg_index:end_index]
 
         beg_index = 0
         # self.unroll_plus_td_steps = self.game_config.num_unroll_steps + self.game_config.td_steps
         end_index = beg_index + self.unroll_plus_td_steps - 1
 
-        pad_reward_lst = game_segments[i].reward_history[beg_index:end_index]
+        pad_reward_lst = game_segments[i].reward_segment[beg_index:end_index]
 
         beg_index = 0
         end_index = beg_index + self.unroll_plus_td_steps
 
-        pad_root_values_lst = game_segments[i].root_value_history[beg_index:end_index]
+        pad_root_values_lst = game_segments[i].root_value_segment[beg_index:end_index]
 
         # pad over and save
         last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
@@ -329,7 +329,7 @@ class MuZeroCollector(ISerialCollector):
                 to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)
             ], maxlen=self.game_config.model.frame_stack_num)
 
-            game_segments[i].init(observation_window_stack[i])
+            game_segments[i].reset(observation_window_stack[i])
 
         dones = np.array([False for _ in range(env_nums)])
         last_game_segments = [None for _ in range(env_nums)]
@@ -433,7 +433,7 @@ class MuZeroCollector(ISerialCollector):
                     else:
                         game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
                     # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
-                    # in ``game_segments[env_id].init``, we have append o_{t} in ``self.obs_history``
+                    # in ``game_segments[env_id].init``, we have append o_{t} in ``self.obs_segment``
                     game_segments[env_id].append(
                         actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
                         to_play_dict[env_id]
@@ -485,7 +485,7 @@ class MuZeroCollector(ISerialCollector):
                             game_segment_length=self.game_config.game_segment_length,
                             config=self.game_config
                         )
-                        game_segments[env_id].init(observation_window_stack[env_id])
+                        game_segments[env_id].reset(observation_window_stack[env_id])
                         # TODO(pu): return data
 
                     self._env_info[env_id]['step'] += 1
@@ -522,10 +522,10 @@ class MuZeroCollector(ISerialCollector):
 
                     # assert len(game_segments[env_id]) == len(priorities)
                     # NOTE: save the last game block in one episode into the trajectory_pool if it's not null
-                    if len(game_segments[env_id].reward_history) != 0:
+                    if len(game_segments[env_id].reward_segment) != 0:
                         self.game_segment_pool.append((game_segments[env_id], priorities, dones[env_id]))
 
-                    # print(game_segments[env_id].reward_history)
+                    # print(game_segments[env_id].reward_segment)
                     # reset the finished env and init game_segments
                     if n_episode > self._env_num:
                         init_obs = self._env.ready_obs
@@ -541,7 +541,7 @@ class MuZeroCollector(ISerialCollector):
                             config=self.game_config
                         )
                         observation_window_stack[env_id] = deque([init_obs for _ in range(self.game_config.model.frame_stack_num)], maxlen=self.game_config.model.frame_stack_num)
-                        game_segments[env_id].init(observation_window_stack[env_id])
+                        game_segments[env_id].reset(observation_window_stack[env_id])
                         last_game_segments[env_id] = None
                         last_game_priorities[env_id] = None
 
@@ -572,11 +572,11 @@ class MuZeroCollector(ISerialCollector):
                 ]
                 """
                 for i in range(len(self.game_segment_pool)):
-                    print(self.game_segment_pool[i][0].obs_history.__len__())
-                    print(self.game_segment_pool[i][0].reward_history)
+                    print(self.game_segment_pool[i][0].obs_segment.__len__())
+                    print(self.game_segment_pool[i][0].reward_segment)
                     
                 for i in range(len(return_data[0])):
-                    print(return_data[0][i].reward_history)
+                    print(return_data[0][i].reward_segment)
                 """
                 break
         # log

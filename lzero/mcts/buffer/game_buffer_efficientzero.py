@@ -4,23 +4,19 @@ from typing import Any, List, Optional, Union, Tuple
 
 import numpy as np
 import torch
-from ding.data.buffer import Buffer
+from .game_buffer import GameBuffer
 from ding.torch_utils.data_helper import to_ndarray
 from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
 
-from ..ctree.ctree_efficientzero import ez_tree as ctree
 from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation_list
 from lzero.policy import concat_output, concat_output_value, inverse_scalar_transform
 
 
-from lzero.mcts.utils import BufferedData
-
-
 @BUFFER_REGISTRY.register('game_buffer_efficientzero')
-class EfficientZeroGameBuffer(Buffer):
+class EfficientZeroGameBuffer(GameBuffer):
     """
     Overview:
         The specific game buffer for EfficientZero policy.
@@ -89,7 +85,7 @@ class EfficientZeroGameBuffer(Buffer):
     )
 
     def __init__(self, cfg: dict):
-        super().__init__(cfg.replay_buffer_size)
+        super().__init__(cfg)
         """
         Overview:
             Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
@@ -114,281 +110,41 @@ class EfficientZeroGameBuffer(Buffer):
         self._alpha = self._cfg.priority_prob_alpha
         self.clear_time = 0
 
-    def push(self, data: Any, meta: Optional[dict] = None) -> None:
+    def sample(self, batch_size: int, policy: Any) -> List[Any]:
         """
         Overview:
-            Push data and it's meta information in buffer.
-            Save a game segment
+            sample data from ``GameBuffer`` and prepare the current and target batch for training
         Arguments:
-            - data (:obj:`Any`): The data which will be pushed into buffer.
-                                 i.e. a game segment
-            - meta (:obj:`dict`): Meta information, e.g. priority, count, staleness.
-                - done: bool
-                    True -> the game is finished. (always True)
-                - unroll_plus_td_steps: int
-                    if the game is not finished, we only save the transitions that can be computed
-                - priorities: list
-                    the priorities corresponding to the transitions in the game history
+            - batch_size (:obj:`int`): batch size
+            - policy (:obj:`torch.tensor`): model of policy
         Returns:
-            - buffered_data (:obj:`BufferedData`): The pushed data.
+            - train_data (:obj:`List`): List of train data
         """
-        if meta['done']:
-            self._eps_collected += 1
-            valid_len = len(data)
-        else:
-            valid_len = len(data) - meta['unroll_plus_td_steps']
-
-        if meta['priorities'] is None:
-            max_prio = self.game_pos_priorities.max() if self.game_segment_buffer else 1
-            # if no 'priorities' provided, set the valid part of the new-added game history the max_prio
-            self.game_pos_priorities = np.concatenate(
-                (self.game_pos_priorities, [max_prio for _ in range(valid_len)] + [0. for _ in range(valid_len, len(data))])
-            )
-        else:
-            assert len(data) == len(meta['priorities']), " priorities should be of same length as the game steps"
-            priorities = meta['priorities'].copy().reshape(-1)
-            priorities[valid_len:len(data)] = 0.
-            self.game_pos_priorities = np.concatenate((self.game_pos_priorities, priorities))
-        self.game_segment_buffer.append(data)
-        self.game_segment_game_pos_look_up += [(self.base_idx + len(self.game_segment_buffer) - 1, step_pos) for step_pos in range(len(data))]
-
-    def push_game_segments(self, data_and_meta: Any) -> None:
-        """
-        Overview:
-            Push game data and it's meta information in buffer.
-            Save a game segment
-        Keys:
-            - data (:obj:`Any`): The data which will be pushed into buffer.
-                                 i.e. a game segment
-            - meta (:obj:`dict`): Meta information
-        """
-        data, meta = data_and_meta
-        for (data_game, meta_game) in zip(data, meta):
-            self.push(data_game, meta_game)
-
-    def sample(
-            self,
-            size: Optional[int] = None,
-            indices: Optional[List[str]] = None,
-            replace: bool = False,
-            sample_range: Optional[slice] = None,
-            ignore_insufficient: bool = False,
-            groupby: str = None,
-            rolling_window: int = None
-    ) -> Union[List[BufferedData], List[List[BufferedData]]]:
-        """
-        Overview:
-            To be compatible with Buffer class
-        """
-        pass
-
-    def get_transition(self, idx: int) -> Tuple[Any]:
-        """
-        Overview:
-            Sample one transition according to the idx
-        Arguments:
-            - idx: transition index
-        Returns:
-            - transition (:obj:`tuple`): One transition of pushed data.
-        """
-        game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
-        game_segment_idx -= self.base_idx
-        transition = self.game_segment_buffer[game_segment_idx][pos_in_game_segment]
-        return transition
-
-    def get_game_segment_from_idx(self, idx: int) -> BufferedData:
-        """
-        Overview:
-            Get one game according to the idx
-        Arguments:
-            - idx: game index
-        Returns:
-            - game: (:obj:`GameHistory`): One game history of pushed data.
-        """
-        return self.get_game(idx)
-
-    def get_game(self, idx: int) -> Any:
-        """
-        Overview:
-            sample one game history according to the idx
-        Arguments:
-            - idx: transition index
-        Returns:
-            - game: (:obj:`GameHistory`): One game history of pushed data.
-        """
-        game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
-        game_segment_idx -= self.base_idx
-        game = self.game_segment_buffer[game_segment_idx]
-        return game
-
-    def update(self, index: str, data: Optional[Any] = None, meta: Optional[dict] = None) -> bool:
-        """
-        Overview:
-            Update data and meta by index
-        Arguments:
-            - index (:obj:`str`): Index of one transition to be updated.
-            - data (:obj:`any`): Pure data.  one transition.
-            - meta (:obj:`dict`): Meta information.
-        Returns:
-            - success (:obj:`bool`): Success or not, if data with the index not exist in buffer, return false.
-        """
-        success = False
-        if index < self.get_num_of_transitions():
-            prio = meta['priorities']
-            self.game_pos_priorities[index] = prio
-            game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[index]
-            game_segment_idx -= self.base_idx
-            # update one transition
-            self.game_segment_buffer[game_segment_idx][pos_in_game_segment] = data
-            success = True
-        return success
-
-    def batch_update(self, indices: List[str], metas: Optional[List[Optional[dict]]] = None) -> None:
-        """
-        Overview:
-            Batch update meta by indices, maybe useful in some data architectures.
-        Arguments:
-            - indices (:obj:`List[str]`): Index of data.
-            - metas (:obj:`Optional[List[Optional[dict]]]`): Meta information.
-        """
-        # only update the priorities for data still in replay buffer
-        for i in range(len(indices)):
-            if metas['make_time'][i] > self.clear_time:
-                idx, prio = indices[i], metas['batch_priorities'][i]
-                self.game_pos_priorities[idx] = prio
-
-    def update_priority(self, train_data: Optional[List[Optional[np.ndarray]]], batch_priorities: Optional[Any]) -> None:
-        """
-        Overview:
-            Update the priority of training data.
-        Arguments:
-            - train_data (:obj:`Optional[List[Optional[np.ndarray]]]`): training data to be updated priority.
-            - batch_priorities (:obj:`batch_priorities`): priorities to update to.
-        """
-        self.batch_update(indices=train_data[0][3], metas={'make_time': train_data[0][5], 'batch_priorities': batch_priorities})
-
-    def remove_oldest_data_to_fit(self) -> None:
-        """
-        Overview:
-            remove some oldest data if the replay buffer is full.
-        """
-        nums_of_game_segments = self.get_num_of_game_segments()
-        total_transition = self.get_num_of_transitions()
-        if total_transition > self.replay_buffer_size:
-            index = 0
-            for i in range(nums_of_game_segments):
-                total_transition -= len(self.game_segment_buffer[i])
-                if total_transition <= self.replay_buffer_size * self.keep_ratio:
-                    # find the max game_segment index to keep in the buffer
-                    index = i
-                    break
-            if total_transition >= self._cfg.batch_size:
-                self._remove(index + 1)
-
-    def _remove(self, excess_game_segment_index: List[int]) -> None:
-        """
-        Overview:
-            delete game histories in index [0: excess_game_segment_index]
-        Arguments:
-            - excess_game_segment_index (:obj:`List[str]`): Index of data.
-        """
-        excess_game_positions = sum([len(game_segment) for game_segment in self.game_segment_buffer[:excess_game_segment_index]])
-        del self.game_segment_buffer[:excess_game_segment_index]
-        self.game_pos_priorities = self.game_pos_priorities[excess_game_positions:]
-        del self.game_segment_game_pos_look_up[:excess_game_positions]
-        self.base_idx += excess_game_segment_index
-        self.clear_time = time.time()
-
-    def delete(self, index: str) -> None:
-        """
-        Overview:
-            Delete one data sample by index
-        Arguments:
-            - index (:obj:`str`): Index
-        """
-        pass
-
-    def clear(self) -> None:
-        del self.game_segment_buffer[:]
-
-    def get_batch_size(self) -> int:
-        return self.batch_size
-
-    def get_priorities(self) -> List[float]:
-        return self.game_pos_priorities
-
-    def get_num_of_episodes(self) -> int:
-        # number of collected episodes
-        return self._eps_collected
-
-    def get_num_of_game_segments(self) -> int:
-        # number of games, i.e. num of game segments
-        return len(self.game_segment_buffer)
-
-    def count(self) -> int:
-        # number of games, i.e. num of game segments
-        return len(self.game_segment_buffer)
-
-    def get_num_of_transitions(self) -> int:
-        # total number of transitions
-        return len(self.game_pos_priorities)
-
-    def __copy__(self) -> "GameBuffer":
-        buffer = type(self)(cfg=self._cfg)
-        buffer.storage = self.game_segment_buffer
-        return buffer
-
-    def prepare_batch_context(self, batch_size: int, beta: float) -> Tuple[Any]:
-        """
-        Overview:
-            Prepare a batch context that contains:
-            game_lst: a list of game histories
-            pos_in_game_segment_lst: transition index in game (relative index)
-            batch_index_list: transition index in replay buffer
-            weights: the weight concerning the priority
-            make_time: the time the batch is made (for correctly updating replay buffer
-                when data is deleted)
-        Arguments:
-            - batch_size: int batch size
-            - beta: float the parameter in PER for calculating the priority
-        Returns:
-            - context (:obj:`Tuple`): Context information of a batch, including game_list, game_pos,
-              batch_index_list, weights and make_time.
-        """
-        assert beta > 0
-        # total number of transitions
-        total = self.get_num_of_transitions()
-        if self._cfg.use_priority is False:
-            self.game_pos_priorities = np.ones_like(self.game_pos_priorities)
-        # +1e-6 for numerical stability
-        probs = self.game_pos_priorities ** self._alpha + 1e-6
-        probs /= probs.sum()
-        # TODO(pu): sample data in PER way
-        # sample according to transition index
-        # TODO(pu): replace=True
-        # batch_index_list = np.random.choice(total, batch_size, p=probs, replace=True)
-        batch_index_list = np.random.choice(total, batch_size, p=probs, replace=False)
-        # TODO(pu): reanalyze the outdated data according to their generated time
-        if self._cfg.reanalyze_outdated is True:
-            batch_index_list.sort()
-        weights = (total * probs[batch_index_list]) ** (-beta)
-        weights /= weights.max()
-        game_lst = []
-        pos_in_game_segment_lst = []
-        for idx in batch_index_list:
+        policy._target_model.to(self._cfg.device)
+        policy._target_model.eval()
+        batch_context = self.sample_ori_data(batch_size)
+        input_context = self._make_batch(batch_context, self._cfg.reanalyze_ratio)
+        reward_value_context, policy_re_context, policy_non_re_context, current_batch = input_context
+        # target reward, value
+        batch_value_prefixs, batch_values = self._compute_target_reward_value(reward_value_context, policy._target_model)
+        # target policy
+        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
+        batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(policy_non_re_context)
+        if 0 < self._cfg.reanalyze_ratio < 1:
             try:
-                game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
+                batch_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
             except Exception as error:
                 print(error)
-            game_segment_idx -= self.base_idx
-            game = self.game_segment_buffer[game_segment_idx]
-            game_lst.append(game)
-            pos_in_game_segment_lst.append(pos_in_game_segment)
-        make_time = [time.time() for _ in range(len(batch_index_list))]
-        context = (game_lst, pos_in_game_segment_lst, batch_index_list, weights, make_time)
-        return context
+        elif self._cfg.reanalyze_ratio == 1:
+            batch_policies = batch_target_policies_re
+        elif self._cfg.reanalyze_ratio == 0:
+            batch_policies = batch_target_policies_non_re
+        targets_batch = [batch_value_prefixs, batch_values, batch_policies]
+        # a batch contains the inputs and the targets
+        train_data = [current_batch, targets_batch]
+        return train_data
 
-    def make_batch(self, batch_context: Any, reanalyze_ratio: float) -> Tuple[Any]:
+    def _make_batch(self, batch_context: Any, reanalyze_ratio: float) -> Tuple[Any]:
         """
         Overview:
             prepare the context of a batch
@@ -410,7 +166,7 @@ class EfficientZeroGameBuffer(Buffer):
         for i in range(batch_size):
             game = game_lst[i]
             pos_in_game_segment = pos_in_game_segment_lst[i]
-            _actions = game.action_history[pos_in_game_segment:pos_in_game_segment + self._cfg.num_unroll_steps].tolist()
+            _actions = game.action_segment[pos_in_game_segment:pos_in_game_segment + self._cfg.num_unroll_steps].tolist()
             # add mask for invalid actions (out of trajectory)
             _mask = [1. for i in range(len(_actions))]
             _mask += [0. for _ in range(self._cfg.num_unroll_steps - len(_mask))]
@@ -419,7 +175,7 @@ class EfficientZeroGameBuffer(Buffer):
                 np.random.randint(0, game.action_space_size) for _ in range(self._cfg.num_unroll_steps - len(_actions))
             ]
             # obtain the input observations, pad if length of obs in game_segment is less than stack+num_unroll_steps
-            obs_lst.append(game_lst[i].obs(pos_in_game_segment_lst[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True))
+            obs_lst.append(game_lst[i].get_obs(pos_in_game_segment_lst[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True))
             action_lst.append(_actions)
             mask_lst.append(_mask)
         # formalize the input observations
@@ -430,7 +186,7 @@ class EfficientZeroGameBuffer(Buffer):
             current_batch[i] = np.asarray(current_batch[i])
         total_transitions = self.get_num_of_transitions()
         # obtain the context of value targets
-        reward_value_context = self.prepare_reward_value_context(
+        reward_value_context = self._prepare_reward_value_context(
             batch_index_list, game_lst, pos_in_game_segment_lst, total_transitions
         )
         # only reanalyze recent reanalyze_ratio (e.g. 50%) data
@@ -441,7 +197,7 @@ class EfficientZeroGameBuffer(Buffer):
         # reanalyzed policy
         if reanalyze_num > 0:
             # obtain the context of reanalyzed policy targets
-            policy_re_context = self.prepare_policy_reanalyzed_context(
+            policy_re_context = self._prepare_policy_reanalyzed_context(
                 batch_index_list[:reanalyze_num], game_lst[:reanalyze_num], pos_in_game_segment_lst[:reanalyze_num]
             )
         else:
@@ -449,7 +205,7 @@ class EfficientZeroGameBuffer(Buffer):
         # non reanalyzed policy
         if reanalyze_num < batch_size:
             # obtain the context of non-reanalyzed policy targets
-            policy_non_re_context = self.prepare_policy_non_reanalyzed_context(
+            policy_non_re_context = self._prepare_policy_non_reanalyzed_context(
                 batch_index_list[reanalyze_num:], game_lst[reanalyze_num:], pos_in_game_segment_lst[reanalyze_num:]
             )
         else:
@@ -457,7 +213,8 @@ class EfficientZeroGameBuffer(Buffer):
         context = reward_value_context, policy_re_context, policy_non_re_context, current_batch
         return context
 
-    def prepare_reward_value_context(self, indices: List[str], games: List[Any], state_index_lst: List[Any], total_transitions: int) -> List[Any]:
+
+    def _prepare_reward_value_context(self, indices: List[str], games: List[Any], state_index_lst: List[Any], total_transitions: int) -> List[Any]:
         """
         Overview:
             prepare the context of rewards and values for calculating TD value target in reanalyzing part.
@@ -467,8 +224,8 @@ class EfficientZeroGameBuffer(Buffer):
             - state_index_lst (:obj:`list`): list of transition index in game_segment
             - total_transitions (:obj:`int`): number of collected transitions
         Returns:
-            - reward_value_context (:obj:`list`): value_obs_lst, value_mask, state_index_lst, rewards_lst, traj_lens, 
-              td_steps_lst, action_mask_history, to_play_history
+            - reward_value_context (:obj:`list`): value_obs_lst, value_mask, state_index_lst, rewards_lst, traj_lens,
+              td_steps_lst, action_mask_segment, to_play_segment
         """
         zero_obs = games[0].zero_obs()
         value_obs_lst = []
@@ -477,7 +234,7 @@ class EfficientZeroGameBuffer(Buffer):
         rewards_lst = []
         traj_lens = []
         # for two_player board games
-        action_mask_history, to_play_history = [], []
+        action_mask_segment, to_play_segment = [], []
         td_steps_lst = []
         for game, state_index, idx in zip(games, state_index_lst, indices):
             traj_len = len(game)
@@ -485,11 +242,11 @@ class EfficientZeroGameBuffer(Buffer):
             td_steps = np.clip(self._cfg.td_steps, 1, max(1, traj_len - state_index)).astype(np.int32)
             # prepare the corresponding observations for bootstrapped values o_{t+k}
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
-            game_obs = game.obs(state_index + td_steps, self._cfg.num_unroll_steps)
-            rewards_lst.append(game.reward_history)
+            game_obs = game.get_obs(state_index + td_steps, self._cfg.num_unroll_steps)
+            rewards_lst.append(game.reward_segment)
             # for two_player board games
-            action_mask_history.append(game.action_mask_history)
-            to_play_history.append(game.to_play_history)
+            action_mask_segment.append(game.action_mask_segment)
+            to_play_segment.append(game.to_play_segment)
             for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                 # get the <num_unroll_steps+1>  bootstrapped target obs
                 td_steps_lst.append(td_steps)
@@ -507,12 +264,12 @@ class EfficientZeroGameBuffer(Buffer):
                     obs = zero_obs
                 value_obs_lst.append(obs)
         reward_value_context = [
-            value_obs_lst, value_mask, state_index_lst, rewards_lst, traj_lens, td_steps_lst, action_mask_history,
-            to_play_history
+            value_obs_lst, value_mask, state_index_lst, rewards_lst, traj_lens, td_steps_lst, action_mask_segment,
+            to_play_segment
         ]
         return reward_value_context
 
-    def prepare_policy_non_reanalyzed_context(self, indices: List[int], games: List[Any], state_index_lst: List[int]) -> List[Any]:
+    def _prepare_policy_non_reanalyzed_context(self, indices: List[int], games: List[Any], state_index_lst: List[int]) -> List[Any]:
         """
         Overview:
             prepare the context of policies for calculating policy target in non-reanalyzing part, just return the policy in self-play
@@ -521,23 +278,23 @@ class EfficientZeroGameBuffer(Buffer):
             - games (:obj:`list`): list of game histories
             - state_index_lst (:obj:`list`): list transition index in game
         Returns:
-            - policy_non_re_context (:obj:`list`): state_index_lst, child_visits, traj_lens, action_mask_history, to_play_history
+            - policy_non_re_context (:obj:`list`): state_index_lst, child_visits, traj_lens, action_mask_segment, to_play_segment
         """
         child_visits = []
         traj_lens = []
         # for two_player board games
-        action_mask_history, to_play_history = [], []
+        action_mask_segment, to_play_segment = [], []
         for game, state_index, idx in zip(games, state_index_lst, indices):
             traj_len = len(game)
             traj_lens.append(traj_len)
             # for two_player board games
-            action_mask_history.append(game.action_mask_history)
-            to_play_history.append(game.to_play_history)
-            child_visits.append(game.child_visit_history)
-        policy_non_re_context = [state_index_lst, child_visits, traj_lens, action_mask_history, to_play_history]
+            action_mask_segment.append(game.action_mask_segment)
+            to_play_segment.append(game.to_play_segment)
+            child_visits.append(game.child_visit_segment)
+        policy_non_re_context = [state_index_lst, child_visits, traj_lens, action_mask_segment, to_play_segment]
         return policy_non_re_context
 
-    def prepare_policy_reanalyzed_context(self, indices: List[str], games: List[Any], state_index_lst: List[str]) -> List[Any]:
+    def _prepare_policy_reanalyzed_context(self, indices: List[str], games: List[Any], state_index_lst: List[str]) -> List[Any]:
         """
         Overview:
             prepare the context of policies for calculating policy target in reanalyzing part.
@@ -547,7 +304,7 @@ class EfficientZeroGameBuffer(Buffer):
             - state_index_lst (:obj:'list'): transition index in game
         Returns:
             - policy_re_context (:obj:`list`): policy_obs_lst, policy_mask, state_index_lst, indices,
-              child_visits, traj_lens, action_mask_history, to_play_history
+              child_visits, traj_lens, action_mask_segment, to_play_segment
         """
         zero_obs = games[0].zero_obs()
         with torch.no_grad():
@@ -556,17 +313,17 @@ class EfficientZeroGameBuffer(Buffer):
             policy_mask = []  # 0 -> out of traj, 1 -> new policy
             rewards, child_visits, traj_lens = [], [], []
             # for two_player board games
-            action_mask_history, to_play_history = [], []
+            action_mask_segment, to_play_segment = [], []
             for game, state_index in zip(games, state_index_lst):
                 traj_len = len(game)
                 traj_lens.append(traj_len)
-                rewards.append(game.reward_history)
+                rewards.append(game.reward_segment)
                 # for two_player board games
-                action_mask_history.append(game.action_mask_history)
-                to_play_history.append(game.to_play_history)
-                child_visits.append(game.child_visit_history)
+                action_mask_segment.append(game.action_mask_segment)
+                to_play_segment.append(game.to_play_segment)
+                child_visits.append(game.child_visit_segment)
                 # prepare the corresponding observations
-                game_obs = game.obs(state_index, self._cfg.num_unroll_steps)
+                game_obs = game.get_obs(state_index, self._cfg.num_unroll_steps)
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     if current_index < traj_len:
                         policy_mask.append(1)
@@ -578,12 +335,12 @@ class EfficientZeroGameBuffer(Buffer):
                         obs = zero_obs
                     policy_obs_lst.append(obs)
         policy_re_context = [
-            policy_obs_lst, policy_mask, state_index_lst, indices, child_visits, traj_lens, action_mask_history,
-            to_play_history
+            policy_obs_lst, policy_mask, state_index_lst, indices, child_visits, traj_lens, action_mask_segment,
+            to_play_segment
         ]
         return policy_re_context
 
-    def compute_target_reward_value(self, reward_value_context: List[Any], model: Any) -> List[np.ndarray]:
+    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any) -> List[np.ndarray]:
         """
         Overview:
             prepare reward and value targets from the context of rewards and values.
@@ -594,17 +351,17 @@ class EfficientZeroGameBuffer(Buffer):
             - batch_value_prefixs (:obj:'np.ndarray): batch of value prefix
             - batch_values (:obj:'np.ndarray): batch of value estimation
         """
-        value_obs_lst, value_mask, state_index_lst, rewards_lst, traj_lens, td_steps_lst, action_mask_history, \
-        to_play_history = reward_value_context
+        value_obs_lst, value_mask, state_index_lst, rewards_lst, traj_lens, td_steps_lst, action_mask_segment, \
+        to_play_segment = reward_value_context
         device = self._cfg.device
         batch_size = len(value_obs_lst)
         game_segment_batch_size = len(state_index_lst)
-        if to_play_history[0][0] in [1,2]:
+        if to_play_segment[0][0] in [1,2]:
             # for two_player board games
             to_play = []
             for bs in range(game_segment_batch_size):
                 to_play_tmp = list(
-                    to_play_history[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
+                    to_play_segment[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
                 )
                 if len(to_play_tmp) < self._cfg.num_unroll_steps + 1:
                     # effective play index is {1,2}
@@ -618,7 +375,7 @@ class EfficientZeroGameBuffer(Buffer):
             action_mask = []
             for bs in range(game_segment_batch_size):
                 action_mask_tmp = list(
-                    action_mask_history[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
+                    action_mask_segment[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
                 )
                 if len(action_mask_tmp) < self._cfg.num_unroll_steps + 1:
                     action_mask_tmp += [
@@ -664,7 +421,7 @@ class EfficientZeroGameBuffer(Buffer):
                 policy_logits_pool = policy_logits_pool.tolist()
                 if self._cfg.mcts_ctree:
                     ## cpp mcts_tree
-                    if to_play_history[0][0] in [None, -1]:
+                    if to_play_segment[0][0] in [None, -1]:
                         # for one_player atari games
                         action_mask = [
                             list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
@@ -686,7 +443,7 @@ class EfficientZeroGameBuffer(Buffer):
                     MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 else:
                     ## python mcts_tree
-                    if to_play_history[0][0] in [None, -1]:
+                    if to_play_segment[0][0] in [None, -1]:
                         # for one_player atari games
                         action_mask = [
                             list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
@@ -697,7 +454,7 @@ class EfficientZeroGameBuffer(Buffer):
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(batch_size)
                     ]
-                    if to_play_history[0][0] in [None, -1]:
+                    if to_play_segment[0][0] in [None, -1]:
                         roots.prepare(
                             self._cfg.root_exploration_fraction,
                             noises,
@@ -727,7 +484,7 @@ class EfficientZeroGameBuffer(Buffer):
                 # use the predicted values
                 value_lst = concat_output_value(network_output)
             # get last state value
-            if to_play_history[0][0] in [1, 2]:
+            if to_play_segment[0][0] in [1, 2]:
                 # TODO(pu): board_games
                 value_lst = value_lst.reshape(-1) * np.array(
                     [
@@ -743,7 +500,7 @@ class EfficientZeroGameBuffer(Buffer):
             value_lst = value_lst.tolist()
             horizon_id, value_index = 0, 0
             for traj_len_non_re, reward_lst, state_index, to_play_list in zip(traj_lens, rewards_lst, state_index_lst,
-                                                                              to_play_history):
+                                                                              to_play_segment):
                 target_values = []
                 target_value_prefixs = []
                 value_prefix = 0.0
@@ -751,7 +508,7 @@ class EfficientZeroGameBuffer(Buffer):
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_lst[value_index]
                     for i, reward in enumerate(reward_lst[current_index:bootstrap_index]):
-                        if to_play_history[0][0] in [1, 2]:
+                        if to_play_segment[0][0] in [1, 2]:
                             if to_play_list[current_index] == to_play_list[i]:
                                 value_lst[value_index] += reward * self._cfg.discount_factor ** i
                             else:
@@ -780,7 +537,7 @@ class EfficientZeroGameBuffer(Buffer):
         batch_values = np.asarray(batch_values, dtype=object)
         return batch_value_prefixs, batch_values
 
-    def compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any) -> np.ndarray:
+    def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any) -> np.ndarray:
         """
         Overview:
             prepare policy targets from the reanalyzed context of policies
@@ -793,8 +550,8 @@ class EfficientZeroGameBuffer(Buffer):
         if policy_re_context is None:
             return batch_target_policies_re
         # for two_player board games
-        policy_obs_lst, policy_mask, state_index_lst, indices, child_visits, traj_lens, action_mask_history, \
-        to_play_history = policy_re_context
+        policy_obs_lst, policy_mask, state_index_lst, indices, child_visits, traj_lens, action_mask_segment, \
+        to_play_segment = policy_re_context
         batch_size = len(policy_obs_lst)
         game_segment_batch_size = len(state_index_lst)
         device = self._cfg.device
@@ -803,7 +560,7 @@ class EfficientZeroGameBuffer(Buffer):
             to_play = []
             for bs in range(game_segment_batch_size):
                 to_play_tmp = list(
-                    to_play_history[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
+                    to_play_segment[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
                 )
                 if len(to_play_tmp) < self._cfg.num_unroll_steps + 1:
                     # effective play index is {1,2}
@@ -817,7 +574,7 @@ class EfficientZeroGameBuffer(Buffer):
             action_mask = []
             for bs in range(game_segment_batch_size):
                 action_mask_tmp = list(
-                    action_mask_history[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
+                    action_mask_segment[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
                 )
                 if len(action_mask_tmp) < self._cfg.num_unroll_steps + 1:
                     action_mask_tmp += [
@@ -864,7 +621,7 @@ class EfficientZeroGameBuffer(Buffer):
             policy_logits_pool = policy_logits_pool.tolist()
             if self._cfg.mcts_ctree:
                 ## cpp mcts_tree
-                if to_play_history[0][0] in [None, -1]:
+                if to_play_segment[0][0] in [None, -1]:
                     # for one_player atari games
                     action_mask = [
                         list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
@@ -887,7 +644,7 @@ class EfficientZeroGameBuffer(Buffer):
 
             else:
                 ## python mcts_tree
-                if to_play_history[0][0] in [None, -1]:
+                if to_play_segment[0][0] in [None, -1]:
                     # for one_player atari games
                     action_mask = [
                         list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(batch_size)
@@ -899,7 +656,7 @@ class EfficientZeroGameBuffer(Buffer):
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(batch_size)
                 ]
-                if to_play_history[0][0] in [None, -1]:
+                if to_play_segment[0][0] in [None, -1]:
                     roots.prepare(
                         self._cfg.root_exploration_fraction,
                         noises,
@@ -941,7 +698,7 @@ class EfficientZeroGameBuffer(Buffer):
                         else:
                             if self._cfg.mcts_ctree:
                                 ## cpp mcts_tree
-                                if to_play_history[0][0] in [None, -1]:
+                                if to_play_segment[0][0] in [None, -1]:
                                     sum_visits = sum(distributions)
                                     policy = [visit_count / sum_visits for visit_count in distributions]
                                     target_policies.append(policy)
@@ -956,7 +713,7 @@ class EfficientZeroGameBuffer(Buffer):
                                     target_policies.append(policy_tmp)
                             else:
                                 # python mcts_tree
-                                if to_play_history[0][0] in [None, -1]:
+                                if to_play_segment[0][0] in [None, -1]:
                                     sum_visits = sum(distributions)
                                     policy = [visit_count / sum_visits for visit_count in distributions]
                                     target_policies.append(policy)
@@ -974,8 +731,7 @@ class EfficientZeroGameBuffer(Buffer):
         batch_target_policies_re = np.array(batch_target_policies_re)
         return batch_target_policies_re
 
-    # @profile
-    def compute_target_policy_non_reanalyzed(self, policy_non_re_context: List[Any]) -> np.ndarray:
+    def _compute_target_policy_non_reanalyzed(self, policy_non_re_context: List[Any]) -> np.ndarray:
         """
         Overview:
             prepare policy targets from the non-reanalyzed context of policies
@@ -984,22 +740,22 @@ class EfficientZeroGameBuffer(Buffer):
                 - state_index_lst
                 - child_visits
                 - traj_lens
-                - action_mask_history
-                - to_play_history
+                - action_mask_segment
+                - to_play_segment
         Returns:
             - batch_target_policies_non_re
         """
         batch_target_policies_non_re = []
         if policy_non_re_context is None:
             return batch_target_policies_non_re
-        state_index_lst, child_visits, traj_lens, action_mask_history, to_play_history = policy_non_re_context
+        state_index_lst, child_visits, traj_lens, action_mask_segment, to_play_segment = policy_non_re_context
         game_segment_batch_size = len(state_index_lst)
         if self._cfg.env_type == 'board_games':
             # for two_player board games
             action_mask = []
             for bs in range(game_segment_batch_size):
                 action_mask_tmp = list(
-                    action_mask_history[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
+                    action_mask_segment[bs][state_index_lst[bs]:state_index_lst[bs] + self._cfg.num_unroll_steps + 1]
                 )
                 if len(action_mask_tmp) < self._cfg.num_unroll_steps + 1:
                     action_mask_tmp += [
@@ -1064,46 +820,14 @@ class EfficientZeroGameBuffer(Buffer):
         batch_target_policies_non_re = np.asarray(batch_target_policies_non_re)
         return batch_target_policies_non_re
 
-    def sample_train_data(self, batch_size: int, policy: Any) -> List[Any]:
+    def update_priority(self, train_data: Optional[List[Optional[np.ndarray]]],
+                        batch_priorities: Optional[Any]) -> None:
         """
         Overview:
-            sample data from ``GameBuffer`` and prepare the current and target batch for training
+            Update the priority of training data.
         Arguments:
-            - batch_size (:obj:`int`): batch size
-            - policy (:obj:`torch.tensor`): model of policy
-        Returns:
-            - train_data (:obj:`List`): List of train data
+            - train_data (:obj:`Optional[List[Optional[np.ndarray]]]`): training data to be updated priority.
+            - batch_priorities (:obj:`batch_priorities`): priorities to update to.
         """
-        policy._target_model.to(self._cfg.device)
-        policy._target_model.eval()
-        batch_context = self.prepare_batch_context(batch_size, self._cfg.priority_prob_beta)
-        input_context = self.make_batch(batch_context, self._cfg.reanalyze_ratio)
-        reward_value_context, policy_re_context, policy_non_re_context, current_batch = input_context
-        # target reward, value
-        batch_value_prefixs, batch_values = self.compute_target_reward_value(reward_value_context, policy._target_model)
-        # target policy
-        batch_target_policies_re = self.compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
-        batch_target_policies_non_re = self.compute_target_policy_non_reanalyzed(policy_non_re_context)
-        if 0 < self._cfg.reanalyze_ratio < 1:
-            try:
-                batch_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
-            except Exception as error:
-                print(error)
-        elif self._cfg.reanalyze_ratio == 1:
-            batch_policies = batch_target_policies_re
-        elif self._cfg.reanalyze_ratio == 0:
-            batch_policies = batch_target_policies_non_re
-        targets_batch = [batch_value_prefixs, batch_values, batch_policies]
-        # a batch contains the inputs and the targets
-        train_data = [current_batch, targets_batch]
-        return train_data
-
-    # the following is to be compatible with Buffer class.
-    def save_data(self) -> None:
-        pass
-
-    def load_data(self) -> None:
-        pass
-
-    def get(self) -> None:
-        pass
+        self.batch_update(indices=train_data[0][3],
+                          metas={'make_time': train_data[0][5], 'batch_priorities': batch_priorities})

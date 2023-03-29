@@ -229,7 +229,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             ) for _ in range(env_nums)
         ]
         for i in range(env_nums):
-            game_segments[i].init(
+            game_segments[i].reset(
                 [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)]
             )
 
@@ -308,7 +308,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                         game_segments[i].store_search_stats(distributions_dict[i], value_dict[i])
                     # for two_player board games
                     # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
-                    # in ``game_segments[env_id].init``, we have append o_{t} in ``self.obs_history``
+                    # in ``game_segments[env_id].init``, we have append o_{t} in ``self.obs_segment``
                     game_segments[i].append(
                         actions[i], to_ndarray(obs['observation']), reward, action_mask_dict[i],
                         to_play_dict[i]
@@ -353,7 +353,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                                 config=self.game_config
                             )
 
-                            game_segments[i].init(
+                            game_segments[i].reset(
                                 [init_obs[i]['observation'] for _ in range(self.game_config.model.frame_stack_num)]
                             )
 

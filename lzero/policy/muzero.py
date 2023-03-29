@@ -566,7 +566,6 @@ class MuZeroPolicy(Policy):
             hidden_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(
                 network_output)
 
-            # TODO(pu)
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
                 pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy(
