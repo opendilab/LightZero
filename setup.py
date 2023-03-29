@@ -15,6 +15,7 @@ from distutils.core import setup
 
 import numpy as np
 from setuptools import find_packages, Extension
+# from setuptools.command.build_ext import build_ext
 from Cython.Build import cythonize  # this line should be after 'from setuptools import find_packages'
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -23,6 +24,18 @@ here = os.path.abspath(os.path.dirname(__file__))
 def _load_req(file: str):
     with open(file, 'r', encoding='utf-8') as f:
         return [line.strip() for line in f.readlines() if line.strip()]
+
+
+# class custom_build_ext(build_ext):
+#     def build_extensions(self):
+#         # Override the compiler executables. Importantly, this
+#         # removes the "default" compiler flags that would
+#         # otherwise get passed on to to the compiler, i.e.,
+#         # distutils.sysconfig.get_var("CFLAGS").
+#         self.compiler.set_executable("compiler_so", "g++")
+#         self.compiler.set_executable("compiler_cxx", "g++")
+#         self.compiler.set_executable("linker_so", "g++")
+#         build_ext.build_extensions(self)
 
 
 requirements = _load_req('requirements.txt')
@@ -54,8 +67,9 @@ def find_cython_extensions(path=None):
         extensions.append(Extension(
             extname, [item],
             include_dirs=[np.get_include()],
-            extra_compile_args=["-std=c++11"],
-            extra_link_args=["-std=c++11"],
+            language="c++",
+            # extra_compile_args=["/std:c++latest"],  # only for Windows
+            # extra_link_args=["/std:c++latest"],  # only for Windows
         ))
 
     return extensions
@@ -73,15 +87,15 @@ setup(
     author_email='opendilab@pjlab.org.cn',
     url='https://github.com/opendilab/LightZero',
     license='Apache License, Version 2.0',
-    keywords='Reinforcement Learning, MCTS',
+    keywords='Reinforcement Learning, MCTS, MuZero',
     packages=[
         # framework
         *find_packages(include=('lzero', "lzero.*")),
-        # application
+        # application zoo
         *find_packages(include=('zoo', 'zoo.*')),
     ],
     package_data={
-        package_name: ['*.yaml', '*cfg']
+        package_name: ['*.yaml']
         for package_name in find_packages(include=('lzero.*',))
     },
     python_requires=">=3.7",
@@ -95,12 +109,13 @@ setup(
             linetrace=_LINETRACE,
         ),
     ),
+    # cmdclass={"build_ext": custom_build_ext},
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         "Intended Audience :: Science/Research",
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: POSIX :: Linux',
-        'Operating System :: Microsoft :: Windows',
+        # 'Operating System :: Microsoft :: Windows',
         'Operating System :: MacOS :: MacOS X',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',

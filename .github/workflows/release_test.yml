@@ -1,6 +1,8 @@
 name: Release Test
 
-on: workflow_dispatch
+on:
+  push:
+  workflow_dispatch:
 
 jobs:
   source_build:
@@ -54,14 +56,14 @@ jobs:
       matrix:
         os:
           - 'ubuntu-20.04'
-          - 'windows-2019'
+          #          - 'windows-2019'
           - 'macos-12'
         python:
           - '3.7'
           - '3.8'
           - '3.9'
-#          - '3.10'
-#          - '3.11'
+        #          - '3.10'
+        #          - '3.11'
         architecture:
           - x86_64
           - arm64
