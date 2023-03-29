@@ -7,6 +7,8 @@ on:
       - dev/*
       - fix/*
       - test/*
+      - dev-*
+      - fix-*
 
 jobs:
   unittest:
@@ -18,8 +20,8 @@ jobs:
       matrix:
         os:
           - 'ubuntu-20.04'
-          - 'windows-2019'
-          #- 'macos-12'
+          - 'macos-12'
+          # - 'windows-2019'
         python-version:
           - '3.7'
           - '3.8'
@@ -87,13 +89,13 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-build.txt
           pip install -r requirements-test.txt
-      - name: Set up compiler on Windows
-        if: ${{ env.OS_NAME == 'Windows' }}
-        shell: bash
-        run: |
-          echo "PATH=C:\msys64\mingw64\bin:$PATH" >> $GITHUB_ENV
-          clang --version
-          set CC=clang
+      # - name: Set up compiler on Windows
+      #   if: ${{ env.OS_NAME == 'Windows' }}
+      #   shell: bash
+      #   run: |
+      #     echo "PATH=C:\msys64\mingw64\bin:$PATH" >> $GITHUB_ENV
+      #     clang --version
+      #     set CC=clang
       - name: Run unittest on MacOS or Linux
         if: ${{ env.OS_NAME == 'MacOS' || env.OS_NAME == 'Linux'}}
         env:
