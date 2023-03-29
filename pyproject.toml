@@ -16,10 +16,9 @@ before-test = [# Unittest for windows
     "pip install -r \"{project}\\requirements-test.txt\"",
 ]
 test-command = [
-    "xcopy /e /i \"{project}\\test\" test",
+    #    "xcopy /e /i \"{project}\\lzero\" lzero",
     "copy \"{project}\\pytest.ini\" pytest.ini",
-    "pytest test -sv -m unittest --log-level=DEBUG",
-    "rmdir /s /q test",
+    "pytest lzero -sv -m unittest --log-level=DEBUG",
 ]
 
 ## macOS build configuration
@@ -29,10 +28,9 @@ before-test = [# Unittest for macos
     "pip install -r {project}/requirements-test.txt",
 ]
 test-command = [
-    "cp -rf {project}/test test",
+    #    "cp -rf {project}/lzero lzero",
     "cp {project}/pytest.ini pytest.ini",
-    "pytest test -sv -m unittest --log-level=DEBUG",
-    "rm -rf test",
+    "pytest lzero -sv -m unittest --log-level=DEBUG",
 ]
 
 
@@ -44,8 +42,7 @@ before-test = [# Unittest for linux
     "pip install -r {project}/requirements-test.txt",
 ]
 test-command = [
-    "cp -rf {project}/test test",
+    #    "cp -rf {project}/lzero lzero",
     "cp {project}/pytest.ini pytest.ini",
-    "pytest test -sv -m unittest --log-level=DEBUG",
-    "rm -rf test",
+    "pytest lzero -sv -m unittest --log-level=DEBUG",
 ]
