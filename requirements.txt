@@ -1,6 +1,3 @@
 DI-engine[common_env]>=0.4.4
 gym[accept-rom-license]==0.25.1
 numpy>=1.21.6
-opencv-python
-swig >= 4.1.1
-pettingzoo==1.12.0
