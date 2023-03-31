@@ -19,7 +19,7 @@ batch_size = 256
 max_env_step = int(1e6)
 
 board_size = 6  # default_size is 15
-bot_action_type = 'v0'  # 'v1'
+bot_action_type = 'v0'  # options={'v0', 'v1'}
 prob_random_action_in_bot = 0.5
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -65,16 +65,16 @@ gomoku_muzero_config = dict(
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=int(board_size * board_size / 2),
         discount_factor=1,
-        manual_temperature_decay=True,
-        replay_buffer_size=int(1e5),  # the size/capacity of replay_buffer, in the terms of transitions.
         update_per_collect=update_per_collect,
         batch_size=batch_size,
+        manual_temperature_decay=True,
         lr_piecewise_constant_decay=False,
         optim_type='Adam',
         learning_rate=0.003,  # lr for Adam optimizer
         grad_clip_value=0.5,
         n_episode=n_episode,
         eval_freq=int(2e3),
+        replay_buffer_size=int(1e5),  # the size/capacity of replay_buffer, in the terms of transitions.
     ),
 )
 gomoku_muzero_config = EasyDict(gomoku_muzero_config)

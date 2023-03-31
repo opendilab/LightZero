@@ -34,17 +34,7 @@ num_simulations = 50
 update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
-reanalyze_ratio = 0.3
-
-## debug config
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 5
-# update_per_collect = 2
-# batch_size = 10
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0.3
+reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -75,10 +65,9 @@ atari_muzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         manual_temperature_decay=False,
         fixed_temperature_value=0.25,
-        # whether to use the self_supervised_learning_loss.
-        self_supervised_learning_loss=True,  # default is False
+        # NOTE: whether to use the self_supervised_learning_loss. default is False
+        self_supervised_learning_loss=True,
         ssl_loss_weight=2,  # default is 0
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         lr_piecewise_constant_decay=True,
@@ -86,6 +75,7 @@ atari_muzero_config = dict(
         learning_rate=0.2,  # init lr for manually decay schedule
         n_episode=n_episode,
         eval_freq=int(2e3),
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
     ),
 )
 atari_muzero_config = EasyDict(atari_muzero_config)
