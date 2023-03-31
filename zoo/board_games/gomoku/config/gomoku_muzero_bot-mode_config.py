@@ -65,9 +65,6 @@ gomoku_muzero_config = dict(
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=int(board_size * board_size / 2),
         discount_factor=1,
-        reward_loss_weight=1,
-        value_loss_weight=0.25,
-        policy_loss_weight=1,
         manual_temperature_decay=True,
         replay_buffer_size=int(1e5),  # the size/capacity of replay_buffer, in the terms of transitions.
         update_per_collect=update_per_collect,
