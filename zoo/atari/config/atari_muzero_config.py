@@ -6,9 +6,7 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-# options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_name = 'PongNoFrameskip-v4'
-
+env_name = 'PongNoFrameskip-v4'  # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -29,24 +27,14 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 50
-# update_per_collect = 1000
-# batch_size = 256
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0.3
-
-## debug config
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-num_simulations = 5
-update_per_collect = 2
-batch_size = 10
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 50
+update_per_collect = 1000
+batch_size = 256
 max_env_step = int(1e6)
-reanalyze_ratio = 0.3
+reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -67,6 +55,8 @@ atari_muzero_config = dict(
             observation_shape=(4, 96, 96),
             action_space_size=action_space_size,
             representation_network_type='conv_res_blocks',
+            # NOTE: whether to use the self_supervised_learning_loss. default is False
+            self_supervised_learning_loss=True,
         ),
         device=device,
         collector_env_num=collector_env_num,
@@ -77,10 +67,7 @@ atari_muzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         manual_temperature_decay=False,
         fixed_temperature_value=0.25,
-        # whether to use the self_supervised_learning_loss.
-        self_supervised_learning_loss=True,  # default is False
         ssl_loss_weight=2,  # default is 0
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         lr_piecewise_constant_decay=True,
@@ -88,6 +75,7 @@ atari_muzero_config = dict(
         learning_rate=0.2,  # init lr for manually decay schedule
         n_episode=n_episode,
         eval_freq=int(2e3),
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
     ),
 )
 atari_muzero_config = EasyDict(atari_muzero_config)
@@ -113,4 +101,5 @@ create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
+
     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

@@ -6,10 +6,7 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-# options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-# env_name = 'PongNoFrameskip-v4'
-env_name = 'BreakoutNoFrameskip-v4'
-
+env_name = 'PongNoFrameskip-v4'  # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -27,11 +24,9 @@ elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
     average_episode_length_when_converge = 800
 
-
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
@@ -40,16 +35,6 @@ update_per_collect = 800
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
-
-## debug config
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 5
-# update_per_collect = 2
-# batch_size = 10
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -66,6 +51,7 @@ atari_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        mcts_ctree=True,
         model=dict(
             observation_shape=(4, 96, 96),
             action_space_size=action_space_size,
@@ -80,7 +66,6 @@ atari_efficientzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         manual_temperature_decay=False,
         fixed_temperature_value=0.25,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         lr_piecewise_constant_decay=True,
@@ -88,6 +73,7 @@ atari_efficientzero_config = dict(
         learning_rate=0.2,  # init lr for manually decay schedule
         n_episode=n_episode,
         eval_freq=int(2e3),
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
     ),
 )
 atari_efficientzero_config = EasyDict(atari_efficientzero_config)
