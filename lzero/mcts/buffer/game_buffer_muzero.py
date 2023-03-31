@@ -728,10 +728,12 @@ class MuZeroGameBuffer(GameBuffer):
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
                                                                         action_mask_segment, pos_in_game_segment_list)
         # TODO: check
-        legal_actions = [
-            [i for i, x in enumerate(action_mask[j]) if x == 1]
-            for j in range(game_segment_batch_size * (self._cfg.num_unroll_steps + 1))
-        ]
+        if action_mask[0] is not None:
+            # If action_mask[0] is None, the action space of the environment is continuous.
+            legal_actions = [
+                [i for i, x in enumerate(action_mask[j]) if x == 1]
+                for j in range(game_segment_batch_size * (self._cfg.num_unroll_steps + 1))
+            ]
 
         with torch.no_grad():
             policy_index = 0

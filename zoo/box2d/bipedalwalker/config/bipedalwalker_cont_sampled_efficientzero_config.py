@@ -19,6 +19,18 @@ update_per_collect = 200
 batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
+
+# debug config
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# continuous_action_space = True
+# K = 20  # num_of_sampled_actions
+# num_simulations = 5
+# update_per_collect = 2
+# batch_size = 4
+# max_env_step = int(5e6)
+# reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
