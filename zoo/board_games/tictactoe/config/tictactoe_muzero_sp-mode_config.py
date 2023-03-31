@@ -32,21 +32,7 @@ tictactoe_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        device=device,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
-        env_type='board_games',
-        num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
-        use_augmentation=False,
-        game_segment_length=9,
-        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
-        td_steps=9,
-        num_unroll_steps=3,
-        manual_temperature_decay=True,
-        replay_buffer_size=int(3e3),  # the size/capacity of replay_buffer, in the terms of transitions.
         model=dict(
-            self_supervised_learning_loss=False,
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 3, 3, 3] -> [12, 3, 3]
@@ -67,16 +53,31 @@ tictactoe_muzero_config = dict(
             reward_support_size=21,
             value_support_size=21,
         ),
-        learn=dict(
-            update_per_collect=update_per_collect,
-            batch_size=batch_size,
-            lr_piecewise_constant_decay=False,
-            optim_type='Adam',
-            learning_rate=0.003,  # lr for Adam optimizer
-            grad_clip_value=0.5,
-        ),
-        n_episode=n_episode, 
+        device=device,
+        env_type='board_games',
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
+        use_augmentation=False,
+        game_segment_length=5,
+        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
+        td_steps=9,
+        num_unroll_steps=3,
+        discount_factor=1,
+        update_per_collect=update_per_collect,
+        batch_size=batch_size,
+        manual_temperature_decay=True,
+        lr_piecewise_constant_decay=True,
+        optim_type='SGD',
+        learning_rate=0.2,  # init lr for manually decay schedule
+        # lr_piecewise_constant_decay=False,
+        # optim_type='Adam',
+        # learning_rate=0.003,  # lr for Adam optimizer
+        grad_clip_value=0.5,
+        n_episode=n_episode,
         eval_freq=int(2e3),
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
+        replay_buffer_size=int(1e5),  # the size/capacity of replay_buffer, in the terms of transitions.
     ),
 )
 tictactoe_muzero_config = EasyDict(tictactoe_muzero_config)

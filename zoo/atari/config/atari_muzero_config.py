@@ -55,6 +55,8 @@ atari_muzero_config = dict(
             observation_shape=(4, 96, 96),
             action_space_size=action_space_size,
             representation_network_type='conv_res_blocks',
+            # NOTE: whether to use the self_supervised_learning_loss. default is False
+            self_supervised_learning_loss=True,
         ),
         device=device,
         collector_env_num=collector_env_num,
@@ -65,8 +67,6 @@ atari_muzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         manual_temperature_decay=False,
         fixed_temperature_value=0.25,
-        # NOTE: whether to use the self_supervised_learning_loss. default is False
-        self_supervised_learning_loss=True,
         ssl_loss_weight=2,  # default is 0
         update_per_collect=update_per_collect,
         batch_size=batch_size,

@@ -49,12 +49,6 @@ gomoku_muzero_config = dict(
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             num_res_blocks=1,
             num_channels=32,
-            reward_head_channels=16,
-            value_head_channels=16,
-            policy_head_channels=16,
-            fc_reward_layers=[32],
-            fc_value_layers=[32],
-            fc_policy_layers=[32],
             support_scale=10,
             reward_support_size=21,
             value_support_size=21,
