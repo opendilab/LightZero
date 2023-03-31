@@ -94,6 +94,7 @@ def train_muzero(
     )
     evaluator = MuZeroEvaluator(
         cfg.policy,
+        cfg.env.n_evaluator_episode,
         cfg.env.stop_value,
         evaluator_env,
         policy.eval_mode,
@@ -137,15 +138,12 @@ def train_muzero(
         for i in range(cfg.policy.update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
             if replay_buffer.get_num_of_transitions() > batch_size:
-                train_data = replay_buffer.sample_train_data(batch_size, policy)
+                train_data = replay_buffer.sample(batch_size, policy)
             else:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
                     f'batch_size: {batch_size},'
-                    f'current buffer statistics is: '
-                    f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
-                    f'num of game blocks: {replay_buffer.get_num_of_game_segments()}, '
-                    f'number of transitions: {replay_buffer.get_num_of_transitions()}, '
+                    f'{replay_buffer}'
                     f'continue to collect now ....'
                 )
                 break

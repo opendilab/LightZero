@@ -61,19 +61,23 @@ tictactoe_muzero_config = dict(
         game_segment_length=5,
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=9,
-        discount_factor=1,
         num_unroll_steps=3,
-        replay_buffer_size=int(1e4),  # the size/capacity of replay_buffer, in the terms of transitions.
+        discount_factor=1,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        lr_piecewise_constant_decay=False,
-        optim_type='Adam',
-        learning_rate=0.003,
+        manual_temperature_decay=True,
+        lr_piecewise_constant_decay=True,
+        optim_type='SGD',
+        learning_rate=0.2,  # init lr for manually decay schedule
+        # lr_piecewise_constant_decay=False,
+        # optim_type='Adam',
+        # learning_rate=0.003,  # lr for Adam optimizer
         grad_clip_value=0.5,
         n_episode=n_episode, 
         eval_freq=int(2e3),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
+        replay_buffer_size=int(1e5),  # the size/capacity of replay_buffer, in the terms of transitions.
     ),
 )
 tictactoe_muzero_config = EasyDict(tictactoe_muzero_config)

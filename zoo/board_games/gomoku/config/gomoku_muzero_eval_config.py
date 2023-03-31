@@ -20,7 +20,7 @@ categorical_distribution = True
 reanalyze_ratio = 0.3
 
 board_size = 6  # default_size is 15
-bot_action_type = 'v0'  # 'v1'
+bot_action_type = 'v0'  # options={'v0', 'v1'}
 prob_random_action_in_bot = 0.5
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -61,22 +61,20 @@ gomoku_muzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='board_games',
-        game_segment_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         use_augmentation=False,
+        game_segment_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
-        td_steps=9,
-        num_unroll_steps=3,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        td_steps=int(board_size * board_size),
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         lr_piecewise_constant_decay=False,
         optim_type='Adam',
         learning_rate=0.003,  # lr for Adam optimizer
         n_episode=n_episode,
-        # If the eval cost is expensive, we could set eval_freq larger.
         eval_freq=int(2e3),
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
     ),
 )
 gomoku_muzero_config = EasyDict(gomoku_muzero_config)

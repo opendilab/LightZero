@@ -12,8 +12,9 @@ from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner, create_buffer
-from ding.worker import create_serial_collector, create_serial_evaluator
+from ding.worker import create_serial_collector
 from lzero.policy import visit_count_temperature
+from lzero.worker import AlphaZeroEvaluator
 
 
 def train_alphazero(
@@ -76,13 +77,14 @@ def train_alphazero(
         replay_buffer=replay_buffer,
         env_config=env_config,
     )
-    evaluator = create_serial_evaluator(
+    evaluator = AlphaZeroEvaluator(
         cfg.policy,
-        env=evaluator_env,
-        policy=policy.eval_mode,
-        tb_logger=tb_logger,
+        cfg.env.n_evaluator_episode,
+        cfg.env.stop_value,
+        evaluator_env,
+        policy.eval_mode,
+        tb_logger,
         exp_name=cfg.exp_name,
-        env_config=env_config,
     )
 
     # ==============================================================
