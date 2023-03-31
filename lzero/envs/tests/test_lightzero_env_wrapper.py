@@ -1,10 +1,10 @@
 import pytest
 
 from ding.envs import DingEnvWrapper
-from ding.envs.env_wrappers import *
-from lzero.envs.lightzero_env_wrapper import LightZeroEnvWrapper
-from lzero.envs.action_discretization_env_wrapper import ActionDiscretizationEnvWrapper
-
+from lzero.envs.wrappers import ActionDiscretizationEnvWrapper, LightZeroEnvWrapper
+from easydict import EasyDict
+import gym
+import numpy as np
 
 @pytest.mark.unittest
 class TestLightZeroEnvWrapper:

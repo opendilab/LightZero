@@ -2,8 +2,7 @@ import gym
 from easydict import EasyDict
 
 from ding.envs import DingEnvWrapper
-from lzero.envs.wrapper import LightZeroEnvWrapper
-from lzero.envs.wrapper import ActionDiscretizationEnvWrapper
+from lzero.envs.wrappers import ActionDiscretizationEnvWrapper, LightZeroEnvWrapper
 
 
 def get_wrappered_env(wrapper_cfg: EasyDict, env_name: str):
