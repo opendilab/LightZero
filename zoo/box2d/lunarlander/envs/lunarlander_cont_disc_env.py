@@ -88,7 +88,7 @@ class LunarLanderDiscEnv(BaseEnv):
             self._env.seed(self._seed)
         obs = self._env.reset()
         obs = to_ndarray(obs)
-        self._final_eval_reward = 0
+        self._eval_episode_return = 0
         if self._save_replay_gif:
             self._frames = []
         # disc_to_cont: transform discrete action index to original continuous action
@@ -141,9 +141,9 @@ class LunarLanderDiscEnv(BaseEnv):
         obs = obs.reshape(8, 1, 1)
         action_mask = np.ones(self._action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
-        self._final_eval_reward += rew
+        self._eval_episode_return += rew
         if done:
-            info['final_eval_reward'] = self._final_eval_reward
+            info['eval_episode_return'] = self._eval_episode_return
             if self._save_replay_gif:
                 print(self._replay_path)
                 if not os.path.exists(self._replay_path):

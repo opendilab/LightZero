@@ -15,6 +15,7 @@ from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
 class TicTacToeEnv(BaseEnv):
 
     config = dict(
+        env_name="TicTacToe",
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',  # only used in AlphaZero
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
@@ -139,8 +140,8 @@ class TicTacToeEnv(BaseEnv):
             bot_action = self.bot_action()
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
             timestep_player2 = self._player_step(bot_action)
-            # the final_eval_reward is calculated from Player 1's perspective
-            timestep_player2.info['final_eval_reward'] = -timestep_player2.reward
+            # the eval_episode_return is calculated from Player 1's perspective
+            timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
             timestep = timestep_player2
@@ -163,8 +164,8 @@ class TicTacToeEnv(BaseEnv):
                 bot_action = self.bot_action()
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
             timestep_player2 = self._player_step(bot_action)
-            # the final_eval_reward is calculated from Player 1's perspective
-            timestep_player2.info['final_eval_reward'] = -timestep_player2.reward
+            # the eval_episode_return is calculated from Player 1's perspective
+            timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
             timestep = timestep_player2
@@ -194,7 +195,7 @@ class TicTacToeEnv(BaseEnv):
         self.current_player = self.to_play
 
         if done:
-            info['final_eval_reward'] = reward
+            info['eval_episode_return'] = reward
             # print('tictactoe one episode done: ', info)
 
         action_mask = np.zeros(self.total_num_actions, 'int8')
