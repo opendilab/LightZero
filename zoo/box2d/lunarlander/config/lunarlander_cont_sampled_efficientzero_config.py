@@ -52,7 +52,6 @@ lunarlander_cont_sampled_efficientzero_config = dict(
             lstm_hidden_size=256,
         ),
         device=device,
-
         env_type='not_board_games',
         game_segment_length=200,
         num_simulations=num_simulations,
@@ -68,6 +67,8 @@ lunarlander_cont_sampled_efficientzero_config = dict(
         optim_type='SGD',
         learning_rate=0.2,  # init lr for manually decay schedule
         policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
+        threshold_training_steps_for_final_lr=int(5e4),
+        grad_clip_value=0.5,
         n_episode=n_episode,
         eval_freq=int(2e3),
         collector_env_num=collector_env_num,

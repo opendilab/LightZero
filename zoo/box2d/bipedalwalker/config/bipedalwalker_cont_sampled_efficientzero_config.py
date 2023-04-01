@@ -14,17 +14,28 @@ n_episode = 8
 evaluator_env_num = 3
 continuous_action_space = True
 K = 20  # num_of_sampled_actions
-num_simulations = 100
+num_simulations = 50
 update_per_collect = 200
 batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
+
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# continuous_action_space = True
+# K = 10  # num_of_sampled_actions
+# num_simulations = 20
+# update_per_collect = 10
+# batch_size = 4
+# max_env_step = int(5e6)
+# reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 bipedalwalker_cont_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/bipedalwalker_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_gcv05_tslr5e4_seed0',
+    exp_name=f'data_sez_ctree/bipedalwalker_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_gcv04_tslr2e4_ssl0_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name='BipedalWalker-v3',
@@ -50,6 +61,7 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
             num_res_blocks=1,
             num_channels=32,
             lstm_hidden_size=256,
+            self_supervised_learning_loss=False,
         ),
         device=device,
         env_type='not_board_games',
@@ -58,6 +70,7 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         downsample=False,
         use_augmentation=False,
+        ssl_loss_weight=0,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in thee original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
@@ -67,8 +80,8 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
         optim_type='SGD',
         learning_rate=0.2,  # init lr for manually decay schedule
         policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
-        threshold_training_steps_for_final_lr=int(5e4),
-        grad_clip_value=0.5,
+        threshold_training_steps_for_final_lr=int(2e4),
+        grad_clip_value=0.4,
         n_episode=n_episode,
         eval_freq=int(2e3),
         collector_env_num=collector_env_num,

@@ -43,6 +43,7 @@ class SampledEfficientZeroModel(nn.Module):
         pred_hid: int = 512,
         pred_out: int = 1024,
         # the above model para. is usually fixed
+        self_supervised_learning_loss: bool = False,
         # ==============================================================
         # specific sampled related config
         # ==============================================================
@@ -85,6 +86,7 @@ class SampledEfficientZeroModel(nn.Module):
             - proj_out (:obj:`int`): dim of projection output layer.
             - pred_hid (:obj:`int`):dim of prediction hidden layer.
             - pred_out (:obj:`int`): dim of prediction output layer.
+            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks in MuZero model, default set it to False.
             # ==============================================================
             # specific sampled related config
             # ==============================================================
@@ -108,6 +110,7 @@ class SampledEfficientZeroModel(nn.Module):
         self.num_of_sampled_actions = num_of_sampled_actions
         self.action_space_size = action_space_size
 
+        self.self_supervised_learning_loss = self_supervised_learning_loss
         self.categorical_distribution = categorical_distribution
         if not self.categorical_distribution:
             self.reward_support_size = 1
@@ -243,30 +246,31 @@ class SampledEfficientZeroModel(nn.Module):
                 norm_type=self.norm_type,
             )
 
-        # projection
-        if self.representation_network_type == 'identity':
-            self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
-        else:
-            if self.downsample:
-                # for atari, due to downsample
-                # observation_shape=(12, 96, 96),  # stack=4
-                # 3 * 96/16 * 96/16 = 3*6*6 = 108
-                self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
-                                                                     ) * math.ceil(observation_shape[2] / 16)
+        if self.self_supervised_learning_loss:
+            # projection
+            if self.representation_network_type == 'identity':
+                self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
             else:
-                self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
+                if self.downsample:
+                    # for atari, due to downsample
+                    # observation_shape=(12, 96, 96),  # stack=4
+                    # 3 * 96/16 * 96/16 = 3*6*6 = 108
+                    self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
+                                                                         ) * math.ceil(observation_shape[2] / 16)
+                else:
+                    self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
-        self.projection = nn.Sequential(
-            nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-            nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-            nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
-        )
-        self.projection_head = nn.Sequential(
-            nn.Linear(self.proj_out, self.pred_hid),
-            nn.BatchNorm1d(self.pred_hid),
-            activation,
-            nn.Linear(self.pred_hid, self.pred_out),
-        )
+            self.projection = nn.Sequential(
+                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
+            )
+            self.projection_head = nn.Sequential(
+                nn.Linear(self.proj_out, self.pred_hid),
+                nn.BatchNorm1d(self.pred_hid),
+                activation,
+                nn.Linear(self.pred_hid, self.pred_out),
+            )
 
     def initial_inference(self, obs: torch.Tensor) -> EZNetworkOutput:
         num = obs.size(0)
@@ -377,6 +381,7 @@ class SampledEfficientZeroModel(nn.Module):
     def project(self, hidden_state: torch.Tensor, with_grad=True):
         """
         Overview:
+            only used when ``self.self_supervised_learning_loss=True``.
             Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
         # only the branch of proj + pred can share the gradients
         Examples:

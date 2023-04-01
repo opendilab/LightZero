@@ -42,6 +42,8 @@ class SampledEfficientZeroPolicy(Policy):
             observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
             action_space_size=6,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            # whether to use the self_supervised_learning_loss.
+            self_supervised_learning_loss=False,
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             categorical_distribution=True,
             # the key difference setting between image-input and vector input.
@@ -136,7 +138,7 @@ class SampledEfficientZeroPolicy(Policy):
         value_loss_weight=0.25,
         policy_loss_weight=1,
         policy_entropy_loss_weight=0,
-        ssl_loss_weight=2,
+        ssl_loss_weight=0,
 
         # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
         # threshold_training_steps_for_final_lr=int(
@@ -276,14 +278,17 @@ class SampledEfficientZeroPolicy(Policy):
         # ``obs_batch`` is used in ``initial_inference()``, which is the first stacked obs at timestep t in
         # ``obs_batch_ori``. shape is (4, 4*3, 96, 96) = (4, 12, 96, 96)
         obs_batch = obs_batch_ori[:, 0:self._cfg.model.frame_stack_num * self._cfg.model.image_channel, :, :]
-        # ``obs_target_batch`` is only used for calculate consistency loss, which take the all obs other than
-        # timestep t1, and is only performed in the last 8 timesteps in the second dim in ``obs_batch_ori``.
-        obs_target_batch = obs_batch_ori[:, self._cfg.model.image_channel:, :, :]
+
+        if self._cfg.model.self_supervised_learning_loss:
+            # ``obs_target_batch`` is only used for calculate consistency loss, which take the all obs other than
+            # timestep t1, and is only performed in the last 8 timesteps in the second dim in ``obs_batch_ori``.
+            obs_target_batch = obs_batch_ori[:, self._cfg.model.image_channel:, :, :]
 
         # do augmentations
         if self._cfg.use_augmentation:
             obs_batch = self.image_transforms.transform(obs_batch)
-            obs_target_batch = self.image_transforms.transform(obs_target_batch)
+            if self._cfg.model.self_supervised_learning_loss:
+                obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
         # shape: (batch_size, num_unroll_steps, action_dim)
         # NOTE: .float(), in continuous action space.
@@ -387,23 +392,24 @@ class SampledEfficientZeroPolicy(Policy):
             beg_index = self._cfg.model.image_channel * step_i
             end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
 
-            # ==============================================================
-            # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
-            # ==============================================================
-            if self._cfg.ssl_loss_weight > 0:
-                # obtain the oracle hidden states from representation function.
-                network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
-                presentation_state = network_output.hidden_state
+            if self._cfg.model.self_supervised_learning_loss:
+                # ==============================================================
+                # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
+                # ==============================================================
+                if self._cfg.ssl_loss_weight > 0:
+                    # obtain the oracle hidden states from representation function.
+                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
+                    presentation_state = network_output.hidden_state
 
-                hidden_state = to_tensor(hidden_state)
-                presentation_state = to_tensor(presentation_state)
+                    hidden_state = to_tensor(hidden_state)
+                    presentation_state = to_tensor(presentation_state)
 
-                # NOTE: no grad for the presentation_state branch.
-                dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
-                observation_proj = self._learn_model.project(presentation_state, with_grad=False)
-                temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
+                    # NOTE: no grad for the presentation_state branch.
+                    dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
+                    observation_proj = self._learn_model.project(presentation_state, with_grad=False)
+                    temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
 
-                consistency_loss += temp_loss
+                    consistency_loss += temp_loss
 
             # NOTE: the target policy, target_value_categorical, target_value_prefix_categorical is calculated in
             # game buffer now.
