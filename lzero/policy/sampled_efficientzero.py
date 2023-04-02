@@ -468,7 +468,7 @@ class SampledEfficientZeroPolicy(Policy):
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(self._learn_model.parameters(),
                                                                      self._cfg.grad_clip_value)
         self._optimizer.step()
-        if self._cfg.cos_lr_scheduler is True:
+        if self._cfg.cos_lr_scheduler is True or self._cfg.lr_piecewise_constant_decay is True:
             self.lr_scheduler.step()
 
         # ==============================================================
