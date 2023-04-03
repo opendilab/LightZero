@@ -21,6 +21,8 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
+> LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkits that combines Monte Carlo Tree Search (MCTS) and Reinforcement Learning (RL). 
+
 ## Background
 
 The following is an overview of the historical evolution of the Monte Carlo Tree Search (MCTS) algorithm series:
@@ -29,7 +31,15 @@ The following is an overview of the historical evolution of the Monte Carlo Tree
 English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README.zh.md)
 
 ## Overview
-> LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkits that combines Monte Carlo Tree Search (MCTS) and Reinforcement Learning (RL).
+
+**LightZero** is an open-source algorithm tollkits that combines Monte Carlo Tree Search (MCTS) and Reinforcement Learning (RL). It provides support for a range of MCTS-based RL algorithms with following advantages:
+- Lightweight.
+- Efficient.
+- Easy-to-understand.
+
+For further details, please refer to [Features](#features).
+
+**LightZero** aims to **promote the standardization and acceleration of MCTS algorithm families**. A performance comparison of all implemented algorithms under a unified framework is presented in the [Benchmark](#benchmark).
 
 ### Outline
 
@@ -54,11 +64,11 @@ English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README
 
 ### Features
 
-**Lightweight**: LightZero integrates multiple MCTS algorithm families and can solve decision-making problems with various attributes in a lightweight framework.
+**Lightweight**: LightZero integrates multiple MCTS algorithm families and can solve decision-making problems with various attributes in a lightweight framework. The algorithms and environments LightZero implemented can be found [here](#integrated-algorithms).
 
 **Efficient**: LightZero uses mixed heterogeneous computing programming to improve computational efficiency for the most time-consuming part of MCTS algorithms.
 
-**Easy-to-understand**: LightZero provides detailed documentation and algorithm framework diagrams for all integrated algorithms to help users understand the algorithm's core and compare the differences and similarities between algorithms under the same paradigm. LightZero also provides function call graphs and network structure diagrams for algorithm code implementation, making it easier for users to locate critical code.
+**Easy-to-understand**: LightZero provides detailed documentation and algorithm framework diagrams for all integrated algorithms to help users understand the algorithm's core and compare the differences and similarities between algorithms under the same paradigm. LightZero also provides function call graphs and network structure diagrams for algorithm code implementation, making it easier for users to locate critical code. All the documentations can be found [here](#paper-notes).
 
 ### Framework Structure
 To understand the framework structure of LightZero, the following important components need to be understood:
@@ -81,6 +91,18 @@ LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of 
 
 [comment]: <> (- [Gumbel MuZero]&#40;https://openreview.net/pdf?id=bERaNdoegnO&#41;)
 Our implementation is mainly based on [DI-engine](https://github.com/opendilab/DI-engie).
+
+| Env./Alg.      | AlphaZero | Muzero | EfficientZero | Sampled EfficientZero |
+| ------------- | --------- | ------ | ------------- | --------------------- |
+| Atari         | ---       | ✔    | ✔           | ✔                   |
+| chess         | ✔       | 🔒   | 🔒          | 🔒                  |
+| go            | ✔       | 🔒   | 🔒          | 🔒                  |
+| gomoku        | ✔       | ✔    | 🔒          | 🔒                  |
+| tictactoe     | ✔       | ✔    | 🔒          | 🔒                  |
+| bipedalwalker | ---       | ✔    | ✔           | ✔                   |
+| lunarlander   | ---       | ✔    | ✔           | ✔                   |
+| pendulum      | ---       | ✔    | ✔           | ✔                   |
+| cartpole      | ---       | ✔    | ✔           | ✔                   |
 
 ## Installation
 
