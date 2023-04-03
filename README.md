@@ -27,12 +27,9 @@ The following is an overview of the historical evolution of the Monte Carlo Tree
 ![pipeline](assets/mcts_rl_evolution_overview.png)
 
 English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README.zh.md)
-<<<<<<< HEAD
-=======
 
 ## Overview
 > LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkits that combines Monte Carlo Tree Search (MCTS) and Reinforcement Learning (RL).
->>>>>>> 5de79f72a728af464978de66e3fce30aa718e8cd
 
 ### Outline
 
