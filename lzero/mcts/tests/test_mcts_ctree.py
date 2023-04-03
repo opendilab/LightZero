@@ -78,7 +78,7 @@ game_config = EasyDict(
     ),
 )
 
-batch_size = env_nums = game_config.batch_size
+batch_size = env_nums = policy_config.batch_size
 action_space_size = game_config.model.action_space_size
 
 model = MuZeroModelFake(action_num=9)
@@ -161,12 +161,12 @@ def test_mcts_vs_bot_to_play_large():
     game_config.model.action_space_size = 20
 
     game_config.num_simulations = 500
-    game_config.batch_size = 256
-    env_nums = game_config.batch_size
+    policy_config.batch_size = 256
+    env_nums = policy_config.batch_size
 
     model = MuZeroModelFake(action_num=game_config.model.action_space_size)
-    # stack_obs = torch.zeros(size=(game_config.batch_size, game_config.obs_space_size), dtype=torch.float)
-    stack_obs = torch.randn(size=(game_config.batch_size, game_config.obs_space_size), dtype=torch.float)
+    # stack_obs = torch.zeros(size=(policy_config.batch_size, game_config.obs_space_size), dtype=torch.float)
+    stack_obs = torch.randn(size=(policy_config.batch_size, game_config.obs_space_size), dtype=torch.float)
 
     network_output = model.initial_inference(stack_obs.float())
 
@@ -201,8 +201,8 @@ def test_mcts_vs_bot_to_play_large():
             ).search(roots, model, hidden_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
-    assert np.array(roots_distributions).shape == (game_config.batch_size, game_config.model.action_space_size)
-    assert np.array(roots_values).shape == (game_config.batch_size, )
+    assert np.array(roots_distributions).shape == (policy_config.batch_size, game_config.model.action_space_size)
+    assert np.array(roots_values).shape == (policy_config.batch_size, )
 
 
 @pytest.mark.unittest

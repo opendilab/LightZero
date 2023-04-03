@@ -45,7 +45,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
     def __init__(
             self,
-            cfg: dict,
+            eval_freq: int = 1000,
             n_evaluator_episode: int = 3,
             stop_value: int = 1e6,
             env: BaseEnvManager = None,
@@ -53,23 +53,23 @@ class MuZeroEvaluator(ISerialEvaluator):
             tb_logger: 'SummaryWriter' = None,  # noqa
             exp_name: Optional[str] = 'default_experiment',
             instance_name: Optional[str] = 'evaluator',
-            game_config: 'game_config' = None,  # noqa
+            policy_config: 'policy_config' = None,  # noqa
     ) -> None:
         """
         Overview:
             Init method. Load config and use ``self._cfg`` setting to build common serial evaluator components,
             e.g. logger helper, timer.
         Arguments:
-            - cfg (:obj:`EasyDict`): Configuration EasyDict.
+            - eval_freq (:obj:`int`): evaluation frequency in terms of training steps.
             - n_evaluator_episode (:obj:`int`): the number of episodes to eval in total.
             - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
             - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
             - tb_logger (:obj:`SummaryWriter`): tensorboard handle
             - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
             - instance_name (:obj:`Optional[str]`): Name of this instance.
-            - game_config: Config of game.
+            - policy_config: Config of game.
         """
-        self._cfg = cfg
+        self._eval_freq = eval_freq
         self._exp_name = exp_name
         self._instance_name = instance_name
         if tb_logger is not None:
@@ -90,7 +90,7 @@ class MuZeroEvaluator(ISerialEvaluator):
         # ==============================================================
         # MCTS+RL related core code
         # ==============================================================
-        self.game_config = game_config
+        self.policy_config = policy_config
 
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
         """
@@ -179,7 +179,7 @@ class MuZeroEvaluator(ISerialEvaluator):
         """
         if train_iter == self._last_eval_iter:
             return False
-        if (train_iter - self._last_eval_iter) < self._cfg.eval_freq and train_iter != 0:
+        if (train_iter - self._last_eval_iter) < self._eval_freq and train_iter != 0:
             return False
         self._last_eval_iter = train_iter
         return True
@@ -190,7 +190,6 @@ class MuZeroEvaluator(ISerialEvaluator):
             train_iter: int = -1,
             envstep: int = -1,
             n_episode: Optional[int] = None,
-            config: Optional[dict] = None,
     ) -> Tuple[bool, float]:
         """
         Overview:
@@ -238,13 +237,13 @@ class MuZeroEvaluator(ISerialEvaluator):
         game_segments = [
             GameSegment(
                 self._env.action_space,
-                game_segment_length=self.game_config.game_segment_length,
-                config=self.game_config
+                game_segment_length=self.policy_config.game_segment_length,
+                config=self.policy_config
             ) for _ in range(env_nums)
         ]
         for i in range(env_nums):
             game_segments[i].reset(
-                [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)]
+                [to_ndarray(init_obs[i]['observation']) for _ in range(self.policy_config.model.frame_stack_num)]
             )
 
         ready_env_id = set()
@@ -268,7 +267,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                 stack_obs = to_ndarray(stack_obs)
                 stack_obs = prepare_observation_list(stack_obs)
-                stack_obs = torch.from_numpy(stack_obs).to(self.game_config.device).float()
+                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
 
                 # ==============================================================
                 # policy forward
@@ -277,7 +276,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                 actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                 distributions_dict_no_env_id = {k: v['distributions'] for k, v in policy_output.items()}
-                if self.game_config.sampled_algo:
+                if self.policy_config.sampled_algo:
                     root_sampled_actions_dict_no_env_id = {k: v['root_sampled_actions'] for k, v in
                                                            policy_output.items()}
 
@@ -290,7 +289,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                 actions = {}
                 distributions_dict = {}
-                if self.game_config.sampled_algo:
+                if self.policy_config.sampled_algo:
                     root_sampled_actions_dict = {}
                 value_dict = {}
                 pred_value_dict = {}
@@ -298,7 +297,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                 for index, env_id in enumerate(ready_env_id):
                     actions[env_id] = actions_no_env_id.pop(index)
                     distributions_dict[env_id] = distributions_dict_no_env_id.pop(index)
-                    if self.game_config.sampled_algo:
+                    if self.policy_config.sampled_algo:
                         root_sampled_actions_dict[env_id] = root_sampled_actions_dict_no_env_id.pop(index)
                     value_dict[env_id] = value_dict_no_env_id.pop(index)
                     pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
@@ -311,20 +310,9 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                 for env_id, t in timesteps.items():
                     obs, reward, done, info = t.obs, t.reward, t.done, t.info
-                    if self.game_config.sampled_algo:
-                        game_segments[env_id].store_search_stats(
-                            distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
-                        )
-                    else:
-                        game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
 
-                    # for two_player board games
-                    # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
-                    # in ``game_segments[env_id].init``, we have append o_{t} in ``self.obs_segment``
-                    game_segments[env_id].append(
-                        actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                        to_play_dict[env_id]
-                    )
+                    # NOTE: in evaluator, we only need save the ``o_{t+1} = obs['observation']``
+                    game_segments[env_id].obs_segment.append(to_ndarray(obs['observation']))
 
                     # NOTE: the position of code snippet is very important.
                     # the obs['action_mask'] and obs['to_play'] is corresponding to next action
@@ -374,12 +362,12 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                             game_segments[env_id] = GameSegment(
                                 self._env.action_space,
-                                game_segment_length=self.game_config.game_segment_length,
-                                config=self.game_config
+                                game_segment_length=self.policy_config.game_segment_length,
+                                config=self.policy_config
                             )
 
                             game_segments[env_id].reset(
-                                [init_obs[env_id]['observation'] for _ in range(self.game_config.model.frame_stack_num)]
+                                [init_obs[env_id]['observation'] for _ in range(self.policy_config.model.frame_stack_num)]
                             )
 
                         # Env reset is done by env_manager automatically.
@@ -390,7 +378,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                     envstep_count += 1
         duration = self._timer.value
-        episode_reward = eval_monitor.get_episode_return()
+        episode_return = eval_monitor.get_episode_return()
         info = {
             'train_iter': train_iter,
             'ckpt_name': 'iteration_{}.pth.tar'.format(train_iter),
@@ -400,11 +388,11 @@ class MuZeroEvaluator(ISerialEvaluator):
             'evaluate_time': duration,
             'avg_envstep_per_sec': envstep_count / duration,
             'avg_time_per_episode': n_episode / duration,
-            'reward_mean': np.mean(episode_reward),
-            'reward_std': np.std(episode_reward),
-            'reward_max': np.max(episode_reward),
-            'reward_min': np.min(episode_reward),
-            # 'each_reward': episode_reward,
+            'reward_mean': np.mean(episode_return),
+            'reward_std': np.std(episode_return),
+            'reward_max': np.max(episode_return),
+            'reward_min': np.min(episode_return),
+            # 'each_reward': episode_return,
         }
         episode_info = eval_monitor.get_episode_info()
         if episode_info is not None:
@@ -418,7 +406,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                 continue
             self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
             self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, envstep)
-        eval_reward = np.mean(episode_reward)
+        eval_reward = np.mean(episode_return)
         if eval_reward > self._max_eval_reward:
             if save_ckpt_fn:
                 save_ckpt_fn('ckpt_best.pth.tar')
@@ -426,8 +414,8 @@ class MuZeroEvaluator(ISerialEvaluator):
         stop_flag = eval_reward >= self._stop_value and train_iter > 0
         if stop_flag:
             self._logger.info(
-                "[DI-engine serial pipeline] " +
+                "[LightZero serial pipeline] " +
                 "Current eval_reward: {} is greater than stop_value: {}".format(eval_reward, self._stop_value) +
-                ", so your RL agent is converged, you can refer to 'log/evaluator/evaluator_logger.txt' for details."
+                ", so your MCTS/RL agent is converged, you can refer to 'log/evaluator/evaluator_logger.txt' for details."
             )
         return stop_flag, eval_reward

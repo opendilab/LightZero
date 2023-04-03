@@ -42,7 +42,7 @@ class MuZeroGameBuffer(GameBuffer):
             batch_size=256,
         ),
         # ==============================================================
-        # begin of additional game_config
+        # begin of additional policy_config
         # ==============================================================
         ## common
         mcts_ctree=True,
@@ -81,7 +81,7 @@ class MuZeroGameBuffer(GameBuffer):
         discount_factor=0.997,
         value_delta_max=0.01,
         # ==============================================================
-        # end of additional game_config
+        # end of additional policy_config
         # ==============================================================
     )
 
@@ -392,7 +392,7 @@ class MuZeroGameBuffer(GameBuffer):
         ]
         return policy_re_context
 
-    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any) -> List[np.ndarray]:
+    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any) -> Tuple[Any, Any]:
         """
         Overview:
             prepare reward and value targets from the context of rewards and values.

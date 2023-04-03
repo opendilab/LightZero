@@ -39,7 +39,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
             batch_size=256,
         ),
         # ==============================================================
-        # begin of additional game_config
+        # begin of additional policy_config
         # ==============================================================
         ## common
         mcts_ctree=True,
@@ -78,7 +78,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         discount_factor=0.997,
         value_delta_max=0.01,
         # ==============================================================
-        # end of additional game_config
+        # end of additional policy_config
         # ==============================================================
     )
 

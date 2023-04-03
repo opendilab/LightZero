@@ -49,7 +49,7 @@ class ActionDiscretizationEnvWrapper(gym.Wrapper):
         obs = self.env.reset(**kwargs)
         self._raw_action_space = self.env.action_space
 
-        if self.cfg.discretization:
+        if self.cfg.manually_discretization:
             # disc_to_cont: transform discrete action index to original continuous action
             self.m = self._raw_action_space.shape[0]
             self.n = self.cfg.each_dim_disc_size
@@ -78,12 +78,10 @@ class ActionDiscretizationEnvWrapper(gym.Wrapper):
                 for debugging, and sometimes learning)
 
         """
-        if self.cfg.discretization:
+        if self.cfg.manually_discretization:
             # disc_to_cont: transform discrete action index to original continuous action
             action = [-1 + 2 / self.n * k for k in self.disc_to_cont[int(action)]]
             action = to_ndarray(action)
-            if action.shape == (1,):
-                action = action.item()  # 0-dim array
 
         # The core original env step.
         obs, rew, done, info = self.env.step(action)

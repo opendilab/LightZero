@@ -41,18 +41,21 @@ def eval_muzero(
     assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero'], \
         "LightZero now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero'"
 
+    if cfg.policy.device == 'cuda' and torch.cuda.is_available():
+        cfg.policy.cuda = True
+    else:
+        cfg.policy.cuda = False
+
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
+
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
-    if cfg.policy.device == 'cuda' and torch.cuda.is_available():
-        cfg.policy.cuda = True
-    else:
-        cfg.policy.cuda = False
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
+
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
@@ -66,16 +69,16 @@ def eval_muzero(
     # ==============================================================
     # MCTS+RL algorithms related core code
     # ==============================================================
-    game_config = cfg.policy
+    policy_config = cfg.policy
     evaluator = MuZeroEvaluator(
-        cfg.policy,
+        cfg.policy.eval_freq,
         cfg.env.n_evaluator_episode,
         cfg.env.stop_value,
         evaluator_env,
         policy.eval_mode,
         tb_logger,
         exp_name=cfg.exp_name,
-        game_config=game_config
+        policy_config=policy_config
     )
 
     # ==========
@@ -91,7 +94,7 @@ def eval_muzero(
         returns = []
         for i in range(num_episodes_each_seed):
             stop, reward = evaluator.eval(
-                learner.save_checkpoint, learner.train_iter, config=game_config
+                learner.save_checkpoint, learner.train_iter
             )
             returns.append(reward)
         returns = np.array(returns)
@@ -99,8 +102,9 @@ def eval_muzero(
         if print_seed_details:
             print("=" * 20)
             print(f'In seed {seed}, returns: {returns}')
-            print(
-                f'win rate: {len(np.where(returns == 1.)[0]) / num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0]) / num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0]) / num_episodes_each_seed}')
+            if cfg.policy.env_type == 'board_games':
+                print(
+                    f'win rate: {len(np.where(returns == 1.)[0]) / num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0]) / num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0]) / num_episodes_each_seed}')
             print("=" * 20)
 
         return returns.mean(), returns

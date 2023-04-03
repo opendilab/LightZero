@@ -80,7 +80,7 @@ python3 -u zoo/atari/config/atari_muzero_config.py
 
 ```bash
 cd LightZero
-python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
+python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 ```
 
 ## 基线算法比较

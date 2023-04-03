@@ -9,30 +9,22 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 32
-n_episode = 32
+collector_env_num = 8
+n_episode = 8
 evaluator_env_num = 5
-num_simulations = 50
+num_simulations = 25
 update_per_collect = 50
 batch_size = 256
-max_env_step = int(1e6)
-reanalyze_ratio = 0.
-
-board_size = 6  # default_size is 15
-bot_action_type = 'v0'  # options={'v0', 'v1'}
-prob_random_action_in_bot = 0.5
+max_env_step = int(2e5)
+reanalyze_ratio = 0.3
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_muzero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+tictactoe_muzero_config = dict(
+    exp_name=f'data_mz_ctree/tictactoe_muzero_sp-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
-        stop_value=int(2),
         battle_mode='self_play_mode',
-        bot_action_type=bot_action_type,
-        prob_random_action_in_bot=prob_random_action_in_bot,
-        channel_last=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -40,29 +32,36 @@ gomoku_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            # We use the half size model for gomoku
-            observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
-            action_space_size=int(board_size * board_size),
+            # the stacked obs shape -> the transformed obs shape:
+            # [S, W, H, C] -> [S x C, W, H]
+            # e.g. [4, 3, 3, 3] -> [12, 3, 3]
+            # observation_shape=(12, 3, 3),  # if frame_stack_num=4
+            observation_shape=(3, 3, 3),  # if frame_stack_num=1
+            action_space_size=9,
             image_channel=3,
             frame_stack_num=1,
             downsample=False,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            # We use the small size model for tictactoe
             num_res_blocks=1,
-            num_channels=32,
+            num_channels=16,
+            fc_reward_layers=[8],
+            fc_value_layers=[8],
+            fc_policy_layers=[8],
             support_scale=10,
             reward_support_size=21,
             value_support_size=21,
         ),
         device=device,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
         env_type='board_games',
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         use_augmentation=False,
-        game_segment_length=int(board_size * board_size),  # for battle_mode='self_play_mode'
+        game_segment_length=5,
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
-        td_steps=int(board_size * board_size),
+        td_steps=9,
+        num_unroll_steps=3,
+        discount_factor=1,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         manual_temperature_decay=True,
@@ -75,16 +74,18 @@ gomoku_muzero_config = dict(
         grad_clip_value=0.5,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
+        replay_buffer_size=int(1e5),  # the size/capacity of replay_buffer, in the terms of transitions.
     ),
 )
-gomoku_muzero_config = EasyDict(gomoku_muzero_config)
-main_config = gomoku_muzero_config
+tictactoe_muzero_config = EasyDict(tictactoe_muzero_config)
+main_config = tictactoe_muzero_config
 
-gomoku_muzero_create_config = dict(
+tictactoe_muzero_create_config = dict(
     env=dict(
-        type='gomoku',
-        import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
+        type='tictactoe',
+        import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
@@ -93,12 +94,11 @@ gomoku_muzero_create_config = dict(
     ),
     collector=dict(
         type='episode_muzero',
-        get_train_sample=True,
         import_names=['lzero.worker.muzero_collector'],
     )
 )
-gomoku_muzero_create_config = EasyDict(gomoku_muzero_create_config)
-create_config = gomoku_muzero_create_config
+tictactoe_muzero_create_config = EasyDict(tictactoe_muzero_create_config)
+create_config = tictactoe_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero

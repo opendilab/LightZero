@@ -15,12 +15,22 @@ def get_wrappered_env(wrapper_cfg: EasyDict, env_name: str):
     Returns:
         A callable that creates the wrapped environment.
     """
-    return lambda: DingEnvWrapper(
-        gym.make(env_name),
-        cfg={
-            'env_wrapper': [
-                lambda env: ActionDiscretizationEnvWrapper(env, wrapper_cfg),
-                lambda env: LightZeroEnvWrapper(env, wrapper_cfg)
-            ]
-        }
-    )
+    if wrapper_cfg.manually_discretization:
+        return lambda: DingEnvWrapper(
+            gym.make(env_name),
+            cfg={
+                'env_wrapper': [
+                    lambda env: ActionDiscretizationEnvWrapper(env, wrapper_cfg),
+                    lambda env: LightZeroEnvWrapper(env, wrapper_cfg)
+                ]
+            }
+        )
+    else:
+        return lambda: DingEnvWrapper(
+            gym.make(env_name),
+            cfg={
+                'env_wrapper': [
+                    lambda env: LightZeroEnvWrapper(env, wrapper_cfg)
+                ]
+            }
+        )

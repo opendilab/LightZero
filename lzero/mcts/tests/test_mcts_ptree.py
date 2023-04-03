@@ -79,7 +79,7 @@ game_config = EasyDict(
     )
 )
 
-batch_size = env_nums = game_config.batch_size
+batch_size = env_nums = policy_config.batch_size
 action_space_size = game_config.model.action_space_size
 
 model = MuZeroModelFake(action_num=9)

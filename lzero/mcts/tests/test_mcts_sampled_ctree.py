@@ -87,7 +87,7 @@ def test_mcts():
         )
     )
 
-    batch_size = env_nums = game_config.batch_size
+    batch_size = env_nums = policy_config.batch_size
     model = MuZeroModelFake(action_num=game_config.model.action_space_size * 2)
     stack_obs = torch.zeros(
         size=(

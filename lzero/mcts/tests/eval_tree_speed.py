@@ -73,7 +73,7 @@ def ptree_func(game_config, num_simulations):
             - search_time.
             - total_time.
         """
-    batch_size = env_nums = game_config.batch_size
+    batch_size = env_nums = policy_config.batch_size
     action_space_size = game_config.action_space_size
 
     build_time = []
@@ -166,7 +166,7 @@ def ctree_func(game_config, num_simulations):
             - search_time.
             - total_time.
         """
-    batch_size = env_nums = game_config.batch_size
+    batch_size = env_nums = policy_config.batch_size
     action_space_size = game_config.action_space_size
 
     build_time = []
@@ -323,7 +323,7 @@ if __name__ == "__main__":
 
     for action_space_size in ACTION_SPCAE_SIZE:
         for batch_size in BATCH_SIZE:
-            game_config.batch_size = batch_size
+            policy_config.batch_size = batch_size
             game_config.action_space_size = action_space_size
             ctree_build_time = []
             ctree_prepare_time = []

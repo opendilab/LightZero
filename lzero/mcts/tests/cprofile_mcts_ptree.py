@@ -81,12 +81,12 @@ def check_mcts():
         )
     )
 
-    env_nums = game_config.batch_size
+    env_nums = policy_config.batch_size
 
     model = MuZeroModelFake(action_num=100)
     stack_obs = torch.zeros(
         size=(
-            game_config.batch_size,
+            policy_config.batch_size,
             100,
         ), dtype=torch.float
     )
@@ -116,7 +116,7 @@ def check_mcts():
     roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
     MCTSPtree(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state)
     roots_distributions = roots.get_distributions()
-    assert np.array(roots_distributions).shape == (game_config.batch_size, game_config.model.action_space_size)
+    assert np.array(roots_distributions).shape == (policy_config.batch_size, game_config.model.action_space_size)
 
 
 if __name__ == '__main__':

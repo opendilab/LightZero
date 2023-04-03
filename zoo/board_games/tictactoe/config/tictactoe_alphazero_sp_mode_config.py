@@ -9,18 +9,18 @@ evaluator_env_num = 5
 num_simulations = 25
 update_per_collect = 50
 batch_size = 256
-max_env_step = int(2e5)
+max_env_step = int(1e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 tictactoe_alphazero_config = dict(
-    exp_name=f'data_az_ptree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name='data_az_ptree/tictactoe_sp-mode_alphazero_seed0',
     env=dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         board_size=3,
-        battle_mode='play_with_bot_mode',
+        battle_mode='self_play_mode',
         channel_last=False,  # NOTE
         manager=dict(shared_memory=False, ),
     ),
@@ -40,7 +40,6 @@ tictactoe_alphazero_config = dict(
             categorical_distribution=False,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
-        stop_value=2,
         cuda=True,
         board_size=3,
         collector_env_num=collector_env_num,

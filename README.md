@@ -108,7 +108,7 @@ Train a MuZero agent to play [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-t
 
 ```bash
 cd LightZero
-python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
+python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 ```
 
 ## Benchmark

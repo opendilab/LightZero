@@ -228,7 +228,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                         )
                     envstep_count += 1
         duration = self._timer.value
-        episode_reward = eval_monitor.get_episode_return()
+        episode_return = eval_monitor.get_episode_return()
         info = {
             'train_iter': train_iter,
             'ckpt_name': 'iteration_{}.pth.tar'.format(train_iter),
@@ -238,11 +238,11 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             'evaluate_time': duration,
             'avg_envstep_per_sec': envstep_count / duration,
             'avg_time_per_episode': n_episode / duration,
-            'reward_mean': np.mean(episode_reward),
-            'reward_std': np.std(episode_reward),
-            'reward_max': np.max(episode_reward),
-            'reward_min': np.min(episode_reward),
-            # 'each_reward': episode_reward,
+            'reward_mean': np.mean(episode_return),
+            'reward_std': np.std(episode_return),
+            'reward_max': np.max(episode_return),
+            'reward_min': np.min(episode_return),
+            # 'each_reward': episode_return,
         }
         episode_info = eval_monitor.get_episode_info()
         if episode_info is not None:
@@ -257,7 +257,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
             self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, envstep)
 
-        eval_reward = np.mean(episode_reward)
+        eval_reward = np.mean(episode_return)
         if eval_reward > self._max_eval_reward:
             if save_ckpt_fn:
                 save_ckpt_fn('ckpt_best.pth.tar')
@@ -265,9 +265,9 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         stop_flag = eval_reward >= self._stop_value and train_iter > 0
         if stop_flag:
             self._logger.info(
-                "[DI-engine serial pipeline] " +
+                "[LightZero serial pipeline] " +
                 "Current eval_reward: {} is greater than stop_value: {}".format(eval_reward, self._stop_value) +
-                ", so your RL agent is converged, you can refer to " +
+                ", so your AlphaZero agent is converged, you can refer to " +
                 "'log/evaluator/evaluator_logger.txt' for details."
             )
         return stop_flag, return_info

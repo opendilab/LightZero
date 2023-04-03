@@ -65,8 +65,8 @@ def train_alphazero(
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
     replay_buffer = create_buffer(cfg.policy.other.replay_buffer, tb_logger=tb_logger, exp_name=cfg.exp_name)
 
-    game_config = cfg.policy
-    batch_size = game_config.batch_size
+    policy_config = cfg.policy
+    batch_size = policy_config.batch_size
     env_config = cfg.env
     collector = create_serial_collector(
         cfg.policy.collect.collector,
@@ -97,9 +97,9 @@ def train_alphazero(
         # set temperature for visit count distributions according to the train_iter,
         # please refer to Appendix D in MuZero paper for details.
         collect_kwargs['temperature'] = visit_count_temperature(
-            game_config.manual_temperature_decay,
-            game_config.fixed_temperature_value,
-            game_config.threshold_training_steps_for_final_temperature,
+            policy_config.manual_temperature_decay,
+            policy_config.fixed_temperature_value,
+            policy_config.threshold_training_steps_for_final_temperature,
             trained_steps=learner.train_iter
         )
 

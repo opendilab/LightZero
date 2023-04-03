@@ -120,7 +120,7 @@ pong_efficientzero_config = dict(
         # If the eval cost is expensive, we could set eval_freq larger.
         eval_freq=int(2e3),
         # ==============================================================
-        # begin of additional game_config
+        # begin of additional policy_config
         # ==============================================================
         ## common
         mcts_ctree=True,
@@ -179,7 +179,7 @@ pong_efficientzero_config = dict(
         root_dirichlet_alpha=0.3,
         root_exploration_fraction=0.25,
         # ==============================================================
-        # end of additional game_config
+        # end of additional policy_config
         # ==============================================================
     ),
 )

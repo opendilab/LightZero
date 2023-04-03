@@ -11,15 +11,13 @@ from ding.envs import DingEnvWrapper, BaseEnvManager
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
-from ding.worker import create_serial_collector
 from lzero.envs.get_wrapped_env import get_wrappered_env
 from lzero.policy import visit_count_temperature
-from lzero.worker import MuZeroEvaluator
+from lzero.worker import MuZeroCollector, MuZeroEvaluator
 
 
 def train_muzero_with_gym_env(
         input_cfg: Tuple[dict, dict],
-        env_name: str,
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
         model_path: Optional[str] = None,
@@ -34,7 +32,6 @@ def train_muzero_with_gym_env(
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
             ``Tuple[dict, dict]`` type means [user_config, create_cfg].
-        - env_name (:obj:`str`): The name of the environment to create.
         - seed (:obj:`int`): Random seed.
         - model (:obj:`Optional[torch.nn.Module]`): Instance of torch.nn.Module.
         - model_path (:obj:`Optional[str]`): The pretrained model path, which should
@@ -57,23 +54,24 @@ def train_muzero_with_gym_env(
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
 
+    if cfg.policy.device == 'cuda' and torch.cuda.is_available():
+        cfg.policy.cuda = True
+    else:
+        cfg.policy.cuda = False
+
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
 
     # Create main components: env, policy
     collector_env_cfg = DingEnvWrapper.create_collector_env_cfg(cfg.env)
     evaluator_env_cfg = DingEnvWrapper.create_evaluator_env_cfg(cfg.env)
     collector_env = BaseEnvManager(
-        [get_wrappered_env(c, env_name) for c in collector_env_cfg],
+        [get_wrappered_env(c, cfg.env.env_name) for c in collector_env_cfg],
         cfg=BaseEnvManager.default_config())
     evaluator_env = BaseEnvManager(
-        [get_wrappered_env(c, env_name) for c in evaluator_env_cfg],
+        [get_wrappered_env(c, cfg.env.env_name) for c in evaluator_env_cfg],
         cfg=BaseEnvManager.default_config())
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
-    if cfg.policy.device == 'cuda' and torch.cuda.is_available():
-        cfg.policy.cuda = True
-    else:
-        cfg.policy.cuda = False
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
@@ -88,27 +86,27 @@ def train_muzero_with_gym_env(
     # ==============================================================
     # MCTS+RL algorithms related core code
     # ==============================================================
-    game_config = cfg.policy
-    batch_size = game_config.batch_size
+    policy_config = cfg.policy
+    batch_size = policy_config.batch_size
     # specific game buffer for MCTS+RL algorithms
-    replay_buffer = GameBuffer(game_config)
-    collector = create_serial_collector(
-        cfg.policy.collect.collector,
+    replay_buffer = GameBuffer(policy_config)
+    collector = MuZeroCollector(
         env=collector_env,
         policy=policy.collect_mode,
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
         replay_buffer=replay_buffer,
-        game_config=game_config
+        policy_config=policy_config
     )
     evaluator = MuZeroEvaluator(
-        cfg.policy,
+        cfg.policy.eval_freq,
+        cfg.env.n_evaluator_episode,
         cfg.env.stop_value,
         evaluator_env,
         policy.eval_mode,
         tb_logger,
         exp_name=cfg.exp_name,
-        game_config=game_config
+        policy_config=policy_config
     )
 
     # ==============================================================
@@ -121,17 +119,15 @@ def train_muzero_with_gym_env(
         # set temperature for visit count distributions according to the train_iter,
         # please refer to Appendix D in MuZero paper for details.
         collect_kwargs['temperature'] = visit_count_temperature(
-            game_config.manual_temperature_decay,
-            game_config.fixed_temperature_value,
-            game_config.threshold_training_steps_for_final_temperature,
+            policy_config.manual_temperature_decay,
+            policy_config.fixed_temperature_value,
+            policy_config.threshold_training_steps_for_final_temperature,
             trained_steps=learner.train_iter
         )
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
-            stop, reward = evaluator.eval(
-                learner.save_checkpoint, learner.train_iter, collector.envstep, config=game_config
-            )
+            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
                 break
 
@@ -146,15 +142,12 @@ def train_muzero_with_gym_env(
         for i in range(cfg.policy.update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
             if replay_buffer.get_num_of_transitions() > batch_size:
-                train_data = replay_buffer.sample_train_data(batch_size, policy)
+                train_data = replay_buffer.sample(batch_size, policy)
             else:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                    f'batch_size: {batch_size},'
-                    f'current buffer statistics is: '
-                    f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
-                    f'num of game blocks: {replay_buffer.get_num_of_game_segments()}, '
-                    f'number of transitions: {replay_buffer.get_num_of_transitions()}, '
+                    f'batch_size: {batch_size}, '
+                    f'{replay_buffer} '
                     f'continue to collect now ....'
                 )
                 break

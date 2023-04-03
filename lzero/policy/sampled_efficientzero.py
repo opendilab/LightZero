@@ -107,7 +107,7 @@ class SampledEfficientZeroPolicy(Policy):
         n_episode=8,
 
         # ==============================================================
-        # begin of additional game_config
+        # begin of additional policy_config
         # ==============================================================
         ## common
         mcts_ctree=True,
@@ -177,7 +177,7 @@ class SampledEfficientZeroPolicy(Policy):
         root_dirichlet_alpha=0.3,
         root_exploration_fraction=0.25,
         # ==============================================================
-        # end of additional game_config
+        # end of additional policy_config
         # ==============================================================
     )
 

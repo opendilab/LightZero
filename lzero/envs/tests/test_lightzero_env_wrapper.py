@@ -12,7 +12,7 @@ class TestLightZeroEnvWrapper:
     def test_continuous_pendulum(self):
         env_cfg = EasyDict(dict(
             env_name='Pendulum-v1',
-            discretization=False,
+            manually_discretization=False,
             continuous=True,
             each_dim_disc_size=None,
             is_train=True,
@@ -22,7 +22,6 @@ class TestLightZeroEnvWrapper:
             gym.make(env_cfg.env_name),
             cfg={
                 'env_wrapper': [
-                    lambda env: ActionDiscretizationEnvWrapper(env, env_cfg),
                     lambda env: LightZeroEnvWrapper(env, env_cfg),
                 ]
             }
@@ -44,7 +43,7 @@ class TestLightZeroEnvWrapper:
     def test_discretization_pendulum(self):
         env_cfg = EasyDict(dict(
             env_name='Pendulum-v1',
-            discretization=True,
+            manually_discretization=True,
             continuous=False,
             each_dim_disc_size=11,
             is_train=True,
@@ -76,7 +75,7 @@ class TestLightZeroEnvWrapper:
     def test_continuous_bipedalwalker(self):
         env_cfg = EasyDict(dict(
             env_name='BipedalWalker-v3',
-            discretization=False,
+            manually_discretization=False,
             continuous=True,
             each_dim_disc_size=4,
             is_train=True,
@@ -86,7 +85,6 @@ class TestLightZeroEnvWrapper:
             gym.make(env_cfg.env_name),
             cfg={
                 'env_wrapper': [
-                    lambda env: ActionDiscretizationEnvWrapper(env, env_cfg),
                     lambda env: LightZeroEnvWrapper(env, env_cfg),
                 ]
             }
@@ -105,11 +103,10 @@ class TestLightZeroEnvWrapper:
 
         print('random_action: {}, action_space: {}'.format(action.shape, lightzero_env.action_space))
 
-
     def test_discretization_bipedalwalker(self):
         env_cfg = EasyDict(dict(
             env_name='BipedalWalker-v3',
-            discretization=True,
+            manually_discretization=True,
             continuous=False,
             each_dim_disc_size=4,
             is_train=True,

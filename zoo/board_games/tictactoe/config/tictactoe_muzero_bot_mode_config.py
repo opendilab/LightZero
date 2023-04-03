@@ -15,17 +15,16 @@ evaluator_env_num = 5
 num_simulations = 25
 update_per_collect = 50
 batch_size = 256
-max_env_step = int(2e5)
+max_env_step = int(2e6)
 reanalyze_ratio = 0.3
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 tictactoe_muzero_config = dict(
-    exp_name=f'data_mz_ctree/tictactoe_muzero_sp-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
-        stop_value=int(2),
-        battle_mode='self_play_mode',
+        battle_mode='play_with_bot_mode',
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -73,7 +72,7 @@ tictactoe_muzero_config = dict(
         # optim_type='Adam',
         # learning_rate=0.003,  # lr for Adam optimizer
         grad_clip_value=0.5,
-        n_episode=n_episode,
+        n_episode=n_episode, 
         eval_freq=int(2e3),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
