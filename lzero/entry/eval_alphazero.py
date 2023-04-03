@@ -4,13 +4,14 @@ from typing import Optional, Tuple
 
 import numpy as np
 import torch
+from tensorboardX import SummaryWriter
+
 from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
-from ding.worker import create_serial_evaluator
-from tensorboardX import SummaryWriter
+from lzero.worker import AlphaZeroEvaluator
 
 
 def eval_alphazero(
@@ -57,14 +58,14 @@ def eval_alphazero(
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
 
-    env_config = cfg.env
-    evaluator = create_serial_evaluator(
-        cfg.policy.eval.evaluator,
-        env=evaluator_env,
-        policy=policy.eval_mode,
-        tb_logger=tb_logger,
+    evaluator = AlphaZeroEvaluator(
+        cfg.policy,
+        cfg.env.n_evaluator_episode,
+        cfg.env.stop_value,
+        evaluator_env,
+        policy.eval_mode,
+        tb_logger,
         exp_name=cfg.exp_name,
-        env_config=env_config,
     )
 
     while True:
@@ -74,7 +75,7 @@ def eval_alphazero(
         returns = []
         for i in range(num_episodes_each_seed):
             stop, reward = evaluator.eval()
-            returns.append(reward[0]['final_eval_reward'])
+            returns.append(reward[0]['eval_episode_return'])
 
         returns = np.array(returns)
 
@@ -86,4 +87,3 @@ def eval_alphazero(
             print("=" * 20)
 
         return returns.mean(), returns
-

@@ -1,3 +1,5 @@
+// C++11
+
 #include <iostream>
 #include "cnode.h"
 #include <algorithm>
@@ -13,8 +15,15 @@
 #include <time.h>
 #include <cmath>
 #include <sys/timeb.h>
-#include <sys/time.h>
+#include <time.h>
 #include <cassert>
+
+#ifdef _WIN32
+#include "..\..\common_lib\utils.cpp"
+#else
+#include "../../common_lib/utils.cpp"
+#endif
+
 
 
 template <class T>
@@ -199,6 +208,13 @@ namespace tree
         this->hidden_state_index_y = hidden_state_index_y;
         this->value_prefix = value_prefix;
         int action_num = policy_logits.size();
+
+        #ifdef _WIN32
+        // 创建动态数组
+        float* policy = new float[action_num];
+        #else
+        float policy[action_num];
+        #endif
 
         std::vector<int> all_actions;
         for (int i = 0; i < action_num; ++i)
@@ -424,6 +440,12 @@ namespace tree
                 this->legal_actions.push_back(action);
             }
         }
+        
+        #ifdef _WIN32
+        // 释放数组内存
+        delete[] policy;
+        #else
+        #endif
     }
 
     void CNode::add_exploration_noise(float exploration_fraction, const std::vector<float> &noises)
@@ -1098,9 +1120,7 @@ namespace tree
             - continuous_action_space: whether the action space is continous in current env.
         */
         // set seed
-        timeval t1;
-        gettimeofday(&t1, NULL);
-        srand(t1.tv_usec);
+        get_time_and_set_rand_seed();
 
         std::vector<float> null_value;
         for (int i = 0; i < 1; ++i)

@@ -18,7 +18,7 @@ num_simulations = 50
 update_per_collect = 200
 batch_size = 256
 max_env_step = int(1e6)
-reanalyze_ratio = 0.3
+reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -36,7 +36,7 @@ pendulum_sampled_efficientzero_config = dict(
     policy=dict(
         model=dict(
             observation_shape=(1, 3, 1),  # if frame_stack_num=1
-            action_space_size=2,
+            action_space_size=1,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             categorical_distribution=True,
@@ -82,7 +82,7 @@ main_config = pendulum_sampled_efficientzero_config
 
 pendulum_sampled_efficientzero_create_config = dict(
     env=dict(
-        type='pendulum',
+        type='pendulum_lightzero',
         import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
     ),
     # env_manager=dict(type='subprocess'),

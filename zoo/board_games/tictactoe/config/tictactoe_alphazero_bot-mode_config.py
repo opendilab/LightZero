@@ -10,13 +10,6 @@ num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 4
-# update_per_collect = 2
-# batch_size = 4
-# max_env_step = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -33,9 +26,7 @@ tictactoe_alphazero_config = dict(
     ),
     policy=dict(
         model=dict(
-            # ==============================================================
             # We use the small size model for tictactoe
-            # ==============================================================
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),
             downsample=False,

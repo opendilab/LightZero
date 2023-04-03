@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Dict
 
 import numpy as np
 from ding.envs import BaseEnvManager
@@ -38,7 +38,7 @@ class AlphaZeroCollector(ISerialCollector):
         instance_name: Optional[str] = 'collector',
         replay_buffer: 'replay_buffer' = None,  # noqa
         env_config=None,
-    ):
+    ) -> None:
         """
             Overview:
                 Init the AlphaZero collector according to input arguments.
@@ -237,15 +237,15 @@ class AlphaZeroCollector(ISerialCollector):
                     if timestep.done:
                         transitions = to_tensor_transitions(self._traj_buffer[env_id])
                         if self._cfg.reward_shaping:
-                            transitions = self.reward_shaping(transitions, timestep.info['final_eval_reward'])
+                            transitions = self.reward_shaping(transitions, timestep.info['eval_episode_return'])
                         return_data.append(transitions)
                         self._traj_buffer[env_id].clear()
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
                     self._total_episode_count += 1
-                    # the final_eval_reward is calculated from Player 1's perspective
-                    reward = timestep.info['final_eval_reward']
+                    # the eval_episode_return is calculated from Player 1's perspective
+                    reward = timestep.info['eval_episode_return']
                     info = {
                         'reward': reward,  # only means player1 reward
                         'time': self._env_info[env_id]['time'],
@@ -334,7 +334,7 @@ class AlphaZeroCollector(ISerialCollector):
                     continue
                 self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
 
-    def reward_shaping(self, transitions, final_eval_reward):
+    def reward_shaping(self, transitions, eval_episode_return):
         """
         Overview:
             Shape the reward according to the player.
@@ -346,8 +346,8 @@ class AlphaZeroCollector(ISerialCollector):
         for t in transitions:
             if t['obs']['to_play'] == -1:
                 # play_with_bot_mode
-                # the final_eval_reward is calculated from Player 1's perspective
-                t['reward'] = final_eval_reward
+                # the eval_episode_return is calculated from Player 1's perspective
+                t['reward'] = eval_episode_return
             else:
                 # self_play_mode
                 if t['obs']['to_play'] == to_play:

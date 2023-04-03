@@ -23,18 +23,21 @@ class AlphaZeroEvaluator(ISerialEvaluator):
     def __init__(
         self,
         cfg: EasyDict,
+        n_evaluator_episode: int = 3,
+        stop_value: int = 1e6,
         env: BaseEnv = None,
         policy: namedtuple = None,
         tb_logger: 'SummaryWriter' = None,  # noqa
         exp_name: Optional[str] = 'default_experiment',
         instance_name: Optional[str] = 'evaluator',
         env_config=None,
-    ):
+    ) -> None:
         """
         Overview:
             Init the AlphaZero evaluator according to input arguments.
         Arguments:
             - cfg (:obj:`EasyDict`): Config.
+            - n_evaluator_episode (:obj:`int`): the number of episodes to eval in total.
             - env (:obj:`BaseEnvManager`): The env for the collection, the BaseEnvManager object or \
                 its derivatives are supported.
             - policy (:obj:`Policy`): The policy to be collected.
@@ -60,9 +63,8 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         self.reset(policy, env)
 
         self._timer = EasyTimer()
-        self._default_n_episode = self._cfg.n_episode
-        self._stop_value = self._cfg.stop_value
-        # self._stop_value = self._cfg.stop_value
+        self._default_n_episode = n_evaluator_episode
+        self._stop_value = stop_value
 
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
         """
@@ -134,7 +136,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             self._tb_logger.flush()
             self._tb_logger.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         """
         Overview:
             Execute the close command and close the evaluator. __del__ is automatically called \
@@ -214,7 +216,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                             if self._cfg.figure_path is not None:
                                 self._env.enable_save_figure(env_id, self._cfg.figure_path)
                         self._policy.reset([env_id])
-                        reward = t.info['final_eval_reward']
+                        reward = t.info['eval_episode_return']
                         if 'episode_info' in t.info:
                             eval_monitor.update_info(env_id, t.info['episode_info'])
                         eval_monitor.update_reward(env_id, reward)

@@ -148,7 +148,7 @@ def test_mcts_vs_bot():
 def test_mcts_to_play_vs_bot():
     legal_actions_list = [[i for i in range(action_space_size)] for _ in range(env_nums)]  # all action
     roots = MCTSPtree.Roots(env_nums, legal_actions_list)
-    to_play = [0 for i in range(env_nums)]
+    to_play = [-1 for _ in range(env_nums)]
     noises = [
         np.random.dirichlet([game_config.root_dirichlet_alpha] * game_config.model.action_space_size
                             ).astype(np.float32).tolist() for _ in range(env_nums)
@@ -203,8 +203,7 @@ def test_mcts_legal_action_to_play_vs_bot():
         np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))).astype(np.float32).tolist()
         for j in range(env_nums)
     ]
-
-    to_play = [0 for i in range(env_nums)]
+    to_play = [-1 for _ in range(env_nums)]
     roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
     MCTSPtree(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
     roots_distributions = roots.get_distributions()

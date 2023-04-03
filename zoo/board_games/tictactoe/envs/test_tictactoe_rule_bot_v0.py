@@ -11,7 +11,7 @@ cfg = EasyDict(
     prob_expert_agent=0,
     battle_mode='play_with_bot_mode',
     agent_vs_human=False,
-    bot_action_type='v1',  # {'v0', 'v1', 'alpha_beta_pruning'}
+    bot_action_type='v0',  # {'v0',  'alpha_beta_pruning'}
 )
 
 @pytest.mark.envtest

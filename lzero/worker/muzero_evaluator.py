@@ -1,15 +1,17 @@
+import time
 import copy
 from collections import namedtuple
 from typing import Optional, Callable, Tuple
 
 import numpy as np
 import torch
+from easydict import EasyDict
+
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
-from easydict import EasyDict
-
+from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation_list
 
 
@@ -44,6 +46,7 @@ class MuZeroEvaluator(ISerialEvaluator):
     def __init__(
             self,
             cfg: dict,
+            n_evaluator_episode: int = 3,
             stop_value: int = 1e6,
             env: BaseEnvManager = None,
             policy: namedtuple = None,
@@ -58,6 +61,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             e.g. logger helper, timer.
         Arguments:
             - cfg (:obj:`EasyDict`): Configuration EasyDict.
+            - n_evaluator_episode (:obj:`int`): the number of episodes to eval in total.
             - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
             - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
             - tb_logger (:obj:`SummaryWriter`): tensorboard handle
@@ -80,7 +84,7 @@ class MuZeroEvaluator(ISerialEvaluator):
         self.reset(policy, env)
 
         self._timer = EasyTimer()
-        self._default_n_episode = cfg.n_episode
+        self._default_n_episode = n_evaluator_episode
         self._stop_value = stop_value
 
         # ==============================================================
@@ -200,11 +204,6 @@ class MuZeroEvaluator(ISerialEvaluator):
             - stop_flag (:obj:`bool`): Whether this training program can be ended.
             - eval_reward (:obj:`float`): Current eval_reward.
         """
-        if self.game_config.sampled_algo:
-            from lzero.mcts.tree_search.game_sampled_efficientzero import GameSegment
-        else:
-            from lzero.mcts.buffer.game_segment import GameSegment
-
         if n_episode is None:
             n_episode = self._default_n_episode
         assert n_episode is not None, "please indicate eval n_episode"
@@ -218,10 +217,21 @@ class MuZeroEvaluator(ISerialEvaluator):
         # initializations
         init_obs = self._env.ready_obs
 
-        action_mask = [init_obs[i]['action_mask'] for i in range(env_nums)]
+        retry_waiting_time = 0.001
+        while len(init_obs.keys()) != self._env_num:
+            # In order to be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
+            # len(self._env.ready_obs), especially in tictactoe env.
+            self._logger.info('The current init_obs.keys() is {}'.format(init_obs.keys()))
+            self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
+            time.sleep(retry_waiting_time)
+            self._logger.info('=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
+            self._logger.info(
+                'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time, self._env._env_states)
+            )
+            init_obs = self._env.ready_obs
+
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
 
-        to_play = [init_obs[i]['to_play'] for i in range(env_nums)]
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
         dones = np.array([False for _ in range(env_nums)])
 
@@ -233,7 +243,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             ) for _ in range(env_nums)
         ]
         for i in range(env_nums):
-            game_segments[i].init(
+            game_segments[i].reset(
                 [to_ndarray(init_obs[i]['observation']) for _ in range(self.game_config.model.frame_stack_num)]
             )
 
@@ -243,7 +253,6 @@ class MuZeroEvaluator(ISerialEvaluator):
         with self._timer:
             while not eval_monitor.is_finished():
                 # Get current ready env obs.
-                # only for subprocess, to get the ready_env_id
                 obs = self._env.ready_obs
                 new_available_env_id = set(obs.keys()).difference(ready_env_id)
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
@@ -279,7 +288,6 @@ class MuZeroEvaluator(ISerialEvaluator):
                     for k, v in policy_output.items()
                 }
 
-                # TODO(pu): subprocess
                 actions = {}
                 distributions_dict = {}
                 if self.game_config.sampled_algo:
@@ -302,33 +310,32 @@ class MuZeroEvaluator(ISerialEvaluator):
                 timesteps = self._env.step(actions)
 
                 for env_id, t in timesteps.items():
-                    i = env_id
                     obs, reward, done, info = t.obs, t.reward, t.done, t.info
                     if self.game_config.sampled_algo:
                         game_segments[env_id].store_search_stats(
                             distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
                         )
                     else:
-                        game_segments[i].store_search_stats(distributions_dict[i], value_dict[i])
+                        game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
+
                     # for two_player board games
                     # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
-                    # in ``game_segments[env_id].init``, we have append o_{t} in ``self.obs_history``
-                    game_segments[i].append(
-                        actions[i], to_ndarray(obs['observation']), reward, action_mask_dict[i],
-                        to_play_dict[i]
+                    # in ``game_segments[env_id].init``, we have append o_{t} in ``self.obs_segment``
+                    game_segments[env_id].append(
+                        actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
+                        to_play_dict[env_id]
                     )
 
-                    # NOTE: the position of code snippt is very important.
+                    # NOTE: the position of code snippet is very important.
                     # the obs['action_mask'] and obs['to_play'] is corresponding to next action
-                    action_mask_dict[i] = to_ndarray(obs['action_mask'])
-                    to_play_dict[i] = to_ndarray(obs['to_play'])
+                    action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
+                    to_play_dict[env_id] = to_ndarray(obs['to_play'])
 
-                    dones[i] = done
-
+                    dones[env_id] = done
                     if t.done:
                         # Env reset is done by env_manager automatically.
                         self._policy.reset([env_id])
-                        reward = t.info['final_eval_reward']
+                        reward = t.info['eval_episode_return']
                         if 'episode_info' in t.info:
                             eval_monitor.update_info(env_id, t.info['episode_info'])
                         eval_monitor.update_reward(env_id, reward)
@@ -337,31 +344,48 @@ class MuZeroEvaluator(ISerialEvaluator):
                                 env_id, eval_monitor.get_latest_reward(env_id), eval_monitor.get_current_episode()
                             )
                         )
+
+                        # reset the finished env and init game_segments
                         if n_episode > self._env_num:
-                            # reset the finished env
+                            # Get current ready env obs.
                             init_obs = self._env.ready_obs
+                            retry_waiting_time = 0.001
+                            while len(init_obs.keys()) != self._env_num:
+                                # In order to be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
+                                # len(self._env.ready_obs), especially in tictactoe env.
+                                self._logger.info('The current init_obs.keys() is {}'.format(init_obs.keys()))
+                                self._logger.info(
+                                    'Before sleeping, the _env_states is {}'.format(self._env._env_states))
+                                time.sleep(retry_waiting_time)
+                                self._logger.info(
+                                    '=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
+                                self._logger.info(
+                                    'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time,
+                                                                                               self._env._env_states)
+                                )
+                                init_obs = self._env.ready_obs
 
-                            if len(init_obs.keys()) != self._env_num:
-                                while env_id not in init_obs.keys():
-                                    init_obs = self._env.ready_obs
-                                    print(f'wait the {env_id} env to reset')
+                            new_available_env_id = set(init_obs.keys()).difference(ready_env_id)
+                            ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
+                            remain_episode -= min(len(new_available_env_id), remain_episode)
 
-                            init_obs = init_obs[env_id]['observation']
-                            init_obs = to_ndarray(init_obs)
                             action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                             to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
 
-                            game_segments[i] = GameSegment(
+                            game_segments[env_id] = GameSegment(
                                 self._env.action_space,
                                 game_segment_length=self.game_config.game_segment_length,
                                 config=self.game_config
                             )
 
-                            game_segments[i].init(
-                                [init_obs[i]['observation'] for _ in range(self.game_config.model.frame_stack_num)]
+                            game_segments[env_id].reset(
+                                [init_obs[env_id]['observation'] for _ in range(self.game_config.model.frame_stack_num)]
                             )
 
-                        # TODO(pu): subprocess
+                        # Env reset is done by env_manager automatically.
+                        self._policy.reset([env_id])
+                        # TODO(pu): subprocess mode, when n_episode > self._env_num, occasionally the ready_env_id=()
+                        # and the stack_obs is np.array(None, dtype=object)
                         ready_env_id.remove(env_id)
 
                     envstep_count += 1

@@ -3,10 +3,12 @@ The Node, Roots class and related core functions for EfficientZero.
 """
 import math
 import random
-from typing import List, Dict, Any, Tuple, Union
+from typing import List, Any, Tuple, Union
 
 import numpy as np
 import torch
+
+from .minimax import MinMaxStats
 
 
 class Node:
@@ -143,7 +145,7 @@ class Node:
             distribution = [v for k, v in distribution.items()]
         return distribution
 
-    def get_child(self, action: Union[int, float]) -> Node:
+    def get_child(self, action: Union[int, float]) -> "Node":
         """
         Overview:
             get children node according to the input action.
@@ -188,7 +190,8 @@ class Roots:
 
                 self.roots.append(Node(0, np.arange(legal_actions_list), action_space_size=self.action_space_size))
 
-    def prepare(self, root_exploration_fraction: float, noises: List[float], value_prefixs: List[float], policies: List[List[float]], to_play: int = -1) -> None:
+    def prepare(self, root_exploration_fraction: float, noises: List[float], value_prefixs: List[float],
+                policies: List[List[float]], to_play: int = -1) -> None:
         """
         Overview:
             Expand the roots and add noises.
@@ -202,8 +205,8 @@ class Roots:
         for i in range(self.root_num):
             #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
             # TODO(pu): why hidden_state_index_x=0, hidden_state_index_y=i?
-            if to_play is None:
-                self.roots[i].expand(0, 0, i, value_prefixs[i], policies[i])
+            if to_play in [-1, None]:
+                self.roots[i].expand(-1, 0, i, value_prefixs[i], policies[i])
             elif to_play is [None]:
                 print('debug')
             else:
@@ -212,7 +215,7 @@ class Roots:
             self.roots[i].add_exploration_noise(root_exploration_fraction, noises[i])
             self.roots[i].visit_count += 1
 
-    def prepare_no_noise(self, value_prefixs: List[float], policies: List[List[float]], to_play: int=-1) -> None:
+    def prepare_no_noise(self, value_prefixs: List[float], policies: List[List[float]], to_play: int = -1) -> None:
         """
         Overview:
             Expand the roots without noise.
@@ -222,8 +225,8 @@ class Roots:
             - to_play_batch: the vector of the player side of each root.
         """
         for i in range(self.root_num):
-            if to_play is None:
-                self.roots[i].expand(0, 0, i, value_prefixs[i], policies[i])
+            if to_play in [-1, None]:
+                self.roots[i].expand(-1, 0, i, value_prefixs[i], policies[i])
             else:
                 self.roots[i].expand(to_play[i], 0, i, value_prefixs[i], policies[i])
 
@@ -232,7 +235,7 @@ class Roots:
     def clear(self) -> None:
         self.roots.clear()
 
-    def get_trajectories(self) -> List[List[Union[int, float]]:]:
+    def get_trajectories(self) -> List[List[Union[int, float]]]:
         """
         Overview:
             Find the current best trajectory starts from each root.
@@ -244,7 +247,7 @@ class Roots:
             trajs.append(self.roots[i].get_trajectory())
         return trajs
 
-    def get_distributions(self) -> List[List[Union[int, float]]:]:
+    def get_distributions(self) -> List[List[Union[int, float]]]:
         """
         Overview:
             Get the children distribution of each root.
@@ -281,7 +284,8 @@ class SearchResults:
 
 
 # not used now
-def update_tree_q(root: Node, min_max_stats: MinMaxStats, discount_factor: float, players: int = 1, to_play: int = 0) -> None:
+def update_tree_q(root: Node, min_max_stats: MinMaxStats, discount_factor: float, players: int = 1,
+                  to_play: int = 0) -> None:
     """
     Overview:
         Update the q value of the root and its child nodes.
@@ -330,7 +334,8 @@ def update_tree_q(root: Node, min_max_stats: MinMaxStats, discount_factor: float
 
 
 def select_child(
-        root: Node, min_max_stats: MinMaxStats, pb_c_base: float, pb_c_int: float, discount_factor: float, mean_q: float, players: int
+        root: Node, min_max_stats: MinMaxStats, pb_c_base: float, pb_c_int: float, discount_factor: float,
+        mean_q: float, players: int
 ) -> Union[int, float]:
     """
     Overview:
@@ -424,7 +429,8 @@ def compute_ucb_score(
 
 
 def batch_traverse(
-        roots: Any, pb_c_base: float, pb_c_init: float, discount_factor: float, min_max_stats_lst: List[MinMaxStats], results: SearchResults,
+        roots: Any, pb_c_base: float, pb_c_init: float, discount_factor: float, min_max_stats_lst: List[MinMaxStats],
+        results: SearchResults,
         virtual_to_play: List,
 ) -> Tuple[List[int], List[int], List[Union[int, float]], List]:
     """
@@ -451,10 +457,16 @@ def batch_traverse(
     results.nodes = [None for i in range(results.num)]
     results.hidden_state_index_x_lst = [None for i in range(results.num)]
     results.hidden_state_index_y_lst = [None for i in range(results.num)]
-    if virtual_to_play in [1, 2] or virtual_to_play[0] in [1, 2]:
-        players = 2
-    elif virtual_to_play in [-1, None] or virtual_to_play[0] in [-1, None]:
-        players = 1
+    if isinstance(virtual_to_play, int):
+        if virtual_to_play in [1, 2]:
+            players = 2
+        elif virtual_to_play in [-1, None]:
+            players = 1
+    elif isinstance(virtual_to_play, list):
+        if virtual_to_play[0] in [1, 2]:
+            players = 2
+        elif virtual_to_play[0] in [-1, None]:
+            players = 1
 
     results.search_paths = {i: [] for i in range(results.num)}
     for i in range(results.num):
@@ -502,7 +514,8 @@ def batch_traverse(
     return results.hidden_state_index_x_lst, results.hidden_state_index_y_lst, results.last_actions, virtual_to_play
 
 
-def backpropagate(search_path: List[Node], min_max_stats: MinMaxStats, to_play: int, value: float, discount_factor: float) -> None:
+def backpropagate(search_path: List[Node], min_max_stats: MinMaxStats, to_play: int, value: float,
+                  discount_factor: float) -> None:
     """
     Overview:
         Update the value sum and visit count of nodes along the search path.
@@ -513,7 +526,7 @@ def backpropagate(search_path: List[Node], min_max_stats: MinMaxStats, to_play: 
         - value: the value to propagate along the search path.
         - discount_factor: the discount factor of reward.
     """
-    assert to_play is None or to_play in [-1, 1, 2]
+    assert to_play is None or to_play in [-1, 1, 2], f'to_play is {to_play}!'
     if to_play is None or to_play == -1:
         # for 1 player mode
         bootstrap_value = value
@@ -605,16 +618,16 @@ def batch_backpropagate(
     for i in range(results.num):
         # expand the leaf node
         #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
-        if to_play is None:
-            # set to_play=0, because two_player mode to_play = {1,2}
-            results.nodes[i].expand(0, hidden_state_index_x, i, value_prefixs[i], policies[i])
+        if to_play in [-1, None]:
+            # set to_play=-1, because two_player mode to_play = {1,2}
+            results.nodes[i].expand(-1, hidden_state_index_x, i, value_prefixs[i], policies[i])
         else:
             results.nodes[i].expand(to_play[i], hidden_state_index_x, i, value_prefixs[i], policies[i])
 
         # reset
         results.nodes[i].is_reset = is_reset_lst[i]
-        if to_play is None:
-            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], 0, values[i], discount_factor)
+        if to_play in [-1, None]:
+            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], -1, values[i], discount_factor)
         else:
             backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], to_play[i], values[i],
                           discount_factor)

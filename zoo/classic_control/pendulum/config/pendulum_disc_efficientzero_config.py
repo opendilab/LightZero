@@ -9,12 +9,20 @@ else:
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-num_simulations = 50
-update_per_collect = 200
-batch_size = 256
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# num_simulations = 50
+# update_per_collect = 200
+# batch_size = 256
+# max_env_step = int(1e6)
+# reanalyze_ratio = 0
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+num_simulations = 5
+update_per_collect = 2
+batch_size = 4
 max_env_step = int(1e6)
 reanalyze_ratio = 0
 # ==============================================================
@@ -74,7 +82,7 @@ main_config = pendulum_disc_efficientzero_config
 
 pendulum_disc_efficientzero_create_config = dict(
     env=dict(
-        type='pendulum',
+        type='pendulum_lightzero',
         import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),

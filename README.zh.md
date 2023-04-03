@@ -1,14 +1,16 @@
 # LightZero
 
+## 背景
+
 下图为蒙特卡洛树搜索（MCTS）算法族的发展历史：
 ![pipeline](assets/mcts_rl_evolution_overview.png)
 
 [English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文
 
-# 概览
+## 概览
 > LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库
 
-## 导航
+### 导航
 - [概览](#概览)
     - [导航](#导航)
     - [特点](#特点)
@@ -18,8 +20,8 @@
 - [快速开始](#快速开始)
 - [基线算法比较](#基线算法比较)
 - [MCTS相关笔记](#MCTS-相关笔记)
-    - [算法框架图](#算法框架图)
     - [论文笔记](#论文笔记)
+    - [算法框架图](#算法框架图)
 - [MCTS相关论文](#MCTS-相关论文)
     - [重要论文](#重要论文)
     - [其他论文](#其他论文)
@@ -28,33 +30,34 @@
 - [致谢](#致谢)
 - [许可证](#许可证)
 
-## 特点
+### 特点
 **轻量**：LightZero 中集成了多种 MCTS 族算法，能够在同一框架下轻量化地解决多种属性的决策问题。
 
 **高效**：LightZero 针对 MCTS 族算法中耗时最长的环节，采用混合异构计算编程提高计算效率。
 
 **易懂**：LightZero 为所有集成的算法提供了详细文档和算法框架图，帮助用户理解算法内核，在同一范式下比较算法之间的异同。同时，LightZero 也为算法的代码实现提供了函数调用图和网络结构图，便于用户定位关键代码。
 
-## 框架结构
+### 框架结构
 为了理解 LightZero 的框架结构，需要了解的重要组件如下：
 
-**Model**
+**Model**:
 ``Model`` 用于定义网络结构，包含``__init__``函数用于初始化网络结构，和``forward``函数用于计算网络的前向传播。
 
-**Policy**
+**Policy**:
 ``Policy`` 定义了对网络的更新方式和与环境交互的方式，包括三个过程，分别是训练过程（learn）、采样过程（collect）和评估过程（evaluate）。
 
-**MCTS**
+**MCTS**:
+
 ``MCTS`` 定义了蒙特卡洛搜索树的结构和与``Policy``的交互方式。``MCTS``的实现包括 python 和 cpp 两种，分别在``ptree``和``ctree``中实现。
 
-## 集成算法
+### 集成算法
 LightZero 是基于 [PyTorch](https://pytorch.org/) 实现的 MCTS 算法库，在 MCTS 的实现中也用到了 cython 和 cpp。同时，LightZero 的框架主要基于 [DI-engine](https://github.com/opendilab/DI-engine) 实现。目前 LightZero 中集成的算法包括：
 - [AlphaZero](https://www.science.org/doi/10.1126/science.aar6404)
 - [MuZero](https://arxiv.org/abs/1911.08265)
 - [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Sampled MuZero](https://arxiv.org/abs/2104.06303)
 
-# 安装方法
+## 安装方法
 
 可以用以下命令从 Github 的源码中安装最新版的 LightZero：
 
@@ -65,7 +68,7 @@ pip3 install -e .
 ```
 
 
-# 快速开始
+## 快速开始
 
 使用如下代码在 [Pong](https://gymnasium.farama.org/environments/atari/pong/) 环境上快速训练一个 MuZero 智能体：
 
@@ -81,10 +84,9 @@ cd LightZero
 python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 ```
 
-# 基线算法比较
+## 基线算法比较
 
-<details closed>
-<summary>(Click to Expand)</summary>
+<details open><summary>点击折叠</summary>
 
 以下是几种算法在 [Atari](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py) 上三个的离散动作空间环境上的基线比较结果，包括 [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py), [MuZero w/ SSL](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py),[EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/efficientzero.py) 和 [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py)：
 
@@ -103,23 +105,41 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
   <img src="assets/benchmark/main/lunarlander_main.png" alt="Image Description 3" width="30%" height="auto" style="margin: 0 1%;">
 </p>
 
-以下是在两个棋类游戏（[TicTacToe](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/tictactoe/envs/tictactoe_env.py) 和 [Gomoku](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py)）上 [AlphaZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/alphazero.py) 和 [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) 的基线效果：
+以下是在两个棋类游戏（[TicTacToe(井字棋)](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/tictactoe/envs/tictactoe_env.py) 和 [Gomoku(五子棋)](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py)上 [AlphaZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/alphazero.py) 和 [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) 的基线效果：
 
 <p align="center">
-  <img src="assets/benchmark/main/tictactoe_main.png" alt="Image Description 1" width="45%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/gomoku_main.png" alt="Image Description 2" width="45%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/tictactoe_bot-mode_main.png" alt="Image Description 1" width="45%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/gomoku_bot-mode_main.png" alt="Image Description 2" width="45%" height="auto" style="margin: 0 1%;">
 </p>
 
 </details>
 
-# MCTS 相关笔记
+## MCTS 相关笔记
 
-## 算法框架图
+### 论文笔记
+
+以下是 LightZero 中集成算法的中文详细文档：
+
+<details open><summary>点击折叠</summary>
+
+[AlphaZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/AlphaZero.pdf)
+
+[MuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/MuZero.pdf)
+
+[EfficientZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/EfficientZero.pdf)
+
+[SampledMuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/SampledMuZero.pdf)
+
+[算法概览图符号表](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/SymbolTable.pdf)
+
+</details>
+
+### 算法框架图
 
 以下是 LightZero 中集成算法的框架概览图：
 
 <details closed>
-<summary>(Click to Expand)</summary>
+<summary>(点击查看更多)</summary>
 
 ![mcts](assets/algo_overview/mcts.png)
 
@@ -135,35 +155,16 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 
 </details>
 
-## 论文笔记
-
-以下是 LightZero 中集成算法的详细文档：
-
-<details closed>
-<summary>(Click to Expand)</summary>
-
-![alphazero](assets/paper_notes/alphazero.pdf)
-
-![muzero](assets/paper_notes/muzero.pdf)
-
-![efficientzero](assets/paper_notes/efficientzero.pdf))
-
-![sampled muzero](assets/paper_notes/sampled_muzero.pdf)
-
-[comment]: <> (![gumbel muzero]&#40;assets/paper_notes/gumbel_muzero.pdf&#41;)
-
-</details>
-
-# MCTS 相关论文
+## MCTS 相关论文
 
 以下是关于 **MCTS** 相关的论文集合，[这一部分](#MCTS-相关论文) 将会持续更新，追踪 MCTS 的前沿动态。
 
-## 重要论文
+### 重要论文
 
 <details closed>
-<summary>(Click to Expand)</summary>
+<summary>(点击查看更多)</summary>
 
-### LightZero Implemented series
+#### LightZero Implemented series
 
 - [2018 _Science_ AlphaZero: A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play](https://www.science.org/doi/10.1126/science.aar6404)
 - [2019 MuZero: Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model](https://arxiv.org/abs/1911.08265)
@@ -172,24 +173,24 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 
 [comment]: <> (- [2022 Gumbel MuZero: Policy Improoveemenet by Planning with Gumbel]&#40;https://openreview.net/pdf?id=bERaNdoegnO&#41;)
 
-### AlphaGo series
+#### AlphaGo series
 
 - [2015 _Nature_ AlphaGo Mastering the game of Go with deep neural networks and tree search](https://www.nature.com/articles/nature16961)
 - [2017 _Nature_ AlphaGo Zero Mastering the game of Go without human knowledge](https://www.nature.com/articles/nature24270)
 - [2019 ELF OpenGo: An Analysis and Open Reimplementation of AlphaZero](https://arxiv.org/abs/1902.04522) 
   - [Code](https://github.com/pytorch/ELF)
-### MuZero series
+#### MuZero series
 - [2022 Online and Offline Reinforcement Learning by Planning with a Learned Model](https://arxiv.org/abs/2104.06294)
 - [2021 Vector Quantized Models for Planning](https://arxiv.org/abs/2106.04615)
 - [2022 Stochastic MuZero: Plannig in Stochastic Environments with A Learned Model](https://openreview.net/pdf?id=X6D9bAHhBQ1)
 - [2021 Muesli: Combining Improvements in Policy Optimization. ](https://arxiv.org/abs/2104.06159)
-### MCTS Analysis
+#### MCTS Analysis
 - [2020 Monte-Carlo Tree Search as Regularized Policy Optimization](https://arxiv.org/abs/2007.12509)
 - [2021 Self-Consistent Models and Values](https://arxiv.org/abs/2110.12840)
 - [2022 Adversarial Policies Beat Professional-Level Go AIs](https://arxiv.org/abs/2211.00241)
 - [2022 _PNAS_ Acquisition of Chess Knowledge in AlphaZero.](https://arxiv.org/abs/2111.09259)
 
-### MCTS Application
+#### MCTS Application
 - [2022 _Nature_ Discovering faster matrix multiplication algorithms with reinforcement learning](https://www.nature.com/articles/s41586-022-05172-4) 
   - [Code](https://github.com/deepmind/alphatensor)
 - [2022 MuZero with Self-competition for Rate Control in VP9 Video Compression](https://arxiv.org/abs/2202.06626)
@@ -198,12 +199,12 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 
 </details>
 
-## 其他论文
+### 其他论文
 
 <details closed>
-<summary>(Click to Expand)</summary>
+<summary>(点击查看更多)</summary>
 
-### ICML
+#### ICML
 - [Efficient Learning for AlphaZero via Path Consistency](https://proceedings.mlr.press/v162/zhao22h/zhao22h.pdf) 2022
   - Dengwei Zhao, Shikui Tu, Lei Xu
   - Key: limited amount of self-plays,  path consistency (PC) optimality
@@ -222,7 +223,7 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
   - Key: chemical retrosynthetic planning, neural-based A*-like algorithm, ANDOR tree
   - ExpEnv: USPTO datasets
   - [Code](https://github.com/binghong-ml/retro_star)
-### ICLR
+#### ICLR
 - [Enabling Arbitrary Translation Objectives with Adaptive Tree Search](https://arxiv.org/pdf/2202.11444.pdf) 2022
   - Wang Ling, Wojciech Stokowiec, Domenic Donato, Chris Dyer, Lei Yu, Laurent Sartran, Austin Matthews
   - Key: adaptive tree search, translation models, autoregressive models, 
@@ -249,7 +250,7 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
   - Binghong Chen,  Bo Dai, Qinjie Lin, Guo Ye, Han Liu, Le Song
   - Key: meta path planning algorithm, exploits a novel neural architecture which can learn promising search directions from problem structures.
   - ExpEnv: a 2d workspace with a 2 DoF (degrees of freedom) point robot, a 3 DoF stick robot and a 5 DoF snake robot
-### NeurIPS
+#### NeurIPS
 - [Evaluation Beyond Task Performance: Analyzing Concepts in AlphaZero in Hex](https://openreview.net/pdf?id=dwKwB2Cd-Km) 2022 
   - Charles Lovering, Jessica Zosa Forde, George Konidaris, Ellie Pavlick, Michael L. Littman
   - Key: AlphaZero’s internal representations, model probing and behavioral tests, how these concepts are captured in the network.
@@ -287,23 +288,23 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
   - Key: covariate shift problem, Mix&Match combines stochastic gradient descent (SGD) with optimistic tree search and model re-use (evolving partially trained models with samples from different mixture distributions)
   - [Code](https://github.com/matthewfaw/mixnmatch)
 
-### Other Conference or Journal
+#### Other Conference or Journal
 - [On Monte Carlo Tree Search and Reinforcement Learning](https://www.jair.org/index.php/jair/article/download/11099/26289/20632) Journal of Artificial Intelligence Research 2017.
 - [Sample-Efficient Neural Architecture Search by Learning Actions for Monte Carlo Tree Search](https://arxiv.org/pdf/1906.06832) IEEE Transactions on Pattern Analysis and Machine Intelligence 2022.
 </details>
 
-# 反馈意见和贡献
+## 反馈意见和贡献
 - 有任何疑问或意见都可以在 github 上直接 [提出 issue](https://github.com/opendilab/LightZero/issues/new/choose)
 - 或者联系我们的邮箱 (opendilab@pjlab.org.cn)
 
-- 感谢所有的反馈意见，包括对算法和系统设计。这些反馈意见和建议都让LightZero 变得更好。 
+- 感谢所有的反馈意见，包括对算法和系统设计。这些反馈意见和建议都会让 LightZero 变得更好。 
 
 
-# 引用
+## 引用
 
 ```latex
 @misc{lightzero,
-    title={{LightZero: OpenDILab} A lightweight and efficient MCTS/MuZero algorithm toolkits.},
+    title={{LightZero: OpenDILab} A lightweight and efficient MCTS/AlphaZero/MuZero algorithm toolkits.},
     author={LightZero Contributors},
     publisher = {GitHub},
     howpublished = {\url{https://github.com/opendilab/LightZero}},
@@ -311,7 +312,7 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 }
 ```
 
-# 致谢
+## 致谢
 
 本算法库的实现部分基于以下 github 库，非常感谢这些开创性工作：
 
@@ -323,6 +324,6 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot-mode_config.py
 [@jayyoung0802](https://github.com/jayyoung0802), [@timothijoe](https://github.com/timothijoe), [@TuTuHuss](https://github.com/TuTuHuss), [@puyuan1996](https://github.com/puyuan1996), [@HansBug](https://github.com/HansBug) 在本算法库中的贡献和支持。
 
 
-# 许可证
+## 许可证
 
 本仓库中的所有代码都符合 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)。

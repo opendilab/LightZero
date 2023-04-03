@@ -37,7 +37,7 @@ num_simulations = 50
 update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
-reanalyze_ratio = 0.3
+reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -60,6 +60,7 @@ atari_sampled_efficientzero_config = dict(
             representation_network_type='conv_res_blocks',
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
+            self_supervised_learning_loss=True,
         ),
         device=device,
         collector_env_num=collector_env_num,
@@ -71,8 +72,8 @@ atari_sampled_efficientzero_config = dict(
         manual_temperature_decay=True,
         # ``fixed_temperature_value`` is effective only when manual_temperature_decay=False
         fixed_temperature_value=0.25,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         update_per_collect=update_per_collect,
+        ssl_loss_weight=2,
         batch_size=batch_size,
         lr_piecewise_constant_decay=True,
         optim_type='SGD',
@@ -80,6 +81,7 @@ atari_sampled_efficientzero_config = dict(
         policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
         n_episode=n_episode,
         eval_freq=int(2e3),
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
     ),
 )
 atari_sampled_efficientzero_config = EasyDict(atari_sampled_efficientzero_config)

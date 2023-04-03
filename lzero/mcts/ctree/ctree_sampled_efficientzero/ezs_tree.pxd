@@ -1,4 +1,5 @@
-# distutils: language=c++
+# distutils:language=c++
+# cython:language_level=3
 from libcpp.vector cimport vector
 from libcpp cimport bool
 

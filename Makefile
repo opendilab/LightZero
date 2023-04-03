@@ -9,7 +9,7 @@ DOC_DIR        := ./docs
 DIST_DIR       := ./dist
 WHEELHOUSE_DIR := ./wheelhouse
 BENCHMARK_DIR  := ./benchmark
-SRC_DIR        := ./core
+SRC_DIR        := ./lzero
 RUNS_DIR       := ./runs
 
 RANGE_DIR       ?= .
@@ -17,7 +17,11 @@ RANGE_TEST_DIR  := ${SRC_DIR}/${RANGE_DIR}
 RANGE_BENCH_DIR := ${BENCHMARK_DIR}/${RANGE_DIR}
 RANGE_SRC_DIR   := ${SRC_DIR}/${RANGE_DIR}
 
-CYTHON_FILES := $(shell find ${SRC_DIR} -name '*.pyx')
+CYTHON_FILES   := $(shell find ${SRC_DIR} -name '*.pyx')
+CYTHON_RELATED := \
+	$(addsuffix .c, $(basename ${CYTHON_FILES})) \
+	$(addsuffix .cpp, $(basename ${CYTHON_FILES})) \
+	$(addsuffix .h, $(basename ${CYTHON_FILES})) \
 
 COV_TYPES        ?= xml term-missing
 COMPILE_PLATFORM ?= manylinux_2_24_x86_64
@@ -40,10 +44,7 @@ package:
 
 clean:
 	rm -rf $(shell find ${SRC_DIR} -name '*.so') \
-			$(shell ls $(addsuffix .c, $(basename ${CYTHON_FILES})) \
-					  $(addsuffix .cpp, $(basename ${CYTHON_FILES})) \
-					  $(addsuffix .h, $(basename ${CYTHON_FILES})) \
-				2> /dev/null)
+			$(if ${CYTHON_RELATED},$(shell ls ${CYTHON_RELATED} 2> /dev/null),)
 	rm -rf ${DIST_DIR} ${WHEELHOUSE_DIR}
 
 test: unittest benchmark
@@ -57,9 +58,14 @@ unittest:
 		$(if ${WORKERS},-n ${WORKERS},)
 
 minitest:
-	$(PYTHON) -m pytest "${SRC_DIR}/rl_utils/tests/test_mcts_ctree.py" \
+	$(PYTHON) -m pytest "${SRC_DIR}/mcts/tests/test_game_block.py" \
 		-sv -m unittest \
 		$(shell for type in ${COV_TYPES}; do echo "--cov-report=$$type"; done) \
-		--cov="${SRC_DIR}/rl_utils/mcts" \
+		--cov="${SRC_DIR}/mcts/tests/test_game_block.py" \
 		$(if ${MIN_COVERAGE},--cov-fail-under=${MIN_COVERAGE},) \
 		$(if ${WORKERS},-n ${WORKERS},)
+
+docs:
+	$(MAKE) -C "${DOC_DIR}" build
+pdocs:
+	$(MAKE) -C "${DOC_DIR}" prod

@@ -122,6 +122,6 @@ def test_mcts():
     to_play_batch = [int(np.random.randint(1, 2, 1)) for _ in range(env_nums)]
     roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
 
-    MCTS(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play_batch)
+    MCTSCtree(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play_batch)
     roots_distributions = roots.get_distributions()
     assert np.array(roots_distributions).shape == (batch_size, game_config.num_of_sampled_actions)

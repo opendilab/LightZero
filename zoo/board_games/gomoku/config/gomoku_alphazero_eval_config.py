@@ -8,22 +8,11 @@ collector_env_num = 1
 n_episode = 1
 evaluator_env_num = 1
 num_simulations = 100
-update_per_collect = 100
+update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e6)
 prob_random_action_in_bot = 0.5
 agent_vs_human = True
-
-# debug config
-# board_size = 6  # default_size is 15
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 2
-# num_simulations = 5
-# update_per_collect = 2
-# batch_size = 4
-# max_env_step = int(2e6)
-# prob_random_action_in_bot = 0.1
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -77,8 +66,8 @@ gomoku_alphazero_create_config = dict(
         type='gomoku',
         import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
     ),
-    env_manager=dict(type='base'),
     # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),  # if agent_vs_human=True
     policy=dict(
         type='alphazero',
         import_names=['lzero.policy.alphazero'],
@@ -105,8 +94,7 @@ if __name__ == '__main__':
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
      """
-    model_path = '/Users/puyuan/code/LightZero/zoo/board_games/gomoku/gomoku_alphazero_bot-mode_rand0.5_ns50_upc50_rr0.3_rbs1e5_seed0/ckpt/ckpt_best.pth.tar'
-
+    model_path = '/Users/user/code/LightZero/zoo/board_games/gomoku/gomoku_alphazero_bot-mode_rand0.5_ns50_upc50_rr0.3_seed0/ckpt/ckpt_best.pth.tar'
     returns_mean_seeds = []
     returns_seeds = []
     seeds = [0]

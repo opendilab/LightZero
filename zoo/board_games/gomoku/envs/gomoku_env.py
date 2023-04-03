@@ -21,6 +21,7 @@ from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_c
 class GomokuEnv(BaseEnv):
 
     config = dict(
+        env_name="Gomoku",
         prob_random_agent=0,
         board_size=6,
         battle_mode='self_play_mode',
@@ -48,18 +49,18 @@ class GomokuEnv(BaseEnv):
         self.board_size = cfg.board_size
         self.prob_random_agent = cfg.prob_random_agent
         self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
-
         self.channel_last = cfg.channel_last
         self.scale = cfg.scale
-        self.check_action_to_connect4_in_bot_v0 = self.cfg.check_action_to_connect4_in_bot_v0
+        self.check_action_to_connect4_in_bot_v0 = cfg.check_action_to_connect4_in_bot_v0
+        self.agent_vs_human = cfg.agent_vs_human
+        self.bot_action_type = cfg.bot_action_type
 
         self.players = [1, 2]
         self.board_markers = [str(i + 1) for i in range(self.board_size)]
         self.total_num_actions = self.board_size * self.board_size
         self.gomoku_rule_bot_v1 = GomokuRuleBotV1()
         self._env = self
-        self.agent_vs_human = cfg.agent_vs_human
-        self.bot_action_type = cfg.bot_action_type
+
         if self.bot_action_type == 'alpha_beta_pruning':
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 
@@ -135,8 +136,8 @@ class GomokuEnv(BaseEnv):
             # print('player 2 (expert player): ' + self.action_to_string(bot_action))  # Note: visualize
             timestep_player2 = self._player_step(bot_action)
             # self.render()  # Note: visualize
-            # the final_eval_reward is calculated from Player 1's perspective
-            timestep_player2.info['final_eval_reward'] = -timestep_player2.reward
+            # the eval_episode_return is calculated from Player 1's perspective
+            timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
             timestep = timestep_player2
@@ -170,8 +171,8 @@ class GomokuEnv(BaseEnv):
                 print('player 2 (human): ' + self.action_to_string(bot_action))  # Note: visualize
                 self.render()
 
-            # the final_eval_reward is calculated from Player 1's perspective
-            timestep_player2.info['final_eval_reward'] = -timestep_player2.reward
+            # the eval_episode_return is calculated from Player 1's perspective
+            timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
             timestep = timestep_player2
@@ -201,7 +202,7 @@ class GomokuEnv(BaseEnv):
         self.current_player = self.to_play
 
         if done:
-            info['final_eval_reward'] = reward
+            info['eval_episode_return'] = reward
             # print('gomoku one episode done: ', info)
 
         action_mask = np.zeros(self.total_num_actions, 'int8')
@@ -796,10 +797,11 @@ class GomokuEnv(BaseEnv):
     def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
         evaluator_env_num = cfg.pop('evaluator_env_num')
         cfg = copy.deepcopy(cfg)
-        # When we collect and train agent in ``self_play_mode`` or ``play_with_bot_mode``, in eval phase,
-        # we use ``eval_mode`` to make agent play with the built-in bot to
+        # When we collect and train agent in ``self_play_mode``, in eval phase,
+        # we use ``eval_mode`` to make agent paly with the built-in bot to
         # evaluate the performance of the current agent.
-        cfg.battle_mode = 'eval_mode'
+        if cfg.battle_mode == 'self_play_mode':
+            cfg.battle_mode = 'eval_mode'
 
         return [cfg for _ in range(evaluator_env_num)]
 

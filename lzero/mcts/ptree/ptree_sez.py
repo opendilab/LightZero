@@ -3,11 +3,13 @@ The Node, Roots class and related core functions for Sampled EfficientZero.
 """
 import math
 import random
-from typing import List, Dict, Any, Tuple, Union
+from typing import List, Any, Tuple, Union
 
 import numpy as np
 import torch
 from torch.distributions import Normal, Independent
+
+from .minimax import MinMaxStats
 
 
 class Node:
@@ -69,9 +71,6 @@ class Node:
             dist.log_prob(sampled_actions)
         """
         self.to_play = to_play
-        # if self.legal_actions is None:
-        # self.legal_actions = []
-
         self.hidden_state_index_x = hidden_state_index_x
         self.hidden_state_index_y = hidden_state_index_y
         self.value_prefix = value_prefix
@@ -123,17 +122,9 @@ class Node:
                 policy_logits = policy_tmp
             # then empty the self.legal_actions
             self.legal_actions = []
-
-            # prob = torch.softmax(torch.tensor(policy_logits), dim=-1)
-            # dist = Categorical(prob)
-            # sampled_actions = dist.sample(torch.tensor([self.num_of_sampled_actions]))
-            # log_prob = dist.log_prob(sampled_actions)
-
             prob = torch.softmax(torch.tensor(policy_logits), dim=-1)
             sampled_actions = torch.multinomial(prob, self.num_of_sampled_actions, replacement=False)
 
-            # TODO: factored policy representation
-            # empirical_distribution = [1/self.num_of_sampled_actions]
             for action_index in range(self.num_of_sampled_actions):
                 self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
                     # prob[action_index], # NOTE: this is a bug
@@ -204,7 +195,6 @@ class Node:
             if child.visit_count > 0:
                 true_reward = child.value_prefix - parent_value_prefix
                 if self.is_reset == 1:
-                    # TODO(pu)
                     true_reward = child.value_prefix
                 # TODO(pu): only one step bootstrap?
                 q_of_s_a = true_reward + discount_factor * child.value
@@ -234,7 +224,6 @@ class Node:
         best_action = node.best_action
         while best_action >= 0:
             traj.append(best_action)
-
             node = node.get_child(best_action)
             best_action = node.best_action
         return traj
@@ -252,7 +241,7 @@ class Node:
             distribution = [v for k, v in distribution.items()]
         return distribution
 
-    def get_child(self, action: Union[int, float]) -> Node:
+    def get_child(self, action: Union[int, float]) -> "Node":
         """
         Overview:
             get children node according to the input action.
@@ -335,7 +324,8 @@ class Roots:
                     )
                 )
 
-    def prepare(self, root_exploration_fraction: float, noises: List[float], value_prefixs: List[float], policies: List[List[float]], to_play: int = -1) -> None:
+    def prepare(self, root_exploration_fraction: float, noises: List[float], value_prefixs: List[float],
+                policies: List[List[float]], to_play: int = -1) -> None:
         """
         Overview:
             Expand the roots and add noises.
@@ -347,21 +337,12 @@ class Roots:
             - to_play_batch: the vector of the player side of each root.
         """
         for i in range(self.root_num):
-            # TODO(pu): add noise to sample distribution \beta logits
-            # if self.continuous_action_space is not True:
-            #     self.roots[i].add_exploration_noise_to_sample_distribution(root_exploration_fraction, noises[i], policies[i])
-
             #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
             # TODO(pu): why hidden_state_index_x=0, hidden_state_index_y=i?
             if to_play is None:
-                self.roots[i].expand(0, 0, i, value_prefixs[i], policies[i])
+                self.roots[i].expand(-1, 0, i, value_prefixs[i], policies[i])
             else:
                 self.roots[i].expand(to_play[i], 0, i, value_prefixs[i], policies[i])
-
-            # TODO(pu): add noise to policy distribution \pi
-            # if self.continuous_action_space is True:
-            #     self.roots[i].add_exploration_noise(root_exploration_fraction, noises[i])
-
             self.roots[i].add_exploration_noise(root_exploration_fraction, noises[i])
 
             self.roots[i].visit_count += 1
@@ -377,7 +358,7 @@ class Roots:
         """
         for i in range(self.root_num):
             if to_play is None:
-                self.roots[i].expand(0, 0, i, value_prefixs[i], policies[i])
+                self.roots[i].expand(-1, 0, i, value_prefixs[i], policies[i])
             else:
                 self.roots[i].expand(to_play[i], 0, i, value_prefixs[i], policies[i])
 
@@ -701,7 +682,8 @@ def batch_traverse(
     return results.hidden_state_index_x_lst, results.hidden_state_index_y_lst, results.last_actions, virtual_to_play
 
 
-def backpropagate(search_path: List[Node], min_max_stats: MinMaxStats, to_play: int, value: float, discount_factor: float) -> None:
+def backpropagate(search_path: List[Node], min_max_stats: MinMaxStats, to_play: int, value: float,
+                  discount_factor: float) -> None:
     """
     Overview:
         Update the value sum and visit count of nodes along the search path.
@@ -800,7 +782,7 @@ def batch_backpropagate(
         #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
         if to_play is None:
             # set to_play=0, because two_player mode to_play = {1,2}
-            results.nodes[i].expand(0, hidden_state_index_x, i, value_prefixs[i], policies[i])
+            results.nodes[i].expand(-1, hidden_state_index_x, i, value_prefixs[i], policies[i])
         else:
             results.nodes[i].expand(to_play[i], hidden_state_index_x, i, value_prefixs[i], policies[i])
 
@@ -823,33 +805,11 @@ class Action:
         return hash(self.value.tostring())
         # return hash(self.value.tobyte())
 
-    def __eq__(self, other: Action) -> bool:
+    def __eq__(self, other: "Action") -> bool:
         return (self.value == other.value).all()
 
-    def __gt__(self, other: Action) -> bool:
+    def __gt__(self, other: "Action") -> bool:
         return self.value[0] > other.value[0]
 
     def __repr__(self) -> str:
         return str(self.value)
-
-# class Action:
-#     def __init__(self, value):
-#         self.value = value
-#
-#     def __hash__(self):
-#         return hash(self.value.tostring())
-#
-#     def __eq__(self, other):
-#         return (self.value == other.value).all()
-#
-#     def __gt__(self, other):
-#         return self.value[0] > other.value[0]
-#
-#     def __repr__(self):
-#         return str(self.value)
-
-# ctypedef Action ACTION
-# cdef vector[vector[CAction*]] clegal_actions = legal_actions_list
-# vector[CAction*] get_trajectory()
-# vector[vector[CAction]]* get_trajectories()
-# vector[CAction *] last_actions

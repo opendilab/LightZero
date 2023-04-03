@@ -16,6 +16,7 @@ from easydict import EasyDict
 class LunarLanderEnv(BaseEnv):
 
     config = dict(
+        env_name="LunarLander-v2",
         save_replay_gif=False,
         replay_path_gif=None,
         replay_path=None,
@@ -37,9 +38,9 @@ class LunarLanderEnv(BaseEnv):
         self._init_flag = False
         # env_name options = {'LunarLander-v2', 'LunarLanderContinuous-v2'}
         self._env_name = cfg.env_name
-        self._replay_path = cfg.replay_path
-        self._replay_path_gif = cfg.replay_path_gif
-        self._save_replay_gif = cfg.save_replay_gif
+        self._replay_path = cfg.get('replay_path', None)
+        self._replay_path_gif = cfg.get('replay_path_gif', None)
+        self._save_replay_gif = cfg.get('save_replay_gif', False)
         self._save_replay_count = 0
         if 'Continuous' in self._env_name:
             self._act_scale = cfg.act_scale  # act_scale only works in continuous env
@@ -71,7 +72,7 @@ class LunarLanderEnv(BaseEnv):
             self._env.seed(self._seed)
         obs = self._env.reset()
         obs = to_ndarray(obs)
-        self._final_eval_reward = 0.
+        self._eval_episode_return = 0.
         if self._save_replay_gif:
             self._frames = []
         if 'Continuous' not in self._env_name:
@@ -118,9 +119,9 @@ class LunarLanderEnv(BaseEnv):
             obs = obs.reshape(8, 1, 1)
             action_mask = None
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
-        self._final_eval_reward += rew
+        self._eval_episode_return += rew
         if done:
-            info['final_eval_reward'] = self._final_eval_reward
+            info['eval_episode_return'] = self._eval_episode_return
             if self._save_replay_gif:
                 if not os.path.exists(self._replay_path_gif):
                     os.makedirs(self._replay_path_gif)

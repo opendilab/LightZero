@@ -19,6 +19,7 @@ class AtariLightZeroEnv(BaseEnv):
         evaluator_env_num=3,
         n_evaluator_episode=3,
         env_name='PongNoFrameskip-v4',
+        env_type='Atari',
         obs_shape=(4, 96, 96),
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
@@ -73,7 +74,7 @@ class AtariLightZeroEnv(BaseEnv):
 
         obs = self._env.reset()
         self.obs = to_ndarray(obs)
-        self._final_eval_reward = 0.
+        self._eval_episode_return = 0.
         self.has_reset = True
         obs = self.observe()
         # obs.shape: 96,96,1
@@ -99,10 +100,10 @@ class AtariLightZeroEnv(BaseEnv):
         # self._env.render()
         self.obs = to_ndarray(obs)
         self.reward = np.array(reward).astype(np.float32)
-        self._final_eval_reward += self.reward
+        self._eval_episode_return += self.reward
         observation = self.observe()
         if done:
-            info['final_eval_reward'] = self._final_eval_reward
+            info['eval_episode_return'] = self._eval_episode_return
 
         return BaseEnvTimestep(observation, self.reward, done, info)
 
@@ -170,6 +171,8 @@ class AtariLightZeroEnv(BaseEnv):
         collector_env_num = cfg.pop('collector_env_num')
         cfg = copy.deepcopy(cfg)
         cfg.max_episode_steps = cfg.collect_max_episode_steps
+        cfg.episode_life = True
+        cfg.clip_rewards = True
         return [cfg for _ in range(collector_env_num)]
 
     @staticmethod

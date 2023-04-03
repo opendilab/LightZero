@@ -16,12 +16,11 @@ num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
-reanalyze_ratio = 0.3
+reanalyze_ratio = 0.
 
 board_size = 6  # default_size is 15
-bot_action_type = 'v0'  # 'v1'
+bot_action_type = 'v0'  # options={'v0', 'v1'}
 prob_random_action_in_bot = 0.5
-
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -31,6 +30,7 @@ gomoku_muzero_config = dict(
     env=dict(
         stop_value=int(2),
         battle_mode='self_play_mode',
+        bot_action_type=bot_action_type,
         prob_random_action_in_bot=prob_random_action_in_bot,
         channel_last=True,
         collector_env_num=collector_env_num,
@@ -40,23 +40,15 @@ gomoku_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
+            # We use the half size model for gomoku
             observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
             action_space_size=int(board_size * board_size),
             image_channel=3,
             frame_stack_num=1,
             downsample=False,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            # ==============================================================
-            # We use the half size model for gomoku
-            # ==============================================================
             num_res_blocks=1,
             num_channels=32,
-            reward_head_channels=16,
-            value_head_channels=16,
-            policy_head_channels=16,
-            fc_reward_layers=[32],
-            fc_value_layers=[32],
-            fc_policy_layers=[32],
             support_scale=10,
             reward_support_size=21,
             value_support_size=21,
@@ -67,20 +59,23 @@ gomoku_muzero_config = dict(
         env_type='board_games',
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         use_augmentation=False,
-        manual_temperature_decay=True,
         game_segment_length=int(board_size * board_size),  # for battle_mode='self_play_mode'
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=int(board_size * board_size),
         update_per_collect=update_per_collect,
         batch_size=batch_size,
+        manual_temperature_decay=True,
         lr_piecewise_constant_decay=True,
         optim_type='SGD',
         learning_rate=0.2,  # init lr for manually decay schedule
+        # lr_piecewise_constant_decay=False,
+        # optim_type='Adam',
+        # learning_rate=0.003,  # lr for Adam optimizer
+        grad_clip_value=0.5,
         n_episode=n_episode,
-        # If the eval cost is expensive, we could set eval_freq larger.
         eval_freq=int(2e3),
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
     ),
 )
 gomoku_muzero_config = EasyDict(gomoku_muzero_config)

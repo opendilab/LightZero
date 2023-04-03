@@ -3,8 +3,9 @@ import os
 from functools import partial
 from typing import Optional, Tuple
 
-import numpy as np
 import torch
+from tensorboardX import SummaryWriter
+
 from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
@@ -12,8 +13,6 @@ from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
 from ding.worker import create_serial_collector
-from tensorboardX import SummaryWriter
-
 from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroEvaluator
 
@@ -95,6 +94,7 @@ def train_muzero(
     )
     evaluator = MuZeroEvaluator(
         cfg.policy,
+        cfg.env.n_evaluator_episode,
         cfg.env.stop_value,
         evaluator_env,
         policy.eval_mode,
@@ -113,11 +113,11 @@ def train_muzero(
         # set temperature for visit count distributions according to the train_iter,
         # please refer to Appendix D in MuZero paper for details.
         collect_kwargs['temperature'] = visit_count_temperature(
-                    game_config.manual_temperature_decay,
-                    game_config.fixed_temperature_value,
-                    game_config.threshold_training_steps_for_final_temperature,
-                    trained_steps=learner.train_iter
-                )
+            game_config.manual_temperature_decay,
+            game_config.fixed_temperature_value,
+            game_config.threshold_training_steps_for_final_temperature,
+            trained_steps=learner.train_iter
+        )
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
@@ -138,15 +138,12 @@ def train_muzero(
         for i in range(cfg.policy.update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
             if replay_buffer.get_num_of_transitions() > batch_size:
-                train_data = replay_buffer.sample_train_data(batch_size, policy)
+                train_data = replay_buffer.sample(batch_size, policy)
             else:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
                     f'batch_size: {batch_size},'
-                    f'current buffer statistics is: '
-                    f'num_of_episodes: {replay_buffer.get_num_of_episodes()}, '
-                    f'num of game blocks: {replay_buffer.get_num_of_game_segments()}, '
-                    f'number of transitions: {replay_buffer.get_num_of_transitions()}, '
+                    f'{replay_buffer}'
                     f'continue to collect now ....'
                 )
                 break

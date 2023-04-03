@@ -208,6 +208,7 @@ if __name__ == "__main__":
         prob_random_agent=0,
         prob_expert_agent=0,
         battle_mode='self_play_mode',
+        scale=True,
         channel_last=True,
         agent_vs_human=False,
         bot_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
