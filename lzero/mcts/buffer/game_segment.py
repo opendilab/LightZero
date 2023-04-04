@@ -67,7 +67,7 @@ class GameSegment:
         if self.config.sampled_algo:
             self.root_sampled_actions = []
 
-    def get_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
+    def get_unroll_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
         """
         Overview:
             Get an observation of the correct format: o[t, t + stack frames + num_unroll_steps].
@@ -95,14 +95,15 @@ class GameSegment:
         """
         return [np.zeros(self.zero_obs_shape, dtype=np.float32) for _ in range(self.frame_stack_num)]
 
-    def step_obs(self) -> List:
+    def get_obs(self) -> List:
         """
         Overview:
             Return an observation in the correct format for model inference.
         Returns:
               stacked_obs (List): An observation in the correct format for model inference.
           """
-        timestep = len(self.reward_segment)
+        timestep_obs = len(self.obs_segment) - self.frame_stack_num
+        timestep = timestep_obs
         stacked_obs = self.obs_segment[timestep:timestep + self.frame_stack_num]
         if self.config.cvt_string:
             stacked_obs = [jpeg_data_decompressor(obs, self.config.gray_scale) for obs in stacked_obs]

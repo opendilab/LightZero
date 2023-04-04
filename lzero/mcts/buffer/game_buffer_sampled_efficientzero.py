@@ -242,7 +242,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
             # stack+num_unroll_steps  4+5
             # pad if length of obs in game_segment is less than stack+num_unroll_steps
             obs_list.append(
-                game_lst[i].get_obs(pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps,
+                game_lst[i].get_unroll_obs(pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps,
                                     padding=True))
             action_list.append(actions_tmp)
             root_sampled_actions_list.append(root_sampled_actions_tmp)

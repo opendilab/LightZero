@@ -257,7 +257,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
 
-                stack_obs = {env_id: game_segments[env_id].step_obs() for env_id in ready_env_id}
+                stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
 
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
@@ -311,8 +311,13 @@ class MuZeroEvaluator(ISerialEvaluator):
                 for env_id, t in timesteps.items():
                     obs, reward, done, info = t.obs, t.reward, t.done, t.info
 
-                    # NOTE: in evaluator, we only need save the ``o_{t+1} = obs['observation']``
-                    game_segments[env_id].obs_segment.append(to_ndarray(obs['observation']))
+                    game_segments[env_id].append(
+                        actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
+                        to_play_dict[env_id]
+                    )
+
+                    # # NOTE: in evaluator, we only need save the ``o_{t+1} = obs['observation']``
+                    # game_segments[env_id].obs_segment.append(to_ndarray(obs['observation']))
 
                     # NOTE: the position of code snippet is very important.
                     # the obs['action_mask'] and obs['to_play'] is corresponding to next action

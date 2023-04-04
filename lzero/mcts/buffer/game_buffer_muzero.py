@@ -192,7 +192,7 @@ class MuZeroGameBuffer(GameBuffer):
             # pad if length of obs in game_segment is less than stack+num_unroll_steps
             # e.g. stack+num_unroll_steps  4+5
             obs_list.append(
-                game_segment_list[i].get_obs(
+                game_segment_list[i].get_unroll_obs(
                     pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
                 )
             )
@@ -278,7 +278,7 @@ class MuZeroGameBuffer(GameBuffer):
             # prepare the corresponding observations for bootstrapped values o_{t+k}
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
             # t=2+3 -> o[2+3, 2+3+4+5] -> o[5, 14]
-            game_obs = game_segment.get_obs(state_index + td_steps, self._cfg.num_unroll_steps)
+            game_obs = game_segment.get_unroll_obs(state_index + td_steps, self._cfg.num_unroll_steps)
 
             rewards_list.append(game_segment.reward_segment)
 
@@ -373,7 +373,7 @@ class MuZeroGameBuffer(GameBuffer):
 
                 child_visits.append(game_segment.child_visit_segment)
                 # prepare the corresponding observations
-                game_obs = game_segment.get_obs(state_index, self._cfg.num_unroll_steps)
+                game_obs = game_segment.get_unroll_obs(state_index, self._cfg.num_unroll_steps)
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
 
                     if current_index < game_segment_len:

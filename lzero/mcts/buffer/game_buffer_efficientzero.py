@@ -186,7 +186,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
             # prepare the corresponding observations for bootstrapped values o_{t+k}
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
             # t=2+3 -> o[2+3, 2+3+4+5] -> o[5, 14]
-            game_obs = game_segment.get_obs(state_index + td_steps, self._cfg.num_unroll_steps)
+            game_obs = game_segment.get_unroll_obs(state_index + td_steps, self._cfg.num_unroll_steps)
 
             rewards_list.append(game_segment.reward_segment)
 

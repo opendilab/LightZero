@@ -54,7 +54,7 @@ def test_game_segment(test_algo):
         episode_rewards = np.zeros(config.env.evaluator_env_num)
 
         while not dones.all():
-            stack_obs = [game_segment.step_obs() for game_segment in game_segments]
+            stack_obs = [game_segment.get_obs() for game_segment in game_segments]
             stack_obs = prepare_observation_list(stack_obs)
             stack_obs = torch.from_numpy(np.array(stack_obs)).to(config.policy.device)
 
