@@ -630,7 +630,9 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     # sampled related core code
                     # ==============================================================
                     if policy_mask[policy_index] == 0:
-                        # the null padding target policy
+                        # TODO: the invalid padding target policy, O is to make sure the correspoding cross_entropy_loss=0, but
+                        # sometimes, the uniform distribution seems to performs better in practice
+                        # target_policies.append([1/self._cfg.model.num_of_sampled_actions for _ in range(self._cfg.model.num_of_sampled_actions)])
                         target_policies.append([0 for _ in range(self._cfg.model.num_of_sampled_actions)])
                     else:
                         if distributions is None:

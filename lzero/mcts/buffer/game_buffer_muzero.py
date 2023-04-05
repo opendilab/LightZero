@@ -651,7 +651,10 @@ class MuZeroGameBuffer(GameBuffer):
                     distributions = roots_distributions[policy_index]
 
                     if policy_mask[policy_index] == 0:
+                        # TODO: the invalid padding target policy, O is to make sure the correspoding cross_entropy_loss=0, but
+                        # sometimes, the uniform distribution seems to performs better in practice
                         target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
+                        # target_policies.append([1/self._cfg.model.action_space_size for _ in range(self._cfg.model.action_space_size)])
                     else:
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
@@ -746,7 +749,7 @@ class MuZeroGameBuffer(GameBuffer):
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     if current_index < game_segment_len:
                         policy_mask.append(1)
-                        # child_visit is already a distribution
+                        # NOTE: child_visit is already a distribution
                         distributions = child_visit[current_index]
                         if self._cfg.mcts_ctree:
                             # cpp mcts_tree
@@ -774,8 +777,10 @@ class MuZeroGameBuffer(GameBuffer):
                                 target_policies.append(policy_tmp)
 
                     else:
-                        # the invalid target policy
+                        # TODO: the invalid padding target policy, O is to make sure the correspoding cross_entropy_loss=0, but
+                        # sometimes, the uniform distribution seems to performs better in practice
                         policy_mask.append(0)
+                        # target_policies.append([1/policy_shape for _ in range(policy_shape)])
                         target_policies.append([0 for _ in range(policy_shape)])
 
                     policy_index += 1
