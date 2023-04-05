@@ -91,8 +91,7 @@ class BipedalWalkerDiscEnv(BaseEnv):
         self.disc_to_cont = list(product(*[list(range(self.n)) for _ in range(self.m)]))
         # the modified discrete action space
         self._action_space = gym.spaces.Discrete(self.K)
-        # to be compatible with LightZero model,shape: [W, H, C]
-        obs = obs.reshape(24, 1, 1)
+
         action_mask = np.ones(self.K, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         return obs
@@ -130,8 +129,7 @@ class BipedalWalkerDiscEnv(BaseEnv):
         if self._save_replay_gif:
             self._frames.append(self._env.render(mode='rgb_array'))
         obs, rew, done, info = self._env.step(action)
-        # to be compatible with LightZero model,shape: [W, H, C]
-        obs = obs.reshape(24, 1, 1)
+
         action_mask = None
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         self._eval_episode_return += rew

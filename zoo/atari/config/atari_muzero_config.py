@@ -55,6 +55,7 @@ atari_muzero_config = dict(
             observation_shape=(4, 96, 96),
             action_space_size=action_space_size,
             representation_network_type='conv_res_blocks',
+            downsample=True,
             # NOTE: whether to use the self_supervised_learning_loss. default is False
             self_supervised_learning_loss=True,
         ),
@@ -63,6 +64,7 @@ atari_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
         game_segment_length=400,
+        use_augmentation=True,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         manual_temperature_decay=False,

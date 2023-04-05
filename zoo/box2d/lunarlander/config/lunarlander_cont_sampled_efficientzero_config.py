@@ -36,15 +36,13 @@ lunarlander_cont_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            image_channel=1,
-            frame_stack_num=1,
-            downsample=False,
-            observation_shape=(1, 8, 1),  # if frame_stack_num=1
+            observation_shape=8,  # if frame_stack_num=1
             action_space_size=2,
+            representation_network_type='identity',  # options={'conv_res_blocks', 'identity'}
+            frame_stack_num=1,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             categorical_distribution=True,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}
             # We use the medium size model for lunarlander_cont.
             num_res_blocks=1,
@@ -56,8 +54,6 @@ lunarlander_cont_sampled_efficientzero_config = dict(
         game_segment_length=200,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        downsample=False,
-        use_augmentation=False,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in thee original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.

@@ -17,15 +17,6 @@ update_per_collect = 100
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
-# debug config
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 5
-# update_per_collect = 2
-# batch_size = 4
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -43,11 +34,9 @@ cartpole_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(1, 4, 1),  # if frame_stack_num=1
+            observation_shape=4,
             action_space_size=2,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            downsample=False,
-            image_channel=1,
+            representation_network_type='identity',  # options={'conv_res_blocks', 'identity'}
             frame_stack_num=1,
             # We use the small size model for cartpole.
             num_res_blocks=1,

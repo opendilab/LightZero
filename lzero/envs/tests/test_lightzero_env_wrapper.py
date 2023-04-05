@@ -33,7 +33,7 @@ class TestLightZeroEnvWrapper:
         print(lightzero_env.observation_space, lightzero_env.action_space, lightzero_env.reward_space)
 
         assert isinstance(obs, dict)
-        assert isinstance(obs['observation'], np.ndarray) and obs['observation'].shape == (3, 1, 1)
+        assert isinstance(obs['observation'], np.ndarray) and obs['observation'].shape == (3,)
         assert obs['action_mask'] is None and obs['to_play'] == -1
 
         action = lightzero_env.random_action()
@@ -65,7 +65,7 @@ class TestLightZeroEnvWrapper:
         print(lightzero_env.observation_space, lightzero_env.action_space, lightzero_env.reward_space)
 
         assert isinstance(obs, dict)
-        assert isinstance(obs['observation'], np.ndarray) and obs['observation'].shape == (3, 1, 1)
+        assert isinstance(obs['observation'], np.ndarray) and obs['observation'].shape == (3,)
         assert obs['action_mask'].sum() == 11 and obs['to_play'] == -1
 
         action = lightzero_env.random_action()
@@ -96,7 +96,7 @@ class TestLightZeroEnvWrapper:
         print(lightzero_env.observation_space, lightzero_env.action_space, lightzero_env.reward_space)
 
         assert isinstance(obs, dict)
-        assert isinstance(obs['observation'], np.ndarray) and obs['observation'].shape == (24, 1, 1)
+        assert isinstance(obs['observation'], np.ndarray) and obs['observation'].shape == (24,)
         assert obs['action_mask'] is None and obs['to_play'] == -1
 
         action = lightzero_env.random_action()
@@ -128,7 +128,7 @@ class TestLightZeroEnvWrapper:
         print(lightzero_env.observation_space, lightzero_env.action_space, lightzero_env.reward_space)
 
         assert isinstance(obs, dict)
-        assert isinstance(obs['observation'], np.ndarray) and obs['observation'].shape == (24, 1, 1)
+        assert isinstance(obs['observation'], np.ndarray) and obs['observation'].shape == (24,)
         assert obs['action_mask'].sum() == 256 and obs['to_play'] == -1
 
         action = lightzero_env.random_action()

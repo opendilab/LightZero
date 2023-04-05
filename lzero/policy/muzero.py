@@ -94,7 +94,7 @@ class MuZeroPolicy(Policy):
 
         ## observation
         cvt_string=False,
-        use_augmentation=True,
+        use_augmentation=False,
         # style of augmentation
         augmentation=['shift', 'intensity'],
 

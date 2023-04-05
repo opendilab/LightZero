@@ -24,7 +24,7 @@ class EfficientZeroModel(nn.Module):
         batch_norm_momentum: float = 0.1,
         last_linear_layer_init_zero: bool = True,
         state_norm: bool = False,
-        downsample: bool = True,
+        downsample: bool = False,
         num_res_blocks: int = 1,
         num_channels: int = 64,
         lstm_hidden_size: int = 512,
@@ -96,6 +96,12 @@ class EfficientZeroModel(nn.Module):
         self.downsample = downsample
 
         self.action_space_size = action_space_size
+
+        if isinstance(observation_shape, int) or len(observation_shape) == 1:
+            # vector obs input, e.g. classical control ad box2d environments
+            # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
+            observation_shape = [1, observation_shape, 1]
+
         flatten_output_size_for_reward_head = (
             (reward_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else
@@ -132,7 +138,7 @@ class EfficientZeroModel(nn.Module):
         if self.representation_network_type == 'identity':
             self.dynamics_network = DynamicsNetwork(
                 num_res_blocks,
-                observation_shape[0] + 1,  # in_channels=observation_shape[0]
+                observation_shape[0] + 1,  # in_channels=observation_shape[0],  +1 denotes action dim
                 reward_head_channels,
                 fc_reward_layers,
                 self.reward_support_size,
@@ -270,6 +276,10 @@ class EfficientZeroModel(nn.Module):
         Arguments:
 
         """
+        if len(observation.shape) == 1:
+            # vector obs input, e.g. classical control ad box2d environments
+            # to be compatible with LightZero model/policy, shape: [C, W, H]
+            observation = observation.reshape(1, observation.shape[0], 1)
         latent_state = self.representation_network(observation)
         if not self.state_norm:
             return latent_state
@@ -436,6 +446,7 @@ class DynamicsNetwork(nn.Module):
         x = x.reshape(-1, self.flatten_output_size_for_reward_head).unsqueeze(0)
 
         value_prefix, reward_hidden_state = self.lstm(x, reward_hidden_state)
+
         value_prefix = value_prefix.squeeze(0)
         value_prefix = self.bn_value_prefix(value_prefix)
         value_prefix = self.activation(value_prefix)

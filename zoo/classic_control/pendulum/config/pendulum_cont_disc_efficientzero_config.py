@@ -43,11 +43,9 @@ pendulum_disc_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(1, 3, 1),  # if frame_stack_num=1
+            observation_shape=3,  # if frame_stack_num=1
             action_space_size=11,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            downsample=False,
-            image_channel=1,
             frame_stack_num=1,
             # We use the small size model for pendulum.
             num_res_blocks=1,
@@ -59,7 +57,6 @@ pendulum_disc_efficientzero_config = dict(
         game_segment_length=50,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        use_augmentation=False,
         policy_entropy_loss_weight=0,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         update_per_collect=update_per_collect,

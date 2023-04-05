@@ -47,9 +47,6 @@ class LightZeroEnvWrapper(gym.Wrapper):
         self._eval_episode_return = 0.
         self._raw_observation_space = self.env.observation_space
 
-        # to be compatible with LightZero model shape: [W, H, C]
-        obs = obs.reshape(self._raw_observation_space.shape[0], 1, 1)
-
         if self.cfg.continuous:
             action_mask = None
         else:
@@ -97,9 +94,6 @@ class LightZeroEnvWrapper(gym.Wrapper):
         """
         # The core original env step.
         obs, rew, done, info = self.env.step(action)
-
-        # to be compatible with LightZero model,shape: [W, H, C]
-        obs = obs.reshape(self._raw_observation_space.shape[0], 1, 1)
 
         if self.cfg.continuous:
             action_mask = None

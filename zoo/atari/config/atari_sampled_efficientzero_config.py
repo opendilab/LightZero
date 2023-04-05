@@ -57,6 +57,7 @@ atari_sampled_efficientzero_config = dict(
             observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
             action_space_size=action_space_size,
             representation_network_type='conv_res_blocks',
+            downsample=True,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             self_supervised_learning_loss=True,
@@ -66,6 +67,7 @@ atari_sampled_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
         game_segment_length=400,
+        use_augmentation=True,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         manual_temperature_decay=True,

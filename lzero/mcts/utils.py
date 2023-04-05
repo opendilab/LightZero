@@ -57,17 +57,27 @@ def prepare_observation_list(observation_lst):
         [B, S, W, H, C] -> [B, S x C, W, H]
         batch, stack num, width, height, channel
     """
-    # B, S, W, H, C
     observation_lst = np.array(observation_lst)
 
-    # 1, 4, 8, 1, 1 -> 1, 4, 1, 8, 1
-    #   [B, S, W, H, C] -> [B, S, C, W, H]
-    observation_lst = np.transpose(observation_lst, (0, 1, 4, 2, 3))
+    if len(observation_lst.shape) == 3:
+        # vector obs input, e.g. classical control ad box2d environments
+        # to be compatible with LightZero model/policy,
+        # observation_lst: [B, S, O], where O is original obs shape
+        # [B, S, O] -> [B, S, O, 1]
+        observation_lst = observation_lst.reshape(observation_lst.shape[0], observation_lst.shape[1], observation_lst.shape[2], 1)
 
-    shape = observation_lst.shape
-    # 1, 4, 1, 8, 1 -> 1, 4*1, 8, 1
-    #  [B, S, C, W, H] -> [B, S*C, W, H]
-    observation_lst = observation_lst.reshape((shape[0], -1, shape[-2], shape[-1]))
+    elif len(observation_lst.shape) == 5:
+        # image obs input, e.g. atari environments
+        # observation_lst: [B, S, W, H, C]
+
+        # 1, 4, 8, 1, 1 -> 1, 4, 1, 8, 1
+        #   [B, S, W, H, C] -> [B, S, C, W, H]
+        observation_lst = np.transpose(observation_lst, (0, 1, 4, 2, 3))
+
+        shape = observation_lst.shape
+        # 1, 4, 1, 8, 1 -> 1, 4*1, 8, 1
+        #  [B, S, C, W, H] -> [B, S*C, W, H]
+        observation_lst = observation_lst.reshape((shape[0], -1, shape[-2], shape[-1]))
 
     return observation_lst
 

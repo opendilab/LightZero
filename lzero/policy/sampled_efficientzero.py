@@ -123,7 +123,7 @@ class SampledEfficientZeroPolicy(Policy):
         ## observation
         # the key difference setting between image-input and vector input.
         cvt_string=False,
-        use_augmentation=True,
+        use_augmentation=False,
         # style of augmentation
         augmentation=['shift', 'intensity'],
 
