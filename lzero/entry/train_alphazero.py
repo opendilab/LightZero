@@ -58,7 +58,7 @@ def train_alphazero(
 
     # load pretrained model
     if model_path is not None:
-        policy.learn_mode.load_state_dict(torch.load(model_path, map_location='cpu'))
+        policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
@@ -69,7 +69,7 @@ def train_alphazero(
     batch_size = policy_config.batch_size
     env_config = cfg.env
     collector = create_serial_collector(
-        cfg.policy.collect.collector,
+        cfg=cfg.policy.collect.collector,
         env=collector_env,
         policy=policy.collect_mode,
         tb_logger=tb_logger,
@@ -78,12 +78,12 @@ def train_alphazero(
         env_config=env_config,
     )
     evaluator = AlphaZeroEvaluator(
-        cfg.policy,
-        cfg.env.n_evaluator_episode,
-        cfg.env.stop_value,
-        evaluator_env,
-        policy.eval_mode,
-        tb_logger,
+        cfg=cfg.policy,
+        n_evaluator_episode=cfg.env.n_evaluator_episode,
+        stop_value=cfg.env.stop_value,
+        env=evaluator_env,
+        policy=policy.eval_mode,
+        tb_logger=tb_logger,
         exp_name=cfg.exp_name,
     )
 

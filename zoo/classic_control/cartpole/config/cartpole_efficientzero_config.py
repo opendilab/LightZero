@@ -48,7 +48,6 @@ cartpole_efficientzero_config = dict(
         game_segment_length=50,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        use_augmentation=False,
         ssl_loss_weight=2,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         update_per_collect=update_per_collect,

@@ -31,31 +31,8 @@ class MuZeroGameBuffer(GameBuffer):
 
     # the default_config for MuZeroGameBuffer.
     config = dict(
-        model=dict(
-            action_space_size=6,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            frame_stack_num=4,
-        ),
-        # learn_mode config
-        learn=dict(
-            # (int) How many samples in a training batch
-            batch_size=256,
-        ),
-        # ==============================================================
-        # begin of additional policy_config
-        # ==============================================================
-        ## common
-        mcts_ctree=True,
-        device='cuda',
-        env_type='not_board_games',
         # the size/capacity of replay_buffer, in the terms of transitions.
         replay_buffer_size=int(1e6),
-
-        ## learn
-        num_simulations=50,
-        td_steps=5,
-        num_unroll_steps=5,
-        lstm_horizon_len=5,
 
         ## reanalyze
         reanalyze_ratio=0.3,
@@ -63,26 +40,6 @@ class MuZeroGameBuffer(GameBuffer):
         # whether to use root value in reanalyzing part
         use_root_value=False,
         mini_infer_size=256,
-
-        ## priority
-        use_priority=True,
-        use_max_priority_for_new_data=True,
-        # how much prioritization is used: 0 means no prioritization while 1 means full prioritization
-        priority_prob_alpha=0.6,
-        # how much correction is used: 0 means no correction while 1 means full correction
-        priority_prob_beta=0.4,
-        prioritized_replay_eps=1e-6,
-
-        ## UCB
-        root_dirichlet_alpha=0.3,
-        root_exploration_fraction=0.25,
-        pb_c_base=19652,
-        pb_c_init=1.25,
-        discount_factor=0.997,
-        value_delta_max=0.01,
-        # ==============================================================
-        # end of additional policy_config
-        # ==============================================================
     )
 
     def __init__(self, cfg: dict):

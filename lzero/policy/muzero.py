@@ -126,13 +126,6 @@ class MuZeroPolicy(Policy):
         # ``fixed_temperature_value`` is effective only when manual_temperature_decay=False
         fixed_temperature_value=0.25,
 
-        ## reanalyze
-        reanalyze_ratio=0.3,
-        reanalyze_outdated=True,
-        # whether to use root value in reanalyzing part
-        use_root_value=False,
-        mini_infer_size=256,
-
         ## priority
         use_priority=True,
         use_max_priority_for_new_data=True,
@@ -145,6 +138,9 @@ class MuZeroPolicy(Policy):
         # UCB related config
         root_dirichlet_alpha=0.3,
         root_exploration_fraction=0.25,
+        pb_c_base=19652,
+        pb_c_init=1.25,
+        value_delta_max=0.01,
         # ==============================================================
         # end of additional policy_config
         # ==============================================================

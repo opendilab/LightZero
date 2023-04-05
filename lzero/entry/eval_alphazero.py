@@ -53,7 +53,7 @@ def eval_alphazero(
 
     # load pretrained model
     if model_path is not None:
-        policy.learn_mode.load_state_dict(torch.load(model_path, map_location='cpu'))
+        policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
