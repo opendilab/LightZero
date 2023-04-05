@@ -322,7 +322,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                         legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
                                          range(transition_batch_size)]
 
-                    roots = MCTSCtree.Roots(
+                    roots = MCTSCtree.roots(
                         transition_batch_size, legal_actions, self._cfg.model.action_space_size,
                         self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                     )
@@ -346,7 +346,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
 
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
                                      range(transition_batch_size)]
-                    roots = MCTSPtree.Roots(
+                    roots = MCTSPtree.roots(
                         transition_batch_size, legal_actions,
                         num_of_sampled_actions=self._cfg.model.num_of_sampled_actions
                     )
@@ -364,7 +364,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                             to_play=-1
                         )
                         # do MCTS for a new policy with the recent target model
-                        MCTSPtree.Roots(self._cfg).search(
+                        MCTSPtree.roots(self._cfg).search(
                             roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=-1
                         )
                     else:
@@ -376,7 +376,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                             to_play=to_play
                         )
                         # do MCTS for a new policy with the recent target model
-                        MCTSPtree.Roots(self._cfg).search(
+                        MCTSPtree.roots(self._cfg).search(
                             roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play
                         )
 
@@ -519,7 +519,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
                                      range(transition_batch_size)]
 
-                roots = MCTSCtree.Roots(
+                roots = MCTSCtree.roots(
                     transition_batch_size, legal_actions, self._cfg.model.action_space_size,
                     self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
@@ -547,7 +547,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
                                      range(transition_batch_size)]
 
-                roots = MCTSPtree.Roots(
+                roots = MCTSPtree.roots(
                     transition_batch_size,
                     legal_actions,
                     action_space_size=self._cfg.model.action_space_size,
@@ -562,7 +562,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
                 )
                 # do MCTS for a new policy with the recent target model
-                MCTSPtree.Roots(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                MCTSPtree.roots(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
 
                 roots_legal_actions_list = roots.legal_actions_list
 

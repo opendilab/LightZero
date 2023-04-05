@@ -789,7 +789,7 @@ class SampledEfficientZeroPolicy(Policy):
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                     ]
-                roots = MCTSCtree.Roots(
+                roots = MCTSCtree.roots(
                     active_collect_env_num, legal_actions, self._cfg.model.action_space_size,
                     self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
@@ -814,7 +814,7 @@ class SampledEfficientZeroPolicy(Policy):
                     to_play = [None for i in range(active_collect_env_num)]
                 if action_mask[0] is None:
                     # continuous action space
-                    roots = MCTSPtree.Roots(
+                    roots = MCTSPtree.roots(
                         active_collect_env_num,
                         None,
                         action_space_size=self._cfg.model.action_space_size,
@@ -831,7 +831,7 @@ class SampledEfficientZeroPolicy(Policy):
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                     ]
-                    roots = MCTSPtree.Roots(
+                    roots = MCTSPtree.roots(
                         active_collect_env_num,
                         legal_actions,
                         action_space_size=self._cfg.model.action_space_size,
@@ -961,7 +961,7 @@ class SampledEfficientZeroPolicy(Policy):
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                     ]
-                roots = MCTSCtree.Roots(
+                roots = MCTSCtree.roots(
                     active_eval_env_num,
                     legal_actions,
                     self._cfg.model.action_space_size,
@@ -980,7 +980,7 @@ class SampledEfficientZeroPolicy(Policy):
                     to_play = [None for i in range(active_eval_env_num)]
                 if action_mask[0] is None:
                     # continuous action space
-                    roots = MCTSPtree.Roots(
+                    roots = MCTSPtree.roots(
                         active_eval_env_num,
                         None,
                         action_space_size=self._cfg.model.action_space_size,
@@ -992,7 +992,7 @@ class SampledEfficientZeroPolicy(Policy):
                     legal_actions = [
                         [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                     ]
-                    roots = MCTSPtree.Roots(
+                    roots = MCTSPtree.roots(
                         active_eval_env_num,
                         legal_actions,
                         action_space_size=self._cfg.model.action_space_size,

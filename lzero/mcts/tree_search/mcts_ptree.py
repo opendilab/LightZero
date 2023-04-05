@@ -58,7 +58,7 @@ class EfficientZeroMCTSPtree(object):
         self._cfg = default_config
 
     @classmethod
-    def Roots(cls: int, root_num: int, legal_actions: List[Any]) -> "ez_ptree.Roots":
+    def roots(cls: int, root_num: int, legal_actions: List[Any]) -> "ez_ptree.Roots":
         """
         Overview:
             The initialization of CRoots with root num and legal action lists.
@@ -260,7 +260,7 @@ class MuZeroMCTSPtree(object):
         self._cfg = default_config
 
     @classmethod
-    def Roots(cls: int, root_num: int, legal_actions: List[Any]) -> "mz_ptree.Roots":
+    def roots(cls: int, root_num: int, legal_actions: List[Any]) -> "mz_ptree.Roots":
         """
         Overview:
             The initialization of CRoots with root num and legal action lists.

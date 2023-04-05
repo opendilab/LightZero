@@ -480,7 +480,7 @@ class MuZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = MCTSCtree.Roots(active_collect_env_num, legal_actions)
+                roots = MCTSCtree.roots(active_collect_env_num, legal_actions)
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
@@ -493,7 +493,7 @@ class MuZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
-                roots = MCTSPtree.Roots(active_collect_env_num, legal_actions)
+                roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
                 # the only difference between collect and eval is the dirichlet noise
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -577,7 +577,7 @@ class MuZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = MCTSCtree.Roots(active_eval_env_num, legal_actions)
+                roots = MCTSCtree.roots(active_eval_env_num, legal_actions)
                 roots.prepare_no_noise(reward_roots, policy_logits, to_play)
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, to_play)
             else:
@@ -585,7 +585,7 @@ class MuZeroPolicy(Policy):
                 legal_actions = [
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
                 ]
-                roots = MCTSPtree.Roots(active_eval_env_num, legal_actions)
+                roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
 
                 roots.prepare_no_noise(reward_roots, policy_logits, to_play)
                 self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, to_play)

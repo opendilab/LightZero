@@ -261,12 +261,12 @@ class GameBuffer(ABC, object):
     def push_game_segments(self, data_and_meta: Any) -> None:
         """
         Overview:
-            Push game data and it's meta information in buffer.
+            Push game_segments data and it's meta information into buffer.
             Save a game segment
-        Keys:
-            - data (:obj:`Any`): The data which will be pushed into buffer.
-                                 i.e. a game segment
-            - meta (:obj:`dict`): Meta information
+        Arguments:
+            - data_and_meta
+                - data (:obj:`Any`): The data (game segments) which will be pushed into buffer.
+                - meta (:obj:`dict`): Meta information, e.g. priority, count, staleness.
         """
         data, meta = data_and_meta
         for (data_game, meta_game) in zip(data, meta):

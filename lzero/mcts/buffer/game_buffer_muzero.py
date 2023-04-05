@@ -412,7 +412,7 @@ class MuZeroGameBuffer(GameBuffer):
 
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
                                      range(transition_batch_size)]
-                    roots = MCTSCtree.Roots(transition_batch_size, legal_actions)
+                    roots = MCTSCtree.roots(transition_batch_size, legal_actions)
 
                     noises = [
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
@@ -432,7 +432,7 @@ class MuZeroGameBuffer(GameBuffer):
 
                     legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
                                      range(transition_batch_size)]
-                    roots = MCTSPtree.Roots(transition_batch_size, legal_actions)
+                    roots = MCTSPtree.roots(transition_batch_size, legal_actions)
                     noises = [
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(transition_batch_size)
@@ -563,7 +563,7 @@ class MuZeroGameBuffer(GameBuffer):
 
                 legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
                                  range(transition_batch_size)]
-                roots = MCTSCtree.Roots(transition_batch_size, legal_actions)
+                roots = MCTSCtree.roots(transition_batch_size, legal_actions)
 
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
@@ -585,7 +585,7 @@ class MuZeroGameBuffer(GameBuffer):
                 legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
                                  range(transition_batch_size)]
 
-                roots = MCTSPtree.Roots(transition_batch_size, legal_actions)
+                roots = MCTSPtree.roots(transition_batch_size, legal_actions)
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(transition_batch_size)

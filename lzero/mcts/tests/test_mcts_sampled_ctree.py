@@ -113,7 +113,7 @@ def test_mcts():
     policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
     legal_actions_list = [[-1 for i in range(5)] for _ in range(env_nums)]
-    roots = MCTSCtree.Roots(env_nums, legal_actions_list, policy_config.model.action_space_size, policy_config.num_of_sampled_actions, continuous_action_space=True)
+    roots = MCTSCtree.roots(env_nums, legal_actions_list, policy_config.model.action_space_size, policy_config.num_of_sampled_actions, continuous_action_space=True)
 
     noises = [
         np.random.dirichlet([policy_config.root_dirichlet_alpha] * policy_config.num_of_sampled_actions

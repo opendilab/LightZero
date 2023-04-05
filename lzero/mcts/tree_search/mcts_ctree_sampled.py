@@ -47,7 +47,7 @@ class SampledEfficientZeroMCTSCtree(object):
         return cfg
 
     @classmethod
-    def Roots(cls: int, root_num: int, legal_action_lis: List[Any], action_space_size: int,
+    def roots(cls: int, root_num: int, legal_action_lis: List[Any], action_space_size: int,
                     num_of_sampled_actions: int, continuous_action_space: bool) -> "ezs_ctree.Roots":
         """
         Overview:
