@@ -31,7 +31,7 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 800
+update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
@@ -42,7 +42,6 @@ reanalyze_ratio = 0.
 atari_efficientzero_config = dict(
     exp_name=f'data_ez_ctree/{env_name[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
-        stop_value=int(1e6),
         env_name=env_name,
         obs_shape=(4, 96, 96),
         collector_env_num=collector_env_num,
@@ -99,5 +98,4 @@ create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-
     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

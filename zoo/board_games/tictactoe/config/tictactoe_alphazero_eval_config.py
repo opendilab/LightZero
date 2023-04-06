@@ -1,87 +1,5 @@
-from easydict import EasyDict
+from zoo.board_games.tictactoe.config.tictactoe_alphazero_bot_mode_config import main_config, create_config
 
-board_size = 3  # fixed
-
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 25
-update_per_collect = 50
-batch_size = 256
-agent_vs_human = False
-
-tictactoe_alphazero_config = dict(
-    exp_name='data_ez_ptree/tictactoe_eval',
-    env=dict(
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
-        n_evaluator_episode=evaluator_env_num,
-        board_size=board_size,
-        battle_mode='self_play_mode',
-        channel_last=False,  # NOTE
-        agent_vs_human=agent_vs_human,
-        manager=dict(shared_memory=False, ),
-    ),
-    policy=dict(
-        model=dict(
-            # We use the small size model for tictactoe
-            observation_shape=(3, 3, 3),
-            action_space_size=int(1 * 3 * 3),
-            downsample=False,
-            num_res_blocks=1,
-            num_channels=16,
-            value_head_channels=16,
-            policy_head_channels=16,
-            fc_value_layers=[8],
-            fc_policy_layers=[8],
-            last_linear_layer_init_zero=True,
-            categorical_distribution=False,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-        ),
-        stop_value=2,
-        cuda=True,
-        board_size=3,
-        collector_env_num=collector_env_num,
-        update_per_collect=update_per_collect,
-        batch_size=batch_size,
-        optim_type='Adam',
-        learning_rate=0.003,
-        weight_decay=0.0001,
-        grad_norm=0.5,
-        value_weight=1.0,
-        entropy_weight=0.0,
-        n_episode=n_episode,
-        eval_freq=int(2e3),
-        mcts=dict(num_simulations=num_simulations),
-    ),
-)
-
-tictactoe_alphazero_config = EasyDict(tictactoe_alphazero_config)
-main_config = tictactoe_alphazero_config
-
-tictactoe_alphazero_create_config = dict(
-    env=dict(
-        type='tictactoe',
-        import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
-    ),
-    # env_manager=dict(type='subprocess'),
-    env_manager=dict(type='base'),  # if agent_vs_human=True
-    policy=dict(
-        type='alphazero',
-        import_names=['lzero.policy.alphazero'],
-    ),
-    collector=dict(
-        type='episode_alphazero',
-        get_train_sample=False,
-        import_names=['lzero.worker.alphazero_collector'],
-    ),
-    evaluator=dict(
-        type='alphazero',
-        import_names=['lzero.worker.alphazero_evaluator'],
-    )
-)
-tictactoe_alphazero_create_config = EasyDict(tictactoe_alphazero_create_config)
-create_config = tictactoe_alphazero_create_config
 
 if __name__ == '__main__':
     from lzero.entry import eval_alphazero
@@ -92,12 +10,18 @@ if __name__ == '__main__':
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
      """
-    model_path = '/Users/user/code/LightZero/zoo/board_games/tictactoe/tictactoe_alphazero_bot-mode_ns25_upc50_rr0.3_seed0/ckpt/ckpt_best.pth.tar'
+    model_path = './LightZero/zoo/board_games/tictactoe/tictactoe_alphazero_bot-mode_ns25_upc50_rr0.3_seed0/ckpt/ckpt_best.pth.tar'
+    seeds = [0]
+    num_episodes_each_seed = 5
+    main_config.env.agent_vs_human = False
+    # main_config.env.agent_vs_human = True
+
+    create_config.env_manager.type = 'base'
+    main_config.env.evaluator_env_num = 1
+    main_config.env.n_evaluator_episode = 1
+    total_test_episodes = num_episodes_each_seed * len(seeds)
     returns_mean_seeds = []
     returns_seeds = []
-    seeds = [0]
-    num_episodes_each_seed = 3
-    total_test_episodes = num_episodes_each_seed * len(seeds)
     for seed in seeds:
         returns_mean, returns = eval_alphazero([main_config, create_config], seed=seed,
                                                num_episodes_each_seed=num_episodes_each_seed,

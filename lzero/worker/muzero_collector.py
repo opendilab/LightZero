@@ -8,7 +8,6 @@ from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
 from ding.worker.collector.base_serial_collector import ISerialCollector
-from easydict import EasyDict
 from torch.nn import L1Loss
 
 from lzero.mcts.buffer.game_segment import GameSegment
@@ -26,37 +25,37 @@ class MuZeroCollector(ISerialCollector):
         envstep
     """
 
-    config = dict(game_segment_pool_size=int(1e6), deepcopy_obs=False, collect_print_freq=100, get_train_sample=False)
+    # TO be compatible with ISerialCollector
+    config = dict()
 
     def __init__(
             self,
-            cfg: EasyDict,
+            collect_print_freq: int = 100,
             env: BaseEnvManager = None,
             policy: namedtuple = None,
             tb_logger: 'SummaryWriter' = None,  # noqa
             exp_name: Optional[str] = 'default_experiment',
             instance_name: Optional[str] = 'collector',
             replay_buffer: 'replay_buffer' = None,  # noqa
-            game_config: 'game_config' = None,  # noqa
+            policy_config: 'policy_config' = None,  # noqa
     ) -> None:
         """
         Overview:
             Init the collector according to input arguments.
         Arguments:
             - cfg (:obj:`EasyDict`): Config dict
+            - collect_print_freq (:obj:`int`): collect_print_frequency in terms of training_steps.
             - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
             - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
             - tb_logger (:obj:`SummaryWriter`): tensorboard handle
             - instance_name (:obj:`Optional[str]`): Name of this instance.
             - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
             - replay_buffer (:obj:`replay_buffer`): the buffer
-            - game_config: Config of game.
+            - policy_config: Config of game.
         """
         self._exp_name = exp_name
         self._instance_name = instance_name
-        self._collect_print_freq = cfg.collect_print_freq
-        self._deepcopy_obs = cfg.deepcopy_obs
-        self._cfg = cfg
+        self._collect_print_freq = collect_print_freq
         self._timer = EasyTimer()
         self._end_flag = False
 
@@ -71,7 +70,7 @@ class MuZeroCollector(ISerialCollector):
             )
 
         self.replay_buffer = replay_buffer
-        self.game_config = game_config
+        self.policy_config = policy_config
 
         self.reset(policy, env)
 
@@ -140,8 +139,8 @@ class MuZeroCollector(ISerialCollector):
         self._end_flag = False
 
         # A game_segment_pool implementation based on the deque structure.
-        self.game_segment_pool = deque(maxlen=self._cfg.game_segment_pool_size)
-        self.unroll_plus_td_steps = self.game_config.num_unroll_steps + self.game_config.td_steps
+        self.game_segment_pool = deque(maxlen=int(1e6))
+        self.unroll_plus_td_steps = self.policy_config.num_unroll_steps + self.policy_config.td_steps
 
     def _reset_stat(self, env_id: int) -> None:
         """
@@ -197,13 +196,13 @@ class MuZeroCollector(ISerialCollector):
             - pred_values_lst: The list of value being predicted.
             - search_values_lst: The list of value obtained through search.
         """
-        if self.game_config.use_priority and not self.game_config.use_max_priority_for_new_data:
-            pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.game_config.device).float().view(-1)
-            search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.game_config.device
+        if self.policy_config.use_priority and not self.policy_config.use_max_priority_for_new_data:
+            pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.policy_config.device).float().view(-1)
+            search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.policy_config.device
                                                                                 ).float().view(-1)
             priorities = L1Loss(reduction='none'
                                 )(pred_values,
-                                  search_values).detach().cpu().numpy() + self.game_config.prioritized_replay_eps
+                                  search_values).detach().cpu().numpy() + self.policy_config.prioritized_replay_eps
         else:
             # priorities is None -> use the max priority for all newly collected data
             priorities = None
@@ -222,18 +221,18 @@ class MuZeroCollector(ISerialCollector):
             (last_game_segments[i].obs_segment[-4:][j] == game_segments[i].obs_segment[:4][j]).all() is True
         """
         # pad over last block trajectory
-        beg_index = self.game_config.model.frame_stack_num
-        end_index = beg_index + self.game_config.num_unroll_steps
+        beg_index = self.policy_config.model.frame_stack_num
+        end_index = beg_index + self.policy_config.num_unroll_steps
 
         # the start <frame_stack_num> obs is init zero obs, so we take the [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
         # e.g. the start 4 obs is init zero obs, the num_unroll_steps is 5, so we take the [4:9] obs as the pad obs
         pad_obs_lst = game_segments[i].obs_segment[beg_index:end_index]
-        pad_child_visits_lst = game_segments[i].child_visit_segment[:self.game_config.num_unroll_steps]
+        pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps]
         # EfficientZero original repo bug:
         # pad_child_visits_lst = game_segments[i].child_visit_segment[beg_index:end_index]
 
         beg_index = 0
-        # self.unroll_plus_td_steps = self.game_config.num_unroll_steps + self.game_config.td_steps
+        # self.unroll_plus_td_steps = self.policy_config.num_unroll_steps + self.policy_config.td_steps
         end_index = beg_index + self.unroll_plus_td_steps - 1
 
         pad_reward_lst = game_segments[i].reward_segment[beg_index:end_index]
@@ -280,8 +279,7 @@ class MuZeroCollector(ISerialCollector):
             - train_iter (:obj:`int`): the number of training iteration.
             - policy_kwargs (:obj:`dict`): the keyword args for policy forward.
         Returns:
-            - return_data (:obj:`List`): A list containing collected episodes if not get_train_sample, otherwise, \
-                return train_samples split by unroll_len.
+            - return_data (:obj:`List`): A list containing collected game_segments
         """
         if n_episode is None:
             if self._default_n_episode is None:
@@ -317,15 +315,15 @@ class MuZeroCollector(ISerialCollector):
 
         game_segments = [
             GameSegment(
-                self._env.action_space, game_segment_length=self.game_config.game_segment_length, config=self.game_config
+                self._env.action_space, game_segment_length=self.policy_config.game_segment_length, config=self.policy_config
             ) for _ in range(env_nums)
         ]
         # stacked observation windows in reset stage for init game_segments
         observation_window_stack = [[] for _ in range(env_nums)]
         for env_id in range(env_nums):
             observation_window_stack[env_id] = deque([
-                to_ndarray(init_obs[env_id]['observation']) for _ in range(self.game_config.model.frame_stack_num)
-            ], maxlen=self.game_config.model.frame_stack_num)
+                to_ndarray(init_obs[env_id]['observation']) for _ in range(self.policy_config.model.frame_stack_num)
+            ], maxlen=self.policy_config.model.frame_stack_num)
 
             game_segments[env_id].reset(observation_window_stack[env_id])
 
@@ -355,7 +353,7 @@ class MuZeroCollector(ISerialCollector):
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
 
-                stack_obs = {env_id: game_segments[env_id].step_obs() for env_id in ready_env_id}
+                stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
 
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
@@ -365,7 +363,7 @@ class MuZeroCollector(ISerialCollector):
 
                 stack_obs = to_ndarray(stack_obs)
                 stack_obs = prepare_observation_list(stack_obs)
-                stack_obs = torch.from_numpy(stack_obs).to(self.game_config.device).float()
+                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
 
                 # ==============================================================
                 # policy forward
@@ -374,7 +372,7 @@ class MuZeroCollector(ISerialCollector):
 
                 actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                 distributions_dict_no_env_id = {k: v['distributions'] for k, v in policy_output.items()}
-                if self.game_config.sampled_algo:
+                if self.policy_config.sampled_algo:
                     root_sampled_actions_dict_no_env_id = {
                         k: v['root_sampled_actions']
                         for k, v in policy_output.items()
@@ -389,7 +387,7 @@ class MuZeroCollector(ISerialCollector):
                 # TODO(pu): subprocess
                 actions = {}
                 distributions_dict = {}
-                if self.game_config.sampled_algo:
+                if self.policy_config.sampled_algo:
                     root_sampled_actions_dict = {}
                 value_dict = {}
                 pred_value_dict = {}
@@ -397,7 +395,7 @@ class MuZeroCollector(ISerialCollector):
                 for index, env_id in enumerate(ready_env_id):
                     actions[env_id] = actions_no_env_id.pop(index)
                     distributions_dict[env_id] = distributions_dict_no_env_id.pop(index)
-                    if self.game_config.sampled_algo:
+                    if self.policy_config.sampled_algo:
                         root_sampled_actions_dict[env_id] = root_sampled_actions_dict_no_env_id.pop(index)
                     value_dict[env_id] = value_dict_no_env_id.pop(index)
                     pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
@@ -422,7 +420,7 @@ class MuZeroCollector(ISerialCollector):
                         continue
                     obs, reward, done, info = timestep.obs, timestep.reward, timestep.done, timestep.info
 
-                    if self.game_config.sampled_algo:
+                    if self.policy_config.sampled_algo:
                         game_segments[env_id].store_search_stats(
                             distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
                         )
@@ -446,7 +444,7 @@ class MuZeroCollector(ISerialCollector):
                     eps_steps_lst[env_id] += 1
                     total_transitions += 1
 
-                    if self.game_config.use_priority and not self.game_config.use_max_priority_for_new_data:
+                    if self.policy_config.use_priority and not self.policy_config.use_max_priority_for_new_data:
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
 
@@ -478,8 +476,8 @@ class MuZeroCollector(ISerialCollector):
                         # create new GameSegment
                         game_segments[env_id] = GameSegment(
                             self._env.action_space,
-                            game_segment_length=self.game_config.game_segment_length,
-                            config=self.game_config
+                            game_segment_length=self.policy_config.game_segment_length,
+                            config=self.policy_config
                         )
                         game_segments[env_id].reset(observation_window_stack[env_id])
 
@@ -550,10 +548,10 @@ class MuZeroCollector(ISerialCollector):
 
                         game_segments[env_id] = GameSegment(
                             self._env.action_space,
-                            game_segment_length=self.game_config.game_segment_length,
-                            config=self.game_config
+                            game_segment_length=self.policy_config.game_segment_length,
+                            config=self.policy_config
                         )
-                        observation_window_stack[env_id] = deque([init_obs[env_id]['observation'] for _ in range(self.game_config.model.frame_stack_num)], maxlen=self.game_config.model.frame_stack_num)
+                        observation_window_stack[env_id] = deque([init_obs[env_id]['observation'] for _ in range(self.policy_config.model.frame_stack_num)], maxlen=self.policy_config.model.frame_stack_num)
                         game_segments[env_id].reset(observation_window_stack[env_id])
                         last_game_segments[env_id] = None
                         last_game_priorities[env_id] = None

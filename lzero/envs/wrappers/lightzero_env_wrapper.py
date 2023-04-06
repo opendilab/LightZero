@@ -50,18 +50,16 @@ class LightZeroEnvWrapper(gym.Wrapper):
         # to be compatible with LightZero model shape: [W, H, C]
         obs = obs.reshape(self._raw_observation_space.shape[0], 1, 1)
 
-        if self.cfg.discretization:
-            action_mask = np.ones(self.env.action_space.n, 'int8')
-        else:
+        if self.cfg.continuous:
             action_mask = None
+        else:
+            action_mask = np.ones(self.env.action_space.n, 'int8')
 
-        if self.cfg.discretization:
+        if self.cfg.continuous:
             self._observation_space = gym.spaces.Dict(
                 {
                     'observation': self._raw_observation_space,
-                    'action_mask': gym.spaces.MultiDiscrete([2 for _ in range(self.env.action_space.n)]) if isinstance(
-                        self.env.action_space, gym.spaces.Discrete) else gym.spaces.MultiDiscrete(
-                        [2 for _ in range(self.env.action_space.shape[0])]),  # {0,1}
+                    'action_mask': gym.spaces.Box(low=np.inf, high=np.inf, shape=(1,)),  # TODO: gym.spaces.Constant(None)
                     'to_play': gym.spaces.Box(low=-1, high=-1, shape=(1,)),  # TODO: gym.spaces.Constant(-1)
                 }
             )
@@ -69,7 +67,9 @@ class LightZeroEnvWrapper(gym.Wrapper):
             self._observation_space = gym.spaces.Dict(
                 {
                     'observation': self._raw_observation_space,
-                    'action_mask': gym.spaces.Box(low=np.inf, high=np.inf, shape=(1,)),  # TODO: gym.spaces.Constant(None)
+                    'action_mask': gym.spaces.MultiDiscrete([2 for _ in range(self.env.action_space.n)]) if isinstance(
+                        self.env.action_space, gym.spaces.Discrete) else gym.spaces.MultiDiscrete(
+                        [2 for _ in range(self.env.action_space.shape[0])]),  # {0,1}
                     'to_play': gym.spaces.Box(low=-1, high=-1, shape=(1,)),  # TODO: gym.spaces.Constant(-1)
                 }
             )
@@ -101,10 +101,10 @@ class LightZeroEnvWrapper(gym.Wrapper):
         # to be compatible with LightZero model,shape: [W, H, C]
         obs = obs.reshape(self._raw_observation_space.shape[0], 1, 1)
 
-        if self.cfg.discretization:
-            action_mask = np.ones(self.env.action_space.n, 'int8')
-        else:
+        if self.cfg.continuous:
             action_mask = None
+        else:
+            action_mask = np.ones(self.env.action_space.n, 'int8')
 
         lightzero_obs_dict = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 

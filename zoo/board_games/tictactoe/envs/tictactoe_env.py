@@ -555,11 +555,9 @@ class TicTacToeEnv(BaseEnv):
     def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
         evaluator_env_num = cfg.pop('evaluator_env_num')
         cfg = copy.deepcopy(cfg)
-        # When we collect and train agent in ``self_play_mode``, in eval phase,
-        # we use ``eval_mode`` to make agent paly with the built-in bot to
+        # In eval phase, we use ``eval_mode`` to make agent play with the built-in bot to
         # evaluate the performance of the current agent.
-        if cfg.battle_mode == 'self_play_mode':
-            cfg.battle_mode = 'eval_mode'
+        cfg.battle_mode = 'eval_mode'
         return [cfg for _ in range(evaluator_env_num)]
 
     def __repr__(self) -> str:

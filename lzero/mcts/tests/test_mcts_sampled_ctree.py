@@ -63,7 +63,7 @@ def test_mcts():
     import numpy as np
     from lzero.mcts.tree_search.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTSCtree
 
-    game_config = EasyDict(
+    policy_config = EasyDict(
         dict(
             lstm_horizon_len=5,
             num_of_sampled_actions=6,
@@ -87,12 +87,12 @@ def test_mcts():
         )
     )
 
-    batch_size = env_nums = game_config.batch_size
-    model = MuZeroModelFake(action_num=game_config.model.action_space_size * 2)
+    batch_size = env_nums = policy_config.batch_size
+    model = MuZeroModelFake(action_num=policy_config.model.action_space_size * 2)
     stack_obs = torch.zeros(
         size=(
             batch_size,
-            game_config.model.action_space_size * 2,
+            policy_config.model.action_space_size * 2,
         ), dtype=torch.float
     )
 
@@ -105,7 +105,7 @@ def test_mcts():
     policy_logits_pool = network_output['policy_logits']
 
     # network output process
-    pred_values_pool = inverse_scalar_transform(pred_values_pool, game_config.model.support_scale).detach().cpu().numpy()
+    pred_values_pool = inverse_scalar_transform(pred_values_pool, policy_config.model.support_scale).detach().cpu().numpy()
     hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
     reward_hidden_state_state = (
         reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
@@ -113,15 +113,15 @@ def test_mcts():
     policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
     legal_actions_list = [[-1 for i in range(5)] for _ in range(env_nums)]
-    roots = MCTSCtree.Roots(env_nums, legal_actions_list, game_config.model.action_space_size, game_config.num_of_sampled_actions, continuous_action_space=True)
+    roots = MCTSCtree.Roots(env_nums, legal_actions_list, policy_config.model.action_space_size, policy_config.num_of_sampled_actions, continuous_action_space=True)
 
     noises = [
-        np.random.dirichlet([game_config.root_dirichlet_alpha] * game_config.num_of_sampled_actions
+        np.random.dirichlet([policy_config.root_dirichlet_alpha] * policy_config.num_of_sampled_actions
                             ).astype(np.float32).tolist() for _ in range(env_nums)
     ]
     to_play_batch = [int(np.random.randint(1, 2, 1)) for _ in range(env_nums)]
-    roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
+    roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
 
-    MCTSCtree(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play_batch)
+    MCTSCtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play_batch)
     roots_distributions = roots.get_distributions()
-    assert np.array(roots_distributions).shape == (batch_size, game_config.num_of_sampled_actions)
+    assert np.array(roots_distributions).shape == (batch_size, policy_config.num_of_sampled_actions)

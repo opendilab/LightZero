@@ -37,7 +37,6 @@ gomoku_alphazero_config = dict(
             num_res_blocks=1,
             num_channels=32,
         ),
-        stop_value=2,
         cuda=True,
         board_size=board_size,
         lr_piecewise_constant_decay=False,

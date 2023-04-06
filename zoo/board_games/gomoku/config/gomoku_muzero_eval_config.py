@@ -1,103 +1,4 @@
-import torch
-from easydict import EasyDict
-
-if torch.cuda.is_available():
-    device = 'cuda'
-else:
-    device = 'cpu'
-
-# ==============================================================
-# begin of the most frequently changed config specified by the user
-# ==============================================================
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 50
-update_per_collect = 50
-batch_size = 256
-max_env_step = int(2e6)
-categorical_distribution = True
-reanalyze_ratio = 0.3
-
-board_size = 6  # default_size is 15
-bot_action_type = 'v0'  # options={'v0', 'v1'}
-prob_random_action_in_bot = 0.5
-# ==============================================================
-# end of the most frequently changed config specified by the user
-# ==============================================================
-
-gomoku_muzero_config = dict(
-    exp_name=f'data_mz_ctree/gomoku_b{board_size}_rand{prob_random_action_in_bot}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
-    env=dict(
-        stop_value=int(2),
-        battle_mode='play_with_bot_mode',
-        bot_action_type=bot_action_type,
-        prob_random_action_in_bot=prob_random_action_in_bot,
-        # agent_vs_human=False,
-        agent_vs_human=True,
-        channel_last=True,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
-        n_evaluator_episode=evaluator_env_num,
-        manager=dict(shared_memory=False, ),
-    ),
-    policy=dict(
-        model=dict(
-            observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
-            action_space_size=int(board_size * board_size),
-            image_channel=3,
-            frame_stack_num=1,
-            downsample=False,
-            categorical_distribution=categorical_distribution,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            # We use the half size model for gomoku
-            num_res_blocks=1,
-            num_channels=32,
-            support_scale=10,
-            reward_support_size=21,
-            value_support_size=21,
-        ),
-        device=device,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
-        env_type='board_games',
-        num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
-        use_augmentation=False,
-        game_segment_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
-        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
-        td_steps=int(board_size * board_size),
-        update_per_collect=update_per_collect,
-        batch_size=batch_size,
-        lr_piecewise_constant_decay=False,
-        optim_type='Adam',
-        learning_rate=0.003,  # lr for Adam optimizer
-        n_episode=n_episode,
-        eval_freq=int(2e3),
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
-    ),
-)
-gomoku_muzero_config = EasyDict(gomoku_muzero_config)
-main_config = gomoku_muzero_config
-
-gomoku_muzero_create_config = dict(
-    env=dict(
-        type='gomoku',
-        import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
-    ),
-    # env_manager=dict(type='subprocess'),
-    env_manager=dict(type='base'),  # if agent_vs_human=True
-    policy=dict(
-        type='muzero',
-        import_names=['lzero.policy.muzero'],
-    ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
-)
-gomoku_muzero_create_config = EasyDict(gomoku_muzero_create_config)
-create_config = gomoku_muzero_create_config
+from zoo.board_games.gomoku.config.gomoku_muzero_bot_mode_config import main_config, create_config
 
 if __name__ == '__main__':
     from lzero.entry import eval_muzero
@@ -107,14 +8,19 @@ if __name__ == '__main__':
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
      """
-    # model_path='/Users/user/code/LightZero/zoo/board_games/gomoku/gomoku_b6_rand0.5_muzero_bot-mode_type-v0_ns50_upc50_rr0.3_rbs1e5_seed0/ckpt/ckpt_best.pth.tar'
-    model_path='/Users/user/code/LightZero/zoo/board_games/gomoku/gomoku_b6_rand0.0_muzero_bot-mode_type-v0_ns50_upc50_rr0.3_seed0/ckpt/ckpt_best.pth.tar'
+    model_path='./LightZero/zoo/board_games/gomoku/gomoku_b6_rand0.0_muzero_bot-mode_type-v0_ns50_upc50_rr0.3_seed0/ckpt/ckpt_best.pth.tar'
 
-    returns_mean_seeds = []
-    returns_seeds = []
     seeds = [0]
     num_episodes_each_seed = 5
+    main_config.env.agent_vs_human = False
+    # main_config.env.agent_vs_human = True
+
+    create_config.env_manager.type = 'base'
+    main_config.env.evaluator_env_num = 1
+    main_config.env.n_evaluator_episode = 1
     total_test_episodes = num_episodes_each_seed * len(seeds)
+    returns_mean_seeds = []
+    returns_seeds = []
     for seed in seeds:
         returns_mean, returns = eval_muzero([main_config, create_config], seed=seed,
                                                             num_episodes_each_seed=num_episodes_each_seed,

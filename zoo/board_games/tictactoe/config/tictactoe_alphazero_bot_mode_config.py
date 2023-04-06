@@ -3,44 +3,46 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-board_size = 6  # default_size is 15
-collector_env_num = 32
-n_episode = 32
+collector_env_num = 8
+n_episode = 8
 evaluator_env_num = 5
-num_simulations = 100
+num_simulations = 25
 update_per_collect = 50
 batch_size = 256
-max_env_step = int(1e6)
-prob_random_action_in_bot = 0.5
+max_env_step = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-gomoku_alphazero_config = dict(
-    exp_name=f'data_az_ptree/gomoku_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
+tictactoe_alphazero_config = dict(
+    exp_name=f'data_az_ptree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
-        board_size=board_size,
-        battle_mode='self_play_mode',
-        bot_action_type='v0',
-        prob_random_action_in_bot=prob_random_action_in_bot,
-        channel_last=False,  # NOTE
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
+        board_size=3,
+        battle_mode='play_with_bot_mode',
+        channel_last=False,  # NOTE
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
         model=dict(
-            # We use the half size model for gomoku
-            observation_shape=(3, board_size, board_size),
-            action_space_size=int(1 * board_size * board_size),
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            # We use the small size model for tictactoe
+            observation_shape=(3, 3, 3),
+            action_space_size=int(1 * 3 * 3),
+            downsample=False,
             num_res_blocks=1,
-            num_channels=32,
+            num_channels=16,
+            value_head_channels=16,
+            policy_head_channels=16,
+            fc_value_layers=[8],
+            fc_policy_layers=[8],
+            last_linear_layer_init_zero=True,
+            categorical_distribution=False,
+            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
         ),
-        stop_value=2,
         cuda=True,
-        board_size=board_size,
-        lr_piecewise_constant_decay=False,
+        board_size=3,
+        collector_env_num=collector_env_num,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
@@ -52,18 +54,16 @@ gomoku_alphazero_config = dict(
         n_episode=n_episode,
         eval_freq=int(2e3),
         mcts=dict(num_simulations=num_simulations),
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
     ),
 )
 
-gomoku_alphazero_config = EasyDict(gomoku_alphazero_config)
-main_config = gomoku_alphazero_config
+tictactoe_alphazero_config = EasyDict(tictactoe_alphazero_config)
+main_config = tictactoe_alphazero_config
 
-gomoku_alphazero_create_config = dict(
+tictactoe_alphazero_create_config = dict(
     env=dict(
-        type='gomoku',
-        import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
+        type='tictactoe',
+        import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
@@ -80,8 +80,8 @@ gomoku_alphazero_create_config = dict(
         import_names=['lzero.worker.alphazero_evaluator'],
     )
 )
-gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
-create_config = gomoku_alphazero_create_config
+tictactoe_alphazero_create_config = EasyDict(tictactoe_alphazero_create_config)
+create_config = tictactoe_alphazero_create_config
 
 if __name__ == '__main__':
     from lzero.entry import train_alphazero

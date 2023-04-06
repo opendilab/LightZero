@@ -40,7 +40,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
             batch_size=256,
         ),
         # ==============================================================
-        # begin of additional game_config
+        # begin of additional policy_config
         # ==============================================================
         ## common
         mcts_ctree=True,
@@ -79,7 +79,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
         discount_factor=0.997,
         value_delta_max=0.01,
         # ==============================================================
-        # end of additional game_config
+        # end of additional policy_config
         # ==============================================================
     )
 
@@ -242,7 +242,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
             # stack+num_unroll_steps  4+5
             # pad if length of obs in game_segment is less than stack+num_unroll_steps
             obs_list.append(
-                game_lst[i].get_obs(pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps,
+                game_lst[i].get_unroll_obs(pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps,
                                     padding=True))
             action_list.append(actions_tmp)
             root_sampled_actions_list.append(root_sampled_actions_tmp)
@@ -630,7 +630,9 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     # sampled related core code
                     # ==============================================================
                     if policy_mask[policy_index] == 0:
-                        # the null padding target policy
+                        # TODO: the invalid padding target policy, O is to make sure the correspoding cross_entropy_loss=0, but
+                        # sometimes, the uniform distribution seems to performs better in practice
+                        # target_policies.append([1/self._cfg.model.num_of_sampled_actions for _ in range(self._cfg.model.num_of_sampled_actions)])
                         target_policies.append([0 for _ in range(self._cfg.model.num_of_sampled_actions)])
                     else:
                         if distributions is None:

@@ -40,10 +40,7 @@ class PendulumEnv(BaseEnv):
             self._env = gym.make('Pendulum-v0')
         self._init_flag = False
         self._replay_path = None
-        if 'continuous' in cfg.keys():
-            self._continuous = cfg.continuous
-        else:
-            self._continuous = True
+        self._continuous = cfg.get("continuous", True)
         self._observation_space = gym.spaces.Box(
             low=np.array([-1.0, -1.0, -8.0]), high=np.array([1.0, 1.0, 8.0]), shape=(3, ), dtype=np.float32
         )
@@ -80,6 +77,7 @@ class PendulumEnv(BaseEnv):
             self._action_space.seed(self._seed)
         obs = self._env.reset()
         obs = to_ndarray(obs).astype(np.float32)
+
         self._eval_episode_return = 0.
         # to be compatible with LightZero model,shape: [W, H, C]
         obs = obs.reshape(obs.shape[0], 1, 1)
@@ -88,6 +86,7 @@ class PendulumEnv(BaseEnv):
         else:
             action_mask = None
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+
         return obs
 
     def close(self) -> None:
@@ -114,6 +113,7 @@ class PendulumEnv(BaseEnv):
         obs = to_ndarray(obs).astype(np.float32)
         # wrapped to be transferred to a array with shape (1,)
         rew = to_ndarray([rew]).astype(np.float32)
+
         if done:
             info['eval_episode_return'] = self._eval_episode_return
         # to be compatible with LightZero model,shape: [W, H, C]
@@ -123,6 +123,7 @@ class PendulumEnv(BaseEnv):
         else:
             action_mask = None
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+
         return BaseEnvTimestep(obs, rew, done, info)
 
     def enable_save_replay(self, replay_path: Optional[str] = None) -> None:

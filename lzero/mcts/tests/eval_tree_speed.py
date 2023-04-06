@@ -60,12 +60,12 @@ class MuZeroModelFake(torch.nn.Module):
         return EasyDict(output)
 
 
-def ptree_func(game_config, num_simulations):
+def ptree_func(policy_config, num_simulations):
     """
         Overview:
             Search on the tree of the Python implementation and record the time spent at different stages.
         Arguments:
-            - game_config: config of game.
+            - policy_config: config of game.
             - num_simulations: Number of simulations.
         Returns:
             - build_time: Type builds take time.
@@ -73,8 +73,8 @@ def ptree_func(game_config, num_simulations):
             - search_time.
             - total_time.
         """
-    batch_size = env_nums = game_config.batch_size
-    action_space_size = game_config.action_space_size
+    batch_size = env_nums = policy_config.batch_size
+    action_space_size = policy_config.action_space_size
 
     build_time = []
     prepare_time = []
@@ -91,7 +91,7 @@ def ptree_func(game_config, num_simulations):
             ), dtype=torch.float
         )
 
-        game_config.num_simulations = n_s
+        policy_config.num_simulations = n_s
         network_output = model.initial_inference(stack_obs.float())
 
         hidden_state_roots = network_output['hidden_state']
@@ -101,7 +101,7 @@ def ptree_func(game_config, num_simulations):
         policy_logits_pool = network_output['policy_logits']
 
         # network output process
-        pred_values_pool = inverse_scalar_transform(pred_values_pool, game_config.model.support_scale).detach().cpu().numpy()
+        pred_values_pool = inverse_scalar_transform(pred_values_pool, policy_config.model.support_scale).detach().cpu().numpy()
         hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
         reward_hidden_state_state = (
             reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
@@ -123,14 +123,14 @@ def ptree_func(game_config, num_simulations):
         roots = MCTSPtree.Roots(env_nums, legal_actions_list)
         build_time.append(time.time() - t1)
         noises = [
-            np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
+            np.random.dirichlet([policy_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                 ).astype(np.float32).tolist() for j in range(env_nums)
         ]
         t1 = time.time()
-        roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+        roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
         prepare_time.append(time.time() - t1)
         t1 = time.time()
-        MCTSPtree(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
+        MCTSPtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
         search_time.append(time.time() - t1)
         total_time.append(time.time() - t0)
         roots_distributions = roots.get_distributions()
@@ -153,12 +153,12 @@ def ptree_func(game_config, num_simulations):
     return build_time, prepare_time, search_time, total_time
 
 
-def ctree_func(game_config, num_simulations):
+def ctree_func(policy_config, num_simulations):
     """
         Overview:
             Search on the tree of the C++ implementation and record the time spent at different stages.
         Arguments:
-            - game_config: config of game.
+            - policy_config: config of game.
             - num_simulations: Number of simulations.
         Returns:
             - build_time: Type builds take time.
@@ -166,8 +166,8 @@ def ctree_func(game_config, num_simulations):
             - search_time.
             - total_time.
         """
-    batch_size = env_nums = game_config.batch_size
-    action_space_size = game_config.action_space_size
+    batch_size = env_nums = policy_config.batch_size
+    action_space_size = policy_config.action_space_size
 
     build_time = []
     prepare_time = []
@@ -183,7 +183,7 @@ def ctree_func(game_config, num_simulations):
                 n_s,
             ), dtype=torch.float
         )
-        game_config.num_simulations = n_s
+        policy_config.num_simulations = n_s
 
         network_output = model.initial_inference(stack_obs.float())
 
@@ -194,7 +194,7 @@ def ctree_func(game_config, num_simulations):
         policy_logits_pool = network_output['policy_logits']
 
         # network output process
-        pred_values_pool = inverse_scalar_transform(pred_values_pool, game_config.model.support_scale).detach().cpu().numpy()
+        pred_values_pool = inverse_scalar_transform(pred_values_pool, policy_config.model.support_scale).detach().cpu().numpy()
         hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
         reward_hidden_state_state = (
             reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
@@ -217,14 +217,14 @@ def ctree_func(game_config, num_simulations):
         roots = MCTSCtree.Roots(env_nums, legal_actions_list)
         build_time.append(time.time() - t1)
         noises = [
-            np.random.dirichlet([game_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
+            np.random.dirichlet([policy_config.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                 ).astype(np.float32).tolist() for j in range(env_nums)
         ]
         t1 = time.time()
-        roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+        roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
         prepare_time.append(time.time() - t1)
         t1 = time.time()
-        MCTSCtree(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
+        MCTSCtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
         search_time.append(time.time() - t1)
         total_time.append(time.time() - t0)
         roots_distributions = roots.get_distributions()
@@ -291,7 +291,7 @@ if __name__ == "__main__":
     # cProfile.run("ctree_func()", filename="ctree_result.out", sort="cumulative")
     # cProfile.run("ptree_func()", filename="ptree_result.out", sort="cumulative")
 
-    game_config = EasyDict(
+    policy_config = EasyDict(
         dict(
             lstm_horizon_len=5,
             model=dict(
@@ -323,8 +323,8 @@ if __name__ == "__main__":
 
     for action_space_size in ACTION_SPCAE_SIZE:
         for batch_size in BATCH_SIZE:
-            game_config.batch_size = batch_size
-            game_config.action_space_size = action_space_size
+            policy_config.batch_size = batch_size
+            policy_config.action_space_size = action_space_size
             ctree_build_time = []
             ctree_prepare_time = []
             ctree_search_time = []
@@ -336,7 +336,7 @@ if __name__ == "__main__":
             num_simulations = NUM_SIMULATIONS
             for i in range(3):
                 build_time, prepare_time, search_time, total_time = ctree_func(
-                    game_config, num_simulations=num_simulations
+                    policy_config, num_simulations=num_simulations
                 )
                 ctree_build_time.append(build_time)
                 ctree_prepare_time.append(prepare_time)
@@ -345,7 +345,7 @@ if __name__ == "__main__":
 
             for i in range(3):
                 build_time, prepare_time, search_time, total_time = ptree_func(
-                    game_config, num_simulations=num_simulations
+                    policy_config, num_simulations=num_simulations
                 )
                 ptree_build_time.append(build_time)
                 ptree_prepare_time.append(prepare_time)

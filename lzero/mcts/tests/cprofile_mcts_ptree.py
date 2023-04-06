@@ -59,7 +59,7 @@ def check_mcts():
     import numpy as np
     from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree as MCTSPtree
 
-    game_config = EasyDict(
+    policy_config = EasyDict(
         dict(
             lstm_horizon_len=5,
             num_simulations=8,
@@ -81,12 +81,12 @@ def check_mcts():
         )
     )
 
-    env_nums = game_config.batch_size
+    env_nums = policy_config.batch_size
 
     model = MuZeroModelFake(action_num=100)
     stack_obs = torch.zeros(
         size=(
-            game_config.batch_size,
+            policy_config.batch_size,
             100,
         ), dtype=torch.float
     )
@@ -100,23 +100,23 @@ def check_mcts():
     policy_logits_pool = network_output['policy_logits']
 
     # network output process
-    pred_values_pool = inverse_scalar_transform(pred_values_pool, game_config.model.support_scale).detach().cpu().numpy()
+    pred_values_pool = inverse_scalar_transform(pred_values_pool, policy_config.model.support_scale).detach().cpu().numpy()
     hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
     reward_hidden_state_state = (
         reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
     )
     policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
-    legal_actions_list = [[i for i in range(game_config.model.action_space_size)] for _ in range(env_nums)]  # all action
+    legal_actions_list = [[i for i in range(policy_config.model.action_space_size)] for _ in range(env_nums)]  # all action
     roots = MCTSPtree.Roots(env_nums, legal_actions_list)
     noises = [
-        np.random.dirichlet([game_config.root_dirichlet_alpha] * game_config.model.action_space_size
+        np.random.dirichlet([policy_config.root_dirichlet_alpha] * policy_config.model.action_space_size
                             ).astype(np.float32).tolist() for _ in range(env_nums)
     ]
-    roots.prepare(game_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
-    MCTSPtree(game_config).search(roots, model, hidden_state_roots, reward_hidden_state_state)
+    roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
+    MCTSPtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state)
     roots_distributions = roots.get_distributions()
-    assert np.array(roots_distributions).shape == (game_config.batch_size, game_config.model.action_space_size)
+    assert np.array(roots_distributions).shape == (policy_config.batch_size, policy_config.model.action_space_size)
 
 
 if __name__ == '__main__':

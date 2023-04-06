@@ -79,7 +79,7 @@ class MuZeroPolicy(Policy):
         # Get "n_episode" episodes per collect.
         n_episode=8,
         # ==============================================================
-        # begin of additional game_config
+        # begin of additional policy_config
         # ==============================================================
         ## common
         mcts_ctree=True,
@@ -146,7 +146,7 @@ class MuZeroPolicy(Policy):
         root_dirichlet_alpha=0.3,
         root_exploration_fraction=0.25,
         # ==============================================================
-        # end of additional game_config
+        # end of additional policy_config
         # ==============================================================
     )
 
@@ -227,7 +227,7 @@ class MuZeroPolicy(Policy):
         """
 
         obs_batch_ori = torch.from_numpy(obs_batch_ori).to(self._cfg.device).float()
-        # ``obs_batch`` is used in ``initial_inference()``, which is the first stacked obs at timestep t in
+        # ``obs_batch`` is used in ``initial_inference()``, which is the first stacked obs at timestep t1 in
         # ``obs_batch_ori``. shape is (4, 4*3, 96, 96) = (4, 12, 96, 96)
         obs_batch = obs_batch_ori[:, 0:self._cfg.model.frame_stack_num * self._cfg.model.image_channel, :, :]
 

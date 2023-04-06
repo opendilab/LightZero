@@ -10,10 +10,10 @@ __TITLE__ = "LightZero"
 __VERSION__ = "0.0.1"
 
 #: Short description of the project, will be included in ``setup.py``.
-__DESCRIPTION__ = 'A description for LightZero.'
+__DESCRIPTION__ = 'A lightweight and efficient MCTS/AlphaZero/MuZero algorithm toolkits.'
 
 #: Author of this project.
-__AUTHOR__ = "DI-engine's Contributors"
+__AUTHOR__ = "LightZero's Contributors"
 
 #: Email of the authors'.
 __AUTHOR_EMAIL__ = "opendilab@opendilab.net"

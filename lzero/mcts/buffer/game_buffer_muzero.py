@@ -42,7 +42,7 @@ class MuZeroGameBuffer(GameBuffer):
             batch_size=256,
         ),
         # ==============================================================
-        # begin of additional game_config
+        # begin of additional policy_config
         # ==============================================================
         ## common
         mcts_ctree=True,
@@ -81,7 +81,7 @@ class MuZeroGameBuffer(GameBuffer):
         discount_factor=0.997,
         value_delta_max=0.01,
         # ==============================================================
-        # end of additional game_config
+        # end of additional policy_config
         # ==============================================================
     )
 
@@ -192,7 +192,7 @@ class MuZeroGameBuffer(GameBuffer):
             # pad if length of obs in game_segment is less than stack+num_unroll_steps
             # e.g. stack+num_unroll_steps  4+5
             obs_list.append(
-                game_segment_list[i].get_obs(
+                game_segment_list[i].get_unroll_obs(
                     pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
                 )
             )
@@ -278,7 +278,7 @@ class MuZeroGameBuffer(GameBuffer):
             # prepare the corresponding observations for bootstrapped values o_{t+k}
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
             # t=2+3 -> o[2+3, 2+3+4+5] -> o[5, 14]
-            game_obs = game_segment.get_obs(state_index + td_steps, self._cfg.num_unroll_steps)
+            game_obs = game_segment.get_unroll_obs(state_index + td_steps, self._cfg.num_unroll_steps)
 
             rewards_list.append(game_segment.reward_segment)
 
@@ -373,7 +373,7 @@ class MuZeroGameBuffer(GameBuffer):
 
                 child_visits.append(game_segment.child_visit_segment)
                 # prepare the corresponding observations
-                game_obs = game_segment.get_obs(state_index, self._cfg.num_unroll_steps)
+                game_obs = game_segment.get_unroll_obs(state_index, self._cfg.num_unroll_steps)
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
 
                     if current_index < game_segment_len:
@@ -392,7 +392,7 @@ class MuZeroGameBuffer(GameBuffer):
         ]
         return policy_re_context
 
-    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any) -> List[np.ndarray]:
+    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any) -> Tuple[Any, Any]:
         """
         Overview:
             prepare reward and value targets from the context of rewards and values.
@@ -651,7 +651,10 @@ class MuZeroGameBuffer(GameBuffer):
                     distributions = roots_distributions[policy_index]
 
                     if policy_mask[policy_index] == 0:
+                        # TODO: the invalid padding target policy, O is to make sure the correspoding cross_entropy_loss=0, but
+                        # sometimes, the uniform distribution seems to performs better in practice
                         target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
+                        # target_policies.append([1/self._cfg.model.action_space_size for _ in range(self._cfg.model.action_space_size)])
                     else:
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
@@ -746,7 +749,7 @@ class MuZeroGameBuffer(GameBuffer):
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     if current_index < game_segment_len:
                         policy_mask.append(1)
-                        # child_visit is already a distribution
+                        # NOTE: child_visit is already a distribution
                         distributions = child_visit[current_index]
                         if self._cfg.mcts_ctree:
                             # cpp mcts_tree
@@ -774,8 +777,10 @@ class MuZeroGameBuffer(GameBuffer):
                                 target_policies.append(policy_tmp)
 
                     else:
-                        # the invalid target policy
+                        # TODO: the invalid padding target policy, O is to make sure the correspoding cross_entropy_loss=0, but
+                        # sometimes, the uniform distribution seems to performs better in practice
                         policy_mask.append(0)
+                        # target_policies.append([1/policy_shape for _ in range(policy_shape)])
                         target_policies.append([0 for _ in range(policy_shape)])
 
                     policy_index += 1
