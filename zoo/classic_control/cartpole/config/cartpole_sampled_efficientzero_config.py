@@ -13,24 +13,22 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 continuous_action_space = False
-each_dim_disc_size = 4  # thus the total discrete action number is 4**4=256
-num_simulations = 100
-update_per_collect = 200
+K = 2  # num_of_sampled_actions
+num_simulations = 25
+update_per_collect = 100
 batch_size = 256
-max_env_step = int(10e6)
+max_env_step = int(1e6)
 reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-bipedalwalker_cont_disc_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/bipedalwalker_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+cartpole_sampled_efficientzero_config = dict(
+    exp_name=f'data_ez_ctree/cartpole_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
-        stop_value=int(1e6),
-        env_name='BipedalWalker-v3',
-        manually_discretization=True,
+        env_name='CartPole-v0',
         continuous=False,
-        each_dim_disc_size=each_dim_disc_size,
+        manually_discretization=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -38,61 +36,61 @@ bipedalwalker_cont_disc_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=24,  # if frame_stack_num=1
-            action_space_size=int(each_dim_disc_size ** 4),
-            continuous_action_space=continuous_action_space,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            observation_shape=4,
+            action_space_size=2,
+            representation_network_type='identity',  # options={'conv_res_blocks', 'identity'}
             frame_stack_num=1,
-            sigma_type='conditioned',  # options={'conditioned', 'fixed'}
-            # We use the medium size model for bipedalwalker_cont.
+            continuous_action_space=continuous_action_space,
+            num_of_sampled_actions=K,
+            # We use the small size model for cartpole.
             num_res_blocks=1,
-            num_channels=32,
-            lstm_hidden_size=256,
+            num_channels=16,
+            lstm_hidden_size=128,
         ),
         device=device,
         env_type='not_board_games',
-        game_segment_length=200,
+        game_segment_length=50,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in thee original Sampled MuZero paper.
-        policy_entropy_loss_weight=5e-3,
+        use_augmentation=False,
+        ssl_loss_weight=2,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         lr_piecewise_constant_decay=True,
         optim_type='SGD',
         learning_rate=0.2,  # init lr for manually decay schedule
-        policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
         n_episode=n_episode,
         eval_freq=int(2e3),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
 )
-bipedalwalker_cont_disc_efficientzero_config = EasyDict(bipedalwalker_cont_disc_efficientzero_config)
-main_config = bipedalwalker_cont_disc_efficientzero_config
 
-bipedalwalker_cont_disc_efficientzero_create_config = dict(
+cartpole_sampled_efficientzero_config = EasyDict(cartpole_sampled_efficientzero_config)
+main_config = cartpole_sampled_efficientzero_config
+
+cartpole_sampled_efficientzero_create_config = dict(
     env=dict(
-        type='bipedalwalker_cont_disc',
-        import_names=['zoo.box2d.bipedalwalker.envs.bipedalwalker_cont_disc_env'],
+        type='cartpole_lightzero',
+        import_names=['zoo.classic_control.cartpole.envs.cartpole_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='efficientzero',
-        import_names=['lzero.policy.efficientzero'],
+        type='sampled_efficientzero',
+        import_names=['lzero.policy.sampled_efficientzero'],
     ),
     collector=dict(
         type='episode_muzero',
         import_names=['lzero.worker.muzero_collector'],
     )
 )
-bipedalwalker_cont_disc_efficientzero_create_config = EasyDict(bipedalwalker_cont_disc_efficientzero_create_config)
-create_config = bipedalwalker_cont_disc_efficientzero_create_config
+cartpole_sampled_efficientzero_create_config = EasyDict(cartpole_sampled_efficientzero_create_config)
+create_config = cartpole_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     # Users can use different train entry by specifying the entry_type.
-    entry_type = "train_muzero_with_gym_env"  # options={"train_muzero", "train_muzero_with_gym_env"}
+    entry_type = "train_muzero"  # options={"train_muzero", "train_muzero_with_gym_env"}
 
     if entry_type == "train_muzero":
         from lzero.entry import train_muzero
@@ -104,4 +102,3 @@ if __name__ == "__main__":
         from lzero.entry import train_muzero_with_gym_env as train_muzero
 
     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
-

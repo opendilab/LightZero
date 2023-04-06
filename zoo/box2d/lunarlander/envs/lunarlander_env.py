@@ -76,13 +76,9 @@ class LunarLanderEnv(BaseEnv):
         if self._save_replay_gif:
             self._frames = []
         if 'Continuous' not in self._env_name:
-            # to be compatible with LightZero model,shape: [W, H, C]
-            obs = obs.reshape(8, 1, 1)
             action_mask = np.ones(4, 'int8')
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         else:
-            # to be compatible with LightZero model,shape: [W, H, C]
-            obs = obs.reshape(8, 1, 1)
             action_mask = None
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         return obs
@@ -110,13 +106,9 @@ class LunarLanderEnv(BaseEnv):
 
         obs, rew, done, info = self._env.step(action)
         if 'Continuous' not in self._env_name:
-            # to be compatible with LightZero model,shape: [W, H, C]
-            obs = obs.reshape(8, 1, 1)
             action_mask = np.ones(4, 'int8')
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         else:
-            # to be compatible with LightZero model,shape: [W, H, C]
-            obs = obs.reshape(8, 1, 1)
             action_mask = None
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         self._eval_episode_return += rew

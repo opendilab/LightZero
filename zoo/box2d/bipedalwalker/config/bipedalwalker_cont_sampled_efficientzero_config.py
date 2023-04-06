@@ -19,17 +19,6 @@ update_per_collect = 200
 batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
-
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# continuous_action_space = True
-# K = 10  # num_of_sampled_actions
-# num_simulations = 20
-# update_per_collect = 10
-# batch_size = 4
-# max_env_step = int(5e6)
-# reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -48,40 +37,35 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(1, 24, 1),  # if frame_stack_num=1
+            observation_shape=24,  # if frame_stack_num=1
             action_space_size=4,
-            image_channel=1,
             frame_stack_num=1,
-            downsample=False,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}
-            # We use the medium size model for bipedalwalker_cont.
+            # We use the medium size model for bipedalwalker.
             num_res_blocks=1,
             num_channels=32,
             lstm_hidden_size=256,
-            self_supervised_learning_loss=False,
+            self_supervised_learning_loss=True,
         ),
         device=device,
         env_type='not_board_games',
         game_segment_length=200,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        downsample=False,
-        use_augmentation=False,
-        ssl_loss_weight=0,
+        ssl_loss_weight=2,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in thee original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        lr_piecewise_constant_decay=True,
         optim_type='SGD',
+        lr_piecewise_constant_decay=True,
         learning_rate=0.2,  # init lr for manually decay schedule
         policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
-        threshold_training_steps_for_final_lr=int(2e4),
-        grad_clip_value=0.4,
+        grad_clip_value=0.5,  # NOTE: this parameter is important for stability.
         n_episode=n_episode,
         eval_freq=int(2e3),
         collector_env_num=collector_env_num,

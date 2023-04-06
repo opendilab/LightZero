@@ -52,8 +52,6 @@ class CartPoleEnv(BaseEnv):
         obs = self._env.reset()
         obs = to_ndarray(obs)
 
-        # to be compatible with LightZero model,shape: [W, H, C]
-        obs = obs.reshape(obs.shape[0], 1, 1)
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
@@ -79,8 +77,6 @@ class CartPoleEnv(BaseEnv):
         if done:
             info['eval_episode_return'] = self._eval_episode_return
 
-        # to be compatible with LightZero model,shape: [W, H, C]
-        obs = obs.reshape(obs.shape[0], 1, 1)
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 

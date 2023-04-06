@@ -24,7 +24,7 @@ class MuZeroModel(nn.Module):
         batch_norm_momentum: float = 0.1,
         last_linear_layer_init_zero: bool = True,
         state_norm: bool = False,
-        downsample: bool = True,
+        downsample: bool = False,
         num_res_blocks: int = 1,
         num_channels: int = 64,
         # the following model para. is usually fixed
@@ -98,6 +98,12 @@ class MuZeroModel(nn.Module):
         self.downsample = downsample
 
         self.action_space_size = action_space_size
+
+        if isinstance(observation_shape, int) or len(observation_shape) == 1:
+            # vector obs input, e.g. classical control ad box2d environments
+            # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
+            observation_shape = [1, observation_shape, 1]
+
         flatten_output_size_for_reward_head = (
             (reward_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else
@@ -225,35 +231,39 @@ class MuZeroModel(nn.Module):
         policy_logits, value = self.prediction(hidden_state)
         return MZNetworkOutput(value, reward, policy_logits, hidden_state)
 
-    def prediction(self, encoded_state: torch.Tensor) -> Tuple[torch.Tensor]:
-        policy, value = self.prediction_network(encoded_state)
+    def prediction(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor]:
+        policy, value = self.prediction_network(latent_state)
         return policy, value
 
     def representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
-        encoded_state = self.representation_network(observation)
+        if len(observation.shape) == 1:
+            # vector obs input, e.g. classical control ad box2d environments
+            # to be compatible with LightZero model/policy, shape: [C, W, H]
+            observation = observation.reshape(1, observation.shape[0], 1)
+        latent_state = self.representation_network(observation)
         if not self.state_norm:
-            return encoded_state
+            return latent_state
         else:
-            encoded_state_normalized = renormalize(encoded_state)
-            return encoded_state_normalized
+            latent_state_normalized = renormalize(latent_state)
+            return latent_state_normalized
 
-    def dynamics(self, encoded_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
+    def dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
         """
          Overview:
-             Dynamics function. Predict ``next_encoded_state``, ``reward``
-             given current ``encoded_state`` and ``action``.
+             Dynamics function. Predict ``next_latent_state``, ``reward``
+             given current ``latent_state`` and ``action``.
          Arguments:
-             - encoded_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+             - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
              - action (:obj:`torch.Tensor`): (batch_size, action_dim).
          """
 
-        # Stack encoded_state with a game specific one hot encoded action
+        # Stack latent_state with a game specific one hot encoded action
         action_one_hot = (
             torch.ones((
-                encoded_state.shape[0],
+                latent_state.shape[0],
                 1,
-                encoded_state.shape[2],
-                encoded_state.shape[3],
+                latent_state.shape[2],
+                latent_state.shape[3],
             )).to(action.device).float()
         )
         if len(action.shape) == 1:
@@ -265,13 +275,13 @@ class MuZeroModel(nn.Module):
         # action[:, :, None, None] shape:  (batch_size, 1, 1, 1)
         action_one_hot = (action[:, :, None, None] * action_one_hot / self.action_space_size)
 
-        x = torch.cat((encoded_state, action_one_hot), dim=1)
-        next_encoded_state, reward = self.dynamics_network(x)
+        x = torch.cat((latent_state, action_one_hot), dim=1)
+        next_latent_state, reward = self.dynamics_network(x)
         if not self.state_norm:
-            return next_encoded_state, reward
+            return next_latent_state, reward
         else:
-            next_encoded_state_normalized = renormalize(next_encoded_state)
-            return next_encoded_state_normalized, reward
+            next_latent_state_normalized = renormalize(next_latent_state)
+            return next_latent_state_normalized, reward
 
     def project(self, hidden_state: torch.Tensor, with_grad=True):
         """

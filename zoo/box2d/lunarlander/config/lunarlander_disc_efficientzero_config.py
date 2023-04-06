@@ -34,12 +34,10 @@ lunarlander_disc_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            image_channel=1,
-            frame_stack_num=1,
-            downsample=False,
-            observation_shape=(1, 8, 1),  # if frame_stack_num=1
+            observation_shape=8,  # if frame_stack_num=1
             action_space_size=4,
-            representation_network_type='conv_res_blocks',
+            representation_network_type='identity',  # options={'conv_res_blocks', 'identity'}
+            frame_stack_num=1,
             # We use the medium size model for lunarlander.
             num_res_blocks=1,
             num_channels=32,
@@ -50,8 +48,6 @@ lunarlander_disc_efficientzero_config = dict(
         game_segment_length=400,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        downsample=False,
-        use_augmentation=False,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         update_per_collect=update_per_collect,
         batch_size=batch_size,

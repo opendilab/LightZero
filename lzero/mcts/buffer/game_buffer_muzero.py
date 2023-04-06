@@ -538,16 +538,16 @@ class MuZeroGameBuffer(GameBuffer):
                         target_rewards.append(reward_list[current_index])
                     else:
                         target_values.append(0)
-                        target_rewards.append(reward)
-                        # TODO
-                        # target_rewards.append(0.0)
+                        target_rewards.append(0.0)
+                        # TODO: check
+                        # target_rewards.append(reward)
                     value_index += 1
 
                 batch_rewards.append(target_rewards)
                 batch_target_values.append(target_values)
 
-        batch_rewards = np.asarray(batch_rewards)
-        batch_target_values = np.asarray(batch_target_values)
+        batch_rewards = np.asarray(batch_rewards, dtype=object)
+        batch_target_values = np.asarray(batch_target_values, dtype=object)
         return batch_rewards, batch_target_values
 
     def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any) -> np.ndarray:

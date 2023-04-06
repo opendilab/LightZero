@@ -16,7 +16,7 @@ num_simulations = 50
 update_per_collect = 200
 batch_size = 256
 max_env_step = int(1e6)
-reanalyze_ratio = 0.
+reanalyze_ratio = 0.3
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -35,13 +35,10 @@ lunarlander_muzero_config = dict(
     policy=dict(
         device=device,
         model=dict(
-            image_channel=1,
-            frame_stack_num=1,
-            downsample=False,
-            observation_shape=(1, 8, 1),  # if frame_stack_num=1
+            observation_shape=8,  # if frame_stack_num=1
             action_space_size=4,
-            # representation_network_type='conv_res_blocks',
-            representation_network_type='identity',
+            representation_network_type='identity',  # options={'conv_res_blocks', 'identity'}
+            frame_stack_num=1,
             # We use the medium size model for lunarlander.
             num_res_blocks=1,
             num_channels=32,
@@ -51,7 +48,6 @@ lunarlander_muzero_config = dict(
         game_segment_length=200,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        use_augmentation=False,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         update_per_collect=update_per_collect,
         batch_size=batch_size,
@@ -88,7 +84,7 @@ create_config = lunarlander_muzero_create_config
 
 if __name__ == "__main__":
     # Users can use different train entry by specifying the entry_type.
-    entry_type = "train_muzero_with_gym_env"  # options={"train_muzero", "train_muzero_with_gym_env"}
+    entry_type = "train_muzero"  # options={"train_muzero", "train_muzero_with_gym_env"}
 
     if entry_type == "train_muzero":
         from lzero.entry import train_muzero

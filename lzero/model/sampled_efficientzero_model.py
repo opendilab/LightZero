@@ -25,7 +25,7 @@ class SampledEfficientZeroModel(nn.Module):
         batch_norm_momentum: float = 0.1,
         last_linear_layer_init_zero: bool = True,
         state_norm: bool = False,
-        downsample: bool = True,
+        downsample: bool = False,
         num_res_blocks: int = 1,
         num_channels: int = 64,
         lstm_hidden_size: int = 512,
@@ -128,6 +128,11 @@ class SampledEfficientZeroModel(nn.Module):
         self.representation_network = representation_network
         self.downsample = downsample
         self.lstm_hidden_size = lstm_hidden_size
+
+        if isinstance(observation_shape, int) or len(observation_shape) == 1:
+            # vector obs input, e.g. classical control ad box2d environments
+            # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
+            observation_shape = [1, observation_shape, 1]
 
         flatten_output_size_for_reward_head = (
             (reward_head_channels * math.ceil(observation_shape[1] / 16) *
@@ -292,6 +297,10 @@ class SampledEfficientZeroModel(nn.Module):
         return policy, value
 
     def representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
+        if len(observation.shape) == 1:
+            # vector obs input, e.g. classical control ad box2d environments
+            # to be compatible with LightZero model/policy, shape: [C, W, H]
+            observation = observation.reshape(1, observation.shape[0], 1)
         encoded_state = self.representation_network(observation)
         if not self.state_norm:
             return encoded_state

@@ -77,10 +77,8 @@ class PendulumEnv(BaseEnv):
             self._action_space.seed(self._seed)
         obs = self._env.reset()
         obs = to_ndarray(obs).astype(np.float32)
-
         self._eval_episode_return = 0.
-        # to be compatible with LightZero model,shape: [W, H, C]
-        obs = obs.reshape(obs.shape[0], 1, 1)
+
         if not self._continuous:
             action_mask = np.ones(self.discrete_action_num, 'int8')
         else:
@@ -116,8 +114,7 @@ class PendulumEnv(BaseEnv):
 
         if done:
             info['eval_episode_return'] = self._eval_episode_return
-        # to be compatible with LightZero model,shape: [W, H, C]
-        obs = obs.reshape(obs.shape[0], 1, 1)
+
         if not self._continuous:
             action_mask = np.ones(self.discrete_action_num, 'int8')
         else:

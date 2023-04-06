@@ -37,14 +37,12 @@ pendulum_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(1, 3, 1),  # if frame_stack_num=1
+            observation_shape=3,  # if frame_stack_num=1
             action_space_size=11,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            downsample=False,
-            image_channel=1,
             frame_stack_num=1,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            representation_network_type='identity',  # options={'conv_res_blocks', 'identity'}
             # We use the small size model for pendulum.
             num_res_blocks=1,
             num_channels=16,
@@ -55,7 +53,6 @@ pendulum_sampled_efficientzero_config = dict(
         game_segment_length=50,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        use_augmentation=False,
         policy_entropy_loss_weight=0,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
