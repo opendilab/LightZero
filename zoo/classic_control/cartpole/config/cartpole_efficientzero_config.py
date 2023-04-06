@@ -1,7 +1,4 @@
-import torch
 from easydict import EasyDict
-
-
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -38,20 +35,21 @@ cartpole_efficientzero_config = dict(
             num_res_blocks=1,
             num_channels=16,
             lstm_hidden_size=128,
+            self_supervised_learning_loss=False,
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        lr_piecewise_constant_decay=True,
         optim_type='SGD',
+        lr_piecewise_constant_decay=True,
         learning_rate=0.2,  # init lr for manually decay schedule
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=2,
+        ssl_loss_weight=0,
         n_episode=n_episode,
-        eval_freq=int(2e3),
+        eval_freq=int(2e2),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

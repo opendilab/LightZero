@@ -3,21 +3,12 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 25
-# update_per_collect = 100
-# batch_size = 256
-# max_env_step = int(1e5)
-# reanalyze_ratio = 0
-# debug config
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-num_simulations = 5
-update_per_collect = 2
-batch_size = 4
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 25
+update_per_collect = 100
+batch_size = 256
 max_env_step = int(1e5)
 reanalyze_ratio = 0
 # ==============================================================
@@ -25,7 +16,7 @@ reanalyze_ratio = 0
 # ==============================================================
 
 cartpole_muzero_config = dict(
-    exp_name=f'data_ez_ctree/cartpole_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_mz_ctree/cartpole_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -44,8 +35,7 @@ cartpole_muzero_config = dict(
             num_res_blocks=1,
             num_channels=16,
             lstm_hidden_size=128,
-            # test
-            self_supervised_learning_loss=True,
+            self_supervised_learning_loss=False,
         ),
         cuda=True,
         env_type='not_board_games',
@@ -58,7 +48,7 @@ cartpole_muzero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(2e3),
+        eval_freq=int(2e2),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

@@ -50,20 +50,18 @@ gomoku_muzero_config = dict(
         game_segment_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        manual_temperature_decay=True,
-        lr_piecewise_constant_decay=False,
         optim_type='Adam',
+        lr_piecewise_constant_decay=False,
         learning_rate=0.003,  # lr for Adam optimizer
         grad_clip_value=0.5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        use_augmentation=False,
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=int(board_size * board_size / 2),
         discount_factor=1,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e5),  # the size/capacity of replay_buffer, in the terms of transitions. It's important for stability
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

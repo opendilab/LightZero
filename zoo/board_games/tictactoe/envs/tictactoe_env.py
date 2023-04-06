@@ -132,7 +132,8 @@ class TicTacToeEnv(BaseEnv):
             timestep_player1 = self._player_step(action)
             # self.env.render()
             if timestep_player1.done:
-                # in play_with_bot_mode, we set to_play as -1, because we don't consider the alternation between players
+                # NOTE: in play_with_bot_mode, we must set to_play as -1, because we don't consider the alternation between players.
+                # And the to_play is used in MCTS.
                 timestep_player1.obs['to_play'] = -1
                 return timestep_player1
 
@@ -145,8 +146,10 @@ class TicTacToeEnv(BaseEnv):
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
             timestep = timestep_player2
-            # in play_with_bot_mode, we set to_play as -1, because we don't consider the alternation between players
+            # NOTE: in play_with_bot_mode, we must set to_play as -1, because we don't consider the alternation between players.
+            # And the to_play is used in MCTS.
             timestep.obs['to_play'] = -1
+
             return timestep
         elif self.battle_mode == 'eval_mode':
             # player 1 battle with expert player 2
@@ -155,6 +158,9 @@ class TicTacToeEnv(BaseEnv):
             timestep_player1 = self._player_step(action)
             # self.env.render()
             if timestep_player1.done:
+                # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
+                # And the to_play is used in MCTS.
+                timestep_player1.obs['to_play'] = -1
                 return timestep_player1
 
             # player 2's turn
@@ -169,6 +175,10 @@ class TicTacToeEnv(BaseEnv):
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
             timestep = timestep_player2
+            # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
+            # And the to_play is used in MCTS.
+            timestep.obs['to_play'] = -1
+
             return timestep
 
     def _player_step(self, action):
