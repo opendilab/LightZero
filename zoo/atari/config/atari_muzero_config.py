@@ -1,10 +1,4 @@
-import torch
 from easydict import EasyDict
-
-if torch.cuda.is_available():
-    device = 'cuda'
-else:
-    device = 'cpu'
 
 env_name = 'PongNoFrameskip-v4'  # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 
@@ -53,6 +47,7 @@ atari_muzero_config = dict(
     policy=dict(
         model=dict(
             observation_shape=(4, 96, 96),
+            frame_stack_num=4,
             action_space_size=action_space_size,
             representation_network_type='conv_res_blocks',
             downsample=True,
@@ -60,24 +55,22 @@ atari_muzero_config = dict(
             self_supervised_learning_loss=True,
         ),
         cuda=True,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
         game_segment_length=400,
-        use_augmentation=True,
-        num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
-        manual_temperature_decay=False,
-        fixed_temperature_value=0.25,
-        ssl_loss_weight=2,  # default is 0
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        lr_piecewise_constant_decay=True,
         optim_type='SGD',
+        lr_piecewise_constant_decay=True,
         learning_rate=0.2,  # init lr for manually decay schedule
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
+        use_augmentation=True,
+        ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
     ),
 )
 atari_muzero_config = EasyDict(atari_muzero_config)

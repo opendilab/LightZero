@@ -48,7 +48,7 @@ class SampledEfficientZeroPolicy(Policy):
             categorical_distribution=True,
             # the key difference setting between image-input and vector input.
             image_channel=1,
-            frame_stack_num=4,
+            frame_stack_num=1,
             # ==============================================================
             # the default config is large size model, same as the EfficientZero original paper.
             # ==============================================================

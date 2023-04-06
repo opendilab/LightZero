@@ -1,10 +1,4 @@
-import torch
 from easydict import EasyDict
-
-if torch.cuda.is_available():
-    device = 'cuda'
-else:
-    device = 'cpu'
 
 env_name = 'PongNoFrameskip-v4'  # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 
@@ -53,6 +47,7 @@ atari_efficientzero_config = dict(
         mcts_ctree=True,
         model=dict(
             observation_shape=(4, 96, 96),
+            frame_stack_num=4,
             action_space_size=action_space_size,
             representation_network_type='conv_res_blocks',
             downsample=True,
@@ -100,4 +95,5 @@ create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
+
     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

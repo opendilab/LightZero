@@ -1,10 +1,4 @@
-import torch
 from easydict import EasyDict
-
-if torch.cuda.is_available():
-    device = 'cuda'
-else:
-    device = 'cpu'
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -32,11 +26,9 @@ tictactoe_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(3, 3, 3),  # if frame_stack_num=1
+            observation_shape=(3, 3, 3),
             action_space_size=9,
             image_channel=3,
-            frame_stack_num=1,
-            downsample=False,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # We use the small size model for tictactoe
             num_res_blocks=1,
@@ -50,6 +42,13 @@ tictactoe_muzero_config = dict(
         ),
         cuda=True,
         env_type='board_games',
+        update_per_collect=update_per_collect,
+        batch_size=batch_size,
+        manual_temperature_decay=True,
+        lr_piecewise_constant_decay=False,
+        optim_type='Adam',
+        learning_rate=0.003,  # lr for Adam optimizer
+        grad_clip_value=0.5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         use_augmentation=False,
@@ -58,18 +57,11 @@ tictactoe_muzero_config = dict(
         td_steps=9,
         num_unroll_steps=3,
         discount_factor=1,
-        update_per_collect=update_per_collect,
-        batch_size=batch_size,
-        manual_temperature_decay=True,
-        lr_piecewise_constant_decay=False,
-        optim_type='Adam',
-        learning_rate=0.003,  # lr for Adam optimizer
-        grad_clip_value=0.5,
         n_episode=n_episode, 
         eval_freq=int(2e3),
+        replay_buffer_size=int(1e5),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
-        replay_buffer_size=int(1e5),  # the size/capacity of replay_buffer, in the terms of transitions.
     ),
 )
 tictactoe_muzero_config = EasyDict(tictactoe_muzero_config)

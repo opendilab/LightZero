@@ -44,7 +44,7 @@ class EfficientZeroPolicy(Policy):
             # the key difference setting between image-input and vector input.
             image_channel=1,
             lstm_hidden_size=512,
-            frame_stack_num=4,
+            frame_stack_num=1,
             support_scale=300,
         ),
 
@@ -90,7 +90,7 @@ class EfficientZeroPolicy(Policy):
 
         ## observation
         cvt_string=False,
-        use_augmentation=True,
+        use_augmentation=False,
         # style of augmentation
         augmentation=['shift', 'intensity'],
 

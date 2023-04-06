@@ -6,10 +6,7 @@ with manually discretitze action space. That is to say, the final action space i
 import torch
 from easydict import EasyDict
 
-if torch.cuda.is_available():
-    device = 'cuda'
-else:
-    device = 'cpu'
+
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -50,7 +47,7 @@ pendulum_disc_muzero_config = dict(
         model=dict(
             observation_shape=3,  # if frame_stack_num=1
             action_space_size=11,
-            representation_network_type='identity',  # options={'conv_res_blocks', 'identity'}
+            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             frame_stack_num=1,
             # We use the small size model for pendulum.
             num_res_blocks=1,

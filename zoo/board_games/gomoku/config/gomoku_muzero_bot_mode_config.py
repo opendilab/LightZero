@@ -1,10 +1,4 @@
-import torch
 from easydict import EasyDict
-
-if torch.cuda.is_available():
-    device = 'cuda'
-else:
-    device = 'cpu'
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -43,8 +37,6 @@ gomoku_muzero_config = dict(
             observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
             action_space_size=int(board_size * board_size),
             image_channel=3,
-            frame_stack_num=1,
-            downsample=False,
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # We use the half size model for gomoku
             num_res_blocks=1,
@@ -54,16 +46,8 @@ gomoku_muzero_config = dict(
             value_support_size=21,
         ),
         cuda=True,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
         env_type='board_games',
-        num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
-        use_augmentation=False,
         game_segment_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
-        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
-        td_steps=int(board_size * board_size / 2),
-        discount_factor=1,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         manual_temperature_decay=True,
@@ -71,9 +55,17 @@ gomoku_muzero_config = dict(
         optim_type='Adam',
         learning_rate=0.003,  # lr for Adam optimizer
         grad_clip_value=0.5,
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
+        use_augmentation=False,
+        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
+        td_steps=int(board_size * board_size / 2),
+        discount_factor=1,
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
     ),
 )
 gomoku_muzero_config = EasyDict(gomoku_muzero_config)

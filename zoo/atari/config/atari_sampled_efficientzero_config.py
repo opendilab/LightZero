@@ -1,10 +1,4 @@
-import torch
 from easydict import EasyDict
-
-if torch.cuda.is_available():
-    device = 'cuda'
-else:
-    device = 'cpu'
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -24,7 +18,7 @@ elif env_name == 'SpaceInvadersNoFrameskip-v4':
 elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
     average_episode_length_when_converge = 800
-    
+
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -54,7 +48,8 @@ atari_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
+            observation_shape=(4, 96, 96),
+            frame_stack_num=4,
             action_space_size=action_space_size,
             representation_network_type='conv_res_blocks',
             downsample=True,
@@ -108,4 +103,5 @@ create_config = atari_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
+
     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

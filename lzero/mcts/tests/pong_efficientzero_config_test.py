@@ -1,10 +1,7 @@
 import torch
 from easydict import EasyDict
 
-if torch.cuda.is_available():
-    device = 'cuda'
-else:
-    device = 'cpu'
+
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user

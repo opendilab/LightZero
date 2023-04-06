@@ -2,13 +2,7 @@
 NOTE: the lunarlander_cont_disc in file name means we use the lunarlander continuous env ('LunarLanderContinuous-v2')
 with manually discretitze action space. That is to say, the final action space is discrete.
 """
-import torch
 from easydict import EasyDict
-
-if torch.cuda.is_available():
-    device = 'cuda'
-else:
-    device = 'cpu'
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -42,7 +36,7 @@ lunarlander_cont_disc_efficientzero_config = dict(
         model=dict(
             observation_shape=8,  # if frame_stack_num=1
             action_space_size=49,  # each_dim_disc_size**2=7**2=9
-            representation_network_type='identity',  # options={'conv_res_blocks', 'identity'}
+            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             frame_stack_num=1,
             # We use the medium size model for lunarlander.
             num_res_blocks=1,
@@ -52,16 +46,16 @@ lunarlander_cont_disc_efficientzero_config = dict(
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
-        num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        lr_piecewise_constant_decay=True,
         optim_type='SGD',
+        lr_piecewise_constant_decay=True,
         learning_rate=0.2,  # init lr for manually decay schedule
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e3),
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
