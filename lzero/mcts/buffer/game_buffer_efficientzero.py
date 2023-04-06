@@ -299,7 +299,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                     for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
                         if to_play_segment[0][0] in [1, 2]:
                             # TODO(pu): for board_games, very important, to check
-                            if to_play_list[current_index] == to_play_list[i]:
+                            if to_play_list[base_index] == to_play_list[i]:
                                 value_list[value_index] += reward * self._cfg.discount_factor ** i
                             else:
                                 value_list[value_index] += -reward * self._cfg.discount_factor ** i

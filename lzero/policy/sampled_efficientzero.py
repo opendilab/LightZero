@@ -296,9 +296,6 @@ class SampledEfficientZeroPolicy(Policy):
         # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
         hidden_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(network_output)
 
-        # TODO(pu): to verify
-        # reward_hidden_state = to_device(reward_hidden_state, self._cfg.device)
-
         # transform the scaled value or its categorical representation to its original value,
         # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
         original_value = self.inverse_scalar_transform_handle(value)
