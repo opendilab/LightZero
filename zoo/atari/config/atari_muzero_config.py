@@ -59,7 +59,7 @@ atari_muzero_config = dict(
             # NOTE: whether to use the self_supervised_learning_loss. default is False
             self_supervised_learning_loss=True,
         ),
-        device=device,
+        cuda=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',

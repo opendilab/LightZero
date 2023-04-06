@@ -62,7 +62,7 @@ atari_sampled_efficientzero_config = dict(
             num_of_sampled_actions=K,
             self_supervised_learning_loss=True,
         ),
-        device=device,
+        cuda=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',

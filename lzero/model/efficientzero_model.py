@@ -236,8 +236,8 @@ class EfficientZeroModel(nn.Module):
                 - reward_hidden (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
          """
         num = obs.size(0)
-        latent_state = self.representation(obs)
-        policy_logits, value = self.prediction(latent_state)
+        latent_state = self._representation(obs)
+        policy_logits, value = self._prediction(latent_state)
         # zero initialization for reward hidden states
         reward_hidden = (torch.zeros(1, num, self.lstm_hidden_size).to(obs.device), torch.zeros(1, num, self.lstm_hidden_size).to(obs.device))
         return EZNetworkOutput(value, [0. for _ in range(num)], policy_logits, latent_state, reward_hidden)
@@ -257,24 +257,36 @@ class EfficientZeroModel(nn.Module):
         Returns:
              EZNetworkOutput
                 - value (:obj:`torch.Tensor`): (batch_size, 1).
+                - value_prefix (:obj:`torch.Tensor`): (batch_size, 1).
                 - policy_logits (:obj:`torch.Tensor`): (batch_size, action_dim).
                 - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
                 - reward_hidden (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
          """
-        latent_state, reward_hidden, value_prefix = self.dynamics(latent_state, reward_hidden, action)
-        policy_logits, value = self.prediction(latent_state)
+        latent_state, reward_hidden, value_prefix = self._dynamics(latent_state, reward_hidden, action)
+        policy_logits, value = self._prediction(latent_state)
         return EZNetworkOutput(value, value_prefix, policy_logits, latent_state, reward_hidden)
 
-    def prediction(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor]:
+    def _prediction(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor]:
+        """
+         Overview:
+             use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
+         Arguments:
+            - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+        Returns:
+            - policy_logits (:obj:`torch.Tensor`): (batch_size, action_dim).
+            - value (:obj:`torch.Tensor`): (batch_size, 1).
+         """
         policy, value = self.prediction_network(latent_state)
         return policy, value
 
-    def representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
+    def _representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
         """
         Overview:
-            Representation network. Encode the observations into hidden state.
+            Representation network. Encode the observations into latent state.
         Arguments:
-
+             - observation (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+        Returns:
+            - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
         """
         if len(observation.shape) == 1:
             # vector obs input, e.g. classical control ad box2d environments
@@ -287,7 +299,7 @@ class EfficientZeroModel(nn.Module):
             latent_state_normalized = renormalize(latent_state)
             return latent_state_normalized
 
-    def dynamics(self, latent_state: torch.Tensor, reward_hidden_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
+    def _dynamics(self, latent_state: torch.Tensor, reward_hidden_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
         """
          Overview:
              Dynamics function. Predict ``next_latent_state``, ``reward_hidden_state``, ``value_prefix``
@@ -296,6 +308,10 @@ class EfficientZeroModel(nn.Module):
              - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
              - reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
              - action (:obj:`torch.Tensor`): (batch_size, action_dim).
+        Returns:
+            - next_latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+            - next_reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+            - value_prefix (:obj:`torch.Tensor`): (batch_size, 1).
          """
 
         # Stack latent_state with a game specific one hot encoded action
@@ -318,12 +334,12 @@ class EfficientZeroModel(nn.Module):
 
         x = torch.cat((latent_state, action_one_hot), dim=1)
         # NOTE: the key difference with MuZero
-        next_latent_state, reward_hidden_state, value_prefix = self.dynamics_network(x, reward_hidden_state)
+        next_latent_state, next_reward_hidden_state, value_prefix = self.dynamics_network(x, reward_hidden_state)
         if not self.state_norm:
-            return next_latent_state, reward_hidden_state, value_prefix
+            return next_latent_state, next_reward_hidden_state, value_prefix
         else:
             next_latent_state_normalized = renormalize(next_latent_state)
-            return next_latent_state_normalized, reward_hidden_state, value_prefix
+            return next_latent_state_normalized, next_reward_hidden_state, value_prefix
 
     def project(self, latent_state: torch.Tensor, with_grad=True):
         """

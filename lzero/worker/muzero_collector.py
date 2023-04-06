@@ -36,21 +36,18 @@ class MuZeroCollector(ISerialCollector):
             tb_logger: 'SummaryWriter' = None,  # noqa
             exp_name: Optional[str] = 'default_experiment',
             instance_name: Optional[str] = 'collector',
-            replay_buffer: 'replay_buffer' = None,  # noqa
             policy_config: 'policy_config' = None,  # noqa
     ) -> None:
         """
         Overview:
             Init the collector according to input arguments.
         Arguments:
-            - cfg (:obj:`EasyDict`): Config dict
             - collect_print_freq (:obj:`int`): collect_print_frequency in terms of training_steps.
             - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
             - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
             - tb_logger (:obj:`SummaryWriter`): tensorboard handle
             - instance_name (:obj:`Optional[str]`): Name of this instance.
             - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
-            - replay_buffer (:obj:`replay_buffer`): the buffer
             - policy_config: Config of game.
         """
         self._exp_name = exp_name
@@ -69,7 +66,6 @@ class MuZeroCollector(ISerialCollector):
                 path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name
             )
 
-        self.replay_buffer = replay_buffer
         self.policy_config = policy_config
 
         self.reset(policy, env)

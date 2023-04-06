@@ -33,7 +33,7 @@ lunarlander_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        device=device,
+        cuda=True,
         model=dict(
             observation_shape=8,  # if frame_stack_num=1
             action_space_size=4,

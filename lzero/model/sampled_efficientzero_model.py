@@ -278,9 +278,24 @@ class SampledEfficientZeroModel(nn.Module):
             )
 
     def initial_inference(self, obs: torch.Tensor) -> EZNetworkOutput:
+        """
+         Overview:
+             To perform the initial inference, we first use the representation network to obtain the "latent_state" of the observation.
+             We then use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
+         Arguments:
+             - obs (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+             - reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+             - action (:obj:`torch.Tensor`): (batch_size, action_dim).
+        Returns:
+             SEZNetworkOutput
+                - value (:obj:`torch.Tensor`): (batch_size, 1).
+                - policy_logits (:obj:`torch.Tensor`): (batch_size, action_dim).
+                - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+                - reward_hidden (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+         """
         num = obs.size(0)
-        hidden_state = self.representation(obs)
-        policy_logits, value = self.prediction(hidden_state)
+        hidden_state = self._representation(obs)
+        policy_logits, value = self._prediction(hidden_state)
         # zero initialization for reward hidden states
         reward_hidden = (torch.zeros(1, num, self.lstm_hidden_size).to(obs.device), torch.zeros(1, num, self.lstm_hidden_size).to(obs.device))
         return EZNetworkOutput(value, [0. for _ in range(num)], policy_logits, hidden_state, reward_hidden)
@@ -288,46 +303,84 @@ class SampledEfficientZeroModel(nn.Module):
     def recurrent_inference(
             self, hidden_state: torch.Tensor, reward_hidden: torch.Tensor, action: torch.Tensor
     ) -> EZNetworkOutput:
-        hidden_state, reward_hidden, value_prefix = self.dynamics(hidden_state, reward_hidden, action)
-        policy_logits, value = self.prediction(hidden_state)
+        """
+         Overview:
+             To perform the recurrent inference, we first use the dynamics network to predict ``next_latent_state``, ``reward_hidden_state``, ``value_prefix``
+             given current ``latent_state`` and ``action``.
+             We then use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
+         Arguments:
+             - obs (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+             - reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+             - action (:obj:`torch.Tensor`): (batch_size, action_dim).
+        Returns:
+             SEZNetworkOutput
+                - value (:obj:`torch.Tensor`): (batch_size, 1).
+                - value_prefix (:obj:`torch.Tensor`): (batch_size, 1).
+                - policy_logits (:obj:`torch.Tensor`): (batch_size, action_dim).
+                - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+                - reward_hidden (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+         """
+        hidden_state, reward_hidden, value_prefix = self._dynamics(hidden_state, reward_hidden, action)
+        policy_logits, value = self._prediction(hidden_state)
         return EZNetworkOutput(value, value_prefix, policy_logits, hidden_state, reward_hidden)
 
-    def prediction(self, encoded_state: torch.Tensor) -> Tuple[torch.Tensor]:
-        policy, value = self.prediction_network(encoded_state)
+    def _prediction(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor]:
+        """
+         Overview:
+             use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
+         Arguments:
+            - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+        Returns:
+            - policy_logits (:obj:`torch.Tensor`): (batch_size, action_dim).
+            - value (:obj:`torch.Tensor`): (batch_size, 1).
+         """
+        policy, value = self.prediction_network(latent_state)
         return policy, value
 
-    def representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
+    def _representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
+        """
+        Overview:
+            Representation network. Encode the observations into latent state.
+        Arguments:
+             - observation (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+        Returns:
+            - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+        """
         if len(observation.shape) == 1:
             # vector obs input, e.g. classical control ad box2d environments
             # to be compatible with LightZero model/policy, shape: [C, W, H]
             observation = observation.reshape(1, observation.shape[0], 1)
-        encoded_state = self.representation_network(observation)
+        latent_state = self.representation_network(observation)
         if not self.state_norm:
-            return encoded_state
+            return latent_state
         else:
-            encoded_state_normalized = renormalize(encoded_state)
-            return encoded_state_normalized
+            latent_state_normalized = renormalize(latent_state)
+            return latent_state_normalized
 
-    def dynamics(self, encoded_state: torch.Tensor, reward_hidden_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
+    def _dynamics(self, latent_state: torch.Tensor, reward_hidden_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
         """
-        Overview:
-            Dynamics function. Predict ``next_encoded_state``, ``reward_hidden_state``, ``value_prefix``
-            given current ``encoded_state`` and ``action``.
-        Arguments:
-            - encoded_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
-            - reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
-            - action (:obj:`torch.Tensor`): (batch_size, action_dim).
-        """
+         Overview:
+             Dynamics function. Predict ``next_latent_state``, ``reward_hidden_state``, ``value_prefix``
+             given current ``latent_state`` and ``action``.
+         Arguments:
+             - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+             - reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+             - action (:obj:`torch.Tensor`): (batch_size, action_dim).
+        Returns:
+            - next_latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+            - next_reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+            - value_prefix (:obj:`torch.Tensor`): (batch_size, 1).
+         """
         if not self.continuous_action_space:
             # discrete action space
-            # stack encoded_state with a game specific one hot encoded action
+            # stack latent_state with a game specific one hot encoded action
             #  action_one_hot (batch_siize, 1, obs_shape[1], obs_shape[2]), e.g. (4,1,6,6)
             action_one_hot = (
                 torch.ones((
-                    encoded_state.shape[0],
+                    latent_state.shape[0],
                     1,
-                    encoded_state.shape[2],
-                    encoded_state.shape[3],
+                    latent_state.shape[2],
+                    latent_state.shape[3],
                 )).to(action.device).float()
             )
             if len(action.shape) == 2:
@@ -341,15 +394,15 @@ class SampledEfficientZeroModel(nn.Module):
 
             # action[:, 0, None, None] shape: (4, 1, 1, 1)
             action_one_hot = (action[:, 0, None, None] * action_one_hot / self.action_space_size)
-            state_action_encoding = torch.cat((encoded_state, action_one_hot), dim=1)
+            state_action_encoding = torch.cat((latent_state, action_one_hot), dim=1)
 
         else:  # continuous action space
             action_one_hot = (
                 torch.ones((
-                    encoded_state.shape[0],
+                    latent_state.shape[0],
                     1,
-                    encoded_state.shape[2],
-                    encoded_state.shape[3],
+                    latent_state.shape[2],
+                    latent_state.shape[3],
                 )).to(action.device).float()
             )
 
@@ -370,22 +423,22 @@ class SampledEfficientZeroModel(nn.Module):
                 print(error)
                 print(action.shape, action_one_hot.shape)
 
-            state_action_encoding = torch.cat((encoded_state, action_embedding), dim=1)
+            state_action_encoding = torch.cat((latent_state, action_embedding), dim=1)
 
         try:
-            next_encoded_state, reward_hidden_state, value_prefix = self.dynamics_network(
+            next_latent_state, next_reward_hidden_state, value_prefix = self.dynamics_network(
                 state_action_encoding, reward_hidden_state
             )
         except Exception as error:
             print(error)
-            print(encoded_state.shape, action_embedding.shape)
+            print(latent_state.shape, action_embedding.shape)
             print(state_action_encoding.shape)
 
         if not self.state_norm:
-            return next_encoded_state, reward_hidden_state, value_prefix
+            return next_latent_state, next_reward_hidden_state, value_prefix
         else:
-            next_encoded_state_normalized = renormalize(next_encoded_state)
-            return next_encoded_state_normalized, reward_hidden_state, value_prefix
+            next_latent_state_normalized = renormalize(next_latent_state)
+            return next_latent_state_normalized, next_reward_hidden_state, value_prefix
 
     def project(self, hidden_state: torch.Tensor, with_grad=True):
         """

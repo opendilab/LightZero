@@ -57,7 +57,7 @@ pendulum_disc_muzero_config = dict(
             num_channels=16,
             lstm_hidden_size=128,
         ),
-        device=device,
+        cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
         num_simulations=num_simulations,

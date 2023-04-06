@@ -32,10 +32,6 @@ tictactoe_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            # the stacked obs shape -> the transformed obs shape:
-            # [S, W, H, C] -> [S x C, W, H]
-            # e.g. [4, 3, 3, 3] -> [12, 3, 3]
-            # observation_shape=(12, 3, 3),  # if frame_stack_num=4
             observation_shape=(3, 3, 3),  # if frame_stack_num=1
             action_space_size=9,
             image_channel=3,
@@ -52,7 +48,7 @@ tictactoe_muzero_config = dict(
             reward_support_size=21,
             value_support_size=21,
         ),
-        device=device,
+        cuda=True,
         env_type='board_games',
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

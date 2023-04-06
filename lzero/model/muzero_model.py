@@ -216,26 +216,57 @@ class MuZeroModel(nn.Module):
                 )
 
     def initial_inference(self, obs: torch.Tensor) -> MZNetworkOutput:
+        """
+         Overview:
+             To perform the initial inference, we first use the representation network to obtain the "latent_state" of the observation.
+             We then use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
+         Arguments:
+             - obs (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+        Returns:
+             MZNetworkOutput
+                - value (:obj:`torch.Tensor`): (batch_size, 1).
+                - policy_logits (:obj:`torch.Tensor`): (batch_size, action_dim).
+                - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+         """
         num = obs.size(0)
-        hidden_state = self.representation(obs)
-        policy_logits, value = self.prediction(hidden_state)
+        latent_state = self._representation(obs)
+        policy_logits, value = self._prediction(latent_state)
         return MZNetworkOutput(
             value,
             [0. for _ in range(num)],
             policy_logits,
-            hidden_state,
+            latent_state,
         )
 
-    def recurrent_inference(self, hidden_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
-        hidden_state, reward = self.dynamics(hidden_state, action)
-        policy_logits, value = self.prediction(hidden_state)
-        return MZNetworkOutput(value, reward, policy_logits, hidden_state)
+    def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
+        """
+         Overview:
+             To perform the recurrent inference, we first use the dynamics network to predict ``next_latent_state``, ``reward_hidden_state``, ``value_prefix``
+             given current ``latent_state`` and ``action``.
+             We then use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
+         Arguments:
+             - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+             - action (:obj:`torch.Tensor`): (batch_size, action_dim).
+        Returns:
+             MZNetworkOutput
+                - value (:obj:`torch.Tensor`): (batch_size, 1).
+                - reward (:obj:`torch.Tensor`): (batch_size, 1).
+                - policy_logits (:obj:`torch.Tensor`): (batch_size, action_dim).
+                - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+         """
+        latent_state, reward = self._dynamics(latent_state, action)
+        policy_logits, value = self._prediction(latent_state)
+        return MZNetworkOutput(value, reward, policy_logits, latent_state)
 
-    def prediction(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor]:
-        policy, value = self.prediction_network(latent_state)
-        return policy, value
-
-    def representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
+    def _representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
+        """
+        Overview:
+            Representation network. Encode the observations into latent state.
+        Arguments:
+             - observation (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+        Returns:
+            - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+        """
         if len(observation.shape) == 1:
             # vector obs input, e.g. classical control ad box2d environments
             # to be compatible with LightZero model/policy, shape: [C, W, H]
@@ -247,7 +278,20 @@ class MuZeroModel(nn.Module):
             latent_state_normalized = renormalize(latent_state)
             return latent_state_normalized
 
-    def dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
+    def _prediction(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor]:
+        """
+         Overview:
+             use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
+         Arguments:
+            - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+        Returns:
+            - policy_logits (:obj:`torch.Tensor`): (batch_size, action_dim).
+            - value (:obj:`torch.Tensor`): (batch_size, 1).
+         """
+        policy_logits, value = self.prediction_network(latent_state)
+        return policy_logits, value
+
+    def _dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
         """
          Overview:
              Dynamics function. Predict ``next_latent_state``, ``reward``
@@ -255,6 +299,9 @@ class MuZeroModel(nn.Module):
          Arguments:
              - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
              - action (:obj:`torch.Tensor`): (batch_size, action_dim).
+        Returns:
+            - next_latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+            - reward (:obj:`torch.Tensor`): (batch_size, 1).
          """
 
         # Stack latent_state with a game specific one hot encoded action
@@ -283,7 +330,7 @@ class MuZeroModel(nn.Module):
             next_latent_state_normalized = renormalize(next_latent_state)
             return next_latent_state_normalized, reward
 
-    def project(self, hidden_state: torch.Tensor, with_grad=True):
+    def project(self, latent_state: torch.Tensor, with_grad=True):
         """
         Overview:
             only used when ``self.self_supervised_learning_loss=True``.
@@ -293,18 +340,18 @@ class MuZeroModel(nn.Module):
             # for lunarlander:
             # observation_shape = (4, 8, 1),  # stack=4
             # self.projection_input_dim = 64*8*1
-            # hidden_state.shape: (batch_size, num_channel, obs_shape[1], obs_shape[2])  256,64,8,1
+            # latent_state.shape: (batch_size, num_channel, obs_shape[1], obs_shape[2])  256,64,8,1
             # 256,64,8,1 -> 256,64*8*1
 
             # for atari:
             # observation_shape = (12, 96, 96),  # 3,96,96 stack=4
             # self.projection_input_dim = 3*6*6 = 108
-            # hidden_state.shape: (batch_size, num_channel, obs_shape[1]/16, obs_shape[2]/16)  256,64,96/16,96/16 = 256,64,6,6
+            # latent_state.shape: (batch_size, num_channel, obs_shape[1]/16, obs_shape[2]/16)  256,64,96/16,96/16 = 256,64,6,6
             # 256, 64, 6, 6 -> 256,64*6*6
         """
-        # hidden_state.shape[0] = batch_size
-        hidden_state = hidden_state.reshape(hidden_state.shape[0], -1)
-        proj = self.projection(hidden_state)
+        # latent_state.shape[0] = batch_size
+        latent_state = latent_state.reshape(latent_state.shape[0], -1)
+        proj = self.projection(latent_state)
 
         # with grad, use proj_head
         if with_grad:

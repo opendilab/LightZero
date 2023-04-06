@@ -52,7 +52,7 @@ tictactoe_muzero_config = dict(
             reward_support_size=21,
             value_support_size=21,
         ),
-        device=device,
+        cuda=True,
         env_type='board_games',
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

@@ -90,13 +90,13 @@ def test_game_segment(test_algo):
             to_play = [-1 for _ in range(config.env.evaluator_env_num)]
 
             if test_algo == 'EfficientZero':
-                roots = MCTSCtree.Roots(config.env.evaluator_env_num,
+                roots = MCTSCtree.roots(config.env.evaluator_env_num,
                                       legal_actions_list)
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 MCTSCtree(config.policy).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
 
             elif test_algo == 'MuZero':
-                roots = MCTSCtree.Roots(config.env.evaluator_env_num, legal_actions_list)
+                roots = MCTSCtree.roots(config.env.evaluator_env_num, legal_actions_list)
                 roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 MCTSCtree(config.policy).search(roots, model, hidden_state_roots, to_play)
 

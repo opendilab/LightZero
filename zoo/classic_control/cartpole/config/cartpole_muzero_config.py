@@ -54,13 +54,11 @@ cartpole_muzero_config = dict(
             # test
             self_supervised_learning_loss=True,
         ),
-        device=device,
+        cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        use_augmentation=False,
-        policy_entropy_loss_weight=0,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         update_per_collect=update_per_collect,
         batch_size=batch_size,

@@ -43,7 +43,7 @@ lunarlander_disc_efficientzero_config = dict(
             num_channels=32,
             lstm_hidden_size=256,
         ),
-        device=device,
+        cuda=True,
         env_type='not_board_games',
         game_segment_length=400,
         num_simulations=num_simulations,

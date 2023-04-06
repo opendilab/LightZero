@@ -108,7 +108,7 @@ def check_mcts():
     policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
     legal_actions_list = [[i for i in range(policy_config.model.action_space_size)] for _ in range(env_nums)]  # all action
-    roots = MCTSPtree.Roots(env_nums, legal_actions_list)
+    roots = MCTSPtree.roots(env_nums, legal_actions_list)
     noises = [
         np.random.dirichlet([policy_config.root_dirichlet_alpha] * policy_config.model.action_space_size
                             ).astype(np.float32).tolist() for _ in range(env_nums)

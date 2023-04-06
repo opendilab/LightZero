@@ -131,7 +131,7 @@ assert len(to_play) == batch_size
 @pytest.mark.unittest
 def test_mcts_vs_bot():
     legal_actions_list = [[i for i in range(action_space_size)] for _ in range(env_nums)]  # all action
-    roots = MCTSPtree.Roots(env_nums, legal_actions_list)
+    roots = MCTSPtree.roots(env_nums, legal_actions_list)
     noises = [
         np.random.dirichlet([policy_config.root_dirichlet_alpha] * policy_config.model.action_space_size
                             ).astype(np.float32).tolist() for _ in range(env_nums)
@@ -147,7 +147,7 @@ def test_mcts_vs_bot():
 @pytest.mark.unittest
 def test_mcts_to_play_vs_bot():
     legal_actions_list = [[i for i in range(action_space_size)] for _ in range(env_nums)]  # all action
-    roots = MCTSPtree.Roots(env_nums, legal_actions_list)
+    roots = MCTSPtree.roots(env_nums, legal_actions_list)
     to_play = [-1 for _ in range(env_nums)]
     noises = [
         np.random.dirichlet([policy_config.root_dirichlet_alpha] * policy_config.model.action_space_size
@@ -166,7 +166,7 @@ def test_mcts_legal_action_vs_bot():
     for i in range(env_nums):
         assert action_num[i] == len(legal_actions_list[i])
 
-    roots = MCTSPtree.Roots(env_nums, legal_actions_list)
+    roots = MCTSPtree.roots(env_nums, legal_actions_list)
     noises = [
         np.random.dirichlet([policy_config.root_dirichlet_alpha] * int(sum(action_mask[j]))).astype(np.float32).tolist()
         for j in range(env_nums)
@@ -198,7 +198,7 @@ def test_mcts_legal_action_to_play_vs_bot():
     for i in range(env_nums):
         assert action_num[i] == len(legal_actions_list[i])
 
-    roots = MCTSPtree.Roots(env_nums, legal_actions_list)
+    roots = MCTSPtree.roots(env_nums, legal_actions_list)
     noises = [
         np.random.dirichlet([policy_config.root_dirichlet_alpha] * int(sum(action_mask[j]))).astype(np.float32).tolist()
         for j in range(env_nums)
@@ -228,7 +228,7 @@ def test_mcts_legal_action_to_play_vs_bot():
 @pytest.mark.unittest
 def test_mcts_self_play():
     legal_actions_list = [[i for i in range(action_space_size)] for _ in range(env_nums)]  # all action
-    roots = MCTSPtree.Roots(env_nums, legal_actions_list)
+    roots = MCTSPtree.roots(env_nums, legal_actions_list)
     noises = [
         np.random.dirichlet([policy_config.root_dirichlet_alpha] * policy_config.model.action_space_size
                             ).astype(np.float32).tolist() for _ in range(env_nums)
@@ -246,7 +246,7 @@ def test_mcts_legal_action_self_play():
     for i in range(env_nums):
         assert action_num[i] == len(legal_actions_list[i])
 
-    roots = MCTSPtree.Roots(env_nums, legal_actions_list)
+    roots = MCTSPtree.roots(env_nums, legal_actions_list)
     noises = [
         np.random.dirichlet([policy_config.root_dirichlet_alpha] * int(sum(action_mask[j]))).astype(np.float32).tolist()
         for j in range(env_nums)

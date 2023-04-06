@@ -7,7 +7,6 @@ from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
 from ding.worker.collector.base_serial_collector import ISerialCollector, CachePool, TrajBuffer, INF, \
     to_tensor_transitions
-from easydict import EasyDict
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_alphazero')
@@ -20,44 +19,36 @@ class AlphaZeroCollector(ISerialCollector):
     Property:
         envstep
     """
-    config = dict(
-        deepcopy_obs=False,
-        transform_obs=False,
-        collect_print_freq=100,
-        reward_shaping=True,
-        augmentation=False
-    )
+
+    # TO be compatible with ISerialCollector
+    config = dict()
 
     def __init__(
         self,
-        cfg: EasyDict,
+        collect_print_freq: int = 100,
         env: BaseEnvManager = None,
         policy: namedtuple = None,
         tb_logger: 'SummaryWriter' = None,  # noqa
         exp_name: Optional[str] = 'default_experiment',
         instance_name: Optional[str] = 'collector',
-        replay_buffer: 'replay_buffer' = None,  # noqa
         env_config=None,
     ) -> None:
         """
             Overview:
                 Init the AlphaZero collector according to input arguments.
             Arguments:
-                - cfg (:obj:`EasyDict`): Config.
+                - collect_print_freq (:obj:`int`): collect_print_frequency in terms of training_steps.
                 - env (:obj:`BaseEnvManager`): The env for the collection, the BaseEnvManager object or \
                     its derivatives are supported.
                 - policy (:obj:`Policy`): The policy to be collected.
                 - tb_logger (:obj:`SummaryWriter`): Logger, defaultly set as 'SummaryWriter' for model summary.
                 - instance_name (:obj:`Optional[str]`): Name of this instance.
                 - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
-                - replay_buffer (:obj:`replay_buffer`): the buffer
                 - env_config: Config of environment
             """
         self._exp_name = exp_name
         self._instance_name = instance_name
-        self._collect_print_freq = cfg.collect_print_freq
-        self._deepcopy_obs = cfg.deepcopy_obs
-        self._cfg = cfg
+        self._collect_print_freq = collect_print_freq
         self._timer = EasyTimer()
         self._end_flag = False
         self._env_config = env_config
@@ -132,7 +123,7 @@ class AlphaZeroCollector(ISerialCollector):
         if _policy is not None:
             self.reset_policy(_policy)
 
-        self._obs_pool = CachePool('obs', self._env_num, deepcopy=self._deepcopy_obs)
+        self._obs_pool = CachePool('obs', self._env_num, deepcopy=False)
         self._policy_output_pool = CachePool('policy_output', self._env_num)
         # _traj_buffer is {env_id: TrajBuffer}, is used to store traj_len pieces of transitions
         self._traj_buffer = {env_id: TrajBuffer(maxlen=self._traj_len) for env_id in range(self._env_num)}
@@ -236,8 +227,9 @@ class AlphaZeroCollector(ISerialCollector):
                     # prepare data
                     if timestep.done:
                         transitions = to_tensor_transitions(self._traj_buffer[env_id])
-                        if self._cfg.reward_shaping:
-                            transitions = self.reward_shaping(transitions, timestep.info['eval_episode_return'])
+                        # reward_shaping
+                        transitions = self.reward_shaping(transitions, timestep.info['eval_episode_return'])
+
                         return_data.append(transitions)
                         self._traj_buffer[env_id].clear()
 

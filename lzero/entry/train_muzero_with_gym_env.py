@@ -54,10 +54,10 @@ def train_muzero_with_gym_env(
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
 
-    if cfg.policy.device == 'cuda' and torch.cuda.is_available():
-        cfg.policy.cuda = True
+    if cfg.policy.cuda and torch.cuda.is_available():
+        cfg.policy.device = 'cuda'
     else:
-        cfg.policy.cuda = False
+        cfg.policy.device = 'cpu'
 
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
 
@@ -73,11 +73,12 @@ def train_muzero_with_gym_env(
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
+
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
     if model_path is not None:
-        policy.learn_mode.load_state_dict(torch.load(model_path, map_location='cpu'))
+        policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
@@ -95,16 +96,15 @@ def train_muzero_with_gym_env(
         policy=policy.collect_mode,
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
-        replay_buffer=replay_buffer,
         policy_config=policy_config
     )
     evaluator = MuZeroEvaluator(
-        cfg.policy.eval_freq,
-        cfg.env.n_evaluator_episode,
-        cfg.env.stop_value,
-        evaluator_env,
-        policy.eval_mode,
-        tb_logger,
+        eval_freq=cfg.policy.eval_freq,
+        n_evaluator_episode=cfg.env.n_evaluator_episode,
+        stop_value=cfg.env.stop_value,
+        env=evaluator_env,
+        policy=policy.eval_mode,
+        tb_logger=tb_logger,
         exp_name=cfg.exp_name,
         policy_config=policy_config
     )
