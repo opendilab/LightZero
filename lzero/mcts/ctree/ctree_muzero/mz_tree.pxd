@@ -52,7 +52,7 @@ cdef extern from "lib/cnode.h" namespace "tree":
         int root_num
         vector[CNode] roots
 
-        void prepare(float root_exploration_fraction, const vector[vector[float]] &noises, const vector[float] &value_prefixs, const vector[vector[float]] &policies, vector[int] to_play_batch)
+        void prepare(float root_noise_weight, const vector[vector[float]] &noises, const vector[float] &value_prefixs, const vector[vector[float]] &policies, vector[int] to_play_batch)
         void prepare_no_noise(const vector[float] &value_prefixs, const vector[vector[float]] &policies, vector[int] to_play_batch)
         void clear()
         vector[vector[int]] get_trajectories()

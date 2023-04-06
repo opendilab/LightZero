@@ -78,24 +78,26 @@ class GomokuEnv(BaseEnv):
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
-        if self.battle_mode == 'self_play_mode' or self.battle_mode == 'eval_mode':
-            # In contrast with ``play_with_bot_mode``, in ``self_play_mode`` and ``eval_mode``,
-            # we make ``to_play=self.current_player`` in obs, which is used to differentiate
-            # the alternation of 2 players in the game when do Q calculation.
-            obs = {
-                'observation': self.current_state()[1],
-                'action_mask': action_mask,
-                'board': copy.deepcopy(self.board),
-                'current_player_index': self.start_player_index,
-                'to_play': self.current_player
-            }
-        else:
+        if self.battle_mode == 'play_with_bot_mode' or self.battle_mode == 'eval_mode':
+            # In ``play_with_bot_mode`` and ``eval_mode``, we need to set the "to_play" parameter in the "obs" dict to -1,
+            # because we don't take into account the alternation between players.
+            # The "to_play" parameter is used in the MCTS algorithm.
             obs = {
                 'observation': self.current_state()[1],
                 'action_mask': action_mask,
                 'board': copy.deepcopy(self.board),
                 'current_player_index': self.start_player_index,
                 'to_play': -1
+            }
+        elif self.battle_mode == 'self_play_mode':
+            # In the "self_play_mode", we set to_play=self.current_player in the "obs" dict,
+            # which is used to differentiate the alternation of 2 players in the game when calculating Q in the MCTS algorithm.
+            obs = {
+                'observation': self.current_state()[1],
+                'action_mask': action_mask,
+                'board': copy.deepcopy(self.board),
+                'current_player_index': self.start_player_index,
+                'to_play': self.current_player
             }
         return obs
 

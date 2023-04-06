@@ -55,7 +55,7 @@ pong_efficientzero_config = dict(
         warp_frame=True,
         save_video=False,
         # trade memory for speed
-        cvt_string=False,
+        transform2string=False,
         game_wrapper=True,
         manager=dict(shared_memory=False, ),
         stop_value=int(1e6),
@@ -123,10 +123,10 @@ pong_efficientzero_config = dict(
         mcts_ctree=True,
         battle_mode='play_with_bot_mode',
         game_wrapper=True,
-        monitor_statistics=True,
+        monitor_extra_statistics=True,
 
         ## observation
-        cvt_string=False,
+        transform2string=False,
         use_augmentation=True,
         # style of augmentation
         augmentation=['shift', 'intensity'],
@@ -174,7 +174,7 @@ pong_efficientzero_config = dict(
 
         # UCB related config
         root_dirichlet_alpha=0.3,
-        root_exploration_fraction=0.25,
+        root_noise_weight=0.25,
         # ==============================================================
         # end of additional policy_config
         # ==============================================================

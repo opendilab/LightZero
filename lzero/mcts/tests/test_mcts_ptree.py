@@ -66,7 +66,7 @@ policy_config = EasyDict(
         pb_c_init=1,
         discount_factor=0.9,
         root_dirichlet_alpha=0.3,
-        root_exploration_fraction=0.2,
+        root_noise_weight=0.2,
         dirichlet_alpha=0.3,
         exploration_fraction=1,
         device='cpu',
@@ -136,7 +136,7 @@ def test_mcts_vs_bot():
         np.random.dirichlet([policy_config.root_dirichlet_alpha] * policy_config.model.action_space_size
                             ).astype(np.float32).tolist() for _ in range(env_nums)
     ]
-    roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
+    roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool)
     MCTSPtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state)
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
@@ -153,7 +153,7 @@ def test_mcts_to_play_vs_bot():
         np.random.dirichlet([policy_config.root_dirichlet_alpha] * policy_config.model.action_space_size
                             ).astype(np.float32).tolist() for _ in range(env_nums)
     ]
-    roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+    roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
     MCTSPtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
@@ -172,7 +172,7 @@ def test_mcts_legal_action_vs_bot():
         for j in range(env_nums)
     ]
 
-    roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
+    roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool)
     MCTSPtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state)
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
@@ -204,7 +204,7 @@ def test_mcts_legal_action_to_play_vs_bot():
         for j in range(env_nums)
     ]
     to_play = [-1 for _ in range(env_nums)]
-    roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+    roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
     MCTSPtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
@@ -233,7 +233,7 @@ def test_mcts_self_play():
         np.random.dirichlet([policy_config.root_dirichlet_alpha] * policy_config.model.action_space_size
                             ).astype(np.float32).tolist() for _ in range(env_nums)
     ]
-    roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+    roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
     MCTSPtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
@@ -252,7 +252,7 @@ def test_mcts_legal_action_self_play():
         for j in range(env_nums)
     ]
 
-    roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+    roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
     MCTSPtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()

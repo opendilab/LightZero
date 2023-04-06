@@ -32,7 +32,7 @@ class AtariLightZeroEnv(BaseEnv):
         scale=True,
         warp_frame=True,
         save_video=False,
-        cvt_string=False,
+        transform2string=False,
         game_wrapper=True,
         manager=dict(shared_memory=False, ),
         stop_value=int(1e6),

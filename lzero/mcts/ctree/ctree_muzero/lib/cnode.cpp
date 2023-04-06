@@ -318,13 +318,13 @@ namespace tree
 
     CRoots::~CRoots() {}
 
-    void CRoots::prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &rewards, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch)
+    void CRoots::prepare(float root_noise_weight, const std::vector<std::vector<float> > &noises, const std::vector<float> &rewards, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch)
     {
         /*
         Overview:
             Expand the roots and add noises.
         Arguments:
-            - root_exploration_fraction: the exploration fraction of roots
+            - root_noise_weight: the exploration fraction of roots
             - noises: the vector of noise add to the roots.
             - rewards: the vector of rewards of each root.
             - policies: the vector of policy logits of each root.
@@ -333,7 +333,7 @@ namespace tree
         for (int i = 0; i < this->root_num; ++i)
         {
             this->roots[i].expand(to_play_batch[i], 0, i, rewards[i], policies[i]);
-            this->roots[i].add_exploration_noise(root_exploration_fraction, noises[i]);
+            this->roots[i].add_exploration_noise(root_noise_weight, noises[i]);
 
             this->roots[i].visit_count += 1;
         }

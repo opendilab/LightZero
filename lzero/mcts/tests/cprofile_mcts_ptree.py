@@ -68,7 +68,7 @@ def check_mcts():
             pb_c_init=1,
             discount_factor=0.9,
             root_dirichlet_alpha=0.3,
-            root_exploration_fraction=0.2,
+            root_noise_weight=0.2,
             dirichlet_alpha=0.3,
             exploration_fraction=1,
             device='cpu',
@@ -113,7 +113,7 @@ def check_mcts():
         np.random.dirichlet([policy_config.root_dirichlet_alpha] * policy_config.model.action_space_size
                             ).astype(np.float32).tolist() for _ in range(env_nums)
     ]
-    roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool)
+    roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool)
     MCTSPtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state)
     roots_distributions = roots.get_distributions()
     assert np.array(roots_distributions).shape == (policy_config.batch_size, policy_config.model.action_space_size)

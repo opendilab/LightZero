@@ -108,7 +108,7 @@ def wrap_lightzero(config, episode_life, clip_rewards):
             env, video_folder=config.save_path, episode_trigger=lambda episode_id: True, name_prefix='rl-video-{}'.format(config.uid)
         )
 
-    env = JpegWrapper(env, cvt_string=config.cvt_string)
+    env = JpegWrapper(env, transform2string=config.transform2string)
     if config.game_wrapper:
         env = GameWrapper(env)
 
@@ -189,17 +189,17 @@ class WarpFrame(gym.ObservationWrapper):
 
 class JpegWrapper(gym.Wrapper):
 
-    def __init__(self, env, cvt_string=True):
+    def __init__(self, env, transform2string=True):
         """
         Overview: convert the observation into string to save memory
         """
         super().__init__(env)
-        self.cvt_string = cvt_string
+        self.transform2string = transform2string
 
     def step(self, action):
         observation, reward, done, info = self.env.step(action)
 
-        if self.cvt_string:
+        if self.transform2string:
             observation = jpeg_data_compressor(observation)
 
         return observation, reward, done, info
@@ -207,7 +207,7 @@ class JpegWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         observation = self.env.reset(**kwargs)
 
-        if self.cvt_string:
+        if self.transform2string:
             observation = jpeg_data_compressor(observation)
 
         return observation

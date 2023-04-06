@@ -1,11 +1,9 @@
-import copy
 from typing import Any, List, Tuple
 
 import numpy as np
 import torch
-from easydict import EasyDict
-
 from ding.utils import BUFFER_REGISTRY
+
 from lzero.mcts.tree_search.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts.tree_search.mcts_ptree_sampled import SampledEfficientZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation_list
@@ -19,25 +17,6 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
     Overview:
         The specific game buffer for Sampled EfficientZero policy.
     """
-
-    @classmethod
-    def default_config(cls: type) -> EasyDict:
-        cfg = EasyDict(copy.deepcopy(cls.config))
-        cfg.cfg_type = cls.__name__ + 'Dict'
-        return cfg
-
-    # the default_config for SampledEfficientZeroGameBuffer.
-    config = dict(
-        # the size/capacity of replay_buffer, in the terms of transitions.
-        replay_buffer_size=int(1e6),
-
-        ## reanalyze
-        reanalyze_ratio=0.3,
-        reanalyze_outdated=True,
-        # whether to use root value in reanalyzing part
-        use_root_value=False,
-        mini_infer_size=256,
-    )
 
     def __init__(self, cfg: dict):
         super().__init__(cfg)
@@ -199,7 +178,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
             # pad if length of obs in game_segment is less than stack+num_unroll_steps
             obs_list.append(
                 game_lst[i].get_unroll_obs(pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps,
-                                    padding=True))
+                                           padding=True))
             action_list.append(actions_tmp)
             root_sampled_actions_list.append(root_sampled_actions_tmp)
 
@@ -331,7 +310,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                                             ).astype(np.float32).tolist() for _ in range(transition_batch_size)
                     ]
                     roots.prepare(
-                        self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
+                        self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
                     )
                     # do MCTS for a new policy with the recent target model
                     MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
@@ -357,7 +336,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
 
                     if to_play_segment[0][0] in [None, -1]:
                         roots.prepare(
-                            self._cfg.root_exploration_fraction,
+                            self._cfg.root_noise_weight,
                             noises,
                             value_prefix_pool,
                             policy_logits_pool,
@@ -369,7 +348,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                         )
                     else:
                         roots.prepare(
-                            self._cfg.root_exploration_fraction,
+                            self._cfg.root_noise_weight,
                             noises,
                             value_prefix_pool,
                             policy_logits_pool,
@@ -528,7 +507,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                                         ).astype(np.float32).tolist() for _ in range(transition_batch_size)
                 ]
                 roots.prepare(
-                    self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
+                    self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
                 )
                 # do MCTS for a new policy with the recent target model
                 MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
@@ -559,7 +538,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                                         ).astype(np.float32).tolist() for _ in range(transition_batch_size)
                 ]
                 roots.prepare(
-                    self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
+                    self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
                 )
                 # do MCTS for a new policy with the recent target model
                 MCTSPtree.roots(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)

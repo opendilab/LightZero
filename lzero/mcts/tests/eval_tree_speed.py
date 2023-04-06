@@ -127,7 +127,7 @@ def ptree_func(policy_config, num_simulations):
                                 ).astype(np.float32).tolist() for j in range(env_nums)
         ]
         t1 = time.time()
-        roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+        roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
         prepare_time.append(time.time() - t1)
         t1 = time.time()
         MCTSPtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
@@ -221,7 +221,7 @@ def ctree_func(policy_config, num_simulations):
                                 ).astype(np.float32).tolist() for j in range(env_nums)
         ]
         t1 = time.time()
-        roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+        roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
         prepare_time.append(time.time() - t1)
         t1 = time.time()
         MCTSCtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
@@ -305,7 +305,7 @@ if __name__ == "__main__":
             pb_c_init=1,
             discount_factor=0.9,
             root_dirichlet_alpha=0.3,
-            root_exploration_fraction=0.2,
+            root_noise_weight=0.2,
             dirichlet_alpha=0.3,
             exploration_fraction=1,
             device='cpu',

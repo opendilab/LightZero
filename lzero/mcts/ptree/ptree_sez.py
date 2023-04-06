@@ -324,13 +324,13 @@ class Roots:
                     )
                 )
 
-    def prepare(self, root_exploration_fraction: float, noises: List[float], value_prefixs: List[float],
+    def prepare(self, root_noise_weight: float, noises: List[float], value_prefixs: List[float],
                 policies: List[List[float]], to_play: int = -1) -> None:
         """
         Overview:
             Expand the roots and add noises.
         Arguments:
-            - root_exploration_fraction: the exploration fraction of roots
+            - root_noise_weight: the exploration fraction of roots
             - noises: the vector of noise add to the roots.
             - value_prefixs: the vector of value prefixs of each root.
             - policies: the vector of policy logits of each root.
@@ -343,7 +343,7 @@ class Roots:
                 self.roots[i].expand(-1, 0, i, value_prefixs[i], policies[i])
             else:
                 self.roots[i].expand(to_play[i], 0, i, value_prefixs[i], policies[i])
-            self.roots[i].add_exploration_noise(root_exploration_fraction, noises[i])
+            self.roots[i].add_exploration_noise(root_noise_weight, noises[i])
 
             self.roots[i].visit_count += 1
 

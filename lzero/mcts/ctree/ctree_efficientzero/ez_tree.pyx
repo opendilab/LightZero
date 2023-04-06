@@ -31,9 +31,9 @@ cdef class Roots:
         self.roots = new CRoots(root_num, legal_actions_list)
 
     @cython.binding
-    def prepare(self, float root_exploration_fraction, list noises, list value_prefix_pool,
+    def prepare(self, float root_noise_weight, list noises, list value_prefix_pool,
                 list policy_logits_pool, vector[int] & to_play_batch):
-        self.roots[0].prepare(root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
+        self.roots[0].prepare(root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
 
     @cython.binding
     def prepare_no_noise(self, list value_prefix_pool, list policy_logits_pool, vector[int] & to_play_batch):

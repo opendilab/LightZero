@@ -61,7 +61,7 @@ gomoku_muzero_config = dict(
         discount_factor=1,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        replay_buffer_size=int(1e5),  # the size/capacity of replay_buffer, in the terms of transitions. It's important for stability
+        replay_buffer_size=int(1e5),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

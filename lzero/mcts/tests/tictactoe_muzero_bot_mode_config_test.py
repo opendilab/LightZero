@@ -55,7 +55,7 @@ tictactoe_muzero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
-        cvt_string=False,
+        transform2string=False,
         gray_scale=False,
         use_augmentation=False,
         game_segment_length=5,
@@ -106,7 +106,7 @@ tictactoe_muzero_config = dict(
         mcts_ctree=True,
         battle_mode='play_with_bot_mode',
         game_wrapper=True,
-        monitor_statistics=True,
+        monitor_extra_statistics=True,
 
         ## observation
         # style of augmentation
@@ -151,7 +151,7 @@ tictactoe_muzero_config = dict(
 
         # UCB related config
         root_dirichlet_alpha=0.3,
-        root_exploration_fraction=0.25,
+        root_noise_weight=0.25,
         # ==============================================================
         # end of additional policy_config
         # ==============================================================

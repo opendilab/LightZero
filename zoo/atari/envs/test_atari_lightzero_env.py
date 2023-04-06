@@ -26,7 +26,7 @@ cfg = EasyDict(
     gray_scale=True,
     # gray_scale=False,
     # trade memory for speed
-    cvt_string=False,
+    transform2string=False,
     stop_value=int(1e6),
 )
 

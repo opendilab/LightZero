@@ -118,7 +118,7 @@ class MCTS(object):
         self._root_dirichlet_alpha = self._cfg.get(
             'root_dirichlet_alpha', 0.3
         )  # 0.3  # for chess, 0.03 for Go and 0.15 for shogi.
-        self._root_exploration_fraction = self._cfg.get('root_exploration_fraction', 0.25)  # 0.25
+        self._root_noise_weight = self._cfg.get('root_noise_weight', 0.25)  # 0.25
 
     def get_next_action(self, simulate_env: Type[BaseEnv], policy_forward_fn: Callable, temperature: int = 1.0, sample: bool = True) -> Tuple[int, List[float]]:
         """
@@ -298,6 +298,6 @@ class MCTS(object):
         """
         actions = node.children.keys()
         noise = np.random.gamma(self._root_dirichlet_alpha, 1, len(actions))
-        frac = self._root_exploration_fraction
+        frac = self._root_noise_weight
         for a, n in zip(actions, noise):
             node.children[a].prior_p = node.children[a].prior_p * (1 - frac) + n * frac

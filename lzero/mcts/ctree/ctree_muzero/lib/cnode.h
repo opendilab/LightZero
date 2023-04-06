@@ -55,7 +55,7 @@ namespace tree {
             CRoots(int root_num, std::vector<std::vector<int> > &legal_actions_list);
             ~CRoots();
 
-            void prepare(float root_exploration_fraction, const std::vector<std::vector<float> > &noises, const std::vector<float> &rewards, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch);
+            void prepare(float root_noise_weight, const std::vector<std::vector<float> > &noises, const std::vector<float> &rewards, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch);
             void prepare_no_noise(const std::vector<float> &rewards, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch);
             void clear();
             std::vector<std::vector<int> > get_trajectories();

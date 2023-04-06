@@ -8,12 +8,12 @@ from ding.envs.env.base_env import BaseEnv, BaseEnvTimestep
 from ding.utils.registry_factory import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
+
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
 
 
 @ENV_REGISTRY.register('tictactoe')
 class TicTacToeEnv(BaseEnv):
-
     config = dict(
         env_name="TicTacToe",
         battle_mode='self_play_mode',
@@ -46,7 +46,7 @@ class TicTacToeEnv(BaseEnv):
         self.prob_random_agent = cfg.prob_random_agent
         self.prob_expert_agent = cfg.prob_expert_agent
         assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (
-                    self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
+                self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
             f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
         self._env = self
         self.agent_vs_human = cfg.agent_vs_human
@@ -71,7 +71,7 @@ class TicTacToeEnv(BaseEnv):
                 low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.uint8
             )
         self._action_space = gym.spaces.Discrete(self.board_size ** 2)
-        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1, ), dtype=np.float32)
+        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
@@ -80,24 +80,26 @@ class TicTacToeEnv(BaseEnv):
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
-        if self.battle_mode == 'self_play_mode' or self.battle_mode == 'eval_mode':
-            # In contrast with ``play_with_bot_mode``, in ``self_play_mode`` and ``eval_mode``,
-            # we make ``to_play=self.current_player`` in obs, which is used to differentiate
-            # the alternation of 2 players in the game when do Q calculation.
-            obs = {
-                'observation': self.current_state()[1],
-                'action_mask': action_mask,
-                'board': copy.deepcopy(self.board),
-                'current_player_index': self.start_player_index,
-                'to_play': self.current_player
-            }
-        else:
+        if self.battle_mode == 'play_with_bot_mode' or self.battle_mode == 'eval_mode':
+            # In ``play_with_bot_mode`` and ``eval_mode``, we need to set the "to_play" parameter in the "obs" dict to -1,
+            # because we don't take into account the alternation between players.
+            # The "to_play" parameter is used in the MCTS algorithm.
             obs = {
                 'observation': self.current_state()[1],
                 'action_mask': action_mask,
                 'board': copy.deepcopy(self.board),
                 'current_player_index': self.start_player_index,
                 'to_play': -1
+            }
+        elif self.battle_mode == 'self_play_mode':
+            # In the "self_play_mode", we set to_play=self.current_player in the "obs" dict,
+            # which is used to differentiate the alternation of 2 players in the game when calculating Q in the MCTS algorithm.
+            obs = {
+                'observation': self.current_state()[1],
+                'action_mask': action_mask,
+                'board': copy.deepcopy(self.board),
+                'current_player_index': self.start_player_index,
+                'to_play': self.current_player
             }
         return obs
 

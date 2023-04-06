@@ -1,11 +1,12 @@
+import copy
 import time
 from abc import ABC, abstractmethod
 from typing import Any, List, Tuple, Optional, Union, TYPE_CHECKING
 
 import numpy as np
-
 from ding.torch_utils.data_helper import to_list
 from ding.utils import BUFFER_REGISTRY
+from easydict import EasyDict
 
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
@@ -18,8 +19,38 @@ class GameBuffer(ABC, object):
         The base game buffer class for MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy.
     """
 
+    @classmethod
+    def default_config(cls: type) -> EasyDict:
+        cfg = EasyDict(copy.deepcopy(cls.config))
+        cfg.cfg_type = cls.__name__ + 'Dict'
+        return cfg
+
+    # Default configuration for GameBuffer.
+    config = dict(
+        # (int) The size/capacity of the replay buffer in terms of transitions.
+        replay_buffer_size=int(1e6),
+        # (float) The ratio of experiences required for the reanalyzing part in a minibatch.
+        reanalyze_ratio=0.3,
+        # (bool) Whether to consider outdated experiences for reanalyzing. If True, we first sort the data in the minibatch by the time it was produced
+        # and only reanalyze the oldest ``reanalyze_ratio`` fraction.
+        reanalyze_outdated=True,
+        # (bool) Whether to use the root value in the reanalyzing part. Please refer to EfficientZero paper for details.
+        use_root_value=False,
+        # (int) The number of samples required for mini inference.
+        mini_infer_size=256,
+    )
+
     def __init__(self, cfg: dict):
         super().__init__()
+        """
+        Overview:
+            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
+            in the default configuration, the user-provided value will override the default configuration. Otherwise, 
+            the default configuration will be used.
+        """
+        default_config = self.default_config()
+        default_config.update(cfg)
+        self._cfg = default_config
         self._cfg = cfg
         assert self._cfg.env_type in ['not_board_games', 'board_games']
         self.replay_buffer_size = self._cfg.replay_buffer_size

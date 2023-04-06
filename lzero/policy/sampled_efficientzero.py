@@ -29,156 +29,125 @@ class SampledEfficientZeroPolicy(Policy):
 
     # The default_config for Sampled fEficientZero policy.
     config = dict(
-        # ``sampled_algo=True`` means the policy is sampled-based algorithm, which is used in ``collector``.
+        # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
         sampled_algo=True,
-        # (bool) Whether learning policy is the same as collecting data policy(on-policy)
-        on_policy=False,
         model=dict(
-            # the stacked obs shape -> the transformed obs shape:
-            # [S, W, H, C] -> [S x C, W, H]
-            # e.g. [4, 96, 96, 3] -> [4*3, 96, 96]
-            # observation_shape=(12, 96, 96),  # if frame_stack_num=4, gray_scale=False
-            # observation_shape=(3, 96, 96),  # if frame_stack_num=1, gray_scale=False
-            observation_shape=(4, 96, 96),  # if frame_stack_num=4, gray_scale=True
-            action_space_size=6,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            # whether to use the self_supervised_learning_loss.
+            # (tuple) the stacked obs shape.
+            # observation_shape=(1, 96, 96),  # if frame_stack_num=1
+            observation_shape=(4, 96, 96),  # if frame_stack_num=4
+            # (bool) Whether to use the self-supervised learning loss.
             self_supervised_learning_loss=False,
+            action_space_size=6,
             # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             categorical_distribution=True,
-            # the key difference setting between image-input and vector input.
+            # (int) the image channel in image observation.
             image_channel=1,
+            # (int) The number of frames to stack together.
             frame_stack_num=1,
-            # ==============================================================
-            # the default config is large size model, same as the EfficientZero original paper.
-            # ==============================================================
-            num_res_blocks=1,
-            num_channels=64,
-            lstm_hidden_size=512,
+            # (int) The scale of supports used in categorical distribution. Only effective when ``categorical_distribution=True``.
             support_scale=300,
-            # the above model para. is usually fixed
-            # ==============================================================
+            # (int) The hidden size in LSTM.
+            lstm_hidden_size=512,
             # the sampled specific config
-            # ==============================================================
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}
             fixed_sigma_value=0.3,
         ),
-        # learn_mode config
-        # How many updates(iterations) to train after collector's one collection.
+        ## common
+        # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
+        mcts_ctree=True,
+        # (bool) Whether to use cuda in policy.
+        cuda=True,
+        collector_env_num=8,
+        evaluator_env_num=3,
+        # (str) The type of environment. options is ['not_board_games', 'board_games'].
+        env_type='not_board_games',
+        # (str) The type of battle mode. options is ['play_with_bot_mode', 'self_play_mode'].
+        battle_mode='play_with_bot_mode',
+        # (bool) Whether to monitor extra statistics in tensorboard.
+        monitor_extra_statistics=True,
+        # (int) The transition number of one ``GameSegment`` block.
+        game_segment_length=200,
+
+        ## observation
+        # (bool) Whether to transform image to string to save memory.
+        transform2string=False,
+        # (bool) Whether to use data augmentation.
+        use_augmentation=False,
+        # (list) style of augmentation.
+        augmentation=['shift', 'intensity'],
+
+        ## learn
+        # (int) How many updates(iterations) to train after collector's one collection.
         # Bigger "update_per_collect" means bigger off-policy.
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
         update_per_collect=100,
-        # (int) How many samples in a training batch
+        # (int) How many samples in a training batch.
         batch_size=256,
-        # (int) Frequency of target network update.
-        target_update_freq=100,
-        # (bool) Whether ignore done(usually for max step termination env)
-        ignore_done=False,
-        weight_decay=2e-5,
-        momentum=0.9,
-        grad_clip_value=10,
-
-        # optim_type='Adam',
-        # lr_piecewise_constant_decay=False,
-        # cos_lr_scheduler=True,
-        # learning_rate=0.0001,  # init lr for Adam optimizer coupled with cos_lr_scheduler
-
-        # lr_piecewise_constant_decay=False,
-        # cos_lr_scheduler=False,
-        # optim_type='Adam',
-        # learning_rate=0.003,  # lr for Adam optimizer
-
-        lr_piecewise_constant_decay=True,
         cos_lr_scheduler=False,
         optim_type='SGD',
+        lr_piecewise_constant_decay=True,
         learning_rate=0.2,  # init lr for manually decay schedule
-
+        # optim_type='Adam',
+        # lr_piecewise_constant_decay=False,
+        # learning_rate=0.003,  # lr for Adam optimizer
         # (float) Weight uniform initialization range in the last output layer
         init_w=3e-3,
-
         normalize_prob_of_sampled_actions=False,
         policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
-        
-        # collect_mode config
+        # (int) Frequency of target network update.
+        target_update_freq=100,
+        weight_decay=1e-4,
+        momentum=0.9,
+        grad_clip_value=10,
         # You can use either "n_sample" or "n_episode" in collector.collect.
         # Get "n_episode" episodes per collect.
         n_episode=8,
-
-        # ==============================================================
-        # begin of additional policy_config
-        # ==============================================================
-        ## common
-        mcts_ctree=True,
-        device='cuda',
-        collector_env_num=8,
-        evaluator_env_num=3,
-        env_type='not_board_games',
-        battle_mode='play_with_bot_mode',
-        game_wrapper=True,
-        monitor_statistics=True,
-        game_segment_length=200,
-
-        ## observation
-        # the key difference setting between image-input and vector input.
-        cvt_string=False,
-        use_augmentation=False,
-        # style of augmentation
-        augmentation=['shift', 'intensity'],
-
-        ## learn
+        # (float) the number of simulations in MCTS.
         num_simulations=50,
+        # (float) Discount factor(gamma) for returns.
         discount_factor=0.997,
+        # (int) The number of step for calculating target q_value.
         td_steps=5,
+        # (int) The number of unroll steps in dynamics network.
         num_unroll_steps=5,
-        lstm_horizon_len=5,
-        # the weight of different loss
+        # (float) The weight of reward loss.
         reward_loss_weight=1,
+        # (float) The weight of value loss.
         value_loss_weight=0.25,
+        # (float) The weight of policy loss.
         policy_loss_weight=1,
         policy_entropy_loss_weight=0,
-        ssl_loss_weight=0,
 
-        # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
-        # threshold_training_steps_for_final_lr=int(
-        #     threshold_env_steps_for_final_lr / collector_env_num / average_episode_length_when_converge * update_per_collect),
+        # (float) The weight of ssl (self-supervised learning) loss.
+        ssl_loss_weight=2,  # NOTE: default is 2.
+        # ``threshold_training_steps_for_final_lr`` is used for adjusting lr manually.
         # lr_piecewise_constant_decay: lr: 0.2 -> 0.02 -> 0.002
         threshold_training_steps_for_final_lr=int(1e5),
-
-        # ``threshold_training_steps_for_final_temperature`` is only used for adjusting temperature manually.
-        # threshold_training_steps_for_final_temperature=int(
-        #     threshold_env_steps_for_final_temperature / collector_env_num / average_episode_length_when_converge * update_per_collect),
+        # ``threshold_training_steps_for_final_temperature`` is used for adjusting temperature manually.
         # manual_temperature_decay: temperature: 1 -> 0.5 -> 0.25
         threshold_training_steps_for_final_temperature=int(1e5),
-
-        # (bool) Whether to use manually decayed temperature
+        # (bool) Whether to use manually decayed temperature.
         manual_temperature_decay=False,
-        # ``fixed_temperature_value`` is effective only when manual_temperature_decay=False
+        # (float) ``fixed_temperature_value`` is effective only when manual_temperature_decay=False
         fixed_temperature_value=0.25,
 
-        ## reanalyze
-        reanalyze_ratio=0.3,
-        reanalyze_outdated=True,
-        # whether to use root value in reanalyzing part
-        use_root_value=False,
-        mini_infer_size=256,
-
-        ## priority
+        ## Priority
+        # (bool) Whether to use priority when sampling from the buffer.
         use_priority=True,
+        # (bool) Whether to use the maximum priority for new data.
         use_max_priority_for_new_data=True,
-        # how much prioritization is used: 0 means no prioritization while 1 means full prioritization
+        # (float) The degree of prioritization to use. A value of 0 means no prioritization, while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,
-        # how much correction is used: 0 means no correction while 1 means full correction
+        # (float) The degree of correction to use. A value of 0 means no correction, while a value of 1 means full correction.
         priority_prob_beta=0.4,
-        prioritized_replay_eps=1e-6,
 
         ## UCB
+        # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
         root_dirichlet_alpha=0.3,
-        root_exploration_fraction=0.25,
-        # ==============================================================
-        # end of additional policy_config
-        # ==============================================================
+        # (float) The noise weight at the root node of the search tree.
+        root_noise_weight=0.25,
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
@@ -336,7 +305,7 @@ class SampledEfficientZeroPolicy(Policy):
 
         # Note: The following lines are just for logging.
         predicted_value_prefixs = []
-        if self._cfg.monitor_statistics:
+        if self._cfg.monitor_extra_statistics:
             hidden_state_list = hidden_state.detach().cpu().numpy()
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
@@ -344,7 +313,7 @@ class SampledEfficientZeroPolicy(Policy):
 
         # calculate the new priorities for each transition.
         value_priority = L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0])
-        value_priority = value_priority.data.cpu().numpy() + self._cfg.prioritized_replay_eps
+        value_priority = value_priority.data.cpu().numpy() + 1e-6
 
         # ==============================================================
         # calculate policy and value loss for the first step.
@@ -440,7 +409,7 @@ class SampledEfficientZeroPolicy(Policy):
                     torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
                 )
 
-            if self._cfg.monitor_statistics:
+            if self._cfg.monitor_extra_statistics:
                 original_value_prefixs = self.inverse_scalar_transform_handle(value_prefix)
                 original_value_prefixs_cpu = original_value_prefixs.detach().cpu()
 
@@ -480,7 +449,7 @@ class SampledEfficientZeroPolicy(Policy):
             weighted_total_loss.item(), loss.mean().item(), policy_loss.mean().item(),
             value_prefix_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
         )
-        if self._cfg.monitor_statistics:
+        if self._cfg.monitor_extra_statistics:
             predicted_value_prefixs = torch.stack(predicted_value_prefixs).transpose(1, 0).squeeze(-1)
             predicted_value_prefixs = predicted_value_prefixs.reshape(-1).unsqueeze(-1)
 
@@ -801,7 +770,7 @@ class SampledEfficientZeroPolicy(Policy):
                 # sampled related core code
                 # ==============================================================
                 roots.prepare(
-                    self._cfg.root_exploration_fraction, noises, value_prefix_roots, policy_logits, to_play
+                    self._cfg.root_noise_weight, noises, value_prefix_roots, policy_logits, to_play
                 )
                 self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
             else:
@@ -844,7 +813,7 @@ class SampledEfficientZeroPolicy(Policy):
                                             ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                     ]
                 roots.prepare(
-                    self._cfg.root_exploration_fraction, noises, value_prefix_roots, policy_logits, to_play
+                    self._cfg.root_noise_weight, noises, value_prefix_roots, policy_logits, to_play
                 )
                 self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
 

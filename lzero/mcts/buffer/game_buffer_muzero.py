@@ -1,11 +1,9 @@
-import copy
 from typing import Any, List, Tuple, Union, TYPE_CHECKING, Optional
 
 import numpy as np
 import torch
-from easydict import EasyDict
-
 from ding.utils import BUFFER_REGISTRY
+
 from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation_list
@@ -22,25 +20,6 @@ class MuZeroGameBuffer(GameBuffer):
     Overview:
         The specific game buffer for MuZero policy.
     """
-
-    @classmethod
-    def default_config(cls: type) -> EasyDict:
-        cfg = EasyDict(copy.deepcopy(cls.config))
-        cfg.cfg_type = cls.__name__ + 'Dict'
-        return cfg
-
-    # the default_config for MuZeroGameBuffer.
-    config = dict(
-        # the size/capacity of replay_buffer, in the terms of transitions.
-        replay_buffer_size=int(1e6),
-
-        ## reanalyze
-        reanalyze_ratio=0.3,
-        reanalyze_outdated=True,
-        # whether to use root value in reanalyzing part
-        use_root_value=False,
-        mini_infer_size=256,
-    )
 
     def __init__(self, cfg: dict):
         super().__init__(cfg)
@@ -418,7 +397,7 @@ class MuZeroGameBuffer(GameBuffer):
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
                                             ).astype(np.float32).tolist() for _ in range(transition_batch_size)
                     ]
-                    roots.prepare(self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play)
+                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
                     MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, to_play)
                 else:
@@ -439,7 +418,7 @@ class MuZeroGameBuffer(GameBuffer):
                     ]
 
                     roots.prepare(
-                        self._cfg.root_exploration_fraction,
+                        self._cfg.root_noise_weight,
                         noises,
                         reward_pool,
                         policy_logits_pool,
@@ -569,7 +548,7 @@ class MuZeroGameBuffer(GameBuffer):
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
                                         ).astype(np.float32).tolist() for _ in range(transition_batch_size)
                 ]
-                roots.prepare(self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play)
+                roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, to_play)
                 roots_legal_actions_list = legal_actions
@@ -592,7 +571,7 @@ class MuZeroGameBuffer(GameBuffer):
                 ]
 
                 roots.prepare(
-                    self._cfg.root_exploration_fraction, noises, reward_pool, policy_logits_pool, to_play=to_play
+                    self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play=to_play
                 )
                 # do MCTS for a new policy with the recent target model
                 MCTSPtree(self._cfg).search(roots, model, hidden_state_roots, to_play=to_play)

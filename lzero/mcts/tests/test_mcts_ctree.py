@@ -66,7 +66,7 @@ policy_config = EasyDict(
     pb_c_init=1,
     discount_factor=0.9,
     root_dirichlet_alpha=0.3,
-    root_exploration_fraction=0.2,
+    root_noise_weight=0.2,
     dirichlet_alpha=0.3,
     exploration_fraction=1,
     device='cpu',
@@ -144,7 +144,7 @@ def test_mcts_vs_bot_to_play():
     ]
     # In ctree, to_play must be list, not None
     roots.prepare(
-        policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool,
+        policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool,
         [0 for _ in range(env_nums)]
     )
     MCTSCtree(policy_config
@@ -194,7 +194,7 @@ def test_mcts_vs_bot_to_play_large():
     ]
     # In ctree, to_play must be list, not None
     roots.prepare(
-        policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool,
+        policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool,
         [0 for _ in range(env_nums)]
     )
     MCTSCtree(policy_config
@@ -218,7 +218,7 @@ def test_mcts_vs_bot_to_play_legal_action():
 
     # In ctree, to_play must be list, not None
     roots.prepare(
-        policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool,
+        policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool,
         [0 for _ in range(env_nums)]
     )
     MCTSCtree(policy_config
@@ -251,7 +251,7 @@ def test_mcts_self_play():
                             ).astype(np.float32).tolist() for _ in range(env_nums)
     ]
     # In ctree, to_play must be list, not None
-    roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+    roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
     MCTSCtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
@@ -270,7 +270,7 @@ def test_mcts_self_play_legal_action():
         for j in range(env_nums)
     ]
     # In ctree, to_play must be list, not None
-    roots.prepare(policy_config.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play)
+    roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
     MCTSCtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()

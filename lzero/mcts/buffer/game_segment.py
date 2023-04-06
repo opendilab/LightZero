@@ -87,7 +87,7 @@ class GameSegment:
             if pad_len > 0:
                 pad_frames = np.array([stacked_obs[-1] for _ in range(pad_len)])
                 stacked_obs = np.concatenate((stacked_obs, pad_frames))
-        if self.config.cvt_string:
+        if self.config.transform2string:
             stacked_obs = [jpeg_data_decompressor(obs, self.config.gray_scale) for obs in stacked_obs]
         return stacked_obs
 
@@ -110,7 +110,7 @@ class GameSegment:
         timestep_obs = len(self.obs_segment) - self.frame_stack_num
         timestep = timestep_obs
         stacked_obs = self.obs_segment[timestep:timestep + self.frame_stack_num]
-        if self.config.cvt_string:
+        if self.config.transform2string:
             stacked_obs = [jpeg_data_decompressor(obs, self.config.gray_scale) for obs in stacked_obs]
         return stacked_obs
 

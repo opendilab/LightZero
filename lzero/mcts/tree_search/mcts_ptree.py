@@ -28,15 +28,15 @@ class EfficientZeroMCTSPtree(object):
 
     # the default_config for EfficientZeroMCTSPtree.
     config = dict(
-        support_scale=300,
-        discount_factor=0.997,
-        num_simulations=50,
-        categorical_distribution=True,
-        # UCB related config
+        # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
         root_dirichlet_alpha=0.3,
-        root_exploration_fraction=0.25,
+        # (float) The noise weight at the root node of the search tree.
+        root_noise_weight=0.25,
+        # (int) The base constant used in the PUCT formula for balancing exploration and exploitation during tree search.
         pb_c_base=19652,
+        # (float) The initialization constant used in the PUCT formula for balancing exploration and exploitation during tree search.
         pb_c_init=1.25,
+        # (float) The maximum change in value allowed during the backup step of the search tree update.
         value_delta_max=0.01,
     )
 
@@ -230,15 +230,15 @@ class MuZeroMCTSPtree(object):
 
     # the default_config for MuZeroMCTSPtree.
     config = dict(
-        support_scale=300,
-        discount_factor=0.997,
-        num_simulations=50,
-        categorical_distribution=True,
-        # UCB related config
+        # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
         root_dirichlet_alpha=0.3,
-        root_exploration_fraction=0.25,
+        # (float) The noise weight at the root node of the search tree.
+        root_noise_weight=0.25,
+        # (int) The base constant used in the PUCT formula for balancing exploration and exploitation during tree search.
         pb_c_base=19652,
+        # (float) The initialization constant used in the PUCT formula for balancing exploration and exploitation during tree search.
         pb_c_init=1.25,
+        # (float) The maximum change in value allowed during the backup step of the search tree update.
         value_delta_max=0.01,
     )
 

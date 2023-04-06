@@ -1,11 +1,9 @@
-import copy
-from typing import Any, List, Tuple
+from typing import Any, List
 
 import numpy as np
 import torch
-from easydict import EasyDict
-
 from ding.utils import BUFFER_REGISTRY
+
 from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation_list
@@ -19,25 +17,6 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
     Overview:
         The specific game buffer for EfficientZero policy.
     """
-
-    @classmethod
-    def default_config(cls: type) -> EasyDict:
-        cfg = EasyDict(copy.deepcopy(cls.config))
-        cfg.cfg_type = cls.__name__ + 'Dict'
-        return cfg
-
-    # the default_config for EfficientZeroGameBuffer.
-    config = dict(
-        # the size/capacity of replay_buffer, in the terms of transitions.
-        replay_buffer_size=int(1e6),
-
-        ## reanalyze
-        reanalyze_ratio=0.3,
-        reanalyze_outdated=True,
-        # whether to use root value in reanalyzing part
-        use_root_value=False,
-        mini_infer_size=256,
-    )
 
     def __init__(self, cfg: dict):
         super().__init__(cfg)
@@ -79,14 +58,16 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         policy._target_model.eval()
 
         # obtain the current_batch and prepare target context
-        reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(batch_size, self._cfg.reanalyze_ratio)
+        reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(batch_size,
+                                                                                                         self._cfg.reanalyze_ratio)
 
         # target value_prefixs, target value
         batch_value_prefixs, batch_target_values = self._compute_target_reward_value(reward_value_context,
                                                                                      policy._target_model)
         # target policy
         batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
-        batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(policy_non_re_context, self._cfg.model.action_space_size)
+        batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(policy_non_re_context,
+                                                                                  self._cfg.model.action_space_size)
 
         if 0 < self._cfg.reanalyze_ratio < 1:
             batch_target_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
@@ -255,7 +236,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                                             ).astype(np.float32).tolist() for _ in range(transition_batch_size)
                     ]
                     roots.prepare(
-                        self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
+                        self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
                     )
                     # do MCTS for a new policy with the recent target model
                     MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
@@ -275,7 +256,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                                             ).astype(np.float32).tolist() for j in range(transition_batch_size)
                     ]
                     roots.prepare(
-                        self._cfg.root_exploration_fraction,
+                        self._cfg.root_noise_weight,
                         noises,
                         value_prefix_pool,
                         policy_logits_pool,
@@ -418,7 +399,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                                         ).astype(np.float32).tolist() for _ in range(transition_batch_size)
                 ]
                 roots.prepare(
-                    self._cfg.root_exploration_fraction, noises, value_prefix_pool, policy_logits_pool, to_play
+                    self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
                 )
                 # do MCTS for a new policy with the recent target model
                 MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
@@ -442,7 +423,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                 ]
                 if to_play_segment[0][0] in [None, -1]:
                     roots.prepare(
-                        self._cfg.root_exploration_fraction,
+                        self._cfg.root_noise_weight,
                         noises,
                         value_prefix_pool,
                         policy_logits_pool,
@@ -454,7 +435,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                     )
                 else:
                     roots.prepare(
-                        self._cfg.root_exploration_fraction,
+                        self._cfg.root_noise_weight,
                         noises,
                         value_prefix_pool,
                         policy_logits_pool,
