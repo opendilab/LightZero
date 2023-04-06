@@ -51,7 +51,7 @@ tictactoe_muzero_config = dict(
     ),
     policy=dict(
         sampled_algo=False,
-        device=device,
+        cuda=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='board_games',

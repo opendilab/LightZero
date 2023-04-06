@@ -65,7 +65,7 @@ pong_efficientzero_config = dict(
     ),
     policy=dict(
         sampled_algo=False,
-        device=device,
+        cuda=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',

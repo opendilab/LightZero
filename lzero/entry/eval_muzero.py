@@ -41,6 +41,11 @@ def eval_muzero(
     assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero'], \
         "LightZero now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero'"
 
+    if cfg.policy.cuda and torch.cuda.is_available():
+        cfg.policy.device = 'cuda'
+    else:
+        cfg.policy.device = 'cpu'
+
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
@@ -50,7 +55,6 @@ def eval_muzero(
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
-    set_pkg_seed(cfg.seed, use_cuda=True if cfg.policy.device == 'cuda' else False)
 
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 

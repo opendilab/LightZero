@@ -52,7 +52,7 @@ bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
             lstm_hidden_size=256,
             self_supervised_learning_loss=True,
         ),
-        device=device,
+        cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
         num_simulations=num_simulations,

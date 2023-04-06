@@ -41,6 +41,11 @@ def eval_alphazero(
     cfg, create_cfg = input_cfg
     create_cfg.policy.type = create_cfg.policy.type
 
+    if cfg.policy.cuda and torch.cuda.is_available():
+        cfg.policy.device = 'cuda'
+    else:
+        cfg.policy.device = 'cpu'
+
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
@@ -59,12 +64,12 @@ def eval_alphazero(
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
 
     evaluator = AlphaZeroEvaluator(
-        cfg.policy,
-        cfg.env.n_evaluator_episode,
-        cfg.env.stop_value,
-        evaluator_env,
-        policy.eval_mode,
-        tb_logger,
+        eval_freq=cfg.policy.eval_freq,
+        n_evaluator_episode=cfg.env.n_evaluator_episode,
+        stop_value=cfg.env.stop_value,
+        env=evaluator_env,
+        policy=policy.eval_mode,
+        tb_logger=tb_logger,
         exp_name=cfg.exp_name,
     )
 

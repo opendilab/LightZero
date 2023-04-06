@@ -54,7 +54,7 @@ cartpole_muzero_config = dict(
             # test
             self_supervised_learning_loss=True,
         ),
-        device=device,
+        cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
         num_simulations=num_simulations,

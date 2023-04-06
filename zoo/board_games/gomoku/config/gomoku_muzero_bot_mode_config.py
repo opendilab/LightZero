@@ -53,7 +53,7 @@ gomoku_muzero_config = dict(
             reward_support_size=21,
             value_support_size=21,
         ),
-        device=device,
+        cuda=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         env_type='board_games',

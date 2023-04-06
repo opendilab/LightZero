@@ -1,5 +1,6 @@
 from easydict import EasyDict
 
+
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================

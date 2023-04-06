@@ -43,6 +43,11 @@ def eval_muzero_with_gym_env(
     assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero'], \
         "LightZero noow only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero'"
 
+    if cfg.policy.cuda and torch.cuda.is_available():
+        cfg.policy.device = 'cuda'
+    else:
+        cfg.policy.device = 'cpu'
+
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
 
     # Create main components: env, policy
@@ -54,7 +59,7 @@ def eval_muzero_with_gym_env(
                                    cfg=BaseEnvManager.default_config())
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
-    set_pkg_seed(cfg.seed, use_cuda=True if cfg.policy.device == 'cuda' else False)
+    set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
 
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 

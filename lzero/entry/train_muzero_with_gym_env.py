@@ -54,6 +54,11 @@ def train_muzero_with_gym_env(
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
 
+    if cfg.policy.cuda and torch.cuda.is_available():
+        cfg.policy.device = 'cuda'
+    else:
+        cfg.policy.device = 'cpu'
+
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
 
     # Create main components: env, policy
@@ -67,7 +72,7 @@ def train_muzero_with_gym_env(
         cfg=BaseEnvManager.default_config())
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
-    set_pkg_seed(cfg.seed, use_cuda=True if cfg.policy.device == 'cuda' else False)
+    set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
 
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
@@ -91,7 +96,6 @@ def train_muzero_with_gym_env(
         policy=policy.collect_mode,
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
-        replay_buffer=replay_buffer,
         policy_config=policy_config
     )
     evaluator = MuZeroEvaluator(

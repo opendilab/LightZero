@@ -6,7 +6,6 @@ from ding.envs import BaseEnv
 from ding.envs import BaseEnvManager
 from ding.utils import build_logger, EasyTimer, SERIAL_EVALUATOR_REGISTRY
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
-from easydict import EasyDict
 
 
 @SERIAL_EVALUATOR_REGISTRY.register('alphazero')
@@ -22,7 +21,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
 
     def __init__(
         self,
-        cfg: EasyDict,
+        eval_freq: int = 1000,
         n_evaluator_episode: int = 3,
         stop_value: int = 1e6,
         env: BaseEnv = None,
@@ -36,7 +35,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         Overview:
             Init the AlphaZero evaluator according to input arguments.
         Arguments:
-            - cfg (:obj:`EasyDict`): Config.
+            - eval_freq (:obj:`int`): evaluation frequency in terms of training steps.
             - n_evaluator_episode (:obj:`int`): the number of episodes to eval in total.
             - env (:obj:`BaseEnvManager`): The env for the collection, the BaseEnvManager object or \
                 its derivatives are supported.
@@ -46,7 +45,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             - instance_name (:obj:`Optional[str]`): Name of this instance.
             - env_config: Config of environment
         """
-        self._cfg = cfg
+        self._eval_freq = eval_freq
         self._exp_name = exp_name
         self._instance_name = instance_name
         self._end_flag = False
@@ -154,7 +153,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         """
         if train_iter == self._last_eval_iter:
             return False
-        if (train_iter - self._last_eval_iter) < self._cfg.eval_freq and train_iter != 0:
+        if (train_iter - self._last_eval_iter) < self._eval_freq and train_iter != 0:
             return False
         self._last_eval_iter = train_iter
         return True
@@ -212,9 +211,6 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                         continue
                     if t.done:
                         # Env reset is done by env_manager automatically.
-                        if 'figure_path' in self._cfg:
-                            if self._cfg.figure_path is not None:
-                                self._env.enable_save_figure(env_id, self._cfg.figure_path)
                         self._policy.reset([env_id])
                         reward = t.info['eval_episode_return']
                         if 'episode_info' in t.info:
