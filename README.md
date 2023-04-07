@@ -25,6 +25,7 @@
 
 ## Background
 
+The method of combining Monte Carlo Tree Search (MCTS) and Deep Reinforcemeent Learning (DRL) represented by AlphaZero and MuZero has achieved superhuman level in various games such as Go and Atari , has also made gratifying progress in scientific fields such as protein structure prediction, matrix multiplication algorithm search, etc. 
 The following is an overview of the historical evolution of the Monte Carlo Tree Search (MCTS) algorithm series:
 ![pipeline](assets/mcts_rl_evolution_overview.png)
 
@@ -37,17 +38,17 @@ English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README
 - Efficient.
 - Easy-to-understand.
 
-For further details, please refer to [Features](#features).
+For further details, please refer to [Features](#features), [Framework Structure](#framework-structure) and [Integrated Algorithms](#integrated-algorithms).
 
 **LightZero** aims to **promote the standardization and acceleration of MCTS algorithm families**. A performance comparison of all implemented algorithms under a unified framework is presented in the [Benchmark](#benchmark).
 
 ### Outline
 
 - [Overview](#overview)
-- [Features](#features)
-- [Framework Structure](#framework-structure)
-- [Integrated Algorithms](#integrated-algorithms)
-- [Outline](#outline)
+  - [Outline](#outline)
+  - [Features](#features)
+  - [Framework Structure](#framework-structure)
+  - [Integrated Algorithms](#integrated-algorithms)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Benchmark](#benchmark)
@@ -71,6 +72,12 @@ For further details, please refer to [Features](#features).
 **Easy-to-understand**: LightZero provides detailed documentation and algorithm framework diagrams for all integrated algorithms to help users understand the algorithm's core and compare the differences and similarities between algorithms under the same paradigm. LightZero also provides function call graphs and network structure diagrams for algorithm code implementation, making it easier for users to locate critical code. All the documentations can be found [here](#paper-notes).
 
 ### Framework Structure
+
+<p align="center">
+  <img src="assets/lightzero_file_structure.png" alt="Image Description 1" width="45%" height="auto" style="margin: 0 1%;">
+  <img src="assets/lightzero_pipeline.png" alt="Image Description 2" width="45%" height="auto" style="margin: 0 1%;">
+</p>
+
 To understand the framework structure of LightZero, the following important components need to be understood:
 
 **Model**:
@@ -90,19 +97,20 @@ LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of 
 - [Sampled MuZero](https://arxiv.org/abs/2104.06303)
 
 [comment]: <> (- [Gumbel MuZero]&#40;https://openreview.net/pdf?id=bERaNdoegnO&#41;)
-Our implementation is mainly based on [DI-engine](https://github.com/opendilab/DI-engie).
 
-| Env./Alg.      | AlphaZero | Muzero | EfficientZero | Sampled EfficientZero |
+The environments and algorithms currently supported by LightZero are shown in the table below:
+
+| Env./Alg.      | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero |
 | ------------- | --------- | ------ | ------------- | --------------------- |
 | Atari         | ---       | ✔    | ✔           | ✔                   |
-| chess         | ✔       | 🔒   | 🔒          | 🔒                  |
-| go            | ✔       | 🔒   | 🔒          | 🔒                  |
-| gomoku        | ✔       | ✔    | 🔒          | 🔒                  |
 | tictactoe     | ✔       | ✔    | 🔒          | 🔒                  |
-| bipedalwalker | ---       | ✔    | ✔           | ✔                   |
-| lunarlander   | ---       | ✔    | ✔           | ✔                   |
+| chess         | 🔒       | 🔒   | 🔒          | 🔒                  |
+| go            | 🔒       | 🔒   | 🔒          | 🔒                  |
+| gomoku        | ✔       | ✔    | 🔒          | 🔒                  |
+| lunarlander | ---       | ✔    | ✔           | ✔                   |
+| bipedalwalker   | ---       | ✔    | ✔           | ✔                   |
+| cartpole     | ---       | ✔    | ✔           | ✔                   |
 | pendulum      | ---       | ✔    | ✔           | ✔                   |
-| cartpole      | ---       | ✔    | ✔           | ✔                   |
 
 ## Installation
 
@@ -118,13 +126,19 @@ pip3 install -e .
 
 ## Quick Start
 
+Train a MuZero agent to play [CartPole](https://gymnasium.farama.org/environments/classic_control/cart_pole/):
+
+```bash
+cd LightZero
+python3 -u zoo/classic_control/cartpole/config/cartpole_muzero_config.py
+```
+
 Train a MuZero agent to play [Pong](https://gymnasium.farama.org/environments/atari/pong/):
 
 ```bash
 cd LightZero
 python3 -u zoo/atari/config/atari_muzero_config.py
 ```
-
 
 Train a MuZero agent to play [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-toe):
 
