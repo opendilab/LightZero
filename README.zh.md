@@ -53,7 +53,7 @@
   <img src="assets/lightzero_pipeline.png" alt="Image Description 2" width="45%" height="auto" style="margin: 0 1%;">
 </p>
 
-为了理解 LightZero 的框架结构，需要了解的核心组件如下：
+上图是 LightZero 的框架流程图。我们在下面简介其中的3个核心模块:
 
 **Model**:
 ``Model`` 用于定义网络结构，包含``__init__``函数用于初始化网络结构，和``forward``函数用于计算网络的前向传播。
@@ -64,6 +64,8 @@
 **MCTS**:
 
 ``MCTS`` 定义了蒙特卡洛搜索树的结构和与``Policy``的交互方式。``MCTS``的实现包括 python 和 cpp 两种，分别在``ptree``和``ctree``中实现。
+
+关于 LightZero 的文件结构，请参考 [lightzero_file_structure](https://github.com/opendilab/LightZero/blob/main/assets/lightzero_file_structure.png)。
 
 ### 集成算法
 LightZero 是基于 [PyTorch](https://pytorch.org/) 实现的 MCTS 算法库，在 MCTS 的实现中也用到了 cython 和 cpp。同时，LightZero 的框架主要基于 [DI-engine](https://github.com/opendilab/DI-engine) 实现。目前 LightZero 中集成的算法包括：

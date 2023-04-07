@@ -73,12 +73,19 @@ For further details, please refer to [Features](#features), [Framework Structure
 
 ### Framework Structure
 
+[comment]: <> (<p align="center">)
+
+[comment]: <> (  <img src="assets/lightzero_file_structure.png" alt="Image Description 1" width="45%" height="auto" style="margin: 0 1%;">)
+
+[comment]: <> (  <img src="assets/lightzero_pipeline.png" alt="Image Description 2" width="45%" height="auto" style="margin: 0 1%;">)
+
+[comment]: <> (</p>)
+
 <p align="center">
-  <img src="assets/lightzero_file_structure.png" alt="Image Description 1" width="45%" height="auto" style="margin: 0 1%;">
-  <img src="assets/lightzero_pipeline.png" alt="Image Description 2" width="45%" height="auto" style="margin: 0 1%;">
+  <img src="assets/lightzero_pipeline.png" alt="Image Description 2" width="100%" height="auto" style="margin: 0 1%;">
 </p>
 
-To understand the framework structure of LightZero, the following important components need to be understood:
+The above picture is the framework pipeline of LightZero. We briefly introduce the three core modules below: 
 
 **Model**:
 ``Model`` is used to define the network structure, including the ``__init__`` function for initializing the network structure and the ``forward`` function for computing the network's forward propagation.
@@ -88,6 +95,8 @@ To understand the framework structure of LightZero, the following important comp
 
 **MCTS**:
 ``MCTS`` defines the structure of the Monte Carlo search tree and the way it interacts with the Policy. The implementation of MCTS includes two languages: Python and C++, implemented in ``ptree`` and ``ctree``, respectively.
+
+For the file structure of LightZero, please refer to [lightzero_file_structure](https://github.com/opendilab/LightZero/blob/main/assets/lightzero_file_structure.png).
 
 ### Integrated Algorithms
 LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of MCTS algorithms (sometimes combined with cython and cpp), including:
