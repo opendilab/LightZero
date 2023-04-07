@@ -55,7 +55,6 @@ atari_sampled_efficientzero_config = dict(
             downsample=True,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            self_supervised_learning_loss=True,
         ),
         cuda=True,
         collector_env_num=collector_env_num,
@@ -69,7 +68,6 @@ atari_sampled_efficientzero_config = dict(
         # ``fixed_temperature_value`` is effective only when manual_temperature_decay=False
         fixed_temperature_value=0.25,
         update_per_collect=update_per_collect,
-        ssl_loss_weight=2,
         batch_size=batch_size,
         lr_piecewise_constant_decay=True,
         optim_type='SGD',

@@ -319,7 +319,7 @@ class MuZeroModel(nn.Module):
             action = action.unsqueeze(-1)
 
         # action shape: (batch_size, 1)
-        # action[:, :, None, None] shape:  (batch_size, 1, 1, 1)
+        # action[:, :, None, None]  shape:  (batch_size, 1, 1, 1)
         action_one_hot = (action[:, :, None, None] * action_one_hot / self.action_space_size)
 
         x = torch.cat((latent_state, action_one_hot), dim=1)

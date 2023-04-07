@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-import torch
 from graphviz import Digraph
 
 
@@ -50,36 +49,55 @@ def get_augmented_data(board_size, play_data):
     return extend_data
 
 
-def prepare_observation_list(observation_lst):
+def prepare_observation(observation_list, model_type='conv'):
     """
     Overview:
-        Prepare the observations to satisfy the input format of torch
-        [B, S, W, H, C] -> [B, S x C, W, H]
-        batch, stack num, width, height, channel
+        Prepare the observations to satisfy the input format of model.
+        if model_type='conv':
+            [B, S, W, H, C] -> [B, S x C, W, H]
+            where B is batch size, S is stack num, W is width, H is height, and C is the number of channels
+        if model_type='mlp':
+            [B, S, O] -> [B, S x O]
+            where B is batch size, S is stack num, O is obs shape.
+    Arguments:
+        - observation_list (:obj:`List`): list of observations.
+        - model_type (:obj:`str`): type of the model. (default is 'conv')
     """
-    observation_lst = np.array(observation_lst)
+    assert model_type in ['conv', 'mlp']
+    observation_array = np.array(observation_list)
 
-    if len(observation_lst.shape) == 3:
-        # vector obs input, e.g. classical control ad box2d environments
-        # to be compatible with LightZero model/policy,
-        # observation_lst: [B, S, O], where O is original obs shape
-        # [B, S, O] -> [B, S, O, 1]
-        observation_lst = observation_lst.reshape(observation_lst.shape[0], observation_lst.shape[1], observation_lst.shape[2], 1)
+    if model_type == 'conv':
+        # for 3-dimensional image obs
+        if len(observation_array.shape) == 3:
+            # vector obs input, e.g. classical control ad box2d environments
+            # to be compatible with LightZero model/policy,
+            # observation_array: [B, S, O], where O is original obs shape
+            # [B, S, O] -> [B, S, O, 1]
+            observation_array = observation_array.reshape(observation_array.shape[0], observation_array.shape[1],
+                                                      observation_array.shape[2], 1)
 
-    elif len(observation_lst.shape) == 5:
-        # image obs input, e.g. atari environments
-        # observation_lst: [B, S, W, H, C]
+        elif len(observation_array.shape) == 5:
+            # image obs input, e.g. atari environments
+            # observation_array: [B, S, W, H, C]
 
-        # 1, 4, 8, 1, 1 -> 1, 4, 1, 8, 1
-        #   [B, S, W, H, C] -> [B, S, C, W, H]
-        observation_lst = np.transpose(observation_lst, (0, 1, 4, 2, 3))
+            # 1, 4, 8, 1, 1 -> 1, 4, 1, 8, 1
+            #   [B, S, W, H, C] -> [B, S, C, W, H]
+            observation_array = np.transpose(observation_array, (0, 1, 4, 2, 3))
 
-        shape = observation_lst.shape
-        # 1, 4, 1, 8, 1 -> 1, 4*1, 8, 1
-        #  [B, S, C, W, H] -> [B, S*C, W, H]
-        observation_lst = observation_lst.reshape((shape[0], -1, shape[-2], shape[-1]))
+            shape = observation_array.shape
+            # 1, 4, 1, 8, 1 -> 1, 4*1, 8, 1
+            #  [B, S, C, W, H] -> [B, S*C, W, H]
+            observation_array = observation_array.reshape((shape[0], -1, shape[-2], shape[-1]))
 
-    return observation_lst
+    elif model_type == 'mlp':
+        # for 1-dimensional vector obs
+        # observation_array: [B, S, O], where O is original obs shape
+        # [B, S, O] -> [B, S*O]
+        # print(observation_array.shape)
+        observation_array = observation_array.reshape(observation_array.shape[0], -1)
+        # print(observation_array.shape)
+
+    return observation_array
 
 
 def obtain_tree_topology(root, to_play=-1):
@@ -130,4 +148,3 @@ def plot_simulation_graph(env_root, current_step, graph_directory=None):
     graph_path = graph_directory + 'simulation_visualize_' + str(current_step) + 'step.gv'
     dot.format = 'png'
     dot.render(graph_path, view=False)
-

@@ -6,8 +6,6 @@ from easydict import EasyDict
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-continuous_action_space = False
-K = 2  # num_of_sampled_actions
 num_simulations = 25
 update_per_collect = 100
 batch_size = 256
@@ -17,8 +15,8 @@ reanalyze_ratio = 0.
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-cartpole_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/cartpole_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+cartpole_efficientzero_config = dict(
+    exp_name=f'data_ez_ctree/cartpole_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -30,15 +28,14 @@ cartpole_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
+            model_type='mlp',  # options={'mlp', 'conv'}
             observation_shape=4,
             action_space_size=2,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            continuous_action_space=continuous_action_space,
-            num_of_sampled_actions=K,
             # We use the small size model for cartpole.
             num_res_blocks=1,
             num_channels=16,
             lstm_hidden_size=128,
+            self_supervised_learning_loss=True,
         ),
         cuda=True,
         env_type='not_board_games',
@@ -48,9 +45,9 @@ cartpole_sampled_efficientzero_config = dict(
         optim_type='SGD',
         lr_piecewise_constant_decay=True,
         learning_rate=0.2,  # init lr for manually decay schedule
+        ssl_loss_weight=2,  # NOTE: default is 0.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=2,
         n_episode=n_episode,
         eval_freq=int(2e2),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
@@ -59,26 +56,26 @@ cartpole_sampled_efficientzero_config = dict(
     ),
 )
 
-cartpole_sampled_efficientzero_config = EasyDict(cartpole_sampled_efficientzero_config)
-main_config = cartpole_sampled_efficientzero_config
+cartpole_efficientzero_config = EasyDict(cartpole_efficientzero_config)
+main_config = cartpole_efficientzero_config
 
-cartpole_sampled_efficientzero_create_config = dict(
+cartpole_efficientzero_create_config = dict(
     env=dict(
         type='cartpole_lightzero',
         import_names=['zoo.classic_control.cartpole.envs.cartpole_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='sampled_efficientzero',
-        import_names=['lzero.policy.sampled_efficientzero'],
+        type='efficientzero',
+        import_names=['lzero.policy.efficientzero'],
     ),
     collector=dict(
         type='episode_muzero',
         import_names=['lzero.worker.muzero_collector'],
     )
 )
-cartpole_sampled_efficientzero_create_config = EasyDict(cartpole_sampled_efficientzero_create_config)
-create_config = cartpole_sampled_efficientzero_create_config
+cartpole_efficientzero_create_config = EasyDict(cartpole_efficientzero_create_config)
+create_config = cartpole_efficientzero_create_config
 
 if __name__ == "__main__":
     # Users can use different train entry by specifying the entry_type.

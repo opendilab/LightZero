@@ -11,7 +11,7 @@ from ding.worker.collector.base_serial_collector import ISerialCollector
 from torch.nn import L1Loss
 
 from lzero.mcts.buffer.game_segment import GameSegment
-from lzero.mcts.utils import prepare_observation_list
+from lzero.mcts.utils import prepare_observation
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
@@ -358,7 +358,9 @@ class MuZeroCollector(ISerialCollector):
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
 
                 stack_obs = to_ndarray(stack_obs)
-                stack_obs = prepare_observation_list(stack_obs)
+
+                stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
+
                 stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
 
                 # ==============================================================

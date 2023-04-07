@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from lzero.mcts.buffer.game_segment import GameSegment
-from lzero.mcts.utils import prepare_observation_list
+from lzero.mcts.utils import prepare_observation
 from lzero.policy import select_action
 
 
@@ -55,7 +55,7 @@ def test_game_segment(test_algo):
 
         while not dones.all():
             stack_obs = [game_segment.get_obs() for game_segment in game_segments]
-            stack_obs = prepare_observation_list(stack_obs)
+            stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
             stack_obs = torch.from_numpy(np.array(stack_obs)).to(config.policy.device)
 
             # ==============================================================

@@ -12,7 +12,7 @@ from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
 from lzero.mcts.buffer.game_segment import GameSegment
-from lzero.mcts.utils import prepare_observation_list
+from lzero.mcts.utils import prepare_observation
 
 
 class MuZeroEvaluator(ISerialEvaluator):
@@ -266,7 +266,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
 
                 stack_obs = to_ndarray(stack_obs)
-                stack_obs = prepare_observation_list(stack_obs)
+                stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
                 stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
 
                 # ==============================================================

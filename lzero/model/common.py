@@ -7,7 +7,7 @@ Overview:
 from typing import List, Optional
 from dataclasses import dataclass
 import torch.nn as nn
-from ding.torch_utils import ResBlock
+from ding.torch_utils import MLP, ResBlock
 from ding.utils import SequenceType
 
 import numpy as np
@@ -176,3 +176,43 @@ class RepresentationNetwork(nn.Module):
             mean += np.abs(param.detach().cpu().numpy().reshape(-1)).tolist()
         mean = sum(mean) / len(mean)
         return mean
+
+
+class RepresentationNetworkMLP(nn.Module):
+
+    def __init__(
+        self,
+        observation_shape: int = 2,
+        hidden_channels: int = 64,
+        layer_num: int = 2,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        last_linear_layer_init_zero: bool = True,
+    ):
+        """
+        Overview:
+            Representation network. Encode the observations into hidden state.
+        Arguments:
+            - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96].
+            - num_res_blocks (:obj:`int`): number of res blocks in EfficientZero model.
+            - num_channels (:obj:`int`): channels of hidden states.
+            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, default set it to True. \
+                But sometimes, we do not need, e.g. board games.
+            - activation (:obj:`Optional[nn.Module]`): the activation in EfficientZero model.
+            - norm_type (:obj:`str`): The type of normalization in networks. default set it to 'BN'.
+        """
+        super().__init__()
+        self.fc_representation = MLP(
+            in_channels=observation_shape,
+            hidden_channels=hidden_channels,
+            out_channels=hidden_channels,
+            layer_num=layer_num,
+            activation=activation,
+            norm_type='BN',
+            output_activation=nn.Identity(),
+            output_norm_type=None,
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
+
+    def forward(self, x):
+        x = self.fc_representation(x)
+        return x

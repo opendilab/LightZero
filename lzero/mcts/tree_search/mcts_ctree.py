@@ -306,7 +306,12 @@ class MuZeroMCTSCtree(object):
 
                 # Inside the search ctree we use the dynamics function to obtain the next hidden
                 # state given an action and the previous hidden state
-                network_output = model.recurrent_inference(hidden_states, last_actions)
+
+                try:
+                    network_output = model.recurrent_inference(hidden_states, last_actions)
+                except Exception as error:
+                    print(error)
+
                 # TODO(pu)
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward

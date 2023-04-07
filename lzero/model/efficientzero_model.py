@@ -335,6 +335,7 @@ class EfficientZeroModel(nn.Module):
         x = torch.cat((latent_state, action_one_hot), dim=1)
         # NOTE: the key difference with MuZero
         next_latent_state, next_reward_hidden_state, value_prefix = self.dynamics_network(x, reward_hidden_state)
+
         if not self.state_norm:
             return next_latent_state, next_reward_hidden_state, value_prefix
         else:

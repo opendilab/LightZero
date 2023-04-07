@@ -43,7 +43,7 @@ class SampledEfficientZeroModel(nn.Module):
         pred_hid: int = 512,
         pred_out: int = 1024,
         # the above model para. is usually fixed
-        self_supervised_learning_loss: bool = False,
+        self_supervised_learning_loss: bool = True,
         # ==============================================================
         # specific sampled related config
         # ==============================================================
@@ -396,7 +396,8 @@ class SampledEfficientZeroModel(nn.Module):
             action_one_hot = (action[:, 0, None, None] * action_one_hot / self.action_space_size)
             state_action_encoding = torch.cat((latent_state, action_one_hot), dim=1)
 
-        else:  # continuous action space
+        else:
+            # continuous action space
             action_one_hot = (
                 torch.ones((
                     latent_state.shape[0],
@@ -415,25 +416,14 @@ class SampledEfficientZeroModel(nn.Module):
             # action_one_hot (batch_siize, 1, obs_shape[1], obs_shape[2]) : (8,1,8,1)
             # action[:, 0, None, None]: 8,1,1,1
             # action_embedding: 8,2,8,1
-            try:
-                action_embedding = torch.cat(
-                    [action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_size)], dim=1
-                )
-            except Exception as error:
-                print(error)
-                print(action.shape, action_one_hot.shape)
-
+            action_embedding = torch.cat(
+                [action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_size)], dim=1
+            )
             state_action_encoding = torch.cat((latent_state, action_embedding), dim=1)
 
-        try:
-            next_latent_state, next_reward_hidden_state, value_prefix = self.dynamics_network(
-                state_action_encoding, reward_hidden_state
-            )
-        except Exception as error:
-            print(error)
-            print(latent_state.shape, action_embedding.shape)
-            print(state_action_encoding.shape)
-
+        next_latent_state, next_reward_hidden_state, value_prefix = self.dynamics_network(
+            state_action_encoding, reward_hidden_state
+        )
         if not self.state_norm:
             return next_latent_state, next_reward_hidden_state, value_prefix
         else:

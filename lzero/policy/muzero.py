@@ -14,7 +14,7 @@ from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity
+    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs
 
 
 @POLICY_REGISTRY.register('muzero')
@@ -29,6 +29,8 @@ class MuZeroPolicy(Policy):
         # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
         sampled_algo=False,
         model=dict(
+            # (str) The model type. For 1-dimensional vector obs, we use mlp model. For 3-dimensional image obs, we use conv model.
+            model_type='conv',  # options={'mlp', 'conv'}
             # (tuple) the stacked obs shape.
             # observation_shape=(1, 96, 96),  # if frame_stack_num=1
             observation_shape=(4, 96, 96),  # if frame_stack_num=4
@@ -149,7 +151,10 @@ class MuZeroPolicy(Policy):
             The user can define and use customized network model but must obey the same interface definition indicated \
             by import_names path. For MuZero, ``lzero.model.muzero_model.MuZeroModel``
         """
-        return 'MuZeroModel', ['lzero.model.muzero_model']
+        if self._cfg.model.model_type == "conv":
+            return 'MuZeroModel', ['lzero.model.muzero_model']
+        elif self._cfg.model.model_type == "mlp":
+            return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
 
     def _init_learn(self) -> None:
         if 'optim_type' not in self._cfg.learn.keys() or self._cfg.optim_type == 'SGD':
@@ -201,28 +206,7 @@ class MuZeroPolicy(Policy):
         obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = targets_batch
 
-        """
-        ``obs_batch_ori`` is the original observations in a batch style, shape is:
-        (batch_size, stack_num+num_unroll_steps, W, H, C) -> (batch_size, (stack_num+num_unroll_steps)*C, W, H )
-
-        e.g. in pong: stack_num=4, num_unroll_steps=5
-        (4, 9, 96, 96, 3) -> (4, 9*3, 96, 96) = (4, 27, 96, 96)
-
-        the second dim of ``obs_batch_ori``:
-        timestep t:     1,   2,   3,  4,    5,   6,   7,   8,     9
-        channel_num:    3    3    3   3     3    3    3    3      3
-                       ---, ---, ---, ---,  ---, ---, ---, ---,   ---
-        """
-
-        obs_batch_ori = torch.from_numpy(obs_batch_ori).to(self._cfg.device).float()
-        # ``obs_batch`` is used in ``initial_inference()``, which is the first stacked obs at timestep t1 in
-        # ``obs_batch_ori``. shape is (4, 4*3, 96, 96) = (4, 12, 96, 96)
-        obs_batch = obs_batch_ori[:, 0:self._cfg.model.frame_stack_num * self._cfg.model.image_channel, :, :]
-
-        if self._cfg.model.self_supervised_learning_loss:
-            # ``obs_target_batch`` is only used for calculate consistency loss, which take the all obs other than
-            # timestep t1, and is only performed in the last 8 timesteps in the second dim in ``obs_batch_ori``.
-            obs_target_batch = obs_batch_ori[:, self._cfg.model.image_channel:, :, :]
+        obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
         # do augmentations
         if self._cfg.use_augmentation:
@@ -311,12 +295,17 @@ class MuZeroPolicy(Policy):
                 # ==============================================================
                 # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
                 # ==============================================================
-                beg_index = self._cfg.model.image_channel * step_i
-                end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
-
                 if self._cfg.ssl_loss_weight > 0:
                     # obtain the oracle hidden states from representation function.
-                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
+                    if self._cfg.model.model_type == 'conv':
+                        beg_index = self._cfg.model.image_channel * step_i
+                        end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
+                        network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
+                    elif self._cfg.model.model_type == 'mlp':
+                        beg_index = self._cfg.model.observation_shape * step_i
+                        end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
+                        network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
+
                     representation_state = network_output.hidden_state
 
                     hidden_state = to_tensor(hidden_state)
