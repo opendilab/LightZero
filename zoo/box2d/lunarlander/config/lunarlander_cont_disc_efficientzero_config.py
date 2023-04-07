@@ -34,9 +34,9 @@ lunarlander_cont_disc_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=8,  # if frame_stack_num=1
+            model_type='mlp',  # options={'mlp', 'conv'}
+            observation_shape=8,
             action_space_size=49,  # each_dim_disc_size**2=7**2=9
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             frame_stack_num=1,
             # We use the medium size model for lunarlander.
             num_res_blocks=1,

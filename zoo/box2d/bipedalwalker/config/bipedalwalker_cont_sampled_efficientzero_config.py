@@ -31,11 +31,11 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
+            model_type='mlp',  # options={'mlp', 'conv'}
             observation_shape=24,  # if frame_stack_num=1
             action_space_size=4,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}
             # We use the medium size model for bipedalwalker.
             num_res_blocks=1,
@@ -54,7 +54,7 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         ssl_loss_weight=2,
-        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in thee original Sampled MuZero paper.
+        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
         policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
         grad_clip_value=0.5,  # NOTE: this parameter is important for stability.

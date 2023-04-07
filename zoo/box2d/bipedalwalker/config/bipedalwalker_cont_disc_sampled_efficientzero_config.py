@@ -36,9 +36,9 @@ bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=24,  # if frame_stack_num=1
+            model_type='mlp',  # options={'mlp', 'conv'}
+            observation_shape=24,
             action_space_size=int(each_dim_disc_size ** 4),
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}

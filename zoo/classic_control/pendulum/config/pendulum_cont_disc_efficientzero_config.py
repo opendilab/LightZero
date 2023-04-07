@@ -29,9 +29,9 @@ pendulum_disc_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
+            model_type='mlp',  # options={'mlp', 'conv'}
             observation_shape=3,
             action_space_size=11,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # We use the small size model for pendulum.
             num_res_blocks=1,
             num_channels=16,

@@ -27,16 +27,16 @@ lunarlander_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        cuda=True,
         model=dict(
+            model_type='mlp',  # options={'mlp', 'conv'}
             observation_shape=8,  # if frame_stack_num=1
             action_space_size=4,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # We use the medium size model for lunarlander.
             num_res_blocks=1,
             num_channels=32,
             lstm_hidden_size=256,
         ),
+        cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
         update_per_collect=update_per_collect,

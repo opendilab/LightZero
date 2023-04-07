@@ -30,11 +30,11 @@ pendulum_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
+            model_type='mlp',  # options={'mlp', 'conv'}
             observation_shape=3,
             action_space_size=1,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}
             # We use the small size model for pendulum.
             num_res_blocks=1,

@@ -45,9 +45,9 @@ pendulum_disc_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
+            model_type='mlp',  # options={'mlp', 'conv'}
             observation_shape=3,  # if frame_stack_num=1
             action_space_size=11,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             frame_stack_num=1,
             # We use the small size model for pendulum.
             num_res_blocks=1,

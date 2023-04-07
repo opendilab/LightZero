@@ -83,7 +83,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
             # ==============================================================
             - continuous_action_space (:obj:`bool`): The type of action space. default set it to False.
             - num_of_sampled_actions (:obj:`int`): the number of sampled actions, i.e. the K in original Sampled MuZero paper.
-            # see ``ReparameterizationHead`` in ``ding.model.cmmon.head`` for more details about thee following arguments.
+            # see ``ReparameterizationHead`` in ``ding.model.common.head`` for more details about thee following arguments.
             - sigma_type (:obj:`str`): the type of sigma in policy head of prediction network, options={'conditioned', 'fixed'}.
             - fixed_sigma_value (:obj:`float`): the fixed sigma value in policy head of prediction network,
             - bound_type (:obj:`str`): The type of bound in networks.  default set it to None.
@@ -110,9 +110,11 @@ class SampledEfficientZeroModelMLP(nn.Module):
             self.value_support_size = value_support_size
 
         if self.continuous_action_space:
+            # for continuous action space, we use the action itself as the encoding
             self.action_encoding_dim = self.action_space_size
         else:
-            self.action_encoding_dim = 1
+            # for discrete action space, we use one-hot encoding
+            self.action_encoding_dim = self.action_space_size
 
         self.proj_hid = proj_hid
         self.proj_out = proj_out
@@ -129,7 +131,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
         self.dynamics_network = DynamicsNetwork(
             continuous_action_space=self.continuous_action_space,
             action_space_size=action_space_size,
-            in_channels=latent_state_dim + self.action_encoding_dim, # TODO: action encoding
+            in_channels=latent_state_dim + self.action_encoding_dim,  # TODO: action encoding
             common_layer_num=2,
             lstm_hidden_size=lstm_hidden_size,
             fc_reward_layers=fc_reward_layers,
@@ -267,22 +269,27 @@ class SampledEfficientZeroModelMLP(nn.Module):
                 # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
                 action = action.unsqueeze(-1)
 
-            action_one_hot = torch.ones_like(action)
-
-            # action_encoding shape: (batch_size, 1)
-            action_encoding = (action * action_one_hot / self.action_space_size)
-
-            state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
-
+            # transform action to one-hot encoding.
+            # action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)
+            action_one_hot = torch.zeros(action.shape[0], self.action_space_size, device=action.device)
+            # transform action to torch.int64
+            action = action.long()
+            action_one_hot.scatter_(1, action, 1)
+            action_encoding = action_one_hot
         else:
             # continuous action space
             if len(action.shape) == 1:
                 # (batch_size, ) -> (batch_size, 1)
                 # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
                 action = action.unsqueeze(-1)
+            elif len(action.shape) == 3:
+                # (batch_size, action_dim, 1) -> (batch_size,  action_dim)
+                # e.g.,  torch.Size([8, 2, 1]) ->  torch.Size([8, 2])
+                action = action.squeeze(-1)
 
-            action_embedding = action
-            state_action_encoding = torch.cat((latent_state, action_embedding), dim=1)
+            action_encoding = action
+
+        state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
 
         next_latent_state, next_reward_hidden_state, value_prefix = self.dynamics_network(
             state_action_encoding, reward_hidden_state
@@ -359,9 +366,11 @@ class DynamicsNetwork(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         if continuous_action_space:
+            # for continuous action space, we use the original action as input
             self.action_encoding_dim = action_space_size
         else:
-            self.action_encoding_dim = 1
+            # for discrete action space, we use one-hot encoding
+            self.action_encoding_dim = action_space_size
         self.latent_state_dim = self.in_channels - self.action_encoding_dim
 
         self.lstm_hidden_size = lstm_hidden_size

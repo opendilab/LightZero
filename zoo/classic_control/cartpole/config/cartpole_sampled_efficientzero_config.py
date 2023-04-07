@@ -30,15 +30,16 @@ cartpole_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
+            model_type='mlp',  # options={'mlp', 'conv'}
             observation_shape=4,
             action_space_size=2,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             # We use the small size model for cartpole.
             num_res_blocks=1,
             num_channels=16,
             lstm_hidden_size=128,
+            self_supervised_learning_loss=True,
         ),
         cuda=True,
         env_type='not_board_games',
