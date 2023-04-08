@@ -201,7 +201,7 @@ class MuZeroGameBuffer(GameBuffer):
         value_mask = []
         rewards_list = []
         game_segment_lens = []
-        # for two_player board games
+        # for board games
         action_mask_segment, to_play_segment = [], []
 
         td_steps_list = []
@@ -218,7 +218,7 @@ class MuZeroGameBuffer(GameBuffer):
 
             rewards_list.append(game_segment.reward_segment)
 
-            # for two_player board games
+            # for board games
             action_mask_segment.append(game_segment.action_mask_segment)
             to_play_segment.append(game_segment.to_play_segment)
 
@@ -261,13 +261,13 @@ class MuZeroGameBuffer(GameBuffer):
         """
         child_visits = []
         game_segment_lens = []
-        # for two_player board games
+        # for board games
         action_mask_segment, to_play_segment = [], []
 
         for game_segment, state_index, idx in zip(game_segment_list, pos_in_game_segment_list, batch_index_list):
             game_segment_len = len(game_segment)
             game_segment_lens.append(game_segment_len)
-            # for two_player board games
+            # for board games
             action_mask_segment.append(game_segment.action_mask_segment)
             to_play_segment.append(game_segment.to_play_segment)
 
@@ -297,13 +297,13 @@ class MuZeroGameBuffer(GameBuffer):
             policy_obs_list = []
             policy_mask = []  # 0 -> out of traj, 1 -> new policy
             rewards, child_visits, game_segment_lens = [], [], []
-            # for two_player board games
+            # for board games
             action_mask_segment, to_play_segment = [], []
             for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
                 game_segment_len = len(game_segment)
                 game_segment_lens.append(game_segment_len)
                 rewards.append(game_segment.reward_segment)
-                # for two_player board games
+                # for board games
                 action_mask_segment.append(game_segment.action_mask_segment)
                 to_play_segment.append(game_segment.to_play_segment)
 
@@ -347,6 +347,14 @@ class MuZeroGameBuffer(GameBuffer):
 
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
                                                                         action_mask_segment, pos_in_game_segment_list)
+        if action_mask[0] is not None:
+            # If action_mask[0] is None, the action space of the environment is continuous.
+            action_mask = [
+                list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
+                range(transition_batch_size)
+            ]
+        legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
+                         range(transition_batch_size)]
 
         batch_target_values, batch_rewards = [], []
         with torch.no_grad():
@@ -381,18 +389,7 @@ class MuZeroGameBuffer(GameBuffer):
 
                 if self._cfg.mcts_ctree:
                     # cpp mcts_tree
-                    if to_play_segment[0][0] in [None, -1]:
-                        # for one_player atari games
-                        action_mask = [
-                            list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
-                            range(transition_batch_size)
-                        ]
-                        to_play = [-1 for _ in range(transition_batch_size)]
-
-                    legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
-                                     range(transition_batch_size)]
                     roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-
                     noises = [
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
                                             ).astype(np.float32).tolist() for _ in range(transition_batch_size)
@@ -402,21 +399,11 @@ class MuZeroGameBuffer(GameBuffer):
                     MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, to_play)
                 else:
                     # python mcts_tree
-                    if to_play_segment[0][0] in [None, -1]:
-                        # for one_player atari games
-                        action_mask = [
-                            list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
-                            range(transition_batch_size)
-                        ]
-
-                    legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
-                                     range(transition_batch_size)]
                     roots = MCTSPtree.roots(transition_batch_size, legal_actions)
                     noises = [
                         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                             ).astype(np.float32).tolist() for j in range(transition_batch_size)
                     ]
-
                     roots.prepare(
                         self._cfg.root_noise_weight,
                         noises,
@@ -434,7 +421,7 @@ class MuZeroGameBuffer(GameBuffer):
                 value_list = concat_output_value(network_output)
 
             # get last state value
-            if to_play_segment[0][0] in [1, 2]:
+            if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
                 # TODO(pu): for board_games, very important, to check
                 value_list = value_list.reshape(-1) * np.array([self._cfg.discount_factor ** td_steps_list[i]
                                                                 if int(td_steps_list[i]) % 2 == 0
@@ -459,7 +446,7 @@ class MuZeroGameBuffer(GameBuffer):
                     bootstrap_index = current_index + td_steps_list[value_index]
                     # for i, reward in enumerate(game.rewards[current_index:bootstrap_index]):
                     for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
-                        if to_play_segment[0][0] in [1, 2]:
+                        if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
                             # TODO(pu): for board_games, very important, to check
                             if to_play_list[base_index] == to_play_list[i]:
                                 value_list[value_index] += reward * self._cfg.discount_factor ** i
@@ -499,7 +486,7 @@ class MuZeroGameBuffer(GameBuffer):
             return []
         batch_target_policies_re = []
 
-        # for two_player board games
+        # for board games
         policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, game_segment_lens, action_mask_segment, \
         to_play_segment = policy_re_context
         # transition_batch_size = game_segment_batch_size * (self._cfg.num_unroll_steps + 1)
@@ -508,6 +495,14 @@ class MuZeroGameBuffer(GameBuffer):
 
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
                                                                         action_mask_segment, pos_in_game_segment_list)
+
+        # TODO(pu):20230408 check
+        # if action_mask[0] is not None:
+        #     # If action_mask[0] is None, the action space of the environment is continuous.
+        #     legal_actions = [
+        #         [i for i, x in enumerate(action_mask[j]) if x == 1]
+        #         for j in range(game_segment_batch_size * (self._cfg.num_unroll_steps + 1))
+        #     ]
 
         with torch.no_grad():
             policy_obs_list = prepare_observation_list(policy_obs_list)
@@ -532,13 +527,13 @@ class MuZeroGameBuffer(GameBuffer):
             policy_logits_pool = policy_logits_pool.tolist()
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
-                if to_play_segment[0][0] in [None, -1]:
-                    # for one_player atari games
+                if action_mask[0] is None:
+                    # TODO(pu): 20230408 check
+                    # If action_mask[0] is None, the action space of the environment is continuous.
                     action_mask = [
                         list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
                         range(transition_batch_size)
                     ]
-                    to_play = [-1 for _ in range(transition_batch_size)]
 
                 legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
                                  range(transition_batch_size)]
@@ -554,8 +549,9 @@ class MuZeroGameBuffer(GameBuffer):
                 roots_legal_actions_list = legal_actions
             else:
                 # python mcts_tree
-                if to_play_segment[0][0] in [None, -1]:
-                    # for one_player atari games
+                if action_mask[0] is None:
+                    # TODO(pu): 20230408 check
+                    # If action_mask[0] is None, the action space of the environment is continuous.
                     action_mask = [
                         list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
                         range(transition_batch_size)
@@ -598,14 +594,12 @@ class MuZeroGameBuffer(GameBuffer):
                         else:
                             if self._cfg.mcts_ctree:
                                 # cpp mcts_tree
-                                if to_play_segment[0][0] in [None, -1]:
-                                    # for one_player atari games
-                                    # NOTE: very important
+                                if self._cfg.env_type == 'not_board_games':
                                     sum_visits = sum(distributions)
                                     policy = [visit_count / sum_visits for visit_count in distributions]
                                     target_policies.append(policy)
                                 else:
-                                    # for two_player board games
+                                    # for board games
                                     policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
                                     # to make sure target_policies have the same dimension
                                     sum_visits = sum(distributions)
@@ -615,13 +609,13 @@ class MuZeroGameBuffer(GameBuffer):
                                     target_policies.append(policy_tmp)
                             else:
                                 # python mcts_tree
-                                if to_play_segment[0][0] in [None, -1]:
+                                if self._cfg.env_type == 'not_board_games':
                                     # NOTE: very important
                                     sum_visits = sum(distributions)
                                     policy = [visit_count / sum_visits for visit_count in distributions]
                                     target_policies.append(policy)
                                 else:
-                                    # for two_player board games
+                                    # for board games
                                     policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
                                     # to make sure target_policies have the same dimension
                                     sum_visits = sum(distributions)
@@ -661,21 +655,28 @@ class MuZeroGameBuffer(GameBuffer):
         pos_in_game_segment_list, child_visits, game_segment_lens, action_mask_segment, to_play_segment = policy_non_re_context
         # TODO: check
         game_segment_batch_size = len(pos_in_game_segment_list)
+        transition_batch_size = game_segment_batch_size * (self._cfg.num_unroll_steps + 1)
 
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
                                                                         action_mask_segment, pos_in_game_segment_list)
-        # TODO: check
-        if action_mask[0] is not None:
+
+        if action_mask[0] is None:
+            # TODO(pu): 20230408 check
             # If action_mask[0] is None, the action space of the environment is continuous.
-            legal_actions = [
-                [i for i, x in enumerate(action_mask[j]) if x == 1]
-                for j in range(game_segment_batch_size * (self._cfg.num_unroll_steps + 1))
+            action_mask = [
+                list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
+                range(transition_batch_size)
             ]
+        legal_actions = [
+            [i for i, x in enumerate(action_mask[j]) if x == 1]
+            for j in range(transition_batch_size)
+        ]
 
         with torch.no_grad():
             policy_index = 0
-            # for policy
-            policy_mask = []  # 0 -> out of traj, 1 -> old policy
+            # 0 -> Invalid target policy for padding outside of game segments,
+            # 1 -> Previous target policy for game segments.
+            policy_mask = []
             for game_segment_len, child_visit, state_index in zip(game_segment_lens, child_visits,
                                                                   pos_in_game_segment_list):
                 target_policies = []
@@ -691,7 +692,7 @@ class MuZeroGameBuffer(GameBuffer):
                                 # for one_player atari games
                                 target_policies.append(distributions)
                             else:
-                                # for two_player board games
+                                # for board games
                                 policy_tmp = [0 for _ in range(policy_shape)]
                                 for index, legal_action in enumerate(legal_actions[policy_index]):
                                     # only the action in ``legal_action`` the policy logits is nonzero
@@ -703,13 +704,12 @@ class MuZeroGameBuffer(GameBuffer):
                                 # for one_player atari games
                                 target_policies.append(distributions)
                             else:
-                                # for two_player board games
+                                # for board games
                                 policy_tmp = [0 for _ in range(policy_shape)]
                                 for index, legal_action in enumerate(legal_actions[policy_index]):
                                     # only the action in ``legal_action`` the policy logits is nonzero
                                     policy_tmp[legal_action] = distributions[index]
                                 target_policies.append(policy_tmp)
-
                     else:
                         # NOTE: the invalid padding target policy, O is to make sure the correspoding cross_entropy_loss=0
                         policy_mask.append(0)

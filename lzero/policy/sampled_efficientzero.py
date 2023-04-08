@@ -112,6 +112,7 @@ class SampledEfficientZeroPolicy(Policy):
         td_steps=5,
         # (int) The number of unroll steps in dynamics network.
         num_unroll_steps=5,
+        lstm_horizon_len=5,
         # (float) The weight of reward loss.
         reward_loss_weight=1,
         # (float) The weight of value loss.
