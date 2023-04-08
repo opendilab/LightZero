@@ -349,13 +349,18 @@ class MuZeroGameBuffer(GameBuffer):
 
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
                                                                         action_mask_segment, pos_in_game_segment_list)
-        if action_mask[0] is None:
-            # If action_mask[0] is None, the action space of the environment is continuous.
+        if self._cfg.model.continuous_action_space is True:
+            # when the action space of the environment is continuous, action_mask[:] is None.
             action_mask = [
                 list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
                 range(transition_batch_size)
             ]
-        legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
+            # NOTE: in continuous action space env: we set all legal_actions as -1
+            legal_actions = [
+                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
+            ]
+        else:
+            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
                          range(transition_batch_size)]
 
         batch_target_values, batch_rewards = [], []
@@ -389,32 +394,26 @@ class MuZeroGameBuffer(GameBuffer):
                 reward_pool = reward_pool.squeeze().tolist()
                 policy_logits_pool = policy_logits_pool.tolist()
 
+                noises = [
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
+                                        ).astype(np.float32).tolist() for _ in range(transition_batch_size)
+                ]
+                # noises = [
+                #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                #                         ).astype(np.float32).tolist() for j in range(transition_batch_size)
+                # ]
                 if self._cfg.mcts_ctree:
                     # cpp mcts_tree
                     roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                    noises = [
-                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
-                                            ).astype(np.float32).tolist() for _ in range(transition_batch_size)
-                    ]
                     roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
                     MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, to_play)
                 else:
                     # python mcts_tree
                     roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                    noises = [
-                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                            ).astype(np.float32).tolist() for j in range(transition_batch_size)
-                    ]
-                    roots.prepare(
-                        self._cfg.root_noise_weight,
-                        noises,
-                        reward_pool,
-                        policy_logits_pool,
-                        to_play=to_play
-                    )
+                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
-                    MCTSPtree(self._cfg).search(roots, model, hidden_state_roots, to_play=to_play)
+                    MCTSPtree(self._cfg).search(roots, model, hidden_state_roots, to_play)
 
                 roots_values = roots.get_values()
                 value_list = np.array(roots_values)
@@ -498,14 +497,18 @@ class MuZeroGameBuffer(GameBuffer):
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
                                                                         action_mask_segment, pos_in_game_segment_list)
 
-        if action_mask[0] is None:
-            # TODO(pu): 20230408 check
-            # If action_mask[0] is None, the action space of the environment is continuous.
+        if self._cfg.model.continuous_action_space is True:
+            # when the action space of the environment is continuous, action_mask[:] is None.
             action_mask = [
                 list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
                 range(transition_batch_size)
             ]
-        legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
+            # NOTE: in continuous action space env: we set all legal_actions as -1
+            legal_actions = [
+                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
+            ]
+        else:
+            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
                          range(transition_batch_size)]
 
         with torch.no_grad():
@@ -529,31 +532,26 @@ class MuZeroGameBuffer(GameBuffer):
             _, reward_pool, policy_logits_pool, hidden_state_roots = concat_output(network_output)
             reward_pool = reward_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
+            noises = [
+                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
+                                    ).astype(np.float32).tolist() for _ in range(transition_batch_size)
+            ]
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
-                                        ).astype(np.float32).tolist() for _ in range(transition_batch_size)
-                ]
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, to_play)
-                roots_legal_actions_list = legal_actions
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                        ).astype(np.float32).tolist() for j in range(transition_batch_size)
-                ]
                 roots.prepare(
                     self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play
                 )
                 # do MCTS for a new policy with the recent target model
                 MCTSPtree(self._cfg).search(roots, model, hidden_state_roots, to_play)
-                roots_legal_actions_list = roots.legal_actions_list
 
+            roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
             policy_index = 0
             for state_index, game_index in zip(pos_in_game_segment_list, batch_index_list):
@@ -572,38 +570,20 @@ class MuZeroGameBuffer(GameBuffer):
                                 list(np.ones(self._cfg.model.action_space_size) / self._cfg.model.action_space_size)
                             )
                         else:
-                            if self._cfg.mcts_ctree:
-                                # cpp mcts_tree
-                                if self._cfg.env_type == 'not_board_games':
-                                    # for atari/classic_control/box2d environments that only have one player.
-                                    sum_visits = sum(distributions)
-                                    policy = [visit_count / sum_visits for visit_count in distributions]
-                                    target_policies.append(policy)
-                                else:
-                                    # for board games that have two players and legal_actions is dy
-                                    policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
-                                    # to make sure target_policies have the same dimension
-                                    sum_visits = sum(distributions)
-                                    policy = [visit_count / sum_visits for visit_count in distributions]
-                                    for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
-                                        policy_tmp[legal_action] = policy[index]
-                                    target_policies.append(policy_tmp)
+                            if self._cfg.env_type == 'not_board_games':
+                                # for atari/classic_control/box2d environments that only have one player.
+                                sum_visits = sum(distributions)
+                                policy = [visit_count / sum_visits for visit_count in distributions]
+                                target_policies.append(policy)
                             else:
-                                # python mcts_tree
-                                if self._cfg.env_type == 'not_board_games':
-                                    # for atari/classic_control/box2d environments that only have one player.
-                                    sum_visits = sum(distributions)
-                                    policy = [visit_count / sum_visits for visit_count in distributions]
-                                    target_policies.append(policy)
-                                else:
-                                    # for board games
-                                    policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
-                                    # to make sure target_policies have the same dimension
-                                    sum_visits = sum(distributions)
-                                    policy = [visit_count / sum_visits for visit_count in distributions]
-                                    for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
-                                        policy_tmp[legal_action] = policy[index]
-                                    target_policies.append(policy_tmp)
+                                # for board games that have two players and legal_actions is dy
+                                policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
+                                # to make sure target_policies have the same dimension
+                                sum_visits = sum(distributions)
+                                policy = [visit_count / sum_visits for visit_count in distributions]
+                                for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
+                                    policy_tmp[legal_action] = policy[index]
+                                target_policies.append(policy_tmp)
 
                     policy_index += 1
 
@@ -640,17 +620,19 @@ class MuZeroGameBuffer(GameBuffer):
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
                                                                         action_mask_segment, pos_in_game_segment_list)
 
-        if action_mask[0] is None:
-            # TODO(pu): polish
-            # If action_mask[0] is None, the action space of the environment is continuous.
+        if self._cfg.model.continuous_action_space is True:
+            # when the action space of the environment is continuous, action_mask[:] is None.
             action_mask = [
                 list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
                 range(transition_batch_size)
             ]
-        legal_actions = [
-            [i for i, x in enumerate(action_mask[j]) if x == 1]
-            for j in range(transition_batch_size)
-        ]
+            # NOTE: in continuous action space env: we set all legal_actions as -1
+            legal_actions = [
+                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
+            ]
+        else:
+            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
+                         range(transition_batch_size)]
 
         with torch.no_grad():
             policy_index = 0
@@ -666,30 +648,16 @@ class MuZeroGameBuffer(GameBuffer):
                         policy_mask.append(1)
                         # NOTE: child_visit is already a distribution
                         distributions = child_visit[current_index]
-                        if self._cfg.mcts_ctree:
-                            # cpp mcts_tree
-                            if self._cfg.env_type == 'not_board_games':
-                                # for atari/classic_control/box2d environments that only have one player.
-                                target_policies.append(distributions)
-                            else:
-                                # for board games that have two players.
-                                policy_tmp = [0 for _ in range(policy_shape)]
-                                for index, legal_action in enumerate(legal_actions[policy_index]):
-                                    # only the action in ``legal_action`` the policy logits is nonzero
-                                    policy_tmp[legal_action] = distributions[index]
-                                target_policies.append(policy_tmp)
+                        if self._cfg.env_type == 'not_board_games':
+                            # for atari/classic_control/box2d environments that only have one player.
+                            target_policies.append(distributions)
                         else:
-                            # python mcts_tree
-                            if self._cfg.env_type == 'not_board_games':
-                                # for atari/classic_control/box2d environments that only have one player.
-                                target_policies.append(distributions)
-                            else:
-                                # for board games that have two players.
-                                policy_tmp = [0 for _ in range(policy_shape)]
-                                for index, legal_action in enumerate(legal_actions[policy_index]):
-                                    # only the action in ``legal_action`` the policy logits is nonzero
-                                    policy_tmp[legal_action] = distributions[index]
-                                target_policies.append(policy_tmp)
+                            # for board games that have two players.
+                            policy_tmp = [0 for _ in range(policy_shape)]
+                            for index, legal_action in enumerate(legal_actions[policy_index]):
+                                # only the action in ``legal_action`` the policy logits is nonzero
+                                policy_tmp[legal_action] = distributions[index]
+                            target_policies.append(policy_tmp)
                     else:
                         # NOTE: the invalid padding target policy, O is to make sure the correspoding cross_entropy_loss=0
                         policy_mask.append(0)

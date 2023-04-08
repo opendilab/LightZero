@@ -166,6 +166,10 @@ class GameBuffer(ABC, object):
             to_play.append(to_play_tmp)
         to_play = sum(to_play, [])
 
+        if self._cfg.model.continuous_action_space is True:
+            # when the action space of the environment is continuous, action_mask[:] is None.
+            return to_play, None
+
         action_mask = []
         for bs in range(game_segment_batch_size):
             action_mask_tmp = list(
