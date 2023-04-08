@@ -250,7 +250,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
 
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
                                                                         action_mask_segment, pos_in_game_segment_list)
-        if action_mask[0] is not None:
+        if action_mask[0] is None:
             # If action_mask[0] is None, the action space of the environment is continuous.
             action_mask = [
                 list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
@@ -432,7 +432,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
 
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
                                                                         action_mask_segment, pos_in_game_segment_list)
-        if action_mask[0] is not None:
+        if action_mask[0] is None:
             # If action_mask[0] is None, the action space of the environment is continuous.
             action_mask = [
                 list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
