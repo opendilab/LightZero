@@ -45,6 +45,7 @@ atari_efficientzero_config = dict(
     ),
     policy=dict(
         mcts_ctree=True,
+        # mcts_ctree=False,
         model=dict(
             observation_shape=(4, 96, 96),
             frame_stack_num=4,

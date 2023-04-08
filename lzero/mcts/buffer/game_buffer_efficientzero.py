@@ -177,6 +177,9 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
                                                                         action_mask_segment, pos_in_game_segment_list)
 
+        legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
+                         range(transition_batch_size)]
+
         # ==============================================================
         # EfficientZero related core code
         # ==============================================================
@@ -217,50 +220,23 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                 )
                 value_prefix_pool = value_prefix_pool.squeeze().tolist()
                 policy_logits_pool = policy_logits_pool.tolist()
+                noises = [
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
+                                        ).astype(np.float32).tolist() for _ in range(transition_batch_size)
+                ]
                 if self._cfg.mcts_ctree:
-                    ## cpp mcts_tree
-                    if to_play_segment[0][0] in [None, -1]:
-                        # for one_player atari games
-                        action_mask = [
-                            list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
-                            range(transition_batch_size)
-                        ]
-                        to_play = [-1 for i in range(transition_batch_size)]
-
-                    legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
-                                     range(transition_batch_size)]
+                    # cpp mcts_tree
                     roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-
-                    noises = [
-                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
-                                            ).astype(np.float32).tolist() for _ in range(transition_batch_size)
-                    ]
                     roots.prepare(
                         self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
                     )
                     # do MCTS for a new policy with the recent target model
                     MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 else:
-                    ## python mcts_tree
-                    if to_play_segment[0][0] in [None, -1]:
-                        # for one_player atari games
-                        action_mask = [
-                            list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
-                            range(transition_batch_size)
-                        ]
-                    legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
-                                     range(transition_batch_size)]
-                    roots = MCTSPtree.roots(transition_batch_size, self._cfg.num_simulations, legal_actions)
-                    noises = [
-                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                            ).astype(np.float32).tolist() for j in range(transition_batch_size)
-                    ]
+                    # python mcts_tree
+                    roots = MCTSPtree.roots(transition_batch_size, legal_actions)
                     roots.prepare(
-                        self._cfg.root_noise_weight,
-                        noises,
-                        value_prefix_pool,
-                        policy_logits_pool,
-                        to_play=to_play
+                        self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
                     )
                     # do MCTS for a new policy with the recent target model
                     MCTSPtree(self._cfg).search(
@@ -273,7 +249,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                 value_list = concat_output_value(network_output)
 
             # get last state value
-            if to_play_segment[0][0] in [1, 2]:
+            if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
                 # TODO(pu): for board_games, very important, to check
                 value_list = value_list.reshape(-1) * np.array([self._cfg.discount_factor ** td_steps_list[i]
                                                                 if int(td_steps_list[i]) % 2 == 0
@@ -297,7 +273,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
                     for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
-                        if to_play_segment[0][0] in [1, 2]:
+                        if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
                             # TODO(pu): for board_games, very important, to check
                             if to_play_list[base_index] == to_play_list[i]:
                                 value_list[value_index] += reward * self._cfg.discount_factor ** i
@@ -351,6 +327,8 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
                                                                         action_mask_segment, pos_in_game_segment_list)
 
+        legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
+                         range(transition_batch_size)]
         with torch.no_grad():
             policy_obs_list = prepare_observation_list(policy_obs_list)
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
@@ -380,72 +358,30 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
             )
             value_prefix_pool = value_prefix_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
+            noises = [
+                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
+                                    ).astype(np.float32).tolist() for _ in range(transition_batch_size)
+            ]
             if self._cfg.mcts_ctree:
-                ## cpp mcts_tree
-                if to_play_segment[0][0] in [None, -1]:
-                    # for one_player atari games
-                    action_mask = [
-                        list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
-                        range(transition_batch_size)
-                    ]
-                    to_play = [-1 for _ in range(transition_batch_size)]
-
-                legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
-                                 range(transition_batch_size)]
+                # cpp mcts_tree
                 roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
-                                        ).astype(np.float32).tolist() for _ in range(transition_batch_size)
-                ]
                 roots.prepare(
                     self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
                 )
                 # do MCTS for a new policy with the recent target model
                 MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
-                roots_legal_actions_list = legal_actions
-
             else:
-                ## python mcts_tree
-                if to_play_segment[0][0] in [None, -1]:
-                    # for one_player atari games
-                    action_mask = [
-                        list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
-                        range(transition_batch_size)
-                    ]
+                # python mcts_tree
+                roots = MCTSPtree.roots(transition_batch_size, legal_actions)
+                roots.prepare(
+                    self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
+                )
+                # do MCTS for a new policy with the recent target model
+                MCTSPtree(self._cfg).search(
+                    roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play
+                )
 
-                legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
-                                 range(transition_batch_size)]
-                roots = MCTSPtree.roots(transition_batch_size, self._cfg.num_simulations, legal_actions)
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                        ).astype(np.float32).tolist() for j in range(transition_batch_size)
-                ]
-                if to_play_segment[0][0] in [None, -1]:
-                    roots.prepare(
-                        self._cfg.root_noise_weight,
-                        noises,
-                        value_prefix_pool,
-                        policy_logits_pool,
-                        to_play=-1
-                    )
-                    # do MCTS for a new policy with the recent target model
-                    MCTSPtree(self._cfg).search(
-                        roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=-1
-                    )
-                else:
-                    roots.prepare(
-                        self._cfg.root_noise_weight,
-                        noises,
-                        value_prefix_pool,
-                        policy_logits_pool,
-                        to_play=to_play
-                    )
-                    # do MCTS for a new policy with the recent target model
-                    MCTSPtree(self._cfg).search(
-                        roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play
-                    )
-                roots_legal_actions_list = roots.legal_actions_list
+            roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
             policy_index = 0
             for state_index, game_index in zip(pos_in_game_segment_list, batch_index_list):
@@ -463,8 +399,8 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                             )
                         else:
                             if self._cfg.mcts_ctree:
-                                ## cpp mcts_tree
-                                if to_play_segment[0][0] in [None, -1]:
+                                # cpp mcts_tree
+                                if self._cfg.env_type == 'not_board_games':
                                     sum_visits = sum(distributions)
                                     policy = [visit_count / sum_visits for visit_count in distributions]
                                     target_policies.append(policy)
@@ -479,7 +415,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                                     target_policies.append(policy_tmp)
                             else:
                                 # python mcts_tree
-                                if to_play_segment[0][0] in [None, -1]:
+                                if self._cfg.env_type == 'not_board_games':
                                     sum_visits = sum(distributions)
                                     policy = [visit_count / sum_visits for visit_count in distributions]
                                     target_policies.append(policy)

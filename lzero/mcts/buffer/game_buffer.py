@@ -161,11 +161,14 @@ class GameBuffer(ABC, object):
                                                                  self._cfg.num_unroll_steps + 1]
             )
             if len(to_play_tmp) < self._cfg.num_unroll_steps + 1:
-                # effective to play index is {1,2}, for null padding data, we set to_play=-1
-                # TODO: check 1
+                # NOTE: the effective to play index is {1,2}, for null padding data, we set to_play=-1
                 to_play_tmp += [-1 for _ in range(self._cfg.num_unroll_steps + 1 - len(to_play_tmp))]
             to_play.append(to_play_tmp)
         to_play = sum(to_play, [])
+
+        if self._cfg.model.continuous_action_space is True:
+            # when the action space of the environment is continuous, action_mask[:] is None.
+            return to_play, None
 
         action_mask = []
         for bs in range(game_segment_batch_size):
