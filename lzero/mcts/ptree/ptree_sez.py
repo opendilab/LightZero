@@ -100,11 +100,8 @@ class Node:
             # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
             log_prob = dist.log_prob(sampled_actions_before_tanh).unsqueeze(-1)
             log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
-            # if self.legal_actions is None:
             self.legal_actions = []
 
-            # TODO: factored policy representation
-            # empirical_distribution = [1/self.num_of_sampled_actions]
             for action_index in range(self.num_of_sampled_actions):
                 self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
                     log_prob[action_index],
@@ -115,7 +112,7 @@ class Node:
                 self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
         else:
             if self.legal_actions is not None:
-                # fisrt use theself.legal_actions to exclude the illegal actions
+                # first use the self.legal_actions to exclude the illegal actions
                 policy_tmp = [0. for _ in range(self.action_space_size)]
                 for index, legal_action in enumerate(self.legal_actions):
                     policy_tmp[legal_action] = policy_logits[index]
@@ -140,7 +137,7 @@ class Node:
     ) -> None:
         """
         Overview:
-            add exploration noise to priors
+            add exploration noise to priors.
         Arguments:
             - noises (:obj: list): length is len(self.legal_actions)
         """
@@ -218,7 +215,6 @@ class Node:
         Outputs:
             - traj: a vector of node index, which is the current best trajectory from this node.
         """
-        # TODO(pu): best action
         traj = []
         node = self
         best_action = node.best_action
@@ -460,31 +456,7 @@ def select_child(
     # ==============================================================
     # sampled related core code
     # ==============================================================
-
     # TODO(pu): Progressive widening (See https://hal.archives-ouvertes.fr/hal-00542673v2/document)
-    # pw_alpha = 0.49
-    # pw_alpha = -1
-    # if len(root.children) < (root.visit_count + 1) ** pw_alpha:
-    #     distribution = torch.distributions.normal.Normal(root.mu, root.sigma)
-    #     sampled_action = distribution.sample().squeeze(0).detach().cpu().numpy()
-    #
-    #     while Action(sampled_action) in root.children.keys():
-    #         # if sampled_action is sampled before, we sample a new action now
-    #         sampled_action = distribution.sample().squeeze(0).detach().cpu()
-    #     action = Action(sampled_action)
-    #
-    #     log_prob = distribution.log_prob(torch.tensor(sampled_action))
-    #     # TODO: factored policy representation
-    #     # empirical_distribution = [1/self.num_of_sampled_actions]
-    #
-    #     # pi, beta
-    #     root.children[action] = Node(prior=log_prob[0], legal_actions=None,
-    #                                  action_space_size=sampled_action.shape[0])  # TODO(pu): action_space_size
-    #     # TODO
-    #     # root.legal_actions.append(action)
-    #     # return action, root.children[action]
-    #     return action
-    # else:
     max_score = -np.inf
     epsilon = 0.000001
     max_index_lst = []
@@ -553,8 +525,8 @@ def compute_ucb_score(
     # TODO(pu)
     node_prior = "density"
     # node_prior = "uniform"
-    # Uniform prior for continuous action space
     if node_prior == "uniform":
+        # Uniform prior for continuous action space
         prior_score = pb_c * (1 / len(parent.children))
     elif node_prior == "density":
         # TODO(pu): empirical distribution
@@ -748,8 +720,7 @@ def backpropagate(search_path: List[Node], min_max_stats: MinMaxStats, to_play: 
 
             # to_play related
             # true_reward is in the perspective of current player of node
-            bootstrap_value = (
-                                  -true_reward if node.to_play == to_play else true_reward) + discount_factor * bootstrap_value
+            bootstrap_value = (-true_reward if node.to_play == to_play else true_reward) + discount_factor * bootstrap_value
 
 
 def batch_backpropagate(
@@ -779,9 +750,9 @@ def batch_backpropagate(
     """
     for i in range(results.num):
         # expand the leaf node
-        #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
+        # to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
         if to_play is None:
-            # set to_play=0, because two_player mode to_play = {1,2}
+            # set to_play=-1, because in board_games to_play = {1,2}
             results.nodes[i].expand(-1, hidden_state_index_x, i, value_prefixs[i], policies[i])
         else:
             results.nodes[i].expand(to_play[i], hidden_state_index_x, i, value_prefixs[i], policies[i])
