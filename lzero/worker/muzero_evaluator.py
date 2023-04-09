@@ -316,7 +316,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                         to_play_dict[env_id]
                     )
 
-                    # # NOTE: in evaluator, we only need save the ``o_{t+1} = obs['observation']``
+                    # NOTE: in evaluator, we only need save the ``o_{t+1} = obs['observation']``
                     # game_segments[env_id].obs_segment.append(to_ndarray(obs['observation']))
 
                     # NOTE: the position of code snippet is very important.
