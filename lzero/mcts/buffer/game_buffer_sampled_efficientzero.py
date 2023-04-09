@@ -250,6 +250,19 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
 
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
                                                                         action_mask_segment, pos_in_game_segment_list)
+        if self._cfg.model.continuous_action_space is True:
+            # when the action space of the environment is continuous, action_mask[:] is None.
+            action_mask = [
+                list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
+                range(transition_batch_size)
+            ]
+            # NOTE: in continuous action space env: we set all legal_actions as -1
+            legal_actions = [
+                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
+            ]
+        else:
+            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
+                         range(transition_batch_size)]
 
         batch_target_values, batch_value_prefixs = [], []
         with torch.no_grad():
@@ -287,28 +300,20 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                 )
                 value_prefix_pool = value_prefix_pool.squeeze().tolist()
                 policy_logits_pool = policy_logits_pool.tolist()
+                # generate the noises for the root nodes
+                noises = [
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
+                                        ).astype(np.float32).tolist() for _ in range(transition_batch_size)
+                ]
 
                 if self._cfg.mcts_ctree:
-                    # cpp mcts_tree
-                    if to_play_segment[0][0] in [None, -1]:
-                        # we use to_play=-1 means play_with_bot_mode game
-                        to_play = [-1 for _ in range(transition_batch_size)]
-                        # NOTE: in continuous action space env: all legal_actions is -1
-                        legal_actions = [
-                            [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
-                        ]
-                    else:
-                        legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
-                                         range(transition_batch_size)]
-
+                    # cpp mcts_tree 
+                    # prepare the root nodes for MCTS
                     roots = MCTSCtree.roots(
                         transition_batch_size, legal_actions, self._cfg.model.action_space_size,
                         self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                     )
-                    noises = [
-                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
-                                            ).astype(np.float32).tolist() for _ in range(transition_batch_size)
-                    ]
+
                     roots.prepare(
                         self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
                     )
@@ -316,48 +321,17 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 else:
                     # python mcts_tree
-                    if to_play_segment[0][0] in [None, -1]:
-                        # for one_player atari games
-                        action_mask = [
-                            list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
-                            range(transition_batch_size)
-                        ]
-
-                    legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
-                                     range(transition_batch_size)]
                     roots = MCTSPtree.roots(
-                        transition_batch_size, legal_actions,
-                        num_of_sampled_actions=self._cfg.model.num_of_sampled_actions
+                        transition_batch_size, legal_actions, self._cfg.model.action_space_size,
+                        self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                     )
-                    noises = [
-                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                            ).astype(np.float32).tolist() for j in range(transition_batch_size)
-                    ]
-
-                    if to_play_segment[0][0] in [None, -1]:
-                        roots.prepare(
-                            self._cfg.root_noise_weight,
-                            noises,
-                            value_prefix_pool,
-                            policy_logits_pool,
-                            to_play=-1
-                        )
-                        # do MCTS for a new policy with the recent target model
-                        MCTSPtree.roots(self._cfg).search(
-                            roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=-1
-                        )
-                    else:
-                        roots.prepare(
-                            self._cfg.root_noise_weight,
-                            noises,
-                            value_prefix_pool,
-                            policy_logits_pool,
-                            to_play=to_play
-                        )
-                        # do MCTS for a new policy with the recent target model
-                        MCTSPtree.roots(self._cfg).search(
-                            roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play
-                        )
+                    roots.prepare(
+                        self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
+                    )
+                    # do MCTS for a new policy with the recent target model
+                    MCTSPtree.roots(self._cfg).search(
+                        roots, model, hidden_state_roots, reward_hidden_state_roots, to_play
+                    )
 
                 roots_values = roots.get_values()
                 value_list = np.array(roots_values)
@@ -366,7 +340,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                 value_list = concat_output_value(network_output)
 
             # get last state value
-            if to_play_segment[0][0] in [1, 2]:
+            if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
                 # TODO(pu): for board_games, very important, to check
                 value_list = value_list.reshape(-1) * np.array([self._cfg.discount_factor ** td_steps_list[i]
                                                                 if int(td_steps_list[i]) % 2 == 0
@@ -393,9 +367,9 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     bootstrap_index = current_index + td_steps_list[value_index]
                     # for i, reward in enumerate(game.rewards[current_index:bootstrap_index]):
                     for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
-                        if to_play_segment[0][0] in [1, 2]:
+                        if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
                             # TODO(pu): for board_games, very important, to check
-                            if to_play_list[current_index] == to_play_list[i]:
+                            if to_play_list[base_index] == to_play_list[i]:
                                 value_list[value_index] += reward * self._cfg.discount_factor ** i
                             else:
                                 value_list[value_index] += -reward * self._cfg.discount_factor ** i
@@ -451,6 +425,19 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
 
         to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
                                                                         action_mask_segment, pos_in_game_segment_list)
+        if self._cfg.model.continuous_action_space is True:
+            # when the action space of the environment is continuous, action_mask[:] is None.
+            action_mask = [
+                list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in
+                range(transition_batch_size)
+            ]
+            # NOTE: in continuous action space env, we set all legal_actions as -1
+            legal_actions = [
+                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
+            ]
+        else:
+            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
+                         range(transition_batch_size)]
 
         with torch.no_grad():
             policy_obs_list = prepare_observation_list(policy_obs_list)
@@ -483,29 +470,19 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
 
             value_prefix_pool = value_prefix_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
+            noises = [
+                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
+                                    ).astype(np.float32).tolist() for _ in range(transition_batch_size)
+            ]
             if self._cfg.mcts_ctree:
                 # ==============================================================
                 # sampled related core code
                 # ==============================================================
                 # cpp mcts_tree
-                if to_play_segment[0][0] in [None, -1]:
-                    # we use to_play=-1 means play_with_bot_mode game
-                    to_play = [-1 for i in range(transition_batch_size)]
-                    # NOTE: in continuous action space env: all legal_actions is -1
-                    legal_actions = [[-1 for _ in range(self._cfg.model.action_space_size)] for _ in
-                                     range(transition_batch_size)]
-                else:
-                    legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
-                                     range(transition_batch_size)]
-
                 roots = MCTSCtree.roots(
                     transition_batch_size, legal_actions, self._cfg.model.action_space_size,
                     self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
-                                        ).astype(np.float32).tolist() for _ in range(transition_batch_size)
-                ]
                 roots.prepare(
                     self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
                 )
@@ -513,38 +490,17 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                 MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
             else:
                 # python mcts_tree
-                if to_play_segment[0][0] in [None, -1]:
-                    # we use to_play=-1 means play_with_bot_mode game in mcts_ptree
-                    to_play = [-1 for i in range(transition_batch_size)]
-                    # NOTE: in continuous action space env: all legal_actions is -1
-                    legal_actions = [
-                        [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in
-                        range(transition_batch_size)
-                    ]
-                else:
-                    # if board_games, we have action_mask
-                    legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
-                                     range(transition_batch_size)]
-
                 roots = MCTSPtree.roots(
-                    transition_batch_size,
-                    legal_actions,
-                    action_space_size=self._cfg.model.action_space_size,
-                    num_of_sampled_actions=self._cfg.model.num_of_sampled_actions,
-                    continuous_action_space=self._cfg.model.continuous_action_space
+                    transition_batch_size, legal_actions, self._cfg.model.action_space_size,
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
-                                        ).astype(np.float32).tolist() for _ in range(transition_batch_size)
-                ]
                 roots.prepare(
                     self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
                 )
                 # do MCTS for a new policy with the recent target model
                 MCTSPtree.roots(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
 
-                roots_legal_actions_list = roots.legal_actions_list
-
+            roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
 
             # ==============================================================
@@ -577,37 +533,19 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                                 )
                             )
                         else:
-                            if self._cfg.mcts_ctree:
-                                ## cpp mcts_tree
-                                if to_play_segment[0][0] in [None, -1]:
-                                    sum_visits = sum(distributions)
-                                    policy = [visit_count / sum_visits for visit_count in distributions]
-                                    target_policies.append(policy)
-                                else:
-                                    # for two_player board games
-                                    policy_tmp = [0 for _ in range(self._cfg.model.num_of_sampled_actions)]
-                                    # to make sure target_policies have the same dimension
-                                    sum_visits = sum(distributions)
-                                    policy = [visit_count / sum_visits for visit_count in distributions]
-                                    for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
-                                        policy_tmp[legal_action] = policy[index]
-                                    target_policies.append(policy_tmp)
+                            if self._cfg.env_type == 'not_board_games':
+                                sum_visits = sum(distributions)
+                                policy = [visit_count / sum_visits for visit_count in distributions]
+                                target_policies.append(policy)
                             else:
-                                # python mcts_tree
-                                if to_play_segment[0][0] in [None, -1]:
-                                    # TODO(pu): very important
-                                    sum_visits = sum(distributions)
-                                    policy = [visit_count / sum_visits for visit_count in distributions]
-                                    target_policies.append(policy)
-                                else:
-                                    # for two_player board games
-                                    policy_tmp = [0 for _ in range(self._cfg.model.num_of_sampled_actions)]
-                                    # to make sure target_policies have the same dimension
-                                    sum_visits = sum(distributions)
-                                    policy = [visit_count / sum_visits for visit_count in distributions]
-                                    for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
-                                        policy_tmp[legal_action] = policy[index]
-                                    target_policies.append(policy_tmp)
+                                # for two_player board games
+                                policy_tmp = [0 for _ in range(self._cfg.model.num_of_sampled_actions)]
+                                # to make sure target_policies have the same dimension
+                                sum_visits = sum(distributions)
+                                policy = [visit_count / sum_visits for visit_count in distributions]
+                                for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
+                                    policy_tmp[legal_action] = policy[index]
+                                target_policies.append(policy_tmp)
 
                     policy_index += 1
 

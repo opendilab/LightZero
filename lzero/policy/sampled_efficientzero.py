@@ -32,6 +32,8 @@ class SampledEfficientZeroPolicy(Policy):
         # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
         sampled_algo=True,
         model=dict(
+            # (bool) If True, the action space of the environment is continuous, otherwise discrete.
+            continuous_action_space=False,
             # (tuple) the stacked obs shape.
             # observation_shape=(1, 96, 96),  # if frame_stack_num=1
             observation_shape=(4, 96, 96),  # if frame_stack_num=4
@@ -398,7 +400,7 @@ class SampledEfficientZeroPolicy(Policy):
 
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
             value_prefix_loss += cross_entropy_loss(value_prefix,
-                                                             target_value_prefix_categorical[:, step_i])
+                                                    target_value_prefix_categorical[:, step_i])
 
             # reset hidden states every ``lstm_horizon_len`` unroll steps.
             if (step_i + 1) % self._cfg.lstm_horizon_len == 0:
@@ -694,9 +696,12 @@ class SampledEfficientZeroPolicy(Policy):
         self._collect_model = self._model
 
         if self._cfg.mcts_ctree:
-            self._mcts_collect = MCTSCtree(self._cfg)
+            from lzero.mcts import SampledEfficientZeroMCTSCtree as MCTSTree
+            self._mcts_collect = MCTSTree(self._cfg)
         else:
-            self._mcts_collect = MCTSPtree(self._cfg)
+            from lzero.mcts import SampledEfficientZeroMCTSPtree as MCTSTree
+            self._mcts_collect = MCTSTree(self._cfg)
+
         self.collect_mcts_temperature = 1
 
     def _forward_collect(
@@ -738,82 +743,45 @@ class SampledEfficientZeroPolicy(Policy):
                 )
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
-            # cpp mcts_tree
+            if self._cfg.model.continuous_action_space is True:
+                # when the action space of the environment is continuous, action_mask[:] is None.
+                # NOTE: in continuous action space env: we set all legal_actions as -1
+                legal_actions = [
+                    [-1 for _ in range(self._cfg.model.num_of_sampled_actions)]
+                    for _ in range(active_collect_env_num)
+                ]
+            else:
+                legal_actions = [
+                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
+                ]
+
             if self._cfg.mcts_ctree:
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                if to_play[0] in [-1]:
-                    # we use to_play=-1 means play_with_bot_mode in mcts_ctree
-                    to_play = [-1 for i in range(active_collect_env_num)]
-                if action_mask[0] is None:
-                    # continuous action space env: all -1
-                    legal_actions = [
-                        [-1 for i in range(self._cfg.model.num_of_sampled_actions)]
-                        for _ in range(active_collect_env_num)
-                    ]
-                else:
-                    legal_actions = [
-                        [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
-                    ]
+                # cpp mcts_tree
                 roots = MCTSCtree.roots(
                     active_collect_env_num, legal_actions, self._cfg.model.action_space_size,
                     self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
-                                        ).astype(np.float32).tolist() for j in range(active_collect_env_num)
-                ]
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                roots.prepare(
-                    self._cfg.root_noise_weight, noises, value_prefix_roots, policy_logits, to_play
-                )
-                self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
             else:
                 # python mcts_tree
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                if to_play[0] in [None, -1]:
-                    # we use to_play=-1 means play_with_bot_mode game in mcts_ptree
-                    to_play = [None for i in range(active_collect_env_num)]
-                if action_mask[0] is None:
-                    # continuous action space
-                    roots = MCTSPtree.roots(
-                        active_collect_env_num,
-                        None,
-                        action_space_size=self._cfg.model.action_space_size,
-                        num_of_sampled_actions=self._cfg.model.num_of_sampled_actions,
-                        continuous_action_space=self._cfg.model.continuous_action_space
-                    )
-                    # the only difference between collect and eval is the dirichlet noise
-                    noises = [
-                        np.random.dirichlet(
-                            [self._cfg.root_dirichlet_alpha] * int(self._cfg.model.num_of_sampled_actions)
-                        ).astype(np.float32).tolist() for j in range(active_collect_env_num)
-                    ]
-                else:
-                    legal_actions = [
-                        [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
-                    ]
-                    roots = MCTSPtree.roots(
-                        active_collect_env_num,
-                        legal_actions,
-                        action_space_size=self._cfg.model.action_space_size,
-                        num_of_sampled_actions=self._cfg.model.num_of_sampled_actions,
-                        continuous_action_space=self._cfg.model.continuous_action_space
-                    )
-                    # the only difference between collect and eval is the dirichlet noise
-                    noises = [
-                        np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                            ).astype(np.float32).tolist() for j in range(active_collect_env_num)
-                    ]
-                roots.prepare(
-                    self._cfg.root_noise_weight, noises, value_prefix_roots, policy_logits, to_play
+                roots = MCTSPtree.roots(
+                    active_collect_env_num,
+                    legal_actions,
+                    self._cfg.model.action_space_size,
+                    self._cfg.model.num_of_sampled_actions,
+                    self._cfg.model.continuous_action_space
                 )
-                self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
+
+            # the only difference between collect and eval is the dirichlet noise
+            noises = [
+                np.random.dirichlet(
+                    [self._cfg.root_dirichlet_alpha] * int(self._cfg.model.num_of_sampled_actions)
+                ).astype(np.float32).tolist() for j in range(active_collect_env_num)
+            ]
+
+            roots.prepare(
+                self._cfg.root_noise_weight, noises, value_prefix_roots, policy_logits, to_play
+            )
+            self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
 
             roots_visit_count_distributions = roots.get_distributions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
@@ -912,64 +880,36 @@ class SampledEfficientZeroPolicy(Policy):
                 )
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
+            if self._cfg.model.continuous_action_space is True:
+                # when the action space of the environment is continuous, action_mask[:] is None.
+                # NOTE: in continuous action space env: we set all legal_actions as -1
+                legal_actions = [
+                    [-1 for _ in range(self._cfg.model.num_of_sampled_actions)]
+                    for _ in range(active_eval_env_num)
+                ]
+            else:
+                legal_actions = [
+                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
+                ]
+
+            # cpp mcts_tree
             if self._cfg.mcts_ctree:
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                if to_play[0] in [-1]:
-                    # we use to_play=-1 means play_with_bot_mode in mcts_ctree
-                    to_play = [-1 for i in range(active_eval_env_num)]
-                if action_mask[0] is None:
-                    # continuous action space env: all -1
-                    legal_actions = [
-                        [-1 for i in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_eval_env_num)
-                    ]
-                else:
-                    legal_actions = [
-                        [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
-                    ]
                 roots = MCTSCtree.roots(
+                    active_eval_env_num, legal_actions, self._cfg.model.action_space_size,
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
+                )
+            else:
+                # python mcts_tree
+                roots = MCTSPtree.roots(
                     active_eval_env_num,
                     legal_actions,
                     self._cfg.model.action_space_size,
                     self._cfg.model.num_of_sampled_actions,
-                    continuous_action_space=self._cfg.model.continuous_action_space
+                    self._cfg.model.continuous_action_space
                 )
 
-                roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
-                self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
-            else:
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                if to_play[0] in [None, -1]:
-                    # we use to_play=-1 or None means play_with_bot_mode in mcts_ptree
-                    to_play = [None for i in range(active_eval_env_num)]
-                if action_mask[0] is None:
-                    # continuous action space
-                    roots = MCTSPtree.roots(
-                        active_eval_env_num,
-                        None,
-                        action_space_size=self._cfg.model.action_space_size,
-                        num_of_sampled_actions=self._cfg.model.num_of_sampled_actions,
-                        continuous_action_space=self._cfg.model.continuous_action_space
-                    )
-                    # the only difference between collect and eval is the dirichlet noise
-                else:
-                    legal_actions = [
-                        [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
-                    ]
-                    roots = MCTSPtree.roots(
-                        active_eval_env_num,
-                        legal_actions,
-                        action_space_size=self._cfg.model.action_space_size,
-                        num_of_sampled_actions=self._cfg.model.num_of_sampled_actions,
-                        continuous_action_space=self._cfg.model.continuous_action_space
-                    )
-                    # the only difference between collect and eval is the dirichlet noise
-
-                roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
-                self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
+            roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
+            self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
 
             roots_visit_count_distributions = roots.get_distributions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
