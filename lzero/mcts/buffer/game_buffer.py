@@ -147,7 +147,7 @@ class GameBuffer(ABC, object):
         return orig_data
 
     def _preprocess_to_play_and_action_mask(self, game_segment_batch_size, to_play_segment, action_mask_segment,
-                                            pos_in_game_segment_list, ):
+                                            pos_in_game_segment_list):
         """
         Overview:
             prepare the to_play and action_mask for the target obs in ``value_obs_list``
