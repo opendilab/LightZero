@@ -32,6 +32,8 @@ class EfficientZeroModelMLP(nn.Module):
             pred_hid: int = 512,
             pred_out: int = 1024,
             self_supervised_learning_loss: bool = True,
+            *args,
+            **kwargs,
     ):
         """
         Overview:
