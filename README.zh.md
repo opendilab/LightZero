@@ -1,14 +1,23 @@
 # LightZero
+> LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库
 
 ## 背景
 
-下图为蒙特卡洛树搜索（MCTS）算法族的发展历史：
+以 AlphaZero, MuZero 为代表的结合蒙特卡洛树搜索 (Monte Carlo Tree Search, MCTS) 和深度强化学习 (Deep Reinforcemeent Learning, DRL) 的方法，在诸如围棋，Atari 等各种游戏上取得了超人的水平，也在诸如蛋白质结构预测，矩阵乘法算法寻找等科学领域取得了可喜的进展。下图为蒙特卡洛树搜索（MCTS）算法族的发展历史：
 ![pipeline](assets/mcts_rl_evolution_overview.png)
 
 [English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文
 
 ## 概览
-> LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库
+
+**LightZero** 是一个结合了蒙特卡洛树搜索 (MCTS) 和强化学习 (RL) 的开源算法工具包。 它支持一系列基于 MCTS 的 RL 算法，具有以下优点：
+- 轻量。
+- 高效。
+- 易懂。
+
+详情请参考[特点](#features)、[框架结构](#framework-structure)和[集成算法](#integrated-algorithms)。
+
+**LightZero** 的目标是**标准化 MCTS 算法族，以加速相关研究和应用。** [Benchmark](#benchmark) 中介绍了目前所有已实现算法的性能比较。
 
 ### 导航
 - [概览](#概览)
@@ -38,7 +47,13 @@
 **易懂**：LightZero 为所有集成的算法提供了详细文档和算法框架图，帮助用户理解算法内核，在同一范式下比较算法之间的异同。同时，LightZero 也为算法的代码实现提供了函数调用图和网络结构图，便于用户定位关键代码。
 
 ### 框架结构
-为了理解 LightZero 的框架结构，需要了解的重要组件如下：
+
+<p align="center">
+  <img src="assets/lightzero_file_structure.png" alt="Image Description 1" width="45%" height="auto" style="margin: 0 1%;">
+  <img src="assets/lightzero_pipeline.png" alt="Image Description 2" width="45%" height="auto" style="margin: 0 1%;">
+</p>
+
+上图是 LightZero 的框架流程图。我们在下面简介其中的3个核心模块:
 
 **Model**:
 ``Model`` 用于定义网络结构，包含``__init__``函数用于初始化网络结构，和``forward``函数用于计算网络的前向传播。
@@ -47,7 +62,10 @@
 ``Policy`` 定义了对网络的更新方式和与环境交互的方式，包括三个过程，分别是训练过程（learn）、采样过程（collect）和评估过程（evaluate）。
 
 **MCTS**:
+
 ``MCTS`` 定义了蒙特卡洛搜索树的结构和与``Policy``的交互方式。``MCTS``的实现包括 python 和 cpp 两种，分别在``ptree``和``ctree``中实现。
+
+关于 LightZero 的文件结构，请参考 [lightzero_file_structure](https://github.com/opendilab/LightZero/blob/main/assets/lightzero_file_structure.png)。
 
 ### 集成算法
 LightZero 是基于 [PyTorch](https://pytorch.org/) 实现的 MCTS 算法库，在 MCTS 的实现中也用到了 cython 和 cpp。同时，LightZero 的框架主要基于 [DI-engine](https://github.com/opendilab/DI-engine) 实现。目前 LightZero 中集成的算法包括：
@@ -55,6 +73,21 @@ LightZero 是基于 [PyTorch](https://pytorch.org/) 实现的 MCTS 算法库，�
 - [MuZero](https://arxiv.org/abs/1911.08265)
 - [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Sampled MuZero](https://arxiv.org/abs/2104.06303)
+
+LightZero 目前支持的环境及算法如下表所示：
+
+| Env./Alg.      | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero |
+| ------------- | --------- | ------ | ------------- | --------------------- |
+| Atari         | ---       | ✔    | ✔           | ✔                   |
+| tictactoe     | ✔       | ✔    | 🔒          | 🔒                  |
+| chess         | 🔒       | 🔒   | 🔒          | 🔒                  |
+| go            | 🔒       | 🔒   | 🔒          | 🔒                  |
+| gomoku        | ✔       | ✔    | 🔒          | 🔒                  |
+| lunarlander | ---       | ✔    | ✔           | ✔                   |
+| bipedalwalker   | ---       | ✔    | ✔           | ✔                   |
+| cartpole     | ---       | ✔    | ✔           | ✔                   |
+| pendulum      | ---       | ✔    | ✔           | ✔                   |
+
 
 ## 安装方法
 
@@ -68,6 +101,12 @@ pip3 install -e .
 
 
 ## 快速开始
+使用如下代码在 [CartPole](https://gymnasium.farama.org/environments/classic_control/cart_pole/) 环境上快速训练一个 MuZero 智能体:
+
+```bash
+cd LightZero
+python3 -u zoo/classic_control/cartpole/config/cartpole_muzero_config.py
+```
 
 使用如下代码在 [Pong](https://gymnasium.farama.org/environments/atari/pong/) 环境上快速训练一个 MuZero 智能体：
 

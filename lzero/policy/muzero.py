@@ -31,6 +31,8 @@ class MuZeroPolicy(Policy):
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For 3-dimensional image obs, we use conv model.
             model_type='conv',  # options={'mlp', 'conv'}
+            # (bool) If True, the action space of the environment is continuous, otherwise discrete.
+            continuous_action_space=False,
             # (tuple) the stacked obs shape.
             # observation_shape=(1, 96, 96),  # if frame_stack_num=1
             observation_shape=(4, 96, 96),  # if frame_stack_num=4
@@ -453,35 +455,23 @@ class MuZeroPolicy(Policy):
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
+            legal_actions = [
+                [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
+            ]
+            # the only difference between collect and eval is the dirichlet noise
+            noises = [
+                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                                    ).astype(np.float32).tolist() for j in range(active_collect_env_num)
+            ]
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
-                if to_play[0] in [None, -1]:
-                    # we use to_play=-1 means play_with_bot_mode game
-                    to_play = [-1 for i in range(active_collect_env_num)]
-                legal_actions = [
-                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
-                ]
                 roots = MCTSCtree.roots(active_collect_env_num, legal_actions)
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                        ).astype(np.float32).tolist() for j in range(active_collect_env_num)
-                ]
-                roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-                self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, to_play)
-
             else:
                 # python mcts_tree
-                legal_actions = [
-                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
-                ]
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
-                # the only difference between collect and eval is the dirichlet noise
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                        ).astype(np.float32).tolist() for j in range(active_collect_env_num)
-                ]
-                roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-                self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, to_play)
+
+            roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
+            self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, to_play)
 
             roots_visit_count_distributions = roots.get_distributions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
@@ -550,26 +540,17 @@ class MuZeroPolicy(Policy):
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
+            legal_actions = [
+                [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
+            ]
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
-                if to_play[0] in [None, -1]:
-                    # we use to_play=-1 means play_with_bot_mode game
-                    to_play = [-1 for i in range(active_eval_env_num)]
-                legal_actions = [
-                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
-                ]
                 roots = MCTSCtree.roots(active_eval_env_num, legal_actions)
-                roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-                self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, to_play)
             else:
                 # python mcts_tree
-                legal_actions = [
-                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
-                ]
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
-
-                roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-                self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, to_play)
+            roots.prepare_no_noise(reward_roots, policy_logits, to_play)
+            self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, to_play)
 
             roots_visit_count_distributions = roots.get_distributions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
