@@ -36,16 +36,18 @@ bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            model_type='mlp',  # options={'mlp', 'conv'}
             observation_shape=24,
             action_space_size=int(each_dim_disc_size ** 4),
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}
-            # We use the medium size model for bipedalwalker_cont.
-            num_res_blocks=1,
-            num_channels=32,
+            model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=256,
+            # The mlp model.
+            latent_state_dim=256,
+            # The conv model.
+            # num_res_blocks=1,
+            # num_channels=32,
             self_supervised_learning_loss=True,
         ),
         cuda=True,

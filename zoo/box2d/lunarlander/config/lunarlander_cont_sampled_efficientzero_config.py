@@ -30,17 +30,19 @@ lunarlander_cont_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            model_type='mlp',  # options={'mlp', 'conv'}
             observation_shape=8,
             action_space_size=2,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             categorical_distribution=True,
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}
-            # We use the medium size model for lunarlander_cont.
-            num_res_blocks=1,
-            num_channels=32,
+            model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=256,
+            # The mlp model.
+            latent_state_dim=256,
+            # The conv model.
+            # num_res_blocks=1,
+            # num_channels=32,
         ),
         cuda=True,
         env_type='not_board_games',

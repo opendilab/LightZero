@@ -2,29 +2,17 @@
 NOTE: the pendulum_cont_disc in file name means we use the Pendulum-v1 continuous env
 with manually discretitze action space. That is to say, the final action space is discrete.
 """
-
-import torch
 from easydict import EasyDict
-
-
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 50
-# update_per_collect = 200
-# batch_size = 256
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-num_simulations = 5
-update_per_collect = 2
-batch_size = 4
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 50
+update_per_collect = 200
+batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0
 # ==============================================================
@@ -45,14 +33,15 @@ pendulum_disc_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            model_type='mlp',  # options={'mlp', 'conv'}
-            observation_shape=3,  # if frame_stack_num=1
+            observation_shape=3,
             action_space_size=11,
-            frame_stack_num=1,
-            # We use the small size model for pendulum.
-            num_res_blocks=1,
-            num_channels=16,
+            model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=128,
+            # The mlp model.
+            latent_state_dim=128,
+            # The conv model.
+            # num_res_blocks=1,
+            # num_channels=16,
         ),
         cuda=True,
         env_type='not_board_games',

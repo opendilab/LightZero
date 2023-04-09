@@ -28,14 +28,16 @@ cartpole_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            model_type='mlp',  # options={'mlp', 'conv'}
             observation_shape=4,
             action_space_size=2,
-            # We use the small size model for cartpole.
-            num_res_blocks=1,
-            num_channels=16,
-            lstm_hidden_size=128,
             self_supervised_learning_loss=True,
+            model_type='mlp',  # options={'mlp', 'conv'}
+            lstm_hidden_size=128,
+            # The mlp model.
+            latent_state_dim=128,
+            # The conv model.
+            # num_res_blocks=1,
+            # num_channels=16,
         ),
         cuda=True,
         env_type='not_board_games',
@@ -45,7 +47,7 @@ cartpole_muzero_config = dict(
         optim_type='SGD',
         lr_piecewise_constant_decay=True,
         learning_rate=0.2,  # init lr for manually decay schedule
-        ssl_loss_weight=2,  # NOTE: default is 0.
+        ssl_loss_weight=2,  
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

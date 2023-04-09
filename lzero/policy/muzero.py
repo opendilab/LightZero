@@ -113,7 +113,7 @@ class MuZeroPolicy(Policy):
         # (float) The weight of policy loss.
         policy_loss_weight=1,
         # (float) The weight of ssl (self-supervised learning) loss.
-        ssl_loss_weight=0,  # NOTE: default is 0.
+        ssl_loss_weight=0,  
         # ``threshold_training_steps_for_final_lr`` is used for adjusting lr manually.
         # lr_piecewise_constant_decay: lr: 0.2 -> 0.02 -> 0.002
         threshold_training_steps_for_final_lr=int(1e5),

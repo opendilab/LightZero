@@ -16,10 +16,9 @@ class EfficientZeroModelMLP(nn.Module):
             self,
             observation_shape: int = 2,
             action_space_size: int = 6,
-            latent_state_dim: int = 64,
+            latent_state_dim: int = 256,
             categorical_distribution: bool = True,
             activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            representation_network: nn.Module = None,
             last_linear_layer_init_zero: bool = True,
             state_norm: bool = False,
             lstm_hidden_size: int = 512,
@@ -32,10 +31,7 @@ class EfficientZeroModelMLP(nn.Module):
             proj_out: int = 1024,
             pred_hid: int = 512,
             pred_out: int = 1024,
-            # the above model para. is usually fixed
             self_supervised_learning_loss: bool = True,
-            *args,
-            **kwargs
     ):
         """
         Overview:
@@ -43,16 +39,11 @@ class EfficientZeroModelMLP(nn.Module):
         Arguments:
             - observation_shape (:obj:`int`): Observation space shape, e.g. 2.
             - action_space_size: (:obj:`int`): Action space size, such as 6.
+            - latent_state_dim (:obj:`int`): Latent state dimension, such as 256.
             - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             - activation (:obj:`Optional[nn.Module]`): the activation in EfficientZero model.
-            - representation_network (:obj:`nn.Module`): the user-defined representation_network.
-            - batch_norm_momentum (:obj:`float`):  Momentum of BN
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
             - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to True.
-            - num_channels (:obj:`int`): channels of hidden states.
-            - reward_head_channels (:obj:`int`): channels of reward head.
-            - value_head_channels (:obj:`int`): channels of value head.
-            - policy_head_channels (:obj:`int`): channels of policy head.
             - fc_reward_layers (:obj:`SequenceType`): hidden layers of the reward prediction head (MLP head).
             - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
             - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
@@ -65,6 +56,7 @@ class EfficientZeroModelMLP(nn.Module):
             - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks in EfficientZero model, default set it to False.
         """
         super(EfficientZeroModelMLP, self).__init__()
+        self.action_space_size = action_space_size
         self.lstm_hidden_size = lstm_hidden_size
         self.categorical_distribution = categorical_distribution
         self.self_supervised_learning_loss = self_supervised_learning_loss
@@ -75,21 +67,23 @@ class EfficientZeroModelMLP(nn.Module):
             self.reward_support_size = reward_support_size
             self.value_support_size = value_support_size
 
+        # for discrete action space, we use one-hot encoding
+        self.action_encoding_dim = self.action_space_size
+
         self.proj_hid = proj_hid
         self.proj_out = proj_out
         self.pred_hid = pred_hid
         self.pred_out = pred_out
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
-        self.representation_network = representation_network
         self.action_space_size = action_space_size
 
         self.representation_network = RepresentationNetworkMLP(observation_shape=observation_shape,
                                                                hidden_channels=latent_state_dim)
 
         self.dynamics_network = DynamicsNetwork(
-            # in_channels=latent_state_dim * 2,  # TODO: action encoding
-            in_channels=latent_state_dim + 1,
+            action_space_size=action_space_size,
+            in_channels=latent_state_dim + self.action_encoding_dim,
             common_layer_num=2,
             lstm_hidden_size=lstm_hidden_size,
             fc_reward_layers=fc_reward_layers,
@@ -213,17 +207,21 @@ class EfficientZeroModelMLP(nn.Module):
             - next_reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
             - value_prefix (:obj:`torch.Tensor`): (batch_size, 1).
          """
-
+        # TODO: action encoding
+        # discrete action space
         # Stack latent_state with a game specific one hot encoded action
         if len(action.shape) == 1:
             # (batch_size, ) -> (batch_size, 1)
             # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
             action = action.unsqueeze(-1)
 
-        action_one_hot = torch.ones_like(action)
-
-        # action_encoding shape: (batch_size, 1)
-        action_encoding = (action * action_one_hot / self.action_space_size)
+        # transform action to one-hot encoding.
+        # action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)
+        action_one_hot = torch.zeros(action.shape[0], self.action_space_size, device=action.device)
+        # transform action to torch.int64
+        action = action.long()
+        action_one_hot.scatter_(1, action, 1)
+        action_encoding = action_one_hot
 
         state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
 
@@ -241,22 +239,7 @@ class EfficientZeroModelMLP(nn.Module):
         Overview:
             only used when ``self.self_supervised_learning_loss=True``.
             Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
-        # only the branch of proj + pred can share the gradients
-        Examples:
-            # for lunarlander:
-            # observation_shape = (4, 8, 1),  # stack=4
-            # self.projection_input_dim = 64*8*1
-            # latent_state.shape: (batch_size, num_channel, obs_shape[1], obs_shape[2])  256,64,8,1
-            # 256,64,8,1 -> 256,64*8*1
-
-            # for atari:
-            # observation_shape = (12, 96, 96),  # 3,96,96 stack=4
-            # self.projection_input_dim = 3*6*6 = 108
-            # latent_state.shape: (batch_size, num_channel, obs_shape[1]/16, obs_shape[2]/16)  256,64,96/16,96/16 = 256,64,6,6
-            # 256, 64, 6, 6 -> 256,64*6*6
         """
-        # latent_state.shape[0] = batch_size
-        latent_state = latent_state.reshape(latent_state.shape[0], -1)
         proj = self.projection(latent_state)
 
         # with grad, use proj_head
@@ -273,7 +256,8 @@ class DynamicsNetwork(nn.Module):
 
     def __init__(
             self,
-            in_channels,
+            action_space_size: int = 2,
+            in_channels: int = 64,
             common_layer_num: int = 2,
             lstm_hidden_size: int = 512,
             fc_reward_layers: SequenceType = [32],
@@ -285,18 +269,21 @@ class DynamicsNetwork(nn.Module):
         Overview:
             Dynamics network. Predict next hidden state given current hidden state and action.
         Arguments:
-            - num_res_blocks (:obj:`int`): number of res blocks.
-            - num_channels (:obj:`int`): channels of hidden states.
-            - fc_reward_layers (:obj:`list`):  hidden layers of the reward prediction head (MLP head)
-            - output_support_size (:obj:`int`): dim of reward output
-            - flatten_output_size_for_reward_head (:obj:`int`): dim of flatten hidden states
+            - action_space_size (:obj:`int`): action space size.
+            - in_channels (:obj:`int`): channels of hidden states.
+            - common_layer_num (:obj:`int`): number of common layers.
             - lstm_hidden_size (:obj:`int`): dim of lstm hidden state in dynamics network.
+            - fc_reward_layers (:obj:`list`):  hidden layers of the reward prediction head (MLP head).
+            - output_support_size (:obj:`int`): dim of reward output
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): the activation in Dynamics network.
         """
         super().__init__()
         self.in_channels = in_channels
-        self.latent_state_dim = self.in_channels-1
+        # for discrete action space, we use one-hot encoding
+        self.action_encoding_dim = action_space_size
+        self.latent_state_dim = self.in_channels - self.action_encoding_dim
+
         self.lstm_hidden_size = lstm_hidden_size
 
         self.fc_dynamics = MLP(
@@ -310,6 +297,8 @@ class DynamicsNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
+        # lstm input: (batch_size, seq_len, input_size)
+        # lstm output: (batch_size, seq_len, hidden_size)
         self.lstm = nn.LSTM(input_size=self.latent_state_dim, hidden_size=self.lstm_hidden_size)
 
         self.fc_reward_head = MLP(
@@ -324,6 +313,17 @@ class DynamicsNetwork(nn.Module):
         )
 
     def forward(self, state_action_encoding: torch.Tensor, reward_hidden_state):
+        """
+        Overview:
+            Forward function. Predict next latent state given current latent state, action and reward hidden state.
+        Arguments:
+            - state_action_encoding (:obj:`torch.Tensor`): current latent state and action encoding.
+            - reward_hidden_state (:obj:`torch.Tensor`): reward hidden state. We use LSTM to predict value prefix.
+        Returns:
+            - state (:obj:`torch.Tensor`): next latent state.
+            - reward_hidden_state (:obj:`torch.Tensor`): next reward hidden state.
+            - value_prefix (:obj:`torch.Tensor`): value prefix.
+        """
         state = self.fc_dynamics(state_action_encoding)
         state_unsqueeze = state.unsqueeze(0)
         value_prefix, reward_hidden_state = self.lstm(state_unsqueeze, reward_hidden_state)
@@ -356,17 +356,13 @@ class PredictionNetwork(nn.Module):
             Prediction network. Predict the value and policy given hidden state.
         Arguments:
             - action_space_size: (:obj:`int`): Action space size, such as 6.
-            - num_res_blocks (:obj:`int`): number of res blocks in model.
-            - in_channels (:obj:`int`): channels of input, if None, then in_channels = num_channels
-            - num_channels (:obj:`int`): channels of hidden states.
-            - value_head_channels (:obj:`int`): channels of value head.
-            - policy_head_channels (:obj:`int`): channels of policy head.
+            - in_channels: (:obj:`int`): channels of hidden states.
+            - common_layer_num (:obj:`int`): number of common layers.
             - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
             - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
             - output_support_size (:obj:`int`): dim of value output.
-            - flatten_output_size_for_value_head (:obj:`int`): dim of flatten hidden states.
-            - flatten_output_size_for_policy_head (:obj:`int`): dim of flatten hidden states.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
+            - activation (:obj:`Optional[nn.Module]`): the activation in Prediction network.
         """
         super().__init__()
         self.in_channels = in_channels
@@ -404,6 +400,15 @@ class PredictionNetwork(nn.Module):
         )
 
     def forward(self, x: torch.Tensor):
+        """
+        Overview:
+            Forward computation of the prediction network.
+        Arguments:
+            - x (:obj:`torch.Tensor`): input tensor with shape (B, in_channels).
+        Returns:
+            - policy (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).
+            - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
+        """
         x_prediction_common = self.fc_prediction_common(x)
 
         value = self.fc_value_head(x_prediction_common)
