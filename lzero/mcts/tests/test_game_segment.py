@@ -6,9 +6,7 @@ from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
 from lzero.policy import select_action
 
-
 args = ['EfficientZero', 'MuZero']
-# args = ['MuZero']
 
 
 @pytest.mark.unittest
@@ -37,6 +35,10 @@ def test_game_segment(test_algo):
 
     # create model
     model = Model(**config.policy.model)
+    if config.policy.cuda and torch.cuda.is_available():
+        config.policy.device = 'cuda'
+    else:
+        config.policy.device = 'cpu'
     model.to(config.policy.device)
     model.eval()
 
@@ -50,12 +52,13 @@ def test_game_segment(test_algo):
             ) for i in range(config.env.evaluator_env_num)
         ]
         for i in range(config.env.evaluator_env_num):
-            game_segments[i].reset([init_observations[i]['observation'] for _ in range(config.policy.model.frame_stack_num)])
+            game_segments[i].reset(
+                [init_observations[i]['observation'] for _ in range(config.policy.model.frame_stack_num)])
         episode_rewards = np.zeros(config.env.evaluator_env_num)
 
         while not dones.all():
             stack_obs = [game_segment.get_obs() for game_segment in game_segments]
-            stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
+            stack_obs = prepare_observation(stack_obs, config.policy.model.model_type)
             stack_obs = torch.from_numpy(np.array(stack_obs)).to(config.policy.device)
 
             # ==============================================================
@@ -83,7 +86,8 @@ def test_game_segment(test_algo):
                 reward_pool = network_output.reward
                 # for board games, we use the all actions is legal_action
                 legal_actions_list = [
-                    [a for a, x in enumerate(init_observations[i]['action_mask']) if x == 1] for i in range(config.env.evaluator_env_num)
+                    [a for a, x in enumerate(init_observations[i]['action_mask']) if x == 1] for i in
+                    range(config.env.evaluator_env_num)
                 ]
 
             # null padding for the atari games and board_games in vs_bot_mode
@@ -91,7 +95,7 @@ def test_game_segment(test_algo):
 
             if test_algo == 'EfficientZero':
                 roots = MCTSCtree.roots(config.env.evaluator_env_num,
-                                      legal_actions_list)
+                                        legal_actions_list)
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 MCTSCtree(config.policy).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
 

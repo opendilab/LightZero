@@ -1,7 +1,4 @@
-import torch
 from easydict import EasyDict
-
-
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -15,11 +12,6 @@ batch_size = 256
 max_env_step = int(2e5)
 reanalyze_ratio = 0.3
 categorical_distribution = False
-
-# only used for adjusting temperature/lr manually
-average_episode_length_when_converge = 5
-threshold_env_steps_for_final_lr = int(5e4)
-threshold_env_steps_for_final_temperature = int(1e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -63,6 +55,7 @@ tictactoe_muzero_config = dict(
         td_steps=9,
         num_unroll_steps=3,
         model=dict(
+            model_type='conv',  # options={'mlp', 'conv'}
             # the stacked obs shape -> the transformed obs shape:
             # [S, W, H, C] -> [S x C, W, H]
             # e.g. [4, 3, 3, 3] -> [12, 3, 3]

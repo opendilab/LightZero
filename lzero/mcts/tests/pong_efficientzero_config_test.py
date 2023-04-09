@@ -1,35 +1,27 @@
 import torch
 from easydict import EasyDict
 
-
-
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 50
-# update_per_collect = 1000
-# batch_size = 256
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0.
-
-
-# debug config
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 5
-update_per_collect = 2
-batch_size = 4
-max_env_step = int(1e4)
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 50
+update_per_collect = 1000
+batch_size = 256
+max_env_step = int(1e6)
 reanalyze_ratio = 0.
 
-# only used for adjusting temperature/lr manually
-average_episode_length_when_converge = 2000
-threshold_env_steps_for_final_lr = int(5e5)
-threshold_env_steps_for_final_temperature = int(1)
+# debug config
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 5
+# update_per_collect = 2
+# batch_size = 4
+# max_env_step = int(1e4)
+# reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -71,6 +63,7 @@ pong_efficientzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         model=dict(
+            model_type='conv',  # options={'mlp', 'conv'}
             observation_shape=(4, 96, 96),
             action_space_size=6,
             representation_network_type='conv_res_blocks',

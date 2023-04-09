@@ -32,7 +32,7 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
     policy=dict(
         model=dict(
             model_type='mlp',  # options={'mlp', 'conv'}
-            observation_shape=24,  # if frame_stack_num=1
+            observation_shape=24,
             action_space_size=4,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
