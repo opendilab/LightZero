@@ -45,13 +45,6 @@ gomoku_muzero_config = dict(
             reward_support_size=21,
             value_support_size=21,
         ),
-        learn=dict(
-            update_per_collect=update_per_collect,
-            lr_piecewise_constant_decay=False,
-            optim_type='Adam',
-            learning_rate=0.003,
-            grad_clip_value=0.5,
-        ),
         cuda=True,
         env_type='board_games',
         game_segment_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
