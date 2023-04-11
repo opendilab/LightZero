@@ -76,7 +76,6 @@ class TestEfficientZeroModel:
         prediction_network = PredictionNetwork(
             action_space_size=action_space_size,
             num_res_blocks=num_res_blocks,
-            in_channels=num_channels,
             num_channels=num_channels,
             value_head_channels=value_head_channels,
             policy_head_channels=policy_head_channels,

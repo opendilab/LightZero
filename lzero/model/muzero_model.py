@@ -137,7 +137,6 @@ class MuZeroModel(nn.Module):
         self.prediction_network = PredictionNetwork(
             action_space_size,
             num_res_blocks,
-            None,  # in_channels
             num_channels,
             value_head_channels,
             policy_head_channels,
@@ -161,9 +160,9 @@ class MuZeroModel(nn.Module):
                 self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
             self.projection = nn.Sequential(
-                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
-                activation, nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
-                activation, nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
+                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
             )
             self.projection_head = nn.Sequential(
                 nn.Linear(self.proj_out, self.pred_hid),
@@ -209,8 +208,9 @@ class MuZeroModel(nn.Module):
         Overview:
             Recurrent inference of MuZero model, which is the rollout step of the MuZero model.
             To perform the recurrent inference, we first use the dynamics network to predict ``next_latent_state``,
-            ``reward_hidden_state``, ``value_prefix`` given current ``latent_state`` and ``action``.
-            We then use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
+            ``reward``, by the given current ``latent_state`` and ``action``.
+            We then use the prediction network to predict the ``value`` and ``policy_logits`` of the current
+            ``latent_state``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
             - action (:obj:`torch.Tensor`): The predicted action to rollout.
@@ -265,8 +265,7 @@ class MuZeroModel(nn.Module):
             - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
             - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.
         """
-        policy_logits, value = self.prediction_network(latent_state)
-        return policy_logits, value
+        return self.prediction_network(latent_state)
 
     def _dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -400,11 +399,7 @@ class DynamicsNetwork(nn.Module):
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - 1,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
+                    in_channels=num_channels - 1, activation=activation, norm_type='BN', res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
@@ -457,19 +452,19 @@ class DynamicsNetwork(nn.Module):
 class PredictionNetwork(nn.Module):
 
     def __init__(
-        self,
-        action_space_size: int,
-        num_res_blocks: int,
-        num_channels: int,
-        value_head_channels: int,
-        policy_head_channels: int,
-        fc_value_layers: int,
-        fc_policy_layers: int,
-        output_support_size: int,
-        flatten_output_size_for_value_head: int,
-        flatten_output_size_for_policy_head: int,
-        last_linear_layer_init_zero: bool = True,
-        activation: nn.Module = nn.ReLU(inplace=True),
+            self,
+            action_space_size: int,
+            num_res_blocks: int,
+            num_channels: int,
+            value_head_channels: int,
+            policy_head_channels: int,
+            fc_value_layers: int,
+            fc_policy_layers: int,
+            output_support_size: int,
+            flatten_output_size_for_value_head: int,
+            flatten_output_size_for_policy_head: int,
+            last_linear_layer_init_zero: bool = True,
+            activation: nn.Module = nn.ReLU(inplace=True),
     ) -> None:
         """
         Overview:
@@ -498,13 +493,8 @@ class PredictionNetwork(nn.Module):
 
         self.resblocks = nn.ModuleList(
             [
-                ResBlock(
-                    in_channels=num_channels,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(num_res_blocks)
+                ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                for _ in range(num_res_blocks)
             ]
         )
 

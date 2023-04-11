@@ -73,15 +73,17 @@ class AlphaZeroModel(nn.Module):
         self.action_space_size = action_space_size
         # TODO use more adaptive way to get the flatten output size
         flatten_output_size_for_value_head = (
-            (value_head_channels * math.ceil(self.observation_shape[1] / 16) *
-             math.ceil(self.observation_shape[2] / 16)) if downsample else
-            (value_head_channels * self.observation_shape[1] * self.observation_shape[2])
+            (
+                value_head_channels * math.ceil(self.observation_shape[1] / 16) *
+                math.ceil(self.observation_shape[2] / 16)
+            ) if downsample else (value_head_channels * self.observation_shape[1] * self.observation_shape[2])
         )
 
         flatten_output_size_for_policy_head = (
-            (policy_head_channels * math.ceil(self.observation_shape[1] / 16) *
-             math.ceil(self.observation_shape[2] / 16)) if downsample else
-            (policy_head_channels * self.observation_shape[1] * self.observation_shape[2])
+            (
+                policy_head_channels * math.ceil(self.observation_shape[1] / 16) *
+                math.ceil(self.observation_shape[2] / 16)
+            ) if downsample else (policy_head_channels * self.observation_shape[1] * self.observation_shape[2])
         )
 
         self.prediction_network = PredictionNetwork(
@@ -174,19 +176,19 @@ class AlphaZeroModel(nn.Module):
 class PredictionNetwork(nn.Module):
 
     def __init__(
-        self,
-        action_space_size: int,
-        num_res_blocks: int,
-        num_channels: int,
-        value_head_channels: int,
-        policy_head_channels: int,
-        fc_value_layers: SequenceType,
-        fc_policy_layers: SequenceType,
-        output_support_size: int,
-        flatten_output_size_for_value_head: int,
-        flatten_output_size_for_policy_head: int,
-        last_linear_layer_init_zero: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            self,
+            action_space_size: int,
+            num_res_blocks: int,
+            num_channels: int,
+            value_head_channels: int,
+            policy_head_channels: int,
+            fc_value_layers: SequenceType,
+            fc_policy_layers: SequenceType,
+            output_support_size: int,
+            flatten_output_size_for_value_head: int,
+            flatten_output_size_for_policy_head: int,
+            last_linear_layer_init_zero: bool = True,
+            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
     ) -> None:
         """
         Overview:
