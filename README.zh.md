@@ -1,16 +1,16 @@
 # LightZero
-> LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库
+> LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库。
+
+[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文
 
 ## 背景
 
 以 AlphaZero, MuZero 为代表的结合蒙特卡洛树搜索 (Monte Carlo Tree Search, MCTS) 和深度强化学习 (Deep Reinforcemeent Learning, DRL) 的方法，在诸如围棋，Atari 等各种游戏上取得了超人的水平，也在诸如蛋白质结构预测，矩阵乘法算法寻找等科学领域取得了可喜的进展。下图为蒙特卡洛树搜索（MCTS）算法族的发展历史：
 ![pipeline](assets/mcts_rl_evolution_overview.png)
 
-[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文
-
 ## 概览
 
-**LightZero** 是一个结合了蒙特卡洛树搜索 (MCTS) 和强化学习 (RL) 的开源算法工具包。 它支持一系列基于 MCTS 的 RL 算法，具有以下优点：
+**LightZero** 是一个结合了蒙特卡洛树搜索和强化学习的开源算法工具包。 它支持一系列基于 MCTS 的 RL 算法，具有以下优点：
 - 轻量。
 - 高效。
 - 易懂。

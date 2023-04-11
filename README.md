@@ -22,26 +22,26 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
-> LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkits that combines Monte Carlo Tree Search (MCTS) and Reinforcement Learning (RL). 
-
-## Background
-
-The method of combining Monte Carlo Tree Search (MCTS) and Deep Reinforcemeent Learning (DRL) represented by AlphaZero and MuZero has achieved superhuman level in various games such as Go and Atari, has also made gratifying progress in scientific fields such as protein structure prediction, matrix multiplication algorithm search, etc. 
-The following is an overview of the historical evolution of the Monte Carlo Tree Search algorithm series:
-![pipeline](assets/mcts_rl_evolution_overview.png)
+> LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkits that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL). 
 
 English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README.zh.md)
 
+## Background
+
+The method of combining Monte Carlo Tree Search and Deep Reinforcement Learning represented by AlphaZero and MuZero has achieved superhuman level in various games such as Go and Atari, has also made gratifying progress in scientific fields such as protein structure prediction, matrix multiplication algorithm search, etc. 
+The following is an overview of the historical evolution of the Monte Carlo Tree Search algorithm series:
+![pipeline](assets/mcts_rl_evolution_overview.png)
+
 ## Overview
 
-**LightZero** is an open-source algorithm toolkits that combines Monte Carlo Tree Search (MCTS) and Reinforcement Learning (RL) for PyTorch. It provides support for a range of MCTS-based RL algorithms and applications with following advantages:
+**LightZero** is an open-source algorithm toolkits that combines MCTS and RL for PyTorch. It provides support for a range of MCTS-based RL algorithms and applications with following advantages:
 - Lightweight.
 - Efficient.
 - Easy-to-understand.
 
 For further details, please refer to [Features](#features), [Framework Structure](#framework-structure) and [Integrated Algorithms](#integrated-algorithms).
 
-**LightZero** aims to **promote the standardization and acceleration of MCTS algorithm families**. A performance comparison of all implemented algorithms under a unified framework is presented in the [Benchmark](#benchmark).
+**LightZero** aims to **promote the standardization of the MCTS+RL algorithm family to accelerate related research and applications**. A performance comparison of all implemented algorithms under a unified framework is presented in the [Benchmark](#benchmark).
 
 ### Outline
 
