@@ -28,8 +28,9 @@ lunarlander_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=8,  # if frame_stack_num=1
+            observation_shape=8,
             action_space_size=4,
+            self_supervised_learning_loss=True,  # NOTE: default is False.
             model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=256,
             # The mlp model.
@@ -46,6 +47,7 @@ lunarlander_muzero_config = dict(
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
+        ssl_loss_weight=2,  # NOTE: default is 0.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

@@ -310,10 +310,8 @@ class MuZeroPolicy(Policy):
                         end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
                         network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
 
-                    representation_state = network_output.hidden_state
-
                     hidden_state = to_tensor(hidden_state)
-                    representation_state = to_tensor(representation_state)
+                    representation_state = to_tensor(network_output.hidden_state)
 
                     # NOTE: no grad for the representation_state branch
                     dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)

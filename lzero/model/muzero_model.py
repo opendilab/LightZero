@@ -20,7 +20,6 @@ class MuZeroModel(nn.Module):
         representation_network_type: str = 'conv_res_blocks',
         categorical_distribution: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-        representation_network: nn.Module = None,
         batch_norm_momentum: float = 0.1,
         last_linear_layer_init_zero: bool = True,
         state_norm: bool = False,
@@ -47,14 +46,14 @@ class MuZeroModel(nn.Module):
     ):
         """
         Overview:
-            MuZero network.
+            MuZero model which consists of a representation network, a dynamics network and a prediction network.
+            The networks are build on convolution residual blocks and fully connected layers.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96].
             - action_space_size: (:obj:`int`): Action space size, such as 6.
             - representation_network_type (:obj:`Optional[str]`): The type of representation_network in MuZero model. options={'conv_res_blocks', 'identity'}
             - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             - activation (:obj:`Optional[nn.Module]`): the activation in MuZero model.
-            - representation_network (:obj:`nn.Module`): the user-defined representation_network.
             - batch_norm_momentum (:obj:`float`):  Momentum of BN
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
             - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to True.
@@ -94,7 +93,6 @@ class MuZeroModel(nn.Module):
         self.pred_out = pred_out
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
-        self.representation_network = representation_network
         self.downsample = downsample
 
         self.action_space_size = action_space_size
@@ -122,21 +120,8 @@ class MuZeroModel(nn.Module):
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
 
-        if self.representation_network is None:
-            if self.representation_network_type == 'identity':
-                self.representation_network = nn.Identity()
-            elif self.representation_network_type == 'conv_res_blocks':
-                self.representation_network = RepresentationNetwork(
-                    observation_shape,
-                    num_res_blocks,
-                    num_channels,
-                    downsample,
-                    momentum=batch_norm_momentum,
-                )
-        else:
-            self.representation_network = self.representation_network
-
         if self.representation_network_type == 'identity':
+            self.representation_network = nn.Identity()
             self.dynamics_network = DynamicsNetwork(
                 num_res_blocks,
                 observation_shape[0] + 1,  # in_channels=observation_shape[0]
@@ -162,7 +147,14 @@ class MuZeroModel(nn.Module):
                 momentum=batch_norm_momentum,
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             )
-        else:
+        elif self.representation_network_type == 'conv_res_blocks':
+            self.representation_network = RepresentationNetwork(
+                observation_shape,
+                num_res_blocks,
+                num_channels,
+                downsample,
+                momentum=batch_norm_momentum,
+            )
             self.dynamics_network = DynamicsNetwork(
                 num_res_blocks,
                 num_channels + 1,
@@ -189,31 +181,31 @@ class MuZeroModel(nn.Module):
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             )
 
-            if self.self_supervised_learning_loss:
-                # projection
-                if self.representation_network_type == 'identity':
-                    self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
+        if self.self_supervised_learning_loss:
+            # projection
+            if self.representation_network_type == 'identity':
+                self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
+            else:
+                if self.downsample:
+                    # for atari, due to downsample
+                    # observation_shape=(12, 96, 96),  # stack=4
+                    # 3 * 96/16 * 96/16 = 3*6*6 = 108
+                    self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
+                                                                         ) * math.ceil(observation_shape[2] / 16)
                 else:
-                    if self.downsample:
-                        # for atari, due to downsample
-                        # observation_shape=(12, 96, 96),  # stack=4
-                        # 3 * 96/16 * 96/16 = 3*6*6 = 108
-                        self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
-                                                                             ) * math.ceil(observation_shape[2] / 16)
-                    else:
-                        self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
+                    self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
-                self.projection = nn.Sequential(
-                    nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
-                    activation, nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
-                    activation, nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
-                )
-                self.projection_head = nn.Sequential(
-                    nn.Linear(self.proj_out, self.pred_hid),
-                    nn.BatchNorm1d(self.pred_hid),
-                    activation,
-                    nn.Linear(self.pred_hid, self.pred_out),
-                )
+            self.projection = nn.Sequential(
+                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
+                activation, nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
+                activation, nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
+            )
+            self.projection_head = nn.Sequential(
+                nn.Linear(self.proj_out, self.pred_hid),
+                nn.BatchNorm1d(self.pred_hid),
+                activation,
+                nn.Linear(self.pred_hid, self.pred_out),
+            )
 
     def initial_inference(self, obs: torch.Tensor) -> MZNetworkOutput:
         """
@@ -333,23 +325,26 @@ class MuZeroModel(nn.Module):
     def project(self, latent_state: torch.Tensor, with_grad=True):
         """
         Overview:
-            only used when ``self.self_supervised_learning_loss=True``.
             Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
-        # only the branch of proj + pred can share the gradients
-        Examples:
-            # for lunarlander:
-            # observation_shape = (4, 8, 1),  # stack=4
-            # self.projection_input_dim = 64*8*1
-            # latent_state.shape: (batch_size, num_channel, obs_shape[1], obs_shape[2])  256,64,8,1
-            # 256,64,8,1 -> 256,64*8*1
+        Arguments:
+            - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (256,64,6,6).
+            - with_grad (:obj:`bool`): whether to use gradient.
+        Returns:
+            - proj (:obj:`torch.Tensor`): (batch_size, projection_output_dim), e.g. (256, 1024).
 
-            # for atari:
-            # observation_shape = (12, 96, 96),  # 3,96,96 stack=4
-            # self.projection_input_dim = 3*6*6 = 108
-            # latent_state.shape: (batch_size, num_channel, obs_shape[1]/16, obs_shape[2]/16)  256,64,96/16,96/16 = 256,64,6,6
-            # 256, 64, 6, 6 -> 256,64*6*6
+        Examples:
+            >>> latent_state = torch.randn(256, 64, 6, 6)
+            >>> proj = self.project(latent_state)
+            >>> proj.shape # (256, 1024)
+
+        e.g. for atari:
+            observation_shape = (12, 96, 96),  # original shape is (3,96,96), frame_stack_num=4
+
+            if downsample is True, latent_state.shape: (batch_size, num_channel, obs_shape[1] / 16, obs_shape[2] / 16) = (256, 64, 96 / 16, 96 / 16) = (256, 64, 6, 6)
+            latent_state reshape: (256, 64, 6, 6) -> (256,64*6*6) = (256, 2304)
+            # self.projection_input_dim = 64*6*6 = 2304
+            # self.projection_output_dim = 1024
         """
-        # latent_state.shape[0] = batch_size
         latent_state = latent_state.reshape(latent_state.shape[0], -1)
         proj = self.projection(latent_state)
 

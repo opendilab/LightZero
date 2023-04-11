@@ -37,7 +37,11 @@ class EfficientZeroModelMLP(nn.Module):
     ):
         """
         Overview:
-            EfficientZero network.
+            EfficientZero model which consists of a representation network, a dynamics network and a prediction network.
+            The networks are build on fully connected layers.
+            The representation network is a network which maps the raw observation to a latent state.
+            The dynamics network is a network which predicts the next latent state, value_prefix and reward_hidden_state given the current latent state, action and reward_hidden_state.
+            The prediction network is a network which predicts the value and policy given the current latent state.
         Arguments:
             - observation_shape (:obj:`int`): Observation space shape, e.g. 2.
             - action_space_size: (:obj:`int`): Action space size, such as 6.
@@ -45,7 +49,8 @@ class EfficientZeroModelMLP(nn.Module):
             - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             - activation (:obj:`Optional[nn.Module]`): the activation in EfficientZero model.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to True.
+            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default set it to True.
+            - lstm_hidden_size (:obj:`int`): dim of lstm hidden state in dynamics network.
             - fc_reward_layers (:obj:`SequenceType`): hidden layers of the reward prediction head (MLP head).
             - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
             - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
@@ -238,10 +243,19 @@ class EfficientZeroModelMLP(nn.Module):
 
     def project(self, latent_state: torch.Tensor, with_grad=True):
         """
-        Overview:
-            only used when ``self.self_supervised_learning_loss=True``.
-            Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
-        """
+         Overview:
+             Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
+         Arguments:
+             - latent_state (:obj:`torch.Tensor`): (batch_size, latent_state_dim), e.g. (256, 128).
+             - with_grad (:obj:`bool`): whether to use gradient.
+         Returns:
+             - proj (:obj:`torch.Tensor`): (batch_size, projection_output_dim), e.g. (256, 1024).
+
+         Examples:
+             >>> latent_state = torch.randn(256, 128)
+             >>> proj = self.project(latent_state)
+             >>> proj.shape # (256, 1024)
+         """
         proj = self.projection(latent_state)
 
         # with grad, use proj_head
@@ -269,10 +283,10 @@ class DynamicsNetwork(nn.Module):
     ):
         """
         Overview:
-            Dynamics network. Predict next hidden state given current hidden state and action.
+            Dynamics network which is a network which predicts the next latent state, value_prefix and reward_hidden_state given the current latent state, action and reward_hidden_state.
         Arguments:
             - action_space_size (:obj:`int`): action space size.
-            - in_channels (:obj:`int`): channels of hidden states.
+            - in_channels (:obj:`int`): channels of latent states.
             - common_layer_num (:obj:`int`): number of common layers.
             - lstm_hidden_size (:obj:`int`): dim of lstm hidden state in dynamics network.
             - fc_reward_layers (:obj:`list`):  hidden layers of the reward prediction head (MLP head).
@@ -355,10 +369,10 @@ class PredictionNetwork(nn.Module):
     ):
         """
         Overview:
-            Prediction network. Predict the value and policy given hidden state.
+            Prediction network which predicts the value and policy given latent state.
         Arguments:
             - action_space_size: (:obj:`int`): Action space size, such as 6.
-            - in_channels: (:obj:`int`): channels of hidden states.
+            - in_channels: (:obj:`int`): channels of latent states.
             - common_layer_num (:obj:`int`): number of common layers.
             - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
             - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
@@ -401,17 +415,17 @@ class PredictionNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, latent_state: torch.Tensor):
         """
         Overview:
             Forward computation of the prediction network.
         Arguments:
-            - x (:obj:`torch.Tensor`): input tensor with shape (B, in_channels).
+            - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, in_channels).
         Returns:
             - policy (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).
             - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
         """
-        x_prediction_common = self.fc_prediction_common(x)
+        x_prediction_common = self.fc_prediction_common(latent_state)
 
         value = self.fc_value_head(x_prediction_common)
         policy = self.fc_policy_head(x_prediction_common)

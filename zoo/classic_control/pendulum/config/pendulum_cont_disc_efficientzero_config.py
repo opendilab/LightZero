@@ -51,7 +51,6 @@ pendulum_disc_efficientzero_config = dict(
         ssl_loss_weight=2,  # NOTE: default is 2.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        policy_entropy_loss_weight=0,
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.

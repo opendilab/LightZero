@@ -58,7 +58,8 @@ class SampledEfficientZeroModel(nn.Module):
     ):
         """
         Overview:
-            Sampled EfficientZero network
+            Sampled EfficientZero model which consists of a representation network, a dynamics network and a prediction network.
+            The networks are build on convolution residual blocks and fully connected layers.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96].
             - action_space_size: (:obj:`int`): Action space size, such as 6.
@@ -433,24 +434,26 @@ class SampledEfficientZeroModel(nn.Module):
     def project(self, hidden_state: torch.Tensor, with_grad=True):
         """
         Overview:
-            only used when ``self.self_supervised_learning_loss=True``.
             Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
-        # only the branch of proj + pred can share the gradients
+        Arguments:
+            - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (256,64,6,6).
+            - with_grad (:obj:`bool`): whether to use gradient.
+        Returns:
+            - proj (:obj:`torch.Tensor`): (batch_size, projection_output_dim), e.g. (256, 1024).
+
         Examples:
-            # for lunarlander:
-            # observation_shape = (4, 8, 1),  # stack=4
-            # self.projection_input_dim = 64*8*1
-            # hidden_state.shape: (batch_size, num_channel, obs_shape[1], obs_shape[2])  256,64,8,1
-            # 256,64,8,1 -> 256,64*8*1
+            >>> latent_state = torch.randn(256, 64, 6, 6)
+            >>> proj = self.project(latent_state)
+            >>> proj.shape # (256, 1024)
 
-            # for atari:
-            # observation_shape = (12, 96, 96),  # 3,96,96 stack=4
-            # self.projection_input_dim = 3*6*6 = 108
-            # hidden_state.shape: (batch_size, num_channel, obs_shape[1]/16, obs_shape[2]/16)  256,64,96/16,96/16 = 256,64,6,6
-            # 256, 64, 6, 6 -> 256,64*6*6
+        e.g. for atari:
+            observation_shape = (12, 96, 96),  # original shape is (3,96,96), frame_stack_num=4
+
+            if downsample is True, latent_state.shape: (batch_size, num_channel, obs_shape[1] / 16, obs_shape[2] / 16) = (256, 64, 96 / 16, 96 / 16) = (256, 64, 6, 6)
+            latent_state reshape: (256, 64, 6, 6) -> (256,64*6*6) = (256, 2304)
+            # self.projection_input_dim = 64*6*6 = 2304
+            # self.projection_output_dim = 1024
         """
-
-        # hidden_state.shape[0] = batch_size
         hidden_state = hidden_state.reshape(hidden_state.shape[0], -1)
 
         proj = self.projection(hidden_state)

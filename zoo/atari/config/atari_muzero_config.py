@@ -4,19 +4,14 @@ env_name = 'PongNoFrameskip-v4'  # options={'PongNoFrameskip-v4', 'QbertNoFrames
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
-    average_episode_length_when_converge = 2000
 elif env_name == 'QbertNoFrameskip-v4':
     action_space_size = 6
-    average_episode_length_when_converge = 2000
 elif env_name == 'MsPacmanNoFrameskip-v4':
     action_space_size = 9
-    average_episode_length_when_converge = 500
 elif env_name == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
-    average_episode_length_when_converge = 1000
 elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
-    average_episode_length_when_converge = 800
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user

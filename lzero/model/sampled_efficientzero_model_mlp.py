@@ -49,7 +49,11 @@ class SampledEfficientZeroModelMLP(nn.Module):
     ):
         """
         Overview:
-            Sampled EfficientZero network
+            Sampled EfficientZero network which consists of a representation network, a dynamics network and a prediction network.
+            The networks are build on fully connected layers.
+            The representation network is an MLP network which maps the raw observation to a latent state.
+            The dynamics network is a LSTM network which predicts the next latent state, reward_hidden_state and value_prefix given the current latent state and action.
+            The prediction network is an MLP network which predicts the value and policy given the current latent state.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96].
             - action_space_size: (:obj:`int`): Action space size, such as 6.
@@ -57,7 +61,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
             - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             - activation (:obj:`Optional[nn.Module]`): the activation in Sampled EfficientZero model.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to True.
+            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default set it to True.
             - lstm_hidden_size (:obj:`int`): dim of lstm hidden state in dynamics network.
             - fc_reward_layers (:obj:`SequenceType`): hidden layers of the reward prediction head (MLP head).
             - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
@@ -295,10 +299,19 @@ class SampledEfficientZeroModelMLP(nn.Module):
 
     def project(self, hidden_state: torch.Tensor, with_grad=True):
         """
-        Overview:
-            only used when ``self.self_supervised_learning_loss=True``.
-            Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
-        """
+         Overview:
+             Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
+         Arguments:
+             - latent_state (:obj:`torch.Tensor`): (batch_size, latent_state_dim), e.g. (256, 128).
+             - with_grad (:obj:`bool`): whether to use gradient.
+         Returns:
+             - proj (:obj:`torch.Tensor`): (batch_size, projection_output_dim), e.g. (256, 1024).
+
+         Examples:
+             >>> latent_state = torch.randn(256, 128)
+             >>> proj = self.project(latent_state)
+             >>> proj.shape # (256, 1024)
+         """
         proj = self.projection(hidden_state)
 
         # with grad, use proj_head
@@ -327,7 +340,7 @@ class DynamicsNetwork(nn.Module):
     ):
         """
         Overview:
-            Dynamics network. Predict next hidden state given current hidden state and action.
+            Dynamics network. Predict next latent state, reward_hidden_state and value_prefix given current latent state and action.
         Arguments:
             - continuous_action_space (:obj:`bool`): whether the action space is continuous.
             - action_space_size (:obj:`int`): dim of action space.
@@ -387,12 +400,12 @@ class DynamicsNetwork(nn.Module):
             - reward_hidden_state (:obj:`torch.Tensor`): next reward hidden state.
             - value_prefix (:obj:`torch.Tensor`): value prefix.
         """
-        state = self.fc_dynamics(state_action_encoding)
-        state_unsqueeze = state.unsqueeze(0)
+        next_latent_state = self.fc_dynamics(state_action_encoding)
+        state_unsqueeze = next_latent_state.unsqueeze(0)
         value_prefix, reward_hidden_state = self.lstm(state_unsqueeze, reward_hidden_state)
         value_prefix = self.fc_reward_head(value_prefix.squeeze(0))
 
-        return state, reward_hidden_state, value_prefix
+        return next_latent_state, reward_hidden_state, value_prefix
 
     def get_dynamic_mean(self):
         return get_dynamic_mean(self)
@@ -424,7 +437,7 @@ class PredictionNetwork(nn.Module):
     ):
         """
         Overview:
-            Prediction network. predict the value and policy given hidden states
+            Prediction network which predict the value and policy given latent states.
         Arguments:
             - continuous_action_space (:obj:`bool`): The type of action space. default set it to False.
             - action_space_size: (:obj:`int`): Action space size, such as 6.
@@ -437,7 +450,7 @@ class PredictionNetwork(nn.Module):
             # ==============================================================
             # specific sampled related config
             # ==============================================================
-            # see ``ReparameterizationHead`` in ``ding.model.cmmon.head`` for more details about thee following arguments.
+            # see ``ReparameterizationHead`` in ``ding.model.cmmoon.head`` for more details about thee following arguments.
             - sigma_type (:obj:`str`): the type of sigma in policy head of prediction network, options={'conditioned', 'fixed'}.
             - fixed_sigma_value (:obj:`float`): the fixed sigma value in policy head of prediction network,
             - bound_type (:obj:`str`): The type of bound in networks.  default set it to None.
@@ -519,7 +532,7 @@ class PredictionNetwork(nn.Module):
         value = self.fc_value_head(x_prediction_common)
 
         # sampled related core code
-        #  {'mu': mu, 'sigma': sigma}
+        #  policy shape: {'mu': mu, 'sigma': sigma}
         policy = self.sampled_fc_policy(x_prediction_common)
         # print("policy['mu']", policy['mu'].max(), policy['mu'].min(), policy['mu'].std())
         # print("policy['sigma']", policy['sigma'].max(), policy['sigma'].min(), policy['sigma'].std())

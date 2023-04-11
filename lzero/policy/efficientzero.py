@@ -327,11 +327,11 @@ class EfficientZeroPolicy(Policy):
                     network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
 
                 hidden_state = to_tensor(hidden_state)
-                presentation_state = to_tensor(network_output.hidden_state)
+                representation_state = to_tensor(network_output.hidden_state)
 
-                # NOTE: no grad for the presentation_state branch.
+                # NOTE: no grad for the representation_state branch.
                 dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
-                observation_proj = self._learn_model.project(presentation_state, with_grad=False)
+                observation_proj = self._learn_model.project(representation_state, with_grad=False)
                 temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
 
                 consistency_loss += temp_loss

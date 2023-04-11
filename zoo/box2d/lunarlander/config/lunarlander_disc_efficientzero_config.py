@@ -28,9 +28,10 @@ lunarlander_disc_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            model_type='mlp',  # options={'mlp', 'conv'}
             observation_shape=8,
             action_space_size=4,
+            self_supervised_learning_loss=True,
+            model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=256,
             # The mlp model.
             latent_state_dim=256,

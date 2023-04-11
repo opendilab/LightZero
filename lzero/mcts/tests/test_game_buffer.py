@@ -12,6 +12,7 @@ config = EasyDict(dict(
     priority_prob_beta=0.4,
     replay_buffer_size=10000,
     env_type='not_board_games',
+    use_priority=True,
 ))
 
 

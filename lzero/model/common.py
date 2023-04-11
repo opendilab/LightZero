@@ -6,6 +6,8 @@ Overview:
 
 from typing import List, Optional
 from dataclasses import dataclass
+
+import torch
 import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import SequenceType
@@ -16,20 +18,20 @@ import numpy as np
 @dataclass
 class EZNetworkOutput:
     # output format of the model
-    value: float
-    value_prefix: float
-    policy_logits: List[float]
-    hidden_state: List[float]
-    reward_hidden_state: object
+    value: torch.Tensor
+    value_prefix: torch.Tensor
+    policy_logits: torch.Tensor
+    hidden_state: torch.Tensor
+    reward_hidden_state: torch.Tensor
 
 
 @dataclass
 class MZNetworkOutput:
     # output format of the model
-    value: float
-    reward: float
-    policy_logits: List[float]
-    hidden_state: List[float]
+    value: torch.Tensor
+    reward: torch.Tensor
+    policy_logits: torch.Tensor
+    hidden_state: torch.Tensor
 
 
 def conv3x3(in_channels, out_channels, stride=1):

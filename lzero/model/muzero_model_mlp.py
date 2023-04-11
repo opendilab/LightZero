@@ -36,7 +36,11 @@ class MuZeroModelMLP(nn.Module):
     ):
         """
         Overview:
-            MuZero network.
+            MuZero model which consists of a representation network, a dynamics network and a prediction network.
+            The networks are build on fully connected layers.
+            The representation network is an MLP network which maps the raw observation to a latent state.
+            The dynamics network is an MLP network which predicts the next latent state, and reward given the current latent state and action.
+            The prediction network is an MLP network which predicts the value and policy given the current latent state.
         Arguments:
             - observation_shape (:obj:`int`): Observation space shape, e.g. 2.
             - action_space_size: (:obj:`int`): Action space size, such as 6.
@@ -44,7 +48,7 @@ class MuZeroModelMLP(nn.Module):
             - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             - activation (:obj:`Optional[nn.Module]`): the activation in MuZero model.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to True.
+            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default set it to True.
             - fc_reward_layers (:obj:`SequenceType`): hidden layers of the reward prediction head (MLP head).
             - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
             - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
@@ -227,10 +231,19 @@ class MuZeroModelMLP(nn.Module):
 
     def project(self, latent_state: torch.Tensor, with_grad=True):
         """
-        Overview:
-            only used when ``self.self_supervised_learning_loss=True``.
-            Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
-        """
+         Overview:
+             Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
+         Arguments:
+             - latent_state (:obj:`torch.Tensor`): (batch_size, latent_state_dim), e.g. (256, 128).
+             - with_grad (:obj:`bool`): whether to use gradient.
+         Returns:
+             - proj (:obj:`torch.Tensor`): (batch_size, projection_output_dim), e.g. (256, 1024).
+
+         Examples:
+             >>> latent_state = torch.randn(256, 128)
+             >>> proj = self.project(latent_state)
+             >>> proj.shape # (256, 1024)
+         """
         proj = self.projection(latent_state)
 
         # with grad, use proj_head
@@ -257,7 +270,7 @@ class DynamicsNetwork(nn.Module):
     ):
         """
         Overview:
-            Dynamics network. Predict next hidden state given current hidden state and action.
+            The dynamics network which predicts the next latent state, and reward given the current latent state and action.
         Arguments:
             - action_space_size (:obj:`int`): dim of action space.
             - in_channels (:obj:`int`): dim of input.
@@ -299,7 +312,7 @@ class DynamicsNetwork(nn.Module):
     def forward(self, state_action_encoding: torch.Tensor):
         """
         Overview:
-            Forward function. Predict next latent state given current latent state, and action.
+            Forward function. Predict next latent state and reward given current latent state, and action.
         Arguments:
             - state_action_encoding (:obj:`torch.Tensor`): current latent state and action encoding.
         Returns:
@@ -333,7 +346,7 @@ class PredictionNetwork(nn.Module):
     ):
         """
         Overview:
-            Prediction network. Predict the value and policy given hidden state.
+            Prediction network. Predict the value and policy given latent state.
         Arguments:
             - action_space_size: (:obj:`int`): Action space size, such as 6.
             - in_channels (:obj:`int`): channels of input, if None, then in_channels = num_channels
