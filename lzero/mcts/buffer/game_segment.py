@@ -108,7 +108,11 @@ class GameSegment:
               stacked_obs (List): An observation in the correct format for model inference.
           """
         timestep_obs = len(self.obs_segment) - self.frame_stack_num
+        timestep_reward = len(self.reward_segment)
+        assert timestep_obs == timestep_reward, "timestep_obs: {}, timestep_reward: {}".format(timestep_obs, timestep_reward)
+        # TODO:
         timestep = timestep_obs
+        timestep = timestep_reward
         stacked_obs = self.obs_segment[timestep:timestep + self.frame_stack_num]
         if self.config.transform2string:
             stacked_obs = [jpeg_data_decompressor(obs, self.config.gray_scale) for obs in stacked_obs]

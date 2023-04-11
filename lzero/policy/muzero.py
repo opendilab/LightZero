@@ -159,7 +159,9 @@ class MuZeroPolicy(Policy):
             return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
 
     def _init_learn(self) -> None:
-        if 'optim_type' not in self._cfg.learn.keys() or self._cfg.optim_type == 'SGD':
+        assert self._cfg.optim_type in ['SGD', 'Adam']
+        # NOTE: in board_gmaes, for fixed lr 0.003, 'Adam' is better than 'SGD'.
+        if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
                 self._model.parameters(),
                 lr=self._cfg.learning_rate,

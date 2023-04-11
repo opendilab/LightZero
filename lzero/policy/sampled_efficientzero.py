@@ -184,7 +184,8 @@ class SampledEfficientZeroPolicy(Policy):
             except Exception as exception:
                 logging.warning(exception)
 
-        if 'optim_type' not in self._cfg.learn.keys() or self._cfg.optim_type == 'SGD':
+        assert self._cfg.optim_type in ['SGD', 'Adam']
+        if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
                 self._model.parameters(),
                 lr=self._cfg.learning_rate,
