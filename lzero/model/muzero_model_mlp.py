@@ -200,8 +200,8 @@ class MuZeroModelMLP(nn.Module):
              - latent_state (:obj:`torch.Tensor`): (batch_size, hidden_channel), e.g. (8,64).
              - action (:obj:`torch.Tensor`): (batch_size, action_dim).
         Returns:
-            - next_latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
-            - reward (:obj:`torch.Tensor`): (batch_size, 1).
+            - next_latent_state (:obj:`torch.Tensor`): (batch_size, hidden_channel), e.g. (8,64).
+            - reward (:obj:`torch.Tensor`):  (batch_size, support_dim), e.g. (8, 21).
          """
         # TODO: action encoding
         # discrete action space
@@ -219,6 +219,7 @@ class MuZeroModelMLP(nn.Module):
         action_one_hot.scatter_(1, action, 1)
         action_encoding = action_one_hot
 
+        # state_action_encoding shape: (batch_size, latent_state[1] + action_dim])
         state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
 
         next_latent_state, reward = self.dynamics_network(state_action_encoding)

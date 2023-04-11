@@ -358,25 +358,24 @@ class SampledEfficientZeroModel(nn.Module):
             latent_state_normalized = renormalize(latent_state)
             return latent_state_normalized
 
-    def _dynamics(self, latent_state: torch.Tensor, reward_hidden_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
+    def _dynamics(self, latent_state: torch.Tensor, reward_hidden_state: Tuple, action: torch.Tensor) -> Tuple[torch.Tensor]:
         """
          Overview:
              Dynamics function. Predict ``next_latent_state``, ``reward_hidden_state``, ``value_prefix``
              given current ``latent_state`` and ``action``.
          Arguments:
-             - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
-             - reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
-             - action (:obj:`torch.Tensor`): (batch_size, action_dim).
+             - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, latent_state[2], latent_state[3]), e.g. (8, 16, 4, 1).
+             - reward_hidden_state (:obj:`tuple`): two dimensional tuple, each element (1, batch_size, lstm_hidden_size) e.g. (1, 8, 128).
+             - action (:obj:`torch.Tensor`): (batch_size, action_dim), e.g. (8, 1).
         Returns:
-            - next_latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
-            - next_reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
-            - value_prefix (:obj:`torch.Tensor`): (batch_size, 1).
+            - next_latent_state (:obj:`torch.Tensor`): (batch_size,num_channel, latent_state[2], latent_state[3]) e.g. (8, 16, 4, 1).
+            - next_reward_hidden_state (:obj:`tuple`): two dimensional tuple, each element (1, batch_size, lstm_hidden_size) e.g. (1, 8, 128).
+            - value_prefix (:obj:`torch.Tensor`): (batch_size, support_dim), e.g. (8, 21).
          """
         if not self.continuous_action_space:
             # discrete action space
-            # stack latent_state with a game specific one hot encoded action
-            #  action_one_hot (batch_siize, 1, obs_shape[1], obs_shape[2]), e.g. (4,1,6,6)
-            action_one_hot = (
+            # the final action_encoding shape is (batch_size, 1, latent_state[2], latent_state[3]), e.g. (8, 1, 4, 1).
+            action_encoding = (
                 torch.ones((
                     latent_state.shape[0],
                     1,
@@ -386,20 +385,21 @@ class SampledEfficientZeroModel(nn.Module):
             )
             if len(action.shape) == 2:
                 # (batch_size, action_dim) -> (batch_size, action_dim, 1)
-                # e.g.,  torch.Size([4, 1]) ->  torch.Size([4, 1, 1])
+                # e.g.,  torch.Size([8, 1]) ->  torch.Size([8, 1, 1])
                 action = action.unsqueeze(-1)
             elif len(action.shape) == 1:
-                # (action_dim) -> (1, action_dim, 1)
-                # e.g.,  torch.Size([4, 1]) ->  torch.Size([4, 1, 1])
-                action = action.unsqueeze(0).unsqueeze(-1)
+                # (batch_size,) -> (batch_size, action_dim=1, 1)
+                # e.g.,  -> torch.Size([8, 1]) ->  torch.Size([8, 1, 1])
+                action = action.unsqueeze(-1).unsqueeze(-1)
 
-            # action[:, 0, None, None] shape: (4, 1, 1, 1)
-            action_one_hot = (action[:, 0, None, None] * action_one_hot / self.action_space_size)
-            state_action_encoding = torch.cat((latent_state, action_one_hot), dim=1)
+            # action[:, 0, None, None] shape:  (batch_size, action_dim, 1, 1) e.g. (8, 1, 1, 1)
+            # action_encoding shape: (batch_size, 1, latent_state[2], latent_state[3]) e.g. (8, 1, 4, 1),
+            # where each element is normalized as action[i]/action_space_size
+            action_encoding = (action[:, 0, None, None] * action_encoding / self.action_space_size)
 
         else:
             # continuous action space
-            action_one_hot = (
+            action_encoding = (
                 torch.ones((
                     latent_state.shape[0],
                     1,
@@ -410,18 +410,17 @@ class SampledEfficientZeroModel(nn.Module):
 
             if len(action.shape) == 2:
                 # (batch_size, action_dim) -> (batch_size, action_dim, 1)
+                # e.g.,  torch.Size([8, 2]) ->  torch.Size([8, 2, 1])
                 action = action.unsqueeze(-1)
 
-            # len(action.shape)==3:
-            # action: (8,2,1)
-            # action_one_hot (batch_siize, 1, obs_shape[1], obs_shape[2]) : (8,1,8,1)
-            # action[:, 0, None, None]: 8,1,1,1
-            # action_embedding: 8,2,8,1
-            action_embedding = torch.cat(
-                [action[:, dim, None, None] * action_one_hot for dim in range(self.action_space_size)], dim=1
+            # action[:, dim, None, None] shape:  (batch_size, 1, 1, 1) e.g. (8, 1, 1, 1)
+            # the final action_encoding shape is action_encoding shape: (batch_size, action_dim, latent_state[2], latent_state[3]) e.g. (8, 2, 4, 1),
+            action_encoding = torch.cat(
+                [action[:, dim, None, None] * action_encoding for dim in range(self.action_space_size)], dim=1
             )
-            state_action_encoding = torch.cat((latent_state, action_embedding), dim=1)
 
+        # state_action_encoding shape: (batch_size, latent_state[1] + 1, latent_state[2], latent_state[3])
+        state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
         next_latent_state, next_reward_hidden_state, value_prefix = self.dynamics_network(
             state_action_encoding, reward_hidden_state
         )

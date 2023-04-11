@@ -200,23 +200,25 @@ class EfficientZeroModelMLP(nn.Module):
         policy_logits, value = self.prediction_network(latent_state)
         return policy_logits, value
 
-    def _dynamics(self, latent_state: torch.Tensor, reward_hidden_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor]:
+    def _dynamics(self, latent_state: torch.Tensor, reward_hidden_state: Tuple, action: torch.Tensor) -> Tuple[
+        torch.Tensor]:
         """
-         Overview:
-             Dynamics function. Predict ``next_latent_state``, ``reward_hidden_state``, ``value_prefix``
-             given current ``latent_state`` and ``action``.
-         Arguments:
-             - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
-             - reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
-             - action (:obj:`torch.Tensor`): (batch_size, action_dim).
-        Returns:
-            - next_latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
-            - next_reward_hidden_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
-            - value_prefix (:obj:`torch.Tensor`): (batch_size, 1).
-         """
+            Overview:
+                Dynamics function. Predict ``next_latent_state``, ``reward_hidden_state``, ``value_prefix``
+                given current ``latent_state`` and ``action``.
+            Arguments:
+                - latent_state (:obj:`torch.Tensor`): (batch_size, latent_state_dim), e.g. (8, 64).
+                - reward_hidden_state (:obj:`tuple`): two dimensional tuple, each element (1, batch_size, lstm_hidden_size) e.g. (1, 8, 128).
+                - action (:obj:`torch.Tensor`): (batch_size, action_dim), e.g. (8, 1).
+           Returns:
+               - next_latent_state (:obj:`torch.Tensor`): (batch_size, latent_state_dim), e.g. (8, 64).
+               - next_reward_hidden_state (:obj:`tuple`): two dimensional tuple, each element (1, batch_size, lstm_hidden_size) e.g. (1, 8, 128).
+               - value_prefix (:obj:`torch.Tensor`): (batch_size, support_dim), e.g. (8, 21).
+            """
         # TODO: action encoding
         # discrete action space
-        # Stack latent_state with a game specific one hot encoded action
+        # Stack latent_state with a one hot encoded action
+        # the final action_encoding shape is (batch_size, latent_state_dim+action_space_size), e.g. (8, 64+2).
         if len(action.shape) == 1:
             # (batch_size, ) -> (batch_size, 1)
             # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
@@ -230,6 +232,7 @@ class EfficientZeroModelMLP(nn.Module):
         action_one_hot.scatter_(1, action, 1)
         action_encoding = action_one_hot
 
+        # state_action_encoding shape: (batch_size, latent_state[1] + action_dim])
         state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
 
         # NOTE: the key difference with MuZero
