@@ -30,21 +30,24 @@ cartpole_muzero_config = dict(
         model=dict(
             observation_shape=4,
             action_space_size=2,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            # We use the small size model for cartpole.
-            num_res_blocks=1,
-            num_channels=16,
+            self_supervised_learning_loss=True,
+            model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=128,
-            self_supervised_learning_loss=False,
+            # The mlp model.
+            latent_state_dim=128,
+            # The conv model.
+            # num_res_blocks=1,
+            # num_channels=16,
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,  # init lr for manually decay schedule
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
+        learning_rate=0.003,
+        ssl_loss_weight=2,  # NOTE: default is 2.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

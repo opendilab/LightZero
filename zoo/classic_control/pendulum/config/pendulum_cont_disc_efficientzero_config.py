@@ -16,7 +16,7 @@ reanalyze_ratio = 0
 # ==============================================================
 
 pendulum_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/pendulum_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_ez_ctree/pendulum_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_seed0',
     env=dict(
         env_name='Pendulum-v1',
         continuous=False,
@@ -31,23 +31,26 @@ pendulum_disc_efficientzero_config = dict(
         model=dict(
             observation_shape=3,
             action_space_size=11,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            # We use the small size model for pendulum.
-            num_res_blocks=1,
-            num_channels=16,
+            self_supervised_learning_loss=True,
+            model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=128,
+            # The mlp model.
+            latent_state_dim=128,
+            # The conv model.
+            # num_res_blocks=1,
+            # num_channels=16,
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        lr_piecewise_constant_decay=True,
-        optim_type='SGD',
-        learning_rate=0.2,  # init lr for manually decay schedule
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
+        learning_rate=0.003,
+        ssl_loss_weight=2,  # NOTE: default is 2.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        policy_entropy_loss_weight=0,
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.

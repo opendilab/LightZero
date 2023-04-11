@@ -18,7 +18,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 cartpole_sampled_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/cartpole_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez_ctree/cartpole_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -32,25 +32,28 @@ cartpole_sampled_efficientzero_config = dict(
         model=dict(
             observation_shape=4,
             action_space_size=2,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
+            self_supervised_learning_loss=True,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            # We use the small size model for cartpole.
-            num_res_blocks=1,
-            num_channels=16,
+            model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=128,
+            # The mlp model.
+            latent_state_dim=128,
+            # The conv model.
+            # num_res_blocks=1,
+            # num_channels=16,
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,  # init lr for manually decay schedule
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
+        learning_rate=0.003,
+        ssl_loss_weight=2,  # NOTE: default is 2.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=2,
         n_episode=n_episode,
         eval_freq=int(2e2),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.

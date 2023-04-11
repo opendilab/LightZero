@@ -20,7 +20,6 @@ class EfficientZeroModel(nn.Module):
         representation_network_type: str = 'conv_res_blocks',
         categorical_distribution: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-        representation_network: nn.Module = None,
         batch_norm_momentum: float = 0.1,
         last_linear_layer_init_zero: bool = True,
         state_norm: bool = False,
@@ -45,14 +44,14 @@ class EfficientZeroModel(nn.Module):
     ):
         """
         Overview:
-            EfficientZero model.
+            EfficientZero model which consists of a representation network, a dynamics network and a prediction network.
+            The networks are build on convolution residual blocks and fully connected layers.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96].
             - action_space_size: (:obj:`int`): Action space size, such as 6.
             - representation_network_type (:obj:`Optional[str]`): The type of representation_network in EfficientZero model. options={'conv_res_blocks', 'identity'}.
             - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             - activation (:obj:`Optional[nn.Module]`): the activation in EfficientZero model.
-            - representation_network (:obj:`nn.Module`): the user-defined representation_network.
             - batch_norm_momentum (:obj:`float`):  Momentum of BN
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
             - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to True.
@@ -92,7 +91,6 @@ class EfficientZeroModel(nn.Module):
         self.pred_out = pred_out
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
-        self.representation_network = representation_network
         self.downsample = downsample
 
         self.action_space_size = action_space_size
@@ -120,22 +118,8 @@ class EfficientZeroModel(nn.Module):
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
 
-        if self.representation_network is None:
-            if self.representation_network_type == 'identity':
-                self.representation_network = nn.Identity()
-            elif self.representation_network_type == 'conv_res_blocks':
-                self.representation_network = RepresentationNetwork(
-                    observation_shape,
-                    num_res_blocks,
-                    num_channels,
-                    downsample,
-                    momentum=batch_norm_momentum,
-                    activation=activation,
-                )
-        else:
-            self.representation_network = self.representation_network
-
         if self.representation_network_type == 'identity':
+            self.representation_network = nn.Identity()
             self.dynamics_network = DynamicsNetwork(
                 num_res_blocks,
                 observation_shape[0] + 1,  # in_channels=observation_shape[0],  +1 denotes action dim
@@ -164,7 +148,19 @@ class EfficientZeroModel(nn.Module):
                 last_linear_layer_init_zero=self.last_linear_layer_init_zero,
                 activation=activation,
             )
-        else:
+
+            # projection
+            self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
+
+        elif self.representation_network_type == 'conv_res_blocks':
+            self.representation_network = RepresentationNetwork(
+                observation_shape,
+                num_res_blocks,
+                num_channels,
+                downsample,
+                momentum=batch_norm_momentum,
+                activation=activation,
+            )
             self.dynamics_network = DynamicsNetwork(
                 num_res_blocks,
                 num_channels + 1,  # 1 denotes action dim
@@ -194,14 +190,11 @@ class EfficientZeroModel(nn.Module):
                 activation=activation,
             )
 
-        # projection
-        if self.representation_network_type == 'identity':
-            self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
-        else:
+            # projection
             if self.downsample:
                 # for atari, due to downsample
-                # observation_shape=(12, 96, 96),  # stack=4
-                # 3 * 96/16 * 96/16 = 3*6*6 = 108
+                # observation_shape=(12, 96, 96), # original shape is (3,96,96), frame_stack_num=4
+                # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
                 self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
                                                                      ) * math.ceil(observation_shape[2] / 16)
             else:
@@ -288,10 +281,6 @@ class EfficientZeroModel(nn.Module):
         Returns:
             - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
         """
-        if len(observation.shape) == 1:
-            # vector obs input, e.g. classical control ad box2d environments
-            # to be compatible with LightZero model/policy, shape: [C, W, H]
-            observation = observation.reshape(1, observation.shape[0], 1)
         latent_state = self.representation_network(observation)
         if not self.state_norm:
             return latent_state
@@ -335,6 +324,7 @@ class EfficientZeroModel(nn.Module):
         x = torch.cat((latent_state, action_one_hot), dim=1)
         # NOTE: the key difference with MuZero
         next_latent_state, next_reward_hidden_state, value_prefix = self.dynamics_network(x, reward_hidden_state)
+
         if not self.state_norm:
             return next_latent_state, next_reward_hidden_state, value_prefix
         else:
@@ -345,22 +335,25 @@ class EfficientZeroModel(nn.Module):
         """
         Overview:
             Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
-        # only the branch of proj + pred can share the gradients
+        Arguments:
+            - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (256,64,6,6).
+            - with_grad (:obj:`bool`): whether to use gradient.
+        Returns:
+            - proj (:obj:`torch.Tensor`): (batch_size, projection_output_dim), e.g. (256, 1024).
+
         Examples:
-            # for lunarlander:
-            # observation_shape = (4, 8, 1),  # stack=4
-            # self.projection_input_dim = 64*8*1
-            # latent_state.shape: (batch_size, num_channel, obs_shape[1], obs_shape[2])  256,64,8,1
-            # 256,64,8,1 -> 256,64*8*1
+            >>> latent_state = torch.randn(256, 64, 6, 6)
+            >>> proj = self.project(latent_state)
+            >>> proj.shape # (256, 1024)
 
-            # for atari:
-            # observation_shape = (12, 96, 96),  # 3,96,96 stack=4
-            # self.projection_input_dim = 3*6*6 = 108
-            # latent_state.shape: (batch_size, num_channel, obs_shape[1]/16, obs_shape[2]/16)  256,64,96/16,96/16 = 256,64,6,6
-            # 256, 64, 6, 6 -> 256,64*6*6
+        e.g. for atari:
+            observation_shape = (12, 96, 96),  # original shape is (3,96,96), frame_stack_num=4
+
+            if downsample is True, latent_state.shape: (batch_size, num_channel, obs_shape[1] / 16, obs_shape[2] / 16) = (256, 64, 96 / 16, 96 / 16) = (256, 64, 6, 6)
+            latent_state reshape: (256, 64, 6, 6) -> (256,64*6*6) = (256, 2304)
+            # self.projection_input_dim = 64*6*6 = 2304
+            # self.projection_output_dim = 1024
         """
-
-        # latent_state.shape[0] = batch_size
         latent_state = latent_state.reshape(latent_state.shape[0], -1)
 
         proj = self.projection(latent_state)
@@ -392,7 +385,7 @@ class DynamicsNetwork(nn.Module):
     ):
         """
         Overview:
-            Dynamics network. Predict next hidden state given current hidden state and action.
+            Dynamics network which is a network which predicts the next latent state, value_prefix and reward_hidden_state given the current latent state, action and reward_hidden_state.
         Arguments:
             - num_res_blocks (:obj:`int`): number of res blocks.
             - num_channels (:obj:`int`): channels of hidden states.
@@ -443,10 +436,21 @@ class DynamicsNetwork(nn.Module):
         )
         self.activation = activation
 
-    def forward(self, x, reward_hidden_state):
-        # take the state encoding,  x[:, -1, :, :] is action encoding
-        state = x[:, :-1, :, :]
-        x = self.conv(x)
+    def forward(self, state_action_encoding: torch.Tensor, reward_hidden_state):
+        """
+        Overview:
+            Forward function. Predict next latent state given current latent state, action and reward hidden state.
+        Arguments:
+            - state_action_encoding (:obj:`torch.Tensor`): current latent state and action encoding.
+            - reward_hidden_state (:obj:`torch.Tensor`): reward hidden state. We use LSTM to predict value prefix.
+        Returns:
+            - state (:obj:`torch.Tensor`): next latent state.
+            - reward_hidden_state (:obj:`torch.Tensor`): next reward hidden state.
+            - value_prefix (:obj:`torch.Tensor`): value prefix.
+        """
+        # take the state encoding,  state_action_encoding[:, -1, :, :] is action encoding
+        state = state_action_encoding[:, :-1, :, :]
+        x = self.conv(state_action_encoding)
         x = self.bn(x)
 
         x += state
@@ -498,7 +502,7 @@ class PredictionNetwork(nn.Module):
     ):
         """
         Overview:
-            Prediction network. Predict the value and policy given hidden state.
+            Prediction network which predicts the value and policy given latent state.
         Arguments:
             - action_space_size: (:obj:`int`): Action space size, such as 6.
             - num_res_blocks (:obj:`int`): number of res blocks in model.
@@ -556,18 +560,27 @@ class PredictionNetwork(nn.Module):
 
         self.activation = activation
 
-    def forward(self, x):
+    def forward(self, latent_state):
+        """
+        Overview:
+            Forward computation of the prediction network.
+        Arguments:
+            - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, in_channels).
+        Returns:
+            - policy (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).
+            - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
+        """
         if self.in_channels is not None:
-            x = self.conv_input(x)
+            latent_state = self.conv_input(latent_state)
 
         for block in self.resblocks:
-            x = block(x)
+            latent_state = block(latent_state)
 
-        value = self.conv1x1_value(x)
+        value = self.conv1x1_value(latent_state)
         value = self.bn_value(value)
         value = self.activation(value)
 
-        policy = self.conv1x1_policy(x)
+        policy = self.conv1x1_policy(latent_state)
         policy = self.bn_policy(policy)
         policy = self.activation(policy)
 

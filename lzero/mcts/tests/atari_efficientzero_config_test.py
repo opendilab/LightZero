@@ -1,17 +1,7 @@
 from easydict import EasyDict
 
-env_name = 'PongNoFrameskip-v4'  # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-
-if env_name == 'PongNoFrameskip-v4':
-    action_space_size = 6
-elif env_name == 'QbertNoFrameskip-v4':
-    action_space_size = 6
-elif env_name == 'MsPacmanNoFrameskip-v4':
-    action_space_size = 9
-elif env_name == 'SpaceInvadersNoFrameskip-v4':
-    action_space_size = 6
-elif env_name == 'BreakoutNoFrameskip-v4':
-    action_space_size = 4
+env_name = 'PongNoFrameskip-v4'
+action_space_size = 6
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -19,9 +9,9 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-num_simulations = 50
-update_per_collect = 1000
-batch_size = 256
+num_simulations = 5
+update_per_collect = 10
+batch_size = 4
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
 # ==============================================================
@@ -37,20 +27,40 @@ atari_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        env_type='Atari',
+        max_episode_steps=int(1.08e5),
+        gray_scale=True,
+        frame_skip=4,
+        episode_life=True,
+        clip_rewards=True,
+        channel_last=True,
+        render_mode_human=False,
+        scale=True,
+        warp_frame=True,
+        save_video=False,
+        transform2string=False,
+        game_wrapper=True,
+        stop_value=int(1e6),
     ),
     policy=dict(
+        sampled_algo=False,
         mcts_ctree=True,
-        # mcts_ctree=False,
         model=dict(
             observation_shape=(4, 96, 96),
             frame_stack_num=4,
             action_space_size=action_space_size,
             representation_network_type='conv_res_blocks',
             downsample=True,
+            model_type='conv',  # options={'mlp', 'conv'}
+            # (bool) If True, the action space of the environment is continuous, otherwise discrete.
+            continuous_action_space=False,
+            self_supervised_learning_loss=True,
+            categorical_distribution=True,
+            image_channel=1,
+            support_scale=300,
+            lstm_hidden_size=512,
         ),
         cuda=True,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
         game_segment_length=400,
         use_augmentation=True,
@@ -66,6 +76,12 @@ atari_efficientzero_config = dict(
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
+        discount_factor=0.997,
+        transform2string=False,
+        lstm_horizon_len=5,
+
     ),
 )
 atari_efficientzero_config = EasyDict(atari_efficientzero_config)
@@ -88,8 +104,3 @@ atari_efficientzero_create_config = dict(
 )
 atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
 create_config = atari_efficientzero_create_config
-
-if __name__ == "__main__":
-    from lzero.entry import train_muzero
-
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

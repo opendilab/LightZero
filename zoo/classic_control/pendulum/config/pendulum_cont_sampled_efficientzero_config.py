@@ -11,14 +11,14 @@ evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 200
 batch_size = 256
-max_env_step = int(5e5)
+max_env_step = int(1e6)
 reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 pendulum_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez_ctree/pendulum_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_seed0',
     env=dict(
         env_name='Pendulum-v1',
         continuous=True,
@@ -31,24 +31,28 @@ pendulum_sampled_efficientzero_config = dict(
     policy=dict(
         model=dict(
             observation_shape=3,
-            action_space_size=1,
+            action_space_size=11,
+            self_supervised_learning_loss=True,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}
-            # We use the small size model for pendulum.
-            num_res_blocks=1,
-            num_channels=16,
+            model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=128,
+            # The mlp model.
+            latent_state_dim=128,
+            # The conv model.
+            # num_res_blocks=1,
+            # num_channels=16,
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        lr_piecewise_constant_decay=True,
-        optim_type='SGD',
-        learning_rate=0.2,  # init lr for manually decay schedule
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
+        learning_rate=0.003,
+        ssl_loss_weight=2,  # NOTE: default is 2.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.

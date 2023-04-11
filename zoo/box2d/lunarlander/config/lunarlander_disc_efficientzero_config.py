@@ -9,14 +9,14 @@ evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 200
 batch_size = 256
-max_env_step = int(1e6)
+max_env_step = int(5e6)
 reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 lunarlander_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_seed0',
     env=dict(
         env_name='LunarLander-v2',
         continuous=False,
@@ -28,22 +28,26 @@ lunarlander_disc_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=8,  # if frame_stack_num=1
+            observation_shape=8,
             action_space_size=4,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            # We use the medium size model for lunarlander.
-            num_res_blocks=1,
-            num_channels=32,
+            self_supervised_learning_loss=True,
+            model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=256,
+            # The mlp model.
+            latent_state_dim=256,
+            # The conv model.
+            # num_res_blocks=1,
+            # num_channels=32,
         ),
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=400,
+        game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,  # init lr for manually decay schedule
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
+        learning_rate=0.003,
+        ssl_loss_weight=2,  # NOTE: default is 2.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

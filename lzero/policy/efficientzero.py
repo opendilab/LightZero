@@ -15,8 +15,7 @@ from lzero.mcts import EfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts import EfficientZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack
-from .utils import negative_cosine_similarity
+    DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, negative_cosine_similarity, prepare_obs
 
 
 @POLICY_REGISTRY.register('efficientzero')
@@ -33,13 +32,15 @@ class EfficientZeroPolicy(Policy):
         # (bool) Whether learning policy is the same as collecting data policy(on-policy)
         on_policy=False,
         model=dict(
+            # (str) The model type. For 1-dimensional vector obs, we use mlp model. For 3-dimensional image obs, we use conv model.
+            model_type='conv',  # options={'mlp', 'conv'}
             # (bool) If True, the action space of the environment is continuous, otherwise discrete.
             continuous_action_space=False,
             # (tuple) the stacked obs shape.
             # observation_shape=(1, 96, 96),  # if frame_stack_num=1
             observation_shape=(4, 96, 96),  # if frame_stack_num=4
             # (bool) Whether to use the self-supervised learning loss.
-            self_supervised_learning_loss=False,
+            self_supervised_learning_loss=True,
             # (bool) Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             categorical_distribution=True,
             # (int) the image channel in image observation.
@@ -106,6 +107,7 @@ class EfficientZeroPolicy(Policy):
         td_steps=5,
         # (int) The number of unroll steps in dynamics network.
         num_unroll_steps=5,
+        # (int) reset the hidden states in LSTM every horizon steps.
         lstm_horizon_len=5,
 
         # (float) The weight of reward loss.
@@ -155,7 +157,10 @@ class EfficientZeroPolicy(Policy):
             The user can define and use customized network model but must obey the same interface definition indicated \
             by import_names path. For EfficientZero, ``lzero.model.efficientzero_model.EfficientZeroModel``
         """
-        return 'EfficientZeroModel', ['lzero.model.efficientzero_model']
+        if self._cfg.model.model_type == "conv":
+            return 'EfficientZeroModel', ['lzero.model.efficientzero_model']
+        elif self._cfg.model.model_type == "mlp":
+            return 'EfficientZeroModelMLP', ['lzero.model.efficientzero_model_mlp']
 
     def _init_learn(self) -> None:
         assert self._cfg.optim_type in ['SGD', 'Adam']
@@ -211,26 +216,7 @@ class EfficientZeroPolicy(Policy):
         obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
         target_value_prefix, target_value, target_policy = targets_batch
 
-        """
-        ``obs_batch_ori`` is the original observations in a batch style, shape is:
-        (batch_size, stack_num+num_unroll_steps, W, H, C) -> (batch_size, (stack_num+num_unroll_steps)*C, W, H )
-
-        e.g. in pong: stack_num=4, num_unroll_steps=5
-        (4, 9, 96, 96, 3) -> (4, 9*3, 96, 96) = (4, 27, 96, 96)
-
-        the second dim of ``obs_batch_ori``:
-        timestep t:     1,   2,   3,  4,    5,   6,   7,   8,     9
-        channel_num:    3    3    3   3     3    3    3    3      3
-                       ---, ---, ---, ---,  ---, ---, ---, ---,   ---
-        """
-
-        obs_batch_ori = torch.from_numpy(obs_batch_ori).to(self._cfg.device).float()
-        # ``obs_batch`` is used in ``initial_inference()``, which is the first stacked obs at timestep t in
-        # ``obs_batch_ori``. shape is (4, 4*3, 96, 96) = (4, 12, 96, 96)
-        obs_batch = obs_batch_ori[:, 0:self._cfg.model.frame_stack_num * self._cfg.model.image_channel, :, :]
-        # ``obs_target_batch`` is only used for calculate consistency loss, which take the all obs other than
-        # timestep t1, and is only performed in the last 8 timesteps in the second dim in ``obs_batch_ori``.
-        obs_target_batch = obs_batch_ori[:, self._cfg.model.image_channel:, :, :]
+        obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
         # do augmentations
         if self._cfg.use_augmentation:
@@ -326,21 +312,26 @@ class EfficientZeroPolicy(Policy):
             original_value = self.inverse_scalar_transform_handle(value)
             original_value_prefix = self.inverse_scalar_transform_handle(value_prefix)
 
-            beg_index = self._cfg.model.image_channel * step_i
-            end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
-
             # ==============================================================
             # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
             # ==============================================================
             if self._cfg.ssl_loss_weight > 0:
                 # obtain the oracle hidden states from representation function.
-                network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
-                hidden_state = to_tensor(hidden_state)
-                presentation_state = to_tensor(network_output.hidden_state)
+                if self._cfg.model.model_type == 'conv':
+                    beg_index = self._cfg.model.image_channel * step_i
+                    end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
+                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
+                elif self._cfg.model.model_type == 'mlp':
+                    beg_index = self._cfg.model.observation_shape * step_i
+                    end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
+                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
 
-                # NOTE: no grad for the presentation_state branch.
+                hidden_state = to_tensor(hidden_state)
+                representation_state = to_tensor(network_output.hidden_state)
+
+                # NOTE: no grad for the representation_state branch.
                 dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
-                observation_proj = self._learn_model.project(presentation_state, with_grad=False)
+                observation_proj = self._learn_model.project(representation_state, with_grad=False)
                 temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
 
                 consistency_loss += temp_loss

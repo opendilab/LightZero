@@ -6,7 +6,7 @@ from ding.utils import BUFFER_REGISTRY
 
 from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
-from lzero.mcts.utils import prepare_observation_list
+from lzero.mcts.utils import prepare_observation
 from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
 from .game_buffer import GameBuffer
 
@@ -136,7 +136,7 @@ class MuZeroGameBuffer(GameBuffer):
             mask_list.append(mask_tmp)
 
         # formalize the input observations
-        obs_list = prepare_observation_list(obs_list)
+        obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
 
         # formalize the inputs of a batch
         current_batch = [obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list]
@@ -365,7 +365,7 @@ class MuZeroGameBuffer(GameBuffer):
 
         batch_target_values, batch_rewards = [], []
         with torch.no_grad():
-            value_obs_list = prepare_observation_list(value_obs_list)
+            value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type) 
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
             slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
             network_output = []
@@ -512,7 +512,7 @@ class MuZeroGameBuffer(GameBuffer):
                          range(transition_batch_size)]
 
         with torch.no_grad():
-            policy_obs_list = prepare_observation_list(policy_obs_list)
+            policy_obs_list = prepare_observation(policy_obs_list, self._cfg.model.model_type) 
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
             slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
             network_output = []
