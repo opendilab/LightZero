@@ -3,19 +3,20 @@ Overview:
     In this file, we provide a set of utility functions for probing network parameters and gradients,
     which can be helpful in analyzing and debugging the inner workings of various models.
 """
-
-import torch
+from typing import List, Tuple
 import numpy as np
+import torch
+import torch.nn as nn
 
 
-def renormalize(input, first_dim=1):
+def renormalize(inputs: torch.Tensor, first_dim: int = 1) -> torch.Tensor:
     """
     Overview:
-        normalize the input states using the max-min-normalization.
+        Normalize the input data using the max-min-normalization.
     """
     if first_dim < 0:
-        first_dim = len(input.shape) + first_dim
-    flat_input = input.view(*input.shape[:first_dim], -1)
+        first_dim = len(inputs.shape) + first_dim
+    flat_input = inputs.view(*inputs.shape[:first_dim], -1)
     max_val = torch.max(flat_input, first_dim, keepdim=True).values
     min_val = torch.min(flat_input, first_dim, keepdim=True).values
     flat_input = (flat_input - min_val) / (max_val - min_val)
@@ -23,7 +24,7 @@ def renormalize(input, first_dim=1):
     return flat_input.view(*input.shape)
 
 
-def get_dynamic_mean(model):
+def get_dynamic_mean(model: nn.Module) -> float:
     dynamic_mean = np.abs(model.conv.weight.detach().cpu().numpy().reshape(-1)).tolist()
 
     for block in model.resblocks:
@@ -33,7 +34,7 @@ def get_dynamic_mean(model):
     return dynamic_mean
 
 
-def get_reward_mean(model):
+def get_reward_mean(model: nn.Module) -> Tuple[np.ndarray, float]:
     reward_w_dist = model.conv1x1_reward.weight.detach().cpu().numpy().reshape(-1)
 
     for name, param in model.fc.named_parameters():
@@ -43,23 +44,24 @@ def get_reward_mean(model):
     return reward_w_dist, reward_mean
 
 
-def get_params_mean(xzero_model):
-    representation_mean = xzero_model.representation_network.get_param_mean()
-    dynamic_mean = xzero_model.dynamics_network.get_dynamic_mean()
-    reward_w_dist, reward_mean = xzero_model.dynamics_network.get_reward_mean()
+def get_params_mean(model: nn.Module) -> Tuple[np.ndarray, float, float, float]:
+    representation_mean = model.representation_network.get_param_mean()
+    dynamic_mean = model.dynamics_network.get_dynamic_mean()
+    reward_w_dist, reward_mean = model.dynamics_network.get_reward_mean()
 
     return reward_w_dist, representation_mean, dynamic_mean, reward_mean
 
 
-def get_gradients(model):
+def get_gradients(model: nn.Module) -> List[torch.Tensor]:
     grads = []
     for p in model.parameters():
-        grad = None if p.grad is None else p.grad.data.cpu().numpy()
+        grad = None if p.grad is None else p.grad.detach()
         grads.append(grad)
     return grads
 
 
-def set_gradients(model, gradients: torch.Tensor):
+def set_gradients(model: nn.Module, gradients: List[torch.Tensor]) -> None:
+    # TODO check whether gradients match model's parameters
     for g, p in zip(gradients, model.parameters()):
         if g is not None:
             p.grad = g

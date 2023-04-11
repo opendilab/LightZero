@@ -1,10 +1,14 @@
-from typing import Tuple
+from typing import Tuple, List
 import random
 import torch
 import torch.nn as nn
 
 
 class Intensity(nn.Module):
+    """
+    Overview:
+        Intensity transformation for data augmentation. Scale the image intensity by a random factor. 
+    """
     def __init__(self, scale: float) -> None:
         super().__init__()
         self.scale = scale
@@ -16,6 +20,10 @@ class Intensity(nn.Module):
 
 
 class RandomCrop(nn.Module):
+    """
+    Overview:
+        Random crop the image to the given size.
+    """
     def __init__(self, image_shape: Tuple[int]) -> None:
         super().__init__()
         self.image_shape = image_shape
@@ -29,7 +37,12 @@ class RandomCrop(nn.Module):
 
 
 class ImageTransforms(object):
-    def __init__(self, augmentation, shift_delta=4, image_shape=(96, 96)):
+    """
+    Overview:
+        Image transformation for data augmentation. Including image normalization (divide 255), random crop and 
+        intensity transformation.
+    """
+    def __init__(self, augmentation: List[str], shift_delta: int = 4, image_shape: Tuple[int] = (96, 96)) -> None:
         self.augmentation = augmentation
 
         self.image_transforms = []
@@ -43,7 +56,7 @@ class ImageTransforms(object):
             self.image_transforms.append(transformation)
 
     @torch.no_grad()
-    def transform(self, images):
+    def transform(self, images: torch.Tensor) -> torch.Tensor:
         images = images.float() / 255. if images.dtype == torch.uint8 else images
         processed_images = images.reshape(-1, *images.shape[-3:])
         for transform in self.image_transforms:
