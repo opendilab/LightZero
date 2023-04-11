@@ -1,3 +1,4 @@
+
 # LightZero
 
 [![Twitter](https://img.shields.io/twitter/url?style=social&url=https%3A%2F%2Ftwitter.com%2Fopendilab)](https://twitter.com/opendilab)
@@ -82,7 +83,7 @@ For further details, please refer to [Features](#features), [Framework Structure
 [comment]: <> (</p>)
 
 <p align="center">
-  <img src="assets/lightzero_pipeline.png" alt="Image Description 2" width="100%" height="auto" style="margin: 0 1%;">
+  <img src="assets/lightzero_pipeline.svg" alt="Image Description 2" width="50%" height="auto" style="margin: 0 1%;">
 </p>
 
 The above picture is the framework pipeline of LightZero. We briefly introduce the three core modules below: 
@@ -96,7 +97,7 @@ The above picture is the framework pipeline of LightZero. We briefly introduce t
 **MCTS**:
 ``MCTS`` defines the structure of the Monte Carlo search tree and the way it interacts with the Policy. The implementation of MCTS includes two languages: Python and C++, implemented in ``ptree`` and ``ctree``, respectively.
 
-For the file structure of LightZero, please refer to [lightzero_file_structure](https://github.com/opendilab/LightZero/blob/main/assets/lightzero_file_structure.png).
+For the file structure of LightZero, please refer to [lightzero_file_structure](https://github.com/opendilab/LightZero/blob/main/assets/lightzero_file_structure.svg).
 
 ### Integrated Algorithms
 LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of MCTS algorithms (sometimes combined with cython and cpp), including:
@@ -113,19 +114,20 @@ The environments and algorithms currently supported by LightZero are shown in th
 | ------------- | --------- | ------ | ------------- | --------------------- |
 | Atari         | ---       | ✔    | ✔           | ✔                   |
 | tictactoe     | ✔       | ✔    | 🔒          | 🔒                  |
+| gomoku        | ✔       | ✔    | 🔒          | 🔒                  |
 | chess         | 🔒       | 🔒   | 🔒          | 🔒                  |
 | go            | 🔒       | 🔒   | 🔒          | 🔒                  |
-| gomoku        | ✔       | ✔    | 🔒          | 🔒                  |
 | lunarlander | ---       | ✔    | ✔           | ✔                   |
 | bipedalwalker   | ---       | ✔    | ✔           | ✔                   |
 | cartpole     | ---       | ✔    | ✔           | ✔                   |
 | pendulum      | ---       | ✔    | ✔           | ✔                   |
 
-<sup>(1): "---" means that this algorithm doesn't support this environment.</sup>
+<sup>(1): "✔" means that the corresponding item is finished and well-tested.</sup>
 
 <sup>(2): "🔒" means that the corresponding item is in the waitinglist (Work In Progress).</sup>
 
-<sup>(2): "✔" means that the corresponding item is finished and well-tested.</sup>
+<sup>(3): "---" means that this algorithm doesn't support this environment.</sup>
+
 
 ## Installation
 

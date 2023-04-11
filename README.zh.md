@@ -49,8 +49,7 @@
 ### 框架结构
 
 <p align="center">
-  <img src="assets/lightzero_file_structure.png" alt="Image Description 1" width="45%" height="auto" style="margin: 0 1%;">
-  <img src="assets/lightzero_pipeline.png" alt="Image Description 2" width="45%" height="auto" style="margin: 0 1%;">
+  <img src="assets/lightzero_pipeline.svg" alt="Image Description 2" width="50%" height="auto" style="margin: 0 1%;">
 </p>
 
 上图是 LightZero 的框架流程图。我们在下面简介其中的3个核心模块:
@@ -65,7 +64,7 @@
 
 ``MCTS`` 定义了蒙特卡洛搜索树的结构和与``Policy``的交互方式。``MCTS``的实现包括 python 和 cpp 两种，分别在``ptree``和``ctree``中实现。
 
-关于 LightZero 的文件结构，请参考 [lightzero_file_structure](https://github.com/opendilab/LightZero/blob/main/assets/lightzero_file_structure.png)。
+关于 LightZero 的文件结构，请参考 [lightzero_file_structure](https://github.com/opendilab/LightZero/blob/main/assets/lightzero_file_structure.svg)。
 
 ### 集成算法
 LightZero 是基于 [PyTorch](https://pytorch.org/) 实现的 MCTS 算法库，在 MCTS 的实现中也用到了 cython 和 cpp。同时，LightZero 的框架主要基于 [DI-engine](https://github.com/opendilab/DI-engine) 实现。目前 LightZero 中集成的算法包括：
@@ -80,14 +79,20 @@ LightZero 目前支持的环境及算法如下表所示：
 | ------------- | --------- | ------ | ------------- | --------------------- |
 | Atari         | ---       | ✔    | ✔           | ✔                   |
 | tictactoe     | ✔       | ✔    | 🔒          | 🔒                  |
+| gomoku        | ✔       | ✔    | 🔒          | 🔒                  |
 | chess         | 🔒       | 🔒   | 🔒          | 🔒                  |
 | go            | 🔒       | 🔒   | 🔒          | 🔒                  |
-| gomoku        | ✔       | ✔    | 🔒          | 🔒                  |
 | lunarlander | ---       | ✔    | ✔           | ✔                   |
 | bipedalwalker   | ---       | ✔    | ✔           | ✔                   |
 | cartpole     | ---       | ✔    | ✔           | ✔                   |
 | pendulum      | ---       | ✔    | ✔           | ✔                   |
 
+
+<sup>(1): "✔" 表示对应的项目已经完成并经过良好的测试。</sup>
+
+<sup>(2): "🔒" 表示对应的项目在等待列表中（正在进行中）。</sup>
+
+<sup>(3): "---" 表示该算法不支持此环境。</sup>
 
 ## 安装方法
 

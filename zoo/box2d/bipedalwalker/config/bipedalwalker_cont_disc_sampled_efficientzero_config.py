@@ -10,7 +10,7 @@ continuous_action_space = False
 each_dim_disc_size = 4  # thus the total discrete action number is 4**4=256
 K = 20  # num_of_sampled_actions
 num_simulations = 50
-update_per_collect = 200
+update_per_collect = 500
 batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
