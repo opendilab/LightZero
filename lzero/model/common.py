@@ -1,12 +1,11 @@
 """
 Overview:
-    In this Python file, we provide a collection of reusable model templates designed to streamline the development 
-    process for various custom algorithms. By utilizing these pre-built model templates, users can quickly adapt and 
+    In this Python file, we provide a collection of reusable model templates designed to streamline the development
+    process for various custom algorithms. By utilizing these pre-built model templates, users can quickly adapt and
     customize their custom algorithms, ensuring efficient and effective development.
-    BTW, you can refer to the unittest of these model templates to learn how to use them.
+    BTW, users can refer to the unittest of these model templates to learn how to use them.
 """
-
-from typing import List
+from typing import Optional
 from dataclasses import dataclass
 import numpy as np
 import torch
@@ -101,7 +100,7 @@ class DownSample(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
-            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \ 
+            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \
                 H is height.
             - output (:obj:`torch.Tensor`): :math:`(B, C_out, W_, H_)`, where B is batch size, C_out is channel, W_ is \
                 output width, H_ is output height.
@@ -172,7 +171,7 @@ class RepresentationNetwork(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
-            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \ 
+            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \
                 H is height.
             - output (:obj:`torch.Tensor`): :math:`(B, C_out, W_, H_)`, where B is batch size, C_out is channel, W_ is \
                 output width, H_ is output height.

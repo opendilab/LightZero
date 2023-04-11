@@ -1,4 +1,8 @@
-from typing import Optional, Tuple, Union
+"""
+Overview:
+    BTW, users can refer to the unittest of these model templates to learn how to use them.
+"""
+from typing import Optional, Tuple
 
 import math
 import torch
@@ -10,6 +14,7 @@ from .common import MZNetworkOutput, RepresentationNetwork
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
+# use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
 @MODEL_REGISTRY.register('MuZeroModel')
 class MuZeroModel(nn.Module):
 
@@ -17,7 +22,6 @@ class MuZeroModel(nn.Module):
         self,
         observation_shape: SequenceType = (12, 96, 96),
         action_space_size: int = 6,
-        representation_network_type: str = 'conv_res_blocks',
         categorical_distribution: bool = True,
         activation: nn.Module = nn.ReLU(inplace=True),
         last_linear_layer_init_zero: bool = True,
@@ -25,7 +29,7 @@ class MuZeroModel(nn.Module):
         downsample: bool = False,
         num_res_blocks: int = 1,
         num_channels: int = 64,
-        # the following model para. is usually fixed
+        # the following model arguments are usually fixed
         reward_head_channels: int = 16,
         value_head_channels: int = 16,
         policy_head_channels: int = 16,
@@ -44,38 +48,40 @@ class MuZeroModel(nn.Module):
     ):
         """
         Overview:
-            Define the neural network model used in MuZero.
+            The definition of the neural network model used in MuZero.
             MuZero model which consists of a representation network, a dynamics network and a prediction network.
             The networks are build on convolution residual blocks and fully connected layers.
         Arguments:
-            - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96].
-            - action_space_size: (:obj:`int`): Action space size, such as 6.
-            - representation_network_type (:obj:`Optional[str]`): The type of representation_network in MuZero model. options={'conv_res_blocks', 'identity'}
-            - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
-            - activation (:obj:`Optional[nn.Module]`): the activation in MuZero model.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to True.
-            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, default set it to True. \
-                But sometimes, we do not need, e.g. board games.
-            - num_res_blocks (:obj:`int`): number of res blocks in MuZero model.
-            - num_channels (:obj:`int`): channels of hidden states.
-            - reward_head_channels (:obj:`int`): channels of reward head.
-            - value_head_channels (:obj:`int`): channels of value head.
-            - policy_head_channels (:obj:`int`): channels of policy head.
-            - fc_reward_layers (:obj:`SequenceType`): hidden layers of the reward prediction head (MLP head).
-            - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
-            - reward_support_size (:obj:`int`): dim of reward output
-            - value_support_size (:obj:`int`): dim of value output.
-            - proj_hid (:obj:`int`): dim of projection hidden layer.
-            - proj_out (:obj:`int`): dim of projection output layer.
-            - pred_hid (:obj:`int`):dim of prediction hidden layer.
-            - pred_out (:obj:`int`): dim of prediction output layer.
-            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks in MuZero model, default set it to False.
+            - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96] for Atari.
+            - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
+            - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical \
+                distribution for value and reward.
+            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
+                operation to speedup, e.g. ReLU(inplace=True).
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
+                dynamics/prediction mlp, default set it to True.
+            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to False.
+            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
+                defaults to True. This option is often used in video games like Atari. In board games like go, \
+                we don't need this module.
+            - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
+            - num_channels (:obj:`int`): The channels of hidden states.
+            - reward_head_channels (:obj:`int`): The channels of reward head.
+            - value_head_channels (:obj:`int`): The channels of value head.
+            - policy_head_channels (:obj:`int`): The channels of policy head.
+            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - reward_support_size (:obj:`int`): The size of categorical reward output
+            - value_support_size (:obj:`int`): The size of categorical value output.
+            - proj_hid (:obj:`int`): The size of projection hidden layer.
+            - proj_out (:obj:`int`): The size of projection output layer.
+            - pred_hid (:obj:`int`): The size of prediction hidden layer.
+            - pred_out (:obj:`int`): The size of prediction output layer.
+            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \
+                in MuZero model, default set it to False.
         """
         super(MuZeroModel, self).__init__()
-        self.representation_network_type = representation_network_type
-        assert self.representation_network_type in ['identity', 'conv_res_blocks'], representation_network_type
         self.categorical_distribution = categorical_distribution
         self.self_supervised_learning_loss = self_supervised_learning_loss
         if self.categorical_distribution:
@@ -113,76 +119,46 @@ class MuZeroModel(nn.Module):
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
 
-        if self.representation_network_type == 'identity':
-            self.representation_network = nn.Identity()
-            self.dynamics_network = DynamicsNetwork(
-                num_res_blocks,
-                observation_shape[0] + 1,  # in_channels=observation_shape[0]
-                reward_head_channels,
-                fc_reward_layers,
-                self.reward_support_size,
-                flatten_output_size_for_reward_head,
-                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            )
-            self.prediction_network = PredictionNetwork(
-                action_space_size,
-                num_res_blocks,
-                observation_shape[0],  # in_channels
-                num_channels,
-                value_head_channels,
-                policy_head_channels,
-                fc_value_layers,
-                fc_policy_layers,
-                self.value_support_size,
-                flatten_output_size_for_value_head,
-                flatten_output_size_for_policy_head,
-                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            )
-        elif self.representation_network_type == 'conv_res_blocks':
-            self.representation_network = RepresentationNetwork(
-                observation_shape,
-                num_res_blocks,
-                num_channels,
-                downsample,
-                momentum=batch_norm_momentum,
-            )
-            self.dynamics_network = DynamicsNetwork(
-                num_res_blocks,
-                num_channels + 1,
-                reward_head_channels,
-                fc_reward_layers,
-                self.reward_support_size,
-                flatten_output_size_for_reward_head,
-                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            )
-            self.prediction_network = PredictionNetwork(
-                action_space_size,
-                num_res_blocks,
-                None,  # in_channels
-                num_channels,
-                value_head_channels,
-                policy_head_channels,
-                fc_value_layers,
-                fc_policy_layers,
-                self.value_support_size,
-                flatten_output_size_for_value_head,
-                flatten_output_size_for_policy_head,
-                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            )
+        self.representation_network = RepresentationNetwork(
+            observation_shape,
+            num_res_blocks,
+            num_channels,
+            downsample,
+        )
+        self.dynamics_network = DynamicsNetwork(
+            num_res_blocks,
+            num_channels + 1,
+            reward_head_channels,
+            fc_reward_layers,
+            self.reward_support_size,
+            flatten_output_size_for_reward_head,
+            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+        )
+        self.prediction_network = PredictionNetwork(
+            action_space_size,
+            num_res_blocks,
+            None,  # in_channels
+            num_channels,
+            value_head_channels,
+            policy_head_channels,
+            fc_value_layers,
+            fc_policy_layers,
+            self.value_support_size,
+            flatten_output_size_for_value_head,
+            flatten_output_size_for_policy_head,
+            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+        )
 
         if self.self_supervised_learning_loss:
-            # projection
-            if self.representation_network_type == 'identity':
-                self.projection_input_dim = observation_shape[0] * observation_shape[1] * observation_shape[2]
+            # projection used in EfficientZero
+            if self.downsample:
+                # for atari, due to downsample
+                # observation_shape=(12, 96, 96),  # stack=4
+                # 3 * 96/16 * 96/16 = 3*6*6 = 108
+                ceil_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
+                self.projection_input_dim = num_channels * ceil_size
             else:
-                if self.downsample:
-                    # for atari, due to downsample
-                    # observation_shape=(12, 96, 96),  # stack=4
-                    # 3 * 96/16 * 96/16 = 3*6*6 = 108
-                    self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
-                                                                         ) * math.ceil(observation_shape[2] / 16)
-                else:
-                    self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
+                self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
             self.projection = nn.Sequential(
                 nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
@@ -199,15 +175,24 @@ class MuZeroModel(nn.Module):
     def initial_inference(self, obs: torch.Tensor) -> MZNetworkOutput:
         """
         Overview:
-             To perform the initial inference, we first use the representation network to obtain the "latent_state".
-             We then use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
+            Initial inference of MuZero model, which is the first step of the MuZero model.
+            To perform the initial inference, we first use the representation network to obtain the ``latent_state``.
+            We then use the prediction network to predict ``value`` and ``policy_logits`` of the ``latent_state``.
         Arguments:
-             - obs (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
-        Returns:
-             MZNetworkOutput
-                - value (:obj:`torch.Tensor`): (batch_size, 1).
-                - policy_logits (:obj:`torch.Tensor`): (batch_size, action_dim).
-                - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+            - obs (:obj:`torch.Tensor`): The 2D image observation data.
+        Returns (MZNetworkOutput):
+            - value (:obj:`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
+            - reward (:obj:`torch.Tensor`): The predicted reward of input state and selected action. \
+                In initial inference, we set it to zero vector.
+            - policy_logits (:obj:`torch.Tensor`): The output logit to select discrete action.
+            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
+        Shapes:
+            - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.
+            - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.
+            - reward (:obj:`torch.Tensor`): :math:`(B, reward_support_size)`, where B is batch_size.
+            - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
+            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
+                latent state, W_ is the width of latent state.
          """
         num = obs.size(0)
         latent_state = self._representation(obs)
@@ -222,18 +207,26 @@ class MuZeroModel(nn.Module):
     def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
         """
         Overview:
-             To perform the recurrent inference, we first use the dynamics network to predict ``next_latent_state``, ``reward_hidden_state``, ``value_prefix``
-             given current ``latent_state`` and ``action``.
-             We then use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
+            Recurrent inference of MuZero model, which is the rollout step of the MuZero model.
+            To perform the recurrent inference, we first use the dynamics network to predict ``next_latent_state``,
+            ``reward_hidden_state``, ``value_prefix`` given current ``latent_state`` and ``action``.
+            We then use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
         Arguments:
-             - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
-             - action (:obj:`torch.Tensor`): (batch_size, action_dim).
-        Returns:
-             MZNetworkOutput
-                - value (:obj:`torch.Tensor`): (batch_size, 1).
-                - reward (:obj:`torch.Tensor`): (batch_size, 1).
-                - policy_logits (:obj:`torch.Tensor`): (batch_size, action_dim).
-                - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
+            - action (:obj:`torch.Tensor`): The predicted action to rollout.
+        Returns (MZNetworkOutput):
+            - value (:obj:`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
+            - reward (:obj:`torch.Tensor`): The predicted reward of input state and selected action.
+            - policy_logits (:obj:`torch.Tensor`): The output logit to select discrete action.
+            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
+        Shapes:
+            - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.
+            - action (:obj:`torch.Tensor`): :math:`(B, )`, where B is batch_size.
+            - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.
+            - reward (:obj:`torch.Tensor`): :math:`(B, reward_support_size)`, where B is batch_size.
+            - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
+            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
+                latent state, W_ is the width of latent state.
          """
         latent_state, reward = self._dynamics(latent_state, action)
         policy_logits, value = self._prediction(latent_state)
@@ -242,11 +235,15 @@ class MuZeroModel(nn.Module):
     def _representation(self, observation: torch.Tensor) -> torch.Tensor:
         """
         Overview:
-            Representation network. Encode the observations into latent state.
+            Use the representation network to encode the observations into latent state.
         Arguments:
-             - observation (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (1,64,6,6).
+            - obs (:obj:`torch.Tensor`): The 2D image observation data.
         Returns:
-            - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
+        Shapes:
+            - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.
+            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
+                latent state, W_ is the width of latent state.
         """
         latent_state = self.representation_network(observation)
         if self.state_norm:
@@ -256,12 +253,17 @@ class MuZeroModel(nn.Module):
     def _prediction(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
-             use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
+            Use the prediction network to predict ``policy_logits`` and ``value``.
         Arguments:
-            - latent_state (:obj:`torch.Tensor`): (batch_size, 1, 1) e.g. (1, 1, 1).
+            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
         Returns:
-            - policy_logits (:obj:`torch.Tensor`): (batch_size, action_dim).
-            - value (:obj:`torch.Tensor`): (batch_size, 1).
+            - policy_logits (:obj:`torch.Tensor`): The output logit to select discrete action.
+            - value (:obj:`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
+        Shapes:
+            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
+                latent state, W_ is the width of latent state.
+            - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
+            - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.
         """
         policy_logits, value = self.prediction_network(latent_state)
         return policy_logits, value
@@ -269,14 +271,21 @@ class MuZeroModel(nn.Module):
     def _dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
-           Dynamics function. Predict ``next_latent_state``, ``reward``
-           given current ``latent_state`` and ``action``.
+            Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state``
+            and ``reward``.
         Arguments:
-           - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, latent_state[2], latent_state[3]), e.g. (8, 16, 4, 1).
-           - action (:obj:`torch.Tensor`): (batch_size, action_dim), e.g. (8, 1).
+            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
+            - action (:obj:`torch.Tensor`): The predicted action to rollout.
         Returns:
-          - next_latent_state (:obj:`torch.Tensor`): (batch_size,num_channel, latent_state[2], latent_state[3]) e.g. (8, 16, 4, 1).
-          - value (:obj:`torch.Tensor`): (batch_size, support_dim), e.g. (8, 21).
+            - next_latent_state (:obj:`torch.Tensor`): The predicted latent state of the next timestep.
+            - reward (:obj:`torch.Tensor`): The predicted reward of the current latent state and selected action.
+        Shapes:
+            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
+                latent state, W_ is the width of latent state.
+            - action (:obj:`torch.Tensor`): :math:`(B, )`, where B is batch_size.
+            - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
+                latent state, W_ is the width of latent state.
+            - reward (:obj:`torch.Tensor`): :math:`(B, reward_support_size)`, where B is batch_size.
         """
         # discrete action space
         # the final action_encoding shape is (batch_size, 1, latent_state[2], latent_state[3]), e.g. (8, 1, 4, 1).
@@ -313,22 +322,29 @@ class MuZeroModel(nn.Module):
     def project(self, latent_state: torch.Tensor, with_grad: bool = True) -> torch.Tensor:
         """
         Overview:
-            Please refer to paper ``Exploring Simple Siamese Representation Learning`` for details.
+            Project the latent state to a lower dimension to calculate the self-supervised loss, which is involved in
+            MuZero algorithm in EfficientZero.
+            For more details, please refer to paper ``Exploring Simple Siamese Representation Learning``.
         Arguments:
-            - latent_state (:obj:`torch.Tensor`): (batch_size, num_channel, obs_shape[1], obs_shape[2]), e.g. (256,64,6,6).
-            - with_grad (:obj:`bool`): whether to use gradient.
+            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
+            - with_grad (:obj:`bool`): Whether to calculate gradient for the projection result.
         Returns:
-            - proj (:obj:`torch.Tensor`): (batch_size, projection_output_dim), e.g. (256, 1024).
+            - proj (:obj:`torch.Tensor`): The result embedding vector of projection operation.
+        Shapes:
+            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
+                latent state, W_ is the width of latent state.
+            - proj (:obj:`torch.Tensor`): :math:`(B, projection_output_dim)`, where B is batch_size.
 
         Examples:
             >>> latent_state = torch.randn(256, 64, 6, 6)
             >>> proj = self.project(latent_state)
             >>> proj.shape # (256, 1024)
 
-        e.g. for atari:
+        .. note::
+            for Atari:
             observation_shape = (12, 96, 96),  # original shape is (3,96,96), frame_stack_num=4
-
-            if downsample is True, latent_state.shape: (batch_size, num_channel, obs_shape[1] / 16, obs_shape[2] / 16) = (256, 64, 96 / 16, 96 / 16) = (256, 64, 6, 6)
+            if downsample is True, latent_state.shape: (batch_size, num_channel, obs_shape[1] / 16, obs_shape[2] / 16)
+            i.e., (256, 64, 96 / 16, 96 / 16) = (256, 64, 6, 6)
             latent_state reshape: (256, 64, 6, 6) -> (256,64*6*6) = (256, 2304)
             # self.projection_input_dim = 64*6*6 = 2304
             # self.projection_output_dim = 1024
@@ -350,27 +366,31 @@ class DynamicsNetwork(nn.Module):
 
     def __init__(
         self,
-        num_res_blocks,
-        num_channels,
-        reward_head_channels,
-        fc_reward_layers,
-        output_support_size,
-        flatten_output_size_for_reward_head,
+        num_res_blocks: int,
+        num_channels: int,
+        reward_head_channels: int,
+        fc_reward_layers: SequenceType,
+        output_support_size: int,
+        flatten_output_size_for_reward_head: int,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
     ):
         """
         Overview:
-            Dynamics network. Predict next hidden state given current hidden state and action.
+            The definition of dynamics network in MuZero algorithm, which is used to predict next hidden state and
+            reward given current hidden state and action.
         Arguments:
-            - num_res_blocks (:obj:`int`): number of res blocks.
-            - num_channels (:obj:`int`): channels of hidden states.
-            - fc_reward_layers (:obj:`list`):  hidden layers of the reward prediction head (MLP head)
-            - output_support_size (:obj:`int`): dim of reward output
-            - flatten_output_size_for_reward_head (:obj:`int`): dim of flatten hidden states
-            - lstm_hidden_size (:obj:`int`): dim of lstm hidden state in dynamics network.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
-            - activation (:obj:`Optional[nn.Module]`): the activation in Dynamics network.
+            - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
+            - num_channels (:obj:`int`): The channels of hidden states.
+            - reward_head_channels (:obj:`int`): The channels of reward head.
+            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - output_support_size (:obj:`int`): The size of categorical reward output.
+            - flatten_output_size_for_reward_head (:obj:`int`): The flatten size of output for reward head, i.e., \
+                the input size of reward head.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
+                reward mlp, default set it to True.
+            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
+                operation to speedup, e.g. ReLU(inplace=True).
         """
         super().__init__()
         self.num_channels = num_channels
@@ -440,7 +460,6 @@ class PredictionNetwork(nn.Module):
         self,
         action_space_size: int,
         num_res_blocks: int,
-        in_channels: Union[int, None],
         num_channels: int,
         value_head_channels: int,
         policy_head_channels: int,
@@ -454,26 +473,28 @@ class PredictionNetwork(nn.Module):
     ) -> None:
         """
         Overview:
-            Prediction network. Predict the value and policy by the given hidden state.
+            The definition of policy and value prediction network, which is used to predict value and policy by the
+            given hidden state.
         Arguments:
-            - action_space_size: (:obj:`int`): Action space size, such as 6.
-            - num_res_blocks (:obj:`int`): number of res blocks in model.
-            - in_channels (:obj:`int`): channels of input, if None, then in_channels = num_channels
-            - num_channels (:obj:`int`): channels of hidden states.
-            - value_head_channels (:obj:`int`): channels of value head.
-            - policy_head_channels (:obj:`int`): channels of policy head.
-            - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
-            - output_support_size (:obj:`int`): dim of value output.
-            - flatten_output_size_for_value_head (:obj:`int`): dim of flatten hidden states.
-            - flatten_output_size_for_policy_head (:obj:`int`): dim of flatten hidden states.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer \
-                of value/policy mlp, default set it to True.
+            - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
+            - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
+            - num_channels (:obj:`int`): The channels of hidden states.
+            - value_head_channels (:obj:`int`): The channels of value head.
+            - policy_head_channels (:obj:`int`): The channels of policy head.
+            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - output_support_size (:obj:`int`): The size of categorical value output.
+            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \
+            - flatten_output_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+                of the value head.
+            - flatten_output_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+                of the policy head.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
+                dynamics/prediction mlp, default set it to True.
+            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
+                operation to speedup, e.g. ReLU(inplace=True).
         """
         super(PredictionNetwork, self).__init__()
-        self.in_channels = in_channels
-        if self.in_channels is not None:
-            self.conv_input = nn.Conv2d(in_channels, num_channels, 1)
 
         self.resblocks = nn.ModuleList(
             [
@@ -519,8 +540,6 @@ class PredictionNetwork(nn.Module):
         self.activation = activation
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        if self.in_channels is not None:
-            x = self.conv_input(x)
 
         for block in self.resblocks:
             x = block(x)

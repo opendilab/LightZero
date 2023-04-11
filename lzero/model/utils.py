@@ -13,6 +13,11 @@ def renormalize(inputs: torch.Tensor, first_dim: int = 1) -> torch.Tensor:
     """
     Overview:
         Normalize the input data using the max-min-normalization.
+    Arguments:
+        - inputs (:obj:`torch.Tensor`): The input data needs to be normalized.
+        - first_dim (:obj:`int`): The first dimension of flattening the input data.
+    Returns:
+        - output (:obj:`torch.Tensor`): The normalized data.
     """
     if first_dim < 0:
         first_dim = len(inputs.shape) + first_dim
@@ -61,7 +66,7 @@ def get_gradients(model: nn.Module) -> List[torch.Tensor]:
 
 
 def set_gradients(model: nn.Module, gradients: List[torch.Tensor]) -> None:
-    # TODO check whether gradients match model's parameters
+    # TODO due to the drawback of zip operation, we have to check whether gradients match model's parameters
     for g, p in zip(gradients, model.parameters()):
         if g is not None:
             p.grad = g
