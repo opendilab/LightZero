@@ -3,24 +3,14 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# continuous_action_space = True
-# K = 20  # num_of_sampled_actions
-# num_simulations = 50
-# update_per_collect = 200
-# batch_size = 256
-# max_env_step = int(5e6)
-# reanalyze_ratio = 0.
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
 continuous_action_space = True
-K = 2  # num_of_sampled_actions
-num_simulations = 5
-update_per_collect = 2
-batch_size = 2
+K = 20  # num_of_sampled_actions
+num_simulations = 50
+update_per_collect = 200
+batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
 # ==============================================================
@@ -53,23 +43,25 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
             # The conv model.
             # num_res_blocks=1,
             # num_channels=32,
-            self_supervised_learning_loss=True,
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,  # init lr for manually decay schedule
+        # optim_type='SGD',
+        # lr_piecewise_constant_decay=True,
+        # learning_rate=0.2,  # init lr for manually decay schedule
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
+        learning_rate=0.003,
+        ssl_loss_weight=2,  # NOTE: default is 2.
+        grad_clip_value=0.5,  # NOTE: this parameter is important for stability in bipedalwalker.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=2,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
         policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
-        grad_clip_value=0.5,  # NOTE: this parameter is important for stability.
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.

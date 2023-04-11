@@ -16,7 +16,7 @@ reanalyze_ratio = 0
 # ==============================================================
 
 pendulum_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/pendulum_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_ez_ctree/pendulum_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_seed0',
     env=dict(
         env_name='Pendulum-v1',
         continuous=False,
@@ -45,10 +45,10 @@ pendulum_disc_efficientzero_config = dict(
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        lr_piecewise_constant_decay=True,
-        optim_type='SGD',
-        learning_rate=0.2,  # init lr for manually decay schedule
-        ssl_loss_weight=2,  
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
+        learning_rate=0.003,
+        ssl_loss_weight=2,  # NOTE: default is 2.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         policy_entropy_loss_weight=0,

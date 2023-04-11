@@ -9,8 +9,8 @@ evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 200
 batch_size = 256
-max_env_step = int(1e6)
-reanalyze_ratio = 0.3
+max_env_step = int(5e6)
+reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -43,9 +43,9 @@ lunarlander_muzero_config = dict(
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,  # init lr for manually decay schedule
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
+        learning_rate=0.003,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

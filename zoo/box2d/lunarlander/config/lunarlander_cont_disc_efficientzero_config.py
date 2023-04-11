@@ -14,14 +14,14 @@ each_dim_disc_size = 7
 num_simulations = 50
 update_per_collect = 200
 batch_size = 256
-max_env_step = int(1e6)
+max_env_step = int(5e6)
 reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 lunarlander_cont_disc_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/lunarlander_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_ez_ctree/lunarlander_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_seed0',
     env=dict(
         env_name='LunarLanderContinuous-v2',
         continuous=False,
@@ -49,9 +49,10 @@ lunarlander_cont_disc_efficientzero_config = dict(
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,  # init lr for manually decay schedule
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
+        learning_rate=0.003,
+        ssl_loss_weight=2,  # NOTE: default is 2.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

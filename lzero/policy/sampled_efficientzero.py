@@ -125,7 +125,6 @@ class SampledEfficientZeroPolicy(Policy):
         policy_loss_weight=1,
         # (float) The weight of policy entropy loss.
         policy_entropy_loss_weight=0,
-
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=2,  # NOTE: default is 2.
         # ``threshold_training_steps_for_final_lr`` is used for adjusting lr manually.
