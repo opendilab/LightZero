@@ -23,8 +23,18 @@ tictactoe_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        env_name="TicTacToe",
+        mcts_mode='self_play_mode',  # only used in AlphaZero
+        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+        agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        channel_last=True,
+        scale=True,
+        stop_value=1,
     ),
     policy=dict(
+        sampled_algo=False,
         model=dict(
             observation_shape=(3, 3, 3),
             action_space_size=9,
@@ -39,6 +49,12 @@ tictactoe_muzero_config = dict(
             support_scale=10,
             reward_support_size=21,
             value_support_size=21,
+            frame_stack_num=1,
+            downsample=False,
+            model_type='conv',  # options={'mlp', 'conv'}
+            # (bool) If True, the action space of the environment is continuous, otherwise discrete.
+            continuous_action_space=False,
+            categorical_distribution=True,
         ),
         cuda=True,
         env_type='board_games',
@@ -61,6 +77,8 @@ tictactoe_muzero_config = dict(
         replay_buffer_size=int(3e3),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
+        transform2string=False,
+        lstm_horizon_len=5,
     ),
 )
 tictactoe_muzero_config = EasyDict(tictactoe_muzero_config)

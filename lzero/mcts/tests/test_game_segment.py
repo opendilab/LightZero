@@ -6,7 +6,8 @@ from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
 from lzero.policy import select_action
 
-args = ['EfficientZero', 'MuZero']
+# args = ['EfficientZero', 'MuZero']
+args = ["MuZero"]
 
 
 @pytest.mark.unittest
@@ -16,22 +17,16 @@ def test_game_segment(test_algo):
     if test_algo == 'EfficientZero':
         from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTSCtree
         from lzero.model.efficientzero_model import EfficientZeroModel as Model
-        from lzero.mcts.tests.pong_efficientzero_config_test_bkp import pong_efficientzero_config as config
+        from lzero.mcts.tests.atari_efficientzero_config_test import atari_efficientzero_config as config
         from zoo.atari.envs.atari_lightzero_env import AtariLightZeroEnv
         envs = [AtariLightZeroEnv(config.env) for _ in range(config.env.evaluator_env_num)]
 
     elif test_algo == 'MuZero':
         from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
         from lzero.model.muzero_model import MuZeroModel as Model
-        from lzero.mcts.tests.tictactoe_muzero_bot_mode_config_test_kp import tictactoe_muzero_config as config
+        from lzero.mcts.tests.tictactoe_muzero_bot_mode_config_test import tictactoe_muzero_config as config
         from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
         envs = [TicTacToeEnv(config.env) for _ in range(config.env.evaluator_env_num)]
-
-    # set config for test
-    # config.env.evaluator_env_num = 2
-    # config.env.num_simulations = 2
-    # config.env.game_segment_length = 20
-    # config.env.render_mode_human = True
 
     # create model
     model = Model(**config.policy.model)

@@ -27,8 +27,23 @@ atari_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        env_type='Atari',
+        max_episode_steps=int(1.08e5),
+        gray_scale=True,
+        frame_skip=4,
+        episode_life=True,
+        clip_rewards=True,
+        channel_last=True,
+        render_mode_human=False,
+        scale=True,
+        warp_frame=True,
+        save_video=False,
+        transform2string=False,
+        game_wrapper=True,
+        stop_value=int(1e6),
     ),
     policy=dict(
+        sampled_algo=False,
         mcts_ctree=True,
         model=dict(
             observation_shape=(4, 96, 96),
@@ -36,10 +51,16 @@ atari_efficientzero_config = dict(
             action_space_size=action_space_size,
             representation_network_type='conv_res_blocks',
             downsample=True,
+            model_type='conv',  # options={'mlp', 'conv'}
+            # (bool) If True, the action space of the environment is continuous, otherwise discrete.
+            continuous_action_space=False,
+            self_supervised_learning_loss=True,
+            categorical_distribution=True,
+            image_channel=1,
+            support_scale=300,
+            lstm_hidden_size=512,
         ),
         cuda=True,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
         game_segment_length=400,
         use_augmentation=True,
@@ -55,6 +76,12 @@ atari_efficientzero_config = dict(
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
+        discount_factor=0.997,
+        transform2string=False,
+        lstm_horizon_len=5,
+
     ),
 )
 atari_efficientzero_config = EasyDict(atari_efficientzero_config)
