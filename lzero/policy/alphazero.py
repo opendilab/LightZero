@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import List, Dict, Any, Tuple, Union
+from typing import List, Dict, Tuple
 
 import numpy as np
 import torch.distributions
@@ -23,40 +23,46 @@ class AlphaZeroPolicy(Policy):
     config = dict(
         # (bool) Whether to use cuda for network.
         cuda=False,
-        # (bool) whether use on-policy training pipeline(behaviour policy and training policy are the same)
+        # (bool) Whether use on-policy training pipeline(behaviour policy and training policy are the same)
         on_policy=False,
+        # (bool) Whether to use priority(PER) sampler to sample data from replay buffer.
         priority=False,
+        # model config sub field
         model=dict(
             observation_shape=(3, 6, 6),
             num_res_blocks=1,
             num_channels=32,
         ),
-        # learn_mode config
+        # (int) Minibatch size for one gradient descent.
         batch_size=256,
-        lr_piecewise_constant_decay=True,
+        # (str) Optimizer for training policy network. ['SGD' or 'Adam']
         optim_type='SGD',
-        learning_rate=0.2,  # init lr for manually decay schedule
-        # optim_type='Adam',
-        # learning_rate=0.001,  # lr for Adam optimizer
+        # (float) Learning rate for training policy network. Ininitial lr for manually decay schedule.
+        learning_rate=0.2,
+        # (float) Weight decay for training policy network.
         weight_decay=1e-4,
+        # (float) One-order Momentum in optimizer, which stabilizes the training process (gradient direction).
         momentum=0.9,
+        # (float) The maximum constraint value of gradient norm clipping.
         grad_clip_value=10,
+        # (float) The weight of value loss.
         value_weight=1.0,
+        # (int) The number of environments used in collecting data.
         collector_env_num=8,
+        # (int) The number of environments used in evaluating policy.
         evaluator_env_num=3,
-        # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
-        # threshold_training_steps_for_final_lr=int(
-        #     threshold_env_steps_for_final_lr / collector_env_num / average_episode_length_when_converge * update_per_collect),
+        # (bool) Whether to use piecewise constant learning rate decay.
+        # i.e. lr: 0.2 -> 0.02 -> 0.002
+        lr_piecewise_constant_decay=True,
+        # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e5),
-        # lr: 0.2 -> 0.02 -> 0.002
-
-        # ``threshold_training_steps_for_final_temperature`` is only used for adjusting temperature manually.
-        # threshold_training_steps_for_final_temperature=int(
-        #     threshold_env_steps_for_final_temperature / collector_env_num / average_episode_length_when_converge * update_per_collect),
-        threshold_training_steps_for_final_temperature=int(1e5),
-        # temperature: 1 -> 0.5 -> 0.25
+        # (bool) Whether to use manually temperature decay.
+        # i.e. temperature: 1 -> 0.5 -> 0.25
         manual_temperature_decay=True,
-        # ``fixed_temperature_value`` is effective only when manual_temperature_decay=False
+        # (int) The number of final training iterations to control temperature, which is only used for manually decay.
+        threshold_training_steps_for_final_temperature=int(1e5),
+        # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
+        # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
         fixed_temperature_value=0.25,
         mcts=dict(
             # (int) The number of simulations to perform at each move.
@@ -83,16 +89,13 @@ class AlphaZeroPolicy(Policy):
         Overview:
             Return this algorithm default model setting for demonstration.
         Returns:
-            - model_info (:obj:`Tuple[str, List[str]]`): model name and mode import_names
-
-        .. note::
-            The user can define and use customized network model but must obey the same inferface definition indicated \
-            by import_names path. For DQN, ``ding.model.template.q_learning.DQN``
+            - model_type (:obj:`str`): The model type used in this algorithm, which is registered in ModelRegistry.
+            - import_names (:obj:`List[str]`): The model class path list used in this algorithm.
         """
         return 'AlphaZeroModel', ['lzero.model.alphazero_model']
 
-    def _init_learn(self):
-        assert self._cfg.optim_type in ['SGD', 'Adam']
+    def _init_learn(self) -> None:
+        assert self._cfg.optim_type in ['SGD', 'Adam'], self._cfg.optim_type
         if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
                 self._model.parameters(),
@@ -109,7 +112,7 @@ class AlphaZeroPolicy(Policy):
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
             # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
-            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)
+            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
             self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
 
         # Algorithm config
@@ -118,9 +121,8 @@ class AlphaZeroPolicy(Policy):
         # Main and target models
         self._learn_model = model_wrap(self._model, wrapper_name='base')
         self._learn_model.reset()
-        self.collect_mcts_temperature = 1
 
-    def _forward_learn(self, inputs: dict) -> Dict[str, Any]:
+    def _forward_learn(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, float]:
         inputs = default_collate(inputs)
         if self._cuda:
             inputs = to_device(inputs, self._device)
@@ -172,32 +174,33 @@ class AlphaZeroPolicy(Policy):
             'policy_loss': policy_loss.item(),
             'value_loss': value_loss.item(),
             'entropy_loss': entropy_loss.item(),
-            'total_grad_norm_before_clip': total_grad_norm_before_clip,
+            'total_grad_norm_before_clip': total_grad_norm_before_clip.item(),
             'collect_mcts_temperature': self.collect_mcts_temperature,
         }
 
     def _init_collect(self) -> None:
-        r"""
-        Overview:
-            Collect mode init method. Called by ``self.__init__``.
-            Init traj and unroll length, collect model.
         """
-
+        Overview:
+            Collect mode init method. Called by ``self.__init__``. Ininitialize the collect model and MCTS utils.
+        """
         self._collect_mcts = MCTS(self._cfg.mcts)
         self._collect_model = model_wrap(self._model, wrapper_name='base')
         self._collect_model.reset()
         self.collect_mcts_temperature = 1
 
     @torch.no_grad()
-    def _forward_collect(self, envs, obs, temperature: np.ndarray = 1):
-        r"""
+    def _forward_collect(self, envs: Dict, obs: Dict, temperature: float = 1) -> Dict[str, torch.Tensor]:
+        """
         Overview:
-            Forward function for collect mode
+            The forward function for collecting data in collect mode. Use real env to execute MCTS search.
         Arguments:
-            - data (:obj:`dict`): Dict type data, including at least ['obs'].
-            - temperature: shape: (N, ), where N is the number of collect_env.
+            - envs (:obj:`Dict`): The dict of colletor envs, the key is env_id and the value is the env instance.
+            - obs (:obj:`Dict`): The dict of obs, the key is env_id and the value is the \
+                corresponding obs in this timestep.
+            - temperature (:obj:`float`): The temperature for MCTS search.
         Returns:
-            - data (:obj:`dict`): The collected data
+            - output (:obj:`Dict[str, torch.Tensor]`): The dict of output, the key is env_id and the value is the \
+                the corresponding policy output in this timestep, including action, probs and so on.
         """
         self.collect_mcts_temperature = temperature
         ready_env_id = list(envs.keys())
@@ -225,23 +228,25 @@ class AlphaZeroPolicy(Policy):
         return output
 
     def _init_eval(self) -> None:
-        r"""
+        """
         Overview:
-            Evaluate mode init method. Called by ``self.__init__``.
-            Init eval model with argmax strategy.
+            Evaluate mode init method. Called by ``self.__init__``. Ininitialize the eval model and MCTS utils.
         """
         self._eval_mcts = MCTS(self._cfg.mcts)
         self._eval_model = model_wrap(self._model, wrapper_name='base')
         self._eval_model.reset()
 
-    def _forward_eval(self, envs: dict, obs) -> dict:
-        r"""
+    def _forward_eval(self, envs: Dict, obs: Dict) -> Dict[str, torch.Tensor]:
+        """
         Overview:
-            Forward function for eval mode, similar to ``self._forward_collect``.
+            The forward function for evaluating the current policy in eval mode, similar to ``self._forward_collect``.
         Arguments:
-            - data (:obj:`dict`): Dict type data, including at least ['obs'].
+            - envs (:obj:`Dict`): The dict of colletor envs, the key is env_id and the value is the env instance.
+            - obs (:obj:`Dict`): The dict of obs, the key is env_id and the value is the \
+                corresponding obs in this timestep.
         Returns:
-            - output (:obj:`dict`): Dict type data, including at least inferred action according to input obs.
+            - output (:obj:`Dict[str, torch.Tensor]`): The dict of output, the key is env_id and the value is the \
+                the corresponding policy output in this timestep, including action, probs and so on.
         """
         ready_env_id = list(obs.keys())
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
@@ -255,7 +260,7 @@ class AlphaZeroPolicy(Policy):
                 start_player_index=start_player_index[env_id],
                 init_state=init_state[env_id],
             )
-            action, mcts_probs = self._collect_mcts.get_next_action(
+            action, mcts_probs = self._eval_mcts.get_next_action(
                 envs[env_id], policy_forward_fn=self._policy_value_fn, temperature=1.0, sample=False
             )
             output[env_id] = {
@@ -265,13 +270,7 @@ class AlphaZeroPolicy(Policy):
         return output
 
     @torch.no_grad()
-    def _policy_value_fn(self, env):
-        """
-        Overview:
-            - input: env
-            - output: a list of (action, probability) tuples for each available
-                action and the score of the env state
-        """
+    def _policy_value_fn(self, env: 'Env') -> Tuple[Dict[int, np.ndarray], float]:  # noqa
         legal_actions = env.legal_actions
         current_state, current_state_scale = env.current_state()
         current_state_scale = torch.from_numpy(current_state_scale).to(
@@ -283,22 +282,20 @@ class AlphaZeroPolicy(Policy):
         return action_probs_dict, value.item()
 
     def _monitor_vars_learn(self) -> List[str]:
+        """
+        Overview:
+            Register the variables to be monitored in learn mode. The registered variables will be logged in
+            tensorboard according to the return value ``_forward_learn``.
+        """
         return super()._monitor_vars_learn() + [
             'cur_lr', 'total_loss', 'policy_loss', 'value_loss', 'entropy_loss', 'total_grad_norm_before_clip',
             'collect_mcts_temperature'
         ]
 
-    def _process_transition(self, obs: Any, model_output: dict, timestep: namedtuple) -> dict:
-        r"""
+    def _process_transition(self, obs: Dict, model_output: Dict[str, torch.Tensor], timestep: namedtuple) -> Dict:
+        """
         Overview:
-            Generate dict type transition data from inputs.
-        Arguments:
-            - obs (:obj:`Any`): Env observation
-            - model_output (:obj:`dict`): Output of collect model, including at least ['action']
-            - timestep (:obj:`namedtuple`): Output after env step, including at least ['obs', 'reward', 'done'] \
-                (here 'obs' indicates obs after env step).
-        Returns:
-            - transition (:obj:`dict`): Dict type transition data.
+            Generate the dict type transition (one timestep) data from policy learning.
         """
         return {
             'obs': obs,
@@ -309,6 +306,6 @@ class AlphaZeroPolicy(Policy):
             'done': timestep.done,
         }
 
-    def _get_train_sample(self, data: list) -> Union[None, List[Any]]:
-        # be compatible with DI-engine base_policy
+    def _get_train_sample(self, data):
+        # be compatible with DI-engine Policy class
         pass

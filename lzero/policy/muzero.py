@@ -26,10 +26,8 @@ class MuZeroPolicy(Policy):
 
     # The default_config for MuZero policy.
     config = dict(
-        # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
-        sampled_algo=False,
         model=dict(
-            # (str) The model type. For 1-dimensional vector obs, we use mlp model. For 3-dimensional image obs, we use conv model.
+            # (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.
             model_type='conv',  # options={'mlp', 'conv'}
             # (bool) If True, the action space of the environment is continuous, otherwise discrete.
             continuous_action_space=False,
@@ -38,7 +36,7 @@ class MuZeroPolicy(Policy):
             observation_shape=(4, 96, 96),  # if frame_stack_num=4
             # (bool) Whether to use the self-supervised learning loss.
             self_supervised_learning_loss=False,
-            # (bool) Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
+            # (bool) Whether to use discrete support to represent categorical distribution for value/reward/value_prefix.
             categorical_distribution=True,
             # (int) the image channel in image observation.
             image_channel=1,
@@ -48,15 +46,21 @@ class MuZeroPolicy(Policy):
             num_res_blocks=1,
             # (int) The number of channels of hidden states in MuZero model.
             num_channels=64,
-            # (int) The scale of supports used in categorical distribution. Only effective when ``categorical_distribution=True``.
+            # (int) The scale of supports used in categorical distribution.
+            # This variable is only effective when ``categorical_distribution=True``.
             support_scale=300,
         ),
-        ## common
+        # ****** common ******
+        # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
+        # this variable is used in ``collector``.
+        sampled_algo=False,
         # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
         mcts_ctree=True,
-        # (bool) Whether to use cuda in policy.
+        # (bool) Whether to use cuda for network.
         cuda=True,
+        # (int) The number of environments used in collecting data.
         collector_env_num=8,
+        # (int) The number of environments used in evaluating policy.
         evaluator_env_num=3,
         # (str) The type of environment. options is ['not_board_games', 'board_games'].
         env_type='not_board_games',
@@ -67,7 +71,7 @@ class MuZeroPolicy(Policy):
         # (int) The transition number of one ``GameSegment`` block.
         game_segment_length=200,
 
-        ## observation
+        # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
         transform2string=False,
         # (bool) Whether to use data augmentation.
@@ -75,32 +79,32 @@ class MuZeroPolicy(Policy):
         # (list) style of augmentation.
         augmentation=['shift', 'intensity'],
 
-        ## learn
+        # ******* learn ******
         # (int) How many updates(iterations) to train after collector's one collection.
         # Bigger "update_per_collect" means bigger off-policy.
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
         update_per_collect=100,
-        # (int) How many samples in a training batch.
+        # (int) Minibatch size for one gradient descent.
         batch_size=256,
+        # (str) Optimizer for training policy network. ['SGD' or 'Adam']
         optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,  # init lr for manually decay schedule
-        # optim_type='Adam',
-        # lr_piecewise_constant_decay=False,
-        # learning_rate=0.003,  # lr for Adam optimizer
+        # (float) Learning rate for training policy network. Ininitial lr for manually decay schedule.
+        learning_rate=0.2,
         # (int) Frequency of target network update.
         target_update_freq=100,
+        # (float) Weight decay for training policy network.
         weight_decay=1e-4,
+        # (float) One-order Momentum in optimizer, which stabilizes the training process (gradient direction).
         momentum=0.9,
+        # (float) The maximum constraint value of gradient norm clipping.
         grad_clip_value=10,
-        # You can use either "n_sample" or "n_episode" in collector.collect.
-        # Get "n_episode" episodes per collect.
+        # (int) The number of episode in each collecting stage.
         n_episode=8,
-        # (float) the number of simulations in MCTS.
+        # (int) the number of simulations in MCTS.
         num_simulations=50,
-        # (float) Discount factor(gamma) for returns.
+        # (float) Discount factor (gamma) for returns.
         discount_factor=0.997,
         # (int) The number of step for calculating target q_value.
         td_steps=5,
@@ -114,29 +118,33 @@ class MuZeroPolicy(Policy):
         policy_loss_weight=1,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
-        # ``threshold_training_steps_for_final_lr`` is used for adjusting lr manually.
-        # lr_piecewise_constant_decay: lr: 0.2 -> 0.02 -> 0.002
+        # (bool) Whether to use piecewise constant learning rate decay.
+        # i.e. lr: 0.2 -> 0.02 -> 0.002
+        lr_piecewise_constant_decay=True,
+        # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(1e5),
-        # ``threshold_training_steps_for_final_temperature`` is used for adjusting temperature manually.
-        # manual_temperature_decay: temperature: 1 -> 0.5 -> 0.25
-        threshold_training_steps_for_final_temperature=int(1e5),
         # (bool) Whether to use manually decayed temperature.
         manual_temperature_decay=False,
-        # (float) ``fixed_temperature_value`` is effective only when manual_temperature_decay=False
+        # (int) The number of final training iterations to control temperature, which is only used for manually decay.
+        threshold_training_steps_for_final_temperature=int(1e5),
+        # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
+        # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
         fixed_temperature_value=0.25,
 
-        ## Priority
-        # (bool) Whether to use priority when sampling from the buffer.
+        # ****** Priority ******
+        # (bool) Whether to use priority when sampling training datafrom the buffer.
         use_priority=True,
-        # (bool) Whether to use the maximum priority for new data.
+        # (bool) Whether to use the maximum priority for new collecting data.
         use_max_priority_for_new_data=True,
-        # (float) The degree of prioritization to use. A value of 0 means no prioritization, while a value of 1 means full prioritization.
+        # (float) The degree of prioritization to use. A value of 0 means no prioritization,
+        # while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,
-        # (float) The degree of correction to use. A value of 0 means no correction, while a value of 1 means full correction.
+        # (float) The degree of correction to use. A value of 0 means no correction,
+        # while a value of 1 means full correction.
         priority_prob_beta=0.4,
 
-        ## UCB
-        # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
+        # ****** UCB ******
+        # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of search tree.
         root_dirichlet_alpha=0.3,
         # (float) The noise weight at the root node of the search tree.
         root_noise_weight=0.25,
@@ -147,7 +155,8 @@ class MuZeroPolicy(Policy):
         Overview:
             Return this algorithm default model setting for demonstration.
         Returns:
-            - model_info (:obj:`Tuple[str, List[str]]`): model name and mode import_names
+            - model_type (:obj:`str`): The model type used in this algorithm, which is registered in ModelRegistry.
+            - import_names (:obj:`List[str]`): The model class path list used in this algorithm.
 
         .. note::
             The user can define and use customized network model but must obey the same interface definition indicated \
@@ -159,7 +168,7 @@ class MuZeroPolicy(Policy):
             return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
 
     def _init_learn(self) -> None:
-        assert self._cfg.optim_type in ['SGD', 'Adam']
+        assert self._cfg.optim_type in ['SGD', 'Adam'], self._cfg.optim_type
         # NOTE: in board_gmaes, for fixed lr 0.003, 'Adam' is better than 'SGD'.
         if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
@@ -178,7 +187,7 @@ class MuZeroPolicy(Policy):
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
             # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
-            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)
+            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
             self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
 
         # use model_wrapper for specialized demands of different modes
@@ -277,7 +286,6 @@ class MuZeroPolicy(Policy):
         reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
 
-        target_reward_cpu = target_reward.detach().cpu()
         gradient_scale = 1 / self._cfg.num_unroll_steps
 
         # ==============================================================
@@ -293,7 +301,6 @@ class MuZeroPolicy(Policy):
             # transform the scaled value or its categorical representation to its original value,
             # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
             original_value = self.inverse_scalar_transform_handle(value)
-            original_reward = self.inverse_scalar_transform_handle(reward)
 
             if self._cfg.model.self_supervised_learning_loss:
                 # ==============================================================
@@ -421,6 +428,10 @@ class MuZeroPolicy(Policy):
         }
 
     def _init_collect(self) -> None:
+        """
+        Overview:
+            Collect mode init method. Called by ``self.__init__``. Ininitialize the collect model and MCTS utils.
+        """
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
             self._mcts_collect = MCTSCtree(self._cfg)
@@ -496,7 +507,8 @@ class MuZeroPolicy(Policy):
                 action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                     distributions, temperature=self.collect_mcts_temperature, deterministic=False
                 )
-                # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
+                # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
+                # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                 output[env_id] = {
                     'action': action,
@@ -510,9 +522,9 @@ class MuZeroPolicy(Policy):
         return output
 
     def _init_eval(self) -> None:
-        r"""
+        """
         Overview:
-            Evaluate mode init method. Called by ``self.__init__``, initialize eval_model.
+            Evaluate mode init method. Called by ``self.__init__``. Ininitialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
         if self._cfg.mcts_ctree:
@@ -568,11 +580,13 @@ class MuZeroPolicy(Policy):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
-                #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than sampling during the evaluation phase.
+                #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than
+                # sampling during the evaluation phase.
                 action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                     distributions, temperature=1, deterministic=True
                 )
-                # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
+                # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
+                # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
                 output[env_id] = {
@@ -587,6 +601,11 @@ class MuZeroPolicy(Policy):
         return output
 
     def _monitor_vars_learn(self) -> List[str]:
+        """
+        Overview:
+            Register the variables to be monitored in learn mode. The registered variables will be logged in
+            tensorboard according to the return value ``_forward_learn``.
+        """
         return [
             'collect_mcts_temperature',
             'cur_lr',
@@ -609,9 +628,9 @@ class MuZeroPolicy(Policy):
     def _state_dict_learn(self) -> Dict[str, Any]:
         """
         Overview:
-            Return the state_dict of learn mode, usually including model and optimizer.
+            Return the state_dict of learn mode, usually including model, target_model and optimizer.
         Returns:
-            - state_dict (:obj:`Dict[str, Any]`): the dict of current policy learn state, for saving and restoring.
+            - state_dict (:obj:`Dict[str, Any]`): The dict of current policy learn state, for saving and restoring.
         """
         return {
             'model': self._learn_model.state_dict(),
@@ -624,23 +643,16 @@ class MuZeroPolicy(Policy):
         Overview:
             Load the state_dict variable into policy learn mode.
         Arguments:
-            - state_dict (:obj:`Dict[str, Any]`): the dict of policy learn state saved before.
-
-        .. tip::
-            If you want to only load some parts of model, you can simply set the ``strict`` argument in \
-            load_state_dict to ``False``, or refer to ``ding.torch_utils.checkpoint_helper`` for more \
-            complicated operation.
+            - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
         """
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
         self._optimizer.load_state_dict(state_dict['optimizer'])
 
-    def _process_transition(
-            self, obs: torch.Tensor, policy_output: torch.Tensor, timestep: torch.Tensor
-    ) -> torch.Tensor:
-        # be compatible with DI-engine base_policy
+    def _process_transition(self, obs, policy_output, timestep):
+        # be compatible with DI-engine Policy class
         pass
 
-    def _get_train_sample(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        # be compatible with DI-engine base_policy
+    def _get_train_sample(self, data):
+        # be compatible with DI-engine Policy class
         pass
