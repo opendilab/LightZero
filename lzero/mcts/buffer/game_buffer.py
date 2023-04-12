@@ -78,7 +78,7 @@ class GameBuffer(ABC, object):
             - batch_size (:obj:`int`): batch size.
             - policy (:obj:`Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]`): policy.
         Returns:
-            - train_data (:obj:`List`): List of train data, including current_batch and targets_batch.
+            - train_data (:obj:`List`): List of train data, including current_batch and target_batch.
         """
 
     @abstractmethod

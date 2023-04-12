@@ -28,8 +28,6 @@ class SampledEfficientZeroPolicy(Policy):
 
     # The default_config for Sampled fEficientZero policy.
     config = dict(
-        # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
-        sampled_algo=True,
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For 3-dimensional image obs, we use conv model.
             model_type='conv',  # options={'mlp', 'conv'}
@@ -40,57 +38,64 @@ class SampledEfficientZeroPolicy(Policy):
             observation_shape=(4, 96, 96),  # if frame_stack_num=4
             # (bool) Whether to use the self-supervised learning loss.
             self_supervised_learning_loss=True,
+            # (int) The size of action space. For discrete action space, it is the number of actions.
+            # For continuous action space, it is the dimension of action.
             action_space_size=6,
-            # whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
+            # (bool) Whether to use discrete support to represent categorical distribution for value/reward/value_prefix.
             categorical_distribution=True,
             # (int) the image channel in image observation.
             image_channel=1,
             # (int) The number of frames to stack together.
             frame_stack_num=1,
-            # (int) The scale of supports used in categorical distribution. Only effective when ``categorical_distribution=True``.
+            # (int) The scale of supports used in categorical distribution.
+            # This variable is only effective when ``categorical_distribution=True``.
             support_scale=300,
             # (int) The hidden size in LSTM.
             lstm_hidden_size=512,
-            # the sampled specific config
-            sigma_type='conditioned',  # options={'conditioned', 'fixed'}
+            # (str) The type of sigma. options={'conditioned', 'fixed'}
+            sigma_type='conditioned',
+            # (float) The fixed sigma value. Only effective when ``sigma_type='fixed'``.
             fixed_sigma_value=0.3,
         ),
-        ## common
+        # ****** common ******
+        # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
+        sampled_algo=True,
         # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
         mcts_ctree=True,
         # (bool) Whether to use cuda in policy.
         cuda=True,
+        # (int) The number of environments used in collecting data.
         collector_env_num=8,
+        # (int) The number of environments used in evaluating policy.
         evaluator_env_num=3,
-        # (str) The type of environment. options is ['not_board_games', 'board_games'].
+        # (str) The type of environment. The options are ['not_board_games', 'board_games'].
         env_type='not_board_games',
-        # (str) The type of battle mode. options is ['play_with_bot_mode', 'self_play_mode'].
+        # (str) The type of battle mode. The options are ['play_with_bot_mode', 'self_play_mode'].
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,
-        # (int) The transition number of one ``GameSegment`` block.
+        # (int) The transition number of one ``GameSegment``.
         game_segment_length=200,
 
-        ## observation
+        # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
         transform2string=False,
         # (bool) Whether to use data augmentation.
         use_augmentation=False,
-        # (list) style of augmentation.
+        # (list) The style of augmentation.
         augmentation=['shift', 'intensity'],
 
-        ## learn
+        # ******* learn ******
         # (int) How many updates(iterations) to train after collector's one collection.
         # Bigger "update_per_collect" means bigger off-policy.
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
         update_per_collect=100,
-        # (int) How many samples in a training batch.
+        # (int) Minibatch size for one gradient descent.
         batch_size=256,
-        cos_lr_scheduler=False,
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
+        # (str) Optimizer for training policy network. ['SGD' or 'Adam']
+        optim_type='Adam',
         learning_rate=0.2,  # init lr for manually decay schedule
         # optim_type='Adam',
         # lr_piecewise_constant_decay=False,
@@ -109,13 +114,13 @@ class SampledEfficientZeroPolicy(Policy):
         n_episode=8,
         # (float) the number of simulations in MCTS.
         num_simulations=50,
-        # (float) Discount factor(gamma) for returns.
+        # (float) Discount factor (gamma) for returns.
         discount_factor=0.997,
         # (int) The number of step for calculating target q_value.
         td_steps=5,
         # (int) The number of unroll steps in dynamics network.
         num_unroll_steps=5,
-        # (int) reset the hidden states in LSTM every horizon steps.
+        # (int) reset the hidden states in LSTM every ``lstm_horizon_len`` horizon steps.
         lstm_horizon_len=5,
         # (float) The weight of reward loss.
         reward_loss_weight=1,
@@ -127,28 +132,35 @@ class SampledEfficientZeroPolicy(Policy):
         policy_entropy_loss_weight=0,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=2,  # NOTE: default is 2.
-        # ``threshold_training_steps_for_final_lr`` is used for adjusting lr manually.
-        # lr_piecewise_constant_decay: lr: 0.2 -> 0.02 -> 0.002
+        # (bool) Whether to use the cosine learning rate decay.
+        cos_lr_scheduler=False,
+        # (bool) Whether to use piecewise constant learning rate decay.
+        # i.e. lr: 0.2 -> 0.02 -> 0.002
+        lr_piecewise_constant_decay=True,
+        # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(1e5),
-        # ``threshold_training_steps_for_final_temperature`` is used for adjusting temperature manually.
-        # manual_temperature_decay: temperature: 1 -> 0.5 -> 0.25
+        # (int) The number of final training iterations to control temperature, which is only used for manually decay.
         threshold_training_steps_for_final_temperature=int(1e5),
         # (bool) Whether to use manually decayed temperature.
+        # i.e. temperature: 1 -> 0.5 -> 0.25
         manual_temperature_decay=False,
-        # (float) ``fixed_temperature_value`` is effective only when manual_temperature_decay=False
+        # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
+        # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
         fixed_temperature_value=0.25,
 
-        ## Priority
-        # (bool) Whether to use priority when sampling from the buffer.
+        # ****** Priority ******
+        # (bool) Whether to use priority when sampling training data from the buffer.
         use_priority=True,
-        # (bool) Whether to use the maximum priority for new data.
+        # (bool) Whether to use the maximum priority for new collecting data.
         use_max_priority_for_new_data=True,
-        # (float) The degree of prioritization to use. A value of 0 means no prioritization, while a value of 1 means full prioritization.
+        # (float) The degree of prioritization to use. A value of 0 means no prioritization,
+        # while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,
-        # (float) The degree of correction to use. A value of 0 means no correction, while a value of 1 means full correction.
+        # (float) The degree of correction to use. A value of 0 means no correction,
+        # while a value of 1 means full correction.
         priority_prob_beta=0.4,
 
-        ## UCB
+        # ****** UCB ******
         # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
         root_dirichlet_alpha=0.3,
         # (float) The noise weight at the root node of the search tree.
@@ -158,9 +170,11 @@ class SampledEfficientZeroPolicy(Policy):
     def default_model(self) -> Tuple[str, List[str]]:
         """
         Overview:
-            Return this algorithm default model setting for demonstration.
+            Return this algorithm default model setting.
         Returns:
-            - model_info (:obj:`Tuple[str, List[str]]`): model name and mode import_names
+            - model_info (:obj:`Tuple[str, List[str]]`): model name and model import_names.
+                - model_type (:obj:`str`): The model type used in this algorithm, which is registered in ModelRegistry.
+                - import_names (:obj:`List[str]`): The model class path list used in this algorithm.
 
         .. note::
             The user can define and use customized network model but must obey the same interface definition indicated \
@@ -172,6 +186,11 @@ class SampledEfficientZeroPolicy(Policy):
             return 'SampledEfficientZeroModelMLP', ['lzero.model.sampled_efficientzero_model_mlp']
 
     def _init_learn(self) -> None:
+        """
+        Overview:
+            Learn mode init method. Called by ``self.__init__``. Ininitialize the learn model, optimizer and MCTS utils.
+        """
+        assert self._cfg.optim_type in ['SGD', 'Adam'], self._cfg.optim_type
         if self._cfg.model.continuous_action_space:
             # Weight Init for the last output layer of gaussian policy head in prediction network.
             init_w = self._cfg.init_w
@@ -183,7 +202,6 @@ class SampledEfficientZeroPolicy(Policy):
             except Exception as exception:
                 logging.warning(exception)
 
-        assert self._cfg.optim_type in ['SGD', 'Adam']
         if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
                 self._model.parameters(),
@@ -230,15 +248,27 @@ class SampledEfficientZeroPolicy(Policy):
         )
 
     def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
+        """
+         Overview:
+             The forward function for learning policy in learn mode, which is the core of the learning process.
+             The data is sampled from replay buffer.
+             The loss is calculated by the loss function and the loss is backpropagated to update the model.
+         Arguments:
+             - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
+                 The first tensor is the current_batch, the second tensor is the target_batch.
+         Returns:
+             - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
+                 current learning loss and learning statistics.
+         """
         self._learn_model.train()
         self._target_model.train()
 
-        current_batch, targets_batch = data
+        current_batch, target_batch = data
         # ==============================================================
         # sampled related core code
         # ==============================================================
         obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights, make_time = current_batch
-        target_value_prefix, target_value, target_policy = targets_batch
+        target_value_prefix, target_value, target_policy = target_batch
 
         obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
@@ -432,7 +462,6 @@ class SampledEfficientZeroPolicy(Policy):
             self._cfg.policy_entropy_loss_weight * policy_entropy_loss
         )
         weighted_total_loss = (weights * loss).mean()
-        # TODO(pu): test the effect
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
@@ -540,8 +569,27 @@ class SampledEfficientZeroPolicy(Policy):
             }
 
     def _calculate_policy_loss_cont(
-        self, policy_loss, policy_logits, target_policy, mask_batch, child_sampled_actions_batch, unroll_step
-    ):
+        self, policy_loss: torch.Tensor, policy_logits: torch.Tensor, target_policy: torch.Tensor, mask_batch: torch.Tensor,
+            child_sampled_actions_batch: torch.Tensor, unroll_step: int) -> Tuple[torch.Tensor]:
+        """
+        Overview:
+            Calculate the policy loss for continuous action space.
+        Arguments:
+            - policy_loss (:obj:`torch.Tensor`): The policy loss tensor.
+            - policy_logits (:obj:`torch.Tensor`): The policy logits tensor.
+            - target_policy (:obj:`torch.Tensor`): The target policy tensor.
+            - mask_batch (:obj:`torch.Tensor`): The mask tensor.
+            - child_sampled_actions_batch (:obj:`torch.Tensor`): The child sampled actions tensor.
+            - unroll_step (:obj:`int`): The unroll step.
+        Returns:
+            - policy_loss (:obj:`torch.Tensor`): The policy loss tensor.
+            - policy_entropy (:obj:`torch.Tensor`): The policy entropy tensor.
+            - policy_entropy_loss (:obj:`torch.Tensor`): The policy entropy loss tensor.
+            - target_policy_entropy (:obj:`torch.Tensor`): The target policy entropy tensor.
+            - target_sampled_actions (:obj:`torch.Tensor`): The target sampled actions tensor.
+            - mu (:obj:`torch.Tensor`): The mu tensor.
+            - sigma (:obj:`torch.Tensor`): The sigma tensor.
+        """
         (mu, sigma
          ) = policy_logits[:, :self._cfg.model.action_space_size], policy_logits[:, -self._cfg.model.action_space_size:]
 
@@ -622,10 +670,25 @@ class SampledEfficientZeroPolicy(Policy):
 
         return policy_loss, policy_entropy, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
 
-    def _calculate_policy_loss_disc(
-        self, policy_loss, policy_logits, target_policy, mask_batch, child_sampled_actions_batch, unroll_step
-    ):
-
+    def _calculate_policy_loss_disc(self, policy_loss: torch.Tensor, policy_logits: torch.Tensor, target_policy: torch.Tensor,
+                                    mask_batch: torch.Tensor, child_sampled_actions_batch: torch.Tensor, unroll_step: int) -> Tuple[torch.Tensor]:
+        """
+        Overview:
+            Calculate the policy loss for discrete action space.
+        Arguments:
+            - policy_loss (:obj:`torch.Tensor`): The policy loss tensor.
+            - policy_logits (:obj:`torch.Tensor`): The policy logits tensor.
+            - target_policy (:obj:`torch.Tensor`): The target policy tensor.
+            - mask_batch (:obj:`torch.Tensor`): The mask tensor.
+            - child_sampled_actions_batch (:obj:`torch.Tensor`): The child sampled actions tensor.
+            - unroll_step (:obj:`int`): The unroll step.
+        Returns:
+            - policy_loss (:obj:`torch.Tensor`): The policy loss tensor.
+            - policy_entropy (:obj:`torch.Tensor`): The policy entropy tensor.
+            - policy_entropy_loss (:obj:`torch.Tensor`): The policy entropy loss tensor.
+            - target_policy_entropy (:obj:`torch.Tensor`): The target policy entropy tensor.
+            - target_sampled_actions (:obj:`torch.Tensor`): The target sampled actions tensor.
+        """
         prob = torch.softmax(policy_logits, dim=-1)
         dist = Categorical(prob)
 
@@ -693,15 +756,15 @@ class SampledEfficientZeroPolicy(Policy):
         return policy_loss, policy_entropy, policy_entropy_loss, target_policy_entropy, target_sampled_actions
 
     def _init_collect(self) -> None:
+        """
+          Overview:
+              Collect mode init method. Called by ``self.__init__``. Ininitialize the collect model and MCTS utils.
+          """
         self._collect_model = self._model
-
         if self._cfg.mcts_ctree:
-            from lzero.mcts import SampledEfficientZeroMCTSCtree as MCTSTree
-            self._mcts_collect = MCTSTree(self._cfg)
+            self._mcts_collect = MCTSCTree(self._cfg)
         else:
-            from lzero.mcts import SampledEfficientZeroMCTSPtree as MCTSTree
-            self._mcts_collect = MCTSTree(self._cfg)
-
+            self._mcts_collect = MCTSPTree(self._cfg)
         self.collect_mcts_temperature = 1
 
     def _forward_collect(
@@ -709,20 +772,26 @@ class SampledEfficientZeroPolicy(Policy):
     ):
         """
         Overview:
-            Forward function of collect mode.
+            The forward function for collecting data in collect mode. Use model to execute MCTS search.
+            Choosing the action through sampling during the collect mode.
         Arguments:
-            - data (:obj:`Dict[str, Any]`): Dict type data, stacked env data for predicting policy_output(action), \
-                values are torch.Tensor or np.ndarray or dict/list combinations, keys are env_id indicated by integer.
-                shape: (N, *obs_shape), i.e. (N, C*S, H, W), where N is the number of collect_env.
-            - action_mask: shape: ``{list: N} -> (action_space_size, ) or None``.
-            - temperature: shape: (N, ), where N is the number of collect_env.
-            - to_play: shape: ``{list: N} -> (2, ) or None``, where N is the number of collect_env.
-            - ready_env_id: None.
+            - data (:obj:`torch.Tensor`): The input data, i.e. the observation.
+            - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
+            - temperature (:obj:`float`): The temperature of the policy.
+            - to_play (:obj:`int`): The player to play.
+            - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
+        Shape:
+            - data (:obj:`torch.Tensor`):
+                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
+                    S is the number of stacked frames, H is the height of the image, W is the width of the image.
+                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
+            - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
+            - temperature: :math:`(1, )`.
+            - to_play: :math:`(N, 1)`, where N is the number of collect_env.
+            - ready_env_id: None
         Returns:
-            - output (:obj:`Dict[int, Any]`): Dict type data, including at least inferred action according to input obs.
-        ReturnsKeys
-            - necessary: ``action``
-            - optional: ``logit``
+            - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
+                ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._collect_model.eval()
         self.collect_mcts_temperature = temperature
@@ -786,7 +855,6 @@ class SampledEfficientZeroPolicy(Policy):
 
             data_id = [i for i in range(active_collect_env_num)]
             output = {i: None for i in data_id}
-            # TODO
             if ready_env_id is None:
                 ready_env_id = np.arange(active_collect_env_num)
 
@@ -797,27 +865,17 @@ class SampledEfficientZeroPolicy(Policy):
                 except Exception as error:
                     # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                     root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
-                # TODO(pu):
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
                 action, visit_count_distribution_entropy = select_action(
                     distributions, temperature=self.collect_mcts_temperature, deterministic=False
                 )
-                if action_mask[0] is not None and not self._cfg.model.continuous_action_space:
-                    # only discrete action space have action mask
-                    try:
-                        action = roots_sampled_actions[i][action].value
-                        # logging.warning('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
-                    except Exception as error:
-                        # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
-                        action = np.array(roots_sampled_actions[i][action])
-                else:
-                    try:
-                        action = roots_sampled_actions[i][action].value
-                        # logging.warning('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
-                    except Exception as error:
-                        # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
-                        action = np.array(roots_sampled_actions[i][action])
+                try:
+                    action = roots_sampled_actions[i][action].value
+                    # logging.warning('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
+                except Exception as error:
+                    # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                    action = np.array(roots_sampled_actions[i][action])
 
                 if not self._cfg.model.continuous_action_space:
                     if len(action.shape) == 0:
@@ -838,10 +896,10 @@ class SampledEfficientZeroPolicy(Policy):
         return output
 
     def _init_eval(self) -> None:
-        r"""
-        Overview:
-            Evaluate mode init method. Called by ``self.__init__``, initialize eval_model.
         """
+         Overview:
+             Evaluate mode init method. Called by ``self.__init__``. Ininitialize the eval model and MCTS utils.
+         """
         self._eval_model = self._model
         if self._cfg.mcts_ctree:
             self._mcts_eval = MCTSCtree(self._cfg)
@@ -850,15 +908,26 @@ class SampledEfficientZeroPolicy(Policy):
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id=None):
         """
-        Overview:
-            Forward computation graph of eval mode(evaluate policy performance), at most cases, it is similar to \
-            ``self._forward_collect``.
-        Arguments:
-            - data (:obj:`Dict[str, Any]`): Dict type data, stacked env data for predicting policy_output(action), \
-                values are torch.Tensor or np.ndarray or dict/list combinations, keys are env_id indicated by integer.
-        Returns:
-            - output (:obj:`Dict[int, Any]`): The dict of predicting action for the interaction with env.
-        """
+         Overview:
+             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
+             Choosing the action with the highest value (argmax) rather than sampling during the eval mode.
+         Arguments:
+             - data (:obj:`torch.Tensor`): The input data, i.e. the observation.
+             - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
+             - to_play (:obj:`int`): The player to play.
+             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
+         Shape:
+             - data (:obj:`torch.Tensor`):
+                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
+                     S is the number of stacked frames, H is the height of the image, W is the width of the image.
+                 - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
+             - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
+             - to_play: :math:`(N, 1)`, where N is the number of collect_env.
+             - ready_env_id: None
+         Returns:
+             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
+                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
+         """
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
         with torch.no_grad():
@@ -936,21 +1005,13 @@ class SampledEfficientZeroPolicy(Policy):
                 # ==============================================================
                 # sampled related core code
                 # ==============================================================
-                if action_mask[0] is not None and not self._cfg.model.continuous_action_space:
-                    # only discrete action space have action mask
-                    try:
-                        action = roots_sampled_actions[i][action].value
-                        # logging.warning('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
-                    except Exception as error:
-                        # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
-                        action = np.array(roots_sampled_actions[i][action])
-                else:
-                    try:
-                        action = roots_sampled_actions[i][action].value
-                        # logging.warning('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
-                    except Exception as error:
-                        # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
-                        action = np.array(roots_sampled_actions[i][action])
+
+                try:
+                    action = roots_sampled_actions[i][action].value
+                    # logging.warning('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
+                except Exception as error:
+                    # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                    action = np.array(roots_sampled_actions[i][action])
 
                 if not self._cfg.model.continuous_action_space:
                     if len(action.shape) == 0:
@@ -971,6 +1032,11 @@ class SampledEfficientZeroPolicy(Policy):
         return output
 
     def _monitor_vars_learn(self) -> List[str]:
+        """
+        Overview:
+             Register the variables to be monitored in learn mode. The registered variables will be logged in
+             tensorboard according to the return value ``_forward_learn``.
+        """
         if self._cfg.model.continuous_action_space:
             return [
                 'collect_mcts_temperature',
@@ -1057,22 +1123,15 @@ class SampledEfficientZeroPolicy(Policy):
             Load the state_dict variable into policy learn mode.
         Arguments:
             - state_dict (:obj:`Dict[str, Any]`): the dict of policy learn state saved before.
-
-        .. tip::
-            If you want to only load some parts of model, you can simply set the ``strict`` argument in \
-            load_state_dict to ``False``, or refer to ``ding.torch_utils.checkpoint_helper`` for more \
-            complicated operation.
         """
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
         self._optimizer.load_state_dict(state_dict['optimizer'])
 
-    def _process_transition(
-            self, obs: torch.Tensor, policy_output: torch.Tensor, timestep: torch.Tensor
-    ) -> torch.Tensor:
-        # be compatible with DI-engine base_policy
+    def _process_transition(self, obs, policy_output, timestep):
+        # be compatible with DI-engine Policy class
         pass
 
-    def _get_train_sample(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        # be compatible with DI-engine base_policy
+    def _get_train_sample(self, data):
+        # be compatible with DI-engine Policy class
         pass

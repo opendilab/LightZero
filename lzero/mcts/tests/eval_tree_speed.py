@@ -94,7 +94,7 @@ def ptree_func(policy_config, num_simulations):
         policy_config.num_simulations = n_s
         network_output = model.initial_inference(stack_obs.float())
 
-        latent_state_roots = network_output['hidden_state']
+        latent_state_roots = network_output['latent_state']
         reward_hidden_state_state = network_output['reward_hidden_state']
         pred_values_pool = network_output['value']
         value_prefix_pool = network_output['value_prefix']
@@ -188,7 +188,7 @@ def ctree_func(policy_config, num_simulations):
 
         network_output = model.initial_inference(stack_obs.float())
 
-        latent_state_roots = network_output['hidden_state']
+        latent_state_roots = network_output['latent_state']
         reward_hidden_state_state = network_output['reward_hidden_state']
         pred_values_pool = network_output['value']
         value_prefix_pool = network_output['value_prefix']

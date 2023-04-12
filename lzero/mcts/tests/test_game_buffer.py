@@ -59,7 +59,7 @@ def test_update_priority():
     indices = [0, 1]
     make_time = [999, 1000]
     train_data = [[[], [], [], indices, [], make_time], []]
-    # train_data = [current_batch, targets_batch]
+    # train_data = [current_batch, target_batch]
     # current_batch = [obs_lst, action_lst, mask_lst, batch_index_list, weights, make_time_lst]
     batch_priorities = [0.999, 0.8]
 

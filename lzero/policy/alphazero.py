@@ -23,11 +23,14 @@ class AlphaZeroPolicy(Policy):
     config = dict(
         # (bool) Whether to use cuda for network.
         cuda=False,
+<<<<<<< Updated upstream
         # (bool) Whether use on-policy training pipeline(behaviour policy and training policy are the same)
         on_policy=False,
         # (bool) Whether to use priority(PER) sampler to sample data from replay buffer.
         priority=False,
         # model config sub field
+=======
+>>>>>>> Stashed changes
         model=dict(
             observation_shape=(3, 6, 6),
             num_res_blocks=1,
@@ -35,11 +38,20 @@ class AlphaZeroPolicy(Policy):
         ),
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
+<<<<<<< Updated upstream
         # (str) Optimizer for training policy network. ['SGD' or 'Adam']
         optim_type='SGD',
         # (float) Learning rate for training policy network. Ininitial lr for manually decay schedule.
         learning_rate=0.2,
         # (float) Weight decay for training policy network.
+=======
+        # lr_piecewise_constant_decay=True,
+        # optim_type='SGD',
+        # learning_rate=0.2,  # init lr for manually decay schedule
+        lr_piecewise_constant_decay=False,
+        optim_type='Adam',
+        learning_rate=0.001,  # lr for Adam optimizer
+>>>>>>> Stashed changes
         weight_decay=1e-4,
         # (float) One-order Momentum in optimizer, which stabilizes the training process (gradient direction).
         momentum=0.9,

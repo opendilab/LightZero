@@ -58,7 +58,7 @@ class MuZeroGameBuffer(GameBuffer):
             - batch_size (:obj:`int`): batch size.
             - policy (:obj:`Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]`): policy.
         Returns:
-            - train_data (:obj:`List`): List of train data, including current_batch and targets_batch.
+            - train_data (:obj:`List`): List of train data, including current_batch and target_batch.
         """
         policy._target_model.to(self._cfg.device)
         policy._target_model.eval()
@@ -85,10 +85,10 @@ class MuZeroGameBuffer(GameBuffer):
         elif self._cfg.reanalyze_ratio == 0:
             batch_target_policies = batch_target_policies_non_re
 
-        targets_batch = [batch_rewards, batch_target_values, batch_target_policies]
+        target_batch = [batch_rewards, batch_target_values, batch_target_policies]
 
-        # a batch contains the current_batch and the targets_batch
-        train_data = [current_batch, targets_batch]
+        # a batch contains the current_batch and the target_batch
+        train_data = [current_batch, target_batch]
         return train_data
 
     def _make_batch(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
@@ -684,7 +684,7 @@ class MuZeroGameBuffer(GameBuffer):
             - train_data (:obj:`Optional[List[Optional[np.ndarray]]]`): training data to be updated priority.
             - batch_priorities (:obj:`batch_priorities`): priorities to update to.
         NOTE:
-            train_data = [current_batch, targets_batch]
+            train_data = [current_batch, target_batch]
             current_batch = [obs_list, action_list, mask_list, batch_index_list, weights, make_time_list]
         """
         indices = train_data[0][3]

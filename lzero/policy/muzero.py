@@ -31,14 +31,14 @@ class MuZeroPolicy(Policy):
             model_type='conv',  # options={'mlp', 'conv'}
             # (bool) If True, the action space of the environment is continuous, otherwise discrete.
             continuous_action_space=False,
-            # (tuple) the stacked obs shape.
+            # (tuple) The stacked obs shape.
             # observation_shape=(1, 96, 96),  # if frame_stack_num=1
             observation_shape=(4, 96, 96),  # if frame_stack_num=4
             # (bool) Whether to use the self-supervised learning loss.
             self_supervised_learning_loss=False,
             # (bool) Whether to use discrete support to represent categorical distribution for value/reward/value_prefix.
             categorical_distribution=True,
-            # (int) the image channel in image observation.
+            # (int) The image channel in image observation.
             image_channel=1,
             # (int) The number of frames to stack together.
             frame_stack_num=1,
@@ -62,13 +62,13 @@ class MuZeroPolicy(Policy):
         collector_env_num=8,
         # (int) The number of environments used in evaluating policy.
         evaluator_env_num=3,
-        # (str) The type of environment. options is ['not_board_games', 'board_games'].
+        # (str) The type of environment. Options is ['not_board_games', 'board_games'].
         env_type='not_board_games',
-        # (str) The type of battle mode. options is ['play_with_bot_mode', 'self_play_mode'].
+        # (str) The type of battle mode. Options is ['play_with_bot_mode', 'self_play_mode'].
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,
-        # (int) The transition number of one ``GameSegment`` block.
+        # (int) The transition number of one ``GameSegment``.
         game_segment_length=200,
 
         # ****** observation ******
@@ -76,7 +76,7 @@ class MuZeroPolicy(Policy):
         transform2string=False,
         # (bool) Whether to use data augmentation.
         use_augmentation=False,
-        # (list) style of augmentation.
+        # (list) The style of augmentation.
         augmentation=['shift', 'intensity'],
 
         # ******* learn ******
@@ -89,7 +89,7 @@ class MuZeroPolicy(Policy):
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD' or 'Adam']
-        optim_type='SGD',
+        optim_type='Adam',
         # (float) Learning rate for training policy network. Ininitial lr for manually decay schedule.
         learning_rate=0.2,
         # (int) Frequency of target network update.
@@ -132,7 +132,7 @@ class MuZeroPolicy(Policy):
         fixed_temperature_value=0.25,
 
         # ****** Priority ******
-        # (bool) Whether to use priority when sampling training datafrom the buffer.
+        # (bool) Whether to use priority when sampling training data from the buffer.
         use_priority=True,
         # (bool) Whether to use the maximum priority for new collecting data.
         use_max_priority_for_new_data=True,
@@ -153,11 +153,11 @@ class MuZeroPolicy(Policy):
     def default_model(self) -> Tuple[str, List[str]]:
         """
         Overview:
-            Return this algorithm default model setting for demonstration.
+            Return this algorithm default model setting.
         Returns:
-            - model_type (:obj:`str`): The model type used in this algorithm, which is registered in ModelRegistry.
-            - import_names (:obj:`List[str]`): The model class path list used in this algorithm.
-
+            - model_info (:obj:`Tuple[str, List[str]]`): model name and model import_names.
+                - model_type (:obj:`str`): The model type used in this algorithm, which is registered in ModelRegistry.
+                - import_names (:obj:`List[str]`): The model class path list used in this algorithm.
         .. note::
             The user can define and use customized network model but must obey the same interface definition indicated \
             by import_names path. For MuZero, ``lzero.model.muzero_model.MuZeroModel``
@@ -168,6 +168,10 @@ class MuZeroPolicy(Policy):
             return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
 
     def _init_learn(self) -> None:
+        """
+        Overview:
+            Learn mode init method. Called by ``self.__init__``. Ininitialize the learn model, optimizer and MCTS utils.
+        """
         assert self._cfg.optim_type in ['SGD', 'Adam'], self._cfg.optim_type
         # NOTE: in board_gmaes, for fixed lr 0.003, 'Adam' is better than 'SGD'.
         if self._cfg.optim_type == 'SGD':
@@ -177,7 +181,6 @@ class MuZeroPolicy(Policy):
                 momentum=self._cfg.momentum,
                 weight_decay=self._cfg.weight_decay,
             )
-
         elif self._cfg.optim_type == 'Adam':
             self._optimizer = optim.Adam(
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
@@ -211,13 +214,25 @@ class MuZeroPolicy(Policy):
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
 
-    def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
+    def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
+        """
+        Overview:
+            The forward function for learning policy in learn mode, which is the core of the learning process.
+            The data is sampled from replay buffer.
+            The loss is calculated by the loss function and the loss is backpropagated to update the model.
+        Arguments:
+            - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
+                The first tensor is the current_batch, the second tensor is the target_batch.
+        Returns:
+            - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
+                current learning loss and learning statistics.
+        """
         self._learn_model.train()
         self._target_model.train()
 
-        current_batch, targets_batch = data
+        current_batch, target_batch = data
         obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
-        target_reward, target_value, target_policy = targets_batch
+        target_reward, target_value, target_policy = target_batch
 
         obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
@@ -440,24 +455,30 @@ class MuZeroPolicy(Policy):
         self.collect_mcts_temperature = 1
 
     def _forward_collect(
-        self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1, ready_env_id=None
-    ):
+        self, data: torch.Tensor, action_mask: list = None, temperature: float = 1, to_play: List = [-1], ready_env_id=None
+    ) -> Dict:
         """
         Overview:
-            Forward function of collect mode.
+            The forward function for collecting data in collect mode. Use model to execute MCTS search.
+            Choosing the action through sampling during the collect mode.
         Arguments:
-            - data (:obj:`Dict[str, Any]`): Dict type data, stacked env data for predicting policy_output(action), \
-                values are torch.Tensor or np.ndarray or dict/list combinations, keys are env_id indicated by integer.
-                shape: (N, *obs_shape), i.e. (N, C*S, H, W), where N is the number of collect_env.
-            - action_mask: shape: ``{list: N} -> (action_space_size, ) or None``.
-            - temperature: shape: (N, ), where N is the number of collect_env.
-            - to_play: shape: ``{list: N} -> (2, ) or None``, where N is the number of collect_env.
-            - ready_env_id: None.
+            - data (:obj:`torch.Tensor`): The input data, i.e. the observation.
+            - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
+            - temperature (:obj:`float`): The temperature of the policy.
+            - to_play (:obj:`int`): The player to play.
+            - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
+        Shape:
+            - data (:obj:`torch.Tensor`): 
+                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
+                    S is the number of stacked frames, H is the height of the image, W is the width of the image.
+                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size. 
+            - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
+            - temperature: :math:`(1, )`.
+            - to_play: :math:`(N, 1)`, where N is the number of collect_env.
+            - ready_env_id: None
         Returns:
-            - output (:obj:`Dict[int, Any]`): Dict type data, including at least inferred action according to input obs.
-        ReturnsKeys
-            - necessary: ``action``
-            - optional: ``logit``
+            - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
+                ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._collect_model.eval()
         self.collect_mcts_temperature = temperature
@@ -496,7 +517,6 @@ class MuZeroPolicy(Policy):
             data_id = [i for i in range(active_collect_env_num)]
             output = {i: None for i in data_id}
 
-            # TODO
             if ready_env_id is None:
                 ready_env_id = np.arange(active_collect_env_num)
 
@@ -532,16 +552,27 @@ class MuZeroPolicy(Policy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id=None):
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1, ready_env_id=None) -> Dict:
         """
         Overview:
-            Forward computation graph of eval mode(evaluate policy performance), at most cases, it is similar to \
-            ``self._forward_collect``.
+            The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search. 
+            Choosing the action with the highest value (argmax) rather than sampling during the eval mode.
         Arguments:
-            - data (:obj:`Dict[str, Any]`): Dict type data, stacked env data for predicting policy_output(action), \
-                values are torch.Tensor or np.ndarray or dict/list combinations, keys are env_id indicated by integer.
+            - data (:obj:`torch.Tensor`): The input data, i.e. the observation.
+            - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
+            - to_play (:obj:`int`): The player to play.
+            - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
+        Shape:
+            - data (:obj:`torch.Tensor`): 
+                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
+                    S is the number of stacked frames, H is the height of the image, W is the width of the image.
+                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size. 
+            - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
+            - to_play: :math:`(N, 1)`, where N is the number of collect_env.
+            - ready_env_id: None
         Returns:
-            - output (:obj:`Dict[int, Any]`): The dict of predicting action for the interaction with env.
+            - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
+                ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]

@@ -79,9 +79,9 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         elif self._cfg.reanalyze_ratio == 0:
             batch_target_policies = batch_target_policies_non_re
 
-        targets_batch = [batch_value_prefixs, batch_target_values, batch_target_policies]
-        # a batch contains the current_batch and the targets_batch
-        train_data = [current_batch, targets_batch]
+        target_batch = [batch_value_prefixs, batch_target_values, batch_target_policies]
+        # a batch contains the current_batch and the target_batch
+        train_data = [current_batch, target_batch]
         return train_data
 
     def _prepare_reward_value_context(

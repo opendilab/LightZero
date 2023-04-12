@@ -134,7 +134,7 @@ def select_action(visit_counts: np.ndarray,
     return action_pos, visit_count_distribution_entropy
 
 
-def concat_output_value(output_lst: List[ModelOutput]) -> np.ndarray:
+def concat_output_value(output_lst: List) -> np.ndarray:
     """
     Overview:
         concat the values of the model output list.
@@ -158,8 +158,8 @@ def concat_output(output_lst: List, data_type: str = 'muzero') -> Tuple:
     Overview:
         concat the model output.
     Arguments:
-        - output_lst (:obj:`List`): the model output list
-        - data_type (:obj:`str`): the data type, should be 'muzero' or 'efficientzero'
+        - output_lst (:obj:`List`): The model output list.
+        - data_type (:obj:`str`): The data type, should be 'muzero' or 'efficientzero'.
     Returns:
         - value_lst (:obj:`np.array`): the values of the model output list
     """
@@ -199,10 +199,10 @@ def to_torch_float_tensor(data_list: List[np.ndarray], device: torch.device) -> 
     Overview:
         convert the data list to torch float tensor
     Arguments:
-        - data_list (:obj:`List`): the data list
-        - device (:obj:`torch.device`): the device
+        - data_list (:obj:`List`): The data list.
+        - device (:obj:`torch.device`): The device.
     Returns:
-        - output_data_list (:obj:`List`): the output data list
+        - output_data_list (:obj:`List`): The output data list.
     """
     output_data_list = []
     for data in data_list:
@@ -213,7 +213,7 @@ def to_torch_float_tensor(data_list: List[np.ndarray], device: torch.device) -> 
 def to_detach_cpu_numpy(data_list: List[torch.Tensor]) -> List[np.ndarray]:
     """
     Overview:
-        convert the data list to detach cpu numpy
+        convert the data list to detach cpu numpy.
     Arguments:
         - data_list (:obj:`List`): the data list
     Returns:

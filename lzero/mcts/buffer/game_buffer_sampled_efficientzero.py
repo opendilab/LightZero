@@ -106,9 +106,9 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
         elif self._cfg.reanalyze_ratio == 0:
             batch_target_policies = batch_target_policies_non_re
 
-        targets_batch = [batch_value_prefixs, batch_target_values, batch_target_policies]
-        # a batch contains the current_batch and the targets_batch
-        train_data = [current_batch, targets_batch]
+        target_batch = [batch_value_prefixs, batch_target_values, batch_target_policies]
+        # a batch contains the current_batch and the target_batch
+        train_data = [current_batch, target_batch]
         return train_data
 
     def _make_batch(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
@@ -571,7 +571,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
             - train_data (:obj:`Optional[List[Optional[np.ndarray]]]`): training data to be updated priority.
             - batch_priorities (:obj:`batch_priorities`): priorities to update to.
         NOTE:
-            train_data = [current_batch, targets_batch]
+            train_data = [current_batch, target_batch]
             current_batch = [obs_list, action_list, root_sampled_actions_list, mask_list, batch_index_list, weights_list, make_time_list]
         """
 
