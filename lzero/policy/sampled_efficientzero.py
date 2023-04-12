@@ -569,8 +569,9 @@ class SampledEfficientZeroPolicy(Policy):
             }
 
     def _calculate_policy_loss_cont(
-        self, policy_loss: torch.Tensor, policy_logits: torch.Tensor, target_policy: torch.Tensor, mask_batch: torch.Tensor,
-            child_sampled_actions_batch: torch.Tensor, unroll_step: int) -> Tuple[torch.Tensor]:
+            self, policy_loss: torch.Tensor, policy_logits: torch.Tensor, target_policy: torch.Tensor,
+            mask_batch: torch.Tensor, child_sampled_actions_batch: torch.Tensor, unroll_step: int
+    ) -> Tuple[torch.Tensor]:
         """
         Overview:
             Calculate the policy loss for continuous action space.
@@ -670,8 +671,10 @@ class SampledEfficientZeroPolicy(Policy):
 
         return policy_loss, policy_entropy, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
 
-    def _calculate_policy_loss_disc(self, policy_loss: torch.Tensor, policy_logits: torch.Tensor, target_policy: torch.Tensor,
-                                    mask_batch: torch.Tensor, child_sampled_actions_batch: torch.Tensor, unroll_step: int) -> Tuple[torch.Tensor]:
+    def _calculate_policy_loss_disc(
+            self, policy_loss: torch.Tensor, policy_logits: torch.Tensor, target_policy: torch.Tensor,
+            mask_batch: torch.Tensor, child_sampled_actions_batch: torch.Tensor, unroll_step: int
+    ) -> Tuple[torch.Tensor]:
         """
         Overview:
             Calculate the policy loss for discrete action space.

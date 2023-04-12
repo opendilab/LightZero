@@ -20,38 +20,26 @@ class AlphaZeroPolicy(Policy):
     Overview:
         The policy class for AlphaZero.
     """
+
+    # The default_config for AlphaZero policy.
     config = dict(
-        # (bool) Whether to use cuda for network.
-        cuda=False,
-<<<<<<< Updated upstream
-        # (bool) Whether use on-policy training pipeline(behaviour policy and training policy are the same)
-        on_policy=False,
-        # (bool) Whether to use priority(PER) sampler to sample data from replay buffer.
-        priority=False,
-        # model config sub field
-=======
->>>>>>> Stashed changes
         model=dict(
+            # (tuple) The stacked obs shape.
             observation_shape=(3, 6, 6),
+            # (int) The number of res blocks in AlphaZero model.
             num_res_blocks=1,
+            # (int) The number of channels of hidden states in AlphaZero model.
             num_channels=32,
         ),
+        # (bool) Whether to use cuda for network.
+        cuda=False,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
-<<<<<<< Updated upstream
         # (str) Optimizer for training policy network. ['SGD' or 'Adam']
-        optim_type='SGD',
+        optim_type='Adam',
         # (float) Learning rate for training policy network. Ininitial lr for manually decay schedule.
         learning_rate=0.2,
         # (float) Weight decay for training policy network.
-=======
-        # lr_piecewise_constant_decay=True,
-        # optim_type='SGD',
-        # learning_rate=0.2,  # init lr for manually decay schedule
-        lr_piecewise_constant_decay=False,
-        optim_type='Adam',
-        learning_rate=0.001,  # lr for Adam optimizer
->>>>>>> Stashed changes
         weight_decay=1e-4,
         # (float) One-order Momentum in optimizer, which stabilizes the training process (gradient direction).
         momentum=0.9,

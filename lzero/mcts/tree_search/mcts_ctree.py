@@ -115,7 +115,6 @@ class EfficientZeroMCTSCtree(object):
                 # latent_state_index_y_lst: the second index of leaf node states in latent_state_pool, i.e. the batch root node index, maximum is ``env_num``.
                 # the latent state of the leaf node is latent_state_pool[x, y].
                 # the index of value prefix hidden state of the leaf node are in the same manner.
-
                 """
                 MCTS stage 1: Selection
                     Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
@@ -140,7 +139,6 @@ class EfficientZeroMCTSCtree(object):
                                                                                                  ).unsqueeze(0)
                 # .long() only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
-
                 """
                 MCTS stage 2: Expansion
                     At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function. 
@@ -151,8 +149,10 @@ class EfficientZeroMCTSCtree(object):
                 )
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    network_output.value = self.inverse_scalar_transform_handle(network_output.value).detach().cpu().numpy()
-                    network_output.value_prefix = self.inverse_scalar_transform_handle(network_output.value_prefix).detach().cpu().numpy()
+                    network_output.value = self.inverse_scalar_transform_handle(network_output.value
+                                                                                ).detach().cpu().numpy()
+                    network_output.value_prefix = self.inverse_scalar_transform_handle(network_output.value_prefix
+                                                                                       ).detach().cpu().numpy()
                     network_output.latent_state = network_output.latent_state.detach().cpu().numpy()
                     network_output.reward_hidden_state = (
                         network_output.reward_hidden_state[0].detach().cpu().numpy(),
@@ -179,7 +179,6 @@ class EfficientZeroMCTSCtree(object):
                 reward_hidden_state_c_pool.append(reward_latent_state_nodes[0])
                 reward_hidden_state_h_pool.append(reward_latent_state_nodes[1])
                 latent_state_index_x += 1
-
                 """
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
@@ -290,7 +289,6 @@ class MuZeroMCTSCtree(object):
                 # latent_state_index_y_lst: the second index of leaf node states in latent_state_pool, i.e. the batch root node index, maximum is ``env_num``.
                 # the latent state of the leaf node is latent_state_pool[x, y].
                 # the index of value prefix hidden state of the leaf node are in the same manner.
-
                 """
                 MCTS stage 1: Selection
                     Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
@@ -307,7 +305,6 @@ class MuZeroMCTSCtree(object):
                 latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
                 # only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
-
                 """
                 MCTS stage 2: Expansion
                     At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function. 
@@ -317,8 +314,10 @@ class MuZeroMCTSCtree(object):
 
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    network_output.value = self.inverse_scalar_transform_handle(network_output.value).detach().cpu().numpy()
-                    network_output.reward = self.inverse_scalar_transform_handle(network_output.reward).detach().cpu().numpy()
+                    network_output.value = self.inverse_scalar_transform_handle(network_output.value
+                                                                                ).detach().cpu().numpy()
+                    network_output.reward = self.inverse_scalar_transform_handle(network_output.reward
+                                                                                 ).detach().cpu().numpy()
                     network_output.latent_state = network_output.latent_state.detach().cpu().numpy()
                     network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()
 
@@ -329,7 +328,6 @@ class MuZeroMCTSCtree(object):
 
                 latent_state_pool.append(latent_state_nodes)
                 latent_state_index_x += 1
-
                 """
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
