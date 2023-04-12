@@ -17,7 +17,7 @@ reanalyze_ratio = 0.
 
 lunarlander_disc_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/lunarlander_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_gcv05_lsd128_bs-false_seed0',
+    f'data_ez_ctree/lunarlander_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_gcv05_lsd256_bias-t_seed0',
     env=dict(
         env_name='LunarLander-v2',
         continuous=False,
@@ -33,11 +33,10 @@ lunarlander_disc_efficientzero_config = dict(
             action_space_size=4,
             self_supervised_learning_loss=True,
             model_type='mlp',  # options={'mlp', 'conv'}
-            bias=False,
+            bias=True,
             lstm_hidden_size=256,
             # The mlp model.
-            latent_state_dim=128,
-            # latent_state_dim=256,
+            latent_state_dim=256,
             # The conv model.
             # num_res_blocks=1,
             # num_channels=32,

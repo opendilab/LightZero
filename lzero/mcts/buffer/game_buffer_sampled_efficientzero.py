@@ -307,7 +307,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                 # use the root values from MCTS
                 # the root values have limited improvement but require much more GPU actors;
                 _, value_prefix_pool, policy_logits_pool, latent_state_roots, reward_hidden_state_roots = concat_output(
-                    network_output
+                    network_output, data_type='efficientzero'
                 )
                 value_prefix_pool = value_prefix_pool.squeeze().tolist()
                 policy_logits_pool = policy_logits_pool.tolist()
@@ -477,7 +477,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                 network_output.append(m_output)
 
             _, value_prefix_pool, policy_logits_pool, latent_state_roots, reward_hidden_state_roots = concat_output(
-                network_output
+                network_output, data_type='efficientzero'
             )
 
             value_prefix_pool = value_prefix_pool.squeeze().tolist()
