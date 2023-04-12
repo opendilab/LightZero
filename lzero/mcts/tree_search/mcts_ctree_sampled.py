@@ -116,13 +116,13 @@ class SampledEfficientZeroMCTSCtree(object):
                 results = tree_efficientzero.ResultsWrapper(num=num)
 
                 # traverse to select actions for each root.
-                # hidden_state_index_x_lst: the first index of leaf node states in hidden_state_pool, i.e. the search depth.
-                # index hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool, i.e. the batch root node index, maximum is ``env_num``.
+                # latent_state_index_x_lst: the first index of leaf node states in hidden_state_pool, i.e. the search depth.
+                # index latent_state_index_y_lst: the second index of leaf node states in hidden_state_pool, i.e. the batch root node index, maximum is ``env_num``.
                 # the hidden state of the leaf node is hidden_state_pool[x, y]; the index of value prefix hidden state of the leaf node are in the same manner.
 
                 # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
                 # simulation reaches a leaf node s_l.
-                hidden_state_index_x_lst, hidden_state_index_y_lst, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
+                latent_state_index_x_lst, latent_state_index_y_lst, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play_batch),
                     self._cfg.model.continuous_action_space
                 )
@@ -130,7 +130,7 @@ class SampledEfficientZeroMCTSCtree(object):
                 search_lens = results.get_search_len()
 
                 # obtain the states for leaf nodes
-                for ix, iy in zip(hidden_state_index_x_lst, hidden_state_index_y_lst):
+                for ix, iy in zip(latent_state_index_x_lst, latent_state_index_y_lst):
                     hidden_states.append(hidden_state_pool[ix][iy])
                     hidden_states_c_reward.append(reward_hidden_state_c_pool[ix][0][iy])
                     hidden_states_h_reward.append(reward_hidden_state_h_pool[ix][0][iy])
@@ -166,32 +166,32 @@ class SampledEfficientZeroMCTSCtree(object):
                     network_output.value_prefix = inverse_scalar_transform(
                         network_output.value_prefix, self._cfg.model.support_scale
                     ).detach().cpu().numpy()
-                    network_output.hidden_state = network_output.hidden_state.detach().cpu().numpy()
+                    network_output.latent_state = network_output.latent_state.detach().cpu().numpy()
                     network_output.reward_hidden_state = (
                         network_output.reward_hidden_state[0].detach().cpu().numpy(),
                         network_output.reward_hidden_state[1].detach().cpu().numpy()
                     )
                     network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()
 
-                hidden_state_nodes = network_output.hidden_state
+                latent_state_nodes = network_output.latent_state
                 value_prefix_pool = network_output.value_prefix.reshape(-1).tolist()
                 value_pool = network_output.value.reshape(-1).tolist()
                 policy_logits_pool = network_output.policy_logits.tolist()
-                reward_hidden_state_nodes = network_output.reward_hidden_state
+                reward_latent_state_nodes = network_output.reward_hidden_state
 
-                hidden_state_pool.append(hidden_state_nodes)
+                hidden_state_pool.append(latent_state_nodes)
                 # reset 0
                 # reset the hidden states in LSTM every horizon steps in search
                 # only need to predict the value prefix in a range (eg: s0 -> s5)
                 assert self._cfg.lstm_horizon_len > 0
                 reset_idx = (np.array(search_lens) % self._cfg.lstm_horizon_len == 0)
                 assert len(reset_idx) == num
-                reward_hidden_state_nodes[0][:, reset_idx, :] = 0
-                reward_hidden_state_nodes[1][:, reset_idx, :] = 0
+                reward_latent_state_nodes[0][:, reset_idx, :] = 0
+                reward_latent_state_nodes[1][:, reset_idx, :] = 0
                 is_reset_lst = reset_idx.astype(np.int32).tolist()
 
-                reward_hidden_state_c_pool.append(reward_hidden_state_nodes[0])
-                reward_hidden_state_h_pool.append(reward_hidden_state_nodes[1])
+                reward_hidden_state_c_pool.append(reward_latent_state_nodes[0])
+                reward_hidden_state_h_pool.append(reward_latent_state_nodes[1])
                 hidden_state_index_x += 1
 
                 # MCTS stage 3:

@@ -266,11 +266,9 @@ class EfficientZeroModelMLP(nn.Module):
         # NOTE: the key difference with MuZero
         next_latent_state, next_reward_hidden_state, value_prefix = self.dynamics_network(state_action_encoding, reward_hidden_state)
 
-        if not self.state_norm:
-            return next_latent_state, next_reward_hidden_state, value_prefix
-        else:
-            next_latent_state_normalized = renormalize(next_latent_state)
-            return next_latent_state_normalized, next_reward_hidden_state, value_prefix
+        if self.state_norm:
+            next_latent_state = renormalize(next_latent_state)
+        return next_latent_state, next_reward_hidden_state, value_prefix
 
     def project(self, latent_state: torch.Tensor, with_grad=True):
         """

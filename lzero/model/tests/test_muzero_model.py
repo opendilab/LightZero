@@ -117,13 +117,13 @@ class TestMuZeroModel:
 if __name__ == "__main__":
     batch_size = 10
     num_res_blocks = 3
-    num_channels = 3
+    num_channels = 3+1  # 3 channels for observation and 1 channel for action
     action_space_size = 1
     reward_head_channels = 2
     fc_reward_layers = [16, 8]
     output_support_size = 2
-    flatten_output_size_for_reward_head = 180
-    state = torch.rand(batch_size, 3, 3, 3)
+    flatten_output_size_for_reward_head = reward_head_channels * 3 * 3
+    state_action_embedding = torch.rand(batch_size, num_channels, 3, 3)
     dynamics_network = DynamicsNetwork(
         num_res_blocks=num_res_blocks,
         num_channels=num_channels,
@@ -132,6 +132,6 @@ if __name__ == "__main__":
         output_support_size=output_support_size,
         flatten_output_size_for_reward_head=flatten_output_size_for_reward_head
     )
-    state, reward = dynamics_network(state)
-    assert state.shape == torch.Size([100, num_channels - action_space_size, 3, 3])
+    state, reward = dynamics_network(state_action_embedding)
+    assert state.shape == torch.Size([10, num_channels - action_space_size, 3, 3])
     assert reward.shape == torch.Size([10, output_support_size])

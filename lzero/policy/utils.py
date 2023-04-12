@@ -164,7 +164,7 @@ def to_detach_cpu_numpy(data_list: List):
 
 
 def ez_network_output_unpack(network_output):
-    hidden_state = network_output.hidden_state  # shape:（batch_size, lstm_hidden_size, num_unroll_steps+1, num_unroll_steps+1）
+    hidden_state = network_output.latent_state  # shape:（batch_size, lstm_hidden_size, num_unroll_steps+1, num_unroll_steps+1）
     value_prefix = network_output.value_prefix  # shape: (batch_size, support_support_size)
     reward_hidden_state = network_output.reward_hidden_state  # shape: {tuple: 2} -> (1, batch_size, 512)
     value = network_output.value  # shape: (batch_size, support_support_size)
@@ -173,7 +173,7 @@ def ez_network_output_unpack(network_output):
 
 
 def mz_network_output_unpack(network_output):
-    hidden_state = network_output.hidden_state  # shape:（batch_size, lstm_hidden_size, num_unroll_steps+1, num_unroll_steps+1）
+    hidden_state = network_output.latent_state  # shape:（batch_size, lstm_hidden_size, num_unroll_steps+1, num_unroll_steps+1）
     reward = network_output.reward  # shape: (batch_size, support_support_size)
     value = network_output.value  # shape: (batch_size, support_support_size)
     policy_logits = network_output.policy_logits  # shape: (batch_size, action_space_size)

@@ -202,8 +202,8 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                     # EfficientZero related core code
                     # ==============================================================
                     # if not in training, obtain the scalars of the value/reward
-                    [m_output.hidden_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                        [m_output.hidden_state, inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                        [m_output.latent_state, inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
                          m_output.policy_logits])
                     m_output.reward_hidden_state = (
                         m_output.reward_hidden_state[0].detach().cpu().numpy(),
@@ -343,8 +343,8 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
 
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    [m_output.hidden_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                        [m_output.hidden_state, inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                        [m_output.latent_state, inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
                          m_output.policy_logits])
                     m_output.reward_hidden_state = (
                         m_output.reward_hidden_state[0].detach().cpu().numpy(),

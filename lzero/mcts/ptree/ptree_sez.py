@@ -422,8 +422,8 @@ class SearchResults:
         self.num = num
         self.nodes = []
         self.search_paths = []
-        self.hidden_state_index_x_lst = []
-        self.hidden_state_index_y_lst = []
+        self.latent_state_index_x_lst = []
+        self.latent_state_index_y_lst = []
         self.last_actions = []
         self.search_lens = []
 
@@ -585,8 +585,8 @@ def batch_traverse(
             `virtual` is to emphasize that actions are performed on an imaginary hidden state.
         - continuous_action_space: whether the action space is continous in current env.
     Returns:
-        - hidden_state_index_x_lst (:obj:`list`): the list of x/first index of hidden state vector of the searched node, i.e. the search depth.
-        - hidden_state_index_y_lst (:obj:`list`): the list of y/second index of hidden state vector of the searched node, i.e. the index of batch root node, its maximum is ``batch_size``/``env_num``.
+        - latent_state_index_x_lst (:obj:`list`): the list of x/first index of hidden state vector of the searched node, i.e. the search depth.
+        - latent_state_index_y_lst (:obj:`list`): the list of y/second index of hidden state vector of the searched node, i.e. the index of batch root node, its maximum is ``batch_size``/``env_num``.
         - last_actions (:obj:`list`): the action performed by the previous node.
         - virtual_to_play (:obj:`list`): the to_play list used in self_play collecting and trainin gin board games,
             `virtual` is to emphasize that actions are performed on an imaginary hidden state.
@@ -596,8 +596,8 @@ def batch_traverse(
     results.last_actions = [None for i in range(results.num)]
 
     results.nodes = [None for i in range(results.num)]
-    results.hidden_state_index_x_lst = [None for i in range(results.num)]
-    results.hidden_state_index_y_lst = [None for i in range(results.num)]
+    results.latent_state_index_x_lst = [None for i in range(results.num)]
+    results.latent_state_index_y_lst = [None for i in range(results.num)]
     if virtual_to_play in [1, 2] or virtual_to_play[0] in [1, 2]:
         players = 2
     elif virtual_to_play in [-1, None] or virtual_to_play[0] in [-1, None]:
@@ -642,8 +642,8 @@ def batch_traverse(
             # note this return the parent node of the current searched node
             parent = results.search_paths[i][len(results.search_paths[i]) - 1 - 1]
 
-            results.hidden_state_index_x_lst[i] = parent.hidden_state_index_x
-            results.hidden_state_index_y_lst[i] = parent.hidden_state_index_y
+            results.latent_state_index_x_lst[i] = parent.hidden_state_index_x
+            results.latent_state_index_y_lst[i] = parent.hidden_state_index_y
             # results.last_actions[i] = last_action
             results.last_actions[i] = last_action.value
             results.search_lens[i] = search_len
@@ -651,7 +651,7 @@ def batch_traverse(
             results.nodes[i] = node
 
     # print(f'env {i} one simulation done!')
-    return results.hidden_state_index_x_lst, results.hidden_state_index_y_lst, results.last_actions, virtual_to_play
+    return results.latent_state_index_x_lst, results.latent_state_index_y_lst, results.last_actions, virtual_to_play
 
 
 def backpropagate(search_path: List[Node], min_max_stats: MinMaxStats, to_play: int, value: float,

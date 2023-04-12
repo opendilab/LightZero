@@ -63,7 +63,7 @@ def test_game_segment(test_algo):
 
             # process the network output
             policy_logits_pool = network_output.policy_logits.detach().cpu().numpy().tolist()
-            hidden_state_roots = network_output.hidden_state.detach().cpu().numpy()
+            hidden_state_roots = network_output.latent_state.detach().cpu().numpy()
 
             if test_algo == 'EfficientZero':
                 reward_hidden_state_roots = network_output.reward_hidden_state

@@ -384,7 +384,7 @@ class DynamicsNetwork(nn.Module):
             reward given current hidden state and action.
         Arguments:
             - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
-            - num_channels (:obj:`int`): The channels of hidden states.
+            - num_channels (:obj:`int`): The channels of input, including obs and action encoding.
             - reward_head_channels (:obj:`int`): The channels of reward head.
             - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical reward output.
@@ -438,7 +438,7 @@ class DynamicsNetwork(nn.Module):
          """
         # take the state encoding (latent_state),  state_action_encoding[:, -1, :, :] is action encoding
         latent_state = state_action_encoding[:, :-1, :, :]
-        x = self.conv(latent_state)
+        x = self.conv(state_action_encoding)
         x = self.bn(x)
 
         # the residual link: add state encoding to the state_action encoding

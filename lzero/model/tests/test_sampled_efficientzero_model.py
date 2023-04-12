@@ -74,7 +74,6 @@ class TestSampledEfficientZeroModel:
             continuous_action_space=True,
             action_space_size=action_space_size,
             num_res_blocks=num_res_blocks,
-            in_channels=num_channels,
             num_channels=num_channels,
             value_head_channels=value_head_channels,
             policy_head_channels=policy_head_channels,
@@ -110,7 +109,7 @@ class TestSampledEfficientZeroModel:
             num_res_blocks=num_res_blocks,
             num_channels=num_channels,
             lstm_hidden_size=lstm_hidden_size,
-            action_space_size=action_space_size,
+            action_space_dim=action_space_size,
             reward_head_channels=reward_head_channels,
             fc_reward_layers=fc_reward_layers,
             output_support_size=output_support_size,
@@ -120,8 +119,8 @@ class TestSampledEfficientZeroModel:
             state_action_embedding, (torch.randn(1, batch_size, lstm_hidden_size), torch.randn(1, batch_size, lstm_hidden_size))
         )
         assert next_state.shape == torch.Size([batch_size, num_channels - action_space_size, 3, 3])
-        assert reward_hidden[0].shape == torch.Size([1, batch_size, lstm_hidden_size])
-        assert reward_hidden[1].shape == torch.Size([1, batch_size, lstm_hidden_size])
+        assert reward_hidden_state[0].shape == torch.Size([1, batch_size, lstm_hidden_size])
+        assert reward_hidden_state[1].shape == torch.Size([1, batch_size, lstm_hidden_size])
         assert value_prefix.shape == torch.Size([batch_size, output_support_size])
 
 
@@ -142,7 +141,7 @@ if __name__ == "__main__":
     dynamics_network = DynamicsNetwork(
         num_res_blocks=num_res_blocks,
         num_channels=num_channels,
-        action_space_size=action_space_size,
+        action_space_dim=action_space_size,
         reward_head_channels=reward_head_channels,
         fc_reward_layers=fc_reward_layers,
         output_support_size=output_support_size,
@@ -152,6 +151,6 @@ if __name__ == "__main__":
         state_action_embedding, (torch.randn(1, batch_size, lstm_hidden_size), torch.randn(1, batch_size, lstm_hidden_size))
     )
     assert next_state.shape == torch.Size([batch_size, num_channels - action_space_size, 3, 3])
-    assert reward_hidden[0].shape == torch.Size([1, batch_size, lstm_hidden_size])
-    assert reward_hidden[1].shape == torch.Size([1, batch_size, lstm_hidden_size])
+    assert reward_hidden_state[0].shape == torch.Size([1, batch_size, lstm_hidden_size])
+    assert reward_hidden_state[1].shape == torch.Size([1, batch_size, lstm_hidden_size])
     assert value_prefix.shape == torch.Size([batch_size, output_support_size])

@@ -115,8 +115,8 @@ class TestEfficientZeroModel:
             state_action_embedding, (torch.randn(1, batch_size, lstm_hidden_size), torch.randn(1, batch_size, 64))
         )
         assert next_state.shape == torch.Size([batch_size, num_channels - action_space_size, 3, 3])
-        assert reward_hidden[0].shape == torch.Size([1, batch_size, lstm_hidden_size])
-        assert reward_hidden[1].shape == torch.Size([1, batch_size, lstm_hidden_size])
+        assert reward_hidden_state[0].shape == torch.Size([1, batch_size, lstm_hidden_size])
+        assert reward_hidden_state[1].shape == torch.Size([1, batch_size, lstm_hidden_size])
         assert value_prefix.shape == torch.Size([batch_size, output_support_size])
 
 
@@ -146,6 +146,6 @@ if __name__ == "__main__":
         state_action_embedding, (torch.randn(1, batch_size, lstm_hidden_size), torch.randn(1, batch_size, lstm_hidden_size))
     )
     assert next_state.shape == torch.Size([batch_size, num_channels - action_space_size, 3, 3])
-    assert reward_hidden[0].shape == torch.Size([1, batch_size, lstm_hidden_size])
-    assert reward_hidden[1].shape == torch.Size([1, batch_size, lstm_hidden_size])
+    assert reward_hidden_state[0].shape == torch.Size([1, batch_size, lstm_hidden_size])
+    assert reward_hidden_state[1].shape == torch.Size([1, batch_size, lstm_hidden_size])
     assert value_prefix.shape == torch.Size([batch_size, output_support_size])

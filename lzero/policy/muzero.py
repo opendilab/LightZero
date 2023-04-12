@@ -311,7 +311,7 @@ class MuZeroPolicy(Policy):
                         network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
 
                     hidden_state = to_tensor(hidden_state)
-                    representation_state = to_tensor(network_output.hidden_state)
+                    representation_state = to_tensor(network_output.latent_state)
 
                     # NOTE: no grad for the representation_state branch
                     dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)

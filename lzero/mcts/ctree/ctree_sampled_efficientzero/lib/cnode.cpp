@@ -1173,8 +1173,8 @@ namespace tree
 
             CNode *parent = results.search_paths[i][results.search_paths[i].size() - 2];
 
-            results.hidden_state_index_x_lst.push_back(parent->hidden_state_index_x);
-            results.hidden_state_index_y_lst.push_back(parent->hidden_state_index_y);
+            results.latent_state_index_x_lst.push_back(parent->hidden_state_index_x);
+            results.latent_state_index_y_lst.push_back(parent->hidden_state_index_y);
 
             results.last_actions.push_back(last_action);
             results.search_lens.push_back(search_len);

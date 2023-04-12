@@ -21,7 +21,7 @@ class EZNetworkOutput:
     value: torch.Tensor
     value_prefix: torch.Tensor
     policy_logits: torch.Tensor
-    hidden_state: torch.Tensor
+    latent_state: torch.Tensor
     reward_hidden_state: torch.Tensor
 
 
@@ -31,7 +31,7 @@ class MZNetworkOutput:
     value: torch.Tensor
     reward: torch.Tensor
     policy_logits: torch.Tensor
-    hidden_state: torch.Tensor
+    latent_state: torch.Tensor
 
 
 class DownSample(nn.Module):

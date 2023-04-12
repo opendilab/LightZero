@@ -380,8 +380,8 @@ class MuZeroGameBuffer(GameBuffer):
 
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    [m_output.hidden_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                        [m_output.hidden_state, inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                        [m_output.latent_state, inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
                          m_output.policy_logits])
 
                 network_output.append(m_output)
@@ -393,15 +393,10 @@ class MuZeroGameBuffer(GameBuffer):
                 _, reward_pool, policy_logits_pool, hidden_state_roots = concat_output(network_output)
                 reward_pool = reward_pool.squeeze().tolist()
                 policy_logits_pool = policy_logits_pool.tolist()
-
                 noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
-                                        ).astype(np.float32).tolist() for _ in range(transition_batch_size)
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                                        ).astype(np.float32).tolist() for j in range(transition_batch_size)
                 ]
-                # noises = [
-                #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                #                         ).astype(np.float32).tolist() for j in range(transition_batch_size)
-                # ]
                 if self._cfg.mcts_ctree:
                     # cpp mcts_tree
                     roots = MCTSCtree.roots(transition_batch_size, legal_actions)
@@ -523,8 +518,8 @@ class MuZeroGameBuffer(GameBuffer):
                 m_output = model.initial_inference(m_obs)
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    [m_output.hidden_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                        [m_output.hidden_state, inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                        [m_output.latent_state, inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
                          m_output.policy_logits])
 
                 network_output.append(m_output)

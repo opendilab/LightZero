@@ -79,7 +79,7 @@ cdef extern from "lib/cnode.h" namespace "tree":
         CSearchResults() except +
         CSearchResults(int num) except +
         int num
-        vector[int] hidden_state_index_x_lst, hidden_state_index_y_lst,  search_lens
+        vector[int] latent_state_index_x_lst, latent_state_index_y_lst,  search_lens
         vector[int] virtual_to_play_batchs
         vector[vector[float]] last_actions
         vector[CNode*] nodes

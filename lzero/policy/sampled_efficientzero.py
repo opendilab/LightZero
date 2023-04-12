@@ -360,7 +360,7 @@ class SampledEfficientZeroPolicy(Policy):
                         network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
 
                     hidden_state = to_tensor(hidden_state)
-                    representation_state = to_tensor(network_output.hidden_state)
+                    representation_state = to_tensor(network_output.latent_state)
 
                     # NOTE: no grad for the representation_state branch.
                     dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
@@ -720,15 +720,15 @@ class SampledEfficientZeroPolicy(Policy):
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
-            hidden_state_roots, value_prefix_roots, reward_hidden_roots, pred_values, policy_logits = ez_network_output_unpack(
+            hidden_state_roots, value_prefix_roots, reward_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
                 network_output)
 
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
                 pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
-                reward_hidden_roots = (
-                    reward_hidden_roots[0].detach().cpu().numpy(), reward_hidden_roots[1].detach().cpu().numpy()
+                reward_hidden_state_roots = (
+                    reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()
                 )
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
@@ -770,7 +770,7 @@ class SampledEfficientZeroPolicy(Policy):
             roots.prepare(
                 self._cfg.root_noise_weight, noises, value_prefix_roots, policy_logits, to_play
             )
-            self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_roots, to_play)
+            self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_state_roots, to_play)
 
             roots_visit_count_distributions = roots.get_distributions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
@@ -856,7 +856,7 @@ class SampledEfficientZeroPolicy(Policy):
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._eval_model.initial_inference(data)
-            hidden_state_roots, value_prefix_roots, reward_hidden_roots, pred_values, policy_logits = ez_network_output_unpack(
+            hidden_state_roots, value_prefix_roots, reward_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
                 network_output)
 
             if not self._eval_model.training:
@@ -864,8 +864,8 @@ class SampledEfficientZeroPolicy(Policy):
                 pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy(
                 )  # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
-                reward_hidden_roots = (
-                    reward_hidden_roots[0].detach().cpu().numpy(), reward_hidden_roots[1].detach().cpu().numpy()
+                reward_hidden_state_roots = (
+                    reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()
                 )
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
@@ -898,7 +898,7 @@ class SampledEfficientZeroPolicy(Policy):
                 )
 
             roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_roots, to_play)
+            self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_state_roots, to_play)
 
             roots_visit_count_distributions = roots.get_distributions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
