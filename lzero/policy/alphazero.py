@@ -58,7 +58,20 @@ class AlphaZeroPolicy(Policy):
         manual_temperature_decay=True,
         # ``fixed_temperature_value`` is effective only when manual_temperature_decay=False
         fixed_temperature_value=0.25,
-        mcts=dict(num_simulations=50),
+        mcts=dict(
+            # (int) The number of simulations to perform at each move.
+            num_simulations=50,
+            # (int) The maximum number of moves to make in a game.
+            max_moves=512,  # for chess and shogi, 722 for Go.
+            # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
+            root_dirichlet_alpha=0.3,
+            # (float) The noise weight at the root node of the search tree.
+            root_noise_weight=0.25,
+            # (int) The base constant used in the PUCT formula for balancing exploration and exploitation during tree search.
+            pb_c_base=19652,
+            # (float) The initialization constant used in the PUCT formula for balancing exploration and exploitation during tree search.
+            pb_c_init=1.25,
+        ),
         other=dict(replay_buffer=dict(
             replay_buffer_size=int(1e6),
             save_episode=False,
@@ -155,10 +168,10 @@ class AlphaZeroPolicy(Policy):
         # =============
         return {
             'cur_lr': self._optimizer.param_groups[0]['lr'],
-            'total_loss': total_loss,
-            'policy_loss': policy_loss,
-            'value_loss': value_loss,
-            'entropy_loss': entropy_loss,
+            'total_loss': total_loss.item(),
+            'policy_loss': policy_loss.item(),
+            'value_loss': value_loss.item(),
+            'entropy_loss': entropy_loss.item(),
             'total_grad_norm_before_clip': total_grad_norm_before_clip,
             'collect_mcts_temperature': self.collect_mcts_temperature,
         }

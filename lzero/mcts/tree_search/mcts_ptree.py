@@ -6,7 +6,8 @@ import torch
 from easydict import EasyDict
 
 from lzero.mcts.ptree import MinMaxStatsList
-from lzero.policy.scaling_transform import inverse_scalar_transform
+from lzero.policy import InverseScalarTransform
+
 
 if TYPE_CHECKING:
     import lzero.mcts.ptree.ptree_ez as ez_ptree
@@ -56,6 +57,9 @@ class EfficientZeroMCTSPtree(object):
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
+        self.inverse_scalar_transform_handle = InverseScalarTransform(
+            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
+        )
 
     @classmethod
     def roots(cls: int, root_num: int, legal_actions: List[Any]) -> "ez_ptree.Roots":
@@ -164,25 +168,15 @@ class EfficientZeroMCTSPtree(object):
                 )
 
                 if not model.training:
+                    # if not in training, obtain the scalars of the value/reward
+                    network_output.value = self.inverse_scalar_transform_handle(network_output.value).detach().cpu().numpy()
+                    network_output.value_prefix = self.inverse_scalar_transform_handle(network_output.value_prefix).detach().cpu().numpy()
+                    network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()
                     network_output.latent_state = network_output.latent_state.detach().cpu().numpy()
                     network_output.reward_hidden_state = (
                         network_output.reward_hidden_state[0].detach().cpu().numpy(),
                         network_output.reward_hidden_state[1].detach().cpu().numpy()
                     )
-                    # if not in training, obtain the scalars of the value/reward
-                    network_output.value = inverse_scalar_transform(
-                        network_output.value,
-                        self._cfg.model.support_scale,
-                        categorical_distribution=self._cfg.model.categorical_distribution
-                    ).detach().cpu().numpy()
-                    network_output.value_prefix = inverse_scalar_transform(
-                        network_output.value_prefix,
-                        self._cfg.model.support_scale,
-                        categorical_distribution=self._cfg.model.categorical_distribution
-                    ).detach().cpu().numpy()
-
-                    network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()
-
                 latent_state_nodes = network_output.latent_state
                 reward_latent_state_nodes = network_output.reward_hidden_state
 
@@ -262,6 +256,9 @@ class MuZeroMCTSPtree(object):
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
+        self.inverse_scalar_transform_handle = InverseScalarTransform(
+            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
+        )
 
     @classmethod
     def roots(cls: int, root_num: int, legal_actions: List[Any]) -> "mz_ptree.Roots":
@@ -349,19 +346,10 @@ class MuZeroMCTSPtree(object):
                 network_output = model.recurrent_inference(latent_states, last_actions)
 
                 if not model.training:
-                    network_output.latent_state = network_output.latent_state.detach().cpu().numpy()
                     # if not in training, obtain the scalars of the value/reward
-                    network_output.value = inverse_scalar_transform(
-                        network_output.value,
-                        self._cfg.model.support_scale,
-                        categorical_distribution=self._cfg.model.categorical_distribution
-                    ).detach().cpu().numpy()
-                    network_output.reward = inverse_scalar_transform(
-                        network_output.reward,
-                        self._cfg.model.support_scale,
-                        categorical_distribution=self._cfg.model.categorical_distribution
-                    ).detach().cpu().numpy()
-
+                    network_output.value = self.inverse_scalar_transform_handle(network_output.value).detach().cpu().numpy()
+                    network_output.reward = self.inverse_scalar_transform_handle(network_output.reward).detach().cpu().numpy()
+                    network_output.latent_state = network_output.latent_state.detach().cpu().numpy()
                     network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()
 
                 latent_state_nodes = network_output.latent_state

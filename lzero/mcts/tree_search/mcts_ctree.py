@@ -6,7 +6,7 @@ import torch
 from easydict import EasyDict
 
 from lzero.mcts.ctree.ctree_efficientzero import ez_tree as tree_efficientzero
-from lzero.policy.scaling_transform import inverse_scalar_transform
+from lzero.policy import InverseScalarTransform
 
 if TYPE_CHECKING:
     from lzero.mcts.ctree.ctree_efficientzero import ez_tree as ez_ctree
@@ -54,6 +54,9 @@ class EfficientZeroMCTSCtree(object):
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
+        self.inverse_scalar_transform_handle = InverseScalarTransform(
+            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
+        )
 
     @classmethod
     def roots(cls: int, active_collect_env_num: int, legal_actions: List[Any]) -> "ez_ctree.Roots":
@@ -148,17 +151,8 @@ class EfficientZeroMCTSCtree(object):
                 )
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    network_output.value = inverse_scalar_transform(
-                        network_output.value,
-                        self._cfg.model.support_scale,
-                        categorical_distribution=self._cfg.model.categorical_distribution
-                    ).detach().cpu().numpy()
-                    network_output.value_prefix = inverse_scalar_transform(
-                        network_output.value_prefix,
-                        self._cfg.model.support_scale,
-                        categorical_distribution=self._cfg.model.categorical_distribution
-                    ).detach().cpu().numpy()
-
+                    network_output.value = self.inverse_scalar_transform_handle(network_output.value).detach().cpu().numpy()
+                    network_output.value_prefix = self.inverse_scalar_transform_handle(network_output.value_prefix).detach().cpu().numpy()
                     network_output.latent_state = network_output.latent_state.detach().cpu().numpy()
                     network_output.reward_hidden_state = (
                         network_output.reward_hidden_state[0].detach().cpu().numpy(),
@@ -242,6 +236,9 @@ class MuZeroMCTSCtree(object):
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
+        self.inverse_scalar_transform_handle = InverseScalarTransform(
+            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
+        )
 
     @classmethod
     def roots(cls: int, active_collect_env_num: int, legal_actions: List[Any]) -> "mz_ctree":
@@ -320,16 +317,8 @@ class MuZeroMCTSCtree(object):
 
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    network_output.value = inverse_scalar_transform(
-                        network_output.value,
-                        self._cfg.model.support_scale,
-                        categorical_distribution=self._cfg.model.categorical_distribution
-                    ).detach().cpu().numpy()
-                    network_output.reward = inverse_scalar_transform(
-                        network_output.reward,
-                        self._cfg.model.support_scale,
-                        categorical_distribution=self._cfg.model.categorical_distribution
-                    ).detach().cpu().numpy()
+                    network_output.value = self.inverse_scalar_transform_handle(network_output.value).detach().cpu().numpy()
+                    network_output.reward = self.inverse_scalar_transform_handle(network_output.reward).detach().cpu().numpy()
                     network_output.latent_state = network_output.latent_state.detach().cpu().numpy()
                     network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()
 

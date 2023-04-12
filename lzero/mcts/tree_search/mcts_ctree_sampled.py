@@ -6,7 +6,7 @@ import torch
 from easydict import EasyDict
 
 from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as tree_efficientzero
-from lzero.policy.scaling_transform import inverse_scalar_transform
+from lzero.policy import InverseScalarTransform
 
 if TYPE_CHECKING:
     from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as ezs_ctree
@@ -44,6 +44,20 @@ class SampledEfficientZeroMCTSCtree(object):
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
+    def __init__(self, cfg: EasyDict = None) -> None:
+        """
+        Overview:
+            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
+            in the default configuration, the user-provided value will override the default configuration. Otherwise, 
+            the default configuration will be used.
+        """
+        default_config = self.default_config()
+        default_config.update(cfg)
+        self._cfg = default_config
+        self.inverse_scalar_transform_handle = InverseScalarTransform(
+            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
+        )
+
     @classmethod
     def roots(
             cls: int, root_num: int, legal_action_lis: List[Any], action_space_size: int, num_of_sampled_actions: int,
@@ -63,17 +77,6 @@ class SampledEfficientZeroMCTSCtree(object):
         return ctree.Roots(
             root_num, legal_action_lis, action_space_size, num_of_sampled_actions, continuous_action_space
         )
-
-    def __init__(self, cfg: EasyDict = None) -> None:
-        """
-        Overview:
-            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
-            in the default configuration, the user-provided value will override the default configuration. Otherwise, 
-            the default configuration will be used.
-        """
-        default_config = self.default_config()
-        default_config.update(cfg)
-        self._cfg = default_config
 
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any],
@@ -162,12 +165,8 @@ class SampledEfficientZeroMCTSCtree(object):
                 )
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    network_output.value = inverse_scalar_transform(
-                        network_output.value, self._cfg.model.support_scale
-                    ).detach().cpu().numpy()
-                    network_output.value_prefix = inverse_scalar_transform(
-                        network_output.value_prefix, self._cfg.model.support_scale
-                    ).detach().cpu().numpy()
+                    network_output.value = self.inverse_scalar_transform_handle(network_output.value).detach().cpu().numpy()
+                    network_output.value_prefix = self.inverse_scalar_transform_handle(network_output.value_prefix).detach().cpu().numpy()
                     network_output.latent_state = network_output.latent_state.detach().cpu().numpy()
                     network_output.reward_hidden_state = (
                         network_output.reward_hidden_state[0].detach().cpu().numpy(),

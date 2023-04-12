@@ -51,7 +51,7 @@ gomoku_alphazero_config = dict(
         entropy_weight=0.0,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        mcts=dict(num_simulations=num_simulations),
+        num_simulations=num_simulations,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

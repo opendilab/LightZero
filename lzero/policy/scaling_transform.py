@@ -34,7 +34,7 @@ def scalar_transform(x, epsilon=0.001, delta=1):
 def inverse_scalar_transform(logits, support_size, epsilon=0.001, categorical_distribution=True):
     """
     Overview:
-        transform the the scaled value or its categorical representation to the original value,
+        transform the scaled value or its categorical representation to the original value,
         i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
     Reference:
         - MuZero Appendix F: Network Architecture.
