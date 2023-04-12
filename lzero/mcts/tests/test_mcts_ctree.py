@@ -26,22 +26,22 @@ class MuZeroModelFake(torch.nn.Module):
         value = torch.zeros(size=(batch_size, 601))
         value_prefix = [0. for _ in range(batch_size)]
         policy_logits = torch.zeros(size=(batch_size, self.action_num))
-        hidden_state = torch.zeros(size=(batch_size, 12, 3, 3))
+        latent_state = torch.zeros(size=(batch_size, 12, 3, 3))
         reward_hidden_state_roots = (torch.zeros(size=(1, batch_size, 16)), torch.zeros(size=(1, batch_size, 16)))
 
         output = {
             'value': value,
             'value_prefix': value_prefix,
             'policy_logits': policy_logits,
-            'hidden_state': hidden_state,
+            'latent_state': latent_state,
             'reward_hidden_state': reward_hidden_state_roots
         }
 
         return EasyDict(output)
 
-    def recurrent_inference(self, hidden_states, reward_hidden_states, actions):
-        batch_size = hidden_states.shape[0]
-        hidden_state = torch.zeros(size=(batch_size, 12, 3, 3))
+    def recurrent_inference(self, latent_states, reward_hidden_states, actions):
+        batch_size = latent_states.shape[0]
+        latent_state = torch.zeros(size=(batch_size, 12, 3, 3))
         reward_hidden_state_roots = (torch.zeros(size=(1, batch_size, 16)), torch.zeros(size=(1, batch_size, 16)))
         value = torch.zeros(size=(batch_size, 601))
         value_prefix = torch.zeros(size=(batch_size, 601))
@@ -51,7 +51,7 @@ class MuZeroModelFake(torch.nn.Module):
             'value': value,
             'value_prefix': value_prefix,
             'policy_logits': policy_logits,
-            'hidden_state': hidden_state,
+            'latent_state': latent_state,
             'reward_hidden_state': reward_hidden_state_roots
         }
 
@@ -86,7 +86,7 @@ stack_obs = torch.zeros(size=(batch_size, 8), dtype=torch.float)
 
 network_output = model.initial_inference(stack_obs.float())
 
-hidden_state_roots = network_output['hidden_state']
+latent_state_roots = network_output['latent_state']
 reward_hidden_state_roots = network_output['reward_hidden_state']
 pred_values_pool = network_output['value']
 value_prefix_pool = network_output['value_prefix']
@@ -94,7 +94,7 @@ policy_logits_pool = network_output['policy_logits']
 
 # network output process
 pred_values_pool = inverse_scalar_transform(pred_values_pool, policy_config.model.support_scale).detach().cpu().numpy()
-hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
+latent_state_roots = latent_state_roots.detach().cpu().numpy()
 reward_hidden_state_roots = (
     reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()
 )
@@ -148,7 +148,7 @@ def test_mcts_vs_bot_to_play():
         [0 for _ in range(env_nums)]
     )
     MCTSCtree(policy_config
-            ).search(roots, model, hidden_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
+            ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert np.array(roots_distributions).shape == (batch_size, action_space_size)
@@ -170,7 +170,7 @@ def test_mcts_vs_bot_to_play_large():
 
     network_output = model.initial_inference(stack_obs.float())
 
-    hidden_state_roots = network_output['hidden_state']
+    latent_state_roots = network_output['latent_state']
     reward_hidden_state_roots = network_output['reward_hidden_state']
     pred_values_pool = network_output['value']
     value_prefix_pool = network_output['value_prefix']
@@ -178,7 +178,7 @@ def test_mcts_vs_bot_to_play_large():
 
     # network output process
     pred_values_pool = inverse_scalar_transform(pred_values_pool, policy_config.model.support_scale).detach().cpu().numpy()
-    hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
+    latent_state_roots = latent_state_roots.detach().cpu().numpy()
     reward_hidden_state_roots = (
         reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()
     )
@@ -198,7 +198,7 @@ def test_mcts_vs_bot_to_play_large():
         [0 for _ in range(env_nums)]
     )
     MCTSCtree(policy_config
-            ).search(roots, model, hidden_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
+            ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert np.array(roots_distributions).shape == (policy_config.batch_size, policy_config.model.action_space_size)
@@ -222,7 +222,7 @@ def test_mcts_vs_bot_to_play_legal_action():
         [0 for _ in range(env_nums)]
     )
     MCTSCtree(policy_config
-            ).search(roots, model, hidden_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
+            ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert len(roots_values) == env_nums
@@ -252,7 +252,7 @@ def test_mcts_self_play():
     ]
     # In ctree, to_play must be list, not None
     roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
-    MCTSCtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+    MCTSCtree(policy_config).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert np.array(roots_distributions).shape == (batch_size, action_space_size)
@@ -271,7 +271,7 @@ def test_mcts_self_play_legal_action():
     ]
     # In ctree, to_play must be list, not None
     roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
-    MCTSCtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+    MCTSCtree(policy_config).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert len(roots_values) == env_nums
@@ -289,7 +289,3 @@ def test_mcts_self_play_legal_action():
         assert action_index < action_num[i]
         assert action == legal_actions_list[i][action_index]
         print('\n action_index={}, legal_action={}, action={}'.format(action_index, legal_actions_list[i], action))
-
-
-# debug
-test_mcts_vs_bot_to_play_large()
