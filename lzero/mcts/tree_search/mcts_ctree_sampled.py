@@ -1,13 +1,12 @@
 import copy
-from typing import TYPE_CHECKING, List, Dict, Any, Tuple, Union
+from typing import TYPE_CHECKING, List, Any, Union
 
 import numpy as np
 import torch
 from easydict import EasyDict
 
-from lzero.policy.scaling_transform import inverse_scalar_transform
-
 from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as tree_efficientzero
+from lzero.policy.scaling_transform import inverse_scalar_transform
 
 if TYPE_CHECKING:
     from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as ezs_ctree
@@ -77,7 +76,7 @@ class SampledEfficientZeroMCTSCtree(object):
         self._cfg = default_config
 
     def search(
-            self, roots: Any, model: torch.nn.Module, hidden_state_roots: List[Any],
+            self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any],
             reward_hidden_state_roots: List[Any], to_play_batch: Union[int, List[Any]]
     ) -> None:
         """
@@ -87,7 +86,7 @@ class SampledEfficientZeroMCTSCtree(object):
         Arguments:
             - roots (:obj:`Any`): a batch of expanded root nodes
             - model (:obj:`torch.nn.Module`): Instance of torch.nn.Module.
-            - hidden_state_roots (:obj:`list`): the hidden states of the roots
+            - latent_state_roots (:obj:`list`): the hidden states of the roots
             - reward_hidden_state_roots (:obj:`list`): the value prefix hidden states in LSTM of the roots
             - to_play_batch (:obj:`list`): the to_play_batch list used in two_player mode board games
         """
@@ -99,7 +98,7 @@ class SampledEfficientZeroMCTSCtree(object):
             device = self._cfg.device
             pb_c_base, pb_c_init, discount_factor = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount_factor
             # the data storage of hidden states: storing the states of all the ctree nodes
-            hidden_state_pool = [hidden_state_roots]
+            hidden_state_pool = [latent_state_roots]
             # 1 x batch x 64
             # the data storage of value prefix hidden states in LSTM
             reward_hidden_state_c_pool = [reward_hidden_state_roots[0]]
@@ -119,13 +118,15 @@ class SampledEfficientZeroMCTSCtree(object):
                 # prepare a result wrapper to transport results between python and c++ parts
                 results = tree_efficientzero.ResultsWrapper(num=num)
 
-                # traverse to select actions for each root.
-                # latent_state_index_x_lst: the first index of leaf node states in hidden_state_pool, i.e. the search depth.
-                # index latent_state_index_y_lst: the second index of leaf node states in hidden_state_pool, i.e. the batch root node index, maximum is ``env_num``.
-                # the hidden state of the leaf node is hidden_state_pool[x, y]; the index of value prefix hidden state of the leaf node are in the same manner.
+                # latent_state_index_x_lst: the first index of leaf node states in latent_state_pool, i.e. the search depth.
+                # latent_state_index_y_lst: the second index of leaf node states in latent_state_pool, i.e. the batch root node index, maximum is ``env_num``.
+                # the latent state of the leaf node is latent_state_pool[x, y].
+                # the index of value prefix hidden state of the leaf node are in the same manner.
 
-                # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
-                # simulation reaches a leaf node s_l.
+                """
+                MCTS stage 1: Selection
+                    Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
+                """
                 latent_state_index_x_lst, latent_state_index_y_lst, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
                     copy.deepcopy(to_play_batch), self._cfg.model.continuous_action_space
@@ -151,17 +152,14 @@ class SampledEfficientZeroMCTSCtree(object):
                     # discrete action
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
 
-                # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are
-                # computed by the dynamics function
-
-                # evaluation for leaf nodes
-
-                # Inside the search ctree we use the dynamics function to obtain the next hidden
-                # state given an action and the previous hidden state
+                """
+                MCTS stage 2: Expansion
+                    At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function. 
+                    Then we calculate the policy_logits and value for the leaf node (next_latent_state) by the prediction function. (aka. evaluation)
+                """
                 network_output = model.recurrent_inference(
                     hidden_states, (hidden_states_c_reward, hidden_states_h_reward), last_actions
                 )
-                # TODO(pu)
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
                     network_output.value = inverse_scalar_transform(
@@ -196,11 +194,13 @@ class SampledEfficientZeroMCTSCtree(object):
 
                 reward_hidden_state_c_pool.append(reward_latent_state_nodes[0])
                 reward_hidden_state_h_pool.append(reward_latent_state_nodes[1])
+                # increase the index of leaf node
                 hidden_state_index_x += 1
 
-                # MCTS stage 3:
-                # Backup: At the end of the simulation, the statistics along the trajectory are updated.
-
+                """
+                MCTS stage 3: Backup
+                    At the end of the simulation, the statistics along the trajectory are updated.
+                """
                 # backpropagation along the search path to update the attributes
                 tree_efficientzero.batch_backpropagate(
                     hidden_state_index_x, discount_factor, value_prefix_pool, value_pool, policy_logits_pool,

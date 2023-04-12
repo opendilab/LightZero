@@ -98,7 +98,7 @@ def test_mcts():
 
     network_output = model.initial_inference(stack_obs.float())
 
-    hidden_state_roots = network_output['hidden_state']
+    latent_state_roots = network_output['hidden_state']
     reward_hidden_state_state = network_output['reward_hidden_state']
     pred_values_pool = network_output['value']
     value_prefix_pool = network_output['value_prefix']
@@ -107,7 +107,7 @@ def test_mcts():
     # network output process
     pred_values_pool = inverse_scalar_transform(pred_values_pool,
                                                 policy_config.model.support_scale).detach().cpu().numpy()
-    hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
+    latent_state_roots = latent_state_roots.detach().cpu().numpy()
     reward_hidden_state_state = (
         reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
     )
@@ -129,6 +129,6 @@ def test_mcts():
     to_play_batch = [int(np.random.randint(1, 2, 1)) for _ in range(env_nums)]
     roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
 
-    MCTSCtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play_batch)
+    MCTSCtree(policy_config).search(roots, model, latent_state_roots, reward_hidden_state_state, to_play_batch)
     roots_distributions = roots.get_distributions()
     assert np.array(roots_distributions).shape == (batch_size, policy_config.num_of_sampled_actions)

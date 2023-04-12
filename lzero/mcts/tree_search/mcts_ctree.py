@@ -1,5 +1,5 @@
 import copy
-from typing import TYPE_CHECKING, List, Dict, Any, Tuple, Union
+from typing import TYPE_CHECKING, List, Any, Union
 
 import numpy as np
 import torch
@@ -68,7 +68,7 @@ class EfficientZeroMCTSCtree(object):
         return ctree.Roots(active_collect_env_num, legal_actions)
 
     def search(
-            self, roots: Any, model: torch.nn.Module, hidden_state_roots: List[Any],
+            self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any],
             reward_hidden_state_roots: List[Any], to_play_batch: Union[int, List[Any]]
     ) -> None:
         """
@@ -77,7 +77,7 @@ class EfficientZeroMCTSCtree(object):
              Use the cpp ctree.
         Arguments:
             - roots (:obj:`Any`): a batch of expanded root nodes
-            - hidden_state_roots (:obj:`list`): the hidden states of the roots
+            - latent_state_roots (:obj:`list`): the hidden states of the roots
             - reward_hidden_state_roots (:obj:`list`): the value prefix hidden states in LSTM of the roots
             - to_play_batch (:obj:`list`): the to_play_batch list used in two_player mode board games
         """
@@ -88,7 +88,7 @@ class EfficientZeroMCTSCtree(object):
             num = roots.num
             pb_c_base, pb_c_init, discount_factor = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount_factor
             # the data storage of hidden states: storing the states of all the ctree nodes
-            latent_state_pool = [hidden_state_roots]
+            latent_state_pool = [latent_state_roots]
             # 1 x batch x 64
             # the data storage of value prefix hidden states in LSTM
             reward_hidden_state_c_pool = [reward_hidden_state_roots[0]]
@@ -108,13 +108,15 @@ class EfficientZeroMCTSCtree(object):
                 # prepare a result wrapper to transport results between python and c++ parts
                 results = tree_efficientzero.ResultsWrapper(num=num)
 
-                # traverse to select actions for each root
                 # latent_state_index_x_lst: the first index of leaf node states in latent_state_pool, i.e. the search depth.
-                # index latent_state_index_y_lst: the second index of leaf node states in latent_state_pool, i.e. the batch root node index, maximum is ``env_num``.
-                # the hidden state of the leaf node is latent_state_pool[x, y]; the index of value prefix hidden state of the leaf node are in the same manner.
+                # latent_state_index_y_lst: the second index of leaf node states in latent_state_pool, i.e. the batch root node index, maximum is ``env_num``.
+                # the latent state of the leaf node is latent_state_pool[x, y].
+                # the index of value prefix hidden state of the leaf node are in the same manner.
 
-                # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
-                # simulation reaches a leaf node s_l.
+                """
+                MCTS stage 1: Selection
+                    Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
+                """
                 latent_state_index_x_lst, latent_state_index_y_lst, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
                     copy.deepcopy(to_play_batch)
@@ -136,12 +138,11 @@ class EfficientZeroMCTSCtree(object):
                 # .long() only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
 
-                # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are
-                # computed by the dynamics function
-                # evaluation for leaf nodes
-
-                # Inside the search ctree we use the dynamics function to obtain the next hidden
-                # state given an action and the previous hidden state
+                """
+                MCTS stage 2: Expansion
+                    At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function. 
+                    Then we calculate the policy_logits and value for the leaf node (next_latent_state) by the prediction function. (aka. evaluation)
+                """
                 network_output = model.recurrent_inference(
                     latent_states, (hidden_states_c_reward, hidden_states_h_reward), last_actions
                 )
@@ -157,6 +158,7 @@ class EfficientZeroMCTSCtree(object):
                         self._cfg.model.support_scale,
                         categorical_distribution=self._cfg.model.categorical_distribution
                     ).detach().cpu().numpy()
+
                     network_output.latent_state = network_output.latent_state.detach().cpu().numpy()
                     network_output.reward_hidden_state = (
                         network_output.reward_hidden_state[0].detach().cpu().numpy(),
@@ -171,7 +173,6 @@ class EfficientZeroMCTSCtree(object):
                 reward_latent_state_nodes = network_output.reward_hidden_state
 
                 latent_state_pool.append(latent_state_nodes)
-                # reset 0
                 # reset the hidden states in LSTM every horizon steps in search
                 # only need to predict the value prefix in a range (eg: s0 -> s5)
                 assert self._cfg.lstm_horizon_len > 0
@@ -185,9 +186,10 @@ class EfficientZeroMCTSCtree(object):
                 reward_hidden_state_h_pool.append(reward_latent_state_nodes[1])
                 hidden_state_index_x += 1
 
-                # MCTS stage 3:
-                # Backup: At the end of the simulation, the statistics along the trajectory are updated.
-
+                """
+                MCTS stage 3: Backup
+                    At the end of the simulation, the statistics along the trajectory are updated.
+                """
                 # backpropagation along the search path to update the attributes
                 tree_efficientzero.batch_backpropagate(
                     hidden_state_index_x, discount_factor, value_prefix_pool, value_pool, policy_logits_pool,
@@ -254,7 +256,7 @@ class MuZeroMCTSCtree(object):
         return ctree.Roots(active_collect_env_num, legal_actions)
 
     def search(
-            self, roots: Any, model: torch.nn.Module, hidden_state_roots: List[Any], to_play_batch: Union[int,
+            self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
                                                                                                           List[Any]]
     ) -> None:
         """
@@ -263,7 +265,7 @@ class MuZeroMCTSCtree(object):
              Use the cpp ctree.
         Arguments:
             - roots (:obj:`Any`): a batch of expanded root nodes
-            - hidden_state_roots (:obj:`list`): the hidden states of the roots
+            - latent_state_roots (:obj:`list`): the hidden states of the roots
             - to_play_batch (:obj:`list`): the to_play_batch list used in two_player mode board games
         """
         with torch.no_grad():
@@ -273,7 +275,7 @@ class MuZeroMCTSCtree(object):
             num = roots.num
             pb_c_base, pb_c_init, discount_factor = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount_factor
             # the data storage of hidden states: storing the states of all the ctree nodes
-            latent_state_pool = [hidden_state_roots]
+            latent_state_pool = [latent_state_roots]
 
             # the index of each layer in the ctree
             hidden_state_index_x = 0
@@ -287,13 +289,15 @@ class MuZeroMCTSCtree(object):
                 # prepare a result wrapper to transport results between python and c++ parts
                 results = tree_muzero.ResultsWrapper(num=num)
 
-                # traverse to select actions for each root.
                 # latent_state_index_x_lst: the first index of leaf node states in latent_state_pool, i.e. the search depth.
-                # index latent_state_index_y_lst: the second index of leaf node states in latent_state_pool, i.e. the batch root node index, maximum is ``env_num``.
-                # the hidden state of the leaf node is latent_state_pool[x, y]; the index of value prefix hidden state of the leaf node are in the same manner.
+                # latent_state_index_y_lst: the second index of leaf node states in latent_state_pool, i.e. the batch root node index, maximum is ``env_num``.
+                # the latent state of the leaf node is latent_state_pool[x, y].
+                # the index of value prefix hidden state of the leaf node are in the same manner.
 
-                # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
-                # simulation reaches a leaf node s_l.
+                """
+                MCTS stage 1: Selection
+                    Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
+                """
                 latent_state_index_x_lst, latent_state_index_y_lst, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
                     copy.deepcopy(to_play_batch)
@@ -307,12 +311,11 @@ class MuZeroMCTSCtree(object):
                 # only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
 
-                # MCTS stage 2: Expansion: At the final time-step l of the simulation, the reward and state are
-                # computed by the dynamics function
-
-                # evaluation for leaf nodes
-                # Inside the search ctree we use the dynamics function to obtain the next hidden
-                # state given an action and the previous hidden state
+                """
+                MCTS stage 2: Expansion
+                    At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function. 
+                    Then we calculate the policy_logits and value for the leaf node (next_latent_state) by the prediction function. (aka. evaluation)
+                """
                 network_output = model.recurrent_inference(latent_states, last_actions)
 
                 if not model.training:
@@ -338,9 +341,10 @@ class MuZeroMCTSCtree(object):
                 latent_state_pool.append(latent_state_nodes)
                 hidden_state_index_x += 1
 
-                # MCTS stage 3:
-                # Backup: At the end of the simulation, the statistics along the trajectory are updated.
-
+                """
+                MCTS stage 3: Backup
+                    At the end of the simulation, the statistics along the trajectory are updated.
+                """
                 # backpropagation along the search path to update the attributes
                 tree_muzero.batch_backpropagate(
                     hidden_state_index_x, discount_factor, reward_pool, value_pool, policy_logits_pool,

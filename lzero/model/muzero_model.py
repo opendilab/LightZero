@@ -380,7 +380,7 @@ class DynamicsNetwork(nn.Module):
     ):
         """
         Overview:
-            The definition of dynamics network in MuZero algorithm, which is used to predict next hidden state and
+            The definition of dynamics network in MuZero algorithm, which is used to predict next latent state and
             reward given current hidden state and action.
         Arguments:
             - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.

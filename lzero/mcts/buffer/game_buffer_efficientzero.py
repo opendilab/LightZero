@@ -222,7 +222,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
             if self._cfg.use_root_value:
                 # use the root values from MCTS, as in EfficiientZero
                 # the root values have limited improvement but require much more GPU actors;
-                _, value_prefix_pool, policy_logits_pool, hidden_state_roots, reward_hidden_state_roots = concat_output(
+                _, value_prefix_pool, policy_logits_pool, latent_state_roots, reward_hidden_state_roots = concat_output(
                     network_output
                 )
                 value_prefix_pool = value_prefix_pool.squeeze().tolist()
@@ -236,14 +236,14 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                     roots = MCTSCtree.roots(transition_batch_size, legal_actions)
                     roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
-                    MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
                 else:
                     # python mcts_tree
                     roots = MCTSPtree.roots(transition_batch_size, legal_actions)
                     roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
                     MCTSPtree(self._cfg).search(
-                        roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play
+                        roots, model, latent_state_roots, reward_hidden_state_roots, to_play=to_play
                     )
                 roots_values = roots.get_values()
                 value_list = np.array(roots_values)
@@ -363,7 +363,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
 
                 network_output.append(m_output)
 
-            _, value_prefix_pool, policy_logits_pool, hidden_state_roots, reward_hidden_state_roots = concat_output(
+            _, value_prefix_pool, policy_logits_pool, latent_state_roots, reward_hidden_state_roots = concat_output(
                 network_output
             )
             value_prefix_pool = value_prefix_pool.squeeze().tolist()
@@ -377,14 +377,14 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                 roots = MCTSCtree.roots(transition_batch_size, legal_actions)
                 roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                MCTSCtree(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
                 roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTSPtree(self._cfg).search(
-                    roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play
+                    roots, model, latent_state_roots, reward_hidden_state_roots, to_play=to_play
                 )
 
             roots_legal_actions_list = legal_actions

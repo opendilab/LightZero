@@ -482,14 +482,14 @@ class EfficientZeroPolicy(Policy):
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
-            hidden_state_roots, value_prefix_roots, reward_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
+            latent_state_roots, value_prefix_roots, reward_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
                 network_output
             )
 
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
                 pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
-                hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
+                latent_state_roots = latent_state_roots.detach().cpu().numpy()
                 reward_hidden_state_roots = (
                     reward_hidden_state_roots[0].detach().cpu().numpy(),
                     reward_hidden_state_roots[1].detach().cpu().numpy()
@@ -510,7 +510,7 @@ class EfficientZeroPolicy(Policy):
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
             roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_roots, policy_logits, to_play)
             self._mcts_collect.search(
-                roots, self._collect_model, hidden_state_roots, reward_hidden_state_roots, to_play
+                roots, self._collect_model, latent_state_roots, reward_hidden_state_roots, to_play
             )
 
             roots_visit_count_distributions = roots.get_distributions(
@@ -574,7 +574,7 @@ class EfficientZeroPolicy(Policy):
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._eval_model.initial_inference(data)
-            hidden_state_roots, value_prefix_roots, reward_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
+            latent_state_roots, value_prefix_roots, reward_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
                 network_output
             )
 
@@ -582,7 +582,7 @@ class EfficientZeroPolicy(Policy):
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
                 pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
-                hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
+                latent_state_roots = latent_state_roots.detach().cpu().numpy()
                 reward_hidden_state_roots = (
                     reward_hidden_state_roots[0].detach().cpu().numpy(),
                     reward_hidden_state_roots[1].detach().cpu().numpy()
@@ -597,7 +597,7 @@ class EfficientZeroPolicy(Policy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_state_roots, to_play)
+            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, reward_hidden_state_roots, to_play)
 
             roots_visit_count_distributions = roots.get_distributions(
             )  # shape: ``{list: batch_size} ->{list: action_space_size}``

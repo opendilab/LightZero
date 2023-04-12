@@ -94,7 +94,7 @@ def ptree_func(policy_config, num_simulations):
         policy_config.num_simulations = n_s
         network_output = model.initial_inference(stack_obs.float())
 
-        hidden_state_roots = network_output['hidden_state']
+        latent_state_roots = network_output['hidden_state']
         reward_hidden_state_state = network_output['reward_hidden_state']
         pred_values_pool = network_output['value']
         value_prefix_pool = network_output['value_prefix']
@@ -103,7 +103,7 @@ def ptree_func(policy_config, num_simulations):
         # network output process
         pred_values_pool = inverse_scalar_transform(pred_values_pool,
                                                     policy_config.model.support_scale).detach().cpu().numpy()
-        hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
+        latent_state_roots = latent_state_roots.detach().cpu().numpy()
         reward_hidden_state_state = (
             reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
         )
@@ -131,7 +131,7 @@ def ptree_func(policy_config, num_simulations):
         roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
         prepare_time.append(time.time() - t1)
         t1 = time.time()
-        MCTSPtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
+        MCTSPtree(policy_config).search(roots, model, latent_state_roots, reward_hidden_state_state, to_play)
         search_time.append(time.time() - t1)
         total_time.append(time.time() - t0)
         roots_distributions = roots.get_distributions()
@@ -188,7 +188,7 @@ def ctree_func(policy_config, num_simulations):
 
         network_output = model.initial_inference(stack_obs.float())
 
-        hidden_state_roots = network_output['hidden_state']
+        latent_state_roots = network_output['hidden_state']
         reward_hidden_state_state = network_output['reward_hidden_state']
         pred_values_pool = network_output['value']
         value_prefix_pool = network_output['value_prefix']
@@ -197,7 +197,7 @@ def ctree_func(policy_config, num_simulations):
         # network output process
         pred_values_pool = inverse_scalar_transform(pred_values_pool,
                                                     policy_config.model.support_scale).detach().cpu().numpy()
-        hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
+        latent_state_roots = latent_state_roots.detach().cpu().numpy()
         reward_hidden_state_state = (
             reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
         )
@@ -226,7 +226,7 @@ def ctree_func(policy_config, num_simulations):
         roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
         prepare_time.append(time.time() - t1)
         t1 = time.time()
-        MCTSCtree(policy_config).search(roots, model, hidden_state_roots, reward_hidden_state_state, to_play)
+        MCTSCtree(policy_config).search(roots, model, latent_state_roots, reward_hidden_state_state, to_play)
         search_time.append(time.time() - t1)
         total_time.append(time.time() - t0)
         roots_distributions = roots.get_distributions()

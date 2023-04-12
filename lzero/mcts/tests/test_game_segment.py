@@ -64,7 +64,7 @@ def test_game_segment(test_algo):
 
             # process the network output
             policy_logits_pool = network_output.policy_logits.detach().cpu().numpy().tolist()
-            hidden_state_roots = network_output.latent_state.detach().cpu().numpy()
+            latent_state_roots = network_output.latent_state.detach().cpu().numpy()
 
             if test_algo == 'EfficientZero':
                 reward_hidden_state_roots = network_output.reward_hidden_state
@@ -92,12 +92,12 @@ def test_game_segment(test_algo):
             if test_algo == 'EfficientZero':
                 roots = MCTSCtree.roots(config.env.evaluator_env_num, legal_actions_list)
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
-                MCTSCtree(config.policy).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
+                MCTSCtree(config.policy).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
 
             elif test_algo == 'MuZero':
                 roots = MCTSCtree.roots(config.env.evaluator_env_num, legal_actions_list)
                 roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
-                MCTSCtree(config.policy).search(roots, model, hidden_state_roots, to_play)
+                MCTSCtree(config.policy).search(roots, model, latent_state_roots, to_play)
 
             roots_distributions = roots.get_distributions()
             roots_values = roots.get_values()
