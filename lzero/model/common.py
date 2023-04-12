@@ -22,7 +22,7 @@ class EZNetworkOutput:
     value_prefix: torch.Tensor
     policy_logits: torch.Tensor
     latent_state: torch.Tensor
-    reward_hidden_state: torch.Tensor
+    reward_hidden_state: Tuple[torch.Tensor]
 
 
 @dataclass

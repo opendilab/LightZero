@@ -23,14 +23,14 @@ class MuZeroModelFake(torch.nn.Module):
         value = torch.zeros(size=(batch_size, 601))
         value_prefix = [0. for _ in range(batch_size)]
         policy_logits = torch.zeros(size=(batch_size, self.action_num))
-        hidden_state = torch.zeros(size=(batch_size, 12, 3, 3))
+        latent_state = torch.zeros(size=(batch_size, 12, 3, 3))
         reward_hidden_state_state = (torch.zeros(size=(1, batch_size, 16)), torch.zeros(size=(1, batch_size, 16)))
 
         output = {
             'value': value,
             'value_prefix': value_prefix,
             'policy_logits': policy_logits,
-            'hidden_state': hidden_state,
+            'latent_state': latent_state,
             'reward_hidden_state': reward_hidden_state_state
         }
 
@@ -38,7 +38,7 @@ class MuZeroModelFake(torch.nn.Module):
 
     def recurrent_inference(self, hidden_states, reward_hidden_states, actions):
         batch_size = hidden_states.shape[0]
-        hidden_state = torch.zeros(size=(batch_size, 12, 3, 3))
+        latent_state = torch.zeros(size=(batch_size, 12, 3, 3))
         reward_hidden_state_state = (torch.zeros(size=(1, batch_size, 16)), torch.zeros(size=(1, batch_size, 16)))
         value = torch.zeros(size=(batch_size, 601))
         value_prefix = torch.zeros(size=(batch_size, 601))
@@ -48,7 +48,7 @@ class MuZeroModelFake(torch.nn.Module):
             'value': value,
             'value_prefix': value_prefix,
             'policy_logits': policy_logits,
-            'hidden_state': hidden_state,
+            'latent_state': latent_state,
             'reward_hidden_state': reward_hidden_state_state
         }
 
