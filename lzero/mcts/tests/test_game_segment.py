@@ -122,7 +122,3 @@ def test_game_segment(test_algo):
 
         for env in envs:
             env.close()
-
-
-# debug
-test_game_segment('EfficientZero')

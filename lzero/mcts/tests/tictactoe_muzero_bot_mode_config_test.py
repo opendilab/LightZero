@@ -39,21 +39,14 @@ tictactoe_muzero_config = dict(
             observation_shape=(3, 3, 3),
             action_space_size=9,
             image_channel=3,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             # We use the small size model for tictactoe
             num_res_blocks=1,
             num_channels=16,
-            fc_reward_layers=[8],
-            fc_value_layers=[8],
-            fc_policy_layers=[8],
+            frame_stack_num=1,
+            model_type='conv',
             support_scale=10,
             reward_support_size=21,
             value_support_size=21,
-            frame_stack_num=1,
-            downsample=False,
-            model_type='conv',  # options={'mlp', 'conv'}
-            # (bool) If True, the action space of the environment is continuous, otherwise discrete.
-            continuous_action_space=False,
             categorical_distribution=True,
         ),
         cuda=True,
