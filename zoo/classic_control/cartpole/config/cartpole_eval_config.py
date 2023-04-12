@@ -1,15 +1,14 @@
 from cartpole_muzero_config import main_config, create_config
+from lzero.entry import eval_muzero
+import numpy as np
 
 if __name__ == "__main__":
-    from lzero.entry import eval_muzero
-    import numpy as np
     """ 
     model_path (:obj:`Optional[str]`): The pretrained model path, which should
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
      """
     model_path = "./ckpt/ckpt_best.pth.tar"
-
     seeds = [0]
     num_episodes_each_seed = 5
     main_config.env.evaluator_env_num = 1

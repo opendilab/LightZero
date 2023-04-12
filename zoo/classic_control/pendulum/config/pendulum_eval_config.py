@@ -1,21 +1,19 @@
 # According to the model you want to evaluate, import the corresponding config.
 from zoo.classic_control.pendulum.config.pendulum_cont_sampled_efficientzero_config import main_config, create_config
+from lzero.entry import eval_muzero
+import numpy as np
 
 if __name__ == "__main__":
-    from lzero.entry import eval_muzero
-    import numpy as np
     """ 
     model_path (:obj:`Optional[str]`): The pretrained model path, which should
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
-     """
-    # model_path = "./ckpt/ckpt_best.pth.tar"
-    model_path = '/Users/puyuan/code/LightZero/zoo/classic_control/pendulum/config/data_sez_ctree/pendulum_sampled_efficientzero_k20_ns50_upc200_rr0.0_seed0_230403_203550/ckpt/iteration_0.pth.tar'
+    """
+    model_path = "./ckpt/ckpt_best.pth.tar"
     seeds = [0]
     num_episodes_each_seed = 5
     main_config.env.evaluator_env_num = 1
     main_config.env.n_evaluator_episode = 1
-
     total_test_episodes = num_episodes_each_seed * len(seeds)
     returns_mean_seeds = []
     returns_seeds = []

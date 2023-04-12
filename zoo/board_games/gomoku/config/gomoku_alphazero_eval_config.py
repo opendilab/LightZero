@@ -1,19 +1,25 @@
 from zoo.board_games.gomoku.config.gomoku_alphazero_bot_mode_config import main_config, create_config
+from lzero.entry import eval_alphazero
+import numpy as np
 
 if __name__ == '__main__':
-    from lzero.entry import eval_alphazero
-    import numpy as np
     """ 
     model_path (:obj:`Optional[str]`): The pretrained model path, which should
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
-     """
-    model_path = '/Users/user/code/LightZero/zoo/board_games/gomoku/gomoku_alphazero_bot-mode_rand0.5_ns50_upc50_rr0.3_seed0/ckpt/ckpt_best.pth.tar'
+    """
+
+    model_path = './ckpt/ckpt_best.pth.tar'
+    seeds = [0]
+    num_episodes_each_seed = 5
+    # If True, you can play with the agent.
+    main_config.env.agent_vs_human = False
+    create_config.env_manager.type = 'base'
+    main_config.env.evaluator_env_num = 1
+    main_config.env.n_evaluator_episode = 1
+    total_test_episodes = num_episodes_each_seed * len(seeds)
     returns_mean_seeds = []
     returns_seeds = []
-    seeds = [0]
-    num_episodes_each_seed = 3
-    total_test_episodes = num_episodes_each_seed * len(seeds)
     for seed in seeds:
         returns_mean, returns = eval_alphazero(
             [main_config, create_config],

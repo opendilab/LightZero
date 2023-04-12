@@ -1,20 +1,19 @@
 from zoo.board_games.tictactoe.config.tictactoe_muzero_bot_mode_config import main_config, create_config
+from lzero.entry import eval_muzero
+import numpy as np
 
 if __name__ == "__main__":
-    from lzero.entry import eval_muzero
-    import numpy as np
     """ 
     model_path (:obj:`Optional[str]`): The pretrained model path, which should
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
-     """
-    model_path = "./ckpt/ckpt_best.pth.tar"
+    """
 
+    model_path = "./ckpt/ckpt_best.pth.tar"
     seeds = [0]
     num_episodes_each_seed = 5
+    # If True, you can play with the agent.
     main_config.env.agent_vs_human = False
-    # main_config.env.agent_vs_human = True
-
     create_config.env_manager.type = 'base'
     main_config.env.evaluator_env_num = 1
     main_config.env.n_evaluator_episode = 1
