@@ -5,7 +5,7 @@ Overview:
     customize their custom algorithms, ensuring efficient and effective development.
     BTW, users can refer to the unittest of these model templates to learn how to use them.
 """
-from typing import Optional
+from typing import Optional, Tuple
 from dataclasses import dataclass
 import numpy as np
 import torch
@@ -214,7 +214,7 @@ class RepresentationNetworkMLP(nn.Module):
     ) -> torch.Tensor:
         """
         Overview:
-            Representation network used in MuZero and derived algorithms. Encode the vector obs obs into hidden state \
+            Representation network used in MuZero and derived algorithms. Encode the vector obs into latent state \
                 with Multi-Layer Perceptron (MLP).
         Arguments:
             - observation_shape (:obj:`int`): The shape of vector observation space, e.g. N = 10.
@@ -249,3 +249,193 @@ class RepresentationNetworkMLP(nn.Module):
             - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
         """
         return self.fc_representation(x)
+
+
+class PredictionNetwork(nn.Module):
+
+    def __init__(
+            self,
+            action_space_size: int,
+            num_res_blocks: int,
+            num_channels: int,
+            value_head_channels: int,
+            policy_head_channels: int,
+            fc_value_layers: int,
+            fc_policy_layers: int,
+            output_support_size: int,
+            flatten_output_size_for_value_head: int,
+            flatten_output_size_for_policy_head: int,
+            last_linear_layer_init_zero: bool = True,
+            activation: nn.Module = nn.ReLU(inplace=True),
+    ) -> None:
+        """
+        Overview:
+            The definition of policy and value prediction network, which is used to predict value and policy by the
+            given latent state.
+        Arguments:
+            - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
+            - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
+            - num_channels (:obj:`int`): The channels of hidden states.
+            - value_head_channels (:obj:`int`): The channels of value head.
+            - policy_head_channels (:obj:`int`): The channels of policy head.
+            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - output_support_size (:obj:`int`): The size of categorical value output.
+            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \
+            - flatten_output_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+                of the value head.
+            - flatten_output_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+                of the policy head.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
+                dynamics/prediction mlp, default set it to True.
+            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
+                operation to speedup, e.g. ReLU(inplace=True).
+        """
+        super(PredictionNetwork, self).__init__()
+
+        self.resblocks = nn.ModuleList(
+            [
+                ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                for _ in range(num_res_blocks)
+            ]
+        )
+
+        self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
+        self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
+        self.bn_value = nn.BatchNorm2d(value_head_channels)
+        self.bn_policy = nn.BatchNorm2d(policy_head_channels)
+        self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
+        self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
+        self.fc_value = MLP(
+            in_channels=self.flatten_output_size_for_value_head,
+            hidden_channels=fc_value_layers[0],
+            out_channels=output_support_size,
+            layer_num=len(fc_value_layers) + 1,
+            activation=activation,
+            norm_type='BN',
+            output_activation=nn.Identity(),
+            output_norm_type=None,
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
+        self.fc_policy = MLP(
+            in_channels=self.flatten_output_size_for_policy_head,
+            hidden_channels=fc_policy_layers[0],
+            out_channels=action_space_size,
+            layer_num=len(fc_policy_layers) + 1,
+            activation=activation,
+            norm_type='BN',
+            output_activation=nn.Identity(),
+            output_norm_type=None,
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
+
+        self.activation = activation
+
+    def forward(self,  latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Overview:
+            Forward computation of the prediction network.
+        Arguments:
+            - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, latent_state_dim).
+        Returns:
+            - policy (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).
+            - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
+        """
+        for res_block in self.resblocks:
+            latent_state = res_block(latent_state)
+
+        value = self.conv1x1_value(latent_state)
+        value = self.bn_value(value)
+        value = self.activation(value)
+
+        policy = self.conv1x1_policy(latent_state)
+        policy = self.bn_policy(policy)
+        policy = self.activation(policy)
+
+        value = value.reshape(-1, self.flatten_output_size_for_value_head)
+        policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
+
+        value = self.fc_value(value)
+        policy = self.fc_policy(policy)
+        return policy, value
+
+
+class PredictionNetworkMLP(nn.Module):
+
+    def __init__(
+            self,
+            action_space_size,
+            num_channels,
+            common_layer_num: int = 2,
+            fc_value_layers: SequenceType = [32],
+            fc_policy_layers: SequenceType = [32],
+            output_support_size: int = 601,
+            last_linear_layer_init_zero: bool = True,
+            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+    ):
+        """
+        Overview:
+            The definition of policy and value prediction network with Multi-Layer Perceptron (MLP),
+            which is used to predict value and policy by the given latent state.
+        Arguments:
+            - action_space_size: (:obj:`int`): Action space size, usually an integer number. For discrete action \
+                space, it is the number of discrete actions.
+            - num_channels (:obj:`int`): The channels of latent states.
+            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - output_support_size (:obj:`int`): The size of categorical value output.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
+                dynamics/prediction mlp, default set it to True.
+            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
+                operation to speedup, e.g. ReLU(inplace=True).
+        """
+        super().__init__()
+        self.num_channels = num_channels
+
+        self.fc_prediction_common = MLP(
+            in_channels=self.num_channels,
+            hidden_channels=self.num_channels,
+            out_channels=self.num_channels,
+            layer_num=common_layer_num,
+            activation=activation,
+            norm_type='BN',
+            output_activation=nn.Identity(),
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
+
+        self.fc_value_head = MLP(
+            in_channels=self.num_channels,
+            hidden_channels=fc_value_layers[0],
+            out_channels=output_support_size,
+            layer_num=2,
+            activation=activation,
+            norm_type='BN',
+            output_activation=nn.Identity(),
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
+        self.fc_policy_head = MLP(
+            in_channels=self.num_channels,
+            hidden_channels=fc_policy_layers[0],
+            out_channels=action_space_size,
+            layer_num=2,
+            activation=activation,
+            norm_type='BN',
+            output_activation=nn.Identity(),
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
+
+    def forward(self, latent_state: torch.Tensor):
+        """
+        Overview:
+            Forward computation of the prediction network.
+        Arguments:
+            - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, latent_state_dim).
+        Returns:
+            - policy (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).
+            - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
+        """
+        x_prediction_common = self.fc_prediction_common(latent_state)
+
+        value = self.fc_value_head(x_prediction_common)
+        policy = self.fc_policy_head(x_prediction_common)
+        return policy, value

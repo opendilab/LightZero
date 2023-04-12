@@ -10,7 +10,7 @@ import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 
-from .common import MZNetworkOutput, RepresentationNetwork
+from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -151,9 +151,10 @@ class MuZeroModel(nn.Module):
         if self.self_supervised_learning_loss:
             # projection used in EfficientZero
             if self.downsample:
-                # for atari, due to downsample
-                # observation_shape=(12, 96, 96),  # stack=4
-                # 3 * 96/16 * 96/16 = 3*6*6 = 108
+                # In Atari, if the observation_shape is set to (12, 96, 96), which indicates the original shape of
+                # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
+                # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
+                # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
                 ceil_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
                 self.projection_input_dim = num_channels * ceil_size
             else:
@@ -164,7 +165,7 @@ class MuZeroModel(nn.Module):
                 nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
                 nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
             )
-            self.projection_head = nn.Sequential(
+            self.prediction_head = nn.Sequential(
                 nn.Linear(self.proj_out, self.pred_hid),
                 nn.BatchNorm1d(self.pred_hid),
                 activation,
@@ -219,6 +220,7 @@ class MuZeroModel(nn.Module):
             - reward (:obj:`torch.Tensor`): The predicted reward of input state and selected action.
             - policy_logits (:obj:`torch.Tensor`): The output logit to select discrete action.
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
+            - next_latent_state (:obj:`torch.Tensor`): The predicted next latent state.
         Shapes:
             - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.
             - action (:obj:`torch.Tensor`): :math:`(B, )`, where B is batch_size.
@@ -227,10 +229,12 @@ class MuZeroModel(nn.Module):
             - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
             - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
                 latent state, W_ is the width of latent state.
+            - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
+                latent state, W_ is the width of latent state.
          """
-        latent_state, reward = self._dynamics(latent_state, action)
-        policy_logits, value = self._prediction(latent_state)
-        return MZNetworkOutput(value, reward, policy_logits, latent_state)
+        next_latent_state, reward = self._dynamics(latent_state, action)
+        policy_logits, value = self._prediction(next_latent_state)
+        return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
 
     def _representation(self, observation: torch.Tensor) -> torch.Tensor:
         """
@@ -336,8 +340,8 @@ class MuZeroModel(nn.Module):
 
         Examples:
             >>> latent_state = torch.randn(256, 64, 6, 6)
-            >>> proj = self.project(latent_state)
-            >>> proj.shape # (256, 1024)
+            >>> output = self.project(latent_state)
+            >>> output.shape # (256, 1024)
 
         .. note::
             for Atari:
@@ -351,9 +355,9 @@ class MuZeroModel(nn.Module):
         latent_state = latent_state.reshape(latent_state.shape[0], -1)
         proj = self.projection(latent_state)
 
-        # with grad, use proj_head
         if with_grad:
-            return self.projection_head(proj)
+            # with grad, use prediction_head
+            return self.prediction_head(proj)
         else:
             return proj.detach()
 
@@ -420,131 +424,43 @@ class DynamicsNetwork(nn.Module):
         )
         self.activation = activation
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        # take the state encoding,  x[:, -1, :, :] is action encoding
-        state = x[:, :-1, :, :]
-        x = self.conv(x)
+    def forward(self, state_action_encoding: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+         Overview:
+             Forward computation of the dynamics network.
+         Arguments:
+             - state_action_encoding (:obj:`torch.Tensor`): The state-action encoding, which is the concatenation of \
+                    latent state and action encoding, with shape (batch_size, num_channels, height, width).
+         Returns:
+             - next_latent_state (:obj:`torch.Tensor`): The next latent state, with shape (batch_size, num_channels, \
+                    height, width).
+            - reward (:obj:`torch.Tensor`): The predicted reward, with shape (batch_size, output_support_size).
+         """
+        # take the state encoding (latent_state),  state_action_encoding[:, -1, :, :] is action encoding
+        latent_state = state_action_encoding[:, :-1, :, :]
+        x = self.conv(latent_state)
         x = self.bn(x)
 
-        x += state
+        # the residual link: add state encoding to the state_action encoding
+        x += latent_state
         x = self.activation(x)
 
         for block in self.resblocks:
             x = block(x)
-        state = x
+        next_latent_state = x
 
-        x = self.conv1x1_reward(x)
+        x = self.conv1x1_reward(next_latent_state)
         x = self.bn_reward(x)
         x = self.activation(x)
-
         x = x.view(-1, self.flatten_output_size_for_reward_head)
+
+        # use the fully connected layer to predict reward
         reward = self.fc(x)
 
-        return state, reward
+        return next_latent_state, reward
 
     def get_dynamic_mean(self) -> float:
         return get_dynamic_mean(self)
 
     def get_reward_mean(self) -> float:
         return get_reward_mean(self)
-
-
-class PredictionNetwork(nn.Module):
-
-    def __init__(
-            self,
-            action_space_size: int,
-            num_res_blocks: int,
-            num_channels: int,
-            value_head_channels: int,
-            policy_head_channels: int,
-            fc_value_layers: int,
-            fc_policy_layers: int,
-            output_support_size: int,
-            flatten_output_size_for_value_head: int,
-            flatten_output_size_for_policy_head: int,
-            last_linear_layer_init_zero: bool = True,
-            activation: nn.Module = nn.ReLU(inplace=True),
-    ) -> None:
-        """
-        Overview:
-            The definition of policy and value prediction network, which is used to predict value and policy by the
-            given hidden state.
-        Arguments:
-            - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
-            - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
-            - num_channels (:obj:`int`): The channels of hidden states.
-            - value_head_channels (:obj:`int`): The channels of value head.
-            - policy_head_channels (:obj:`int`): The channels of policy head.
-            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
-            - output_support_size (:obj:`int`): The size of categorical value output.
-            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \
-            - flatten_output_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
-                of the value head.
-            - flatten_output_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
-                of the policy head.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
-                dynamics/prediction mlp, default set it to True.
-            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
-                operation to speedup, e.g. ReLU(inplace=True).
-        """
-        super(PredictionNetwork, self).__init__()
-
-        self.resblocks = nn.ModuleList(
-            [
-                ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
-                for _ in range(num_res_blocks)
-            ]
-        )
-
-        self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
-        self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
-        self.bn_value = nn.BatchNorm2d(value_head_channels)
-        self.bn_policy = nn.BatchNorm2d(policy_head_channels)
-        self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
-        self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
-        self.fc_value = MLP(
-            in_channels=self.flatten_output_size_for_value_head,
-            hidden_channels=fc_value_layers[0],
-            out_channels=output_support_size,
-            layer_num=len(fc_value_layers) + 1,
-            activation=activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-        self.fc_policy = MLP(
-            in_channels=self.flatten_output_size_for_policy_head,
-            hidden_channels=fc_policy_layers[0],
-            out_channels=action_space_size,
-            layer_num=len(fc_policy_layers) + 1,
-            activation=activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-
-        self.activation = activation
-
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-
-        for block in self.resblocks:
-            x = block(x)
-
-        value = self.conv1x1_value(x)
-        value = self.bn_value(value)
-        value = self.activation(value)
-
-        policy = self.conv1x1_policy(x)
-        policy = self.bn_policy(policy)
-        policy = self.activation(policy)
-
-        value = value.reshape(-1, self.flatten_output_size_for_value_head)
-        policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
-
-        value = self.fc_value(value)
-        policy = self.fc_policy(policy)
-        return policy, value

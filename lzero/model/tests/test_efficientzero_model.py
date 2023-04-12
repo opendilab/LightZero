@@ -111,7 +111,7 @@ class TestEfficientZeroModel:
             output_support_size=output_support_size,
             flatten_output_size_for_reward_head=flatten_output_size_for_reward_head
         )
-        next_state, reward_hidden, value_prefix = dynamics_network(
+        next_state, reward_hidden_state, value_prefix = dynamics_network(
             state_action_embedding, (torch.randn(1, batch_size, lstm_hidden_size), torch.randn(1, batch_size, 64))
         )
         assert next_state.shape == torch.Size([batch_size, num_channels - action_space_size, 3, 3])
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         output_support_size=output_support_size,
         flatten_output_size_for_reward_head=flatten_output_size_for_reward_head
     )
-    next_state, reward_hidden, value_prefix = dynamics_network(
+    next_state, reward_hidden_state, value_prefix = dynamics_network(
         state_action_embedding, (torch.randn(1, batch_size, lstm_hidden_size), torch.randn(1, batch_size, lstm_hidden_size))
     )
     assert next_state.shape == torch.Size([batch_size, num_channels - action_space_size, 3, 3])

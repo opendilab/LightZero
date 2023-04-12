@@ -298,8 +298,8 @@ class EfficientZeroPolicy(Policy):
         # the core recurrent_inference in EfficientZero policy.
         # ==============================================================
         for step_i in range(self._cfg.num_unroll_steps):
-            # unroll with the dynamics function: predict the next ``hidden_state``, ``reward_hidden``,
-            # `` value_prefix`` given current ``hidden_state`` ``reward_hidden`` and ``action``.
+            # unroll with the dynamics function: predict the next ``hidden_state``, ``reward_hidden_state``,
+            # `` value_prefix`` given current ``hidden_state`` ``reward_hidden_state`` and ``action``.
             # And then predict policy_logits and value  with the prediction function.
             network_output = self._learn_model.recurrent_inference(
                 hidden_state, reward_hidden_state, action_batch[:, step_i]

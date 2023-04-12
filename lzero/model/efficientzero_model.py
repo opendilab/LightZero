@@ -10,7 +10,7 @@ import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 
-from .common import EZNetworkOutput, RepresentationNetwork
+from .common import EZNetworkOutput, RepresentationNetwork, PredictionNetwork
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -48,8 +48,8 @@ class EfficientZeroModel(nn.Module):
         """
         Overview:
             The definition of the network model of EfficientZero, which is a generalization version for 2D image obs.
-            EfficientZero model which consists of a representation network, a dynamics network and a prediction network.
             The networks are build on convolution residual blocks and fully connected layers.
+            EfficientZero model which consists of a representation network, a dynamics network and a prediction network.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96] for Atari.
             - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
@@ -63,9 +63,9 @@ class EfficientZeroModel(nn.Module):
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
                 we don't need this module.
-            - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
+            - num_res_blocks (:obj:`int`): The number of res blocks in EfficientZero model.
             - num_channels (:obj:`int`): The channels of hidden states.
-            - lstm_hidden_size (:obj:`int`): The hidden size of LSTM to predict value_prefix.
+            - lstm_hidden_size (:obj:`int`): The hidden size of LSTM in dynamics network to predict value_prefix.
             - reward_head_channels (:obj:`int`): The channels of reward head.
             - value_head_channels (:obj:`int`): The channels of value head.
             - policy_head_channels (:obj:`int`): The channels of policy head.
@@ -82,13 +82,6 @@ class EfficientZeroModel(nn.Module):
         super(EfficientZeroModel, self).__init__()
         self.lstm_hidden_size = lstm_hidden_size
         self.categorical_distribution = categorical_distribution
-        if not self.categorical_distribution:
-            self.reward_support_size = 1
-            self.value_support_size = 1
-        else:
-            self.reward_support_size = reward_support_size
-            self.value_support_size = value_support_size
-
         self.proj_hid = proj_hid
         self.proj_out = proj_out
         self.pred_hid = pred_hid
@@ -96,8 +89,13 @@ class EfficientZeroModel(nn.Module):
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
         self.downsample = downsample
-
         self.action_space_size = action_space_size
+        if not self.categorical_distribution:
+            self.reward_support_size = 1
+            self.value_support_size = 1
+        else:
+            self.reward_support_size = reward_support_size
+            self.value_support_size = value_support_size
 
         flatten_output_size_for_reward_head = (
             (reward_head_channels * math.ceil(observation_shape[1] / 16) *
@@ -152,8 +150,9 @@ class EfficientZeroModel(nn.Module):
 
         # projection used in EfficientZero
         if self.downsample:
-            # for atari, due to downsample
-            # observation_shape=(12, 96, 96), # original shape is (3,96,96), frame_stack_num=4
+            # In Atari, if the observation_shape is set to (12, 96, 96), which indicates the original shape of
+            # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
+            # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
             # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
             ceil_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
             self.projection_input_dim = num_channels * ceil_size
@@ -165,7 +164,7 @@ class EfficientZeroModel(nn.Module):
             nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
             nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
         )
-        self.projection_head = nn.Sequential(
+        self.prediction_head = nn.Sequential(
             nn.Linear(self.proj_out, self.pred_hid),
             nn.BatchNorm1d(self.pred_hid),
             activation,
@@ -178,7 +177,7 @@ class EfficientZeroModel(nn.Module):
             Initial inference of EfficientZero model, which is the first step of the EfficientZero model.
             To perform the initial inference, we first use the representation network to obtain the ``latent_state``.
             We then use the prediction network to predict ``value`` and ``policy_logits`` of the ``latent_state``, and
-            also prepare the zeros-like ``reward_hidden`` for the next step of the EfficientZero model.
+            also prepare the zeros-like ``reward_hidden_state`` for the next step of the EfficientZero model.
         Arguments:
             - obs (:obj:`torch.Tensor`): The 2D image observation data.
         Returns (EZNetworkOutput):
@@ -187,7 +186,7 @@ class EfficientZeroModel(nn.Module):
                 In initial inference, we set it to zero vector.
             - policy_logits (:obj:`torch.Tensor`): The output logit to select discrete action.
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-            - reward_hidden (:obj:`Tuple[torch.Tensor]`): The hidden state of LSTM about reward. In initial inference, \
+            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The hidden state of LSTM about reward. In initial inference, \
                 we set it to the zeros-like hidden state (H and C).
         Shapes:
             - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.
@@ -196,21 +195,22 @@ class EfficientZeroModel(nn.Module):
             - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
             - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
                 latent state, W_ is the width of latent state.
-            - reward_hidden (:obj:`Tuple[torch.Tensor]`): :math:`(1, B, lstm_hidden_size)`, where B is batch_size.
+            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The shape of each element is :math:`(1, B, lstm_hidden_size)`, where B is batch_size.
         """
         num = obs.size(0)
         latent_state = self._representation(obs)
         policy_logits, value = self._prediction(latent_state)
         # zero initialization for reward hidden states
-        reward_hidden = (
+        # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
+        reward_hidden_state = (
             torch.zeros(1, num,
                         self.lstm_hidden_size).to(obs.device), torch.zeros(1, num,
                                                                            self.lstm_hidden_size).to(obs.device)
         )
-        return EZNetworkOutput(value, [0. for _ in range(num)], policy_logits, latent_state, reward_hidden)
+        return EZNetworkOutput(value, [0. for _ in range(num)], policy_logits, latent_state, reward_hidden_state)
 
     def recurrent_inference(
-            self, latent_state: torch.Tensor, reward_hidden: Tuple[torch.Tensor], action: torch.Tensor
+            self, latent_state: torch.Tensor, reward_hidden_state: Tuple[torch.Tensor], action: torch.Tensor
     ) -> EZNetworkOutput:
         """
         Overview:
@@ -220,27 +220,29 @@ class EfficientZeroModel(nn.Module):
              We then use the prediction network to predict the ``value`` and ``policy_logits``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-            - reward_hidden (:obj:`Tuple[torch.Tensor]`): The input hidden state of LSTM about reward.
+            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The input hidden state of LSTM about reward.
             - action (:obj:`torch.Tensor`): The predicted action to rollout.
         Returns (EZNetworkOutput):
             - value (:obj:`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
             - value_prefix (:obj:`torch.Tensor`): The predicted prefix sum of value for input state.
             - policy_logits (:obj:`torch.Tensor`): The output logit to select discrete action.
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-            - reward_hidden (:obj:`Tuple[torch.Tensor]`): The output hidden state of LSTM about reward.
+            - next_latent_state (:obj:`torch.Tensor`): The predicted next latent state.
+            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The output hidden state of LSTM about reward.
         Shapes:
-            - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.
             - action (:obj:`torch.Tensor`): :math:`(B, )`, where B is batch_size.
             - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.
             - value_prefix (:obj:`torch.Tensor`): :math:`(B, reward_support_size)`, where B is batch_size.
             - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
             - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
                 latent state, W_ is the width of latent state.
-            - reward_hidden (:obj:`Tuple[torch.Tensor]`): :math:`(1, B, lstm_hidden_size)`, where B is batch_size.
+            - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
+                latent state, W_ is the width of latent state.
+            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): :math:`(1, B, lstm_hidden_size)`, where B is batch_size.
          """
-        latent_state, reward_hidden, value_prefix = self._dynamics(latent_state, reward_hidden, action)
-        policy_logits, value = self._prediction(latent_state)
-        return EZNetworkOutput(value, value_prefix, policy_logits, latent_state, reward_hidden)
+        next_latent_state, reward_hidden_state, value_prefix = self._dynamics(latent_state, reward_hidden_state, action)
+        policy_logits, value = self._prediction(next_latent_state)
+        return EZNetworkOutput(value, value_prefix, policy_logits, next_latent_state, reward_hidden_state)
 
     def _representation(self, observation: torch.Tensor) -> torch.Tensor:
         """
@@ -338,8 +340,7 @@ class EfficientZeroModel(nn.Module):
     def project(self, latent_state: torch.Tensor, with_grad: bool = True) -> torch.Tensor:
         """
         Overview:
-            Project the latent state to a lower dimension to calculate the self-supervised loss, which is involved in
-            MuZero algorithm in EfficientZero.
+            Project the latent state to a lower dimension to calculate the self-supervised loss, which is proposed in EfficientZero.
             For more details, please refer to paper ``Exploring Simple Siamese Representation Learning``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
@@ -353,8 +354,17 @@ class EfficientZeroModel(nn.Module):
 
         Examples:
             >>> latent_state = torch.randn(256, 64, 6, 6)
-            >>> proj = self.project(latent_state)
-            >>> proj.shape # (256, 1024)
+            >>> output = self.project(latent_state)
+            >>> output.shape # (256, 1024)
+
+        .. note::
+            for Atari:
+            observation_shape = (12, 96, 96),  # original shape is (3,96,96), frame_stack_num=4
+            if downsample is True, latent_state.shape: (batch_size, num_channel, obs_shape[1] / 16, obs_shape[2] / 16)
+            i.e., (256, 64, 96 / 16, 96 / 16) = (256, 64, 6, 6)
+            latent_state reshape: (256, 64, 6, 6) -> (256,64*6*6) = (256, 2304)
+            # self.projection_input_dim = 64*6*6 = 2304
+            # self.projection_output_dim = 1024
         """
         latent_state = latent_state.reshape(latent_state.shape[0], -1)
 
@@ -362,7 +372,7 @@ class EfficientZeroModel(nn.Module):
 
         # with grad, use proj_head
         if with_grad:
-            return self.projection_head(proj)
+            return self.prediction_head(proj)
         else:
             return proj.detach()
 
@@ -386,10 +396,10 @@ class DynamicsNetwork(nn.Module):
     ):
         """
         Overview:
-            The definition of dynamics network in EfficientZero algorithm, which is used to predict next hidden state
+            The definition of dynamics network in EfficientZero algorithm, which is used to predict next latent state
             value_prefix and reward_hidden_state by the given current hidden state and action.
         Arguments:
-            - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
+            - num_res_blocks (:obj:`int`): The number of res blocks in EfficientZero model.
             - num_channels (:obj:`int`): The channels of hidden states.
             - reward_head_channels (:obj:`int`): The channels of reward head.
             - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
@@ -405,21 +415,21 @@ class DynamicsNetwork(nn.Module):
         super().__init__()
         self.num_channels = num_channels
         self.lstm_hidden_size = lstm_hidden_size
+        self.activation = activation
 
         self.conv = nn.Conv2d(num_channels, num_channels - 1, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn = nn.BatchNorm2d(num_channels - 1)
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - 1, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=num_channels - 1, activation=self.activation, norm_type='BN', res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
-
         self.reward_resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - 1, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=num_channels - 1, activation=self.activation, norm_type='BN', res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
@@ -427,6 +437,8 @@ class DynamicsNetwork(nn.Module):
         self.conv1x1_reward = nn.Conv2d(num_channels - 1, reward_head_channels, 1)
         self.bn_reward = nn.BatchNorm2d(reward_head_channels)
         self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
+        # input_shape: （sequence_length，batch_size，input_size)
+        # output_shape: (sequence_length, batch_size, hidden_size)
         self.lstm = nn.LSTM(input_size=self.flatten_output_size_for_reward_head, hidden_size=self.lstm_hidden_size)
         self.bn_value_prefix = nn.BatchNorm1d(self.lstm_hidden_size)
         self.fc = MLP(
@@ -434,32 +446,33 @@ class DynamicsNetwork(nn.Module):
             hidden_channels=fc_reward_layers[0],
             out_channels=output_support_size,
             layer_num=len(fc_reward_layers) + 1,
-            activation=activation,
+            activation=self.activation,
             norm_type='BN',
             output_activation=nn.Identity(),
             output_norm_type=None,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
-        self.activation = activation
 
-    def forward(self, state_action_encoding: torch.Tensor, reward_hidden_state):
+    def forward(self, state_action_encoding: torch.Tensor, reward_hidden_state: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, Tuple, torch.Tensor]:
         # take the state encoding,  state_action_encoding[:, -1, :, :] is action encoding
-        state = state_action_encoding[:, :-1, :, :]
+        state_encoding = state_action_encoding[:, :-1, :, :]
         x = self.conv(state_action_encoding)
         x = self.bn(x)
 
-        x += state
+        # the residual link: add state encoding to the state_action encoding
+        x += state_encoding
         x = self.activation(x)
 
         for block in self.resblocks:
             x = block(x)
-        state = x
+        next_latent_state = x
 
-        x = self.conv1x1_reward(x)
+        x = self.conv1x1_reward(next_latent_state)
         x = self.bn_reward(x)
         x = self.activation(x)
         x = x.reshape(-1, self.flatten_output_size_for_reward_head).unsqueeze(0)
 
+        # use lstm to predict value_prefix and reward_hidden_state
         value_prefix, reward_hidden_state = self.lstm(x, reward_hidden_state)
 
         value_prefix = value_prefix.squeeze(0)
@@ -467,7 +480,7 @@ class DynamicsNetwork(nn.Module):
         value_prefix = self.activation(value_prefix)
         value_prefix = self.fc(value_prefix)
 
-        return state, reward_hidden_state, value_prefix
+        return next_latent_state, reward_hidden_state, value_prefix
 
     def get_dynamic_mean(self) -> float:
         return get_dynamic_mean(self)
@@ -475,103 +488,3 @@ class DynamicsNetwork(nn.Module):
     def get_reward_mean(self) -> float:
         return get_reward_mean(self)
 
-
-class PredictionNetwork(nn.Module):
-
-    def __init__(
-            self,
-            action_space_size: int,
-            num_res_blocks: int,
-            num_channels: int,
-            value_head_channels: int,
-            policy_head_channels: int,
-            fc_value_layers: int,
-            fc_policy_layers: int,
-            output_support_size: int,
-            flatten_output_size_for_value_head: int,
-            flatten_output_size_for_policy_head: int,
-            last_linear_layer_init_zero: bool = True,
-            activation: nn.Module = nn.ReLU(inplace=True),
-    ) -> None:
-        """
-        Overview:
-            The definition of policy and value prediction network, which is used to predict value and policy by the
-            given hidden state.
-        Arguments:
-            - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
-            - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
-            - num_channels (:obj:`int`): The channels of hidden states.
-            - value_head_channels (:obj:`int`): The channels of value head.
-            - policy_head_channels (:obj:`int`): The channels of policy head.
-            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
-            - output_support_size (:obj:`int`): The size of categorical value output.
-            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \
-            - flatten_output_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
-                of the value head.
-            - flatten_output_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
-                of the policy head.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
-                dynamics/prediction mlp, default set it to True.
-            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
-                operation to speedup, e.g. ReLU(inplace=True).
-        """
-        super(PredictionNetwork, self).__init__()
-
-        self.resblocks = nn.ModuleList(
-            [
-                ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
-                for _ in range(num_res_blocks)
-            ]
-        )
-
-        self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
-        self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
-        self.bn_value = nn.BatchNorm2d(value_head_channels)
-        self.bn_policy = nn.BatchNorm2d(policy_head_channels)
-        self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
-        self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
-        self.fc_value = MLP(
-            in_channels=self.flatten_output_size_for_value_head,
-            hidden_channels=fc_value_layers[0],
-            out_channels=output_support_size,
-            layer_num=len(fc_value_layers) + 1,
-            activation=activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-        self.fc_policy = MLP(
-            in_channels=self.flatten_output_size_for_policy_head,
-            hidden_channels=fc_policy_layers[0],
-            out_channels=action_space_size,
-            layer_num=len(fc_policy_layers) + 1,
-            activation=activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-
-        self.activation = activation
-
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-
-        for block in self.resblocks:
-            x = block(x)
-
-        value = self.conv1x1_value(x)
-        value = self.bn_value(value)
-        value = self.activation(value)
-
-        policy = self.conv1x1_policy(x)
-        policy = self.bn_policy(policy)
-        policy = self.activation(policy)
-
-        value = value.reshape(-1, self.flatten_output_size_for_value_head)
-        policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
-
-        value = self.fc_value(value)
-        policy = self.fc_policy(policy)
-        return policy, value
