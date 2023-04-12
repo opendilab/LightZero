@@ -1,4 +1,5 @@
 from typing import List, Tuple, Dict
+from easydict import EasyDict
 
 import numpy as np
 import torch
@@ -6,7 +7,7 @@ import torch.nn.functional as F
 from scipy.stats import entropy
 
 
-def prepare_obs(obs_batch_ori, cfg):
+def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Overview:
         Prepare the observations for the model, including:
@@ -54,9 +55,9 @@ def prepare_obs(obs_batch_ori, cfg):
         (4, 6, 4) -> (4, 6*4) = (4, 24)
 
         the second dim of ``obs_batch_ori``:
-        timestep t:     1,   2,      3,     4,    5,   6,  
+        timestep t:     1,   2,      3,     4,    5,   6,
         obs_shape:      4    4       4      4     4    4
-                       ----, ----,  ----, ----,  ----,  ----, 
+                       ----, ----,  ----, ----,  ----,  ----,
         """
         obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
         # ``obs_batch`` is used in ``initial_inference()``, which is the first stacked obs at timestep t1 in
@@ -93,7 +94,7 @@ def negative_cosine_similarity(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tens
     return -(x1 * x2).sum(dim=1)
 
 
-def get_max_entropy(action_shape: int) -> None:
+def get_max_entropy(action_shape: int) -> np.float32:
     """
     Overview:
         get the max entropy of the action space.
@@ -106,13 +107,20 @@ def get_max_entropy(action_shape: int) -> None:
     return -action_shape * p * np.log2(p)
 
 
-def select_action(visit_counts: np.array, temperature: float = 1, deterministic: bool = True) -> Tuple:
+def select_action(visit_counts: np.ndarray,
+                  temperature: float = 1,
+                  deterministic: bool = True) -> Tuple[np.int64, np.ndarray]:
     """
     Overview:
-        select action from the root visit counts.
+        Select action from visit counts of the root node.
     Arguments:
-        - temperature (:obj:`float`): the temperature for the distribution
-        - deterministic (:obj:`bool`):  True -> select the argmax, False -> sample from the distribution
+        - visit_counts (:obj:`np.ndarray`): The visit counts of the root node.
+        - temperature (:obj:`float`): The temperature used to adjust the sampling distribution.
+        - deterministic (:obj:`bool`):  Whether to enable deterministic mode in action selection. True means to \
+            select the argmax result, False indicates to sample action from the distribution.
+    Returns:
+        - action_pos (:obj:`np.int64`): The selected action position (index).
+        - visit_count_distribution_entropy (:obj:`np.ndarray`): The entropy of the visit count distribution.
     """
     action_probs = [visit_count_i ** (1 / temperature) for visit_count_i in visit_counts]
     action_probs = [x / sum(action_probs) for x in action_probs]
@@ -126,7 +134,7 @@ def select_action(visit_counts: np.array, temperature: float = 1, deterministic:
     return action_pos, visit_count_distribution_entropy
 
 
-def concat_output_value(output_lst: List) -> np.array:
+def concat_output_value(output_lst: List[ModelOutput]) -> np.ndarray:
     """
     Overview:
         concat the values of the model output list.
@@ -186,7 +194,7 @@ def concat_output(output_lst: List, data_type: str = 'muzero') -> Tuple:
         )
 
 
-def to_torch_float_tensor(data_list: List, device) -> List:
+def to_torch_float_tensor(data_list: List[np.ndarray], device: torch.device) -> List[torch.Tensor]:
     """
     Overview:
         convert the data list to torch float tensor
@@ -202,7 +210,7 @@ def to_torch_float_tensor(data_list: List, device) -> List:
     return output_data_list
 
 
-def to_detach_cpu_numpy(data_list: List) -> List:
+def to_detach_cpu_numpy(data_list: List[torch.Tensor]) -> List[np.ndarray]:
     """
     Overview:
         convert the data list to detach cpu numpy

@@ -1,10 +1,11 @@
+from typing import Union
 import numpy as np
 import torch
 
 
 class DiscreteSupport(object):
 
-    def __init__(self, min: int, max: int, delta=1.):
+    def __init__(self, min: int, max: int, delta: float = 1.) -> None:
         assert min < max
         self.min = min
         self.max = max
@@ -14,16 +15,17 @@ class DiscreteSupport(object):
         self.delta = delta
 
 
-def scalar_transform(x, epsilon=0.001, delta=1):
+def scalar_transform(x: torch.Tensor, epsilon: float = 0.001, delta: float = 1.) -> torch.Tensor:
     """
     Overview:
-        transform the original value to the scaled value, i.e. h(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
+        Transform the original value to the scaled value, i.e. the h(.) function
+        in paper https://arxiv.org/pdf/1805.11593.pdf.
     Reference:
         - MuZero: Appendix F: Network Architecture
         - https://arxiv.org/pdf/1805.11593.pdf (Page-11) Appendix A : Proposition A.2
     """
     # h(.) function
-    if delta == 1:
+    if delta == 1:  # for speed up
         output = torch.sign(x) * (torch.sqrt(torch.abs(x) + 1) - 1) + epsilon * x
     else:
         # delta != 1
@@ -31,7 +33,12 @@ def scalar_transform(x, epsilon=0.001, delta=1):
     return output
 
 
-def inverse_scalar_transform(logits, support_size, epsilon=0.001, categorical_distribution=True):
+def inverse_scalar_transform(
+        logits: torch.Tensor,
+        support_size: int,
+        epsilon: float = 0.001,
+        categorical_distribution: bool = True
+) -> torch.Tensor:
     """
     Overview:
         transform the scaled value or its categorical representation to the original value,
@@ -56,7 +63,7 @@ def inverse_scalar_transform(logits, support_size, epsilon=0.001, categorical_di
         ((torch.sqrt(1 + 4 * epsilon * (torch.abs(value) + 1 + epsilon)) - 1) / (2 * epsilon)) ** 2 - 1
     )
 
-    # TODO(pu): save time
+    # TODO(pu): comment this line due to saving time
     # output[torch.abs(output) < epsilon] = 0.
 
     return output
@@ -72,13 +79,18 @@ class InverseScalarTransform:
         - https://arxiv.org/pdf/1805.11593.pdf Appendix A: Proposition A.2
     """
 
-    def __init__(self, support_size, device='cpu', categorical_distribution=True):
+    def __init__(
+            self,
+            support_size: int,
+            device: Union[str, torch.device] = 'cpu',
+            categorical_distribution: bool = True
+    ) -> None:
         scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
         self.value_support = torch.from_numpy(scalar_support.range).unsqueeze(0)
         self.value_support = self.value_support.to(device)
         self.categorical_distribution = categorical_distribution
 
-    def __call__(self, logits, epsilon=0.001):
+    def __call__(self, logits: torch.Tensor, epsilon: float = 0.001) -> torch.Tensor:
         if self.categorical_distribution:
             value_probs = torch.softmax(logits, dim=1)
             value = value_probs.mul_(self.value_support).sum(1, keepdim=True)
@@ -92,8 +104,9 @@ class InverseScalarTransform:
 
 
 def visit_count_temperature(
-    manual_temperature_decay, fixed_temperature_value, threshold_training_steps_for_final_lr_temperature, trained_steps
-):
+        manual_temperature_decay: bool, fixed_temperature_value: float,
+        threshold_training_steps_for_final_lr_temperature: int, trained_steps: int
+) -> float:
     if manual_temperature_decay:
         if trained_steps < 0.5 * threshold_training_steps_for_final_lr_temperature:
             return 1.0
@@ -105,7 +118,7 @@ def visit_count_temperature(
         return fixed_temperature_value
 
 
-def phi_transform(discrete_support, x):
+def phi_transform(discrete_support: DiscreteSupport, x: torch.Tensor) -> torch.Tensor:
     """
     Overview:
         We then apply a transformation ``phi`` to the scalar in order to obtain equivalent categorical representations.
@@ -132,5 +145,5 @@ def phi_transform(discrete_support, x):
     return target
 
 
-def cross_entropy_loss(prediction, target):
+def cross_entropy_loss(prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     return -(torch.log_softmax(prediction, dim=1) * target).sum(1)
