@@ -42,6 +42,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
         fixed_sigma_value: float = 0.3,
         bound_type: str = None,
         norm_type: str = 'BN',
+        bias: bool = True,
         *args,
         **kwargs,
     ):
@@ -83,6 +84,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
             - fixed_sigma_value (:obj:`float`): the fixed sigma value in policy head of prediction network,
             - bound_type (:obj:`str`): The type of bound in networks.  default set it to None.
             - norm_type (:obj:`str`): The type of normalization in networks. default set it to 'BN'.
+            - bias (:obj:`bool`): Whether to use bias in the last layer of policy and value head in prediction network, default set it to True.
         """
         super(SampledEfficientZeroModelMLP, self).__init__()
         self.observation_shape = observation_shape
@@ -121,6 +123,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
         else:
             # for discrete action space, we use one-hot encoding
             self.action_encoding_dim = self.action_space_size
+        self.bias = bias
 
         self.representation_network = RepresentationNetworkMLP(
             observation_shape=self.observation_shape, hidden_channels=self.latent_state_dim
@@ -149,6 +152,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
             fixed_sigma_value=self.fixed_sigma_value,
             bound_type=self.bound_type,
             norm_type=self.norm_type,
+            bias = self.bias,
         )
 
         if self.self_supervised_learning_loss:
@@ -374,6 +378,7 @@ class DynamicsNetwork(nn.Module):
         output_support_size: int = 601,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+
     ):
         """
         Overview:
@@ -479,6 +484,7 @@ class PredictionNetwork(nn.Module):
         fixed_sigma_value: float = 0.3,
         bound_type: str = None,
         norm_type: str = 'BN',
+        bias: bool = True,
     ):
         """
         Overview:
@@ -504,6 +510,7 @@ class PredictionNetwork(nn.Module):
             - fixed_sigma_value (:obj:`float`): the fixed sigma value in policy head of prediction network,
             - bound_type (:obj:`str`): The type of bound in networks.  default set it to None.
             - norm_type (:obj:`str`): The type of normalization in networks. default set it to 'BN'.
+            - bias (:obj:`bool`): Whether to use bias in the last layer of policy and value head in prediction network, default set it to True.
         """
         super().__init__()
         self.num_channels = num_channels
@@ -513,12 +520,13 @@ class PredictionNetwork(nn.Module):
         self.fixed_sigma_value = fixed_sigma_value
         self.bound_type = bound_type
         self.action_space_size = action_space_size
-
         if self.continuous_action_space:
             self.action_encoding_dim = self.action_space_size
         else:
             self.action_encoding_dim = 1
+        self.bias = bias
 
+        # ******* common backbone ******
         self.fc_prediction_common = MLP(
             in_channels=self.num_channels,
             hidden_channels=self.num_channels,
@@ -530,20 +538,34 @@ class PredictionNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
-        self.fc_value_head = MLP(
-            in_channels=self.num_channels,
-            hidden_channels=fc_value_layers[0],
-            out_channels=output_support_size,
-            layer_num=2,
-            activation=activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
+        # ******* value and policy head ******
+        if self.bias:
+            # use bias in the last layer
+            self.fc_value_head = MLP(
+                in_channels=self.num_channels,
+                hidden_channels=fc_value_layers[0],
+                out_channels=output_support_size,
+                layer_num=2,
+                activation=activation,
+                norm_type='BN',
+                output_activation=nn.Identity(),
+                last_linear_layer_init_zero=last_linear_layer_init_zero
+            )
+        else:
+            # no bias in the last layer in policy and value head
+            self.fc_value_head = nn.Sequential(
+                nn.Linear(self.num_channels, fc_value_layers[0]), nn.BatchNorm1d(fc_value_layers[0]),
+                self.activation,
+                nn.Linear(fc_value_layers[0], output_support_size, bias=self.bias)
+            )
+            if last_linear_layer_init_zero:
+                self.fc_value_head[-1].weight.data.fill_(0)
 
         # sampled related core code
         if self.continuous_action_space:
-            self.sampled_fc_policy = ReparameterizationHead(
+            # use bias in the last layer
+            # NOTE：in reparameterization policy head, use bias in the last layer is by default.
+            self.fc_policy_head = ReparameterizationHead(
                 input_size=self.num_channels,
                 output_size=action_space_size,
                 layer_num=2,
@@ -554,17 +576,28 @@ class PredictionNetwork(nn.Module):
                 bound_type=self.bound_type
             )
         else:
-            self.sampled_fc_policy = MLP(
-                in_channels=self.num_channels,
-                hidden_channels=fc_policy_layers[0],
-                out_channels=action_space_size,
-                layer_num=2,
-                activation=activation,
-                norm_type=self.norm_type,
-                output_activation=nn.Identity(),
-                output_norm_type=None,
-                last_linear_layer_init_zero=last_linear_layer_init_zero
-            )
+            if self.bias:
+                # use bias in the last layer
+                self.fc_policy_head = MLP(
+                    in_channels=self.num_channels,
+                    hidden_channels=fc_policy_layers[0],
+                    out_channels=action_space_size,
+                    layer_num=2,
+                    activation=activation,
+                    norm_type=self.norm_type,
+                    output_activation=nn.Identity(),
+                    output_norm_type=None,
+                    last_linear_layer_init_zero=last_linear_layer_init_zero
+                )
+            else:
+                # no bias in the last layer in policy and value head
+                self.fc_policy_head = nn.Sequential(
+                    nn.Linear(self.num_channels, fc_policy_layers[0]),
+                    nn.BatchNorm1d(fc_policy_layers[0]), self.activation,
+                    nn.Linear(fc_policy_layers[0], action_space_size, bias=self.bias)
+                )
+                if last_linear_layer_init_zero:
+                    self.fc_policy_head[-1].weight.data.fill_(0)
 
     def forward(self, latent_state: torch.Tensor):
         """
@@ -578,12 +611,11 @@ class PredictionNetwork(nn.Module):
              - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
          """
         x_prediction_common = self.fc_prediction_common(latent_state)
-
         value = self.fc_value_head(x_prediction_common)
 
         # sampled related core code
-        #  policy shape: {'mu': mu, 'sigma': sigma}
-        policy = self.sampled_fc_policy(x_prediction_common)
+        # policy shape: {'mu': mu, 'sigma': sigma}
+        policy = self.fc_policy_head(x_prediction_common)
         # print("policy['mu']", policy['mu'].max(), policy['mu'].min(), policy['mu'].std())
         # print("policy['sigma']", policy['sigma'].max(), policy['sigma'].min(), policy['sigma'].std())
         if self.continuous_action_space:

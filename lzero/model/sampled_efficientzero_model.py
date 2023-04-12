@@ -679,7 +679,7 @@ class PredictionNetwork(nn.Module):
 
         # sampled related core code
         if self.continuous_action_space:
-            self.sampled_fc_policy = ReparameterizationHead(
+            self.fc_policy_head = ReparameterizationHead(
                 input_size=self.flatten_output_size_for_policy_head,
                 output_size=action_space_size,
                 layer_num=len(fc_policy_layers) + 1,
@@ -690,7 +690,7 @@ class PredictionNetwork(nn.Module):
                 bound_type=self.bound_type
             )
         else:
-            self.sampled_fc_policy = MLP(
+            self.fc_policy_head = MLP(
                 in_channels=self.flatten_output_size_for_policy_head,
                 hidden_channels=fc_policy_layers[0],
                 out_channels=action_space_size,
@@ -732,7 +732,7 @@ class PredictionNetwork(nn.Module):
 
         # sampled related core code
         #  {'mu': mu, 'sigma': sigma}
-        policy = self.sampled_fc_policy(policy)
+        policy = self.fc_policy_head(policy)
 
         # print("policy['mu']", policy['mu'].max(), policy['mu'].min(), policy['mu'].std())
         # print("policy['sigma']", policy['sigma'].max(), policy['sigma'].min(), policy['sigma'].std())

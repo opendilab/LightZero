@@ -32,6 +32,7 @@ class EfficientZeroModelMLP(nn.Module):
         pred_hid: int = 512,
         pred_out: int = 1024,
         self_supervised_learning_loss: bool = True,
+        bias: bool = True,
         *args,
         **kwargs,
     ):
@@ -63,6 +64,7 @@ class EfficientZeroModelMLP(nn.Module):
             - pred_hid (:obj:`int`): The size of prediction hidden layer.
             - pred_out (:obj:`int`): The size of prediction output layer.
             - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks in Sampled EfficientZero model, default set it to False.
+            - bias (:obj:`bool`): Whether to use bias in the last layer of policy and value head in prediction network, default set it to True.
         """
         super(EfficientZeroModelMLP, self).__init__()
         self.action_space_size = action_space_size
@@ -84,7 +86,7 @@ class EfficientZeroModelMLP(nn.Module):
         self.pred_out = pred_out
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
-        self.action_space_size = action_space_size
+        self.bias = bias
 
         self.representation_network = RepresentationNetworkMLP(
             observation_shape=observation_shape, hidden_channels=latent_state_dim
@@ -107,6 +109,7 @@ class EfficientZeroModelMLP(nn.Module):
             fc_policy_layers=fc_policy_layers,
             output_support_size=self.value_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            bias=self.bias,
         )
 
         if self.self_supervised_learning_loss:

@@ -194,11 +194,11 @@ class SampledEfficientZeroPolicy(Policy):
         if self._cfg.model.continuous_action_space:
             # Weight Init for the last output layer of gaussian policy head in prediction network.
             init_w = self._cfg.init_w
-            self._model.prediction_network.sampled_fc_policy.mu.weight.data.uniform_(-init_w, init_w)
-            self._model.prediction_network.sampled_fc_policy.mu.bias.data.uniform_(-init_w, init_w)
-            self._model.prediction_network.sampled_fc_policy.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
+            self._model.prediction_network.fc_policy_head.mu.weight.data.uniform_(-init_w, init_w)
+            self._model.prediction_network.fc_policy_head.mu.bias.data.uniform_(-init_w, init_w)
+            self._model.prediction_network.fc_policy_head.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
             try:
-                self._model.prediction_network.sampled_fc_policy.log_sigma_layer.bias.data.uniform_(-init_w, init_w)
+                self._model.prediction_network.fc_policy_head.log_sigma_layer.bias.data.uniform_(-init_w, init_w)
             except Exception as exception:
                 logging.warning(exception)
 
@@ -765,9 +765,9 @@ class SampledEfficientZeroPolicy(Policy):
           """
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
-            self._mcts_collect = MCTSCTree(self._cfg)
+            self._mcts_collect = MCTSCtree(self._cfg)
         else:
-            self._mcts_collect = MCTSPTree(self._cfg)
+            self._mcts_collect = MCTSPtree(self._cfg)
         self.collect_mcts_temperature = 1
 
     def _forward_collect(

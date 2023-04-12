@@ -267,6 +267,7 @@ class PredictionNetwork(nn.Module):
             flatten_output_size_for_policy_head: int,
             last_linear_layer_init_zero: bool = True,
             activation: nn.Module = nn.ReLU(inplace=True),
+            bias: bool = True,
     ) -> None:
         """
         Overview:
@@ -290,6 +291,7 @@ class PredictionNetwork(nn.Module):
                 dynamics/prediction mlp, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
+            - bias (:obj:`bool`): Whether to use bias in the last layer of policy and value head in prediction network, default set it to True.
         """
         super(PredictionNetwork, self).__init__()
 
@@ -306,30 +308,48 @@ class PredictionNetwork(nn.Module):
         self.bn_policy = nn.BatchNorm2d(policy_head_channels)
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
-        self.fc_value = MLP(
-            in_channels=self.flatten_output_size_for_value_head,
-            hidden_channels=fc_value_layers[0],
-            out_channels=output_support_size,
-            layer_num=len(fc_value_layers) + 1,
-            activation=activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-        self.fc_policy = MLP(
-            in_channels=self.flatten_output_size_for_policy_head,
-            hidden_channels=fc_policy_layers[0],
-            out_channels=action_space_size,
-            layer_num=len(fc_policy_layers) + 1,
-            activation=activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-
         self.activation = activation
+        self.bias = bias
+
+        if self.bias:
+            # use bias in the last layer
+            self.fc_value = MLP(
+                in_channels=self.flatten_output_size_for_value_head,
+                hidden_channels=fc_value_layers[0],
+                out_channels=output_support_size,
+                layer_num=len(fc_value_layers) + 1,
+                activation=self.activation,
+                norm_type='BN',
+                output_activation=nn.Identity(),
+                output_norm_type=None,
+                last_linear_layer_init_zero=last_linear_layer_init_zero
+            )
+            self.fc_policy = MLP(
+                in_channels=self.flatten_output_size_for_policy_head,
+                hidden_channels=fc_policy_layers[0],
+                out_channels=action_space_size,
+                layer_num=len(fc_policy_layers) + 1,
+                activation=self.activation,
+                norm_type='BN',
+                output_activation=nn.Identity(),
+                output_norm_type=None,
+                last_linear_layer_init_zero=last_linear_layer_init_zero
+            )
+        else:
+            # no bias in the last layer in policy and value head
+            self.fc_value_head = nn.Sequential(
+                nn.Linear(self.num_channels, fc_value_layers[0]), nn.BatchNorm1d(fc_value_layers[0]),
+                self.activation,
+                nn.Linear(fc_value_layers[0], output_support_size, bias=self.bias)
+            )
+            self.fc_policy_head = nn.Sequential(
+                nn.Linear(self.num_channels, fc_policy_layers[0]),
+                nn.BatchNorm1d(fc_policy_layers[0]), self.activation,
+                nn.Linear(fc_policy_layers[0], action_space_size, bias=self.bias)
+            )
+            if last_linear_layer_init_zero:
+                self.fc_value_head[-1].weight.data.fill_(0)
+                self.fc_policy_head[-1].weight.data.fill_(0)
 
     def forward(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -372,6 +392,7 @@ class PredictionNetworkMLP(nn.Module):
         output_support_size: int = 601,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        bias: bool = True,
     ):
         """
         Overview:
@@ -388,6 +409,7 @@ class PredictionNetworkMLP(nn.Module):
                 dynamics/prediction mlp, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
+            - bias (:obj:`bool`): Whether to use bias in the last layer of policy and value head in prediction network, default set it to True.
         """
         super().__init__()
         self.num_channels = num_channels
@@ -402,27 +424,46 @@ class PredictionNetworkMLP(nn.Module):
             output_activation=nn.Identity(),
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
+        self.activation = activation
+        self.bias = bias
 
-        self.fc_value_head = MLP(
-            in_channels=self.num_channels,
-            hidden_channels=fc_value_layers[0],
-            out_channels=output_support_size,
-            layer_num=2,
-            activation=activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-        self.fc_policy_head = MLP(
-            in_channels=self.num_channels,
-            hidden_channels=fc_policy_layers[0],
-            out_channels=action_space_size,
-            layer_num=2,
-            activation=activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
+        if self.bias:
+            # use bias in the last layer
+            self.fc_value_head = MLP(
+                in_channels=self.num_channels,
+                hidden_channels=fc_value_layers[0],
+                out_channels=output_support_size,
+                layer_num=len(fc_value_layers)+1,
+                activation=activation,
+                norm_type='BN',
+                output_activation=nn.Identity(),
+                last_linear_layer_init_zero=last_linear_layer_init_zero
+            )
+            self.fc_policy_head = MLP(
+                in_channels=self.num_channels,
+                hidden_channels=fc_policy_layers[0],
+                out_channels=action_space_size,
+                layer_num=len(fc_policy_layers)+1,
+                activation=activation,
+                norm_type='BN',
+                output_activation=nn.Identity(),
+                last_linear_layer_init_zero=last_linear_layer_init_zero
+            )
+        else:
+            # no bias in the last layer in policy and value head
+            self.fc_value_head = nn.Sequential(
+                nn.Linear(self.num_channels, fc_value_layers[0]), nn.BatchNorm1d(fc_value_layers[0]),
+                self.activation,
+                nn.Linear(fc_value_layers[0], output_support_size, bias=self.bias)
+            )
+            self.fc_policy_head = nn.Sequential(
+                nn.Linear(self.num_channels, fc_policy_layers[0]),
+                nn.BatchNorm1d(fc_policy_layers[0]), self.activation,
+                nn.Linear(fc_policy_layers[0], action_space_size, bias=self.bias)
+            )
+            if last_linear_layer_init_zero:
+                self.fc_value_head[-1].weight.data.fill_(0)
+                self.fc_policy_head[-1].weight.data.fill_(0)
 
     def forward(self, latent_state: torch.Tensor):
         """
