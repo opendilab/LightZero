@@ -4,7 +4,6 @@ from zoo.classic_control.pendulum.config.pendulum_cont_sampled_efficientzero_con
 if __name__ == "__main__":
     from lzero.entry import eval_muzero
     import numpy as np
-
     """ 
     model_path (:obj:`Optional[str]`): The pretrained model path, which should
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
@@ -21,9 +20,13 @@ if __name__ == "__main__":
     returns_mean_seeds = []
     returns_seeds = []
     for seed in seeds:
-        returns_mean, returns = eval_muzero([main_config, create_config], seed=seed,
-                                            num_episodes_each_seed=num_episodes_each_seed,
-                                            print_seed_details=False, model_path=model_path)
+        returns_mean, returns = eval_muzero(
+            [main_config, create_config],
+            seed=seed,
+            num_episodes_each_seed=num_episodes_each_seed,
+            print_seed_details=False,
+            model_path=model_path
+        )
         returns_mean_seeds.append(returns_mean)
         returns_seeds.append(returns)
 

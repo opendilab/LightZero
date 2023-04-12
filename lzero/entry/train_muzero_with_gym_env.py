@@ -65,11 +65,11 @@ def train_muzero_with_gym_env(
     collector_env_cfg = DingEnvWrapper.create_collector_env_cfg(cfg.env)
     evaluator_env_cfg = DingEnvWrapper.create_evaluator_env_cfg(cfg.env)
     collector_env = BaseEnvManager(
-        [get_wrappered_env(c, cfg.env.env_name) for c in collector_env_cfg],
-        cfg=BaseEnvManager.default_config())
+        [get_wrappered_env(c, cfg.env.env_name) for c in collector_env_cfg], cfg=BaseEnvManager.default_config()
+    )
     evaluator_env = BaseEnvManager(
-        [get_wrappered_env(c, cfg.env.env_name) for c in evaluator_env_cfg],
-        cfg=BaseEnvManager.default_config())
+        [get_wrappered_env(c, cfg.env.env_name) for c in evaluator_env_cfg], cfg=BaseEnvManager.default_config()
+    )
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)

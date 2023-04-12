@@ -14,6 +14,7 @@ cfg = EasyDict(
     bot_action_type='v0',  # {'v0',  'alpha_beta_pruning'}
 )
 
+
 @pytest.mark.envtest
 class TestExpertAction:
 

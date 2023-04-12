@@ -109,7 +109,9 @@ class GameSegment:
           """
         timestep_obs = len(self.obs_segment) - self.frame_stack_num
         timestep_reward = len(self.reward_segment)
-        assert timestep_obs == timestep_reward, "timestep_obs: {}, timestep_reward: {}".format(timestep_obs, timestep_reward)
+        assert timestep_obs == timestep_reward, "timestep_obs: {}, timestep_reward: {}".format(
+            timestep_obs, timestep_reward
+        )
         # TODO:
         timestep = timestep_obs
         timestep = timestep_reward
@@ -118,7 +120,14 @@ class GameSegment:
             stacked_obs = [jpeg_data_decompressor(obs, self.config.gray_scale) for obs in stacked_obs]
         return stacked_obs
 
-    def append(self, action: np.ndarray, obs: np.ndarray, reward: np.ndarray, action_mask: np.ndarray = None, to_play: int = -1) -> None:
+    def append(
+            self,
+            action: np.ndarray,
+            obs: np.ndarray,
+            reward: np.ndarray,
+            action_mask: np.ndarray = None,
+            to_play: int = -1
+    ) -> None:
         """
         Overview:
             append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
@@ -130,8 +139,10 @@ class GameSegment:
         self.action_mask_segment.append(action_mask)
         self.to_play_segment.append(to_play)
 
-    def pad_over(self, next_segment_observations: List, next_segment_rewards: List, next_segment_root_values: List,
-                 next_segment_child_visits: List) -> None:
+    def pad_over(
+            self, next_segment_observations: List, next_segment_rewards: List, next_segment_root_values: List,
+            next_segment_child_visits: List
+    ) -> None:
         """
         Overview:
             To make sure the correction of value targets, we need to add (o_t, r_t, etc) from the next game_segment
@@ -169,8 +180,9 @@ class GameSegment:
         """
         return self.target_values[timestep], self.target_rewards[timestep], self.target_policies[timestep]
 
-    def store_search_stats(self, visit_counts: List, root_value: List, root_sampled_actions=None,
-                           idx: int = None) -> None:
+    def store_search_stats(
+            self, visit_counts: List, root_value: List, root_sampled_actions=None, idx: int = None
+    ) -> None:
         """
         Overview:
             store the visit count distributions and value of the root node after MCTS.

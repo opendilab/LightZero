@@ -13,26 +13,26 @@ from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_me
 class MuZeroModelMLP(nn.Module):
 
     def __init__(
-            self,
-            observation_shape: int = 2,
-            action_space_size: int = 6,
-            latent_state_dim: int = 256,
-            categorical_distribution: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            last_linear_layer_init_zero: bool = True,
-            state_norm: bool = False,
-            fc_reward_layers: SequenceType = [32],
-            fc_value_layers: SequenceType = [32],
-            fc_policy_layers: SequenceType = [32],
-            reward_support_size: int = 601,
-            value_support_size: int = 601,
-            proj_hid: int = 1024,
-            proj_out: int = 1024,
-            pred_hid: int = 512,
-            pred_out: int = 1024,
-            self_supervised_learning_loss: bool = False,
-            *args,
-            **kwargs
+        self,
+        observation_shape: int = 2,
+        action_space_size: int = 6,
+        latent_state_dim: int = 256,
+        categorical_distribution: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        last_linear_layer_init_zero: bool = True,
+        state_norm: bool = False,
+        fc_reward_layers: SequenceType = [32],
+        fc_value_layers: SequenceType = [32],
+        fc_policy_layers: SequenceType = [32],
+        reward_support_size: int = 601,
+        value_support_size: int = 601,
+        proj_hid: int = 1024,
+        proj_out: int = 1024,
+        pred_hid: int = 512,
+        pred_out: int = 1024,
+        self_supervised_learning_loss: bool = False,
+        *args,
+        **kwargs
     ):
         """
         Overview:
@@ -83,8 +83,9 @@ class MuZeroModelMLP(nn.Module):
         self.state_norm = state_norm
         self.action_space_size = action_space_size
 
-        self.representation_network = RepresentationNetworkMLP(observation_shape=observation_shape,
-                                                               hidden_channels=self.latent_state_dim)
+        self.representation_network = RepresentationNetworkMLP(
+            observation_shape=observation_shape, hidden_channels=self.latent_state_dim
+        )
 
         self.dynamics_network = DynamicsNetwork(
             action_space_size=action_space_size,
@@ -109,9 +110,9 @@ class MuZeroModelMLP(nn.Module):
             self.projection_input_dim = latent_state_dim
 
             self.projection = nn.Sequential(
-                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
-                activation, nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
-                activation, nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
+                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
             )
             self.prediction_head = nn.Sequential(
                 nn.Linear(self.proj_out, self.pred_hid),
@@ -294,14 +295,14 @@ class MuZeroModelMLP(nn.Module):
 class DynamicsNetwork(nn.Module):
 
     def __init__(
-            self,
-            action_space_size: int = 2,
-            num_channels: int = 64,
-            common_layer_num: int = 2,
-            fc_reward_layers: SequenceType = [32],
-            output_support_size: int = 601,
-            last_linear_layer_init_zero: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        self,
+        action_space_size: int = 2,
+        num_channels: int = 64,
+        common_layer_num: int = 2,
+        fc_reward_layers: SequenceType = [32],
+        output_support_size: int = 601,
+        last_linear_layer_init_zero: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
     ):
         """
         Overview:
@@ -368,5 +369,3 @@ class DynamicsNetwork(nn.Module):
 
     def get_reward_mean(self) -> float:
         return get_reward_mean(self)
-
-

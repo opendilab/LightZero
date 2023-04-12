@@ -124,13 +124,13 @@ class DownSample(nn.Module):
 class RepresentationNetwork(nn.Module):
 
     def __init__(
-        self,
-        observation_shape: SequenceType = (12, 96, 96),
-        num_res_blocks: int = 1,
-        num_channels: int = 64,
-        downsample: bool = True,
-        activation: nn.Module = nn.ReLU(inplace=True),
-        norm_type: str = 'BN',
+            self,
+            observation_shape: SequenceType = (12, 96, 96),
+            num_res_blocks: int = 1,
+            num_channels: int = 64,
+            downsample: bool = True,
+            activation: nn.Module = nn.ReLU(inplace=True),
+            norm_type: str = 'BN',
     ) -> None:
         """
         Overview:
@@ -331,7 +331,7 @@ class PredictionNetwork(nn.Module):
 
         self.activation = activation
 
-    def forward(self,  latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
             Forward computation of the prediction network.
@@ -363,15 +363,15 @@ class PredictionNetwork(nn.Module):
 class PredictionNetworkMLP(nn.Module):
 
     def __init__(
-            self,
-            action_space_size,
-            num_channels,
-            common_layer_num: int = 2,
-            fc_value_layers: SequenceType = [32],
-            fc_policy_layers: SequenceType = [32],
-            output_support_size: int = 601,
-            last_linear_layer_init_zero: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        self,
+        action_space_size,
+        num_channels,
+        common_layer_num: int = 2,
+        fc_value_layers: SequenceType = [32],
+        fc_policy_layers: SequenceType = [32],
+        output_support_size: int = 601,
+        last_linear_layer_init_zero: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
     ):
         """
         Overview:

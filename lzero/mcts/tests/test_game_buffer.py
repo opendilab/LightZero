@@ -5,15 +5,17 @@ from easydict import EasyDict
 from ding.torch_utils import to_list
 from lzero.mcts.buffer.game_buffer_efficientzero import EfficientZeroGameBuffer
 
-config = EasyDict(dict(
-    batch_size=10,
-    transition_num=20,
-    priority_prob_alpha=0.6,
-    priority_prob_beta=0.4,
-    replay_buffer_size=10000,
-    env_type='not_board_games',
-    use_priority=True,
-))
+config = EasyDict(
+    dict(
+        batch_size=10,
+        transition_num=20,
+        priority_prob_alpha=0.6,
+        priority_prob_beta=0.4,
+        replay_buffer_size=10000,
+        env_type='not_board_games',
+        use_priority=True,
+    )
+)
 
 
 @pytest.mark.unittest

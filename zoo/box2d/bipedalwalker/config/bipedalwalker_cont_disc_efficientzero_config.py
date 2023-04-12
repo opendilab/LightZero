@@ -18,7 +18,8 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 bipedalwalker_cont_disc_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/bipedalwalker_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_seed0',
+    exp_name=
+    f'data_sez_ctree/bipedalwalker_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name='BipedalWalker-v3',
@@ -101,4 +102,3 @@ if __name__ == "__main__":
         from lzero.entry import train_muzero_with_gym_env as train_muzero
 
     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
-

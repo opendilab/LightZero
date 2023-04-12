@@ -69,8 +69,14 @@ class EfficientZeroMCTSPtree(object):
         import lzero.mcts.ptree.ptree_ez as ptree
         return ptree.Roots(root_num, legal_actions)
 
-    def search(self, roots: Any, model: torch.nn.Module, hidden_state_roots: List[Any],
-               reward_hidden_state_roots: List[Any], to_play: Union[int, List[Any]] = -1) -> None:
+    def search(
+            self,
+            roots: Any,
+            model: torch.nn.Module,
+            hidden_state_roots: List[Any],
+            reward_hidden_state_roots: List[Any],
+            to_play: Union[int, List[Any]] = -1
+    ) -> None:
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
@@ -271,8 +277,13 @@ class MuZeroMCTSPtree(object):
         import lzero.mcts.ptree.ptree_mz as ptree
         return ptree.Roots(root_num, legal_actions)
 
-    def search(self, roots: Any, model: torch.nn.Module, hidden_state_roots: List[Any],
-               to_play: Union[int, List[Any]] = -1) -> None:
+    def search(
+            self,
+            roots: Any,
+            model: torch.nn.Module,
+            hidden_state_roots: List[Any],
+            to_play: Union[int, List[Any]] = -1
+    ) -> None:
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
@@ -372,6 +383,5 @@ class MuZeroMCTSPtree(object):
                 # backpropagation along the search path to update the attributes
                 tree_muzero.batch_backpropagate(
                     hidden_state_index_x, discount_factor, reward_pool, value_pool, policy_logits_pool,
-                    min_max_stats_lst,
-                    results, virtual_to_play
+                    min_max_stats_lst, results, virtual_to_play
                 )

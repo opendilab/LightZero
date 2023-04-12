@@ -8,15 +8,17 @@ from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 class TestGomokuEnv:
 
     def test_self_play_mode(self):
-        cfg = EasyDict(board_size=15,
-                       battle_mode='self_play_mode',
-                       prob_random_agent=0,
-                       channel_last=False,
-                       scale=True,
-                       agent_vs_human=False,
-                       bot_action_type='v0',
-                       prob_random_action_in_bot=0.,
-                       check_action_to_connect4_in_bot_v0=False, )
+        cfg = EasyDict(
+            board_size=15,
+            battle_mode='self_play_mode',
+            prob_random_agent=0,
+            channel_last=False,
+            scale=True,
+            agent_vs_human=False,
+            bot_action_type='v0',
+            prob_random_action_in_bot=0.,
+            check_action_to_connect4_in_bot_v0=False,
+        )
         env = GomokuEnv(cfg)
         obs = env.reset()
         print('init board state: ')
@@ -48,15 +50,17 @@ class TestGomokuEnv:
                 break
 
     def test_play_with_bot_mode(self):
-        cfg = EasyDict(board_size=15,
-                       battle_mode='play_with_bot_mode',
-                       prob_random_agent=0,
-                       channel_last=False,
-                       scale=True,
-                       agent_vs_human=False,
-                       bot_action_type='v0',
-                       prob_random_action_in_bot=0.,
-                       check_action_to_connect4_in_bot_v0=False, )
+        cfg = EasyDict(
+            board_size=15,
+            battle_mode='play_with_bot_mode',
+            prob_random_agent=0,
+            channel_last=False,
+            scale=True,
+            agent_vs_human=False,
+            bot_action_type='v0',
+            prob_random_action_in_bot=0.,
+            check_action_to_connect4_in_bot_v0=False,
+        )
         env = GomokuEnv(cfg)
         env.reset()
         print('init board state: ')

@@ -24,7 +24,7 @@ class EfficientZeroMCTSCtree(object):
     Interfaces:
         __init__, search
     """
-    
+
     config = dict(
         # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
         root_dirichlet_alpha=0.3,
@@ -67,7 +67,10 @@ class EfficientZeroMCTSCtree(object):
         from lzero.mcts.ctree.ctree_efficientzero import ez_tree as ctree
         return ctree.Roots(active_collect_env_num, legal_actions)
 
-    def search(self, roots: Any, model: torch.nn.Module, hidden_state_roots: List[Any], reward_hidden_state_roots: List[Any], to_play_batch: Union[int, List[Any]]) -> None:
+    def search(
+            self, roots: Any, model: torch.nn.Module, hidden_state_roots: List[Any],
+            reward_hidden_state_roots: List[Any], to_play_batch: Union[int, List[Any]]
+    ) -> None:
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
@@ -113,7 +116,8 @@ class EfficientZeroMCTSCtree(object):
                 # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
                 # simulation reaches a leaf node s_l.
                 latent_state_index_x_lst, latent_state_index_y_lst, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play_batch)
+                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                    copy.deepcopy(to_play_batch)
                 )
                 # obtain the search horizon for leaf nodes
                 search_lens = results.get_search_len()
@@ -125,8 +129,10 @@ class EfficientZeroMCTSCtree(object):
                     hidden_states_h_reward.append(reward_hidden_state_h_pool[ix][0][iy])
 
                 latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
-                hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(self._cfg.device).unsqueeze(0)
-                hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(self._cfg.device).unsqueeze(0)
+                hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(self._cfg.device
+                                                                                                 ).unsqueeze(0)
+                hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(self._cfg.device
+                                                                                                 ).unsqueeze(0)
                 # .long() only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
 
@@ -247,7 +253,10 @@ class MuZeroMCTSCtree(object):
         from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
         return ctree.Roots(active_collect_env_num, legal_actions)
 
-    def search(self, roots: Any, model: torch.nn.Module, hidden_state_roots: List[Any], to_play_batch: Union[int, List[Any]]) -> None:
+    def search(
+            self, roots: Any, model: torch.nn.Module, hidden_state_roots: List[Any], to_play_batch: Union[int,
+                                                                                                          List[Any]]
+    ) -> None:
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
@@ -286,7 +295,8 @@ class MuZeroMCTSCtree(object):
                 # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
                 # simulation reaches a leaf node s_l.
                 latent_state_index_x_lst, latent_state_index_y_lst, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play_batch)
+                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                    copy.deepcopy(to_play_batch)
                 )
 
                 # obtain the states for leaf nodes
@@ -333,6 +343,6 @@ class MuZeroMCTSCtree(object):
 
                 # backpropagation along the search path to update the attributes
                 tree_muzero.batch_backpropagate(
-                    hidden_state_index_x, discount_factor, reward_pool, value_pool, policy_logits_pool, min_max_stats_lst,
-                    results, virtual_to_play_batch
+                    hidden_state_index_x, discount_factor, reward_pool, value_pool, policy_logits_pool,
+                    min_max_stats_lst, results, virtual_to_play_batch
                 )

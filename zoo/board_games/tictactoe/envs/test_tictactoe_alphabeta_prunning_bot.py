@@ -110,6 +110,5 @@ class TestTicTacToeAlphaBetaPruningBot:
         assert env.get_done_winner()[0] is True, env.get_done_winner()[1] == 1
 
 
-
 test = TestTicTacToeAlphaBetaPruningBot()
 test.test_tictactoe_self_play_mode_draw()

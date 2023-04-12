@@ -40,7 +40,7 @@ class TestExpertActionV0:
                         print('player 1 win')
                     else:
                         print('draw')
-                    print('='*20)
+                    print('=' * 20)
                     break
 
                 action = env.bot_action()
@@ -56,7 +56,7 @@ class TestExpertActionV0:
                         print('player 2 win')
                     else:
                         print('draw')
-                    print('='*20)
+                    print('=' * 20)
                     break
 
     def test_v0_vs_v1(self):
@@ -102,7 +102,7 @@ class TestExpertActionV0:
                         print('player 1 win')
                     else:
                         print('draw')
-                    print('='*20)
+                    print('=' * 20)
                     break
 
                 env.bot_action_type = 'v1'
@@ -119,11 +119,10 @@ class TestExpertActionV0:
                         print('player 2 win')
                     else:
                         print('draw')
-                    print('='*20)
+                    print('=' * 20)
                     break
 
 
 test = TestExpertActionV0()
 # test.test_v0_vs_v1()
 test.test_naive()
-

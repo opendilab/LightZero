@@ -16,7 +16,8 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 tictactoe_muzero_config = dict(
-    exp_name=f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=
+    f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         battle_mode='play_with_bot_mode',
         collector_env_num=collector_env_num,
@@ -56,7 +57,7 @@ tictactoe_muzero_config = dict(
         td_steps=9,
         num_unroll_steps=3,
         discount_factor=1,
-        n_episode=n_episode, 
+        n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(3e3),
         collector_env_num=collector_env_num,

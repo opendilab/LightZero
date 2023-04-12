@@ -422,14 +422,22 @@ class DynamicsNetwork(nn.Module):
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - 1, activation=self.activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=num_channels - 1,
+                    activation=self.activation,
+                    norm_type='BN',
+                    res_type='basic',
+                    bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
         self.reward_resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - 1, activation=self.activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=num_channels - 1,
+                    activation=self.activation,
+                    norm_type='BN',
+                    res_type='basic',
+                    bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
@@ -453,7 +461,8 @@ class DynamicsNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
-    def forward(self, state_action_encoding: torch.Tensor, reward_hidden_state: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, Tuple, torch.Tensor]:
+    def forward(self, state_action_encoding: torch.Tensor,
+                reward_hidden_state: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, Tuple, torch.Tensor]:
         # take the state encoding,  state_action_encoding[:, -1, :, :] is action encoding
         state_encoding = state_action_encoding[:, :-1, :, :]
         x = self.conv(state_action_encoding)
@@ -487,4 +496,3 @@ class DynamicsNetwork(nn.Module):
 
     def get_reward_mean(self) -> float:
         return get_reward_mean(self)
-

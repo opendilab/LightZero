@@ -21,6 +21,7 @@ cfg = dict(
 
 @pytest.mark.envtest
 class TestGomokuBot:
+
     def test_gomoku_self_play_mode_draw(self):
         # player_0: AlphaBetaPruningBot
         # player_1: AlphaBetaPruningBot
@@ -59,11 +60,13 @@ class TestGomokuBot:
         player_1 = AlphaBetaPruningBot(GomokuEnv, cfg, 'player 2')  # player_index = 1, player = 2
 
         player_index = 1  # player 2 fist
-        init_state = [[1, 1, 1, 1, 0],
-                      [1, 0, 0, 0, 2],
-                      [0, 0, 2, 0, 2],
-                      [0, 2, 0, 0, 2],
-                      [2, 1, 1, 0, 0], ]
+        init_state = [
+            [1, 1, 1, 1, 0],
+            [1, 0, 0, 0, 2],
+            [0, 0, 2, 0, 2],
+            [0, 2, 0, 0, 2],
+            [2, 1, 1, 0, 0],
+        ]
         env.reset(player_index, init_state)
 
         state = env.board
@@ -97,11 +100,13 @@ class TestGomokuBot:
         player_1 = AlphaBetaPruningBot(GomokuEnv, cfg, 'player 2')  # player_index = 1, player = 2
 
         player_index = 0  # player 1 fist
-        init_state = [[0, 0, 2, 0, 0],
-                      [0, 1, 2, 0, 0],
-                      [2, 2, 1, 0, 0],
-                      [2, 0, 0, 1, 2],
-                      [1, 1, 1, 0, 0], ]
+        init_state = [
+            [0, 0, 2, 0, 0],
+            [0, 1, 2, 0, 0],
+            [2, 2, 1, 0, 0],
+            [2, 0, 0, 1, 2],
+            [1, 1, 1, 0, 0],
+        ]
         env.reset(player_index, init_state)
 
         state = env.board

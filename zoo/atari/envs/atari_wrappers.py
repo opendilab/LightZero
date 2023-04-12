@@ -105,7 +105,10 @@ def wrap_lightzero(config, episode_life, clip_rewards):
         env = ClipRewardWrapper(env)
     if config.save_video:
         env = RecordVideo(
-            env, video_folder=config.save_path, episode_trigger=lambda episode_id: True, name_prefix='rl-video-{}'.format(config.uid)
+            env,
+            video_folder=config.save_path,
+            episode_trigger=lambda episode_id: True,
+            name_prefix='rl-video-{}'.format(config.uid)
         )
 
     env = JpegWrapper(env, transform2string=config.transform2string)

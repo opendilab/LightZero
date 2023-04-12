@@ -1,6 +1,7 @@
 from easydict import EasyDict
 import copy
 
+
 class Node():
     """
     Overview:
@@ -36,7 +37,12 @@ class Node():
                 action = self.legal_actions.pop(0)
                 board, legal_actions = self.env.simulate_action_v2(self.board, self.start_player_index, action)
                 child_node = Node(
-                    board, legal_actions, start_player_index=next_start_player_index, parent=self, prev_action=action, env=self.env
+                    board,
+                    legal_actions,
+                    start_player_index=next_start_player_index,
+                    parent=self,
+                    prev_action=action,
+                    env=self.env
                 )
                 # print('add one edge')
                 self.children.append(child_node)
@@ -99,7 +105,7 @@ def pruning(tree, maximising_player, alpha=float("-inf"), beta=float("+inf"), de
 
     val = float("-inf") if maximising_player else float("+inf")
     for subtree in tree.children:
-        sub_val = pruning(subtree, not maximising_player, alpha, beta, depth-1, first_level=False)
+        sub_val = pruning(subtree, not maximising_player, alpha, beta, depth - 1, first_level=False)
         if maximising_player:
             val = max(sub_val, val)
             if val > alpha:
@@ -132,9 +138,7 @@ class AlphaBetaPruningBot:
         except:
             simulator_env = copy.deepcopy(self.ENV)
         simulator_env.reset(start_player_index=player_index, init_state=board)
-        root = Node(
-            board, simulator_env.legal_actions, start_player_index=player_index, env=simulator_env
-        )
+        root = Node(board, simulator_env.legal_actions, start_player_index=player_index, env=simulator_env)
         if player_index == 0:
             val, best_subtree = pruning(root, True, depth=depth, first_level=True)
         else:

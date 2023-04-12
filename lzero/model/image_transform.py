@@ -9,6 +9,7 @@ class Intensity(nn.Module):
     Overview:
         Intensity transformation for data augmentation. Scale the image intensity by a random factor.
     """
+
     def __init__(self, scale: float) -> None:
         """
         Arguments:
@@ -33,6 +34,7 @@ class RandomCrop(nn.Module):
     Overview:
         Random crop the image to the given size.
     """
+
     def __init__(self, image_shape: Tuple[int]) -> None:
         """
         Arguments:
@@ -53,7 +55,7 @@ class RandomCrop(nn.Module):
         H_, W_ = self.image_shape
         dh, dw = H - H_, W - W_
         h, w = random.randint(0, dh), random.randint(0, dw)
-        return x[..., h: h + H_, w: w + W_]
+        return x[..., h:h + H_, w:w + W_]
 
 
 class ImageTransforms(object):
@@ -62,6 +64,7 @@ class ImageTransforms(object):
         Image transformation for data augmentation. Including image normalization (divide 255), random crop and
         intensity transformation.
     """
+
     def __init__(self, augmentation: List[str], shift_delta: int = 4, image_shape: Tuple[int] = (96, 96)) -> None:
         """
         Arguments:

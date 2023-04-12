@@ -113,7 +113,7 @@ class MuZeroPolicy(Policy):
         # (float) The weight of policy loss.
         policy_loss_weight=1,
         # (float) The weight of ssl (self-supervised learning) loss.
-        ssl_loss_weight=0,  
+        ssl_loss_weight=0,
         # ``threshold_training_steps_for_final_lr`` is used for adjusting lr manually.
         # lr_piecewise_constant_decay: lr: 0.2 -> 0.02 -> 0.002
         threshold_training_steps_for_final_lr=int(1e5),
@@ -304,7 +304,9 @@ class MuZeroPolicy(Policy):
                     if self._cfg.model.model_type == 'conv':
                         beg_index = self._cfg.model.image_channel * step_i
                         end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
-                        network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
+                        network_output = self._learn_model.initial_inference(
+                            obs_target_batch[:, beg_index:end_index, :, :]
+                        )
                     elif self._cfg.model.model_type == 'mlp':
                         beg_index = self._cfg.model.observation_shape * step_i
                         end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
@@ -349,8 +351,8 @@ class MuZeroPolicy(Policy):
         # ==============================================================
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-                self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
+            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
         )
         weighted_total_loss = (weights * loss).mean()
 
@@ -358,8 +360,9 @@ class MuZeroPolicy(Policy):
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
-        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(self._learn_model.parameters(),
-                                                                     self._cfg.grad_clip_value)
+        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
+            self._learn_model.parameters(), self._cfg.grad_clip_value
+        )
         self._optimizer.step()
         if self._cfg.lr_piecewise_constant_decay is True:
             self.lr_scheduler.step()
@@ -371,19 +374,26 @@ class MuZeroPolicy(Policy):
 
         # packing loss info for tensorboard logging
         loss_info = (
-            weighted_total_loss.item(), loss.mean().item(), policy_loss.mean().item(),
-            reward_loss.mean().item(), value_loss.mean().item(), consistency_loss.mean()
+            weighted_total_loss.item(), loss.mean().item(), policy_loss.mean().item(), reward_loss.mean().item(),
+            value_loss.mean().item(), consistency_loss.mean()
         )
         if self._cfg.monitor_extra_statistics:
             predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
             predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
 
             td_data = (
-                value_priority, target_reward.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
-                transformed_target_reward.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
-                target_reward_categorical.detach().cpu().numpy(), target_value_categorical.detach().cpu().numpy(),
-                predicted_rewards.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
-                target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), hidden_state_list,
+                value_priority,
+                target_reward.detach().cpu().numpy(),
+                target_value.detach().cpu().numpy(),
+                transformed_target_reward.detach().cpu().numpy(),
+                transformed_target_value.detach().cpu().numpy(),
+                target_reward_categorical.detach().cpu().numpy(),
+                target_value_categorical.detach().cpu().numpy(),
+                predicted_rewards.detach().cpu().numpy(),
+                predicted_values.detach().cpu().numpy(),
+                target_policy.detach().cpu().numpy(),
+                predicted_policies.detach().cpu().numpy(),
+                hidden_state_list,
             )
 
         return {
@@ -401,7 +411,6 @@ class MuZeroPolicy(Policy):
             # ==============================================================
             'value_priority_orig': value_priority,
             'value_priority': td_data[0].flatten().mean().item(),
-
             'target_reward': td_data[1].flatten().mean().item(),
             'target_value': td_data[2].flatten().mean().item(),
             'transformed_target_reward': td_data[3].flatten().mean().item(),
@@ -420,8 +429,7 @@ class MuZeroPolicy(Policy):
         self.collect_mcts_temperature = 1
 
     def _forward_collect(
-            self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1,
-            ready_env_id=None
+        self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1, ready_env_id=None
     ):
         """
         Overview:
@@ -446,8 +454,7 @@ class MuZeroPolicy(Policy):
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
-            hidden_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(
-                network_output)
+            hidden_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
@@ -455,9 +462,7 @@ class MuZeroPolicy(Policy):
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
-            legal_actions = [
-                [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
-            ]
+            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
             # the only difference between collect and eval is the dirichlet noise
             noises = [
                 np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -473,7 +478,8 @@ class MuZeroPolicy(Policy):
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
             self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions(
+            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             data_id = [i for i in range(active_collect_env_num)]
@@ -530,19 +536,15 @@ class MuZeroPolicy(Policy):
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
-            hidden_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(
-                network_output)
+            hidden_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy(
-                )  # shape（B, 1）
+                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
-            legal_actions = [
-                [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
-            ]
+            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(active_eval_env_num, legal_actions)
@@ -552,7 +554,8 @@ class MuZeroPolicy(Policy):
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
             self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions(
+            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             data_id = [i for i in range(active_eval_env_num)]

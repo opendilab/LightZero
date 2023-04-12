@@ -19,7 +19,8 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/bipedalwalker_cont_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_seed0',
+    exp_name=
+    f'data_sez_ctree/bipedalwalker_cont_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name='BipedalWalker-v3',
@@ -85,7 +86,9 @@ bipedalwalker_cont_disc_sampled_efficientzero_create_config = dict(
         import_names=['lzero.worker.muzero_collector'],
     )
 )
-bipedalwalker_cont_disc_sampled_efficientzero_create_config = EasyDict(bipedalwalker_cont_disc_sampled_efficientzero_create_config)
+bipedalwalker_cont_disc_sampled_efficientzero_create_config = EasyDict(
+    bipedalwalker_cont_disc_sampled_efficientzero_create_config
+)
 create_config = bipedalwalker_cont_disc_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
@@ -102,4 +105,3 @@ if __name__ == "__main__":
         from lzero.entry import train_muzero_with_gym_env as train_muzero
 
     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
-

@@ -20,9 +20,13 @@ if __name__ == "__main__":
     num_episodes_each_seed = 5
     total_test_episodes = num_episodes_each_seed * len(seeds)
     for seed in seeds:
-        returns_mean, returns = eval_muzero([main_config, create_config], seed=seed,
-                                                            num_episodes_each_seed=num_episodes_each_seed,
-                                                            print_seed_details=False, model_path=model_path)
+        returns_mean, returns = eval_muzero(
+            [main_config, create_config],
+            seed=seed,
+            num_episodes_each_seed=num_episodes_each_seed,
+            print_seed_details=False,
+            model_path=model_path
+        )
         returns_mean_seeds.append(returns_mean)
         returns_seeds.append(returns)
 

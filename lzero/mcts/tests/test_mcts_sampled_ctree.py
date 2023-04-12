@@ -11,7 +11,7 @@ class MuZeroModelFake(torch.nn.Module):
     Interfaces:
         __init__, initial_inference, recurrent_inference
     """
-    
+
     def __init__(self, action_num):
         super().__init__()
         self.action_num = action_num
@@ -105,7 +105,8 @@ def test_mcts():
     policy_logits_pool = network_output['policy_logits']
 
     # network output process
-    pred_values_pool = inverse_scalar_transform(pred_values_pool, policy_config.model.support_scale).detach().cpu().numpy()
+    pred_values_pool = inverse_scalar_transform(pred_values_pool,
+                                                policy_config.model.support_scale).detach().cpu().numpy()
     hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
     reward_hidden_state_state = (
         reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
@@ -113,7 +114,13 @@ def test_mcts():
     policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
     legal_actions_list = [[-1 for i in range(5)] for _ in range(env_nums)]
-    roots = MCTSCtree.roots(env_nums, legal_actions_list, policy_config.model.action_space_size, policy_config.num_of_sampled_actions, continuous_action_space=True)
+    roots = MCTSCtree.roots(
+        env_nums,
+        legal_actions_list,
+        policy_config.model.action_space_size,
+        policy_config.num_of_sampled_actions,
+        continuous_action_space=True
+    )
 
     noises = [
         np.random.dirichlet([policy_config.root_dirichlet_alpha] * policy_config.num_of_sampled_actions

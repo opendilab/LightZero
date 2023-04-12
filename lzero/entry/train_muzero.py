@@ -121,9 +121,7 @@ def train_muzero(
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
-            stop, reward = evaluator.eval(
-                learner.save_checkpoint, learner.train_iter, collector.envstep
-            )
+            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
                 break
 

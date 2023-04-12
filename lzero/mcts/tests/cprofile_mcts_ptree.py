@@ -100,14 +100,17 @@ def check_mcts():
     policy_logits_pool = network_output['policy_logits']
 
     # network output process
-    pred_values_pool = inverse_scalar_transform(pred_values_pool, policy_config.model.support_scale).detach().cpu().numpy()
+    pred_values_pool = inverse_scalar_transform(pred_values_pool,
+                                                policy_config.model.support_scale).detach().cpu().numpy()
     hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
     reward_hidden_state_state = (
         reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
     )
     policy_logits_pool = policy_logits_pool.detach().cpu().numpy().tolist()
 
-    legal_actions_list = [[i for i in range(policy_config.model.action_space_size)] for _ in range(env_nums)]  # all action
+    legal_actions_list = [
+        [i for i in range(policy_config.model.action_space_size)] for _ in range(env_nums)
+    ]  # all action
     roots = MCTSPtree.roots(env_nums, legal_actions_list)
     noises = [
         np.random.dirichlet([policy_config.root_dirichlet_alpha] * policy_config.model.action_space_size
@@ -130,4 +133,3 @@ if __name__ == '__main__':
 
     # Save the analysis results to a file.
     cProfile.run(f"profile_mcts({run_num})", filename="result.out")
-

@@ -71,6 +71,7 @@ class InverseScalarTransform:
         - MuZero Appendix F: Network Architecture.
         - https://arxiv.org/pdf/1805.11593.pdf Appendix A: Proposition A.2
     """
+
     def __init__(self, support_size, device='cpu', categorical_distribution=True):
         scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
         self.value_support = torch.from_numpy(scalar_support.range).unsqueeze(0)
@@ -90,7 +91,9 @@ class InverseScalarTransform:
         return output
 
 
-def visit_count_temperature(manual_temperature_decay, fixed_temperature_value, threshold_training_steps_for_final_lr_temperature, trained_steps):
+def visit_count_temperature(
+    manual_temperature_decay, fixed_temperature_value, threshold_training_steps_for_final_lr_temperature, trained_steps
+):
     if manual_temperature_decay:
         if trained_steps < 0.5 * threshold_training_steps_for_final_lr_temperature:
             return 1.0

@@ -13,7 +13,6 @@ from typing import List, Dict, Any, Tuple, Union, Callable, Type
 from ding.envs import BaseEnv
 
 
-
 class Node(object):
     """
     Overview:
@@ -120,7 +119,13 @@ class MCTS(object):
         )  # 0.3  # for chess, 0.03 for Go and 0.15 for shogi.
         self._root_noise_weight = self._cfg.get('root_noise_weight', 0.25)  # 0.25
 
-    def get_next_action(self, simulate_env: Type[BaseEnv], policy_forward_fn: Callable, temperature: int = 1.0, sample: bool = True) -> Tuple[int, List[float]]:
+    def get_next_action(
+            self,
+            simulate_env: Type[BaseEnv],
+            policy_forward_fn: Callable,
+            temperature: int = 1.0,
+            sample: bool = True
+    ) -> Tuple[int, List[float]]:
         """
         Overview:
             calculate the move probabilities based on visit counts at the root node.
@@ -191,7 +196,6 @@ class MCTS(object):
             # print(node.is_leaf())
 
         done, winner = simulate_env.get_done_winner()
-
         """
         in ``self_play_mode``, the leaf_value is calculated from the perspective of player ``simulate_env.current_player``.
         in ``play_with_bot_mode``, the leaf_value is calculated from the perspective of player 1.

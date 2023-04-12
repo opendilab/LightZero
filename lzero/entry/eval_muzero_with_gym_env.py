@@ -53,10 +53,12 @@ def eval_muzero_with_gym_env(
     # Create main components: env, policy
     collector_env_cfg = DingEnvWrapper.create_collector_env_cfg(cfg.env)
     evaluator_env_cfg = DingEnvWrapper.create_evaluator_env_cfg(cfg.env)
-    collector_env = BaseEnvManager([get_wrappered_env(c, cfg.env.env_name) for c in collector_env_cfg],
-                                   cfg=BaseEnvManager.default_config())
-    evaluator_env = BaseEnvManager([get_wrappered_env(c, cfg.env.env_name) for c in evaluator_env_cfg],
-                                   cfg=BaseEnvManager.default_config())
+    collector_env = BaseEnvManager(
+        [get_wrappered_env(c, cfg.env.env_name) for c in collector_env_cfg], cfg=BaseEnvManager.default_config()
+    )
+    evaluator_env = BaseEnvManager(
+        [get_wrappered_env(c, cfg.env.env_name) for c in evaluator_env_cfg], cfg=BaseEnvManager.default_config()
+    )
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
@@ -108,7 +110,8 @@ def eval_muzero_with_gym_env(
             print(f'In seed {seed}, returns: {returns}')
             if cfg.policy.env_type == 'board_games':
                 print(
-                    f'win rate: {len(np.where(returns == 1.)[0]) / num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0]) / num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0]) / num_episodes_each_seed}')
+                    f'win rate: {len(np.where(returns == 1.)[0]) / num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0]) / num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0]) / num_episodes_each_seed}'
+                )
             print("=" * 20)
 
         return returns.mean(), returns

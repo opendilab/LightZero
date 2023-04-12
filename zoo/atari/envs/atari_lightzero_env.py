@@ -52,9 +52,7 @@ class AtariLightZeroEnv(BaseEnv):
         self.episode_life = cfg.episode_life
 
     def _make_env(self):
-        return wrap_lightzero(self.cfg,
-                              episode_life=self.cfg.episode_life,
-                              clip_rewards=self.cfg.clip_rewards)
+        return wrap_lightzero(self.cfg, episode_life=self.cfg.episode_life, clip_rewards=self.cfg.clip_rewards)
 
     def reset(self):
         if not self._init_flag:
@@ -62,7 +60,7 @@ class AtariLightZeroEnv(BaseEnv):
             self._observation_space = self._env.env.observation_space
             self._action_space = self._env.env.action_space
             self._reward_space = gym.spaces.Box(
-                low=self._env.env.reward_range[0], high=self._env.env.reward_range[1], shape=(1,), dtype=np.float32
+                low=self._env.env.reward_range[0], high=self._env.env.reward_range[1], shape=(1, ), dtype=np.float32
             )
 
             self._init_flag = True

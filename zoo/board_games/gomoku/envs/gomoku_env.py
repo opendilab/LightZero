@@ -69,7 +69,7 @@ class GomokuEnv(BaseEnv):
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.int32
         )
         self._action_space = gym.spaces.Discrete(self.board_size ** 2)
-        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1, ), dtype=np.float32)
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
@@ -375,8 +375,10 @@ class GomokuEnv(BaseEnv):
         action = np.random.choice(self.legal_actions)
 
         size_of_board_template = 5
-        shift_distance = [[i, j] for i in range(self.board_size - size_of_board_template + 1) for j in
-                          range(self.board_size - size_of_board_template + 1)]
+        shift_distance = [
+            [i, j] for i in range(self.board_size - size_of_board_template + 1)
+            for j in range(self.board_size - size_of_board_template + 1)
+        ]
         action_block_opponent_to_connect5 = None
         action_to_connect4 = None
         action_to_special_connect4_case1 = None
@@ -390,11 +392,12 @@ class GomokuEnv(BaseEnv):
             board_block_index =[0,1,2,3]
             shift_distance = (0,0), (0,1), (1,0), (1,1)
             """
-            shfit_tmp_board = copy.deepcopy(board_deepcopy[
-                                            shift_distance[board_block_index][0]:size_of_board_template +
-                                                                                 shift_distance[board_block_index][0],
-                                            shift_distance[board_block_index][1]:size_of_board_template +
-                                                                                 shift_distance[board_block_index][1]])
+            shfit_tmp_board = copy.deepcopy(
+                board_deepcopy[shift_distance[board_block_index][0]:size_of_board_template +
+                               shift_distance[board_block_index][0],
+                               shift_distance[board_block_index][1]:size_of_board_template +
+                               shift_distance[board_block_index][1]]
+            )
 
             # Horizontal and vertical checks
             for i in range(size_of_board_template):
@@ -406,7 +409,8 @@ class GomokuEnv(BaseEnv):
                     zero_position_index = np.where(shfit_tmp_board[i, :] == 0)[0]
                     if zero_position_index.shape[0] == 0:
                         logging.debug(
-                            'there is no empty position in this searched five positions, continue to search...')
+                            'there is no empty position in this searched five positions, continue to search...'
+                        )
                     else:
                         if zero_position_index.shape[0] == 2:
                             ind = random.choice(zero_position_index)
@@ -414,9 +418,12 @@ class GomokuEnv(BaseEnv):
                             ind = zero_position_index[0]
                         # convert ind to action
                         # the action that will lead a connect5 of current or opponent player's pieces
-                        action = np.ravel_multi_index((np.array([i + shift_distance[board_block_index][0]]),
-                                                       np.array([ind + shift_distance[board_block_index][1]])),
-                                                      (self.board_size, self.board_size))[0]
+                        action = np.ravel_multi_index(
+                            (
+                                np.array([i + shift_distance[board_block_index][0]]
+                                         ), np.array([ind + shift_distance[board_block_index][1]])
+                            ), (self.board_size, self.board_size)
+                        )[0]
                         if self.check_action_to_connect4_in_bot_v0:
                             if check_action_to_special_connect4_case1(shfit_tmp_board[i, :]):
                                 action_to_special_connect4_case1 = action
@@ -424,12 +431,12 @@ class GomokuEnv(BaseEnv):
                                 action_to_special_connect4_case2 = action
                             if check_action_to_connect4(shfit_tmp_board[i, :]):
                                 action_to_connect4 = action
-                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[i, :]) > 0) and abs(
-                                sum(shfit_tmp_board[i, :])) == size_of_board_template - 1:
+                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[i, :]) > 0) and abs(sum(
+                                shfit_tmp_board[i, :])) == size_of_board_template - 1:
                             # immediately take the action that will lead a connect5 of current player's pieces
                             return action
-                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[i, :]) < 0) and abs(
-                                sum(shfit_tmp_board[i, :])) == size_of_board_template - 1:
+                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[i, :]) < 0) and abs(sum(
+                                shfit_tmp_board[i, :])) == size_of_board_template - 1:
                             # memory the action that will lead a connect5 of opponent player's pieces, to avoid the forget
                             action_block_opponent_to_connect5 = action
 
@@ -441,7 +448,8 @@ class GomokuEnv(BaseEnv):
                     zero_position_index = np.where(shfit_tmp_board[:, i] == 0)[0]
                     if zero_position_index.shape[0] == 0:
                         logging.debug(
-                            'there is no empty position in this searched five positions, continue to search...')
+                            'there is no empty position in this searched five positions, continue to search...'
+                        )
                     else:
                         if zero_position_index.shape[0] == 2:
                             ind = random.choice(zero_position_index)
@@ -450,9 +458,12 @@ class GomokuEnv(BaseEnv):
 
                         # convert ind to action
                         # the action that will lead a connect5 of current or opponent player's pieces
-                        action = np.ravel_multi_index((np.array([ind + shift_distance[board_block_index][0]]),
-                                                       np.array([i + shift_distance[board_block_index][1]])),
-                                                      (self.board_size, self.board_size))[0]
+                        action = np.ravel_multi_index(
+                            (
+                                np.array([ind + shift_distance[board_block_index][0]]
+                                         ), np.array([i + shift_distance[board_block_index][1]])
+                            ), (self.board_size, self.board_size)
+                        )[0]
                         if self.check_action_to_connect4_in_bot_v0:
                             if check_action_to_special_connect4_case1(shfit_tmp_board[:, i]):
                                 action_to_special_connect4_case1 = action
@@ -460,12 +471,12 @@ class GomokuEnv(BaseEnv):
                                 action_to_special_connect4_case2 = action
                             if check_action_to_connect4(shfit_tmp_board[:, i]):
                                 action_to_connect4 = action
-                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[:, i]) > 0) and abs(
-                                sum(shfit_tmp_board[:, i])) == size_of_board_template - 1:
+                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[:, i]) > 0) and abs(sum(
+                                shfit_tmp_board[:, i])) == size_of_board_template - 1:
                             # immediately take the action that will lead a connect5 of current player's pieces
                             return action
-                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[:, i]) < 0) and abs(
-                                sum(shfit_tmp_board[:, i])) == size_of_board_template - 1:
+                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[:, i]) < 0) and abs(sum(
+                                shfit_tmp_board[:, i])) == size_of_board_template - 1:
                             # memory the action that will lead a connect5 of opponent player's pieces, to avoid the forget
                             action_block_opponent_to_connect5 = action
 
@@ -479,8 +490,7 @@ class GomokuEnv(BaseEnv):
 
                 zero_position_index = np.where(diag == 0)[0]
                 if zero_position_index.shape[0] == 0:
-                    logging.debug(
-                        'there is no empty position in this searched five positions, continue to search...')
+                    logging.debug('there is no empty position in this searched five positions, continue to search...')
                 else:
                     if zero_position_index.shape[0] == 2:
                         ind = random.choice(zero_position_index)
@@ -489,9 +499,12 @@ class GomokuEnv(BaseEnv):
 
                     # convert ind to action
                     # the action that will lead a connect5 of current or opponent player's pieces
-                    action = np.ravel_multi_index((np.array([ind + shift_distance[board_block_index][0]]),
-                                                   np.array([ind + shift_distance[board_block_index][1]])),
-                                                  (self.board_size, self.board_size))[0]
+                    action = np.ravel_multi_index(
+                        (
+                            np.array([ind + shift_distance[board_block_index][0]]
+                                     ), np.array([ind + shift_distance[board_block_index][1]])
+                        ), (self.board_size, self.board_size)
+                    )[0]
                     if self.check_action_to_connect4_in_bot_v0:
                         if check_action_to_special_connect4_case1(diag):
                             action_to_special_connect4_case1 = action
@@ -515,8 +528,7 @@ class GomokuEnv(BaseEnv):
                 # find the index in the anti_diag vector
                 zero_position_index = np.where(anti_diag == 0)[0]
                 if zero_position_index.shape[0] == 0:
-                    logging.debug(
-                        'there is no empty position in this searched five positions, continue to search...')
+                    logging.debug('there is no empty position in this searched five positions, continue to search...')
                 else:
                     if zero_position_index.shape[0] == 2:
                         ind = random.choice(zero_position_index)
@@ -524,9 +536,12 @@ class GomokuEnv(BaseEnv):
                         ind = zero_position_index[0]
                     # convert ind to action
                     # the action that will lead a connect5 of current or opponent player's pieces
-                    action = np.ravel_multi_index((np.array([ind + shift_distance[board_block_index][0]]), np.array(
-                        [size_of_board_template - 1 - ind + shift_distance[board_block_index][1]])),
-                                                  (self.board_size, self.board_size))[0]
+                    action = np.ravel_multi_index(
+                        (
+                            np.array([ind + shift_distance[board_block_index][0]]),
+                            np.array([size_of_board_template - 1 - ind + shift_distance[board_block_index][1]])
+                        ), (self.board_size, self.board_size)
+                    )[0]
                     if self.check_action_to_connect4_in_bot_v0:
                         if check_action_to_special_connect4_case1(anti_diag):
                             action_to_special_connect4_case1 = action
@@ -617,8 +632,9 @@ class GomokuEnv(BaseEnv):
             # find the index in the anti_diag vector
             ind = np.where(anti_diag == 0)[0][0]
             # convert ind to action
-            action = np.ravel_multi_index((np.array([ind]), np.array([self.board_size - 1 - ind])),
-                                          (self.board_size, self.board_size))[0]
+            action = np.ravel_multi_index(
+                (np.array([ind]), np.array([self.board_size - 1 - ind])), (self.board_size, self.board_size)
+            )[0]
             if self.current_player_to_compute_bot_action * sum(anti_diag) > 0:
                 # immediately take the action that will lead a connect5 of current player's pieces
                 return action
@@ -659,13 +675,15 @@ class GomokuEnv(BaseEnv):
         # print(self.board)
         while True:
             try:
-                row = int(input(
-                    f"Enter the row (1, 2, ...,{self.board_size}, from up to bottom) to play for the player {self.current_player}: "
+                row = int(
+                    input(
+                        f"Enter the row (1, 2, ...,{self.board_size}, from up to bottom) to play for the player {self.current_player}: "
+                    )
                 )
-                )
-                col = int(input(
-                    f"Enter the column (1, 2, ...,{self.board_size}, from left to right) to play for the player {self.current_player}: "
-                )
+                col = int(
+                    input(
+                        f"Enter the column (1, 2, ...,{self.board_size}, from left to right) to play for the player {self.current_player}: "
+                    )
                 )
                 choice = self.coord_to_action(row - 1, col - 1)
                 if (choice in self.legal_actions and 1 <= row and 1 <= col and row <= self.board_size

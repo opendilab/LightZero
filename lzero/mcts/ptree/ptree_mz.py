@@ -35,8 +35,10 @@ class Node:
         self.hidden_state_index_y = 0
         self.parent_value_prefix = 0  # only used in update_tree_q method
 
-    def expand(self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, reward: float,
-               policy_logits: List[float]) -> None:
+    def expand(
+            self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, reward: float,
+            policy_logits: List[float]
+    ) -> None:
         """
         Overview:
             Expand the child nodes of the current node.
@@ -177,7 +179,14 @@ class Roots:
                 # if legal_actions_list is int
                 self.roots.append(Node(0, np.arange(legal_actions_list)))
 
-    def prepare(self, root_noise_weight: float, noises: List[float], rewards: List[float], policies: List[List[float]], to_play: int = -1) -> None:
+    def prepare(
+            self,
+            root_noise_weight: float,
+            noises: List[float],
+            rewards: List[float],
+            policies: List[List[float]],
+            to_play: int = -1
+    ) -> None:
         """
         Overview:
             Expand the roots and add noises.
@@ -298,8 +307,10 @@ def update_tree_q(root: Node, min_max_stats: MinMaxStats, discount_factor: float
             if child.expanded:
                 node_stack.append(child)
 
+
 def select_child(
-        root: Node, min_max_stats: MinMaxStats, pb_c_base: float, pb_c_int: float, discount_factor: float, mean_q: float, players: int
+        root: Node, min_max_stats: MinMaxStats, pb_c_base: float, pb_c_int: float, discount_factor: float,
+        mean_q: float, players: int
 ) -> Union[int, float]:
     """
     Overview:
@@ -389,7 +400,12 @@ def compute_ucb_score(
 
 
 def batch_traverse(
-        roots: Any, pb_c_base: float, pb_c_init: float, discount_factor: float, min_max_stats_lst: List[MinMaxStats], results: SearchResults,
+        roots: Any,
+        pb_c_base: float,
+        pb_c_init: float,
+        discount_factor: float,
+        min_max_stats_lst: List[MinMaxStats],
+        results: SearchResults,
         virtual_to_play: List,
 ) -> Tuple[List[int], List[int], List[Union[int, float]], List]:
     """
@@ -439,8 +455,9 @@ def batch_traverse(
             parent_q = mean_q
 
             # select action according to the pUCT rule
-            action = select_child(node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q,
-                                  players)
+            action = select_child(
+                node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players
+            )
             if players == 2:
                 # Players play turn by turn
                 if virtual_to_play[i] == 1:
@@ -469,7 +486,9 @@ def batch_traverse(
     return results.latent_state_index_x_lst, results.latent_state_index_y_lst, results.last_actions, virtual_to_play
 
 
-def backpropagate(search_path: List[Node], min_max_stats: MinMaxStats, to_play: int, value: float, discount_factor: float) -> None:
+def backpropagate(
+        search_path: List[Node], min_max_stats: MinMaxStats, to_play: int, value: float, discount_factor: float
+) -> None:
     """
     Overview:
         Update the value sum and visit count of nodes along the search path.
@@ -523,7 +542,8 @@ def backpropagate(search_path: List[Node], min_max_stats: MinMaxStats, to_play: 
             # true_reward is in the perspective of current player of node
             # bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount_factor * bootstrap_value
             bootstrap_value = (
-                                  -true_reward if node.to_play == to_play else true_reward) + discount_factor * bootstrap_value
+                -true_reward if node.to_play == to_play else true_reward
+            ) + discount_factor * bootstrap_value
 
 
 def batch_backpropagate(
@@ -561,5 +581,6 @@ def batch_backpropagate(
         if to_play is None:
             backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], 0, values[i], discount_factor)
         else:
-            backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], to_play[i], values[i],
-                          discount_factor)
+            backpropagate(
+                results.search_paths[i], min_max_stats_lst.stats_lst[i], to_play[i], values[i], discount_factor
+            )

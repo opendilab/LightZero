@@ -25,7 +25,7 @@ class SampledEfficientZeroMCTSPtree(object):
     Interfaces:
         __init__, search
     """
-    
+
     # the default_config for SampledEfficientZeroMCTSPtree.
     config = dict(
         # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
@@ -38,7 +38,6 @@ class SampledEfficientZeroMCTSPtree(object):
         pb_c_init=1.25,
         # (float) The maximum change in value allowed during the backup step of the search tree update.
         value_delta_max=0.01,
-
     )
 
     @classmethod
@@ -59,8 +58,10 @@ class SampledEfficientZeroMCTSPtree(object):
         self._cfg = default_config
 
     @classmethod
-    def roots(cls: int, root_num: int, legal_action_lis: List[Any], action_space_size: int,
-                    num_of_sampled_actions: int, continuous_action_space: bool) -> "ptree.Roots":
+    def roots(
+            cls: int, root_num: int, legal_action_lis: List[Any], action_space_size: int, num_of_sampled_actions: int,
+            continuous_action_space: bool
+    ) -> "ptree.Roots":
         """
         Overview:
             Initialization of CNode with root_num, legal_actions_list, action_space_size, num_of_sampled_actions, continuous_action_space.
@@ -73,11 +74,17 @@ class SampledEfficientZeroMCTSPtree(object):
         """
         import lzero.mcts.ptree.ptree_sez as ptree
         return ptree.Roots(
-                    root_num, legal_action_lis, action_space_size,
-                    num_of_sampled_actions, continuous_action_space
-                )
+            root_num, legal_action_lis, action_space_size, num_of_sampled_actions, continuous_action_space
+        )
 
-    def search(self, roots: Any, model: torch.nn.Module, hidden_state_roots: List[Any], reward_hidden_state_roots: List[Any], to_play: Union[int, List[Any]]=-1) -> None:
+    def search(
+            self,
+            roots: Any,
+            model: torch.nn.Module,
+            hidden_state_roots: List[Any],
+            reward_hidden_state_roots: List[Any],
+            to_play: Union[int, List[Any]] = -1
+    ) -> None:
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
@@ -219,4 +226,3 @@ class SampledEfficientZeroMCTSPtree(object):
                     hidden_state_index_x, discount_factor, value_prefix_pool, value_pool, policy_logits_pool,
                     min_max_stats_lst, results, is_reset_lst, virtual_to_play
                 )
-

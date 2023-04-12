@@ -24,7 +24,7 @@ class SampledEfficientZeroMCTSCtree(object):
     Interfaces:
         __init__, search
     """
-    
+
     # the default_config for SampledEfficientZeroMCTSCtree.
     config = dict(
         # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
@@ -46,8 +46,10 @@ class SampledEfficientZeroMCTSCtree(object):
         return cfg
 
     @classmethod
-    def roots(cls: int, root_num: int, legal_action_lis: List[Any], action_space_size: int,
-                    num_of_sampled_actions: int, continuous_action_space: bool) -> "ezs_ctree.Roots":
+    def roots(
+            cls: int, root_num: int, legal_action_lis: List[Any], action_space_size: int, num_of_sampled_actions: int,
+            continuous_action_space: bool
+    ) -> "ezs_ctree.Roots":
         """
         Overview:
             Initialization of CNode with root_num, legal_actions_list, action_space_size, num_of_sampled_actions, continuous_action_space.
@@ -60,9 +62,8 @@ class SampledEfficientZeroMCTSCtree(object):
         """
         from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as ctree
         return ctree.Roots(
-                    root_num, legal_action_lis, action_space_size,
-                    num_of_sampled_actions, continuous_action_space
-                )
+            root_num, legal_action_lis, action_space_size, num_of_sampled_actions, continuous_action_space
+        )
 
     def __init__(self, cfg: EasyDict = None) -> None:
         """
@@ -75,7 +76,10 @@ class SampledEfficientZeroMCTSCtree(object):
         default_config.update(cfg)
         self._cfg = default_config
 
-    def search(self, roots: Any, model: torch.nn.Module, hidden_state_roots: List[Any], reward_hidden_state_roots: List[Any], to_play_batch: Union[int, List[Any]]) -> None:
+    def search(
+            self, roots: Any, model: torch.nn.Module, hidden_state_roots: List[Any],
+            reward_hidden_state_roots: List[Any], to_play_batch: Union[int, List[Any]]
+    ) -> None:
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
@@ -123,8 +127,8 @@ class SampledEfficientZeroMCTSCtree(object):
                 # MCTS stage 1: Each simulation starts from the internal root state s0, and finishes when the
                 # simulation reaches a leaf node s_l.
                 latent_state_index_x_lst, latent_state_index_y_lst, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play_batch),
-                    self._cfg.model.continuous_action_space
+                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                    copy.deepcopy(to_play_batch), self._cfg.model.continuous_action_space
                 )
                 # obtain the search horizon for leaf nodes
                 search_lens = results.get_search_len()
@@ -202,4 +206,3 @@ class SampledEfficientZeroMCTSCtree(object):
                     hidden_state_index_x, discount_factor, value_prefix_pool, value_pool, policy_logits_pool,
                     min_max_stats_lst, results, is_reset_lst, virtual_to_play_batch
                 )
-

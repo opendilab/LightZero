@@ -93,9 +93,7 @@ def eval_muzero(
         # ==============================================================
         returns = []
         for i in range(num_episodes_each_seed):
-            stop, reward = evaluator.eval(
-                learner.save_checkpoint, learner.train_iter
-            )
+            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter)
             returns.append(reward)
         returns = np.array(returns)
 
@@ -104,7 +102,8 @@ def eval_muzero(
             print(f'In seed {seed}, returns: {returns}')
             if cfg.policy.env_type == 'board_games':
                 print(
-                    f'win rate: {len(np.where(returns == 1.)[0]) / num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0]) / num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0]) / num_episodes_each_seed}')
+                    f'win rate: {len(np.where(returns == 1.)[0]) / num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0]) / num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0]) / num_episodes_each_seed}'
+                )
             print("=" * 20)
 
         return returns.mean(), returns

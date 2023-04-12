@@ -23,19 +23,20 @@ class TestLunarLanderEnvEnv:
             The env created for testing the LunarLander environment.
             It is used to check information such as observation space, action space and reward space.
     """
+
     def test_naive(self, cfg):
         env = LunarLanderEnv(cfg)
         env.seed(314)
         assert env._seed == 314
         obs = env.reset()
-        assert obs['observation'].shape == (8,)
+        assert obs['observation'].shape == (8, )
         for i in range(10):
             random_action = env.random_action()
             timestep = env.step(random_action)
             print(timestep)
             assert isinstance(timestep.obs['observation'], np.ndarray)
             assert isinstance(timestep.done, bool)
-            assert timestep.obs['observation'].shape == (8,)
+            assert timestep.obs['observation'].shape == (8, )
             assert timestep.reward.shape == (1, )
             assert timestep.reward >= env.reward_space.low
             assert timestep.reward <= env.reward_space.high

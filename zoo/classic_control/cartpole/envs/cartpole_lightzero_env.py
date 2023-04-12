@@ -19,12 +19,12 @@ class CartPoleEnv(BaseEnv):
         self._observation_space = gym.spaces.Box(
             low=np.array([-4.8, float("-inf"), -0.42, float("-inf")]),
             high=np.array([4.8, float("inf"), 0.42, float("inf")]),
-            shape=(4,),
+            shape=(4, ),
             dtype=np.float32
         )
         self._action_space = gym.spaces.Discrete(2)
         self._action_space.seed(0)  # default seed
-        self._reward_space = gym.spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32)
+        self._reward_space = gym.spaces.Box(low=0.0, high=1.0, shape=(1, ), dtype=np.float32)
         self._continuous = False
 
     def reset(self) -> np.ndarray:
@@ -68,7 +68,7 @@ class CartPoleEnv(BaseEnv):
         np.random.seed(self._seed)
 
     def step(self, action: Union[int, np.ndarray]) -> BaseEnvTimestep:
-        if isinstance(action, np.ndarray) and action.shape == (1,):
+        if isinstance(action, np.ndarray) and action.shape == (1, ):
             action = action.squeeze()  # 0-dim array
 
         obs, rew, done, info = self._env.step(action)

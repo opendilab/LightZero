@@ -16,7 +16,8 @@ reanalyze_ratio = 0.3
 # ==============================================================
 
 tictactoe_muzero_config = dict(
-    exp_name=f'data_mz_ctree/tictactoe_muzero_sp-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=
+    f'data_mz_ctree/tictactoe_muzero_sp-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         battle_mode='self_play_mode',
         collector_env_num=collector_env_num,

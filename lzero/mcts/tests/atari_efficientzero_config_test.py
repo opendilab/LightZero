@@ -19,7 +19,8 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 atari_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/{env_name[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=
+    f'data_ez_ctree/{env_name[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name=env_name,
         obs_shape=(4, 96, 96),
@@ -81,7 +82,6 @@ atari_efficientzero_config = dict(
         discount_factor=0.997,
         transform2string=False,
         lstm_horizon_len=5,
-
     ),
 )
 atari_efficientzero_config = EasyDict(atari_efficientzero_config)

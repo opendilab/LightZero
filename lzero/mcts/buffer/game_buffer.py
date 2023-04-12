@@ -68,8 +68,9 @@ class GameBuffer(ABC, object):
         self.clear_time = 0
 
     @abstractmethod
-    def sample(self, batch_size: int,
-               policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]) -> List[Any]:
+    def sample(
+            self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
+    ) -> List[Any]:
         """
         Overview:
             sample data from ``GameBuffer`` and prepare the current and target batch for training.
@@ -146,8 +147,9 @@ class GameBuffer(ABC, object):
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
         return orig_data
 
-    def _preprocess_to_play_and_action_mask(self, game_segment_batch_size, to_play_segment, action_mask_segment,
-                                            pos_in_game_segment_list):
+    def _preprocess_to_play_and_action_mask(
+        self, game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
+    ):
         """
         Overview:
             prepare the to_play and action_mask for the target obs in ``value_obs_list``
@@ -158,7 +160,7 @@ class GameBuffer(ABC, object):
         for bs in range(game_segment_batch_size):
             to_play_tmp = list(
                 to_play_segment[bs][pos_in_game_segment_list[bs]:pos_in_game_segment_list[bs] +
-                                                                 self._cfg.num_unroll_steps + 1]
+                                    self._cfg.num_unroll_steps + 1]
             )
             if len(to_play_tmp) < self._cfg.num_unroll_steps + 1:
                 # NOTE: the effective to play index is {1,2}, for null padding data, we set to_play=-1
@@ -174,7 +176,7 @@ class GameBuffer(ABC, object):
         for bs in range(game_segment_batch_size):
             action_mask_tmp = list(
                 action_mask_segment[bs][pos_in_game_segment_list[bs]:pos_in_game_segment_list[bs] +
-                                                                     self._cfg.num_unroll_steps + 1]
+                                        self._cfg.num_unroll_steps + 1]
             )
             if len(action_mask_tmp) < self._cfg.num_unroll_steps + 1:
                 action_mask_tmp += [
@@ -207,8 +209,9 @@ class GameBuffer(ABC, object):
         pass
 
     @abstractmethod
-    def _prepare_policy_non_reanalyzed_context(self, batch_index_list: List[int], game_segment_list: List[Any],
-                                               pos_in_game_segment_list: List[int]) -> List[Any]:
+    def _prepare_policy_non_reanalyzed_context(
+            self, batch_index_list: List[int], game_segment_list: List[Any], pos_in_game_segment_list: List[int]
+    ) -> List[Any]:
         """
         Overview:
             prepare the context of policies for calculating policy target in non-reanalyzing part, just return the policy in self-play
@@ -222,8 +225,9 @@ class GameBuffer(ABC, object):
         pass
 
     @abstractmethod
-    def _prepare_policy_reanalyzed_context(self, batch_index_list: List[str], game_segment_list: List[Any],
-                                           pos_in_game_segment_list: List[str]) -> List[Any]:
+    def _prepare_policy_reanalyzed_context(
+            self, batch_index_list: List[str], game_segment_list: List[Any], pos_in_game_segment_list: List[str]
+    ) -> List[Any]:
         """
         Overview:
             prepare the context of policies for calculating policy target in reanalyzing part.
@@ -264,8 +268,9 @@ class GameBuffer(ABC, object):
         pass
 
     @abstractmethod
-    def _compute_target_policy_non_reanalyzed(self, policy_non_re_context: List[Any],
-                                              policy_shape: Optional[int]) -> np.ndarray:
+    def _compute_target_policy_non_reanalyzed(
+            self, policy_non_re_context: List[Any], policy_shape: Optional[int]
+    ) -> np.ndarray:
         """
         Overview:
             prepare policy targets from the non-reanalyzed context of policies
@@ -282,8 +287,9 @@ class GameBuffer(ABC, object):
         pass
 
     @abstractmethod
-    def update_priority(self, train_data: Optional[List[Optional[np.ndarray]]],
-                        batch_priorities: Optional[Any]) -> None:
+    def update_priority(
+            self, train_data: Optional[List[Optional[np.ndarray]]], batch_priorities: Optional[Any]
+    ) -> None:
         """
         Overview:
             Update the priority of training data.
@@ -331,8 +337,10 @@ class GameBuffer(ABC, object):
             max_prio = self.game_pos_priorities.max() if self.game_segment_buffer else 1
             # if no 'priorities' provided, set the valid part of the new-added game history the max_prio
             self.game_pos_priorities = np.concatenate(
-                (self.game_pos_priorities,
-                 [max_prio for _ in range(valid_len)] + [0. for _ in range(valid_len, len(data))])
+                (
+                    self.game_pos_priorities, [max_prio
+                                               for _ in range(valid_len)] + [0. for _ in range(valid_len, len(data))]
+                )
             )
         else:
             assert len(data) == len(meta['priorities']), " priorities should be of same length as the game steps"
@@ -341,9 +349,9 @@ class GameBuffer(ABC, object):
             self.game_pos_priorities = np.concatenate((self.game_pos_priorities, priorities))
 
         self.game_segment_buffer.append(data)
-        self.game_segment_game_pos_look_up += [(self.base_idx + len(self.game_segment_buffer) - 1, step_pos) for
-                                               step_pos in
-                                               range(len(data))]
+        self.game_segment_game_pos_look_up += [
+            (self.base_idx + len(self.game_segment_buffer) - 1, step_pos) for step_pos in range(len(data))
+        ]
 
     def remove_oldest_data_to_fit(self) -> None:
         """
@@ -371,7 +379,8 @@ class GameBuffer(ABC, object):
             - excess_game_segment_index (:obj:`List[str]`): Index of data.
         """
         excess_game_positions = sum(
-            [len(game_segment) for game_segment in self.game_segment_buffer[:excess_game_segment_index]])
+            [len(game_segment) for game_segment in self.game_segment_buffer[:excess_game_segment_index]]
+        )
         del self.game_segment_buffer[:excess_game_segment_index]
         self.game_pos_priorities = self.game_pos_priorities[excess_game_positions:]
         del self.game_segment_game_pos_look_up[:excess_game_positions]

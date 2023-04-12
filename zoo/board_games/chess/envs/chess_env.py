@@ -33,7 +33,7 @@ class ChessEnv(BaseEnv):
             name: spaces.Dict(
                 {
                     'observation': spaces.Box(low=0, high=1, shape=(8, 8, 111), dtype=bool),
-                    'action_mask': spaces.Box(low=0, high=1, shape=(4672,), dtype=np.int8)
+                    'action_mask': spaces.Box(low=0, high=1, shape=(4672, ), dtype=np.int8)
                 }
             )
             for name in self.agents

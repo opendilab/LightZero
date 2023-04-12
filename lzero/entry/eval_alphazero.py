@@ -89,7 +89,8 @@ def eval_alphazero(
             print(f'In seed {seed}, returns: {returns}')
             if cfg.policy.env_type == 'board_games':
                 print(
-                    f'win rate: {len(np.where(returns == 1.)[0]) / num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0]) / num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0]) / num_episodes_each_seed}')
+                    f'win rate: {len(np.where(returns == 1.)[0]) / num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0]) / num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0]) / num_episodes_each_seed}'
+                )
             print("=" * 20)
 
         return returns.mean(), returns

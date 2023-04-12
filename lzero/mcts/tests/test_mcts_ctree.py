@@ -14,7 +14,7 @@ class MuZeroModelFake(torch.nn.Module):
     Interfaces:
         __init__, initial_inference, recurrent_inference
     """
-    
+
     def __init__(self, action_num):
         super().__init__()
         self.action_num = action_num
@@ -144,11 +144,10 @@ def test_mcts_vs_bot_to_play():
     ]
     # In ctree, to_play must be list, not None
     roots.prepare(
-        policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool,
-        [0 for _ in range(env_nums)]
+        policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, [0 for _ in range(env_nums)]
     )
     MCTSCtree(policy_config
-            ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
+              ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert np.array(roots_distributions).shape == (batch_size, action_space_size)
@@ -177,7 +176,8 @@ def test_mcts_vs_bot_to_play_large():
     policy_logits_pool = network_output['policy_logits']
 
     # network output process
-    pred_values_pool = inverse_scalar_transform(pred_values_pool, policy_config.model.support_scale).detach().cpu().numpy()
+    pred_values_pool = inverse_scalar_transform(pred_values_pool,
+                                                policy_config.model.support_scale).detach().cpu().numpy()
     latent_state_roots = latent_state_roots.detach().cpu().numpy()
     reward_hidden_state_roots = (
         reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()
@@ -194,11 +194,10 @@ def test_mcts_vs_bot_to_play_large():
     ]
     # In ctree, to_play must be list, not None
     roots.prepare(
-        policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool,
-        [0 for _ in range(env_nums)]
+        policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, [0 for _ in range(env_nums)]
     )
     MCTSCtree(policy_config
-            ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
+              ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert np.array(roots_distributions).shape == (policy_config.batch_size, policy_config.model.action_space_size)
@@ -218,11 +217,10 @@ def test_mcts_vs_bot_to_play_legal_action():
 
     # In ctree, to_play must be list, not None
     roots.prepare(
-        policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool,
-        [0 for _ in range(env_nums)]
+        policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, [0 for _ in range(env_nums)]
     )
     MCTSCtree(policy_config
-            ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
+              ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert len(roots_values) == env_nums

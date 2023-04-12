@@ -2,9 +2,8 @@ import pytest
 from zoo.atari.envs.atari_lightzero_env import AtariLightZeroEnv
 from easydict import EasyDict
 
-
 cfg = EasyDict(
-    env_name='PongNoFrameskip-v4',   # action_space_size=6
+    env_name='PongNoFrameskip-v4',  # action_space_size=6
     # env_name='QbertNoFrameskip-v4',   # action_space_size=6
     # env_name='BreakoutNoFrameskip-v4',   # action_space_size=4
     # env_name='MsPacmanNoFrameskip-v4',  # action_space_size=9

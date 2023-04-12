@@ -40,10 +40,8 @@ class AlphaZeroPolicy(Policy):
         # learning_rate=0.001,  # lr for Adam optimizer
         weight_decay=1e-4,
         momentum=0.9,
-
         grad_clip_value=10,
         value_weight=1.0,
-        
         collector_env_num=8,
         evaluator_env_num=3,
         # ``threshold_training_steps_for_final_lr`` is only used for adjusting lr manually.
@@ -61,12 +59,10 @@ class AlphaZeroPolicy(Policy):
         # ``fixed_temperature_value`` is effective only when manual_temperature_decay=False
         fixed_temperature_value=0.25,
         mcts=dict(num_simulations=50),
-        other=dict(
-            replay_buffer=dict(
-                replay_buffer_size=int(1e6),
-                save_episode=False,
-            )
-        ),
+        other=dict(replay_buffer=dict(
+            replay_buffer_size=int(1e6),
+            save_episode=False,
+        )),
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
@@ -146,8 +142,10 @@ class AlphaZeroPolicy(Policy):
         self._optimizer.zero_grad()
         total_loss.backward()
 
-        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(list(self._model.parameters()),
-                                                                     max_norm=self._cfg.grad_clip_value, )
+        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
+            list(self._model.parameters()),
+            max_norm=self._cfg.grad_clip_value,
+        )
         self._optimizer.step()
         if self._cfg.lr_piecewise_constant_decay is True:
             self.lr_scheduler.step()
@@ -202,7 +200,9 @@ class AlphaZeroPolicy(Policy):
                 init_state=init_state[env_id],
             )
             action, mcts_probs = self._collect_mcts.get_next_action(
-                envs[env_id], policy_forward_fn=self._policy_value_fn, temperature=self.collect_mcts_temperature,
+                envs[env_id],
+                policy_forward_fn=self._policy_value_fn,
+                temperature=self.collect_mcts_temperature,
                 sample=True
             )
             output[env_id] = {
@@ -261,8 +261,9 @@ class AlphaZeroPolicy(Policy):
         """
         legal_actions = env.legal_actions
         current_state, current_state_scale = env.current_state()
-        current_state_scale = torch.from_numpy(current_state_scale).to(device=self._device,
-                                                                       dtype=torch.float).unsqueeze(0)
+        current_state_scale = torch.from_numpy(current_state_scale).to(
+            device=self._device, dtype=torch.float
+        ).unsqueeze(0)
         with torch.no_grad():
             action_probs, value = self._policy_model.compute_prob_value(current_state_scale)
         action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
@@ -270,7 +271,8 @@ class AlphaZeroPolicy(Policy):
 
     def _monitor_vars_learn(self) -> List[str]:
         return super()._monitor_vars_learn() + [
-            'cur_lr', 'total_loss', 'policy_loss', 'value_loss', 'entropy_loss', 'total_grad_norm_before_clip', 'collect_mcts_temperature'
+            'cur_lr', 'total_loss', 'policy_loss', 'value_loss', 'entropy_loss', 'total_grad_norm_before_clip',
+            'collect_mcts_temperature'
         ]
 
     def _process_transition(self, obs: Any, model_output: dict, timestep: namedtuple) -> dict:

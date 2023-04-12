@@ -73,8 +73,9 @@ def prepare_observation(observation_list, model_type='conv'):
             # to be compatible with LightZero model/policy,
             # observation_array: [B, S, O], where O is original obs shape
             # [B, S, O] -> [B, S, O, 1]
-            observation_array = observation_array.reshape(observation_array.shape[0], observation_array.shape[1],
-                                                      observation_array.shape[2], 1)
+            observation_array = observation_array.reshape(
+                observation_array.shape[0], observation_array.shape[1], observation_array.shape[2], 1
+            )
 
         elif len(observation_array.shape) == 5:
             # image obs input, e.g. atari environments

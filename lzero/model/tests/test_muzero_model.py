@@ -117,7 +117,7 @@ class TestMuZeroModel:
 if __name__ == "__main__":
     batch_size = 10
     num_res_blocks = 3
-    num_channels = 3+1  # 3 channels for observation and 1 channel for action
+    num_channels = 3 + 1  # 3 channels for observation and 1 channel for action
     action_space_size = 1
     reward_head_channels = 2
     fc_reward_layers = [16, 8]

@@ -311,15 +311,18 @@ class MuZeroCollector(ISerialCollector):
 
         game_segments = [
             GameSegment(
-                self._env.action_space, game_segment_length=self.policy_config.game_segment_length, config=self.policy_config
+                self._env.action_space,
+                game_segment_length=self.policy_config.game_segment_length,
+                config=self.policy_config
             ) for _ in range(env_nums)
         ]
         # stacked observation windows in reset stage for init game_segments
         observation_window_stack = [[] for _ in range(env_nums)]
         for env_id in range(env_nums):
-            observation_window_stack[env_id] = deque([
-                to_ndarray(init_obs[env_id]['observation']) for _ in range(self.policy_config.model.frame_stack_num)
-            ], maxlen=self.policy_config.model.frame_stack_num)
+            observation_window_stack[env_id] = deque(
+                [to_ndarray(init_obs[env_id]['observation']) for _ in range(self.policy_config.model.frame_stack_num)],
+                maxlen=self.policy_config.model.frame_stack_num
+            )
 
             game_segments[env_id].reset(observation_window_stack[env_id])
 
@@ -503,7 +506,9 @@ class MuZeroCollector(ISerialCollector):
                     # NOTE: put the penultimate game block in one episode into the trajectory_pool
                     # pad over 2th last game_segment using the last game_segment
                     if last_game_segments[env_id] is not None:
-                        self.pad_and_save_last_trajectory(env_id, last_game_segments, last_game_priorities, game_segments, dones)
+                        self.pad_and_save_last_trajectory(
+                            env_id, last_game_segments, last_game_priorities, game_segments, dones
+                        )
 
                     # store current block trajectory
                     priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
@@ -526,14 +531,15 @@ class MuZeroCollector(ISerialCollector):
                             # In order to be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
                             # len(self._env.ready_obs), especially in tictactoe env.
                             self._logger.info('The current init_obs.keys() is {}'.format(init_obs.keys()))
-                            self._logger.info(
-                                'Before sleeping, the _env_states is {}'.format(self._env._env_states))
+                            self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
                             time.sleep(retry_waiting_time)
                             self._logger.info(
-                                '=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
+                                '=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10
+                            )
                             self._logger.info(
-                                'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time,
-                                                                                           self._env._env_states)
+                                'After sleeping {}s, the current _env_states is {}'.format(
+                                    retry_waiting_time, self._env._env_states
+                                )
                             )
                             init_obs = self._env.ready_obs
 
@@ -549,7 +555,10 @@ class MuZeroCollector(ISerialCollector):
                             game_segment_length=self.policy_config.game_segment_length,
                             config=self.policy_config
                         )
-                        observation_window_stack[env_id] = deque([init_obs[env_id]['observation'] for _ in range(self.policy_config.model.frame_stack_num)], maxlen=self.policy_config.model.frame_stack_num)
+                        observation_window_stack[env_id] = deque(
+                            [init_obs[env_id]['observation'] for _ in range(self.policy_config.model.frame_stack_num)],
+                            maxlen=self.policy_config.model.frame_stack_num
+                        )
                         game_segments[env_id].reset(observation_window_stack[env_id])
                         last_game_segments[env_id] = None
                         last_game_priorities[env_id] = None

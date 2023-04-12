@@ -277,8 +277,10 @@ class MuZeroEvaluator(ISerialEvaluator):
                 actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                 distributions_dict_no_env_id = {k: v['distributions'] for k, v in policy_output.items()}
                 if self.policy_config.sampled_algo:
-                    root_sampled_actions_dict_no_env_id = {k: v['root_sampled_actions'] for k, v in
-                                                           policy_output.items()}
+                    root_sampled_actions_dict_no_env_id = {
+                        k: v['root_sampled_actions']
+                        for k, v in policy_output.items()
+                    }
 
                 value_dict_no_env_id = {k: v['value'] for k, v in policy_output.items()}
                 pred_value_dict_no_env_id = {k: v['pred_value'] for k, v in policy_output.items()}
@@ -348,13 +350,16 @@ class MuZeroEvaluator(ISerialEvaluator):
                                 # len(self._env.ready_obs), especially in tictactoe env.
                                 self._logger.info('The current init_obs.keys() is {}'.format(init_obs.keys()))
                                 self._logger.info(
-                                    'Before sleeping, the _env_states is {}'.format(self._env._env_states))
+                                    'Before sleeping, the _env_states is {}'.format(self._env._env_states)
+                                )
                                 time.sleep(retry_waiting_time)
                                 self._logger.info(
-                                    '=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
+                                    '=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10
+                                )
                                 self._logger.info(
-                                    'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time,
-                                                                                               self._env._env_states)
+                                    'After sleeping {}s, the current _env_states is {}'.format(
+                                        retry_waiting_time, self._env._env_states
+                                    )
                                 )
                                 init_obs = self._env.ready_obs
 
@@ -372,7 +377,10 @@ class MuZeroEvaluator(ISerialEvaluator):
                             )
 
                             game_segments[env_id].reset(
-                                [init_obs[env_id]['observation'] for _ in range(self.policy_config.model.frame_stack_num)]
+                                [
+                                    init_obs[env_id]['observation']
+                                    for _ in range(self.policy_config.model.frame_stack_num)
+                                ]
                             )
 
                         # Env reset is done by env_manager automatically.

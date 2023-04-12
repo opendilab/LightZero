@@ -20,9 +20,13 @@ if __name__ == "__main__":
     returns_mean_seeds = []
     returns_seeds = []
     for seed in seeds:
-        returns_mean, returns = eval_muzero([main_config, create_config], seed=seed,
-                                                            num_episodes_each_seed=num_episodes_each_seed,
-                                                            print_seed_details=False, model_path=model_path)
+        returns_mean, returns = eval_muzero(
+            [main_config, create_config],
+            seed=seed,
+            num_episodes_each_seed=num_episodes_each_seed,
+            print_seed_details=False,
+            model_path=model_path
+        )
         returns_mean_seeds.append(returns_mean)
         returns_seeds.append(returns)
 

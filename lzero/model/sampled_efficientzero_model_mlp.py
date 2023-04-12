@@ -14,36 +14,36 @@ from .utils import renormalize, get_dynamic_mean, get_reward_mean, get_params_me
 class SampledEfficientZeroModelMLP(nn.Module):
 
     def __init__(
-            self,
-            observation_shape: int = 2,
-            action_space_size: int = 6,
-            latent_state_dim: int = 256,
-            categorical_distribution: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            last_linear_layer_init_zero: bool = True,
-            state_norm: bool = False,
-            lstm_hidden_size: int = 512,
-            fc_reward_layers: SequenceType = [32],
-            fc_value_layers: SequenceType = [32],
-            fc_policy_layers: SequenceType = [32],
-            reward_support_size: int = 601,
-            value_support_size: int = 601,
-            proj_hid: int = 1024,
-            proj_out: int = 1024,
-            pred_hid: int = 512,
-            pred_out: int = 1024,
-            self_supervised_learning_loss: bool = True,
-            # ==============================================================
-            # specific sampled related config
-            # ==============================================================
-            continuous_action_space: bool = False,
-            num_of_sampled_actions: int = 6,
-            sigma_type='conditioned',
-            fixed_sigma_value: float = 0.3,
-            bound_type: str = None,
-            norm_type: str = 'BN',
-            *args,
-            **kwargs,
+        self,
+        observation_shape: int = 2,
+        action_space_size: int = 6,
+        latent_state_dim: int = 256,
+        categorical_distribution: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        last_linear_layer_init_zero: bool = True,
+        state_norm: bool = False,
+        lstm_hidden_size: int = 512,
+        fc_reward_layers: SequenceType = [32],
+        fc_value_layers: SequenceType = [32],
+        fc_policy_layers: SequenceType = [32],
+        reward_support_size: int = 601,
+        value_support_size: int = 601,
+        proj_hid: int = 1024,
+        proj_out: int = 1024,
+        pred_hid: int = 512,
+        pred_out: int = 1024,
+        self_supervised_learning_loss: bool = True,
+        # ==============================================================
+        # specific sampled related config
+        # ==============================================================
+        continuous_action_space: bool = False,
+        num_of_sampled_actions: int = 6,
+        sigma_type='conditioned',
+        fixed_sigma_value: float = 0.3,
+        bound_type: str = None,
+        norm_type: str = 'BN',
+        *args,
+        **kwargs,
     ):
         """
         Overview:
@@ -122,8 +122,9 @@ class SampledEfficientZeroModelMLP(nn.Module):
             # for discrete action space, we use one-hot encoding
             self.action_encoding_dim = self.action_space_size
 
-        self.representation_network = RepresentationNetworkMLP(observation_shape=self.observation_shape,
-                                                               hidden_channels=self.latent_state_dim)
+        self.representation_network = RepresentationNetworkMLP(
+            observation_shape=self.observation_shape, hidden_channels=self.latent_state_dim
+        )
 
         self.dynamics_network = DynamicsNetwork(
             continuous_action_space=self.continuous_action_space,
@@ -154,9 +155,9 @@ class SampledEfficientZeroModelMLP(nn.Module):
             # self_supervised_learning_loss related network proposed in EfficientZero
             self.projection_input_dim = latent_state_dim
             self.projection = nn.Sequential(
-                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
-                activation, nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid),
-                activation, nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
+                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
             )
             self.prediction_head = nn.Sequential(
                 nn.Linear(self.proj_out, self.pred_hid),
@@ -195,8 +196,11 @@ class SampledEfficientZeroModelMLP(nn.Module):
         policy_logits, value = self._prediction(latent_state)
         # zero initialization for reward hidden states
         # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
-        reward_hidden_state = (torch.zeros(1, batch_size, self.lstm_hidden_size).to(obs.device),
-                         torch.zeros(1, batch_size, self.lstm_hidden_size).to(obs.device))
+        reward_hidden_state = (
+            torch.zeros(1, batch_size,
+                        self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
+                                                                           self.lstm_hidden_size).to(obs.device)
+        )
         return EZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, latent_state, reward_hidden_state)
 
     def recurrent_inference(
@@ -265,8 +269,8 @@ class SampledEfficientZeroModelMLP(nn.Module):
         policy, value = self.prediction_network(latent_state)
         return policy, value
 
-    def _dynamics(self, latent_state: torch.Tensor, reward_hidden_state: Tuple, action: torch.Tensor) -> Tuple[
-        torch.Tensor]:
+    def _dynamics(self, latent_state: torch.Tensor, reward_hidden_state: Tuple,
+                  action: torch.Tensor) -> Tuple[torch.Tensor]:
         """
         Overview:
             Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state``
@@ -360,16 +364,16 @@ class SampledEfficientZeroModelMLP(nn.Module):
 class DynamicsNetwork(nn.Module):
 
     def __init__(
-            self,
-            continuous_action_space: bool = False,
-            action_space_size: int = 2,
-            num_channels: int = 64,
-            common_layer_num: int = 2,
-            lstm_hidden_size: int = 512,
-            fc_reward_layers: SequenceType = [32],
-            output_support_size: int = 601,
-            last_linear_layer_init_zero: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        self,
+        continuous_action_space: bool = False,
+        action_space_size: int = 2,
+        num_channels: int = 64,
+        common_layer_num: int = 2,
+        lstm_hidden_size: int = 512,
+        fc_reward_layers: SequenceType = [32],
+        output_support_size: int = 601,
+        last_linear_layer_init_zero: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
     ):
         """
         Overview:
@@ -458,23 +462,23 @@ class DynamicsNetwork(nn.Module):
 class PredictionNetwork(nn.Module):
 
     def __init__(
-            self,
-            continuous_action_space,
-            action_space_size,
-            num_channels,
-            common_layer_num: int = 2,
-            fc_value_layers: SequenceType = [32],
-            fc_policy_layers: SequenceType = [32],
-            output_support_size: int = 601,
-            last_linear_layer_init_zero: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            # ==============================================================
-            # specific sampled related config
-            # ==============================================================
-            sigma_type='conditioned',
-            fixed_sigma_value: float = 0.3,
-            bound_type: str = None,
-            norm_type: str = 'BN',
+        self,
+        continuous_action_space,
+        action_space_size,
+        num_channels,
+        common_layer_num: int = 2,
+        fc_value_layers: SequenceType = [32],
+        fc_policy_layers: SequenceType = [32],
+        output_support_size: int = 601,
+        last_linear_layer_init_zero: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        # ==============================================================
+        # specific sampled related config
+        # ==============================================================
+        sigma_type='conditioned',
+        fixed_sigma_value: float = 0.3,
+        bound_type: str = None,
+        norm_type: str = 'BN',
     ):
         """
         Overview:

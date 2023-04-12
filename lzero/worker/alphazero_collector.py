@@ -24,14 +24,14 @@ class AlphaZeroCollector(ISerialCollector):
     config = dict()
 
     def __init__(
-        self,
-        collect_print_freq: int = 100,
-        env: BaseEnvManager = None,
-        policy: namedtuple = None,
-        tb_logger: 'SummaryWriter' = None,  # noqa
-        exp_name: Optional[str] = 'default_experiment',
-        instance_name: Optional[str] = 'collector',
-        env_config=None,
+            self,
+            collect_print_freq: int = 100,
+            env: BaseEnvManager = None,
+            policy: namedtuple = None,
+            tb_logger: 'SummaryWriter' = None,  # noqa
+            exp_name: Optional[str] = 'default_experiment',
+            instance_name: Optional[str] = 'collector',
+            env_config=None,
     ) -> None:
         """
             Overview:

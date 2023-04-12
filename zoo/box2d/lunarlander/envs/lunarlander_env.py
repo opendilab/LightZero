@@ -118,7 +118,8 @@ class LunarLanderEnv(BaseEnv):
                 if not os.path.exists(self._replay_path_gif):
                     os.makedirs(self._replay_path_gif)
                 path = os.path.join(
-                    self._replay_path_gif, '{}_episode_{}_seed{}.gif'.format(self._env_name, self._save_replay_count, self._seed)
+                    self._replay_path_gif,
+                    '{}_episode_{}_seed{}.gif'.format(self._env_name, self._save_replay_count, self._seed)
                 )
                 self.display_frames_as_gif(self._frames, path)
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')

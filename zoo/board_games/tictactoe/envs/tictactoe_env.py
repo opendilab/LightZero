@@ -71,7 +71,7 @@ class TicTacToeEnv(BaseEnv):
                 low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.uint8
             )
         self._action_space = gym.spaces.Discrete(self.board_size ** 2)
-        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1, ), dtype=np.float32)
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:

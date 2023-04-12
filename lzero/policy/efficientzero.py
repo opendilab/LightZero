@@ -305,7 +305,8 @@ class EfficientZeroPolicy(Policy):
                 hidden_state, reward_hidden_state, action_batch[:, step_i]
             )
             hidden_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(
-                network_output)
+                network_output
+            )
 
             # transform the scaled value or its categorical representation to its original value,
             # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -357,9 +358,7 @@ class EfficientZeroPolicy(Policy):
                 target_policy_entropy += 0
 
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
-            value_prefix_loss += cross_entropy_loss(
-                value_prefix, target_value_prefix_categorical[:, step_i]
-            )
+            value_prefix_loss += cross_entropy_loss(value_prefix, target_value_prefix_categorical[:, step_i])
 
             # reset hidden states every ``lstm_horizon_len`` unroll steps.
             if (step_i + 1) % self._cfg.lstm_horizon_len == 0:
@@ -384,8 +383,8 @@ class EfficientZeroPolicy(Policy):
         # ==============================================================
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-                self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss
+            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss
         )
         weighted_total_loss = (weights * loss).mean()
         # TODO(pu): test the effect
@@ -417,12 +416,10 @@ class EfficientZeroPolicy(Policy):
 
             td_data = (
                 value_priority, target_value_prefix.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
-                transformed_target_value_prefix.detach().cpu().numpy(),
-                transformed_target_value.detach().cpu().numpy(),
-                target_value_prefix_categorical.detach().cpu().numpy(),
-                target_value_categorical.detach().cpu().numpy(), predicted_value_prefixs.detach().cpu().numpy(),
-                predicted_values.detach().cpu().numpy(), target_policy.detach().cpu().numpy(),
-                predicted_policies.detach().cpu().numpy(), hidden_state_list
+                transformed_target_value_prefix.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
+                target_value_prefix_categorical.detach().cpu().numpy(), target_value_categorical.detach().cpu().numpy(),
+                predicted_value_prefixs.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
+                target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), hidden_state_list
             )
 
         return {
@@ -442,7 +439,6 @@ class EfficientZeroPolicy(Policy):
             # ==============================================================
             'value_priority': td_data[0].flatten().mean().item(),
             'value_priority_orig': value_priority,
-
             'target_value_prefix': td_data[1].flatten().mean().item(),
             'target_value': td_data[2].flatten().mean().item(),
             'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
@@ -461,8 +457,7 @@ class EfficientZeroPolicy(Policy):
         self.collect_mcts_temperature = 1
 
     def _forward_collect(
-            self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1,
-            ready_env_id=None
+        self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1, ready_env_id=None
     ):
         """
         Overview:
@@ -488,20 +483,20 @@ class EfficientZeroPolicy(Policy):
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
             hidden_state_roots, value_prefix_roots, reward_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
-                network_output)
+                network_output
+            )
 
             if not self._learn_model.training:
                 # if not in training, obtain the scalars of the value/reward
                 pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 reward_hidden_state_roots = (
-                    reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()
+                    reward_hidden_state_roots[0].detach().cpu().numpy(),
+                    reward_hidden_state_roots[1].detach().cpu().numpy()
                 )
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
-            legal_actions = [
-                [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
-            ]
+            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
             # the only difference between collect and eval is the dirichlet noise.
             noises = [
                 np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -513,12 +508,13 @@ class EfficientZeroPolicy(Policy):
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
-            roots.prepare(
-                self._cfg.root_noise_weight, noises, value_prefix_roots, policy_logits, to_play
+            roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_roots, policy_logits, to_play)
+            self._mcts_collect.search(
+                roots, self._collect_model, hidden_state_roots, reward_hidden_state_roots, to_play
             )
-            self._mcts_collect.search(roots, self._collect_model, hidden_state_roots, reward_hidden_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions(
+            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             data_id = [i for i in range(active_collect_env_num)]
@@ -579,22 +575,21 @@ class EfficientZeroPolicy(Policy):
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._eval_model.initial_inference(data)
             hidden_state_roots, value_prefix_roots, reward_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
-                network_output)
+                network_output
+            )
 
             # TODO(pu)
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy(
-                )  # shape（B, 1）
+                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
                 hidden_state_roots = hidden_state_roots.detach().cpu().numpy()
                 reward_hidden_state_roots = (
-                    reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()
+                    reward_hidden_state_roots[0].detach().cpu().numpy(),
+                    reward_hidden_state_roots[1].detach().cpu().numpy()
                 )
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
-            legal_actions = [
-                [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
-            ]
+            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(active_eval_env_num, legal_actions)
@@ -604,7 +599,8 @@ class EfficientZeroPolicy(Policy):
             roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
             self._mcts_eval.search(roots, self._eval_model, hidden_state_roots, reward_hidden_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions(
+            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
             data_id = [i for i in range(active_eval_env_num)]
             output = {i: None for i in data_id}

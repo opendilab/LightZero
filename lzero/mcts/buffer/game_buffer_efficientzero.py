@@ -58,16 +58,19 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         policy._target_model.eval()
 
         # obtain the current_batch and prepare target context
-        reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(batch_size,
-                                                                                                         self._cfg.reanalyze_ratio)
+        reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(
+            batch_size, self._cfg.reanalyze_ratio
+        )
 
         # target value_prefixs, target value
-        batch_value_prefixs, batch_target_values = self._compute_target_reward_value(reward_value_context,
-                                                                                     policy._target_model)
+        batch_value_prefixs, batch_target_values = self._compute_target_reward_value(
+            reward_value_context, policy._target_model
+        )
         # target policy
         batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
-        batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(policy_non_re_context,
-                                                                                  self._cfg.model.action_space_size)
+        batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
+            policy_non_re_context, self._cfg.model.action_space_size
+        )
 
         if 0 < self._cfg.reanalyze_ratio < 1:
             batch_target_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
@@ -174,18 +177,18 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         transition_batch_size = len(value_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)
 
-        to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
-                                                                        action_mask_segment, pos_in_game_segment_list)
+        to_play, action_mask = self._preprocess_to_play_and_action_mask(
+            game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
+        )
 
-        legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
-                         range(transition_batch_size)]
+        legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
 
         # ==============================================================
         # EfficientZero related core code
         # ==============================================================
         batch_target_values, batch_value_prefixs = [], []
         with torch.no_grad():
-            value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type) 
+            value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
             slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
             network_output = []
@@ -203,8 +206,12 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                     # ==============================================================
                     # if not in training, obtain the scalars of the value/reward
                     [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                        [m_output.latent_state, inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
-                         m_output.policy_logits])
+                        [
+                            m_output.latent_state,
+                            inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                            m_output.policy_logits
+                        ]
+                    )
                     m_output.reward_hidden_state = (
                         m_output.reward_hidden_state[0].detach().cpu().numpy(),
                         m_output.reward_hidden_state[1].detach().cpu().numpy()
@@ -227,17 +234,13 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                 if self._cfg.mcts_ctree:
                     # cpp mcts_tree
                     roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                    roots.prepare(
-                        self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
-                    )
+                    roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
                     MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
                 else:
                     # python mcts_tree
                     roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                    roots.prepare(
-                        self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
-                    )
+                    roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
                     MCTSPtree(self._cfg).search(
                         roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play
@@ -251,13 +254,16 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
             # get last state value
             if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
                 # TODO(pu): for board_games, very important, to check
-                value_list = value_list.reshape(-1) * np.array([self._cfg.discount_factor ** td_steps_list[i]
-                                                                if int(td_steps_list[i]) % 2 == 0
-                                                                else -self._cfg.discount_factor ** td_steps_list[i]
-                                                                for i in range(transition_batch_size)])
+                value_list = value_list.reshape(-1) * np.array(
+                    [
+                        self._cfg.discount_factor ** td_steps_list[i] if int(td_steps_list[i]) %
+                        2 == 0 else -self._cfg.discount_factor ** td_steps_list[i]
+                        for i in range(transition_batch_size)
+                    ]
+                )
             else:
                 value_list = value_list.reshape(-1) * (
-                        np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list
+                    np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list
                 )
 
             value_list = value_list * np.array(value_mask)
@@ -292,8 +298,8 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                         target_values.append(value_list[value_index])
                         # TODO: Since the horizon is small and the discount_factor is close to 1.
                         # Compute the reward sum to approximate the value prefix for simplification
-                        value_prefix += reward_list[
-                            current_index]  # * self._cfg.discount_factor ** (current_index - base_index)
+                        value_prefix += reward_list[current_index
+                                                    ]  # * self._cfg.discount_factor ** (current_index - base_index)
                         target_value_prefixs.append(value_prefix)
                     else:
                         target_values.append(0)
@@ -324,13 +330,13 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         # transition_batch_size = game_segment_batch_size * (self._cfg.num_unroll_steps + 1)
         transition_batch_size = len(policy_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)
-        to_play, action_mask = self._preprocess_to_play_and_action_mask(game_segment_batch_size, to_play_segment,
-                                                                        action_mask_segment, pos_in_game_segment_list)
+        to_play, action_mask = self._preprocess_to_play_and_action_mask(
+            game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
+        )
 
-        legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in
-                         range(transition_batch_size)]
+        legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
         with torch.no_grad():
-            policy_obs_list = prepare_observation(policy_obs_list, self._cfg.model.model_type) 
+            policy_obs_list = prepare_observation(policy_obs_list, self._cfg.model.model_type)
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
             slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
             network_output = []
@@ -344,8 +350,12 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
                     [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                        [m_output.latent_state, inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
-                         m_output.policy_logits])
+                        [
+                            m_output.latent_state,
+                            inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                            m_output.policy_logits
+                        ]
+                    )
                     m_output.reward_hidden_state = (
                         m_output.reward_hidden_state[0].detach().cpu().numpy(),
                         m_output.reward_hidden_state[1].detach().cpu().numpy()
@@ -365,17 +375,13 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                roots.prepare(
-                    self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
-                )
+                roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTSCtree(self._cfg).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                roots.prepare(
-                    self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play
-                )
+                roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTSPtree(self._cfg).search(
                     roots, model, hidden_state_roots, reward_hidden_state_roots, to_play=to_play

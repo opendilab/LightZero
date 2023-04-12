@@ -20,7 +20,7 @@ class BipedalWalkerDiscEnv(BaseEnv):
             original continuous action into ``each_dim_disc_size`` bins and using their Cartesian product to obtain
             handcrafted discrete actions.
     """
-    
+
     @classmethod
     def default_config(cls: type) -> EasyDict:
         cfg = EasyDict(copy.deepcopy(cls.config))
@@ -57,7 +57,7 @@ class BipedalWalkerDiscEnv(BaseEnv):
              and at the same time, the action space will be discretized into "each_dim_disc_size" bins.
         Returns:
             - info_dict (:obj:`Dict[str, Any]`): Including observation, action_mask, and to_play label.
-        """     
+        """
         if not self._init_flag:
             self._env = gym.make('BipedalWalker-v3')
             self._observation_space = self._env.observation_space
@@ -118,7 +118,7 @@ class BipedalWalkerDiscEnv(BaseEnv):
             - action (:obj:`np.ndarray`): Discrete action
         Returns:
             - BaseEnvTimestep (:obj:`tuple`): Including observation, reward, done, and info.
-        """     
+        """
         # disc_to_cont: transform discrete action index to original continuous action
         action = [-1 + 2 / self.n * k for k in self.disc_to_cont[int(action)]]
         action = to_ndarray(action)
@@ -149,7 +149,7 @@ class BipedalWalkerDiscEnv(BaseEnv):
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
                 self._save_replay_count += 1
         obs = to_ndarray(obs)
-        rew = to_ndarray([rew]) 
+        rew = to_ndarray([rew])
         return BaseEnvTimestep(obs, rew, done, info)
 
     @property

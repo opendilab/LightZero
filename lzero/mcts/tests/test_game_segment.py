@@ -48,7 +48,8 @@ def test_game_segment(test_algo):
         ]
         for i in range(config.env.evaluator_env_num):
             game_segments[i].reset(
-                [init_observations[i]['observation'] for _ in range(config.policy.model.frame_stack_num)])
+                [init_observations[i]['observation'] for _ in range(config.policy.model.frame_stack_num)]
+            )
         episode_rewards = np.zeros(config.env.evaluator_env_num)
 
         while not dones.all():
@@ -74,23 +75,22 @@ def test_game_segment(test_algo):
                 )
                 # for atari env, all actions is legal_action
                 legal_actions_list = [
-                    [i for i in range(config.policy.model.action_space_size)] for _ in
-                    range(config.env.evaluator_env_num)
+                    [i for i in range(config.policy.model.action_space_size)]
+                    for _ in range(config.env.evaluator_env_num)
                 ]
             elif test_algo == 'MuZero':
                 reward_pool = network_output.reward
                 # for board games, we use the all actions is legal_action
                 legal_actions_list = [
-                    [a for a, x in enumerate(init_observations[i]['action_mask']) if x == 1] for i in
-                    range(config.env.evaluator_env_num)
+                    [a for a, x in enumerate(init_observations[i]['action_mask']) if x == 1]
+                    for i in range(config.env.evaluator_env_num)
                 ]
 
             # null padding for the atari games and board_games in vs_bot_mode
             to_play = [-1 for _ in range(config.env.evaluator_env_num)]
 
             if test_algo == 'EfficientZero':
-                roots = MCTSCtree.roots(config.env.evaluator_env_num,
-                                        legal_actions_list)
+                roots = MCTSCtree.roots(config.env.evaluator_env_num, legal_actions_list)
                 roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 MCTSCtree(config.policy).search(roots, model, hidden_state_roots, reward_hidden_state_roots, to_play)
 

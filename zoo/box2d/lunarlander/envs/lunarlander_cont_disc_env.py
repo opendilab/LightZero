@@ -20,7 +20,7 @@ class LunarLanderDiscEnv(BaseEnv):
             original continuous action into ``each_dim_disc_size`` bins and using their Cartesian product to obtain
             handcrafted discrete actions.
     """
-    
+
     @classmethod
     def default_config(cls: type) -> EasyDict:
         cfg = EasyDict(copy.deepcopy(cls.config))
@@ -60,7 +60,7 @@ class LunarLanderDiscEnv(BaseEnv):
              and at the same time, the action space will be discretized into "each_dim_disc_size" bins.
         Returns:
             - info_dict (:obj:`Dict[str, Any]`): Including observation, action_mask, and to_play label.
-        """     
+        """
         if not self._init_flag:
             self._env = gym.make(self._cfg.env_name)
             if self._replay_path is not None:
@@ -75,10 +75,10 @@ class LunarLanderDiscEnv(BaseEnv):
             self._observation_space = self._env.observation_space
 
             self._reward_space = gym.spaces.Box(
-                low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1,), dtype=np.float32
+                low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1, ), dtype=np.float32
             )
             self._reward_space = gym.spaces.Box(
-                low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1,), dtype=np.float32
+                low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1, ), dtype=np.float32
             )
             self._init_flag = True
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
@@ -126,10 +126,10 @@ class LunarLanderDiscEnv(BaseEnv):
             - action (:obj:`np.ndarray`): Discrete action
         Returns:
             - BaseEnvTimestep (:obj:`tuple`): Including observation, reward, done, and info.
-        """  
+        """
         action = [-1 + 2 / self.n * k for k in self.disc_to_cont[int(action)]]
         action = to_ndarray(action)
-        if action.shape == (1,):
+        if action.shape == (1, ):
             action = action.item()  # 0-dim array
         if self._act_scale:
             action = affine_transform(action, min_val=-1, max_val=1)

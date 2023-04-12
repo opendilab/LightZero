@@ -22,9 +22,13 @@ if __name__ == "__main__":
     returns_mean_seeds = []
     returns_seeds = []
     for seed in seeds:
-        returns_mean, returns = eval_muzero([main_config, create_config], seed=seed,
-                                                            num_episodes_each_seed=num_episodes_each_seed,
-                                                            print_seed_details=True, model_path=model_path)
+        returns_mean, returns = eval_muzero(
+            [main_config, create_config],
+            seed=seed,
+            num_episodes_each_seed=num_episodes_each_seed,
+            print_seed_details=True,
+            model_path=model_path
+        )
         returns_mean_seeds.append(returns_mean)
         returns_seeds.append(returns)
 
@@ -35,5 +39,7 @@ if __name__ == "__main__":
     print(f'We eval total {len(seeds)} seeds. In each seed, we eval {num_episodes_each_seed} episodes.')
     print(f'In seeds {seeds}, returns_mean_seeds is {returns_mean_seeds}, returns is {returns_seeds}')
     print('In all seeds, reward_mean:', returns_mean_seeds.mean(), end='. ')
-    print(f'win rate: {len(np.where(returns_seeds == 1.)[0]) / total_test_episodes}, draw rate: {len(np.where(returns_seeds == 0.)[0]) / total_test_episodes}, lose rate: {len(np.where(returns_seeds == -1.)[0]) / total_test_episodes}')
+    print(
+        f'win rate: {len(np.where(returns_seeds == 1.)[0]) / total_test_episodes}, draw rate: {len(np.where(returns_seeds == 0.)[0]) / total_test_episodes}, lose rate: {len(np.where(returns_seeds == -1.)[0]) / total_test_episodes}'
+    )
     print("=" * 20)

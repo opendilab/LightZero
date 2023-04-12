@@ -16,41 +16,41 @@ from .utils import renormalize, get_dynamic_mean, get_reward_mean, get_params_me
 class SampledEfficientZeroModel(nn.Module):
 
     def __init__(
-            self,
-            observation_shape: SequenceType = (12, 96, 96),
-            action_space_size: int = 6,
-            categorical_distribution: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            last_linear_layer_init_zero: bool = True,
-            state_norm: bool = False,
-            downsample: bool = False,
-            num_res_blocks: int = 1,
-            num_channels: int = 64,
-            lstm_hidden_size: int = 512,
-            reward_head_channels: int = 16,
-            value_head_channels: int = 16,
-            policy_head_channels: int = 16,
-            fc_reward_layers: SequenceType = [32],
-            fc_value_layers: SequenceType = [32],
-            fc_policy_layers: SequenceType = [32],
-            reward_support_size: int = 601,
-            value_support_size: int = 601,
-            proj_hid: int = 1024,
-            proj_out: int = 1024,
-            pred_hid: int = 512,
-            pred_out: int = 1024,
-            self_supervised_learning_loss: bool = True,
-            # ==============================================================
-            # specific sampled related config
-            # ==============================================================
-            continuous_action_space: bool = False,
-            num_of_sampled_actions: int = 6,
-            sigma_type='conditioned',
-            fixed_sigma_value: float = 0.3,
-            bound_type: str = None,
-            norm_type: str = 'BN',
-            *args,
-            **kwargs,
+        self,
+        observation_shape: SequenceType = (12, 96, 96),
+        action_space_size: int = 6,
+        categorical_distribution: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        last_linear_layer_init_zero: bool = True,
+        state_norm: bool = False,
+        downsample: bool = False,
+        num_res_blocks: int = 1,
+        num_channels: int = 64,
+        lstm_hidden_size: int = 512,
+        reward_head_channels: int = 16,
+        value_head_channels: int = 16,
+        policy_head_channels: int = 16,
+        fc_reward_layers: SequenceType = [32],
+        fc_value_layers: SequenceType = [32],
+        fc_policy_layers: SequenceType = [32],
+        reward_support_size: int = 601,
+        value_support_size: int = 601,
+        proj_hid: int = 1024,
+        proj_out: int = 1024,
+        pred_hid: int = 512,
+        pred_out: int = 1024,
+        self_supervised_learning_loss: bool = True,
+        # ==============================================================
+        # specific sampled related config
+        # ==============================================================
+        continuous_action_space: bool = False,
+        num_of_sampled_actions: int = 6,
+        sigma_type='conditioned',
+        fixed_sigma_value: float = 0.3,
+        bound_type: str = None,
+        norm_type: str = 'BN',
+        *args,
+        **kwargs,
     ):
         """
         Overview:
@@ -244,8 +244,11 @@ class SampledEfficientZeroModel(nn.Module):
         policy_logits, value = self._prediction(latent_state)
         # zero initialization for reward hidden states
         # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
-        reward_hidden_state = (torch.zeros(1, batch_size, self.lstm_hidden_size).to(obs.device),
-                         torch.zeros(1, batch_size, self.lstm_hidden_size).to(obs.device))
+        reward_hidden_state = (
+            torch.zeros(1, batch_size,
+                        self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
+                                                                           self.lstm_hidden_size).to(obs.device)
+        )
         return EZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, latent_state, reward_hidden_state)
 
     def recurrent_inference(
@@ -445,19 +448,19 @@ class SampledEfficientZeroModel(nn.Module):
 class DynamicsNetwork(nn.Module):
 
     def __init__(
-            self,
-            num_res_blocks,
-            num_channels,
-            action_space_dim,
-            reward_head_channels,
-            fc_reward_layers,
-            output_support_size,
-            flatten_output_size_for_reward_head,
-            lstm_hidden_size,
-            momentum: float = 0.1,
-            last_linear_layer_init_zero: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            norm_type: str = 'BN',
+        self,
+        num_res_blocks,
+        num_channels,
+        action_space_dim,
+        reward_head_channels,
+        fc_reward_layers,
+        output_support_size,
+        flatten_output_size_for_reward_head,
+        lstm_hidden_size,
+        momentum: float = 0.1,
+        last_linear_layer_init_zero: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        norm_type: str = 'BN',
     ):
         """
         Overview:
@@ -585,28 +588,28 @@ class DynamicsNetwork(nn.Module):
 class PredictionNetwork(nn.Module):
 
     def __init__(
-            self,
-            continuous_action_space,
-            action_space_size,
-            num_res_blocks,
-            num_channels,
-            value_head_channels,
-            policy_head_channels,
-            fc_value_layers,
-            fc_policy_layers,
-            output_support_size,
-            flatten_output_size_for_value_head,
-            flatten_output_size_for_policy_head,
-            momentum: float = 0.1,
-            last_linear_layer_init_zero: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            # ==============================================================
-            # specific sampled related config
-            # ==============================================================
-            sigma_type='conditioned',
-            fixed_sigma_value: float = 0.3,
-            bound_type: str = None,
-            norm_type: str = 'BN',
+        self,
+        continuous_action_space,
+        action_space_size,
+        num_res_blocks,
+        num_channels,
+        value_head_channels,
+        policy_head_channels,
+        fc_value_layers,
+        fc_policy_layers,
+        output_support_size,
+        flatten_output_size_for_value_head,
+        flatten_output_size_for_policy_head,
+        momentum: float = 0.1,
+        last_linear_layer_init_zero: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        # ==============================================================
+        # specific sampled related config
+        # ==============================================================
+        sigma_type='conditioned',
+        fixed_sigma_value: float = 0.3,
+        bound_type: str = None,
+        norm_type: str = 'BN',
     ):
         """
         Overview:
