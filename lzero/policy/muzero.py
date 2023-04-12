@@ -49,6 +49,8 @@ class MuZeroPolicy(Policy):
             # (int) The scale of supports used in categorical distribution.
             # This variable is only effective when ``categorical_distribution=True``.
             support_scale=300,
+            # (bool) whether to learn bias in the last linear layer in value and policy head.
+            bias=True,
         ),
         # ****** common ******
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)

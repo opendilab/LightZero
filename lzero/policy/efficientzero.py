@@ -48,6 +48,8 @@ class EfficientZeroPolicy(Policy):
             support_scale=300,
             # (int) The hidden size in LSTM.
             lstm_hidden_size=512,
+            # (bool) whether to learn bias in the last linear layer in value and policy head.
+            bias=True,
         ),
         # ****** common ******
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)

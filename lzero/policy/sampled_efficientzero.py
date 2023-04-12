@@ -56,6 +56,8 @@ class SampledEfficientZeroPolicy(Policy):
             sigma_type='conditioned',
             # (float) The fixed sigma value. Only effective when ``sigma_type='fixed'``.
             fixed_sigma_value=0.3,
+            # (bool) whether to learn bias in the last linear layer in value and policy head.
+            bias=True,
         ),
         # ****** common ******
         # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.

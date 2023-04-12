@@ -31,6 +31,7 @@ class MuZeroModelMLP(nn.Module):
         pred_hid: int = 512,
         pred_out: int = 1024,
         self_supervised_learning_loss: bool = False,
+        bias: bool = True,
         *args,
         **kwargs
     ):
@@ -60,6 +61,7 @@ class MuZeroModelMLP(nn.Module):
             - pred_hid (:obj:`int`): The size of prediction hidden layer.
             - pred_out (:obj:`int`): The size of prediction output layer.
             - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks in MuZero model, default set it to False.
+            - bias (:obj:`bool`): Whether to use bias in the last layer of policy and value head in prediction network, default set it to True.
         """
         super(MuZeroModelMLP, self).__init__()
         self.action_space_size = action_space_size
@@ -81,7 +83,7 @@ class MuZeroModelMLP(nn.Module):
         self.pred_out = pred_out
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
-        self.action_space_size = action_space_size
+        self.bias = bias
 
         self.representation_network = RepresentationNetworkMLP(
             observation_shape=observation_shape, hidden_channels=self.latent_state_dim
@@ -103,6 +105,7 @@ class MuZeroModelMLP(nn.Module):
             fc_policy_layers=fc_policy_layers,
             output_support_size=self.value_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            bias=self.bias,
         )
 
         if self.self_supervised_learning_loss:
