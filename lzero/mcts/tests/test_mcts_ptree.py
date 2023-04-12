@@ -92,7 +92,7 @@ stack_obs = torch.zeros(
 
 network_output = model.initial_inference(stack_obs.float())
 
-hidden_state_roots = network_output['latent_state']
+latent_state_roots = network_output['latent_state']
 reward_hidden_state_state = network_output['reward_hidden_state']
 pred_values_pool = network_output['value']
 value_prefix_pool = network_output['value_prefix']
@@ -100,7 +100,7 @@ policy_logits_pool = network_output['policy_logits']
 
 # network output process
 pred_values_pool = inverse_scalar_transform(pred_values_pool, policy_config.model.support_scale).detach().cpu().numpy()
-hidden_state_roots = latent_state_roots.detach().cpu().numpy()
+latent_state_roots = latent_state_roots.detach().cpu().numpy()
 reward_hidden_state_state = (
     reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
 )

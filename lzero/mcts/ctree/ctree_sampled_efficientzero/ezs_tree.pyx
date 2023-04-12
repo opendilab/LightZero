@@ -99,12 +99,12 @@ cdef class Node:
                   bool continuous_action_space):
         pass
 
-    def expand(self, int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix,
+    def expand(self, int to_play, int latent_state_index_x, int latent_state_index_y, float value_prefix,
                list policy_logits):
         cdef vector[float] cpolicy = policy_logits
-        self.cnode.expand(to_play, hidden_state_index_x, hidden_state_index_y, value_prefix, cpolicy)
+        self.cnode.expand(to_play, latent_state_index_x, latent_state_index_y, value_prefix, cpolicy)
 
-def batch_backpropagate(int hidden_state_index_x, float discount_factor, list value_prefixs, list values, list policies,
+def batch_backpropagate(int latent_state_index_x, float discount_factor, list value_prefixs, list values, list policies,
                          MinMaxStatsList min_max_stats_lst, ResultsWrapper results, list is_reset_lst,
                          list to_play_batch):
     cdef int i
@@ -112,7 +112,7 @@ def batch_backpropagate(int hidden_state_index_x, float discount_factor, list va
     cdef vector[float] cvalues = values
     cdef vector[vector[float]] cpolicies = policies
 
-    cbatch_backpropagate(hidden_state_index_x, discount_factor, cvalue_prefixs, cvalues, cpolicies,
+    cbatch_backpropagate(latent_state_index_x, discount_factor, cvalue_prefixs, cvalues, cpolicies,
                           min_max_stats_lst.cmin_max_stats_lst, results.cresults, is_reset_lst, to_play_batch)
 
 def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount_factor, MinMaxStatsList min_max_stats_lst,

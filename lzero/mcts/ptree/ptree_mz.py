@@ -31,12 +31,12 @@ class Node:
         self.value_prefix = 0.0
         self.children = {}
         self.children_index = []
-        self.hidden_state_index_x = 0
-        self.hidden_state_index_y = 0
+        self.latent_state_index_x = 0
+        self.latent_state_index_y = 0
         self.parent_value_prefix = 0  # only used in update_tree_q method
 
     def expand(
-            self, to_play: int, hidden_state_index_x: int, hidden_state_index_y: int, reward: float,
+            self, to_play: int, latent_state_index_x: int, latent_state_index_y: int, reward: float,
             policy_logits: List[float]
     ) -> None:
         """
@@ -44,8 +44,8 @@ class Node:
             Expand the child nodes of the current node.
         Arguments:
             - to_play (:obj:`Class int`): which player to play the game in the current node.
-            - hidden_state_index_x (:obj:`Class int`): the x/first index of hidden state vector of the current node, i.e. the search depth.
-            - hidden_state_index_y (:obj:`Class int`): the y/second index of hidden state vector of the current node, i.e. the index of batch root node, its maximum is ``batch_size``/``env_num``.
+            - latent_state_index_x (:obj:`Class int`): the x/first index of hidden state vector of the current node, i.e. the search depth.
+            - latent_state_index_y (:obj:`Class int`): the y/second index of hidden state vector of the current node, i.e. the index of batch root node, its maximum is ``batch_size``/``env_num``.
             - value_prefix: (:obj:`Class float`): the value prefix of the current node.
             - policy_logits: (:obj:`Class List`): the policy logit of the child nodes.
         """
@@ -54,8 +54,8 @@ class Node:
             # TODO
             self.legal_actions = np.arange(len(policy_logits))
 
-        self.hidden_state_index_x = hidden_state_index_x
-        self.hidden_state_index_y = hidden_state_index_y
+        self.latent_state_index_x = latent_state_index_x
+        self.latent_state_index_y = latent_state_index_y
         self.reward = reward
 
         policy_values = torch.softmax(torch.tensor([policy_logits[a] for a in self.legal_actions]), dim=0).tolist()
@@ -198,8 +198,8 @@ class Roots:
             - to_play_batch: the vector of the player side of each root.
         """
         for i in range(self.root_num):
-            #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
-            # TODO(pu): why hidden_state_index_x=0, hidden_state_index_y=i?
+            #  to_play: int, latent_state_index_x: int, latent_state_index_y: int,
+            # TODO(pu): why latent_state_index_x=0, latent_state_index_y=i?
             if to_play is None:
                 self.roots[i].expand(0, 0, i, rewards[i], policies[i])
             else:
@@ -475,8 +475,8 @@ def batch_traverse(
             # note this return the parent node of the current searched node
             parent = results.search_paths[i][len(results.search_paths[i]) - 1 - 1]
 
-            results.latent_state_index_x_lst[i] = parent.hidden_state_index_x
-            results.latent_state_index_y_lst[i] = parent.hidden_state_index_y
+            results.latent_state_index_x_lst[i] = parent.latent_state_index_x
+            results.latent_state_index_y_lst[i] = parent.latent_state_index_y
             results.last_actions[i] = last_action
             results.search_lens[i] = search_len
             # the leaf node
@@ -547,7 +547,7 @@ def backpropagate(
 
 
 def batch_backpropagate(
-        hidden_state_index_x: int,
+        latent_state_index_x: int,
         discount_factor: float,
         value_prefixs: List[float],
         values: List[float],
@@ -560,7 +560,7 @@ def batch_backpropagate(
     Overview:
         Backpropagation along the search path to update the attributes.
     Arguments:
-        - hidden_state_index_x (:obj:`Class Int`): the index of hidden state vector.
+        - latent_state_index_x (:obj:`Class Int`): the index of hidden state vector.
         - discount_factor (:obj:`Class Float`): discount_factor factor used i calculating bootstrapped value, if env is board_games, we set discount_factor=1.
         - value_prefixs (:obj:`Class List`): the value prefixs of nodes along the search path.
         - values (:obj:`Class List`):  the values to propagate along the search path.
@@ -571,12 +571,12 @@ def batch_backpropagate(
     """
     for i in range(results.num):
         # expand the leaf node
-        #  to_play: int, hidden_state_index_x: int, hidden_state_index_y: int,
+        #  to_play: int, latent_state_index_x: int, latent_state_index_y: int,
         if to_play is None:
             # set to_play=0, because two_player mode to_play = {1,2}
-            results.nodes[i].expand(0, hidden_state_index_x, i, value_prefixs[i], policies[i])
+            results.nodes[i].expand(0, latent_state_index_x, i, value_prefixs[i], policies[i])
         else:
-            results.nodes[i].expand(to_play[i], hidden_state_index_x, i, value_prefixs[i], policies[i])
+            results.nodes[i].expand(to_play[i], latent_state_index_x, i, value_prefixs[i], policies[i])
 
         if to_play is None:
             backpropagate(results.search_paths[i], min_max_stats_lst.stats_lst[i], 0, values[i], discount_factor)

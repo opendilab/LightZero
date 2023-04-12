@@ -184,28 +184,28 @@ namespace tree
         this->to_play = 0;
         this->value_prefix = 0.0;
         this->parent_value_prefix = 0.0;
-        this->hidden_state_index_x = -1;
-        this->hidden_state_index_y = -1;
+        this->latent_state_index_x = -1;
+        this->latent_state_index_y = -1;
     }
 
     CNode::~CNode() {}
 
 
-    void CNode::expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix, const std::vector<float> &policy_logits)
+    void CNode::expand(int to_play, int latent_state_index_x, int latent_state_index_y, float value_prefix, const std::vector<float> &policy_logits)
     {
         /*
         Overview:
             Expand the child nodes of the current node.
         Arguments:
             - to_play: which player to play the game in the current node.
-            - hidden_state_index_x: the x/first index of hidden state vector of the current node, i.e. the search depth.
-            - hidden_state_index_y: the y/second index of hidden state vector of the current node, i.e. the index of batch root node, its maximum is ``batch_size``/``env_num``.
+            - latent_state_index_x: the x/first index of hidden state vector of the current node, i.e. the search depth.
+            - latent_state_index_y: the y/second index of hidden state vector of the current node, i.e. the index of batch root node, its maximum is ``batch_size``/``env_num``.
             - value_prefix: the value prefix of the current node.
             - policy_logits: the logit of the child nodes.
         */
         this->to_play = to_play;
-        this->hidden_state_index_x = hidden_state_index_x;
-        this->hidden_state_index_y = hidden_state_index_y;
+        this->latent_state_index_x = latent_state_index_x;
+        this->latent_state_index_y = latent_state_index_y;
         this->value_prefix = value_prefix;
         int action_num = policy_logits.size();
 
@@ -941,13 +941,13 @@ namespace tree
         }
     }
 
-    void cbatch_backpropagate(int hidden_state_index_x, float discount_factor, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> is_reset_lst, std::vector<int> &to_play_batch)
+    void cbatch_backpropagate(int latent_state_index_x, float discount_factor, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> is_reset_lst, std::vector<int> &to_play_batch)
     {        
         /*
         Overview:
             Expand the nodes along the search path and update the infos.
         Arguments:
-            - hidden_state_index_x: the index of hidden state vector.
+            - latent_state_index_x: the index of hidden state vector.
             - discount_factor: the discount factor of reward.
             - value_prefixs: the value prefixs of nodes along the search path.
             - values: the values to propagate along the search path.
@@ -959,7 +959,7 @@ namespace tree
         */
         for (int i = 0; i < results.num; ++i)
         {
-            results.nodes[i]->expand(to_play_batch[i], hidden_state_index_x, i, value_prefixs[i], policies[i]);
+            results.nodes[i]->expand(to_play_batch[i], latent_state_index_x, i, value_prefixs[i], policies[i]);
             // reset
             results.nodes[i]->is_reset = is_reset_lst[i];
 
@@ -1173,8 +1173,8 @@ namespace tree
 
             CNode *parent = results.search_paths[i][results.search_paths[i].size() - 2];
 
-            results.latent_state_index_x_lst.push_back(parent->hidden_state_index_x);
-            results.latent_state_index_y_lst.push_back(parent->hidden_state_index_y);
+            results.latent_state_index_x_lst.push_back(parent->latent_state_index_x);
+            results.latent_state_index_y_lst.push_back(parent->latent_state_index_y);
 
             results.last_actions.push_back(last_action);
             results.search_lens.push_back(search_len);

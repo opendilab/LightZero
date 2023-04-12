@@ -33,10 +33,10 @@ cdef extern from "lib/cnode.h" namespace "tree":
     cdef cppclass CNode:
         CNode() except +
         CNode(float prior, vector[int] & legal_actions) except +
-        int visit_count, to_play, hidden_state_index_x, hidden_state_index_y, best_action
+        int visit_count, to_play, latent_state_index_x, latent_state_index_y, best_action
         float value_prefixs, prior, value_sum, parent_value_prefix
 
-        void expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefixs,
+        void expand(int to_play, int latent_state_index_x, int latent_state_index_y, float value_prefixs,
                     vector[float] policy_logits)
         void add_exploration_noise(float exploration_fraction, vector[float] noises)
         float compute_mean_q(int isRoot, float parent_q, float discount_factor)
@@ -75,7 +75,7 @@ cdef extern from "lib/cnode.h" namespace "tree":
 
     cdef void cbackpropagate(vector[CNode *] & search_path, CMinMaxStats & min_max_stats,
                               int to_play, float value, float discount_factor)
-    void cbatch_backpropagate(int hidden_state_index_x, float discount_factor, vector[float] value_prefixs,
+    void cbatch_backpropagate(int latent_state_index_x, float discount_factor, vector[float] value_prefixs,
                                vector[float] values, vector[vector[float]] policies,
                                CMinMaxStatsList *min_max_stats_lst, CSearchResults & results,
                                vector[int] is_reset_lst, vector[int] & to_play_batch)

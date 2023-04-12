@@ -95,7 +95,7 @@ class EfficientZeroMCTSCtree(object):
             reward_hidden_state_h_pool = [reward_hidden_state_roots[1]]
 
             # the index of each layer in the ctree
-            hidden_state_index_x = 0
+            latent_state_index_x = 0
             # minimax value storage
             min_max_stats_lst = tree_efficientzero.MinMaxStatsList(num)
             min_max_stats_lst.set_delta(self._cfg.value_delta_max)
@@ -184,7 +184,7 @@ class EfficientZeroMCTSCtree(object):
 
                 reward_hidden_state_c_pool.append(reward_latent_state_nodes[0])
                 reward_hidden_state_h_pool.append(reward_latent_state_nodes[1])
-                hidden_state_index_x += 1
+                latent_state_index_x += 1
 
                 """
                 MCTS stage 3: Backup
@@ -192,7 +192,7 @@ class EfficientZeroMCTSCtree(object):
                 """
                 # backpropagation along the search path to update the attributes
                 tree_efficientzero.batch_backpropagate(
-                    hidden_state_index_x, discount_factor, value_prefix_pool, value_pool, policy_logits_pool,
+                    latent_state_index_x, discount_factor, value_prefix_pool, value_pool, policy_logits_pool,
                     min_max_stats_lst, results, is_reset_lst, virtual_to_play_batch
                 )
 
@@ -278,7 +278,7 @@ class MuZeroMCTSCtree(object):
             latent_state_pool = [latent_state_roots]
 
             # the index of each layer in the ctree
-            hidden_state_index_x = 0
+            latent_state_index_x = 0
             # minimax value storage
             min_max_stats_lst = tree_muzero.MinMaxStatsList(num)
             min_max_stats_lst.set_delta(self._cfg.value_delta_max)
@@ -339,7 +339,7 @@ class MuZeroMCTSCtree(object):
                 policy_logits_pool = network_output.policy_logits.tolist()
 
                 latent_state_pool.append(latent_state_nodes)
-                hidden_state_index_x += 1
+                latent_state_index_x += 1
 
                 """
                 MCTS stage 3: Backup
@@ -347,6 +347,6 @@ class MuZeroMCTSCtree(object):
                 """
                 # backpropagation along the search path to update the attributes
                 tree_muzero.batch_backpropagate(
-                    hidden_state_index_x, discount_factor, reward_pool, value_pool, policy_logits_pool,
+                    latent_state_index_x, discount_factor, reward_pool, value_pool, policy_logits_pool,
                     min_max_stats_lst, results, virtual_to_play_batch
                 )

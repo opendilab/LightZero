@@ -105,13 +105,13 @@ class SampledEfficientZeroMCTSCtree(object):
             reward_hidden_state_h_pool = [reward_hidden_state_roots[1]]
 
             # the index of each layer in the ctree
-            hidden_state_index_x = 0
+            latent_state_index_x = 0
             # minimax value storage
             min_max_stats_lst = tree_efficientzero.MinMaxStatsList(num)
             min_max_stats_lst.set_delta(self._cfg.value_delta_max)
 
             for index_simulation in range(self._cfg.num_simulations):
-                hidden_states = []
+                latent_states = []
                 hidden_states_c_reward = []
                 hidden_states_h_reward = []
 
@@ -136,11 +136,11 @@ class SampledEfficientZeroMCTSCtree(object):
 
                 # obtain the states for leaf nodes
                 for ix, iy in zip(latent_state_index_x_lst, latent_state_index_y_lst):
-                    hidden_states.append(hidden_state_pool[ix][iy])
+                    latent_states.append(hidden_state_pool[ix][iy])
                     hidden_states_c_reward.append(reward_hidden_state_c_pool[ix][0][iy])
                     hidden_states_h_reward.append(reward_hidden_state_h_pool[ix][0][iy])
 
-                hidden_states = torch.from_numpy(np.asarray(hidden_states)).to(device).float()
+                latent_states = torch.from_numpy(np.asarray(latent_states)).to(device).float()
                 hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(device).unsqueeze(0)
                 hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(device).unsqueeze(0)
 
@@ -158,7 +158,7 @@ class SampledEfficientZeroMCTSCtree(object):
                     Then we calculate the policy_logits and value for the leaf node (next_latent_state) by the prediction function. (aka. evaluation)
                 """
                 network_output = model.recurrent_inference(
-                    hidden_states, (hidden_states_c_reward, hidden_states_h_reward), last_actions
+                    latent_states, (hidden_states_c_reward, hidden_states_h_reward), last_actions
                 )
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
@@ -195,7 +195,7 @@ class SampledEfficientZeroMCTSCtree(object):
                 reward_hidden_state_c_pool.append(reward_latent_state_nodes[0])
                 reward_hidden_state_h_pool.append(reward_latent_state_nodes[1])
                 # increase the index of leaf node
-                hidden_state_index_x += 1
+                latent_state_index_x += 1
 
                 """
                 MCTS stage 3: Backup
@@ -203,6 +203,6 @@ class SampledEfficientZeroMCTSCtree(object):
                 """
                 # backpropagation along the search path to update the attributes
                 tree_efficientzero.batch_backpropagate(
-                    hidden_state_index_x, discount_factor, value_prefix_pool, value_pool, policy_logits_pool,
+                    latent_state_index_x, discount_factor, value_prefix_pool, value_pool, policy_logits_pool,
                     min_max_stats_lst, results, is_reset_lst, virtual_to_play_batch
                 )

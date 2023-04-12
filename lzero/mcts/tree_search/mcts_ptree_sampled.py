@@ -111,7 +111,7 @@ class SampledEfficientZeroMCTSPtree(object):
             reward_hidden_state_h_pool = [reward_hidden_state_roots[1]]
 
             # the index of each layer in the ctree
-            hidden_state_index_x = 0
+            latent_state_index_x = 0
             # minimax value storage
             min_max_stats_lst = MinMaxStatsList(num)
 
@@ -120,7 +120,7 @@ class SampledEfficientZeroMCTSPtree(object):
                 """
                 each simulation, we expanded a new node, so we have `num_simulations` num of node at most
                 """
-                hidden_states = []
+                latent_states = []
                 hidden_states_c_reward = []
                 hidden_states_h_reward = []
 
@@ -145,7 +145,7 @@ class SampledEfficientZeroMCTSPtree(object):
 
                 # obtain the states for leaf nodes
                 for ix, iy in zip(latent_state_index_x_lst, latent_state_index_y_lst):
-                    hidden_states.append(hidden_state_pool[ix][iy])  # hidden_state_pool[ix][iy] shape (12,3,3)
+                    latent_states.append(hidden_state_pool[ix][iy])  # hidden_state_pool[ix][iy] shape (12,3,3)
                     hidden_states_c_reward.append(
                         reward_hidden_state_c_pool[ix][0][iy]
                     )  # reward_hidden_state_c_pool[ix][0][iy] shape (64,)
@@ -153,7 +153,7 @@ class SampledEfficientZeroMCTSPtree(object):
                         reward_hidden_state_h_pool[ix][0][iy]
                     )  # reward_hidden_state_h_pool[ix][0][iy] shape (64,)
 
-                hidden_states = torch.from_numpy(np.asarray(hidden_states)).to(self._cfg.device).float()
+                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
                 hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)
                                                           ).to(self._cfg.device).unsqueeze(0)  # shape (1,1, 64)
                 hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)
@@ -173,7 +173,7 @@ class SampledEfficientZeroMCTSPtree(object):
                     Then we calculate the policy_logits and value for the leaf node (next_latent_state) by the prediction function. (aka. evaluation)
                 """
                 network_output = model.recurrent_inference(
-                    hidden_states, (hidden_states_c_reward, hidden_states_h_reward), last_actions
+                    latent_states, (hidden_states_c_reward, hidden_states_h_reward), last_actions
                 )
                 if not model.training:
                     network_output.latent_state = network_output.latent_state.detach().cpu().numpy()
@@ -211,7 +211,7 @@ class SampledEfficientZeroMCTSPtree(object):
                 reward_hidden_state_c_pool.append(reward_latent_state_nodes[0])
                 reward_hidden_state_h_pool.append(reward_latent_state_nodes[1])
                 # increase the index of leaf node
-                hidden_state_index_x += 1
+                latent_state_index_x += 1
 
                 """
                 MCTS stage 3: Backup
@@ -219,6 +219,6 @@ class SampledEfficientZeroMCTSPtree(object):
                 """
                 # backpropagation along the search path to update the attributes
                 tree_sez.batch_backpropagate(
-                    hidden_state_index_x, discount_factor, value_prefix_pool, value_pool, policy_logits_pool,
+                    latent_state_index_x, discount_factor, value_prefix_pool, value_pool, policy_logits_pool,
                     min_max_stats_lst, results, is_reset_lst, virtual_to_play
                 )
