@@ -15,7 +15,8 @@ from lzero.mcts import EfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts import EfficientZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, negative_cosine_similarity, prepare_obs
+    DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, negative_cosine_similarity, prepare_obs, \
+    configure_optimizers
 
 
 @POLICY_REGISTRY.register('efficientzero')
@@ -176,7 +177,7 @@ class EfficientZeroPolicy(Policy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Ininitialize the learn model, optimizer and MCTS utils.
         """
-        assert self._cfg.optim_type in ['SGD', 'Adam'], self._cfg.optim_type
+        assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
         if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
                 self._model.parameters(),
@@ -191,6 +192,8 @@ class EfficientZeroPolicy(Policy):
                 lr=self._cfg.learning_rate,
                 weight_decay=self._cfg.weight_decay,
             )
+        elif self._cfg.optim_type == 'AdamW':
+            self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay, learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
 
         if self._cfg.lr_piecewise_constant_decay:
             from torch.optim.lr_scheduler import LambdaLR

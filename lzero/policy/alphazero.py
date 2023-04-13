@@ -12,6 +12,7 @@ from ding.utils import POLICY_REGISTRY
 from ding.utils.data import default_collate
 
 from lzero.mcts.ptree.ptree_az import MCTS
+from lzero.policy import configure_optimizers
 
 
 @POLICY_REGISTRY.register('alphazero')
@@ -95,7 +96,7 @@ class AlphaZeroPolicy(Policy):
         return 'AlphaZeroModel', ['lzero.model.alphazero_model']
 
     def _init_learn(self) -> None:
-        assert self._cfg.optim_type in ['SGD', 'Adam'], self._cfg.optim_type
+        assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
         if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
                 self._model.parameters(),
@@ -107,6 +108,8 @@ class AlphaZeroPolicy(Policy):
             self._optimizer = optim.Adam(
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
+        elif self._cfg.optim_type == 'AdamW':
+            self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay, learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
 
         if self._cfg.lr_piecewise_constant_decay:
             from torch.optim.lr_scheduler import LambdaLR

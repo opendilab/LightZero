@@ -1,10 +1,106 @@
+import logging
 from typing import List, Tuple, Dict
 from easydict import EasyDict
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 from scipy.stats import entropy
+import math
+import inspect
+
+import torch
+import torch.nn as nn
+from torch.nn import functional as F
+
+
+class LayerNorm(nn.Module):
+    """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
+
+    def __init__(self, ndim, bias):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(ndim))
+        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
+
+    def forward(self, input):
+        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
+
+
+def configure_optimizers(model: nn.Module, weight_decay: float = 0, learning_rate: float = 3e-3,
+                         betas: tuple = (0.9, 0.999), device_type: str = "cuda"):
+
+    """
+    Overview:
+        This function is adapted from https://github.com/karpathy/nanoGPT/blob/master/model.py
+
+        This long function is unfortunately doing something very simple and is being very defensive:
+        We are separating out all parameters of the model into two buckets: those that will experience
+        weight decay for regularization and those that won't (biases, and layernorm/embedding weights).
+        We are then returning the PyTorch optimizer object.
+    Arguments:
+        - model (:obj:`nn.Module`): The model to be optimized.
+        - weight_decay (:obj:`float`): The weight decay factor.
+        - learning_rate (:obj:`float`): The learning rate.
+        - betas (:obj:`tuple`): The betas for Adam.
+        - device_type (:obj:`str`): The device type.
+    Returns:
+        - optimizer (:obj:`torch.optim`): The optimizer.
+    """
+    # separate out all parameters to those that will and won't experience regularizing weight decay
+    decay = set()
+    no_decay = set()
+    # TODO(pu): check torch.nn.BatchNorm1d, torch.nn.LSTM
+    whitelist_weight_modules = (torch.nn.Linear, torch.nn.LSTM)
+    blacklist_weight_modules = (torch.nn.LayerNorm, LayerNorm, torch.nn.Embedding, torch.nn.BatchNorm1d)
+    for mn, m in model.named_modules():
+        for pn, p in m.named_parameters():
+            fpn = '%s.%s' % (mn, pn) if mn else pn  # full param name
+            # random note: because named_modules and named_parameters are recursive
+            # we will see the same tensors p many many times. but doing it this way
+            # allows us to know which parent module any tensor p belongs to...
+            if pn.endswith('bias') or pn.endswith('lstm.bias_ih_l0') or pn.endswith('lstm.bias_hh_l0'):
+                # all biases will not be decayed
+                no_decay.add(fpn)
+            elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
+                # weights of whitelist modules will be weight decayed
+                decay.add(fpn)
+            elif (pn.endswith('weight_ih_l0') or pn.endswith('weight_hh_l0')) and isinstance(m, whitelist_weight_modules):
+                # some special weights of whitelist modules will be weight decayed
+                decay.add(fpn)
+            elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
+                # weights of blacklist modules will NOT be weight decayed
+                no_decay.add(fpn)
+    try:
+        # subtle: 'transformer.wte.weight' and 'lm_head.weight' are tied, so they
+        # will appear in the no_decay and decay sets respectively after the above.
+        # In addition, because named_parameters() doesn't return duplicates, it
+        # will only return the first occurence, key'd by 'transformer.wte.weight', below.
+        # so let's manually remove 'lm_head.weight' from decay set. This will include
+        # this tensor into optimization via transformer.wte.weight only, and not decayed.
+        decay.remove('lm_head.weight')
+    except KeyError:
+        logging.info("lm_head.weight not found in decay set, so not removing it")
+
+    # validate that we considered every parameter
+    param_dict = {pn: p for pn, p in model.named_parameters()}
+    inter_params = decay & no_decay
+    union_params = decay | no_decay
+    assert len(inter_params) == 0, "parameters %s made it into both decay/no_decay sets!" % (str(inter_params),)
+    assert len(
+        param_dict.keys() - union_params) == 0, "parameters %s were not separated into either decay/no_decay set!" \
+                                                % (str(param_dict.keys() - union_params),)
+
+    # create the pytorch optimizer object
+    optim_groups = [
+        {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": weight_decay},
+        {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
+    ]
+    # new PyTorch nightly has a new 'fused' option for AdamW that is much faster
+    use_fused = (device_type == 'cuda') and ('fused' in inspect.signature(torch.optim.AdamW).parameters)
+    print(f"using fused AdamW: {use_fused}")
+    extra_args = dict(fused=True) if use_fused else dict()
+    optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
+
+    return optimizer
 
 
 def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
