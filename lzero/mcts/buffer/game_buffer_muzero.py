@@ -25,8 +25,8 @@ class MuZeroGameBuffer(GameBuffer):
         super().__init__(cfg)
         """
         Overview:
-            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
-            in the default configuration, the user-provided value will override the default configuration. Otherwise, 
+            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
+            in the default configuration, the user-provided value will override the default configuration. Otherwise,
             the default configuration will be used.
         """
         default_config = self.default_config()
@@ -347,7 +347,7 @@ class MuZeroGameBuffer(GameBuffer):
             - batch_target_values (:obj:'np.ndarray): batch of value estimation
         """
         value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
-        to_play_segment = reward_value_context
+        to_play_segment = reward_value_context  # noqa
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
         transition_batch_size = len(value_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)
@@ -495,7 +495,7 @@ class MuZeroGameBuffer(GameBuffer):
 
         # for board games
         policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, game_segment_lens, action_mask_segment, \
-        to_play_segment = policy_re_context
+        to_play_segment = policy_re_context  # noqa
         # transition_batch_size = game_segment_batch_size * (self._cfg.num_unroll_steps + 1)
         transition_batch_size = len(policy_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)

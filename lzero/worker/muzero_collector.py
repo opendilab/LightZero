@@ -590,14 +590,11 @@ class MuZeroCollector(ISerialCollector):
                         'unroll_plus_td_steps': self.unroll_plus_td_steps
                     } for i in range(len(self.game_segment_pool))
                 ]
-                """
-                for i in range(len(self.game_segment_pool)):
-                    print(self.game_segment_pool[i][0].obs_segment.__len__())
-                    print(self.game_segment_pool[i][0].reward_segment)
-                    
-                for i in range(len(return_data[0])):
-                    print(return_data[0][i].reward_segment)
-                """
+                # for i in range(len(self.game_segment_pool)):
+                #     print(self.game_segment_pool[i][0].obs_segment.__len__())
+                #     print(self.game_segment_pool[i][0].reward_segment)
+                # for i in range(len(return_data[0])):
+                #     print(return_data[0][i].reward_segment)
                 break
         # log
         self._output_log(train_iter)

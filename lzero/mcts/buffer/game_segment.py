@@ -201,7 +201,6 @@ class GameSegment:
         """
         Overview:
             post processing the data when a ``GameSegment`` block is full.
-        
         Note:
         game_segment element shape:
             e.g. game_segment_length=20, stack=4, num_unroll_steps=5, td_steps=5

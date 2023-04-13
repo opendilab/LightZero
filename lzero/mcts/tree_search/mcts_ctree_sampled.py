@@ -47,8 +47,8 @@ class SampledEfficientZeroMCTSCtree(object):
     def __init__(self, cfg: EasyDict = None) -> None:
         """
         Overview:
-            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
-            in the default configuration, the user-provided value will override the default configuration. Otherwise, 
+            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
+            in the default configuration, the user-provided value will override the default configuration. Otherwise,
             the default configuration will be used.
         """
         default_config = self.default_config()
@@ -155,7 +155,7 @@ class SampledEfficientZeroMCTSCtree(object):
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
                 """
                 MCTS stage 2: Expansion
-                    At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function. 
+                    At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function.
                     Then we calculate the policy_logits and value for the leaf node (next_latent_state) by the prediction function. (aka. evaluation)
                 """
                 network_output = model.recurrent_inference(

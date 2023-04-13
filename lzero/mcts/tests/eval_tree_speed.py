@@ -143,7 +143,7 @@ def ptree_func(policy_config, num_simulations):
 
         temperature = [1 for _ in range(env_nums)]
         for i in range(env_nums):
-            distributions, value = roots_distributions[i], roots_values[i]
+            distributions = roots_distributions[i]
             action_index, visit_count_distribution_entropy = select_action(
                 distributions, temperature=temperature[i], deterministic=False
             )
@@ -238,7 +238,7 @@ def ctree_func(policy_config, num_simulations):
 
         temperature = [1 for _ in range(env_nums)]
         for i in range(env_nums):
-            distributions, value = roots_distributions[i], roots_values[i]
+            distributions = roots_distributions[i]
             action_index, visit_count_distribution_entropy = select_action(
                 distributions, temperature=temperature[i], deterministic=False
             )
@@ -261,13 +261,13 @@ def plot(ctree_time, ptree_time, iters, label):
         'size': 18,
     }
 
-    fig = plt.figure(figsize=(20, 10))
+    plt.figure(figsize=(20, 10))
     # ctree
     color = palette(0)
     avg = np.mean(ctree_time, axis=0)
     std = np.std(ctree_time, axis=0)
-    r1 = list(map(lambda x: x[0] - x[1], zip(avg, std)))  # 上方差
-    r2 = list(map(lambda x: x[0] + x[1], zip(avg, std)))  # 下方差
+    r1 = list(map(lambda x: x[0] - x[1], zip(avg, std)))
+    r2 = list(map(lambda x: x[0] + x[1], zip(avg, std)))
     plt.plot(iters, avg, color=color, label="ctree", linewidth=3.0)
     plt.fill_between(iters, r1, r2, color=color, alpha=0.2)
 

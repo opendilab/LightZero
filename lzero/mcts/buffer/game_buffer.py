@@ -44,8 +44,8 @@ class GameBuffer(ABC, object):
         super().__init__()
         """
         Overview:
-            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
-            in the default configuration, the user-provided value will override the default configuration. Otherwise, 
+            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
+            in the default configuration, the user-provided value will override the default configuration. Otherwise,
             the default configuration will be used.
         """
         default_config = self.default_config()

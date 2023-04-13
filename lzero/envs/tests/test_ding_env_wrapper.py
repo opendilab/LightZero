@@ -1,7 +1,9 @@
+from easydict import EasyDict
 import pytest
+import gym
+import numpy as np
 
 from ding.envs import DingEnvWrapper
-from ding.envs.env_wrappers import *
 
 
 @pytest.mark.unittest

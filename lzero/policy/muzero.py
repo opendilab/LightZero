@@ -475,10 +475,10 @@ class MuZeroPolicy(Policy):
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
         Shape:
-            - data (:obj:`torch.Tensor`): 
+            - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
                     S is the number of stacked frames, H is the height of the image, W is the width of the image.
-                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size. 
+                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
             - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
             - temperature: :math:`(1, )`.
             - to_play: :math:`(N, 1)`, where N is the number of collect_env.
@@ -562,7 +562,7 @@ class MuZeroPolicy(Policy):
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1, ready_env_id=None) -> Dict:
         """
         Overview:
-            The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search. 
+            The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
             Choosing the action with the highest value (argmax) rather than sampling during the eval mode.
         Arguments:
             - data (:obj:`torch.Tensor`): The input data, i.e. the observation.
@@ -570,10 +570,10 @@ class MuZeroPolicy(Policy):
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
         Shape:
-            - data (:obj:`torch.Tensor`): 
+            - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
                     S is the number of stacked frames, H is the height of the image, W is the width of the image.
-                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size. 
+                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
             - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
             - to_play: :math:`(N, 1)`, where N is the number of collect_env.
             - ready_env_id: None

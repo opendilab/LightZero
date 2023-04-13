@@ -225,7 +225,7 @@ class SampledEfficientZeroPolicy(Policy):
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
             # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
-            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)
+            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
             self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
 
         # use model_wrapper for specialized demands of different modes
@@ -356,7 +356,6 @@ class SampledEfficientZeroPolicy(Policy):
         value_prefix_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
 
-        target_value_prefix_cpu = target_value_prefix.detach().cpu()
         gradient_scale = 1 / self._cfg.num_unroll_steps
 
         # ==============================================================
@@ -376,7 +375,6 @@ class SampledEfficientZeroPolicy(Policy):
             # transform the scaled value or its categorical representation to its original value,
             # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
             original_value = self.inverse_scalar_transform_handle(value)
-            original_value_prefix = self.inverse_scalar_transform_handle(value_prefix)
 
             if self._cfg.model.self_supervised_learning_loss:
                 # ==============================================================
@@ -867,7 +865,7 @@ class SampledEfficientZeroPolicy(Policy):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 try:
                     root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
-                except Exception as error:
+                except Exception:
                     # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                     root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
@@ -878,7 +876,7 @@ class SampledEfficientZeroPolicy(Policy):
                 try:
                     action = roots_sampled_actions[i][action].value
                     # logging.warning('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
-                except Exception as error:
+                except Exception:
                     # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                     action = np.array(roots_sampled_actions[i][action])
 
@@ -998,7 +996,7 @@ class SampledEfficientZeroPolicy(Policy):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 try:
                     root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
-                except Exception as error:
+                except Exception:
                     # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                     root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
@@ -1014,7 +1012,7 @@ class SampledEfficientZeroPolicy(Policy):
                 try:
                     action = roots_sampled_actions[i][action].value
                     # logging.warning('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
-                except Exception as error:
+                except Exception:
                     # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                     action = np.array(roots_sampled_actions[i][action])
 
