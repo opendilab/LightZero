@@ -10,7 +10,7 @@ continuous_action_space = False
 each_dim_disc_size = 4  # thus the total discrete action number is 4**4=256
 K = 20  # num_of_sampled_actions
 num_simulations = 50
-update_per_collect = 500
+update_per_collect = 200
 batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
@@ -20,7 +20,7 @@ reanalyze_ratio = 0.
 
 bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/bipedalwalker_cont_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_seed0',
+    f'data_sez_ctree/bipedalwalker_cont_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name='BipedalWalker-v3',
@@ -55,7 +55,7 @@ bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        ssl_loss_weight=2,  # NOTE: default is 2.
+        ssl_loss_weight=2,
         grad_clip_value=0.5,  # NOTE: this parameter is important for stability in bipedalwalker.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

@@ -9,7 +9,7 @@ evaluator_env_num = 3
 continuous_action_space = True
 K = 20  # num_of_sampled_actions
 num_simulations = 50
-update_per_collect = 500
+update_per_collect = 200
 batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
@@ -19,7 +19,7 @@ reanalyze_ratio = 0.
 
 lunarlander_cont_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/lunarlander_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_seed0',
+    f'data_sez_ctree/lunarlander_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='LunarLanderContinuous-v2',
         continuous=True,
@@ -35,7 +35,7 @@ lunarlander_cont_sampled_efficientzero_config = dict(
             action_space_size=2,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            categorical_distribution=True,
+            self_supervised_learning_loss=True,
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}
             model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=256,
@@ -53,10 +53,11 @@ lunarlander_cont_sampled_efficientzero_config = dict(
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        ssl_loss_weight=2,  # NOTE: default is 2.
+        ssl_loss_weight=2,
+        grad_clip_value=0.5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in thee original Sampled MuZero paper.
+        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
         policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
         threshold_training_steps_for_final_lr=int(5e4),

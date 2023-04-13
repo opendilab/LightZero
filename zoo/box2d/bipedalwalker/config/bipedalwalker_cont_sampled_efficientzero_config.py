@@ -19,7 +19,7 @@ reanalyze_ratio = 0.
 
 bipedalwalker_cont_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/bipedalwalker_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_gcv05_lsd256_bias-t_seed0',
+    f'data_sez_ctree/bipedalwalker_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='BipedalWalker-v3',
         continuous=True,
@@ -38,7 +38,6 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
             num_of_sampled_actions=K,
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}
             model_type='mlp',  # options={'mlp', 'conv'}
-            bias=True,
             lstm_hidden_size=256,
             # The mlp model.
             latent_state_dim=256,

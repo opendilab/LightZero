@@ -165,7 +165,7 @@ def concat_output(output_lst: List, data_type: str = 'muzero') -> Tuple:
     """
     assert data_type in ['muzero', 'efficientzero'], "data_type should be 'muzero' or 'efficientzero'"
     # concat the model output
-    value_lst, reward_lst, policy_logits_lst, hidden_state_lst = [], [], [], []
+    value_lst, reward_lst, policy_logits_lst, latent_state_lst = [], [], [], []
     reward_hidden_state_c_lst, reward_hidden_state_h_lst = [], []
     for output in output_lst:
         value_lst.append(output.value)
@@ -175,7 +175,7 @@ def concat_output(output_lst: List, data_type: str = 'muzero') -> Tuple:
             reward_lst.append(output.value_prefix)
 
         policy_logits_lst.append(output.policy_logits)
-        hidden_state_lst.append(output.hidden_state)
+        latent_state_lst.append(output.latent_state)
         if data_type == 'efficientzero':
             reward_hidden_state_c_lst.append(output.reward_hidden_state[0].squeeze(0))
             reward_hidden_state_h_lst.append(output.reward_hidden_state[1].squeeze(0))
@@ -183,13 +183,13 @@ def concat_output(output_lst: List, data_type: str = 'muzero') -> Tuple:
     value_lst = np.concatenate(value_lst)
     reward_lst = np.concatenate(reward_lst)
     policy_logits_lst = np.concatenate(policy_logits_lst)
-    hidden_state_lst = np.concatenate(hidden_state_lst)
+    latent_state_lst = np.concatenate(latent_state_lst)
     if data_type == 'muzero':
-        return value_lst, reward_lst, policy_logits_lst, hidden_state_lst
+        return value_lst, reward_lst, policy_logits_lst, latent_state_lst
     elif data_type == 'efficientzero':
         reward_hidden_state_c_lst = np.expand_dims(np.concatenate(reward_hidden_state_c_lst), axis=0)
         reward_hidden_state_h_lst = np.expand_dims(np.concatenate(reward_hidden_state_h_lst), axis=0)
-        return value_lst, reward_lst, policy_logits_lst, hidden_state_lst, (
+        return value_lst, reward_lst, policy_logits_lst, latent_state_lst, (
             reward_hidden_state_c_lst, reward_hidden_state_h_lst
         )
 
@@ -232,12 +232,12 @@ def ez_network_output_unpack(network_output: Dict) -> Tuple:
     Arguments:
         - network_output (:obj:`Tuple`): the network output of efficientzero
     """
-    hidden_state = network_output.latent_state  # shape:（batch_size, lstm_hidden_size, num_unroll_steps+1, num_unroll_steps+1）
+    latent_state = network_output.latent_state  # shape:（batch_size, lstm_hidden_size, num_unroll_steps+1, num_unroll_steps+1）
     value_prefix = network_output.value_prefix  # shape: (batch_size, support_support_size)
     reward_hidden_state = network_output.reward_hidden_state  # shape: {tuple: 2} -> (1, batch_size, 512)
     value = network_output.value  # shape: (batch_size, support_support_size)
     policy_logits = network_output.policy_logits  # shape: (batch_size, action_space_size)
-    return hidden_state, value_prefix, reward_hidden_state, value, policy_logits
+    return latent_state, value_prefix, reward_hidden_state, value, policy_logits
 
 
 def mz_network_output_unpack(network_output: Dict) -> Tuple:
@@ -247,8 +247,8 @@ def mz_network_output_unpack(network_output: Dict) -> Tuple:
     Arguments:
         - network_output (:obj:`Tuple`): the network output of muzero
     """
-    hidden_state = network_output.latent_state  # shape:（batch_size, lstm_hidden_size, num_unroll_steps+1, num_unroll_steps+1）
+    latent_state = network_output.latent_state  # shape:（batch_size, lstm_hidden_size, num_unroll_steps+1, num_unroll_steps+1）
     reward = network_output.reward  # shape: (batch_size, support_support_size)
     value = network_output.value  # shape: (batch_size, support_support_size)
     policy_logits = network_output.policy_logits  # shape: (batch_size, action_space_size)
-    return hidden_state, reward, value, policy_logits
+    return latent_state, reward, value, policy_logits

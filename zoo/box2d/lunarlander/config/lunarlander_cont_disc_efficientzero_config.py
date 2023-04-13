@@ -22,7 +22,7 @@ reanalyze_ratio = 0.
 
 lunarlander_cont_disc_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/lunarlander_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_seed0',
+    f'data_ez_ctree/lunarlander_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='LunarLanderContinuous-v2',
         continuous=False,
@@ -53,7 +53,7 @@ lunarlander_cont_disc_efficientzero_config = dict(
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        ssl_loss_weight=2,  # NOTE: default is 2.
+        ssl_loss_weight=2,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
