@@ -1,9 +1,9 @@
-import copy
-from typing import TYPE_CHECKING, List, Dict, Any, Tuple, Union
+from typing import TYPE_CHECKING, List, Any, Union
+from easydict import EasyDict
 
 import numpy as np
 import torch
-from easydict import EasyDict
+import copy
 
 from lzero.policy import InverseScalarTransform
 from lzero.mcts.ptree import MinMaxStatsList
@@ -170,7 +170,7 @@ class SampledEfficientZeroMCTSPtree(object):
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
                 """
                 MCTS stage 2: Expansion
-                    At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function. 
+                    At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function.
                     Then we calculate the policy_logits and value for the leaf node (next_latent_state) by the prediction function. (aka. evaluation)
                 """
                 network_output = model.recurrent_inference(

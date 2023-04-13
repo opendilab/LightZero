@@ -135,7 +135,7 @@ def plot_simulation_graph(env_root, current_step, graph_directory=None):
     dot = Digraph(comment='this is direction')
     for node_topology in node_topology_list:
         node_name = str(node_topology['node_id'])
-        label = f"node_id: {node_topology['node_id']}, \l visit_count: {node_topology['visit_count']}, \l policy_prior: {round(node_topology['policy_prior'], 4)}, \l value: {round(node_topology['value'], 4)}"
+        label = f"node_id: {node_topology['node_id']}, \n visit_count: {node_topology['visit_count']}, \n policy_prior: {round(node_topology['policy_prior'], 4)}, \n value: {round(node_topology['value'], 4)}"
         dot.node(node_name, label=label)
     for edge_topology in edge_topology_list:
         parent_id = str(edge_topology['parent_id'])

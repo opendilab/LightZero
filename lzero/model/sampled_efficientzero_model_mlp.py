@@ -152,7 +152,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
             fixed_sigma_value=self.fixed_sigma_value,
             bound_type=self.bound_type,
             norm_type=self.norm_type,
-            bias = self.bias,
+            bias=self.bias,
         )
 
         if self.self_supervised_learning_loss:
@@ -174,8 +174,8 @@ class SampledEfficientZeroModelMLP(nn.Module):
         """
          Overview:
             Initial inference of SampledEfficientZero model, which is the first step of the SampledEfficientZero model.
-             To perform the initial inference, we first use the representation network to obtain the "latent_state" of the observation.
-             Then we use the prediction network to predict the "value" and "policy_logits" of the "latent_state", and
+            To perform the initial inference, we first use the representation network to obtain the "latent_state" of the observation.
+            Then we use the prediction network to predict the "value" and "policy_logits" of the "latent_state", and
             also prepare the zeros-like ``reward_hidden_state`` for the next step of the Sampled EfficientZero model.
         Arguments:
             - obs (:obj:`torch.Tensor`): The 1D vector observation data.

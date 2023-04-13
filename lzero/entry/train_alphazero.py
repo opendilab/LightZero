@@ -124,8 +124,8 @@ def train_alphazero(
             train_data = replay_buffer.sample(batch_size, learner.train_iter)
             if train_data is None:
                 logging.warning(
-                    f'The data in replay_buffer is not sufficient to sample a mini-batch.'
-                    f'continue to collect now ....'
+                    'The data in replay_buffer is not sufficient to sample a mini-batch.'
+                    'continue to collect now ....'
                 )
                 break
 

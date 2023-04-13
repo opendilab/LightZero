@@ -1,12 +1,13 @@
-import copy
 from typing import TYPE_CHECKING, List, Any, Union
+from easydict import EasyDict
 
+import copy
 import numpy as np
 import torch
-from easydict import EasyDict
 
 from lzero.mcts.ptree import MinMaxStatsList
 from lzero.policy import InverseScalarTransform
+import lzero.mcts.ptree.ptree_mz as tree_muzero
 
 if TYPE_CHECKING:
     import lzero.mcts.ptree.ptree_ez as ez_ptree
@@ -49,8 +50,8 @@ class EfficientZeroMCTSPtree(object):
     def __init__(self, cfg: EasyDict = None) -> None:
         """
         Overview:
-            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
-            in the default configuration, the user-provided value will override the default configuration. Otherwise, 
+            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
+            in the default configuration, the user-provided value will override the default configuration. Otherwise,
             the default configuration will be used.
         """
         default_config = self.default_config()
@@ -157,7 +158,7 @@ class EfficientZeroMCTSPtree(object):
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
                 """
                 MCTS stage 2: Expansion
-                    At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function. 
+                    At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function.
                     Then we calculate the policy_logits and value for the leaf node (next_latent_state) by the prediction function. (aka. evaluation)
                 """
                 network_output = model.recurrent_inference(
@@ -213,7 +214,6 @@ class EfficientZeroMCTSPtree(object):
 # ==============================================================
 # MuZero
 # ==============================================================
-import lzero.mcts.ptree.ptree_mz as tree_muzero
 
 
 class MuZeroMCTSPtree(object):
@@ -247,8 +247,8 @@ class MuZeroMCTSPtree(object):
     def __init__(self, cfg: EasyDict = None) -> None:
         """
         Overview:
-            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key 
-            in the default configuration, the user-provided value will override the default configuration. Otherwise, 
+            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
+            in the default configuration, the user-provided value will override the default configuration. Otherwise,
             the default configuration will be used.
         """
         default_config = self.default_config()
@@ -324,8 +324,6 @@ class MuZeroMCTSPtree(object):
                 latent_state_index_x_lst, latent_state_index_y_lst, last_actions, virtual_to_play = tree_muzero.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play)
                 )
-                # obtain the search horizon for leaf nodes (not expanded)
-                search_lens = results.search_lens
 
                 # obtain the states for leaf nodes
                 for ix, iy in zip(latent_state_index_x_lst, latent_state_index_y_lst):
@@ -336,7 +334,7 @@ class MuZeroMCTSPtree(object):
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
                 """
                 MCTS stage 2: Expansion
-                    At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function. 
+                    At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function.
                     Then we calculate the policy_logits and value for the leaf node (next_latent_state) by the prediction function. (aka. evaluation)
                 """
                 network_output = model.recurrent_inference(latent_states, last_actions)

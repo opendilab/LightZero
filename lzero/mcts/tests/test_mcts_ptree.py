@@ -183,7 +183,7 @@ def test_mcts_legal_action_vs_bot():
 
     temperature = [1 for _ in range(env_nums)]
     for i in range(env_nums):
-        distributions, value = roots_distributions[i], roots_values[i]
+        distributions = roots_distributions[i]
         action_index, visit_count_distribution_entropy = select_action(
             distributions, temperature=temperature[i], deterministic=False
         )
@@ -215,7 +215,7 @@ def test_mcts_legal_action_to_play_vs_bot():
 
     temperature = [1 for _ in range(env_nums)]
     for i in range(env_nums):
-        distributions, value = roots_distributions[i], roots_values[i]
+        distributions = roots_distributions[i]
         action_index, visit_count_distribution_entropy = select_action(
             distributions, temperature=temperature[i], deterministic=False
         )
@@ -263,7 +263,7 @@ def test_mcts_legal_action_self_play():
 
     temperature = [1 for _ in range(env_nums)]
     for i in range(env_nums):
-        distributions, value = roots_distributions[i], roots_values[i]
+        distributions = roots_distributions[i]
         action_index, visit_count_distribution_entropy = select_action(
             distributions, temperature=temperature[i], deterministic=False
         )

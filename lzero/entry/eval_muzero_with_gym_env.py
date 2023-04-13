@@ -26,7 +26,8 @@ def eval_muzero_with_gym_env(
     """
     Overview:
         The eval entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
-        We create a gym environment using env_name parameter, and then convert it to the format required by LightZero using LightZeroEnvWrapper class. 
+        We create a gym environment using env_name parameter, and then convert it to the format
+        required by LightZero using LightZeroEnvWrapper class.
         Please refer to the get_wrappered_env method for more details.
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.

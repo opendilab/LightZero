@@ -336,7 +336,6 @@ class EfficientZeroPolicy(Policy):
             # transform the scaled value or its categorical representation to its original value,
             # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
             original_value = self.inverse_scalar_transform_handle(value)
-            original_value_prefix = self.inverse_scalar_transform_handle(value_prefix)
 
             # ==============================================================
             # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
@@ -378,7 +377,7 @@ class EfficientZeroPolicy(Policy):
             try:
                 target_dist = Categorical(target_normalized_visit_count)
                 target_policy_entropy += target_dist.entropy().mean()
-            except Exception as error:
+            except Exception:
                 # if there is zero in target_normalized_visit_count
                 target_policy_entropy += 0
 
