@@ -135,7 +135,7 @@ jobs:
       - name: Publish distribution 📦 to real PyPI
         uses: pypa/gh-action-pypi-publish@master
         with:
-          password: ${{ secrets.PYPI_PASSWORD }}
+          password: ${{ secrets.PYPI_API_TOKEN }}
           verbose: true
           skip_existing: true
           packages_dir: dist/
