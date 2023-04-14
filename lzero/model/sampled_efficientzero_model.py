@@ -131,6 +131,11 @@ class SampledEfficientZeroModel(nn.Module):
         self.num_of_sampled_actions = num_of_sampled_actions
         self.self_supervised_learning_loss = self_supervised_learning_loss
 
+        if isinstance(observation_shape, int) or len(observation_shape) == 1:
+            # vector obs input, e.g. classical control ad box2d environments
+            # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
+            observation_shape = [1, observation_shape, 1]
+
         flatten_output_size_for_reward_head = (
             (reward_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else

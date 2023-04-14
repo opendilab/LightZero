@@ -34,7 +34,7 @@ def configure_optimizers(model: nn.Module, weight_decay: float = 0, learning_rat
 
         This long function is unfortunately doing something very simple and is being very defensive:
         We are separating out all parameters of the model into two buckets: those that will experience
-        weight decay for regularization and those that won't (biases, and layernorm/embedding weights).
+        weight decay for regularization and those that won't (biases, layernorm, embedding weights, and batchnorm).
         We are then returning the PyTorch optimizer object.
     Arguments:
         - model (:obj:`nn.Module`): The model to be optimized.
