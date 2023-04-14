@@ -39,11 +39,7 @@ bipedalwalker_cont_disc_efficientzero_config = dict(
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}
             model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=256,
-            # The mlp model.
             latent_state_dim=256,
-            # The conv model.
-            # num_res_blocks=1,
-            # num_channels=32,
         ),
         cuda=True,
         env_type='not_board_games',
@@ -57,7 +53,7 @@ bipedalwalker_cont_disc_efficientzero_config = dict(
         grad_clip_value=0.5,  # NOTE: this parameter is important for stability in bipedalwalker.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in thee original Sampled MuZero paper.
+        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
         policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
         n_episode=n_episode,

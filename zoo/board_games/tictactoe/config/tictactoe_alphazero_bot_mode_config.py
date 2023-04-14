@@ -26,7 +26,7 @@ tictactoe_alphazero_config = dict(
     ),
     policy=dict(
         model=dict(
-            # We use the small size model for tictactoe
+            # We use the small size model for tictactoe.
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),
             downsample=False,
@@ -44,7 +44,7 @@ tictactoe_alphazero_config = dict(
         collector_env_num=collector_env_num,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
+        optim_type='AdamW',
         learning_rate=0.003,
         weight_decay=0.0001,
         grad_norm=0.5,

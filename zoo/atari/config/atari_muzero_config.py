@@ -30,7 +30,7 @@ reanalyze_ratio = 0.
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_seed0',
+    f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -55,7 +55,7 @@ atari_muzero_config = dict(
         game_segment_length=400,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='SGD',
+        optim_type='AdamW',
         lr_piecewise_constant_decay=True,
         learning_rate=0.2,  # init lr for manually decay schedule
         num_simulations=num_simulations,

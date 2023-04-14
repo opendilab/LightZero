@@ -66,7 +66,7 @@ atari_sampled_efficientzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         lr_piecewise_constant_decay=True,
-        optim_type='SGD',
+        optim_type='AdamW',
         learning_rate=0.2,  # init lr for manually decay schedule
         policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
         n_episode=n_episode,

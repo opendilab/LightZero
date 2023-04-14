@@ -1,6 +1,7 @@
 from easydict import EasyDict
 
-env_name = 'PongNoFrameskip-v4'  # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
+# options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
+env_name = 'PongNoFrameskip-v4'
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -40,13 +41,10 @@ atari_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        mcts_ctree=True,
-        # mcts_ctree=False,
         model=dict(
             observation_shape=(4, 96, 96),
             frame_stack_num=4,
             action_space_size=action_space_size,
-            representation_network_type='conv_res_blocks',
             downsample=True,
         ),
         cuda=True,
@@ -62,7 +60,7 @@ atari_efficientzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         lr_piecewise_constant_decay=True,
-        optim_type='SGD',
+        optim_type='AdamW',
         learning_rate=0.2,  # init lr for manually decay schedule
         n_episode=n_episode,
         eval_freq=int(2e3),

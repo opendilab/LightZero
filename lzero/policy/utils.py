@@ -48,9 +48,8 @@ def configure_optimizers(model: nn.Module, weight_decay: float = 0, learning_rat
     # separate out all parameters to those that will and won't experience regularizing weight decay
     decay = set()
     no_decay = set()
-    # TODO(pu): check torch.nn.BatchNorm1d, torch.nn.LSTM
-    whitelist_weight_modules = (torch.nn.Linear, torch.nn.LSTM)
-    blacklist_weight_modules = (torch.nn.LayerNorm, LayerNorm, torch.nn.Embedding, torch.nn.BatchNorm1d)
+    whitelist_weight_modules = (torch.nn.Linear, torch.nn.LSTM, nn.Conv2d)
+    blacklist_weight_modules = (torch.nn.LayerNorm, LayerNorm, torch.nn.Embedding, torch.nn.BatchNorm1d, torch.nn.BatchNorm2d)
     for mn, m in model.named_modules():
         for pn, p in m.named_parameters():
             fpn = '%s.%s' % (mn, pn) if mn else pn  # full param name

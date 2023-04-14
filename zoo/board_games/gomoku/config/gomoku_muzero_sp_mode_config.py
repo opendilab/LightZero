@@ -34,7 +34,6 @@ gomoku_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            # We use the half size model for gomoku
             observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
             action_space_size=int(board_size * board_size),
             image_channel=3,
@@ -51,7 +50,7 @@ gomoku_muzero_config = dict(
         batch_size=batch_size,
         manual_temperature_decay=False,
         lr_piecewise_constant_decay=False,
-        optim_type='Adam',
+        optim_type='AdamW',
         learning_rate=0.003,  # lr for Adam optimizer
         grad_clip_value=0.5,
         num_simulations=num_simulations,

@@ -91,7 +91,7 @@ class EfficientZeroPolicy(Policy):
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD' or 'Adam']
-        optim_type='Adam',
+        optim_type='AdamW',
         # (float) Learning rate for training policy network. Ininitial lr for manually decay schedule.
         learning_rate=0.2,
         # (int) Frequency of target network update.
@@ -121,7 +121,7 @@ class EfficientZeroPolicy(Policy):
         # (float) The weight of policy loss.
         policy_loss_weight=1,
         # (float) The weight of ssl (self-supervised learning) loss.
-        ssl_loss_weight=2,  # NOTE: default is 2.
+        ssl_loss_weight=2,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
         lr_piecewise_constant_decay=True,

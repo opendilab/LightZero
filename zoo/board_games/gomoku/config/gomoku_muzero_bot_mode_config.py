@@ -35,11 +35,9 @@ gomoku_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
+            observation_shape=(3, board_size, board_size),
             action_space_size=int(board_size * board_size),
             image_channel=3,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            # We use the half size model for gomoku
             num_res_blocks=1,
             num_channels=32,
             support_scale=10,
@@ -51,7 +49,7 @@ gomoku_muzero_config = dict(
         game_segment_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
+        optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,  # lr for Adam optimizer
         grad_clip_value=0.5,

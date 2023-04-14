@@ -98,9 +98,9 @@ class SampledEfficientZeroPolicy(Policy):
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD' or 'Adam']
-        optim_type='Adam',
+        optim_type='AdamW',
         learning_rate=0.2,  # init lr for manually decay schedule
-        # optim_type='Adam',
+        # optim_type='AdamW',
         # lr_piecewise_constant_decay=False,
         # learning_rate=0.003,  # lr for Adam optimizer
         # (float) Weight uniform initialization range in the last output layer
@@ -134,7 +134,7 @@ class SampledEfficientZeroPolicy(Policy):
         # (float) The weight of policy entropy loss.
         policy_entropy_loss_weight=0,
         # (float) The weight of ssl (self-supervised learning) loss.
-        ssl_loss_weight=2,  # NOTE: default is 2.
+        ssl_loss_weight=2,
         # (bool) Whether to use the cosine learning rate decay.
         cos_lr_scheduler=False,
         # (bool) Whether to use piecewise constant learning rate decay.

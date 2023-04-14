@@ -27,11 +27,10 @@ tictactoe_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(3, 3, 3),  # if frame_stack_num=1
+            # We use the small size model for tictactoe.
+            observation_shape=(3, 3, 3),
             action_space_size=9,
             image_channel=3,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
-            # We use the small size model for tictactoe
             num_res_blocks=1,
             num_channels=16,
             fc_reward_layers=[8],
@@ -47,7 +46,7 @@ tictactoe_muzero_config = dict(
         batch_size=batch_size,
         manual_temperature_decay=False,
         lr_piecewise_constant_decay=False,
-        optim_type='Adam',
+        optim_type='AdamW',
         learning_rate=0.003,  # lr for Adam optimizer
         grad_clip_value=0.5,
         num_simulations=num_simulations,

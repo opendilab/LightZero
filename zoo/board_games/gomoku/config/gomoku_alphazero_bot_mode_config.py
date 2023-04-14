@@ -31,7 +31,6 @@ gomoku_alphazero_config = dict(
     ),
     policy=dict(
         model=dict(
-            # We use the half size model for gomoku
             observation_shape=(3, board_size, board_size),
             action_space_size=int(1 * board_size * board_size),
             representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
@@ -43,7 +42,7 @@ gomoku_alphazero_config = dict(
         lr_piecewise_constant_decay=False,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
+        optim_type='AdamW',
         learning_rate=0.003,
         weight_decay=0.0001,
         grad_norm=0.5,

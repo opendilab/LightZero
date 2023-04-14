@@ -39,11 +39,7 @@ lunarlander_cont_disc_efficientzero_config = dict(
             action_space_size=int(each_dim_disc_size ** 2),  # each_dim_disc_size**2=7**2=9
             model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=256,
-            # The mlp model.
             latent_state_dim=256,
-            # The conv model.
-            # num_res_blocks=1,
-            # num_channels=32,
         ),
         cuda=True,
         env_type='not_board_games',

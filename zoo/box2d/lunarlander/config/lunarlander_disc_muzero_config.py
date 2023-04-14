@@ -33,11 +33,7 @@ lunarlander_muzero_config = dict(
             self_supervised_learning_loss=True,  # NOTE: default is False.
             model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=256,
-            # The mlp model.
             latent_state_dim=256,
-            # The conv model.
-            # num_res_blocks=1,
-            # num_channels=32,
         ),
         cuda=True,
         env_type='not_board_games',

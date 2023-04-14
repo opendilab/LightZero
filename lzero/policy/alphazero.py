@@ -37,7 +37,7 @@ class AlphaZeroPolicy(Policy):
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD' or 'Adam']
-        optim_type='Adam',
+        optim_type='AdamW',
         # (float) Learning rate for training policy network. Ininitial lr for manually decay schedule.
         learning_rate=0.2,
         # (float) Weight decay for training policy network.

@@ -19,7 +19,7 @@ reanalyze_ratio = 0.
 
 pendulum_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/pendulum_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sslw2_seed0',
+    f'data_sez_ctree/pendulum_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='Pendulum-v1',
         continuous=True,
@@ -39,21 +39,17 @@ pendulum_sampled_efficientzero_config = dict(
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}
             model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=128,
-            # The mlp model.
             latent_state_dim=128,
-            # The conv model.
-            # num_res_blocks=1,
-            # num_channels=16,
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
+        optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        ssl_loss_weight=2,  # NOTE: default is 2.
+        ssl_loss_weight=2,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.

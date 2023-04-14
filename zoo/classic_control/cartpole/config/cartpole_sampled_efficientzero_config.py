@@ -38,21 +38,17 @@ cartpole_sampled_efficientzero_config = dict(
             num_of_sampled_actions=K,
             model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=128,
-            # The mlp model.
             latent_state_dim=128,
-            # The conv model.
-            # num_res_blocks=1,
-            # num_channels=16,
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
+        optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        ssl_loss_weight=2,  # NOTE: default is 2.
+        ssl_loss_weight=2,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

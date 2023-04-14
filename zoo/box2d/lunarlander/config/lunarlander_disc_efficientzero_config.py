@@ -32,22 +32,16 @@ lunarlander_disc_efficientzero_config = dict(
             observation_shape=8,
             action_space_size=4,
             self_supervised_learning_loss=True,
-
-            model_type='conv',  # options={'mlp', 'conv'}
+            model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=256,
-            num_res_blocks=1,
-            num_channels=32,
-
-            # model_type='mlp',  # options={'mlp', 'conv'}
-            # lstm_hidden_size=256,
-            # latent_state_dim=256,
+            latent_state_dim=256,
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
+        optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         ssl_loss_weight=2,
