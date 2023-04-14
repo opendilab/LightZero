@@ -52,7 +52,6 @@ jobs:
       matrix:
         os:
           - 'ubuntu-20.04'
-          #          - 'windows-2019'
           - 'macos-12'
         python:
           - '3.7'
@@ -73,12 +72,6 @@ jobs:
             architecture: x86
           - os: ubuntu-20.04
             architecture: AMD64
-          - os: windows-2019
-            architecture: x86_64
-          - os: windows-2019
-            architecture: arm64
-          - os: windows-2019
-            architecture: aarch64
           - os: macos-12
             architecture: aarch64
           - os: macos-12
