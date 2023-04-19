@@ -10,7 +10,7 @@ num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
-reanalyze_ratio = 0.3
+reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -27,10 +27,10 @@ tictactoe_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            # We use the small size model for tictactoe.
             observation_shape=(3, 3, 3),
             action_space_size=9,
             image_channel=3,
+            # We use the small size model for tictactoe.
             num_res_blocks=1,
             num_channels=16,
             fc_reward_layers=[8],
@@ -42,19 +42,19 @@ tictactoe_muzero_config = dict(
         ),
         cuda=True,
         env_type='board_games',
+        game_segment_length=9,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        manual_temperature_decay=False,
+        optim_type='Adam',
         lr_piecewise_constant_decay=False,
-        optim_type='AdamW',
-        learning_rate=0.003,  # lr for Adam optimizer
+        learning_rate=0.003,
         grad_clip_value=0.5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        game_segment_length=5,
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=9,
         num_unroll_steps=3,
+        # NOTE：In board_games, we set discount_factor=1.
         discount_factor=1,
         n_episode=n_episode,
         eval_freq=int(2e3),

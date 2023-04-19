@@ -33,29 +33,28 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
         model=dict(
             observation_shape=24,
             action_space_size=4,
-            self_supervised_learning_loss=True,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            sigma_type='conditioned',  # options={'conditioned', 'fixed'}
+            sigma_type='conditioned',
             model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=256,
             latent_state_dim=256,
+            self_supervised_learning_loss=True,
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
-        lr_piecewise_constant_decay=False,
-        learning_rate=0.003,
-        ssl_loss_weight=2,
-        grad_clip_value=0.5,  # NOTE: this parameter is important for stability in bipedalwalker.
-        num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
+        optim_type='SGD',
+        lr_piecewise_constant_decay=True,
+        learning_rate=0.2,
+        # NOTE: this parameter is important for stability in bipedalwalker.
+        grad_clip_value=0.5,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
-        policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.

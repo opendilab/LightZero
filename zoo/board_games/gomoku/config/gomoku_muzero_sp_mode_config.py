@@ -34,10 +34,9 @@ gomoku_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(3, board_size, board_size),  # if frame_stack_num=1
+            observation_shape=(3, board_size, board_size),
             action_space_size=int(board_size * board_size),
             image_channel=3,
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             num_res_blocks=1,
             num_channels=32,
             support_scale=10,
@@ -46,18 +45,19 @@ gomoku_muzero_config = dict(
         ),
         cuda=True,
         env_type='board_games',
+        game_segment_length=int(board_size * board_size),  # for battle_mode='self_play_mode'
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        manual_temperature_decay=False,
+        optim_type='Adam',
         lr_piecewise_constant_decay=False,
-        optim_type='AdamW',
-        learning_rate=0.003,  # lr for Adam optimizer
+        learning_rate=0.003,
         grad_clip_value=0.5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        game_segment_length=int(board_size * board_size),  # for battle_mode='self_play_mode'
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
-        td_steps=int(board_size * board_size),
+        td_steps=int(board_size * board_size),  # for battle_mode='self_play_mode'
+        # NOTE：In board_games, we set discount_factor=1.
+        discount_factor=1,
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e5),

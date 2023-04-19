@@ -9,50 +9,46 @@ evaluator_env_num = 5
 num_simulations = 25
 update_per_collect = 50
 batch_size = 256
-max_env_step = int(1e5)
+max_env_step = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 tictactoe_alphazero_config = dict(
     exp_name='data_az_ptree/tictactoe_sp-mode_alphazero_seed0',
     env=dict(
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
-        n_evaluator_episode=evaluator_env_num,
         board_size=3,
         battle_mode='self_play_mode',
         channel_last=False,  # NOTE
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
+        n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
         model=dict(
-            # We use the small size model for tictactoe.
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),
-            downsample=False,
+            # We use the small size model for tictactoe.
             num_res_blocks=1,
             num_channels=16,
-            value_head_channels=16,
-            policy_head_channels=16,
             fc_value_layers=[8],
             fc_policy_layers=[8],
-            last_linear_layer_init_zero=True,
-            categorical_distribution=False,
         ),
         cuda=True,
         board_size=3,
-        collector_env_num=collector_env_num,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        weight_decay=0.0001,
-        grad_norm=0.5,
+        grad_clip_value=0.5,
         value_weight=1.0,
         entropy_weight=0.0,
         n_episode=n_episode,
         eval_freq=int(2e3),
         mcts=dict(num_simulations=num_simulations),
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
     ),
 )
 

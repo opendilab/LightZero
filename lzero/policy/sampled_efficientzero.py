@@ -97,10 +97,10 @@ class SampledEfficientZeroPolicy(Policy):
         update_per_collect=100,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
-        # (str) Optimizer for training policy network. ['SGD' or 'Adam']
-        optim_type='AdamW',
+        # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
+        optim_type='SGD',
         learning_rate=0.2,  # init lr for manually decay schedule
-        # optim_type='AdamW',
+        # optim_type='Adam',
         # lr_piecewise_constant_decay=False,
         # learning_rate=0.003,  # lr for Adam optimizer
         # (float) Weight uniform initialization range in the last output layer

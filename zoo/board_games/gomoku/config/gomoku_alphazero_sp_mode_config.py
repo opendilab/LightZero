@@ -7,7 +7,7 @@ board_size = 6  # default_size is 15
 collector_env_num = 32
 n_episode = 32
 evaluator_env_num = 5
-num_simulations = 100
+num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
@@ -33,24 +33,22 @@ gomoku_alphazero_config = dict(
         model=dict(
             observation_shape=(3, board_size, board_size),
             action_space_size=int(1 * board_size * board_size),
-            representation_network_type='conv_res_blocks',  # options={'conv_res_blocks', 'identity'}
             num_res_blocks=1,
             num_channels=32,
         ),
         cuda=True,
         board_size=board_size,
-        lr_piecewise_constant_decay=False,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        weight_decay=0.0001,
-        grad_norm=0.5,
+        grad_clip_value=0.5,
         value_weight=1.0,
         entropy_weight=0.0,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        num_simulations=num_simulations,
+        mcts=dict(num_simulations=num_simulations),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

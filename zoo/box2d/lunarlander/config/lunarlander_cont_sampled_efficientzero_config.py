@@ -35,8 +35,7 @@ lunarlander_cont_sampled_efficientzero_config = dict(
             action_space_size=2,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            self_supervised_learning_loss=True,
-            sigma_type='conditioned',  # options={'conditioned', 'fixed'}
+            sigma_type='conditioned',
             model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=256,
             latent_state_dim=256,
@@ -46,17 +45,14 @@ lunarlander_cont_sampled_efficientzero_config = dict(
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
-        lr_piecewise_constant_decay=False,
-        learning_rate=0.003,
-        ssl_loss_weight=2,
+        optim_type='SGD',
+        lr_piecewise_constant_decay=True,
+        learning_rate=0.2,
         grad_clip_value=0.5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
-        policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
-        threshold_training_steps_for_final_lr=int(5e4),
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
