@@ -43,7 +43,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
         fixed_sigma_value: float = 0.3,
         bound_type: str = None,
         norm_type: str = 'BN',
-        discrete_action_encoding_type: str = 'one_hot',
+        discrete_action_encoding_type: str = 'not_one_hot',
         *args,
         **kwargs,
     ):
@@ -318,6 +318,10 @@ class SampledEfficientZeroModelMLP(nn.Module):
                 action_encoding = action_one_hot
             elif self.discrete_action_encoding_type == 'not_one_hot':
                 action_encoding = action / self.action_space_size
+                if len(action_encoding.shape) == 1:
+                    # (batch_size, ) -> (batch_size, 1)
+                    # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
+                    action_encoding = action_encoding.unsqueeze(-1)
         else:
             # continuous action space
             if len(action.shape) == 1:
