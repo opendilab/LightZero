@@ -126,7 +126,7 @@ class EfficientZeroPolicy(Policy):
         # i.e. lr: 0.2 -> 0.02 -> 0.002
         lr_piecewise_constant_decay=True,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
-        threshold_training_steps_for_final_lr=int(1e5),
+        threshold_training_steps_for_final_lr=int(5e4),
         # (int) The number of final training iterations to control temperature, which is only used for manually decay.
         threshold_training_steps_for_final_temperature=int(1e5),
         # (bool) Whether to use manually decayed temperature.
