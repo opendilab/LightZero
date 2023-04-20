@@ -92,11 +92,12 @@ namespace tree{
         }
     }
 
-    void CNode::expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float reward, const std::vector<float> &policy_logits){
+    void CNode::expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float reward, float value, const std::vector<float> &policy_logits){
         this->to_play = to_play;
         this->hidden_state_index_x = hidden_state_index_x;
         this->hidden_state_index_y = hidden_state_index_y;
         this->reward = reward;
+        this->raw_value = value;
 
         int action_num = policy_logits.size();
         if(this->legal_actions.size()==0){
@@ -279,18 +280,18 @@ namespace tree{
 
     CRoots::~CRoots(){}
 
-    void CRoots::prepare(float root_noise_weight, const std::vector<std::vector<float> > &noises, const std::vector<float> &rewards, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch){
+    void CRoots::prepare(float root_noise_weight, const std::vector<std::vector<float> > &noises, const std::vector<float> &rewards, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch){
         for(int i = 0; i < this->root_num; ++i){
-            this->roots[i].expand(to_play_batch[i], 0, i, rewards[i], policies[i]);
+            this->roots[i].expand(to_play_batch[i], 0, i, rewards[i], values[i], policies[i]);
             this->roots[i].add_exploration_noise(root_noise_weight, noises[i]);
 
             this->roots[i].visit_count += 1;
         }
     }
 
-    void CRoots::prepare_no_noise(const std::vector<float> &rewards, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch){
+    void CRoots::prepare_no_noise(const std::vector<float> &rewards, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch){
         for(int i = 0; i < this->root_num; ++i){
-            this->roots[i].expand(to_play_batch[i], 0, i, rewards[i], policies[i]);
+            this->roots[i].expand(to_play_batch[i], 0, i, rewards[i], values[i], policies[i]);
 
             this->roots[i].visit_count += 1;
         }
@@ -425,7 +426,7 @@ namespace tree{
 
     void cbatch_back_propagate(int hidden_state_index_x, float discount, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &to_play_batch){
         for(int i = 0; i < results.num; ++i){
-            results.nodes[i]->expand(to_play_batch[i], hidden_state_index_x, i, value_prefixs[i], policies[i]);
+            results.nodes[i]->expand(to_play_batch[i], hidden_state_index_x, i, value_prefixs[i], values[i], policies[i]);
             cback_propagate(results.search_paths[i], min_max_stats_lst->stats_lst[i], to_play_batch[i], values[i], discount);
         }
     }

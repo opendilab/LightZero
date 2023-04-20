@@ -293,7 +293,7 @@ class GumeblMuZeroPolicy(Policy):
         # ==============================================================
         #policy_loss = cross_entropy_loss(policy_logits, target_policy[:, 0])
         new_policy_batch = torch.from_numpy(np.transpose(new_policy_batch, (1,0,2))).to(self._cfg.device)
-        policy_loss = (new_policy_batch * (torch.log(new_policy_batch) - torch.log(torch.softmax(policy_logits, dim=1)))).sum(-1).mean(0)
+        policy_loss = (new_policy_batch * (torch.log(torch.softmax(new_policy_batch, dim=1)) - torch.log(torch.softmax(policy_logits, dim=1)))).sum(-1).mean(0)
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
         reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
@@ -506,7 +506,7 @@ class GumeblMuZeroPolicy(Policy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
-            roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
+            roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, list(pred_values), policy_logits, to_play)
             self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
 
             roots_visit_count_distributions = roots.get_distributions(
@@ -597,7 +597,7 @@ class GumeblMuZeroPolicy(Policy):
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
-            roots.prepare_no_noise(reward_roots, policy_logits, to_play)
+            roots.prepare_no_noise(reward_roots, list(pred_values), policy_logits, to_play)
             self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play)
 
             roots_visit_count_distributions = roots.get_distributions(

@@ -39,7 +39,7 @@ cdef extern from "lib/cnode.h" namespace "tree":
         vector[CNode]* ptr_node_pool;
 
         void setdata(float reward, int visit_count, float value_sum, float raw_value, int action_num, vector[float] child_prior, vector[float] child_reward, vector[int] child_visit_count, vector[float] child_value_sum, vector[float]child_raw_value)
-        void expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefixs, vector[float] policy_logits)
+        void expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefixs, float value, vector[float] policy_logits)
         void add_exploration_noise(float exploration_fraction, vector[float] noises)
         float compute_mean_q(int isRoot, float parent_q, float discount)
 
@@ -57,8 +57,8 @@ cdef extern from "lib/cnode.h" namespace "tree":
         vector[CNode] roots
         vector[vector[CNode]] node_pools
 
-        void prepare(float root_noise_weight, const vector[vector[float]] &noises, const vector[float] &value_prefixs, const vector[vector[float]] &policies, vector[int] to_play_batch)
-        void prepare_no_noise(const vector[float] &value_prefixs, const vector[vector[float]] &policies, vector[int] to_play_batch)
+        void prepare(float root_noise_weight, const vector[vector[float]] &noises, const vector[float] &value_prefixs, const vector[float] &values, const vector[vector[float]] &policies, vector[int] to_play_batch)
+        void prepare_no_noise(const vector[float] &value_prefixs, const vector[float] &values, const vector[vector[float]] &policies, vector[int] to_play_batch)
         void clear()
         vector[vector[int]] get_trajectories()
         vector[vector[int]] get_distributions()

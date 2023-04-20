@@ -33,11 +33,11 @@ cdef class Roots:
         self.root_num = root_num
         self.roots = new CRoots(root_num, legal_actions_list)
 
-    def prepare(self, float root_noise_weight, list noises, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):
-        self.roots[0].prepare(root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play_batch)
+    def prepare(self, float root_noise_weight, list noises, list value_prefix_pool, list value_pool, list policy_logits_pool, vector[int] &to_play_batch):
+        self.roots[0].prepare(root_noise_weight, noises, value_prefix_pool, value_pool, policy_logits_pool, to_play_batch)
 
-    def prepare_no_noise(self, list value_prefix_pool, list policy_logits_pool, vector[int] &to_play_batch):
-        self.roots[0].prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play_batch)
+    def prepare_no_noise(self, list value_prefix_pool, list value_pool, list policy_logits_pool, vector[int] &to_play_batch):
+        self.roots[0].prepare_no_noise(value_prefix_pool, value_pool, policy_logits_pool, to_play_batch)
 
     def get_trajectories(self):
         return self.roots[0].get_trajectories()
@@ -71,9 +71,9 @@ cdef class Node:
     def __cinit__(self, float prior, vector[int] &legal_actions):
         pass
 
-    def expand(self, int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix, list policy_logits):
+    def expand(self, int to_play, int hidden_state_index_x, int hidden_state_index_y, float value_prefix, float value, list policy_logits):
         cdef vector[float] cpolicy = policy_logits
-        self.cnode.expand(to_play, hidden_state_index_x, hidden_state_index_y, value_prefix, cpolicy)
+        self.cnode.expand(to_play, hidden_state_index_x, hidden_state_index_y, value_prefix, value, cpolicy)
 
     def set_data(self, float reward, int visit_count, float value_sum, float raw_value, int action_num, list child_prior, list child_reward, list child_visit_count, list child_value_sum, list child_raw_value):
         cdef vector[float] cchild_prior=child_prior

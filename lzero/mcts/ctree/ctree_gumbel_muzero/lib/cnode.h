@@ -34,7 +34,7 @@ namespace tree {
 
             void setdata(float reward, int visit_count, float value_sum, float raw_value, int action_num, std::vector<float> child_prior, \
                 std::vector<float> child_reward, std::vector<int> child_visit_count, std::vector<float> child_value_sum, std::vector<float> child_raw_value);
-            void expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float reward, const std::vector<float> &policy_logits);
+            void expand(int to_play, int hidden_state_index_x, int hidden_state_index_y, float reward, float value, const std::vector<float> &policy_logits);
             void add_exploration_noise(float exploration_fraction, const std::vector<float> &noises);
             std::vector<float> get_q(float discount);
             float compute_mean_q(int isRoot, float parent_q, float discount);
@@ -61,8 +61,8 @@ namespace tree {
             CRoots(int root_num, std::vector<std::vector<int> > &legal_actions_list);
             ~CRoots();
 
-            void prepare(float root_noise_weight, const std::vector<std::vector<float> > &noises, const std::vector<float> &rewards, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch);
-            void prepare_no_noise(const std::vector<float> &rewards, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch);
+            void prepare(float root_noise_weight, const std::vector<std::vector<float> > &noises, const std::vector<float> &rewards, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch);
+            void prepare_no_noise(const std::vector<float> &rewards, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch);
             void clear();
             std::vector<std::vector<int> > get_trajectories();
             std::vector<std::vector<int> > get_distributions();
