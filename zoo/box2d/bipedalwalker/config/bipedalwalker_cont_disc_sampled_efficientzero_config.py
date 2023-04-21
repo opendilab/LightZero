@@ -38,7 +38,7 @@ bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
             action_space_size=int(each_dim_disc_size ** 4),
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            sigma_type='conditioned',  # options={'conditioned', 'fixed'}
+            sigma_type='conditioned',
             model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=256,
             latent_state_dim=256,
@@ -48,15 +48,15 @@ bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
-        lr_piecewise_constant_decay=False,
-        learning_rate=0.003,
-        ssl_loss_weight=2,
-        grad_clip_value=0.5,  # NOTE: this parameter is important for stability in bipedalwalker.
+        optim_type='SGD',
+        lr_piecewise_constant_decay=True,
+        learning_rate=0.2,
+        # NOTE: this parameter is important for stability in bipedalwalker.
+        grad_clip_value=0.5,
+        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
+        policy_entropy_loss_weight=5e-3,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in thee original Sampled MuZero paper.
-        policy_entropy_loss_weight=5e-3,
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
@@ -89,7 +89,7 @@ create_config = bipedalwalker_cont_disc_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     # Users can use different train entry by specifying the entry_type.
-    entry_type = "train_muzero_with_gym_env"  # options={"train_muzero", "train_muzero_with_gym_env"}
+    entry_type = "train_muzero"  # options={"train_muzero", "train_muzero_with_gym_env"}
 
     if entry_type == "train_muzero":
         from lzero.entry import train_muzero

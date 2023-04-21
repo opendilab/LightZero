@@ -36,21 +36,18 @@ pendulum_disc_muzero_config = dict(
         model=dict(
             observation_shape=3,
             action_space_size=11,
-            self_supervised_learning_loss=True,  # NOTE: default is False.
             model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=128,
-            # The mlp model.
             latent_state_dim=128,
-            # The conv model.
-            # num_res_blocks=1,
-            # num_channels=16,
+            self_supervised_learning_loss=True,  # NOTE: default is False.
+
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
+        optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         ssl_loss_weight=2,  # NOTE: default is 0.

@@ -97,10 +97,10 @@ class SampledEfficientZeroPolicy(Policy):
         update_per_collect=100,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
-        # (str) Optimizer for training policy network. ['SGD' or 'Adam']
-        optim_type='AdamW',
+        # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
+        optim_type='SGD',
         learning_rate=0.2,  # init lr for manually decay schedule
-        # optim_type='AdamW',
+        # optim_type='Adam',
         # lr_piecewise_constant_decay=False,
         # learning_rate=0.003,  # lr for Adam optimizer
         # (float) Weight uniform initialization range in the last output layer
@@ -141,7 +141,7 @@ class SampledEfficientZeroPolicy(Policy):
         # i.e. lr: 0.2 -> 0.02 -> 0.002
         lr_piecewise_constant_decay=True,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
-        threshold_training_steps_for_final_lr=int(1e5),
+        threshold_training_steps_for_final_lr=int(5e4),
         # (int) The number of final training iterations to control temperature, which is only used for manually decay.
         threshold_training_steps_for_final_temperature=int(1e5),
         # (bool) Whether to use manually decayed temperature.

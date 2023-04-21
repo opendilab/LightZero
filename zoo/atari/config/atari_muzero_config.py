@@ -1,6 +1,7 @@
 from easydict import EasyDict
 
-env_name = 'PongNoFrameskip-v4'  # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
+# options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
+env_name = 'PongNoFrameskip-v4'
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -20,7 +21,7 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 1000
+update_per_collect = 2000
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
@@ -45,22 +46,20 @@ atari_muzero_config = dict(
             observation_shape=(4, 96, 96),
             frame_stack_num=4,
             action_space_size=action_space_size,
-            representation_network_type='conv_res_blocks',
             downsample=True,
-            # NOTE: whether to use the self_supervised_learning_loss. default is False
-            self_supervised_learning_loss=True,
+            self_supervised_learning_loss=True,  # default is False
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=400,
+        use_augmentation=True,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
+        optim_type='SGD',
         lr_piecewise_constant_decay=True,
-        learning_rate=0.2,  # init lr for manually decay schedule
+        learning_rate=0.2,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        use_augmentation=True,
         ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
         eval_freq=int(2e3),
@@ -92,5 +91,4 @@ create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-
     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

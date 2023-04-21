@@ -33,10 +33,9 @@ pendulum_sampled_efficientzero_config = dict(
         model=dict(
             observation_shape=3,
             action_space_size=11,
-            self_supervised_learning_loss=True,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            sigma_type='conditioned',  # options={'conditioned', 'fixed'}
+            sigma_type='conditioned',
             model_type='mlp',  # options={'mlp', 'conv'}
             lstm_hidden_size=128,
             latent_state_dim=128,
@@ -46,14 +45,13 @@ pendulum_sampled_efficientzero_config = dict(
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
+        optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        ssl_loss_weight=2,
-        num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.

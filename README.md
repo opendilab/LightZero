@@ -401,7 +401,7 @@ This repo is partially based on the following repo, many thanks to their pioneer
 - https://github.com/YeWR/EfficientZero
 - https://github.com/werner-duvaud/muzero-general
 
-A special thanks to [@PaParaZz1](https://github.com/PaParaZz1), [@karroyan](https://github.com/karroyan), [@nighood](https://github.com/nighood), 
+Special thanks to [@PaParaZz1](https://github.com/PaParaZz1), [@karroyan](https://github.com/karroyan), [@nighood](https://github.com/nighood), 
 [@jayyoung0802](https://github.com/jayyoung0802), [@timothijoe](https://github.com/timothijoe), [@TuTuHuss](https://github.com/TuTuHuss), [@puyuan1996](https://github.com/puyuan1996), [@HansBug](https://github.com/HansBug) for their contributions and support.
 
 

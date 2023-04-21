@@ -21,7 +21,7 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 1000
+update_per_collect = 2000
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
@@ -48,23 +48,21 @@ atari_efficientzero_config = dict(
             downsample=True,
         ),
         cuda=True,
-        collector_env_num=collector_env_num,
-        evaluator_env_num=evaluator_env_num,
         env_type='not_board_games',
         game_segment_length=400,
         use_augmentation=True,
-        num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
-        manual_temperature_decay=False,
-        fixed_temperature_value=0.25,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
+        optim_type='SGD',
         lr_piecewise_constant_decay=True,
-        optim_type='AdamW',
-        learning_rate=0.2,  # init lr for manually decay schedule
+        learning_rate=0.2,
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
     ),
 )
 atari_efficientzero_config = EasyDict(atari_efficientzero_config)
@@ -90,5 +88,4 @@ create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-
     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

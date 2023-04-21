@@ -36,8 +36,8 @@ class AlphaZeroPolicy(Policy):
         cuda=False,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
-        # (str) Optimizer for training policy network. ['SGD' or 'Adam']
-        optim_type='AdamW',
+        # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
+        optim_type='SGD',
         # (float) Learning rate for training policy network. Ininitial lr for manually decay schedule.
         learning_rate=0.2,
         # (float) Weight decay for training policy network.
@@ -59,7 +59,7 @@ class AlphaZeroPolicy(Policy):
         threshold_training_steps_for_final_lr=int(5e5),
         # (bool) Whether to use manually temperature decay.
         # i.e. temperature: 1 -> 0.5 -> 0.25
-        manual_temperature_decay=True,
+        manual_temperature_decay=False,
         # (int) The number of final training iterations to control temperature, which is only used for manually decay.
         threshold_training_steps_for_final_temperature=int(1e5),
         # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.

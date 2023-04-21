@@ -91,8 +91,8 @@ class MuZeroPolicy(Policy):
         update_per_collect=100,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
-        # (str) Optimizer for training policy network. ['SGD' or 'Adam']
-        optim_type='AdamW',
+        # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
+        optim_type='SGD',
         # (float) Learning rate for training policy network. Ininitial lr for manually decay schedule.
         learning_rate=0.2,
         # (int) Frequency of target network update.
@@ -125,7 +125,7 @@ class MuZeroPolicy(Policy):
         # i.e. lr: 0.2 -> 0.02 -> 0.002
         lr_piecewise_constant_decay=True,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
-        threshold_training_steps_for_final_lr=int(1e5),
+        threshold_training_steps_for_final_lr=int(5e4),
         # (bool) Whether to use manually decayed temperature.
         manual_temperature_decay=False,
         # (int) The number of final training iterations to control temperature, which is only used for manually decay.
