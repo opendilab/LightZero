@@ -20,7 +20,7 @@ namespace tree {
 
     class CNode {
         public:
-            int visit_count, to_play, latent_state_index_x, latent_state_index_y, best_action;
+            int visit_count, to_play, simulation_index, batch_index, best_action;
             float reward, prior, value_sum;
             std::vector<int> children_index;
             std::map<int, CNode> children;
@@ -31,7 +31,7 @@ namespace tree {
             CNode(float prior, std::vector<int> &legal_actions);
             ~CNode();
 
-            void expand(int to_play, int latent_state_index_x, int latent_state_index_y, float reward, const std::vector<float> &policy_logits);
+            void expand(int to_play, int simulation_index, int batch_index, float reward, const std::vector<float> &policy_logits);
             void add_exploration_noise(float exploration_fraction, const std::vector<float> &noises);
             float compute_mean_q(int isRoot, float parent_q, float discount_factor);
             void print_out();
@@ -67,7 +67,7 @@ namespace tree {
     class CSearchResults{
         public:
             int num;
-            std::vector<int> latent_state_index_x_lst, latent_state_index_y_lst, last_actions, search_lens;
+            std::vector<int> latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, search_lens;
             std::vector<int> virtual_to_play_batchs;
             std::vector<CNode*> nodes;
             std::vector<std::vector<CNode*> > search_paths;
@@ -82,7 +82,7 @@ namespace tree {
     //*********************************************************
     void update_tree_q(CNode* root, tools::CMinMaxStats &min_max_stats, float discount_factor, int players);
     void cbackpropagate(std::vector<CNode*> &search_path, tools::CMinMaxStats &min_max_stats, int to_play, float value, float discount_factor);
-    void cbatch_backpropagate(int latent_state_index_x, float discount_factor, const std::vector<float> &rewards, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &to_play_batch);
+    void cbatch_backpropagate(int simulation_index, float discount_factor, const std::vector<float> &rewards, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &to_play_batch);
     int cselect_child(CNode* root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount_factor, float mean_q, int players);
     float cucb_score(CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, float total_children_visit_counts, float pb_c_base, float pb_c_init, float discount_factor, int players);
     void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount_factor, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &virtual_to_play_batch);
