@@ -191,7 +191,7 @@ class SampledEfficientZeroPolicy(Policy):
     def _init_learn(self) -> None:
         """
         Overview:
-            Learn mode init method. Called by ``self.__init__``. Ininitialize the learn model, optimizer and MCTS utils.
+            Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
         assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
         if self._cfg.model.continuous_action_space:
@@ -764,7 +764,7 @@ class SampledEfficientZeroPolicy(Policy):
     def _init_collect(self) -> None:
         """
           Overview:
-              Collect mode init method. Called by ``self.__init__``. Ininitialize the collect model and MCTS utils.
+              Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
           """
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
@@ -904,7 +904,7 @@ class SampledEfficientZeroPolicy(Policy):
     def _init_eval(self) -> None:
         """
          Overview:
-             Evaluate mode init method. Called by ``self.__init__``. Ininitialize the eval model and MCTS utils.
+             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
          """
         self._eval_model = self._model
         if self._cfg.mcts_ctree:

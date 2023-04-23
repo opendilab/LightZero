@@ -93,7 +93,7 @@ class MuZeroPolicy(Policy):
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
         optim_type='SGD',
-        # (float) Learning rate for training policy network. Ininitial lr for manually decay schedule.
+        # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.2,
         # (int) Frequency of target network update.
         target_update_freq=100,
@@ -173,7 +173,7 @@ class MuZeroPolicy(Policy):
     def _init_learn(self) -> None:
         """
         Overview:
-            Learn mode init method. Called by ``self.__init__``. Ininitialize the learn model, optimizer and MCTS utils.
+            Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
         assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
         # NOTE: in board_gmaes, for fixed lr 0.003, 'Adam' is better than 'SGD'.
@@ -450,7 +450,7 @@ class MuZeroPolicy(Policy):
     def _init_collect(self) -> None:
         """
         Overview:
-            Collect mode init method. Called by ``self.__init__``. Ininitialize the collect model and MCTS utils.
+            Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
@@ -554,7 +554,7 @@ class MuZeroPolicy(Policy):
     def _init_eval(self) -> None:
         """
         Overview:
-            Evaluate mode init method. Called by ``self.__init__``. Ininitialize the eval model and MCTS utils.
+            Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
         if self._cfg.mcts_ctree:

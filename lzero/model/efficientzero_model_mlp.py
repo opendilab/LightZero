@@ -353,7 +353,7 @@ class DynamicsNetwork(nn.Module):
             - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical reward output.
             - lstm_hidden_size (:obj:`int`): The hidden size of lstm in dynamics network.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy head, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
         """
@@ -372,7 +372,6 @@ class DynamicsNetwork(nn.Module):
             activation=self.activation,
             norm_type='BN',
             output_activation=nn.Identity(),
-            last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
         # input_shape: （sequence_length，batch_size，input_size)

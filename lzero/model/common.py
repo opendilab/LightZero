@@ -209,7 +209,7 @@ class RepresentationNetworkMLP(nn.Module):
         hidden_channels: int = 64,
         layer_num: int = 2,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-        last_linear_layer_init_zero: bool = True,
+        last_linear_layer_init_zero: bool = False,
         norm_type: Optional[str] = 'BN',
     ) -> torch.Tensor:
         """
@@ -226,7 +226,7 @@ class RepresentationNetworkMLP(nn.Module):
             - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
                 Use the inplace operation to speed up.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to initialize the last linear layer with zeros, \
-                which can provide stable zero outputs in the beginning, defaults to True.
+                defaults to False.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super().__init__()
@@ -401,7 +401,6 @@ class PredictionNetworkMLP(nn.Module):
             activation=activation,
             norm_type='BN',
             output_activation=nn.Identity(),
-            last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.activation = activation
 
