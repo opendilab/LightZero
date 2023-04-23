@@ -159,13 +159,13 @@ class EfficientZeroMCTSPtree(object):
 
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    [network_output.latent_state, network_output.policy_logits, network_output.value_prefix,
-                     network_output.reward] = to_detach_cpu_numpy(
+                    [network_output.latent_state, network_output.policy_logits, network_output.value,
+                     network_output.value_prefix] = to_detach_cpu_numpy(
                         [
                             network_output.latent_state,
                             network_output.policy_logits,
+                            self.inverse_scalar_transform_handle(network_output.value),
                             self.inverse_scalar_transform_handle(network_output.value_prefix),
-                            self.inverse_scalar_transform_handle(network_output.reward),
                         ]
                     )
                     network_output.reward_hidden_state = (
