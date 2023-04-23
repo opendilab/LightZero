@@ -111,20 +111,20 @@ def obtain_tree_topology(root, to_play=-1):
         node = node_stack[-1]
         node_stack.pop()
         node_dict = {}
-        node_dict['node_id'] = node.latent_state_index_x
+        node_dict['node_id'] = node.simulation_index
         node_dict['visit_count'] = node.visit_count
         node_dict['policy_prior'] = node.prior
         node_dict['value'] = node.value
         node_topology_list.append(node_dict)
 
-        node_id_list.append(node.latent_state_index_x)
+        node_id_list.append(node.simulation_index)
         for a in node.legal_actions:
             child = node.get_child(a)
             if child.expanded:
-                child.parent_latent_state_index_x = node.latent_state_index_x
+                child.parent_simulation_index = node.simulation_index
                 edge_dict = {}
-                edge_dict['parent_id'] = node.latent_state_index_x
-                edge_dict['child_id'] = child.latent_state_index_x
+                edge_dict['parent_id'] = node.simulation_index
+                edge_dict['child_id'] = child.simulation_index
                 edge_topology_list.append(edge_dict)
                 node_stack.append(child)
     return edge_topology_list, node_id_list, node_topology_list
