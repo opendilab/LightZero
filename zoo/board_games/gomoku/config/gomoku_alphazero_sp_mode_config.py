@@ -81,5 +81,14 @@ gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
 create_config = gomoku_alphazero_create_config
 
 if __name__ == '__main__':
+    # from lzero.entry import train_alphazero
+    # train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
+
     from lzero.entry import train_alphazero
-    train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
+
+    def run(max_env_step: int):
+            train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
+
+
+    import cProfile
+    cProfile.run(f"run({10000})", filename="gomoku_az_sp_ctree_cprofile.10k_envstep_cython-legal-actions", sort="cumulative")

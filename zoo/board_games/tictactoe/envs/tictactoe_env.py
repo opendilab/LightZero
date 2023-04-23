@@ -1,5 +1,6 @@
 import copy
 import sys
+from functools import lru_cache
 from typing import List
 
 import gym
@@ -10,7 +11,14 @@ from ditk import logging
 from easydict import EasyDict
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
+from zoo.board_games.tictactoe.envs.legal_actions_cython import legal_actions_cython
 
+
+@lru_cache(maxsize=128)
+def _legal_actions_func(board_tuple):
+    # board_tuple = tuple(board)
+    # return legal_actions_cython(board_tuple)
+    return legal_actions_cython(list(board_tuple))
 
 @ENV_REGISTRY.register('tictactoe')
 class TicTacToeEnv(BaseEnv):
@@ -318,12 +326,22 @@ class TicTacToeEnv(BaseEnv):
 
     @property
     def legal_actions(self):
-        legal_actions = []
-        for i in range(self.board_size):
-            for j in range(self.board_size):
-                if self.board[i][j] == 0:
-                    legal_actions.append(self.coord_to_action(i, j))
-        return legal_actions
+        return legal_actions_cython(list(self.board))
+        # return self.legal_actions_func_lru()
+
+    # only for eval speed
+    @property
+    def legal_actions_cython(self):
+        return legal_actions_cython(list(self.board))
+
+    # only for eval speed
+    @property
+    def legal_actions_cython_lru(self):
+        return self.legal_actions_func_lru()
+
+    @lru_cache(maxsize=128)
+    def legal_actions_func_lru(self):
+        return legal_actions_cython(list(self.board))
 
     def random_action(self):
         action_list = self.legal_actions

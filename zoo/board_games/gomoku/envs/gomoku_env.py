@@ -1,6 +1,7 @@
 import copy
 import random
 import sys
+from functools import lru_cache
 from typing import List
 
 import gym
@@ -9,6 +10,7 @@ from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
+from zoo.board_games.gomoku.envs.legal_actions_cython import legal_actions_cython
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
 from zoo.board_games.gomoku.envs.gomoku_rule_bot_v1 import GomokuRuleBotV1
@@ -19,7 +21,6 @@ from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_c
 
 @ENV_REGISTRY.register('gomoku')
 class GomokuEnv(BaseEnv):
-
     config = dict(
         env_name="Gomoku",
         prob_random_agent=0,
@@ -69,7 +70,7 @@ class GomokuEnv(BaseEnv):
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.int32
         )
         self._action_space = gym.spaces.Discrete(self.board_size ** 2)
-        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1, ), dtype=np.float32)
+        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
@@ -315,12 +316,22 @@ class GomokuEnv(BaseEnv):
 
     @property
     def legal_actions(self):
-        legal_actions = []
-        for i in range(self.board_size):
-            for j in range(self.board_size):
-                if self.board[i][j] == 0:
-                    legal_actions.append(self.coord_to_action(i, j))
-        return legal_actions
+        # return legal_actions_cython(self.board_size, list(self.board))
+        return self.legal_actions_func_lru()
+
+    # only for eval speed
+    @property
+    def legal_actions_cython(self):
+        return legal_actions_cython(self.board_size, list(self.board))
+
+    # only for eval speed
+    @property
+    def legal_actions_cython_lru(self):
+        return self.legal_actions_func_lru()
+
+    @lru_cache(maxsize=128)
+    def legal_actions_func_lru(self):
+        return legal_actions_cython(self.board_size, list(self.board))
 
     def random_action(self):
         action_list = self.legal_actions
@@ -394,9 +405,9 @@ class GomokuEnv(BaseEnv):
             """
             shfit_tmp_board = copy.deepcopy(
                 board_deepcopy[shift_distance[board_block_index][0]:size_of_board_template +
-                               shift_distance[board_block_index][0],
-                               shift_distance[board_block_index][1]:size_of_board_template +
-                               shift_distance[board_block_index][1]]
+                                                                    shift_distance[board_block_index][0],
+                shift_distance[board_block_index][1]:size_of_board_template +
+                                                     shift_distance[board_block_index][1]]
             )
 
             # Horizontal and vertical checks
