@@ -209,7 +209,6 @@ class RepresentationNetworkMLP(nn.Module):
         hidden_channels: int = 64,
         layer_num: int = 2,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-        last_linear_layer_init_zero: bool = False,
         norm_type: Optional[str] = 'BN',
     ) -> torch.Tensor:
         """
@@ -225,8 +224,6 @@ class RepresentationNetworkMLP(nn.Module):
                 we don't need this module.
             - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
                 Use the inplace operation to speed up.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to initialize the last linear layer with zeros, \
-                defaults to False.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super().__init__()
@@ -237,9 +234,8 @@ class RepresentationNetworkMLP(nn.Module):
             layer_num=layer_num,
             activation=activation,
             norm_type=norm_type,
-            output_activation=nn.Identity(),
+            output_activation=activation,
             output_norm_type=None,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -373,6 +369,7 @@ class PredictionNetworkMLP(nn.Module):
         output_support_size: int = 601,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        norm_type: Optional[str] = 'BN',
     ):
         """
         Overview:
@@ -389,6 +386,7 @@ class PredictionNetworkMLP(nn.Module):
                 dynamics/prediction mlp, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super().__init__()
         self.num_channels = num_channels
@@ -399,10 +397,9 @@ class PredictionNetworkMLP(nn.Module):
             out_channels=self.num_channels,
             layer_num=common_layer_num,
             activation=activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
+            norm_type=norm_type,
+            output_activation=activation,
         )
-        self.activation = activation
 
         self.fc_value_head = MLP(
             in_channels=self.num_channels,
@@ -410,7 +407,7 @@ class PredictionNetworkMLP(nn.Module):
             out_channels=output_support_size,
             layer_num=len(fc_value_layers)+1,
             activation=activation,
-            norm_type='BN',
+            norm_type=norm_type,
             output_activation=nn.Identity(),
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
@@ -420,7 +417,7 @@ class PredictionNetworkMLP(nn.Module):
             out_channels=action_space_size,
             layer_num=len(fc_policy_layers)+1,
             activation=activation,
-            norm_type='BN',
+            norm_type=norm_type,
             output_activation=nn.Identity(),
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )

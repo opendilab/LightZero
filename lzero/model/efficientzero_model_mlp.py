@@ -340,6 +340,7 @@ class DynamicsNetwork(nn.Module):
         lstm_hidden_size: int = 512,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        norm_type: Optional[str] = 'BN',
     ):
         """
         Overview:
@@ -356,6 +357,7 @@ class DynamicsNetwork(nn.Module):
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy head, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super().__init__()
         self.num_channels = num_channels
@@ -370,8 +372,9 @@ class DynamicsNetwork(nn.Module):
             layer_num=common_layer_num,
             out_channels=self.latent_state_dim,
             activation=self.activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
+            norm_type=norm_type,
+            output_activation=self.activation,
+            output_norm_type=None,
         )
 
         # input_shape: （sequence_length，batch_size，input_size)
@@ -384,7 +387,7 @@ class DynamicsNetwork(nn.Module):
             layer_num=2,
             out_channels=output_support_size,
             activation=self.activation,
-            norm_type='BN',
+            norm_type=norm_type,
             output_activation=nn.Identity(),
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
