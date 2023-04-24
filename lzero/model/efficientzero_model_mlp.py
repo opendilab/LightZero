@@ -33,6 +33,7 @@ class EfficientZeroModelMLP(nn.Module):
         state_norm: bool = False,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
         discrete_action_encoding_type: str = 'not_one_hot',
+        norm_type: Optional[str] = 'BN',
         *args,
         **kwargs,
     ):
@@ -65,6 +66,7 @@ class EfficientZeroModelMLP(nn.Module):
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. default set it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super(EfficientZeroModelMLP, self).__init__()
         if not categorical_distribution:
@@ -99,7 +101,7 @@ class EfficientZeroModelMLP(nn.Module):
         self.self_supervised_learning_loss = self_supervised_learning_loss
 
         self.representation_network = RepresentationNetworkMLP(
-            observation_shape=observation_shape, hidden_channels=latent_state_dim
+            observation_shape=observation_shape, hidden_channels=latent_state_dim, norm_type=norm_type
         )
 
         self.dynamics_network = DynamicsNetwork(
@@ -110,6 +112,7 @@ class EfficientZeroModelMLP(nn.Module):
             fc_reward_layers=fc_reward_layers,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            norm_type=norm_type
         )
 
         self.prediction_network = PredictionNetworkMLP(
@@ -119,6 +122,7 @@ class EfficientZeroModelMLP(nn.Module):
             fc_policy_layers=fc_policy_layers,
             output_support_size=self.value_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            norm_type=norm_type
         )
 
         if self.self_supervised_learning_loss:
