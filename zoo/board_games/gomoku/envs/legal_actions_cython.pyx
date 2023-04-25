@@ -1,5 +1,3 @@
-# cythonize -i ./legal_actions_cython.pyx
-
 def legal_actions_cython(int board_size, list board):
     cdef list legal_actions = []
     cdef int i, j

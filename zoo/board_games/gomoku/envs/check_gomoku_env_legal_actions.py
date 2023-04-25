@@ -105,5 +105,5 @@ class TestGomokuEnv:
                 break
 
 
-test = TestGomokuEnv()
-test.test_self_play_mode()
+# test = TestGomokuEnv()
+# test.test_self_play_mode()

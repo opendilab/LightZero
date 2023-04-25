@@ -10,7 +10,7 @@ from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
-from zoo.board_games.gomoku.envs.legal_actions_cython import legal_actions_cython
+from zoo.board_games.gomoku.envs.legal_actions_cython_str import legal_actions_cython_str
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
 from zoo.board_games.gomoku.envs.gomoku_rule_bot_v1 import GomokuRuleBotV1
@@ -18,6 +18,12 @@ from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_c
     check_action_to_special_connect4_case2, \
     check_action_to_connect4
 
+@lru_cache(maxsize=128)
+def _legal_actions_func_str_lru(board_str):
+    return legal_actions_cython_str(board_str)
+
+def _legal_actions_func_str(board_str):
+    return legal_actions_cython_str(board_str)
 
 @ENV_REGISTRY.register('gomoku')
 class GomokuEnv(BaseEnv):
@@ -314,24 +320,28 @@ class GomokuEnv(BaseEnv):
             reward = None
         return done, reward
 
+    # TODO(pu): why have bug when use lru_cache in simulate_action_v2() method in alpha_beta_pruning_bot.py
     @property
     def legal_actions(self):
-        # return legal_actions_cython(self.board_size, list(self.board))
-        return self.legal_actions_func_lru()
+        return self.legal_actions_func_str_lru()
 
-    # only for eval speed
-    @property
-    def legal_actions_cython(self):
-        return legal_actions_cython(self.board_size, list(self.board))
+    def legal_actions_func_str_lru(self):
+        board_str = ''.join(str(cell) for row in self.board for cell in row)
+        return _legal_actions_func_str_lru(board_str)
 
-    # only for eval speed
+    # only for evaluation speed
     @property
     def legal_actions_cython_lru(self):
-        return self.legal_actions_func_lru()
+        return self.legal_actions_func_str_lru()
 
-    @lru_cache(maxsize=128)
-    def legal_actions_func_lru(self):
-        return legal_actions_cython(self.board_size, list(self.board))
+    # only for evaluation speed
+    @property
+    def legal_actions_cython(self):
+        return self.legal_actions_func_str()
+
+    def legal_actions_func_str(self):
+        board_str = ''.join(str(cell) for row in self.board for cell in row)
+        return _legal_actions_func_str(board_str)
 
     def random_action(self):
         action_list = self.legal_actions

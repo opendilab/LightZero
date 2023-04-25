@@ -13,9 +13,6 @@ Overview:
     | legal_actions_cython_v2      | 4.400
     | legal_actions_cython_v3      | 4.333
     | legal_actions_cython_v3_lru  | 0.011
-
-
-
 """
 
 import numpy as np
@@ -90,14 +87,15 @@ def eval_legal_actions_cython_v3():
 
 
 from functools import lru_cache
+
+
 @lru_cache(maxsize=128)
 def eval_legal_actions_cython_v3_lru():
     eval_legal_actions_template(legal_actions_cython_v3)
 
-if __name__ == "__main__":
-    # eval_times = 1000000
-    eval_times = 100000
 
+if __name__ == "__main__":
+    eval_times = 1000000
 
     print(f"##### execute eval_legal_actions {eval_times} times #####")
 

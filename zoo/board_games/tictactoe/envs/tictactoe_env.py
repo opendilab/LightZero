@@ -11,14 +11,18 @@ from ditk import logging
 from easydict import EasyDict
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
-from zoo.board_games.tictactoe.envs.legal_actions_cython import legal_actions_cython
+from zoo.board_games.gomoku.envs.legal_actions_cython_str import legal_actions_cython_str
+from zoo.board_games.gomoku.envs.legal_actions_cython import legal_actions_cython
 
 
 @lru_cache(maxsize=128)
-def _legal_actions_func(board_tuple):
-    # board_tuple = tuple(board)
-    # return legal_actions_cython(board_tuple)
-    return legal_actions_cython(list(board_tuple))
+def _legal_actions_func_str_lru(board_str):
+    return legal_actions_cython_str(board_str)
+
+
+def _legal_actions_func_str(board_str):
+    return legal_actions_cython_str(board_str)
+
 
 @ENV_REGISTRY.register('tictactoe')
 class TicTacToeEnv(BaseEnv):
@@ -61,6 +65,23 @@ class TicTacToeEnv(BaseEnv):
         self.bot_action_type = cfg.bot_action_type
         if 'alpha_beta_pruning' in self.bot_action_type:
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
+
+    # @property
+    # def legal_actions(self):
+    #     return self.legal_actions_func_str()
+
+    # TODO(pu): why have bug when use lru_cache in simulate_action_v2() method in alpha_beta_pruning_bot.py
+    @property
+    def legal_actions(self):
+        return self.legal_actions_func_str_lru()
+
+    def legal_actions_func_str_lru(self):
+        board_str = ''.join(str(cell) for row in self.board for cell in row)
+        return _legal_actions_func_str_lru(board_str)
+
+    def legal_actions_func_str(self):
+        board_str = ''.join(str(cell) for row in self.board for cell in row)
+        return _legal_actions_func_str(board_str)
 
     def reset(self, start_player_index=0, init_state=None):
         """
@@ -324,25 +345,6 @@ class TicTacToeEnv(BaseEnv):
         have_winner = False
         return have_winner, winner
 
-    @property
-    def legal_actions(self):
-        return legal_actions_cython(list(self.board))
-        # return self.legal_actions_func_lru()
-
-    # only for eval speed
-    @property
-    def legal_actions_cython(self):
-        return legal_actions_cython(list(self.board))
-
-    # only for eval speed
-    @property
-    def legal_actions_cython_lru(self):
-        return self.legal_actions_func_lru()
-
-    @lru_cache(maxsize=128)
-    def legal_actions_func_lru(self):
-        return legal_actions_cython(list(self.board))
-
     def random_action(self):
         action_list = self.legal_actions
         return np.random.choice(action_list)
@@ -515,8 +517,10 @@ class TicTacToeEnv(BaseEnv):
         """
         Overview:
             execute action and get next_simulator_env. used in AlphaZero.
+        Arguments:
+            - action: an integer from the action space.
         Returns:
-            Returns TicTacToeEnv instance.
+            - next_simulator_env: next simulator env after execute action.
         """
         if action not in self.legal_actions:
             raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
@@ -528,24 +532,29 @@ class TicTacToeEnv(BaseEnv):
         else:
             start_player_index = 0  # self.players = [1, 2], start_player = 1, start_player_index = 0
         next_simulator_env = copy.deepcopy(self)
-        next_simulator_env.reset(start_player_index, init_state=new_board)  # index
+        next_simulator_env.reset(start_player_index, init_state=new_board)
         return next_simulator_env
 
     def simulate_action_v2(self, board, start_player_index, action):
         """
         Overview:
-            execute action from board and get new_board, new_legal_actions. used in AlphaZero.
+            execute action from board and get new_board, new_legal_actions. used in alphabeta_pruning_bot.
+        Arguments:
+            - board (:obj:`np.array`): current board
+            - start_player_index (:obj:`int`): start player index
+            - action (:obj:`int`): action
         Returns:
-            - new_board (:obj:`np.array`):
-            - new_legal_actions (:obj:`np.array`):
+            - new_board (:obj:`np.array`): new board
+            - new_legal_actions (:obj:`list`): new legal actions
         """
-        self.reset(start_player_index, init_state=board)  # index
+        self.reset(start_player_index, init_state=board)
         if action not in self.legal_actions:
             raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
         row, col = self.action_to_coord(action)
         self.board[row, col] = self.current_player
         new_legal_actions = copy.deepcopy(self.legal_actions)
         new_board = copy.deepcopy(self.board)
+
         return new_board, new_legal_actions
 
     def clone(self):

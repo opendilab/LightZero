@@ -1,3 +1,3 @@
-DI-engine[common_env]>=0.4.7
+git+https://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env]
 gym[accept-rom-license]==0.25.1
 numpy>=1.21.6
