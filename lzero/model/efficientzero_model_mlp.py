@@ -352,8 +352,6 @@ class DynamicsNetwork(nn.Module):
             out_channels=self.latent_state_dim,
             activation=self.activation,
             norm_type='BN',
-            output_activation=False,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
         # input_shape: （sequence_length，batch_size，input_size)
@@ -368,6 +366,7 @@ class DynamicsNetwork(nn.Module):
             activation=self.activation,
             norm_type='BN',
             output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 

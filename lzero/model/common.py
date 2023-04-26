@@ -331,7 +331,6 @@ class PredictionNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
-
     def forward(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
@@ -400,8 +399,6 @@ class PredictionNetworkMLP(nn.Module):
             layer_num=common_layer_num,
             activation=activation,
             norm_type='BN',
-            output_activation=False,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.activation = activation
 
@@ -413,6 +410,7 @@ class PredictionNetworkMLP(nn.Module):
             activation=activation,
             norm_type='BN',
             output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy_head = MLP(
@@ -423,6 +421,7 @@ class PredictionNetworkMLP(nn.Module):
             activation=activation,
             norm_type='BN',
             output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 

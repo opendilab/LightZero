@@ -335,8 +335,6 @@ class DynamicsNetwork(nn.Module):
             out_channels=self.latent_state_dim,
             activation=activation,
             norm_type='BN',
-            output_activation=False,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
         self.fc_reward_head = MLP(
@@ -347,6 +345,7 @@ class DynamicsNetwork(nn.Module):
             activation=activation,
             norm_type='BN',
             output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
