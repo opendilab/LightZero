@@ -11,6 +11,8 @@ from ding.utils import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
 from zoo.board_games.gomoku.envs.legal_actions_cython_str import legal_actions_cython_str
+from zoo.board_games.gomoku.envs.get_done_winner_cython import get_done_winner_cython
+
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
 from zoo.board_games.gomoku.envs.gomoku_rule_bot_v1 import GomokuRuleBotV1
@@ -256,45 +258,10 @@ class GomokuEnv(BaseEnv):
             # (C, W, H) e.g. (3, 6, 6)
             return raw_obs, scale_obs
 
+    # TODO(pu): why ValueError: 'a' cannot be empty unless no samples are taken
+    # @lru_cache(maxsize=128)
     def get_done_winner(self):
-        """
-        Overview:
-             Check if the game is over and who the winner is. Return 'done' and 'winner'.
-        Returns:
-            - outputs (:obj:`Tuple`): Tuple containing 'done' and 'winner',
-                - if player 1 win,     'done' = True, 'winner' = 1
-                - if player 2 win,     'done' = True, 'winner' = 2
-                - if draw,             'done' = True, 'winner' = -1
-                - if game is not over, 'done' = False, 'winner' = -1
-        """
-        # has_legal_actions i.e. not done
-        has_legal_actions = False
-        directions = ((1, -1), (1, 0), (1, 1), (0, 1))
-        for i in range(self.board_size):
-            for j in range(self.board_size):
-                # if no stone is on the position, don't need to consider this position
-                if self.board[i][j] == 0:
-                    has_legal_actions = True
-                    continue
-                # value-value at a coord, i-row, j-col
-                player = self.board[i][j]
-                # check if there exist 5 in a line
-                for d in directions:
-                    x, y = i, j
-                    count = 0
-                    for _ in range(5):
-                        if (x not in range(self.board_size)) or (y not in range(self.board_size)):
-                            break
-                        if self.board[x][y] != player:
-                            break
-                        x += d[0]
-                        y += d[1]
-                        count += 1
-                        # if 5 in a line, store positions of all stones, return value
-                        if count == 5:
-                            return True, player
-        # if the players don't have legal actions, return done=True
-        return not has_legal_actions, -1
+        return get_done_winner_cython(self.board_size, self.board)
 
     def get_done_reward(self):
         """
