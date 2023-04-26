@@ -150,7 +150,7 @@ def train_muzero(
             log_vars = learner.train(train_data, collector.envstep)
 
             if cfg.policy.use_priority:
-                replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+                replay_buffer.update_priority(train_data, log_vars[0]['priority'])
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break

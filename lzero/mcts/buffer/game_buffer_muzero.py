@@ -22,21 +22,16 @@ class MuZeroGameBuffer(GameBuffer):
     """
 
     def __init__(self, cfg: dict):
-        super().__init__(cfg)
         """
         Overview:
             Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
             in the default configuration, the user-provided value will override the default configuration. Otherwise,
             the default configuration will be used.
         """
-        default_config = self.default_config()
-        default_config.update(cfg)
-        self._cfg = default_config
+        super().__init__(cfg)
         assert self._cfg.env_type in ['not_board_games', 'board_games']
         self.replay_buffer_size = self._cfg.replay_buffer_size
         self.batch_size = self._cfg.batch_size
-        self._alpha = self._cfg.priority_prob_alpha
-        self._beta = self._cfg.priority_prob_beta
 
         self.keep_ratio = 1
         self.model_update_interval = 10

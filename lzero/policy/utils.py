@@ -1,16 +1,13 @@
-import logging
 from typing import List, Tuple, Dict
 from easydict import EasyDict
 
+from ditk import logging
+import inspect
 import numpy as np
 import torch
-from scipy.stats import entropy
-import math
-import inspect
-
-import torch
 import torch.nn as nn
-from torch.nn import functional as F
+import torch.nn.functional as F
+from scipy.stats import entropy
 
 
 class LayerNorm(nn.Module):
@@ -25,9 +22,13 @@ class LayerNorm(nn.Module):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
 
-def configure_optimizers(model: nn.Module, weight_decay: float = 0, learning_rate: float = 3e-3,
-                         betas: tuple = (0.9, 0.999), device_type: str = "cuda"):
-
+def configure_optimizers(
+    model: nn.Module,
+    weight_decay: float = 0,
+    learning_rate: float = 3e-3,
+    betas: tuple = (0.9, 0.999),
+    device_type: str = "cuda"
+):
     """
     Overview:
         This function is adapted from https://github.com/karpathy/nanoGPT/blob/master/model.py
@@ -49,7 +50,9 @@ def configure_optimizers(model: nn.Module, weight_decay: float = 0, learning_rat
     decay = set()
     no_decay = set()
     whitelist_weight_modules = (torch.nn.Linear, torch.nn.LSTM, nn.Conv2d)
-    blacklist_weight_modules = (torch.nn.LayerNorm, LayerNorm, torch.nn.Embedding, torch.nn.BatchNorm1d, torch.nn.BatchNorm2d)
+    blacklist_weight_modules = (
+        torch.nn.LayerNorm, LayerNorm, torch.nn.Embedding, torch.nn.BatchNorm1d, torch.nn.BatchNorm2d
+    )
     for mn, m in model.named_modules():
         for pn, p in m.named_parameters():
             fpn = '%s.%s' % (mn, pn) if mn else pn  # full param name
@@ -62,7 +65,8 @@ def configure_optimizers(model: nn.Module, weight_decay: float = 0, learning_rat
             elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
                 # weights of whitelist modules will be weight decayed
                 decay.add(fpn)
-            elif (pn.endswith('weight_ih_l0') or pn.endswith('weight_hh_l0')) and isinstance(m, whitelist_weight_modules):
+            elif (pn.endswith('weight_ih_l0') or pn.endswith('weight_hh_l0')) and isinstance(m,
+                                                                                             whitelist_weight_modules):
                 # some special weights of whitelist modules will be weight decayed
                 decay.add(fpn)
             elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
@@ -83,15 +87,21 @@ def configure_optimizers(model: nn.Module, weight_decay: float = 0, learning_rat
     param_dict = {pn: p for pn, p in model.named_parameters()}
     inter_params = decay & no_decay
     union_params = decay | no_decay
-    assert len(inter_params) == 0, "parameters %s made it into both decay/no_decay sets!" % (str(inter_params),)
+    assert len(inter_params) == 0, "parameters %s made it into both decay/no_decay sets!" % (str(inter_params), )
     assert len(
         param_dict.keys() - union_params) == 0, "parameters %s were not separated into either decay/no_decay set!" \
                                                 % (str(param_dict.keys() - union_params),)
 
     # create the pytorch optimizer object
     optim_groups = [
-        {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": weight_decay},
-        {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
+        {
+            "params": [param_dict[pn] for pn in sorted(list(decay))],
+            "weight_decay": weight_decay
+        },
+        {
+            "params": [param_dict[pn] for pn in sorted(list(no_decay))],
+            "weight_decay": 0.0
+        },
     ]
     # new PyTorch nightly has a new 'fused' option for AdamW that is much faster
     use_fused = (device_type == 'cuda') and ('fused' in inspect.signature(torch.optim.AdamW).parameters)
@@ -202,14 +212,14 @@ def get_max_entropy(action_shape: int) -> np.float32:
     return -action_shape * p * np.log2(p)
 
 
-def select_action(visit_counts: np.ndarray,
+def select_action(visit_counts: List,
                   temperature: float = 1,
                   deterministic: bool = True) -> Tuple[np.int64, np.ndarray]:
     """
     Overview:
         Select action from visit counts of the root node.
     Arguments:
-        - visit_counts (:obj:`np.ndarray`): The visit counts of the root node.
+        - visit_counts (:obj:`List`): The visit counts of the root node.
         - temperature (:obj:`float`): The temperature used to adjust the sampling distribution.
         - deterministic (:obj:`bool`):  Whether to enable deterministic mode in action selection. True means to \
             select the argmax result, False indicates to sample action from the distribution.
@@ -347,3 +357,22 @@ def mz_network_output_unpack(network_output: Dict) -> Tuple:
     value = network_output.value  # shape: (batch_size, support_support_size)
     policy_logits = network_output.policy_logits  # shape: (batch_size, action_space_size)
     return latent_state, reward, value, policy_logits
+
+
+def visit_count_temperature(
+        manual_temperature_decay: bool, fixed_temperature_value: float,
+        threshold_training_steps_for_final_lr_temperature: int, trained_steps: int
+) -> float:
+    if manual_temperature_decay:
+        if trained_steps < 0.5 * threshold_training_steps_for_final_lr_temperature:
+            return 1.0
+        elif trained_steps < 0.75 * threshold_training_steps_for_final_lr_temperature:
+            return 0.5
+        else:
+            return 0.25
+    else:
+        return fixed_temperature_value
+
+
+def cross_entropy_loss(prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    return -(torch.log_softmax(prediction, dim=1) * target).sum(1)

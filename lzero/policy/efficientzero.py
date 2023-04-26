@@ -14,9 +14,9 @@ from torch.nn import L1Loss
 from lzero.mcts import EfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts import EfficientZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
-from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, negative_cosine_similarity, prepare_obs, \
-    configure_optimizers
+from .utils import to_torch_float_tensor, ez_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
+    configure_optimizers, cross_entropy_loss
+from .scaling_transform import scalar_transform, InverseScalarTransform, phi_transform, DiscreteSupport
 
 
 @POLICY_REGISTRY.register('efficientzero')
@@ -193,7 +193,12 @@ class EfficientZeroPolicy(Policy):
                 weight_decay=self._cfg.weight_decay,
             )
         elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay, learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
+            self._optimizer = configure_optimizers(
+                model=self._model,
+                weight_decay=self._cfg.weight_decay,
+                learning_rate=self._cfg.learning_rate,
+                device_type=self._cfg.device
+            )
 
         if self._cfg.lr_piecewise_constant_decay:
             from torch.optim.lr_scheduler import LambdaLR
@@ -465,7 +470,7 @@ class EfficientZeroPolicy(Policy):
             # priority related
             # ==============================================================
             'value_priority': td_data[0].flatten().mean().item(),
-            'value_priority_orig': value_priority,
+            'priority': value_priority,  # this key must be priority to update replay buffer
             'target_value_prefix': td_data[1].flatten().mean().item(),
             'target_value': td_data[2].flatten().mean().item(),
             'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
@@ -488,23 +493,23 @@ class EfficientZeroPolicy(Policy):
         self.collect_mcts_temperature = 1
 
     def _forward_collect(
-        self,
-        data: torch.Tensor,
-        action_mask: list = None,
-        temperature: float = 1,
-        to_play: List = [-1],
-        ready_env_id=None
-    ):
+            self,
+            data: torch.Tensor,
+            action_mask: List[int],
+            temperature: float = 1,
+            to_play: List[int] = None,
+            ready_env_id: List[int] = None,
+    ) -> List[Dict]:
         """
         Overview:
             The forward function for collecting data in collect mode. Use model to execute MCTS search.
             Choosing the action through sampling during the collect mode.
         Arguments:
             - data (:obj:`torch.Tensor`): The input data, i.e. the observation.
-            - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
+            - action_mask (:obj:`List[int]`): The action mask, i.e. the action that cannot be selected.
             - temperature (:obj:`float`): The temperature of the policy.
-            - to_play (:obj:`int`): The player to play.
-            - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
+            - to_play (:obj:`List[int]`): The player to play.
+            - ready_env_id (:obj:`List[int]`): The id of the env that is ready to collect.
         Shape:
             - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
@@ -512,15 +517,20 @@ class EfficientZeroPolicy(Policy):
                 - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
             - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
             - temperature: :math:`(1, )`.
-            - to_play: :math:`(N, 1)`, where N is the number of collect_env.
-            - ready_env_id: None
+            - to_play: :math:`(N, )`, where N is the number of collect_env.
+            - ready_env_id: :math:`(N, )`
         Returns:
-            - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
-                ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
+            - output (:obj:`List[Dict]`): Each element is a dict-type data, the keys including ``action``, \
+                ``distributions``, ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._collect_model.eval()
         self.collect_mcts_temperature = temperature
         active_collect_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_collect_env_num)
+        if to_play is None:
+            to_play = [-1 for _ in ready_env_id]
+
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
@@ -555,15 +565,11 @@ class EfficientZeroPolicy(Policy):
                 roots, self._collect_model, latent_state_roots, reward_hidden_state_roots, to_play
             )
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
-            data_id = [i for i in range(active_collect_env_num)]
-            output = {i: None for i in data_id}
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_collect_env_num)
-
+            output = []
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
@@ -573,14 +579,16 @@ class EfficientZeroPolicy(Policy):
                 )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                output[env_id] = {
-                    'action': action,
-                    'distributions': distributions,
-                    'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'value': value,
-                    'pred_value': pred_values[i],
-                    'policy_logits': policy_logits[i],
-                }
+                output.append(
+                    {
+                        'action': action,
+                        'distributions': distributions,
+                        'visit_count_distribution_entropy': visit_count_distribution_entropy,
+                        'value': value,
+                        'pred_value': pred_values[i],
+                        'policy_logits': policy_logits[i],
+                    }
+                )
 
         return output
 
@@ -595,30 +603,41 @@ class EfficientZeroPolicy(Policy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id=None):
+    def _forward_eval(
+            self,
+            data: torch.Tensor,
+            action_mask: List[int],
+            to_play: List[int] = None,
+            ready_env_id: List[int] = None
+    ) -> List[Dict]:
         """
          Overview:
              The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
              Choosing the action with the highest value (argmax) rather than sampling during the eval mode.
          Arguments:
              - data (:obj:`torch.Tensor`): The input data, i.e. the observation.
-             - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
-             - to_play (:obj:`int`): The player to play.
-             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
+             - action_mask (:obj:`List[int]`): The action mask, i.e. the action that cannot be selected.
+             - to_play (:obj:`List[int]`): The player to play.
+             - ready_env_id (:obj:`List[int]`): The id of the env that is ready to collect.
          Shape:
              - data (:obj:`torch.Tensor`):
                  - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
                      S is the number of stacked frames, H is the height of the image, W is the width of the image.
                  - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
              - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
-             - to_play: :math:`(N, 1)`, where N is the number of collect_env.
-             - ready_env_id: None
+             - to_play: :math:`(N, )`, where N is the number of collect_env.
+             - ready_env_id: :math:`(N, )`
          Returns:
-             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
-                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
+             - output (:obj:`List[Dict]`): Each element is a dict-type data, the keys including ``action``, \
+                ``distributions``,  ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
          """
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_eval_env_num)
+        if to_play is None:
+            to_play = [-1 for _ in ready_env_id]
+
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._eval_model.initial_inference(data)
@@ -646,15 +665,11 @@ class EfficientZeroPolicy(Policy):
             roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
             self._mcts_eval.search(roots, self._eval_model, latent_state_roots, reward_hidden_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
-            data_id = [i for i in range(active_eval_env_num)]
-            output = {i: None for i in data_id}
 
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_eval_env_num)
-
+            output = []
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
@@ -665,14 +680,16 @@ class EfficientZeroPolicy(Policy):
                 )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                output[env_id] = {
-                    'action': action,
-                    'distributions': distributions,
-                    'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'value': value,
-                    'pred_value': pred_values[i],
-                    'policy_logits': policy_logits[i],
-                }
+                output.append(
+                    {
+                        'action': action,
+                        'distributions': distributions,
+                        'visit_count_distribution_entropy': visit_count_distribution_entropy,
+                        'value': value,
+                        'pred_value': pred_values[i],
+                        'policy_logits': policy_logits[i],
+                    }
+                )
 
         return output
 

@@ -1,14 +1,14 @@
-import time
-from collections import deque, namedtuple
 from typing import Optional, Any, List
+from collections import deque, namedtuple
 
+import time
 import numpy as np
 import torch
+from torch.nn import L1Loss
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
 from ding.worker.collector.base_serial_collector import ISerialCollector
-from torch.nn import L1Loss
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
@@ -260,8 +260,6 @@ class MuZeroCollector(ISerialCollector):
         # reset last game_segments
         last_game_segments[i] = None
         last_game_priorities[i] = None
-
-        return None
 
     def collect(self,
                 n_episode: Optional[int] = None,

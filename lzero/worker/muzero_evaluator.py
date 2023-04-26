@@ -1,11 +1,11 @@
+from typing import Optional, Callable, Tuple
+from collections import namedtuple
+from easydict import EasyDict
+
 import time
 import copy
-from collections import namedtuple
-from typing import Optional, Callable, Tuple
-
 import numpy as np
 import torch
-from easydict import EasyDict
 
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray

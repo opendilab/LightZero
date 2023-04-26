@@ -15,9 +15,9 @@ from torch.nn import L1Loss
 from lzero.mcts import SampledEfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts import SampledEfficientZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
-from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, ez_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
-    configure_optimizers
+from .utils import to_torch_float_tensor, ez_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
+    configure_optimizers, cross_entropy_loss
+from .scaling_transform import scalar_transform, InverseScalarTransform, phi_transform, DiscreteSupport
 
 
 @POLICY_REGISTRY.register('sampled_efficientzero')
@@ -218,7 +218,12 @@ class SampledEfficientZeroPolicy(Policy):
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
         elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay, learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
+            self._optimizer = configure_optimizers(
+                model=self._model,
+                weight_decay=self._cfg.weight_decay,
+                learning_rate=self._cfg.learning_rate,
+                device_type=self._cfg.device
+            )
 
         if self._cfg.cos_lr_scheduler is True:
             from torch.optim.lr_scheduler import CosineAnnealingLR

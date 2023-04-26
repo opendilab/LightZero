@@ -103,26 +103,17 @@ class InverseScalarTransform:
         return output
 
 
-def visit_count_temperature(
-        manual_temperature_decay: bool, fixed_temperature_value: float,
-        threshold_training_steps_for_final_lr_temperature: int, trained_steps: int
-) -> float:
-    if manual_temperature_decay:
-        if trained_steps < 0.5 * threshold_training_steps_for_final_lr_temperature:
-            return 1.0
-        elif trained_steps < 0.75 * threshold_training_steps_for_final_lr_temperature:
-            return 0.5
-        else:
-            return 0.25
-    else:
-        return fixed_temperature_value
-
-
 def phi_transform(discrete_support: DiscreteSupport, x: torch.Tensor) -> torch.Tensor:
     """
     Overview:
         We then apply a transformation ``phi`` to the scalar in order to obtain equivalent categorical representations.
          After this transformation, each scalar is represented as the linear combination of its two adjacent supports.
+    Arguments:
+        - discrete_support (:obj:`DiscreteSupport`): The discrete support used in categorical representations of \
+            reward, value or value_prefix.
+        - x (:obj:`torch.Tensor`): The input tensor.
+    Returns:
+        - target (:obj:`torch.Tensor`): The output transformed tensor.
     Reference:
         - MuZero paper Appendix F: Network Architecture.
     """
@@ -143,7 +134,3 @@ def phi_transform(discrete_support: DiscreteSupport, x: torch.Tensor) -> torch.T
     target.scatter_(2, x_low_idx.long().unsqueeze(-1), p_low.unsqueeze(-1))
 
     return target
-
-
-def cross_entropy_loss(prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-    return -(torch.log_softmax(prediction, dim=1) * target).sum(1)
