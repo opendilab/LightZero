@@ -214,7 +214,7 @@ class MuZeroCollector:
                     {
                         'priorities': self._trajectory_pool[i][1],
                         'done': self._trajectory_pool[i][2],
-                        '_unroll_plus_td_steps': self._unroll_plus_td_steps
+                        'unroll_plus_td_steps': self._unroll_plus_td_steps
                     } for i in range(L)
                 ]
 
