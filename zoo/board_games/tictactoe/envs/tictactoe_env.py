@@ -11,17 +11,8 @@ from ditk import logging
 from easydict import EasyDict
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
-from zoo.board_games.gomoku.envs.legal_actions_cython_str import legal_actions_cython_str
-from zoo.board_games.gomoku.envs.legal_actions_cython import legal_actions_cython
-
-
-@lru_cache(maxsize=128)
-def _legal_actions_func_str_lru(board_str):
-    return legal_actions_cython_str(board_str)
-
-
-def _legal_actions_func_str(board_str):
-    return legal_actions_cython_str(board_str)
+from zoo.board_games.tictactoe.envs.legal_actions_cython import legal_actions_cython
+from zoo.board_games.tictactoe.envs.get_done_winner_cython import get_done_winner_cython
 
 
 @ENV_REGISTRY.register('tictactoe')
@@ -66,22 +57,24 @@ class TicTacToeEnv(BaseEnv):
         if 'alpha_beta_pruning' in self.bot_action_type:
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 
-    # @property
-    # def legal_actions(self):
-    #     return self.legal_actions_func_str()
-
     # TODO(pu): why have bug when use lru_cache in simulate_action_v2() method in alpha_beta_pruning_bot.py
     @property
     def legal_actions(self):
-        return self.legal_actions_func_str_lru()
+        return self.legal_actions_func_lru()
 
-    def legal_actions_func_str_lru(self):
-        board_str = ''.join(str(cell) for row in self.board for cell in row)
-        return _legal_actions_func_str_lru(board_str)
+    # only for evaluation speed
+    @property
+    def legal_actions_cython(self):
+        return legal_actions_cython(list(self.board))
 
-    def legal_actions_func_str(self):
-        board_str = ''.join(str(cell) for row in self.board for cell in row)
-        return _legal_actions_func_str(board_str)
+    # only for evaluation speed
+    @property
+    def legal_actions_cython_lru(self):
+        return self.legal_actions_func_lru()
+
+    @lru_cache(maxsize=128)
+    def legal_actions_func_lru(self):
+        return legal_actions_cython(list(self.board))
 
     def reset(self, start_player_index=0, init_state=None):
         """
@@ -100,7 +93,7 @@ class TicTacToeEnv(BaseEnv):
                 low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.uint8
             )
         self._action_space = gym.spaces.Discrete(self.board_size ** 2)
-        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1, ), dtype=np.float32)
+        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
@@ -278,29 +271,10 @@ class TicTacToeEnv(BaseEnv):
             # (C, W, H)
             return raw_obs, scale_obs
 
+    # TODO(pu): why ValueError: 'a' cannot be empty unless no samples are taken
+    # @lru_cache(maxsize=128)
     def get_done_winner(self):
-        """
-        Overview:
-             Check if the game is over and who the winner is. Return 'done' and 'winner'.
-        Returns:
-            - outputs (:obj:`Tuple`): Tuple containing 'done' and 'winner',
-                - if player 1 win,     'done' = True, 'winner' = 1
-                - if player 2 win,     'done' = True, 'winner' = 2
-                - if draw,             'done' = True, 'winner' = -1
-                - if game is not over, 'done' = False, 'winner' = -1
-        """
-        have_winner, winner = self._get_have_winner_and_winner()
-        if have_winner:
-            done, winner = True, winner
-        elif len(self.legal_actions) == 0:
-            # the agent don't have legal_actions to move, so the episode is done
-            # winner = -1 indicates draw.
-            done, winner = True, -1
-        else:
-            # episode is not done.
-            done, winner = False, -1
-
-        return done, winner
+        return get_done_winner_cython(self.board)
 
     def get_done_reward(self):
         """
@@ -325,25 +299,6 @@ class TicTacToeEnv(BaseEnv):
             # episode is not done
             reward = None
         return done, reward
-
-    def _get_have_winner_and_winner(self):
-        # has_legal_actions i.e. not done
-        # Horizontal and vertical checks
-        for i in range(self.board_size):
-            if len(set(self.board[i, :])) == 1 and (self.board[i, 0] != 0):
-                return True, self.board[i, 0]
-            if len(set(self.board[:, i])) == 1 and (self.board[0, i] != 0):
-                return True, self.board[0, i]
-
-        # Diagonal checks
-        if self.board[0, 0] == self.board[1, 1] == self.board[2, 2] != 0:
-            return True, self.board[0, 0]
-        if self.board[2, 0] == self.board[1, 1] == self.board[0, 2] != 0:
-            return True, self.board[2, 0]
-
-        winner = -1
-        have_winner = False
-        return have_winner, winner
 
     def random_action(self):
         action_list = self.legal_actions
