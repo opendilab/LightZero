@@ -41,8 +41,10 @@ class TicTacToeEnv(BaseEnv):
         self.channel_last = cfg.channel_last
         self.scale = cfg.scale
         self.battle_mode = cfg.battle_mode
-        # ``self.mcts_mode`` is only used in AlphaZero
-        self.mcts_mode = cfg.get('mcts_mode', cfg.battle_mode)
+        # The mode of interaction between the agent and the environment.
+        assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
+        # The mode of MCTS is only used in AlphaZero.
+        self.mcts_mode = 'self_play_mode'
         self.board_size = 3
         self.players = [1, 2]
         self.total_num_actions = 9

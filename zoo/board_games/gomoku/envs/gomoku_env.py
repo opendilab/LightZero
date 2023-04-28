@@ -46,8 +46,11 @@ class GomokuEnv(BaseEnv):
     def __init__(self, cfg: dict = None):
         self.cfg = cfg
         self.battle_mode = cfg.battle_mode
-        # ``self.mcts_mode`` is only used in AlphaZero
-        self.mcts_mode = cfg.get('mcts_mode', cfg.battle_mode)
+        # The mode of interaction between the agent and the environment.
+        assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
+        # The mode of MCTS is only used in AlphaZero.
+        self.mcts_mode = 'self_play_mode'
+
         self.board_size = cfg.board_size
         self.prob_random_agent = cfg.prob_random_agent
         self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
@@ -87,7 +90,8 @@ class GomokuEnv(BaseEnv):
             obs = {
                 'observation': self.current_state()[1],
                 'action_mask': action_mask,
-                'board': copy.deepcopy(self.board),
+                # 'board': copy.deepcopy(self.board),
+                'board': self.board,  # TODO(pu): check correctness
                 'current_player_index': self.start_player_index,
                 'to_play': -1
             }
@@ -97,7 +101,8 @@ class GomokuEnv(BaseEnv):
             obs = {
                 'observation': self.current_state()[1],
                 'action_mask': action_mask,
-                'board': copy.deepcopy(self.board),
+                # 'board': copy.deepcopy(self.board),
+                'board': self.board,  # TODO(pu): check correctness
                 'current_player_index': self.start_player_index,
                 'to_play': self.current_player
             }
@@ -216,7 +221,8 @@ class GomokuEnv(BaseEnv):
         obs = {
             'observation': self.current_state()[1],
             'action_mask': action_mask,
-            'board': copy.deepcopy(self.board),
+            # 'board': copy.deepcopy(self.board),
+            'board': self.board,  # TODO(pu): check correctness
             'current_player_index': self.players.index(self.current_player),
             'to_play': self.current_player
         }
@@ -237,10 +243,14 @@ class GomokuEnv(BaseEnv):
         board_opponent_player = np.where(self.board == self.to_play, 1, 0)
         board_to_play = np.full((self.board_size, self.board_size), self.current_player)
         raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
+        # if self.scale:
+        #     scale_obs = copy.deepcopy(raw_obs / 2)
+        # else:
+        #     scale_obs = copy.deepcopy(raw_obs)
         if self.scale:
-            scale_obs = copy.deepcopy(raw_obs / 2)
+            scale_obs = raw_obs / 2  # TODO(pu): check correctness
         else:
-            scale_obs = copy.deepcopy(raw_obs)
+            scale_obs = raw_obs
 
         if self.channel_last:
             # move channel dim to last axis
@@ -799,7 +809,6 @@ class GomokuEnv(BaseEnv):
         # In eval phase, we use ``eval_mode`` to make agent play with the built-in bot to
         # evaluate the performance of the current agent.
         cfg.battle_mode = 'eval_mode'
-
         return [cfg for _ in range(evaluator_env_num)]
 
     def __repr__(self) -> str:

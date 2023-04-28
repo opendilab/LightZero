@@ -87,6 +87,12 @@ def train_alphazero(
         exp_name=cfg.exp_name,
     )
 
+    stop, reward = evaluator.eval(
+        learner.save_checkpoint,
+        learner.train_iter,
+        collector.envstep,
+    )
+
     # ==============================================================
     # Main loop
     # ==============================================================

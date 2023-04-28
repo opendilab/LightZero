@@ -12,12 +12,23 @@ update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
 prob_random_action_in_bot = 0.5
+
+# debug config
+# board_size = 6  # default_size is 15
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 5
+# update_per_collect = 3
+# batch_size = 2
+# max_env_step = int(1e6)
+# prob_random_action_in_bot = 0.5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 gomoku_alphazero_config = dict(
     exp_name=
-    f'data_az_ptree/gomoku_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
+    f'data_az_ptree/gomoku_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_atd_seed0',
     env=dict(
         board_size=board_size,
         battle_mode='self_play_mode',
@@ -43,6 +54,7 @@ gomoku_alphazero_config = dict(
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
+        manual_temperature_decay=True,
         grad_clip_value=0.5,
         value_weight=1.0,
         entropy_weight=0.0,
@@ -81,14 +93,16 @@ gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
 create_config = gomoku_alphazero_create_config
 
 if __name__ == '__main__':
-    from lzero.entry import train_alphazero
-    train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
-
     # from lzero.entry import train_alphazero
-    #
-    # def run(max_env_step: int):
-    #         train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
-    #
-    #
-    # import cProfile
-    # cProfile.run(f"run({10000})", filename="gomoku_az_sp_ctree_cprofile.10k_envstep_cython-legal-actions", sort="cumulative")
+    # train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
+
+    from lzero.entry import train_alphazero
+
+    def run(max_env_step: int):
+        train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
+
+    import cProfile
+
+    # cProfile.run(f"run({10000})", filename="gomoku_az_sp_ctree_cprofile.10k_envstep_cython-legal-actions-lru_cython-gdw", sort="cumulative")
+    cProfile.run(f"run({500000})", filename="gomoku_az_sp_ctree_cprofile.500k_envstep_cython-legal-actions-lru_cython-gdw", sort="cumulative")
+    # cProfile.run(f"run({500000})", filename="gomoku_az_sp_ctree_cprofile.500k_envstep_cython-legal-actions-lru_cython-gdw_nodc", sort="cumulative")

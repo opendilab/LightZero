@@ -19,7 +19,7 @@ class Node(object):
         The node base class for tree_search.
     """
 
-    def __init__(self, parent: "Node", prior_p: float) -> None:
+    def __init__(self, parent: "Node" = None, prior_p: float = 1.0) -> None:
         self._parent = parent
         self._children = {}
         self._visit_count = 0
@@ -132,13 +132,13 @@ class MCTS(object):
         Arguments:
             - simulate_env (:obj:`Class BaseGameEnv`): The class of simulate env.
             - policy_forward_fn (:obj:`Function`): The Callable to compute the action probs and state value.
-            - temperature (:obj:`Int`): Temperature is a parameter that controls the "softness" of the probability distribution..
+            - temperature (:obj:`Int`): Temperature is a parameter that controls the "softness" of the probability distribution.
             - sample (:obj:`Bool`): The value of the node.
         Returns:
             - action (:obj:`Bool`): Select the action with the most visits as the final action.
             - action_probs (:obj:`List`): The output probability of each action.
         """
-        root = Node(None, 1.0)
+        root = Node()
         self._expand_leaf_node(root, simulate_env, policy_forward_fn)
         if sample:
             self._add_exploration_noise(root)
