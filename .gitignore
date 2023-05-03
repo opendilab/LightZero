@@ -1432,6 +1432,7 @@ collect_demo_data_config.py
 events.*
 /test_*
 # LightZero special key
+/zoo/board_games/**/*.c
 /lzero/mcts/**/*.cpp
 /lzero/mcts/**/*.so
 /lzero/mcts/**/*.h

@@ -13,6 +13,7 @@ num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
+sp_prob = 0.8
 
 # collector_env_num = 2
 # n_episode = 2
@@ -26,7 +27,7 @@ max_env_step = int(1e6)
 # ==============================================================
 
 gomoku_alphazero_league_config = dict(
-    exp_name="gomoku_alphazero_league_seed0",
+    exp_name=f"gomoku_alphazero_league_sp-{sp_prob}_seed0",
     env=dict(
         env_name="Gomoku",
         board_size=board_size,
@@ -74,13 +75,14 @@ gomoku_alphazero_league_config = dict(
             # log_freq=2,  # debug
             player_category=['gomoku'],
             # path to save policy of league player, user can specify this field
-            path_policy="gomoku_alphazero_league_policy_ckpt",
+            path_policy=f"gomoku_alphazero_league_policy_ckpt_sp-{sp_prob}",
             active_players=dict(main_player=1, ),
             main_player=dict(
                 # An active player will be considered trained enough for snapshot after two phase steps.
                 one_phase_step=20000,
                 # A namedtuple of probabilities of selecting different opponent branch.
-                branch_probs=dict(pfsp=0.2, sp=0.8),
+                # branch_probs=dict(pfsp=0.2, sp=0.8),
+                branch_probs=dict(pfsp=1 - sp_prob, sp=sp_prob),
                 # If win rates between this player and all the opponents are greater than this value, this player can
                 # be regarded as strong enough to these opponents. If also already trained for one phase step,
                 # this player can be regarded as trained enough for snapshot.
