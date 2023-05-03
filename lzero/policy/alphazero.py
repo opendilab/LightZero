@@ -24,6 +24,8 @@ class AlphaZeroPolicy(Policy):
 
     # The default_config for AlphaZero policy.
     config = dict(
+        # (str) RL policy register name (refer to function "POLICY_REGISTRY").
+        type='alphazero',
         model=dict(
             # (tuple) The stacked obs shape.
             observation_shape=(3, 6, 6),
