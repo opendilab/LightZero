@@ -13,7 +13,7 @@ num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
-sp_prob = 0.8
+sp_prob = 1  # TODO(pu): 0.8
 
 # collector_env_num = 2
 # n_episode = 2
@@ -27,7 +27,7 @@ sp_prob = 0.8
 # ==============================================================
 
 gomoku_alphazero_league_config = dict(
-    exp_name=f"gomoku_alphazero_league_sp-{sp_prob}_seed0",
+    exp_name=f"data_az_ptree_league/gomoku_alphazero_league_sp-{sp_prob}_seed0",
     env=dict(
         env_name="Gomoku",
         board_size=board_size,

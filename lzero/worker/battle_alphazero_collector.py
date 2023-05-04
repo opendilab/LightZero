@@ -222,9 +222,7 @@ class BattleAlphaZeroCollector(ISerialCollector):
         remain_episode = n_episode
 
         while True:
-
             # for policy_id, policy in enumerate(self._policy):
-
             with self._timer:
                 # Get current env obs.
                 obs = self._env.ready_obs
@@ -329,7 +327,7 @@ class BattleAlphaZeroCollector(ISerialCollector):
                     # the eval_episode_return is calculated from Player 1's perspective
                     reward = timestep.info['eval_episode_return']
                     info = {
-                        'reward': reward,  # only means player1 reward
+                        'reward': reward,
                         'time': self._env_info[env_id]['time'],
                         'step': self._env_info[env_id]['step'],
                     }

@@ -10,7 +10,7 @@ num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
-sp_prob = 0.8
+sp_prob = 1
 
 # collector_env_num = 2
 # n_episode = 2
@@ -24,7 +24,7 @@ sp_prob = 0.8
 # ==============================================================
 
 tictactoe_alphazero_league_config = dict(
-    exp_name=f"tictactoe_alphazero_league_sp-{sp_prob}_seed0",
+    exp_name=f"data_az_ptree_league/tictactoe_alphazero_league_sp-{sp_prob}_seed0",
     env=dict(
         board_size=3,
         battle_mode='self_play_mode',

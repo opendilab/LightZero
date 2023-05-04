@@ -125,9 +125,10 @@ class TicTacToeEnv(BaseEnv):
                     action = self.bot_action()
 
             timestep = self._player_step(action)
-            # TODO(pu): check
-            # the eval_episode_return is calculated from Player 1's perspective
-            timestep.info['eval_episode_return'] = timestep.reward if timestep.obs['to_play'] == 1 else -timestep.reward
+            if timestep.done:
+                # TODO(pu): check
+                # the eval_episode_return is calculated from Player 1's perspective
+                timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs['to_play'] == 1 else timestep.reward
             return timestep
         elif self.battle_mode == 'play_with_bot_mode':
             # player 1 battle with expert player 2
