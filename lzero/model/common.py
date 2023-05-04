@@ -209,6 +209,8 @@ class RepresentationNetworkMLP(nn.Module):
         hidden_channels: int = 64,
         layer_num: int = 2,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        output_activation: bool = True,
+        last_linear_layer_init_zero: bool = False,
         norm_type: Optional[str] = 'BN',
     ) -> torch.Tensor:
         """
@@ -224,6 +226,9 @@ class RepresentationNetworkMLP(nn.Module):
                 we don't need this module.
             - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
                 Use the inplace operation to speed up.
+            - output_activation (:obj:`bool`): Whether to use activation function in the last layer, defaults to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to initialize the last linear layer with zeros, \
+                which can provide stable zero outputs in the beginning, defaults to False.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super().__init__()
@@ -234,8 +239,9 @@ class RepresentationNetworkMLP(nn.Module):
             layer_num=layer_num,
             activation=activation,
             norm_type=norm_type,
-            output_activation=activation,
-            output_norm_type=None,
+            output_activation=output_activation,
+            output_norm=False,
+            last_linear_layer_init_zero=last_linear_layer_init_zero,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -311,8 +317,8 @@ class PredictionNetwork(nn.Module):
             layer_num=len(fc_value_layers) + 1,
             activation=self.activation,
             norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
+            output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy = MLP(
@@ -322,11 +328,10 @@ class PredictionNetwork(nn.Module):
             layer_num=len(fc_policy_layers) + 1,
             activation=self.activation,
             norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
+            output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
-
 
     def forward(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -397,8 +402,8 @@ class PredictionNetworkMLP(nn.Module):
             out_channels=self.num_channels,
             layer_num=common_layer_num,
             activation=activation,
-            norm_type=norm_type,
-            output_activation=activation,
+            norm_type='BN',
+            last_linear_layer_init_zero=False,
         )
 
         self.fc_value_head = MLP(
@@ -407,8 +412,9 @@ class PredictionNetworkMLP(nn.Module):
             out_channels=output_support_size,
             layer_num=len(fc_value_layers)+1,
             activation=activation,
-            norm_type=norm_type,
-            output_activation=nn.Identity(),
+            norm_type='BN',
+            output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy_head = MLP(
@@ -417,8 +423,9 @@ class PredictionNetworkMLP(nn.Module):
             out_channels=action_space_size,
             layer_num=len(fc_policy_layers)+1,
             activation=activation,
-            norm_type=norm_type,
-            output_activation=nn.Identity(),
+            norm_type='BN',
+            output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 

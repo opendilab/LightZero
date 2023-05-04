@@ -425,8 +425,6 @@ class DynamicsNetwork(nn.Module):
             out_channels=self.latent_state_dim,
             activation=activation,
             norm_type='BN',
-            output_activation=nn.Identity(),
-            last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
         # input_shape: （sequence_length，batch_size，input_size)
@@ -440,7 +438,7 @@ class DynamicsNetwork(nn.Module):
             out_channels=output_support_size,
             activation=activation,
             norm_type='BN',
-            output_activation=nn.Identity(),
+            output_activation=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
@@ -538,7 +536,7 @@ class PredictionNetworkMLP(nn.Module):
             layer_num=common_layer_num,
             activation=activation,
             norm_type='BN',
-            output_activation=nn.Identity(),
+            output_activation=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
@@ -550,7 +548,7 @@ class PredictionNetworkMLP(nn.Module):
             layer_num=2,
             activation=activation,
             norm_type='BN',
-            output_activation=nn.Identity(),
+            output_activation=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
@@ -574,8 +572,8 @@ class PredictionNetworkMLP(nn.Module):
                 layer_num=2,
                 activation=activation,
                 norm_type=self.norm_type,
-                output_activation=nn.Identity(),
-                output_norm_type=None,
+                output_activation=False,
+                output_norm=False,
                 last_linear_layer_init_zero=last_linear_layer_init_zero
             )
 

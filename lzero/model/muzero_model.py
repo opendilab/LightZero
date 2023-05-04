@@ -421,8 +421,8 @@ class DynamicsNetwork(nn.Module):
             out_channels=output_support_size,
             activation=activation,
             norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
+            output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.activation = activation

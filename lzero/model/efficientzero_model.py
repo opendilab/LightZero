@@ -469,8 +469,8 @@ class DynamicsNetwork(nn.Module):
             layer_num=len(fc_reward_layers) + 1,
             activation=self.activation,
             norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
+            output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 

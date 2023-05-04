@@ -103,13 +103,13 @@ class MuZeroPolicy(Policy):
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
         grad_clip_value=10,
-        # (int) The number of episode in each collecting stage.
+        # (int) The number of episodes in each collecting stage.
         n_episode=8,
         # (int) the number of simulations in MCTS.
         num_simulations=50,
         # (float) Discount factor (gamma) for returns.
         discount_factor=0.997,
-        # (int) The number of step for calculating target q_value.
+        # (int) The number of steps for calculating target q_value.
         td_steps=5,
         # (int) The number of unroll steps in dynamics network.
         num_unroll_steps=5,
