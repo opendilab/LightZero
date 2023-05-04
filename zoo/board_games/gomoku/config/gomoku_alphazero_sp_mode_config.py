@@ -10,7 +10,7 @@ evaluator_env_num = 5
 num_simulations = 50
 update_per_collect = 50
 batch_size = 256
-max_env_step = int(1e6)
+max_env_step = int(5e5)
 prob_random_action_in_bot = 0.5
 
 # debug config
@@ -28,7 +28,7 @@ prob_random_action_in_bot = 0.5
 # ==============================================================
 gomoku_alphazero_config = dict(
     exp_name=
-    f'data_az_ptree/gomoku_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_mtd_cython-la-lru_cython-gdw-lru_deepcopy_seed0',
+    f'data_az_ptree/gomoku_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_mtd_cython-la-lru_cython-gdw-lru_deepcopy_tf32-torch2_seed0',
     env=dict(
         board_size=board_size,
         battle_mode='self_play_mode',
@@ -41,6 +41,10 @@ gomoku_alphazero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        torch_compile=True,
+        tensor_float_32=True,
+        # torch_compile=False,
+        # tensor_float_32=False,
         model=dict(
             observation_shape=(3, board_size, board_size),
             action_space_size=int(1 * board_size * board_size),
@@ -93,14 +97,27 @@ gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
 create_config = gomoku_alphazero_create_config
 
 if __name__ == '__main__':
+    if main_config.policy.tensor_float_32:
+        import torch
+
+        # The flag below controls whether to allow TF32 on matmul. This flag defaults to False
+        # in PyTorch 1.12 and later.
+        torch.backends.cuda.matmul.allow_tf32 = True
+        # The flag below controls whether to allow TF32 on cuDNN. This flag defaults to True.
+        torch.backends.cudnn.allow_tf32 = True
+
     # from lzero.entry import train_alphazero
     # train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
 
     from lzero.entry import train_alphazero
 
+
     def run(max_env_step: int):
         train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
 
+
     import cProfile
 
-    cProfile.run(f"run({500000})", filename="gomoku_az_sp_ctree_cprofile.500k_envstep_mtd_cython-la-lru_cython-gdw_deepcopy", sort="cumulative")
+    cProfile.run(f"run({500000})",
+                 filename="gomoku_az_sp_ctree_cprofile.500k_envstep_mtd_cython-la-lru_cython-gdw_deepcopy_tf32-torch2",
+                 sort="cumulative")

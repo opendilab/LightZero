@@ -124,7 +124,8 @@ class AlphaZeroPolicy(Policy):
         self._learn_model = self._model
 
         # TODO(pu): test the effect of torch 2.0
-        # self._learn_model = torch.compile(self._learn_model)
+        if self._cfg.torch_compile:
+            self._learn_model = torch.compile(self._learn_model)
 
     def _forward_learn(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, float]:
         inputs = default_collate(inputs)
