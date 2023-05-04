@@ -20,6 +20,24 @@ from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_c
     check_action_to_connect4
 
 
+@lru_cache(maxsize=128)
+def _legal_actions_func_lru(board_size, board_tuple):
+    # Convert tuple to NumPy array.
+    board_array = np.array(board_tuple, dtype=np.int32)
+    # Convert NumPy array to memory view.
+    board_view = board_array.view(dtype=np.int32).reshape(board_array.shape)
+    return legal_actions_cython(board_size, board_view)
+
+
+@lru_cache(maxsize=128)
+def _get_done_winner_func_lru(board_size, board_tuple):
+    # Convert tuple to NumPy array.
+    board_array = np.array(board_tuple, dtype=np.int32)
+    # Convert NumPy array to memory view.
+    board_view = board_array.view(dtype=np.int32).reshape(board_array.shape)
+    return get_done_winner_cython(board_size, board_view)
+
+
 @ENV_REGISTRY.register('gomoku')
 class GomokuEnv(BaseEnv):
     config = dict(
@@ -42,6 +60,26 @@ class GomokuEnv(BaseEnv):
         cfg = EasyDict(copy.deepcopy(cls.config))
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
+
+    @property
+    def legal_actions(self):
+        # Convert NumPy arrays to nested tuples to make them hashable.
+        return _legal_actions_func_lru(self.board_size, tuple(map(tuple, self.board)))
+
+    # only for evaluation speed
+    @property
+    def legal_actions_cython(self):
+        return legal_actions_cython(self.board_size, list(self.board))
+
+    # only for evaluation speed
+    @property
+    def legal_actions_cython_lru(self):
+        # Convert NumPy arrays to nested tuples to make them hashable.
+        return _legal_actions_func_lru(self.board_size, tuple(map(tuple, self.board)))
+
+    def get_done_winner(self):
+        # Convert NumPy arrays to nested tuples to make them hashable.
+        return _get_done_winner_func_lru(self.board_size, tuple(map(tuple, self.board)))
 
     def __init__(self, cfg: dict = None):
         self.cfg = cfg
@@ -90,8 +128,8 @@ class GomokuEnv(BaseEnv):
             obs = {
                 'observation': self.current_state()[1],
                 'action_mask': action_mask,
-                # 'board': copy.deepcopy(self.board),
-                'board': self.board,  # TODO(pu): check correctness
+                'board': copy.deepcopy(self.board),
+                # 'board': self.board,  # TODO(pu): check correctness
                 'current_player_index': self.start_player_index,
                 'to_play': -1
             }
@@ -101,8 +139,8 @@ class GomokuEnv(BaseEnv):
             obs = {
                 'observation': self.current_state()[1],
                 'action_mask': action_mask,
-                # 'board': copy.deepcopy(self.board),
-                'board': self.board,  # TODO(pu): check correctness
+                'board': copy.deepcopy(self.board),
+                # 'board': self.board,  # TODO(pu): check correctness
                 'current_player_index': self.start_player_index,
                 'to_play': self.current_player
             }
@@ -221,8 +259,8 @@ class GomokuEnv(BaseEnv):
         obs = {
             'observation': self.current_state()[1],
             'action_mask': action_mask,
-            # 'board': copy.deepcopy(self.board),
-            'board': self.board,  # TODO(pu): check correctness
+            'board': copy.deepcopy(self.board),
+            # 'board': self.board,  # TODO(pu): check correctness
             'current_player_index': self.players.index(self.current_player),
             'to_play': self.current_player
         }
@@ -243,14 +281,14 @@ class GomokuEnv(BaseEnv):
         board_opponent_player = np.where(self.board == self.to_play, 1, 0)
         board_to_play = np.full((self.board_size, self.board_size), self.current_player)
         raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
-        # if self.scale:
-        #     scale_obs = copy.deepcopy(raw_obs / 2)
-        # else:
-        #     scale_obs = copy.deepcopy(raw_obs)
         if self.scale:
-            scale_obs = raw_obs / 2  # TODO(pu): check correctness
+            scale_obs = copy.deepcopy(raw_obs / 2)
         else:
-            scale_obs = raw_obs
+            scale_obs = copy.deepcopy(raw_obs)
+        # if self.scale:
+        #     scale_obs = raw_obs / 2  # TODO(pu): check correctness
+        # else:
+        #     scale_obs = raw_obs
 
         if self.channel_last:
             # move channel dim to last axis
@@ -260,11 +298,6 @@ class GomokuEnv(BaseEnv):
         else:
             # (C, W, H) e.g. (3, 6, 6)
             return raw_obs, scale_obs
-
-    # TODO(pu): why ValueError: 'a' cannot be empty unless no samples are taken
-    # @lru_cache(maxsize=128)
-    def get_done_winner(self):
-        return get_done_winner_cython(self.board_size, self.board)
 
     def get_done_reward(self):
         """
@@ -289,25 +322,6 @@ class GomokuEnv(BaseEnv):
             # episode is not done
             reward = None
         return done, reward
-
-    # TODO(pu): why have bug when use lru_cache in simulate_action_v2() method in alpha_beta_pruning_bot.py
-    @property
-    def legal_actions(self):
-        return self.legal_actions_func_lru()
-
-    # only for evaluation speed
-    @property
-    def legal_actions_cython(self):
-        return legal_actions_cython(self.board_size, list(self.board))
-
-    # only for evaluation speed
-    @property
-    def legal_actions_cython_lru(self):
-        return self.legal_actions_func_lru()
-
-    @lru_cache(maxsize=128)
-    def legal_actions_func_lru(self):
-        return legal_actions_cython(self.board_size, list(self.board))
 
     def random_action(self):
         action_list = self.legal_actions

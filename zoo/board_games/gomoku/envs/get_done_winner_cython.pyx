@@ -3,7 +3,6 @@ cimport cython
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-# cpdef tuple[int32_t, int32_t] get_done_winner_cython(int32_t board_size, int32_t[:, :] board):
 cpdef get_done_winner_cython(int32_t board_size, int32_t[:, :] board):
     """
     Overview:
@@ -20,7 +19,6 @@ cpdef get_done_winner_cython(int32_t board_size, int32_t[:, :] board):
     """
     cdef int32_t i, j, player, x, y, count
     cdef bint has_legal_actions = False
-    # cdef tuple[int32_t, int32_t] directions = ((1, -1), (1, 0), (1, 1), (0, 1))
     cdef directions = ((1, -1), (1, 0), (1, 1), (0, 1))
 
 

@@ -15,6 +15,24 @@ from zoo.board_games.tictactoe.envs.legal_actions_cython import legal_actions_cy
 from zoo.board_games.tictactoe.envs.get_done_winner_cython import get_done_winner_cython
 
 
+@lru_cache(maxsize=128)
+def _legal_actions_func_lru(board_tuple):
+    # Convert tuple to NumPy array.
+    board_array = np.array(board_tuple, dtype=np.int32)
+    # Convert NumPy array to memory view.
+    board_view = board_array.view(dtype=np.int32).reshape(board_array.shape)
+    return legal_actions_cython(board_view)
+
+
+@lru_cache(maxsize=128)
+def _get_done_winner_func_lru(board_tuple):
+    # Convert tuple to NumPy array.
+    board_array = np.array(board_tuple, dtype=np.int32)
+    # Convert NumPy array to memory view.
+    board_view = board_array.view(dtype=np.int32).reshape(board_array.shape)
+    return get_done_winner_cython(board_view)
+
+
 @ENV_REGISTRY.register('tictactoe')
 class TicTacToeEnv(BaseEnv):
     config = dict(
@@ -59,10 +77,10 @@ class TicTacToeEnv(BaseEnv):
         if 'alpha_beta_pruning' in self.bot_action_type:
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 
-    # TODO(pu): why have bug when use lru_cache in simulate_action_v2() method in alpha_beta_pruning_bot.py
     @property
     def legal_actions(self):
-        return self.legal_actions_func_lru()
+        # Convert NumPy arrays to nested tuples to make them hashable.
+        return _legal_actions_func_lru(tuple(map(tuple, self.board)))
 
     # only for evaluation speed
     @property
@@ -72,11 +90,12 @@ class TicTacToeEnv(BaseEnv):
     # only for evaluation speed
     @property
     def legal_actions_cython_lru(self):
-        return self.legal_actions_func_lru()
+        # Convert NumPy arrays to nested tuples to make them hashable.
+        return _legal_actions_func_lru(tuple(map(tuple, self.board)))
 
-    @lru_cache(maxsize=128)
-    def legal_actions_func_lru(self):
-        return legal_actions_cython(list(self.board))
+    def get_done_winner(self):
+        # Convert NumPy arrays to nested tuples to make them hashable.
+        return _get_done_winner_func_lru(tuple(map(tuple, self.board)))
 
     def reset(self, start_player_index=0, init_state=None):
         """
@@ -272,11 +291,6 @@ class TicTacToeEnv(BaseEnv):
         else:
             # (C, W, H)
             return raw_obs, scale_obs
-
-    # TODO(pu): why ValueError: 'a' cannot be empty unless no samples are taken
-    # @lru_cache(maxsize=128)
-    def get_done_winner(self):
-        return get_done_winner_cython(self.board)
 
     def get_done_reward(self):
         """
