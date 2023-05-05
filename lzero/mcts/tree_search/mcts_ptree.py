@@ -118,9 +118,9 @@ class EfficientZeroMCTSPtree(object):
                 # prepare a result wrapper to transport results between python and c++ parts
                 results = tree.SearchResults(num=batch_size)
 
-                # latent_state_index_in_search_path: the first index of leaf node states in latent_state_batch_in_search_path, i.e. is simulation_index in one the search.
+                # latent_state_index_in_search_path: the first index of leaf node states in latent_state_batch_in_search_path, i.e. is current_latent_state_index in one the search.
                 # latent_state_index_in_batch: the second index of leaf node states in latent_state_batch_in_search_path, i.e. the index in the batch, whose maximum is ``batch_size``.
-                # e.g. the latent state of the leaf node in (x, y) is latent_state_batch_in_search_path[x, y], where x is simulation_index, y is batch_index.
+                # e.g. the latent state of the leaf node in (x, y) is latent_state_batch_in_search_path[x, y], where x is current_latent_state_index, y is batch_index.
                 # The index of value prefix hidden state of the leaf node are in the same manner.
 
                 """
@@ -193,8 +193,11 @@ class EfficientZeroMCTSPtree(object):
                 # In ``batch_backpropagate()``, we first expand the leaf node using ``the policy_logits`` and 
                 # ``reward`` predicted by the model, then perform backpropagation along the search path to update the
                 # statistics.
+
+                # NOTE: simulation_index + 1 is very important, which is the depth of the current leaf node.
+                current_latent_state_index = simulation_index + 1
                 tree.batch_backpropagate(
-                    simulation_index, discount_factor, value_prefix_batch, value_batch, policy_logits_batch,
+                    current_latent_state_index, discount_factor, value_prefix_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, is_reset_list, virtual_to_play
                 )
 
@@ -296,7 +299,7 @@ class MuZeroMCTSPtree(object):
 
                 # latent_state_index_in_search_path: The first index of the latent state corresponding to the leaf node in latent_state_batch_in_search_path, that is, the search depth. 
                 # latent_state_index_in_batch: The second index of the latent state corresponding to the leaf node in latent_state_batch_in_search_path, i.e. the index in the batch, whose maximum is ``batch_size``. 
-                # e.g. the latent state of the leaf node in (x, y) is latent_state_batch_in_search_path[x, y], where x is simulation_index, y is batch_index.
+                # e.g. the latent state of the leaf node in (x, y) is latent_state_batch_in_search_path[x, y], where x is current_latent_state_index, y is batch_index.
 
                 """
                 MCTS stage 1: Selection
@@ -343,7 +346,10 @@ class MuZeroMCTSPtree(object):
                 # In ``batch_backpropagate()``, we first expand the leaf node using ``the policy_logits`` and 
                 # ``reward`` predicted by the model, then perform backpropagation along the search path to update the
                 # statistics.
+
+                # NOTE: simulation_index + 1 is very important, which is the depth of the current leaf node.
+                current_latent_state_index = simulation_index + 1
                 tree_muzero.batch_backpropagate(
-                    simulation_index, discount_factor, reward_batch, value_batch, policy_logits_batch,
+                    current_latent_state_index, discount_factor, reward_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, virtual_to_play
                 )
