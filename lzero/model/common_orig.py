@@ -237,11 +237,9 @@ class RepresentationNetworkMLP(nn.Module):
             layer_num=layer_num,
             activation=activation,
             norm_type=norm_type,
-            # output_activation=nn.Identity(),
-            # output_norm_type=None,
             output_activation=False,
             output_norm=False,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
+            last_linear_layer_init_zero=last_linear_layer_init_zero,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -317,8 +315,8 @@ class PredictionNetwork(nn.Module):
             layer_num=len(fc_value_layers) + 1,
             activation=self.activation,
             norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
+            output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy = MLP(
@@ -328,11 +326,10 @@ class PredictionNetwork(nn.Module):
             layer_num=len(fc_policy_layers) + 1,
             activation=self.activation,
             norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
+            output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
-
 
     def forward(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -375,6 +372,7 @@ class PredictionNetworkMLP(nn.Module):
         output_support_size: int = 601,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        norm_type: Optional[str] = 'BN',
     ):
         """
         Overview:
@@ -391,6 +389,7 @@ class PredictionNetworkMLP(nn.Module):
                 dynamics/prediction mlp, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super().__init__()
         self.num_channels = num_channels
@@ -402,10 +401,9 @@ class PredictionNetworkMLP(nn.Module):
             layer_num=common_layer_num,
             activation=activation,
             norm_type='BN',
-            output_activation=nn.Identity(),
-            last_linear_layer_init_zero=last_linear_layer_init_zero
+            output_activation=False,
+            last_linear_layer_init_zero=last_linear_layer_init_zero,
         )
-        self.activation = activation
 
         self.fc_value_head = MLP(
             in_channels=self.num_channels,
@@ -414,7 +412,9 @@ class PredictionNetworkMLP(nn.Module):
             layer_num=len(fc_value_layers)+1,
             activation=activation,
             norm_type='BN',
-            output_activation=nn.Identity(),
+            output_activation=False,
+            # TODO(pu): check
+            output_norm=True,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy_head = MLP(
@@ -424,7 +424,9 @@ class PredictionNetworkMLP(nn.Module):
             layer_num=len(fc_policy_layers)+1,
             activation=activation,
             norm_type='BN',
-            output_activation=nn.Identity(),
+            output_activation=False,
+            # TODO(pu): check
+            output_norm=True,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 

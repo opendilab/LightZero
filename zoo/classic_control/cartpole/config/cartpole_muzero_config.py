@@ -17,7 +17,7 @@ reanalyze_ratio = 0
 
 cartpole_muzero_config = dict(
     # exp_name=f'data_mz_ctree/cartpole_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_conv_sgd02_seed0',
-    exp_name=f'data_mz_ctree/cartpole_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_mlp_adamw3e-3_seed0',
+    exp_name=f'data_mz_ctree/cartpole_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_mlp_adam3e-3_seed0',
 
     env=dict(
         env_name='CartPole-v0',
@@ -52,7 +52,7 @@ cartpole_muzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
 
-        optim_type='AdamW',
+        optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
 
