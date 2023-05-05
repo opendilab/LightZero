@@ -16,7 +16,9 @@ reanalyze_ratio = 0
 # ==============================================================
 
 cartpole_muzero_config = dict(
-    exp_name=f'data_mz_ctree/cartpole_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    # exp_name=f'data_mz_ctree/cartpole_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_conv_sgd02_seed0',
+    exp_name=f'data_mz_ctree/cartpole_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_mlp_adamw3e-3_seed0',
+
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -30,20 +32,34 @@ cartpole_muzero_config = dict(
         model=dict(
             observation_shape=4,
             action_space_size=2,
+
             model_type='mlp',  # options={'mlp', 'conv'}
+
+            # model_type='conv',  # options={'mlp', 'conv'}
+            # num_res_blocks=1,
+            # num_channels=16,
+            # fc_value_layers=[8],
+            # fc_policy_layers=[8],
+
             lstm_hidden_size=128,
             latent_state_dim=128,
             self_supervised_learning_loss=True,  # NOTE: default is False.
-            discrete_action_encoding_type='not_one_hot',
+            discrete_action_encoding_type='one_hot',
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
+
+        optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
+
+        # optim_type='SGD',
+        # lr_piecewise_constant_decay=True,
+        # learning_rate=0.2,
+
         ssl_loss_weight=2,  # NOTE: default is 0.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

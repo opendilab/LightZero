@@ -209,8 +209,7 @@ class RepresentationNetworkMLP(nn.Module):
         hidden_channels: int = 64,
         layer_num: int = 2,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-        output_activation: bool = True,
-        last_linear_layer_init_zero: bool = False,
+        last_linear_layer_init_zero: bool = True,
         norm_type: Optional[str] = 'BN',
     ) -> torch.Tensor:
         """
@@ -226,9 +225,8 @@ class RepresentationNetworkMLP(nn.Module):
                 we don't need this module.
             - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
                 Use the inplace operation to speed up.
-            - output_activation (:obj:`bool`): Whether to use activation function in the last layer, defaults to True.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to initialize the last linear layer with zeros, \
-                which can provide stable zero outputs in the beginning, defaults to False.
+                which can provide stable zero outputs in the beginning, defaults to True.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super().__init__()
@@ -239,7 +237,7 @@ class RepresentationNetworkMLP(nn.Module):
             layer_num=layer_num,
             activation=activation,
             norm_type=norm_type,
-            output_activation=output_activation,
+            output_activation=False,
             output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero,
         )
@@ -403,7 +401,8 @@ class PredictionNetworkMLP(nn.Module):
             layer_num=common_layer_num,
             activation=activation,
             norm_type='BN',
-            last_linear_layer_init_zero=False,
+            output_activation=False,
+            last_linear_layer_init_zero=last_linear_layer_init_zero,
         )
 
         self.fc_value_head = MLP(
@@ -414,7 +413,8 @@ class PredictionNetworkMLP(nn.Module):
             activation=activation,
             norm_type='BN',
             output_activation=False,
-            output_norm=False,
+            # TODO(pu): check
+            output_norm=True,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy_head = MLP(
@@ -425,7 +425,8 @@ class PredictionNetworkMLP(nn.Module):
             activation=activation,
             norm_type='BN',
             output_activation=False,
-            output_norm=False,
+            # TODO(pu): check
+            output_norm=True,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
