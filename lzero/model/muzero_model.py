@@ -421,9 +421,9 @@ class DynamicsNetwork(nn.Module):
             out_channels=output_support_size,
             activation=activation,
             norm_type='BN',
-            output_activation=False,
             # TODO(pu): check
-            output_norm=True,
+            output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.activation = activation
@@ -440,7 +440,7 @@ class DynamicsNetwork(nn.Module):
                     height, width).
             - reward (:obj:`torch.Tensor`): The predicted reward, with shape (batch_size, output_support_size).
          """
-        # take the state encoding (latent_state),  state_action_encoding[:, -1, :, :] is action encoding
+        # take the state encoding (latent_state), state_action_encoding[:, -1, :, :] is action encoding
         latent_state = state_action_encoding[:, :-1, :, :]
         x = self.conv(state_action_encoding)
         x = self.bn(x)

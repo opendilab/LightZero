@@ -16,7 +16,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 lunarlander_muzero_config = dict(
-    exp_name=f'data_mz_ctree/lunarlander_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_mz_ctree/lunarlander_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_mlp_adam3e-3_rcid-true_seed0',
     env=dict(
         env_name='LunarLander-v2',
         continuous=False,
@@ -35,15 +35,16 @@ lunarlander_muzero_config = dict(
             latent_state_dim=256,
             self_supervised_learning_loss=True,  # NOTE: default is False.
             discrete_action_encoding_type='one_hot',
+            res_connection_in_dynamics=True,
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
+        learning_rate=0.003,
         ssl_loss_weight=2,  # NOTE: default is 0.
         grad_clip_value=0.5,
         num_simulations=num_simulations,

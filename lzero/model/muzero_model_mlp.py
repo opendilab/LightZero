@@ -32,6 +32,7 @@ class MuZeroModelMLP(nn.Module):
         last_linear_layer_init_zero: bool = True,
         state_norm: bool = False,
         discrete_action_encoding_type: str = 'one_hot',
+        res_connection_in_dynamics: bool = False,
         *args,
         **kwargs
     ):
@@ -62,6 +63,7 @@ class MuZeroModelMLP(nn.Module):
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
             - state_norm (:obj:`bool`): Whether to use normalization for latent states, default set it to True.
             - discrete_action_encoding_type (:obj:`str`): The encoding type of discrete action, which can be 'one_hot' or 'not_one_hot'.
+            - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection for dynamics network, default set it to False.
         """
         super(MuZeroModelMLP, self).__init__()
         self.categorical_distribution = categorical_distribution
@@ -95,7 +97,8 @@ class MuZeroModelMLP(nn.Module):
         self.self_supervised_learning_loss = self_supervised_learning_loss
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
-
+        self.res_connection_in_dynamics = res_connection_in_dynamics
+        
         self.representation_network = RepresentationNetworkMLP(
             observation_shape=observation_shape, hidden_channels=self.latent_state_dim
         )
@@ -107,6 +110,7 @@ class MuZeroModelMLP(nn.Module):
             fc_reward_layers=fc_reward_layers,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            res_connection_in_dynamics=self.res_connection_in_dynamics,
         )
 
         self.prediction_network = PredictionNetworkMLP(
@@ -327,6 +331,7 @@ class DynamicsNetwork(nn.Module):
         output_support_size: int = 601,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        res_connection_in_dynamics: bool = False,
     ):
         """
         Overview:
@@ -342,24 +347,52 @@ class DynamicsNetwork(nn.Module):
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
+            - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection in dynamics network.
         """
         super().__init__()
         self.num_channels = num_channels
         self.action_encoding_dim = action_encoding_dim
         self.latent_state_dim = self.num_channels - self.action_encoding_dim
 
-        self.fc_dynamics = MLP(
-            in_channels=self.num_channels,
-            hidden_channels=self.latent_state_dim,
-            layer_num=common_layer_num,
-            out_channels=self.latent_state_dim,
-            activation=activation,
-            norm_type='BN',
-            # TODO(pu): check
-            output_activation=True,
-            output_norm=True,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
+        self.res_connection_in_dynamics = res_connection_in_dynamics
+        if self.res_connection_in_dynamics:
+            self.fc_dynamics_1 = MLP(
+                in_channels=self.num_channels,
+                hidden_channels=self.latent_state_dim,
+                layer_num=common_layer_num,
+                out_channels=self.latent_state_dim,
+                activation=activation,
+                norm_type='BN',
+                # TODO(pu): check
+                output_activation=True,
+                output_norm=True,
+                last_linear_layer_init_zero=last_linear_layer_init_zero
+            )
+            self.fc_dynamics_2 = MLP(
+                in_channels=self.latent_state_dim,
+                hidden_channels=self.latent_state_dim,
+                layer_num=common_layer_num,
+                out_channels=self.latent_state_dim,
+                activation=activation,
+                norm_type='BN',
+                # TODO(pu): check
+                output_activation=True,
+                output_norm=True,
+                last_linear_layer_init_zero=last_linear_layer_init_zero
+            )
+        else:
+            self.fc_dynamics = MLP(
+                in_channels=self.num_channels,
+                hidden_channels=self.latent_state_dim,
+                layer_num=common_layer_num,
+                out_channels=self.latent_state_dim,
+                activation=activation,
+                norm_type='BN',
+                # TODO(pu): check
+                output_activation=True,
+                output_norm=True,
+                last_linear_layer_init_zero=last_linear_layer_init_zero
+            )
 
         self.fc_reward_head = MLP(
             in_channels=self.latent_state_dim,
@@ -385,8 +418,19 @@ class DynamicsNetwork(nn.Module):
             - next_latent_state (:obj:`torch.Tensor`): The next latent state, with shape (batch_size, latent_state_dim).
             - reward (:obj:`torch.Tensor`): The predicted reward for input state.
         """
-        next_latent_state = self.fc_dynamics(state_action_encoding)
-        reward = self.fc_reward_head(next_latent_state)
+        if self.res_connection_in_dynamics:
+            # take the state encoding (latent_state), state_action_encoding[:, -self.action_encoding_dim]
+            # is action encoding
+            latent_state = state_action_encoding[:, :-self.action_encoding_dim]
+            x = self.fc_dynamics_1(state_action_encoding)
+            # the residual link: add state encoding to the state_action encoding
+            next_latent_state = x + latent_state
+            next_latent_state_ = self.fc_dynamics_2(next_latent_state)
+        else:
+            next_latent_state = self.fc_dynamics(state_action_encoding)
+            next_latent_state_ = next_latent_state
+
+        reward = self.fc_reward_head(next_latent_state_)
         return next_latent_state, reward
 
     def get_dynamic_mean(self) -> float:
