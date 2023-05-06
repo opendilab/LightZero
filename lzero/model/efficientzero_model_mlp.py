@@ -32,8 +32,9 @@ class EfficientZeroModelMLP(nn.Module):
         last_linear_layer_init_zero: bool = True,
         state_norm: bool = False,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-        discrete_action_encoding_type: str = 'not_one_hot',
         norm_type: Optional[str] = 'BN',
+        discrete_action_encoding_type: str = 'one_hot',
+        res_connection_in_dynamics: bool = False,
         *args,
         **kwargs,
     ):
@@ -67,6 +68,7 @@ class EfficientZeroModelMLP(nn.Module):
                 operation to speedup, e.g. ReLU(inplace=True).
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. default set it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+            - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection for dynamics network, default set it to False.
         """
         super(EfficientZeroModelMLP, self).__init__()
         if not categorical_distribution:
@@ -96,9 +98,10 @@ class EfficientZeroModelMLP(nn.Module):
         self.proj_out = proj_out
         self.pred_hid = pred_hid
         self.pred_out = pred_out
+        self.self_supervised_learning_loss = self_supervised_learning_loss
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
-        self.self_supervised_learning_loss = self_supervised_learning_loss
+        self.res_connection_in_dynamics = res_connection_in_dynamics
 
         self.representation_network = RepresentationNetworkMLP(
             observation_shape=observation_shape, hidden_channels=latent_state_dim, norm_type=norm_type
@@ -112,7 +115,8 @@ class EfficientZeroModelMLP(nn.Module):
             fc_reward_layers=fc_reward_layers,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            norm_type=norm_type
+            norm_type=norm_type,
+            res_connection_in_dynamics=self.res_connection_in_dynamics,
         )
 
         self.prediction_network = PredictionNetworkMLP(
@@ -345,6 +349,7 @@ class DynamicsNetwork(nn.Module):
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
         norm_type: Optional[str] = 'BN',
+        res_connection_in_dynamics: bool = False,
     ):
         """
         Overview:
@@ -362,6 +367,7 @@ class DynamicsNetwork(nn.Module):
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+            - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection in dynamics network.
         """
         super().__init__()
         self.num_channels = num_channels
@@ -369,15 +375,47 @@ class DynamicsNetwork(nn.Module):
         self.latent_state_dim = self.num_channels - self.action_encoding_dim
         self.lstm_hidden_size = lstm_hidden_size
         self.activation = activation
+        self.res_connection_in_dynamics = res_connection_in_dynamics
 
-        self.fc_dynamics = MLP(
-            in_channels=self.num_channels,
-            hidden_channels=self.latent_state_dim,
-            layer_num=common_layer_num,
-            out_channels=self.latent_state_dim,
-            activation=self.activation,
-            norm_type='BN',
-        )
+        if self.res_connection_in_dynamics:
+            self.fc_dynamics_1 = MLP(
+                in_channels=self.num_channels,
+                hidden_channels=self.latent_state_dim,
+                layer_num=common_layer_num,
+                out_channels=self.latent_state_dim,
+                activation=activation,
+                norm_type=norm_type,
+                output_activation=True,
+                output_norm=True,
+                # last_linear_layer_init_zero=False is important for convergence
+                last_linear_layer_init_zero=False,
+            )
+            self.fc_dynamics_2 = MLP(
+                in_channels=self.latent_state_dim,
+                hidden_channels=self.latent_state_dim,
+                layer_num=common_layer_num,
+                out_channels=self.latent_state_dim,
+                activation=activation,
+                norm_type=norm_type,
+                output_activation=True,
+                output_norm=True,
+                # last_linear_layer_init_zero=False is important for convergence
+                last_linear_layer_init_zero=False,
+
+            )
+        else:
+            self.fc_dynamics = MLP(
+                in_channels=self.num_channels,
+                hidden_channels=self.latent_state_dim,
+                layer_num=common_layer_num,
+                out_channels=self.latent_state_dim,
+                activation=activation,
+                norm_type=norm_type,
+                output_activation=True,
+                output_norm=True,
+                # last_linear_layer_init_zero=False is important for convergence
+                last_linear_layer_init_zero=False,
+            )
 
         # input_shape: （sequence_length，batch_size，input_size)
         # output_shape: (sequence_length, batch_size, hidden_size)
@@ -389,7 +427,7 @@ class DynamicsNetwork(nn.Module):
             layer_num=2,
             out_channels=output_support_size,
             activation=self.activation,
-            norm_type='BN',
+            norm_type=norm_type,
             output_activation=False,
             output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
@@ -408,8 +446,19 @@ class DynamicsNetwork(nn.Module):
             - next_reward_hidden_state (:obj:`torch.Tensor`): The input hidden state of LSTM about reward.
             - value_prefix (:obj:`torch.Tensor`): The predicted prefix sum of value for input state.
         """
-        next_latent_state = self.fc_dynamics(state_action_encoding)
-        next_latent_state_unsqueeze = next_latent_state.unsqueeze(0)
+        if self.res_connection_in_dynamics:
+            # take the state encoding (latent_state), state_action_encoding[:, -self.action_encoding_dim]
+            # is action encoding
+            latent_state = state_action_encoding[:, :-self.action_encoding_dim]
+            x = self.fc_dynamics_1(state_action_encoding)
+            # the residual link: add state encoding to the state_action encoding
+            next_latent_state = x + latent_state
+            next_latent_state_ = self.fc_dynamics_2(next_latent_state)
+        else:
+            next_latent_state = self.fc_dynamics(state_action_encoding)
+            next_latent_state_ = next_latent_state
+
+        next_latent_state_unsqueeze = next_latent_state_.unsqueeze(0)
         value_prefix, next_reward_hidden_state = self.lstm(next_latent_state_unsqueeze, reward_hidden_state)
         value_prefix = self.fc_reward_head(value_prefix.squeeze(0))
 

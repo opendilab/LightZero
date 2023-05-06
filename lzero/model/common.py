@@ -61,7 +61,7 @@ class DownSample(nn.Module):
         self.resblocks1 = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=out_channels // 2, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=out_channels // 2, activation=activation, norm_type=norm_type, res_type='basic', bias=False
                 ) for _ in range(1)
             ]
         )
@@ -77,20 +77,20 @@ class DownSample(nn.Module):
             in_channels=out_channels // 2,
             out_channels=out_channels,
             activation=activation,
-            norm_type='BN',
+            norm_type=norm_type,
             res_type='downsample',
             bias=False
         )
         self.resblocks2 = nn.ModuleList(
             [
-                ResBlock(in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                ResBlock(in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False)
                 for _ in range(1)
             ]
         )
         self.pooling1 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
         self.resblocks3 = nn.ModuleList(
             [
-                ResBlock(in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                ResBlock(in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False)
                 for _ in range(1)
             ]
         )
@@ -237,10 +237,11 @@ class RepresentationNetworkMLP(nn.Module):
             layer_num=layer_num,
             activation=activation,
             norm_type=norm_type,
-            # TODO(pu): check
-            output_activation=True,
-            output_norm=True,
-            last_linear_layer_init_zero=last_linear_layer_init_zero,
+            # don't use activation and norm in the last layer of representation network is important for convergence.
+            output_activation=False,
+            output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
+            last_linear_layer_init_zero=True,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -296,7 +297,7 @@ class PredictionNetwork(nn.Module):
 
         self.resblocks = nn.ModuleList(
             [
-                ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                ResBlock(in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False)
                 for _ in range(num_res_blocks)
             ]
         )
@@ -315,9 +316,10 @@ class PredictionNetwork(nn.Module):
             out_channels=output_support_size,
             layer_num=len(fc_value_layers) + 1,
             activation=self.activation,
-            norm_type='BN',
+            norm_type=norm_type,
             output_activation=False,
             output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy = MLP(
@@ -326,9 +328,10 @@ class PredictionNetwork(nn.Module):
             out_channels=action_space_size,
             layer_num=len(fc_policy_layers) + 1,
             activation=self.activation,
-            norm_type='BN',
+            norm_type=norm_type,
             output_activation=False,
             output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
@@ -401,11 +404,11 @@ class PredictionNetworkMLP(nn.Module):
             out_channels=self.num_channels,
             layer_num=common_layer_num,
             activation=activation,
-            norm_type='BN',
-            # TODO(pu): check
+            norm_type=norm_type,
             output_activation=True,
             output_norm=True,
-            last_linear_layer_init_zero=last_linear_layer_init_zero,
+            # last_linear_layer_init_zero=False is important for convergence
+            last_linear_layer_init_zero=False,
         )
 
         self.fc_value_head = MLP(
@@ -414,10 +417,10 @@ class PredictionNetworkMLP(nn.Module):
             out_channels=output_support_size,
             layer_num=len(fc_value_layers)+1,
             activation=activation,
-            norm_type='BN',
-            # TODO(pu): check
+            norm_type=norm_type,
             output_activation=False,
             output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy_head = MLP(
@@ -426,10 +429,10 @@ class PredictionNetworkMLP(nn.Module):
             out_channels=action_space_size,
             layer_num=len(fc_policy_layers)+1,
             activation=activation,
-            norm_type='BN',
-            # TODO(pu): check
+            norm_type=norm_type,
             output_activation=False,
             output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 

@@ -32,6 +32,7 @@ class MuZeroModelMLP(nn.Module):
         last_linear_layer_init_zero: bool = True,
         state_norm: bool = False,
         discrete_action_encoding_type: str = 'one_hot',
+        norm_type: Optional[str] = 'BN',
         res_connection_in_dynamics: bool = False,
         *args,
         **kwargs
@@ -63,6 +64,7 @@ class MuZeroModelMLP(nn.Module):
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
             - state_norm (:obj:`bool`): Whether to use normalization for latent states, default set it to True.
             - discrete_action_encoding_type (:obj:`str`): The encoding type of discrete action, which can be 'one_hot' or 'not_one_hot'.
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection for dynamics network, default set it to False.
         """
         super(MuZeroModelMLP, self).__init__()
@@ -100,7 +102,7 @@ class MuZeroModelMLP(nn.Module):
         self.res_connection_in_dynamics = res_connection_in_dynamics
         
         self.representation_network = RepresentationNetworkMLP(
-            observation_shape=observation_shape, hidden_channels=self.latent_state_dim
+            observation_shape=observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
         )
 
         self.dynamics_network = DynamicsNetwork(
@@ -110,6 +112,7 @@ class MuZeroModelMLP(nn.Module):
             fc_reward_layers=fc_reward_layers,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            norm_type=norm_type,
             res_connection_in_dynamics=self.res_connection_in_dynamics,
         )
 
@@ -120,6 +123,7 @@ class MuZeroModelMLP(nn.Module):
             fc_policy_layers=fc_policy_layers,
             output_support_size=self.value_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            norm_type=norm_type
         )
 
         if self.self_supervised_learning_loss:
@@ -331,6 +335,7 @@ class DynamicsNetwork(nn.Module):
         output_support_size: int = 601,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        norm_type: Optional[str] = 'BN',
         res_connection_in_dynamics: bool = False,
     ):
         """
@@ -347,6 +352,7 @@ class DynamicsNetwork(nn.Module):
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection in dynamics network.
         """
         super().__init__()
@@ -362,11 +368,11 @@ class DynamicsNetwork(nn.Module):
                 layer_num=common_layer_num,
                 out_channels=self.latent_state_dim,
                 activation=activation,
-                norm_type='BN',
-                # TODO(pu): check
+                norm_type=norm_type,
                 output_activation=True,
                 output_norm=True,
-                last_linear_layer_init_zero=last_linear_layer_init_zero
+                # last_linear_layer_init_zero=False is important for convergence
+                last_linear_layer_init_zero=False,
             )
             self.fc_dynamics_2 = MLP(
                 in_channels=self.latent_state_dim,
@@ -374,11 +380,12 @@ class DynamicsNetwork(nn.Module):
                 layer_num=common_layer_num,
                 out_channels=self.latent_state_dim,
                 activation=activation,
-                norm_type='BN',
-                # TODO(pu): check
+                norm_type=norm_type,
                 output_activation=True,
                 output_norm=True,
-                last_linear_layer_init_zero=last_linear_layer_init_zero
+                # last_linear_layer_init_zero=False is important for convergence
+                last_linear_layer_init_zero=False,
+
             )
         else:
             self.fc_dynamics = MLP(
@@ -387,11 +394,11 @@ class DynamicsNetwork(nn.Module):
                 layer_num=common_layer_num,
                 out_channels=self.latent_state_dim,
                 activation=activation,
-                norm_type='BN',
-                # TODO(pu): check
+                norm_type=norm_type,
                 output_activation=True,
                 output_norm=True,
-                last_linear_layer_init_zero=last_linear_layer_init_zero
+                # last_linear_layer_init_zero=False is important for convergence
+                last_linear_layer_init_zero=False,
             )
 
         self.fc_reward_head = MLP(
@@ -400,8 +407,7 @@ class DynamicsNetwork(nn.Module):
             layer_num=2,
             out_channels=output_support_size,
             activation=activation,
-            norm_type='BN',
-            # TODO(pu): check
+            norm_type=norm_type,
             output_activation=False,
             output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
