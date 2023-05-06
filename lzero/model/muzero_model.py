@@ -422,7 +422,8 @@ class DynamicsNetwork(nn.Module):
             activation=activation,
             norm_type='BN',
             output_activation=False,
-            output_norm=False,
+            # TODO(pu): check
+            output_norm=True,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.activation = activation
