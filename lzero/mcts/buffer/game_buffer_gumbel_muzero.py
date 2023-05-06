@@ -131,7 +131,7 @@ class GumbelMuZeroGameBuffer(GameBuffer):
                 for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
             ]
             _new_policy += [
-                np.random.rand(game.new_policy_probs)
+                np.random.rand(game.action_space_size)
                 for _ in range(self._cfg.num_unroll_steps + 1 - len(_new_policy))
             ]
 

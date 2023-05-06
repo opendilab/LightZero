@@ -41,7 +41,7 @@ namespace tree{
 //        this->value_prefix = 0.0;
         this->reward = 0.0;
 //        this->parent_value_prefix = 0.0;
-        this->gumbel_scale = 10.0;
+        this->gumbel_scale = 1.0;
         this->gumbel_rng=0.0;
     }
 
@@ -58,7 +58,7 @@ namespace tree{
 //        this->parent_value_prefix = 0.0;
         this->hidden_state_index_x = -1;
         this->hidden_state_index_y = -1;
-        this->gumbel_scale = 10.0;
+        this->gumbel_scale = 1.0;
         this->gumbel_rng=0.0;
 
         this->gumbel = generate_gumbel(this->gumbel_scale, this->gumbel_rng, legal_actions.size());
@@ -378,49 +378,19 @@ namespace tree{
     }
 
     void cback_propagate(std::vector<CNode*> &search_path, tools::CMinMaxStats &min_max_stats, int to_play, float value, float discount){
-        assert(to_play == -1 || to_play == 1);
-        if(to_play == -1){
-            float bootstrap_value = value;
-            int path_len = search_path.size();
-            for(int i = path_len - 1; i >= 0; --i){
-                CNode* node = search_path[i];
-                node->value_sum += bootstrap_value;
-                node->visit_count += 1;
+        assert(to_play == -1);
+        float bootstrap_value = value;
+        int path_len = search_path.size();
+        for(int i = path_len - 1; i >= 0; --i){
+            CNode* node = search_path[i];
+            node->value_sum += bootstrap_value;
+            node->visit_count += 1;
 
-                float true_reward = node->reward;
+            float true_reward = node->reward;
 
-                min_max_stats.update(true_reward + discount * node->value());
+            min_max_stats.update(true_reward + discount * node->value());
 
-                bootstrap_value = true_reward + discount * bootstrap_value;
-            }
-        }
-        else
-        {
-            float bootstrap_value = value;
-            int path_len = search_path.size();
-            for(int i = path_len - 1; i >= 0; --i){
-                CNode* node = search_path[i];
-                if(node->to_play == to_play)
-                    node->value_sum += bootstrap_value;
-                else
-                    node->value_sum += - bootstrap_value;
-                node->visit_count += 1;
-
-
-                // NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
-               // but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
-//                float true_reward = node->value_prefix - parent_value_prefix;
-                float true_reward = node->reward;
-
-            // TODO(pu): why in muzero-general is - node.value
-                min_max_stats.update(true_reward + discount * - node->value());
-
-                if(node->to_play == to_play)
-                    bootstrap_value = - true_reward + discount * bootstrap_value;
-                else
-                    bootstrap_value = true_reward + discount * bootstrap_value;
-
-            }
+            bootstrap_value = true_reward + discount * bootstrap_value;
         }
     }
 
@@ -479,31 +449,20 @@ namespace tree{
         int num_valid_actions = root->legal_actions.size();
         int num_considered = std::min(max_num_considered_actions, num_simulations);
         int simulation_index = std::accumulate(child_visit_count.begin(), child_visit_count.end(), 0);
-        int considered_visit;
-        considered_visit = visit_table[num_considered][simulation_index];
+        int considered_visit = visit_table[num_considered][simulation_index];
 
         std::vector<float> score = score_considered(considered_visit, root->gumbel, child_prior, completed_qvalues, child_visit_count);
 
         float argmax = -std::numeric_limits<float>::infinity();
-        int max_action = 0;
+        int max_action = root->legal_actions[0];
+        int index = 0;
         for(auto a: root->legal_actions){
-            if(score[a] > argmax){
-                argmax = score[a];
+            if(score[index] > argmax){
+                argmax = score[index];
                 max_action = a;
             }
+            index += 1;
         }
-
-        // // for test
-        // std::cout << "considered_visit " << considered_visit << std::endl;
-        // std::cout << "gumbel\t\tprior\t\tcompleted_qvalues\t\tchild_visit_count" << std::endl;
-        // for(auto a: root->legal_actions){
-        //     std::cout << root->gumbel[a] << "\t\t" << child_prior[a] << "\t\t" << completed_qvalues[a] << "\t\t" << child_visit_count[a] << std::endl;
-        // }
-
-        // for(auto a: root->legal_actions){
-        //     std::cout << "score " << score[a] << std::endl;
-        // }
-        // //
 
         return max_action;    
     }
@@ -530,20 +489,15 @@ namespace tree{
         }
         
         float argmax = -std::numeric_limits<float>::infinity();
-        int max_action = 0;
+        int max_action = root->legal_actions[0];
+        int index = 0;
         for(auto a: root->legal_actions){
-            if(to_argmax[a] > argmax){
-                argmax = to_argmax[a];
+            if(to_argmax[index] > argmax){
+                argmax = to_argmax[index];
                 max_action = a;
             }
+            index += 1;
         }
-
-        // // for test
-        // std::cout << "to_argmax ";
-        // for(auto a: root->legal_actions){
-        //     std::cout << to_argmax[a] << " " << std::endl;
-        // }
-        // //
         
         return max_action;
     }
@@ -607,14 +561,6 @@ namespace tree{
                     action = cselect_interior_child(node, discount);
                 }
                 is_root = 0;
-
-                if(players>1)
-                {
-                    if(virtual_to_play_batch[i] == 1)
-                        virtual_to_play_batch[i] = 2;
-                    else
-                        virtual_to_play_batch[i] = 1;
-                }
 
                 node->best_action = action;
                 // next
@@ -704,7 +650,6 @@ namespace tree{
         std::vector<float> & child_prior, float discount, float maxvisit_init, float value_scale, \
         bool rescale_values, float epsilon){
         assert (child_visit.size() == child_prior.size());
-        float min_num = -10e7;
         std::vector<float> qvalues;
         std::vector<float> child_prior_tmp;
 
@@ -715,14 +660,15 @@ namespace tree{
         float value = compute_mixed_value(root->raw_value, qvalues, child_visit, child_prior_tmp);
         std::vector<float> completed_qvalue;
 
-        for (unsigned int i = 0;i < child_prior_tmp.size();i++)
+        for (unsigned int i = 0;i < child_prior_tmp.size();i++){
             if (child_visit[i] > 0){
                 completed_qvalue.push_back(qvalues[i]);
             }
             else{
                 completed_qvalue.push_back(value);
             }
-        
+        }
+
         if (rescale_values){
             rescale_qvalues(completed_qvalue, epsilon);
         }

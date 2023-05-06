@@ -99,7 +99,7 @@ namespace tree {
     float compute_mixed_value(float raw_value, std::vector<float> q_values, std::vector<int> &child_visit, std::vector<float> &child_prior);
     void rescale_qvalues(std::vector<float> &value, float epsilon);
     std::vector<float> qtransform_completed_by_mix_value(CNode *root, std::vector<int> & child_visit, \
-        std::vector<float> & child_prior, float discount= 0.99, float maxvisit_init = 50.0, float value_scale = 0.1, \
+        std::vector<float> & child_prior, float discount= 0.99, float maxvisit_init = 100.0, float value_scale = 10, \
         bool rescale_values = true, float epsilon = 1e-8);
     std::vector<int> get_sequence_of_considered_visits(int max_num_considered_actions, int num_simulations);
     std::vector<std::vector<int>> get_table_of_considered_visits(int max_num_considered_actions, int num_simulations);

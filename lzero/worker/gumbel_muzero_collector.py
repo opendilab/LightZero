@@ -183,7 +183,7 @@ class GumbelMuZeroCollector(ISerialCollector):
     # ==============================================================
     # MCTS+RL related core code
     # ==============================================================
-    def _compute_priorities(self, i, pred_values_lst, search_values_lst):
+    def _compute_priorities(self, i, pred_values_lst, search_values_lst, new_policy_lst):
         """
         Overview:
             obtain the priorities at index i.
@@ -196,9 +196,11 @@ class GumbelMuZeroCollector(ISerialCollector):
             pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.policy_config.device).float().view(-1)
             search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.policy_config.device
                                                                                 ).float().view(-1)
+            new_policy = torch.from_numpy(np.array(new_policy_lst[i])).to(self.policy_config.device
+                                                                                ).float().view(-1)
             priorities = L1Loss(reduction='none'
                                 )(pred_values,
-                                  search_values).detach().cpu().numpy() + self.policy_config.prioritized_replay_eps
+                                  search_values, new_policy).detach().cpu().numpy() + self.policy_config.prioritized_replay_eps
         else:
             # priorities is None -> use the max priority for all newly collected data
             priorities = None
@@ -332,6 +334,7 @@ class GumbelMuZeroCollector(ISerialCollector):
         # for priorities in self-play
         search_values_lst = [[] for _ in range(env_nums)]
         pred_values_lst = [[] for _ in range(env_nums)]
+        new_policy_lst = [[] for _ in range(env_nums)]
 
         # some logs
         eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros(env_nums)
@@ -451,6 +454,7 @@ class GumbelMuZeroCollector(ISerialCollector):
                     if self.policy_config.use_priority and not self.policy_config.use_max_priority_for_new_data:
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
+                        new_policy_lst[env_id].append(new_policy_dict[env_id])
 
                     # append the newest obs
                     observation_window_stack[env_id].append(to_ndarray(obs['observation']))
@@ -469,9 +473,10 @@ class GumbelMuZeroCollector(ISerialCollector):
                             )
 
                         # calculate priority
-                        priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
+                        priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst, new_policy_lst)
                         pred_values_lst[env_id] = []
                         search_values_lst[env_id] = []
+                        new_policy_lst[env_id] = []
 
                         # the current game_segments become last_game_segment
                         last_game_segments[env_id] = game_segments[env_id]
@@ -514,7 +519,7 @@ class GumbelMuZeroCollector(ISerialCollector):
                         )
 
                     # store current block trajectory
-                    priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
+                    priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst, new_policy_lst)
 
                     # NOTE: put the last game block in one episode into the trajectory_pool
                     game_segments[env_id].game_segment_to_array()
@@ -574,6 +579,7 @@ class GumbelMuZeroCollector(ISerialCollector):
 
                     pred_values_lst[env_id] = []
                     search_values_lst[env_id] = []
+                    new_policy_lst[env_id] = []
                     eps_steps_lst[env_id] = 0
                     visit_entropies_lst[env_id] = 0
 

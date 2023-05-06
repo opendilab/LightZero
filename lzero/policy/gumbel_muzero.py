@@ -16,6 +16,7 @@ from torch.nn import L1Loss, KLDivLoss
 # python mcts
 from lzero.mcts import GumbelMuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
+from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
     configure_optimizers
@@ -294,11 +295,14 @@ class GumeblMuZeroPolicy(Policy):
         # ==============================================================
         # policy_loss = cross_entropy_loss(policy_logits, target_policy[:, 0])
         eps=1e-7
-        new_policy_batch = torch.from_numpy(np.transpose(new_policy_batch, (1,0,2))).to(self._cfg.device)
-        policy_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
-        for new_policy in new_policy_batch:
-            # new_policy = torch.softmax(torch.randn(new_policy.shape), dim=-1).detach().to(self._cfg.device)
-            policy_loss += self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)).double(), new_policy.detach().double())
+        # policy_loss = cross_entropy_loss(policy_logits, target_policy[:, 0])
+        policy_loss = cross_entropy_loss(policy_logits, torch.from_numpy(new_policy_batch[:, 0]).to(self._cfg.device).detach())
+        # new_policy_batch = torch.from_numpy(np.transpose(new_policy_batch, (1,0,2))).to(self._cfg.device)
+        # policy_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+        # policy_loss = self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)).double(), torch.from_numpy(new_policy_batch[:, 0]).to(self._cfg.device).detach().double())
+        # for new_policy in new_policy_batch[1:]:
+        #     # new_policy = torch.softmax(torch.randn(new_policy.shape), dim=-1).detach().to(self._cfg.device)
+        #     policy_loss += self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)).double(), new_policy.detach().double())
         # policy_loss = ((new_policy_batch+eps).detach() * (torch.log((new_policy_batch+eps).detach())) - torch.log(torch.softmax(policy_logits, dim=-1))).sum(-1).mean(0)
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
@@ -353,7 +357,9 @@ class GumeblMuZeroPolicy(Policy):
             # calculate policy loss for the next ``num_unroll_steps`` unroll steps.
             # NOTE: the +=.
             # ==============================================================
+            # policy_loss += self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)).double(), torch.from_numpy(new_policy_batch[:, step_i + 1]).to(self._cfg.device).detach().double())
             # policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
+            policy_loss += cross_entropy_loss(policy_logits, torch.from_numpy(new_policy_batch[:, step_i + 1]).to(self._cfg.device).detach())
 
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_i])

@@ -380,7 +380,8 @@ class GumbelMuZeroMCTSCtree(object):
         from lzero.mcts.ctree.ctree_gumbel_muzero import gmz_tree as ctree
         return ctree.Roots(active_collect_env_num, legal_actions)
 
-    def search(self, roots, model, latent_state_roots, to_play_batch):
+    def search(self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
+                                                                                                          List[Any]]):
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
