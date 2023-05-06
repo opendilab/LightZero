@@ -28,7 +28,7 @@ def data_reanalyze_fetcher(cfg: EasyDict, policy: 'Policy', replay_buffer: 'Game
             yield
 
             if cfg.policy.use_priority:
-                replay_buffer.update_priority(ctx.train_data, ctx.train_output['priority'])
+                replay_buffer.update_priority(ctx.train_data, ctx.train_output['td_error_priority'])
         else:
             one_time_warning(
                 f'The data in replay_buffer is not sufficient to sample a mini-batch: '

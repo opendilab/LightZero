@@ -470,7 +470,7 @@ class EfficientZeroPolicy(Policy):
             # priority related
             # ==============================================================
             'value_priority': td_data[0].flatten().mean().item(),
-            'priority': value_priority,  # this key must be priority to update replay buffer
+            'td_error_priority': value_priority,  # this key must be priority to update replay buffer
             'target_value_prefix': td_data[1].flatten().mean().item(),
             'target_value': td_data[2].flatten().mean().item(),
             'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
