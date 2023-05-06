@@ -28,7 +28,7 @@ prob_random_action_in_bot = 0.5
 # ==============================================================
 gomoku_alphazero_config = dict(
     exp_name=
-    f'data_az_ptree/gomoku_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_mtd_cython-la-lru_cython-gdw-lru_deepcopy_tf32-torch2_seed0',
+    f'data_az_ptree/gomoku_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_mtd_cython-la-lru_cython-gdw-lru_deepcopy_tf32-torch2_lru1280_seed0',
     env=dict(
         board_size=board_size,
         battle_mode='self_play_mode',
@@ -119,5 +119,5 @@ if __name__ == '__main__':
     import cProfile
 
     cProfile.run(f"run({500000})",
-                 filename="gomoku_az_sp_ctree_cprofile.500k_envstep_mtd_cython-la-lru_cython-gdw_deepcopy_tf32-torch2",
+                 filename="gomoku_az_sp_ctree_cprofile.500k_envstep_mtd_cython-la-lru_cython-gdw-lru_deepcopy_tf32-torch2_lru1280",
                  sort="cumulative")
