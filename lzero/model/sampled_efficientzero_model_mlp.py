@@ -452,7 +452,6 @@ class DynamicsNetwork(nn.Module):
                 output_norm=True,
                 # last_linear_layer_init_zero=False is important for convergence
                 last_linear_layer_init_zero=False,
-
             )
         else:
             self.fc_dynamics = MLP(

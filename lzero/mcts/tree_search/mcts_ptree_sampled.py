@@ -145,10 +145,10 @@ class SampledEfficientZeroMCTSPtree(object):
                     hidden_states_h_reward.append(reward_hidden_state_h_batch[ix][0][iy])
 
                 latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
-                hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)
-                                                          ).to(self._cfg.device).unsqueeze(0)
-                hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)
-                                                          ).to(self._cfg.device).unsqueeze(0)
+                hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(self._cfg.device
+                                                                                                 ).unsqueeze(0)
+                hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(self._cfg.device
+                                                                                                 ).unsqueeze(0)
 
                 if self._cfg.model.continuous_action_space is True:
                     # continuous action
@@ -169,7 +169,10 @@ class SampledEfficientZeroMCTSPtree(object):
                 )
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    [network_output.latent_state, network_output.policy_logits, network_output.value_prefix, network_output.reward] = to_detach_cpu_numpy(
+                    [
+                        network_output.latent_state, network_output.policy_logits, network_output.value_prefix,
+                        network_output.reward
+                    ] = to_detach_cpu_numpy(
                         [
                             network_output.latent_state,
                             network_output.policy_logits,
@@ -199,7 +202,7 @@ class SampledEfficientZeroMCTSPtree(object):
                 reward_hidden_state_c_batch.append(reward_latent_state_batch[0])
                 reward_hidden_state_h_batch.append(reward_latent_state_batch[1])
 
-                # In ``batch_backpropagate()``, we first expand the leaf node using ``the policy_logits`` and 
+                # In ``batch_backpropagate()``, we first expand the leaf node using ``the policy_logits`` and
                 # ``reward`` predicted by the model, then perform backpropagation along the search path to update the
                 # statistics.
 

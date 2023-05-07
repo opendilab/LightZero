@@ -61,7 +61,11 @@ class DownSample(nn.Module):
         self.resblocks1 = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=out_channels // 2, activation=activation, norm_type=norm_type, res_type='basic', bias=False
+                    in_channels=out_channels // 2,
+                    activation=activation,
+                    norm_type=norm_type,
+                    res_type='basic',
+                    bias=False
                 ) for _ in range(1)
             ]
         )
@@ -83,15 +87,17 @@ class DownSample(nn.Module):
         )
         self.resblocks2 = nn.ModuleList(
             [
-                ResBlock(in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False)
-                for _ in range(1)
+                ResBlock(
+                    in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
+                ) for _ in range(1)
             ]
         )
         self.pooling1 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
         self.resblocks3 = nn.ModuleList(
             [
-                ResBlock(in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False)
-                for _ in range(1)
+                ResBlock(
+                    in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
+                ) for _ in range(1)
             ]
         )
         self.pooling2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
@@ -297,8 +303,9 @@ class PredictionNetwork(nn.Module):
 
         self.resblocks = nn.ModuleList(
             [
-                ResBlock(in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False)
-                for _ in range(num_res_blocks)
+                ResBlock(
+                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
+                ) for _ in range(num_res_blocks)
             ]
         )
 
@@ -415,7 +422,7 @@ class PredictionNetworkMLP(nn.Module):
             in_channels=self.num_channels,
             hidden_channels=fc_value_layers[0],
             out_channels=output_support_size,
-            layer_num=len(fc_value_layers)+1,
+            layer_num=len(fc_value_layers) + 1,
             activation=activation,
             norm_type=norm_type,
             output_activation=False,
@@ -427,7 +434,7 @@ class PredictionNetworkMLP(nn.Module):
             in_channels=self.num_channels,
             hidden_channels=fc_policy_layers[0],
             out_channels=action_space_size,
-            layer_num=len(fc_policy_layers)+1,
+            layer_num=len(fc_policy_layers) + 1,
             activation=activation,
             norm_type=norm_type,
             output_activation=False,

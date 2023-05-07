@@ -103,7 +103,6 @@ class EfficientZeroModel(nn.Module):
         self.downsample = downsample
         self.self_supervised_learning_loss = self_supervised_learning_loss
 
-
         flatten_output_size_for_reward_head = (
             (reward_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else

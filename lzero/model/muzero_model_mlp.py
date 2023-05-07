@@ -100,7 +100,7 @@ class MuZeroModelMLP(nn.Module):
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
         self.res_connection_in_dynamics = res_connection_in_dynamics
-        
+
         self.representation_network = RepresentationNetworkMLP(
             observation_shape=observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
         )
@@ -220,7 +220,7 @@ class MuZeroModelMLP(nn.Module):
             latent_state = renormalize(latent_state)
         return latent_state
 
-    def _prediction(self, latent_state: torch.Tensor) ->  Tuple[torch.Tensor, torch.Tensor]:
+    def _prediction(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
             Use the representation network to encode the observations into latent state.
@@ -385,7 +385,6 @@ class DynamicsNetwork(nn.Module):
                 output_norm=True,
                 # last_linear_layer_init_zero=False is important for convergence
                 last_linear_layer_init_zero=False,
-
             )
         else:
             self.fc_dynamics = MLP(
