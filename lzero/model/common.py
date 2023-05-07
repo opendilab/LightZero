@@ -275,6 +275,7 @@ class PredictionNetwork(nn.Module):
             flatten_output_size_for_policy_head: int,
             last_linear_layer_init_zero: bool = True,
             activation: nn.Module = nn.ReLU(inplace=True),
+            norm_type: Optional[str] = 'BN',
     ) -> None:
         """
         Overview:
@@ -298,6 +299,7 @@ class PredictionNetwork(nn.Module):
                 dynamics/prediction mlp, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super(PredictionNetwork, self).__init__()
 

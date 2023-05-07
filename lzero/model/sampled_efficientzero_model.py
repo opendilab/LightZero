@@ -169,7 +169,7 @@ class SampledEfficientZeroModel(nn.Module):
             num_res_blocks,
             num_channels,
             downsample,
-            norm_type=norm_type,
+            norm_type=self.norm_type,
         )
 
         self.dynamics_network = DynamicsNetwork(
