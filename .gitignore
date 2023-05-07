@@ -1433,6 +1433,7 @@ events.*
 /test_*
 # LightZero special key
 /lzero/mcts/**/*.cpp
+/zoo/**/*.c
 /lzero/mcts/**/*.so
 /lzero/mcts/**/*.h
 !/lzero/mcts/**/lib

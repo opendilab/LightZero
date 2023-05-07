@@ -43,6 +43,7 @@ class EfficientZeroModel(nn.Module):
             state_norm: bool = False,
             downsample: bool = False,
             activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            norm_type: Optional[str] = 'BN',
             *args,
             **kwargs
     ) -> None:
@@ -79,6 +80,7 @@ class EfficientZeroModel(nn.Module):
                 we don't need this module.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super(EfficientZeroModel, self).__init__()
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
@@ -102,7 +104,8 @@ class EfficientZeroModel(nn.Module):
         self.state_norm = state_norm
         self.downsample = downsample
         self.self_supervised_learning_loss = self_supervised_learning_loss
-
+        self.norm_type = norm_type
+        self.activation = activation
 
         flatten_output_size_for_reward_head = (
             (reward_head_channels * math.ceil(observation_shape[1] / 16) *
@@ -127,7 +130,8 @@ class EfficientZeroModel(nn.Module):
             num_res_blocks,
             num_channels,
             downsample,
-            activation=activation,
+            activation=self.activation,
+            norm_type=self.norm_type,
         )
         self.dynamics_network = DynamicsNetwork(
             num_res_blocks,
@@ -138,7 +142,8 @@ class EfficientZeroModel(nn.Module):
             flatten_output_size_for_reward_head,
             lstm_hidden_size=lstm_hidden_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            activation=activation,
+            activation=self.activation,
+            norm_type=self.norm_type,
         )
         self.prediction_network = PredictionNetwork(
             action_space_size,
@@ -152,7 +157,8 @@ class EfficientZeroModel(nn.Module):
             flatten_output_size_for_value_head,
             flatten_output_size_for_policy_head,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            activation=activation,
+            activation=self.activation,
+            norm_type=self.norm_type,
         )
 
         # projection used in EfficientZero
@@ -403,6 +409,7 @@ class DynamicsNetwork(nn.Module):
         lstm_hidden_size: int = 512,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        norm_type: Optional[str] = 'BN',
     ):
         """
         Overview:
@@ -421,6 +428,7 @@ class DynamicsNetwork(nn.Module):
                 reward mlp, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super().__init__()
         self.num_channels = num_channels
@@ -435,7 +443,7 @@ class DynamicsNetwork(nn.Module):
                 ResBlock(
                     in_channels=num_channels - 1,
                     activation=self.activation,
-                    norm_type='BN',
+                    norm_type=norm_type,
                     res_type='basic',
                     bias=False
                 ) for _ in range(num_res_blocks)
@@ -446,7 +454,7 @@ class DynamicsNetwork(nn.Module):
                 ResBlock(
                     in_channels=num_channels - 1,
                     activation=self.activation,
-                    norm_type='BN',
+                    norm_type=norm_type,
                     res_type='basic',
                     bias=False
                 ) for _ in range(num_res_blocks)
@@ -468,7 +476,7 @@ class DynamicsNetwork(nn.Module):
             out_channels=output_support_size,
             layer_num=len(fc_reward_layers) + 1,
             activation=self.activation,
-            norm_type='BN',
+            norm_type=norm_type,
             output_activation=False,
             output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero

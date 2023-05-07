@@ -20,8 +20,7 @@ reanalyze_ratio = 0
 # ==============================================================
 
 pendulum_disc_muzero_config = dict(
-    exp_name=
-    f'data_ez_ctree/pendulum_disc_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_ez_ctree/pendulum_disc_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='Pendulum-v1',
         continuous=False,
@@ -40,7 +39,6 @@ pendulum_disc_muzero_config = dict(
             lstm_hidden_size=128,
             latent_state_dim=128,
             self_supervised_learning_loss=True,  # NOTE: default is False.
-
         ),
         cuda=True,
         env_type='not_board_games',

@@ -25,9 +25,13 @@ class LayerNorm(nn.Module):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
 
-def configure_optimizers(model: nn.Module, weight_decay: float = 0, learning_rate: float = 3e-3,
-                         betas: tuple = (0.9, 0.999), device_type: str = "cuda"):
-
+def configure_optimizers(
+    model: nn.Module,
+    weight_decay: float = 0,
+    learning_rate: float = 3e-3,
+    betas: tuple = (0.9, 0.999),
+    device_type: str = "cuda"
+):
     """
     Overview:
         This function is adapted from https://github.com/karpathy/nanoGPT/blob/master/model.py
@@ -49,7 +53,9 @@ def configure_optimizers(model: nn.Module, weight_decay: float = 0, learning_rat
     decay = set()
     no_decay = set()
     whitelist_weight_modules = (torch.nn.Linear, torch.nn.LSTM, nn.Conv2d)
-    blacklist_weight_modules = (torch.nn.LayerNorm, LayerNorm, torch.nn.Embedding, torch.nn.BatchNorm1d, torch.nn.BatchNorm2d)
+    blacklist_weight_modules = (
+        torch.nn.LayerNorm, LayerNorm, torch.nn.Embedding, torch.nn.BatchNorm1d, torch.nn.BatchNorm2d
+    )
     for mn, m in model.named_modules():
         for pn, p in m.named_parameters():
             fpn = '%s.%s' % (mn, pn) if mn else pn  # full param name
@@ -62,7 +68,8 @@ def configure_optimizers(model: nn.Module, weight_decay: float = 0, learning_rat
             elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
                 # weights of whitelist modules will be weight decayed
                 decay.add(fpn)
-            elif (pn.endswith('weight_ih_l0') or pn.endswith('weight_hh_l0')) and isinstance(m, whitelist_weight_modules):
+            elif (pn.endswith('weight_ih_l0') or pn.endswith('weight_hh_l0')) and isinstance(m,
+                                                                                             whitelist_weight_modules):
                 # some special weights of whitelist modules will be weight decayed
                 decay.add(fpn)
             elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
@@ -83,15 +90,21 @@ def configure_optimizers(model: nn.Module, weight_decay: float = 0, learning_rat
     param_dict = {pn: p for pn, p in model.named_parameters()}
     inter_params = decay & no_decay
     union_params = decay | no_decay
-    assert len(inter_params) == 0, "parameters %s made it into both decay/no_decay sets!" % (str(inter_params),)
+    assert len(inter_params) == 0, "parameters %s made it into both decay/no_decay sets!" % (str(inter_params), )
     assert len(
         param_dict.keys() - union_params) == 0, "parameters %s were not separated into either decay/no_decay set!" \
                                                 % (str(param_dict.keys() - union_params),)
 
     # create the pytorch optimizer object
     optim_groups = [
-        {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": weight_decay},
-        {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
+        {
+            "params": [param_dict[pn] for pn in sorted(list(decay))],
+            "weight_decay": weight_decay
+        },
+        {
+            "params": [param_dict[pn] for pn in sorted(list(no_decay))],
+            "weight_decay": 0.0
+        },
     ]
     # new PyTorch nightly has a new 'fused' option for AdamW that is much faster
     use_fused = (device_type == 'cuda') and ('fused' in inspect.signature(torch.optim.AdamW).parameters)

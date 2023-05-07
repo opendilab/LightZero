@@ -35,8 +35,7 @@ class Node:
         self.parent_value_prefix = 0  # only used in update_tree_q method
 
     def expand(
-            self, to_play: int, simulation_index: int, batch_index: int, value_prefix: float,
-            policy_logits: List[float]
+            self, to_play: int, simulation_index: int, batch_index: int, value_prefix: float, policy_logits: List[float]
     ) -> None:
         """
         Overview:
@@ -286,6 +285,7 @@ class SearchResults:
         self.last_actions = []
         self.search_lens = []
 
+
 def select_child(
         root: Node, min_max_stats: MinMaxStats, pb_c_base: float, pb_c_int: float, discount_factor: float,
         mean_q: float, players: int
@@ -431,7 +431,6 @@ def batch_traverse(
         is_root = 1
         search_len = 0
         results.search_paths[i].append(node)
-
         """
         MCTS stage 1: Selection
             Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l. 
@@ -515,7 +514,7 @@ def backpropagate(
         path_len = len(search_path)
         for i in range(path_len - 1, -1, -1):
             node = search_path[i]
-            
+
             node.value_sum += bootstrap_value if node.to_play == to_play else -bootstrap_value
 
             node.visit_count += 1
@@ -536,7 +535,9 @@ def backpropagate(
             min_max_stats.update(true_reward + discount_factor * -node.value)
 
             # true_reward is in the perspective of current player of node
-            bootstrap_value = (-true_reward if node.to_play == to_play else true_reward) + discount_factor * bootstrap_value
+            bootstrap_value = (
+                -true_reward if node.to_play == to_play else true_reward
+            ) + discount_factor * bootstrap_value
 
 
 def batch_backpropagate(

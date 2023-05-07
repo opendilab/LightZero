@@ -118,7 +118,7 @@ class SampledEfficientZeroModel(nn.Module):
 
         self.continuous_action_space = continuous_action_space
         self.action_space_size = action_space_size
-        # The dim of action space. For discrete action space, it's 1. 
+        # The dim of action space. For discrete action space, it's 1.
         # For continuous action space, it is the dim of action.
         self.action_space_dim = action_space_size if self.continuous_action_space else 1
         assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
@@ -136,7 +136,7 @@ class SampledEfficientZeroModel(nn.Module):
         self.proj_out = proj_out
         self.pred_hid = pred_hid
         self.pred_out = pred_out
-        
+
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
         self.downsample = downsample
@@ -169,7 +169,7 @@ class SampledEfficientZeroModel(nn.Module):
             num_res_blocks,
             num_channels,
             downsample,
-            norm_type=norm_type,
+            norm_type=self.norm_type,
         )
 
         self.dynamics_network = DynamicsNetwork(
@@ -379,7 +379,9 @@ class SampledEfficientZeroModel(nn.Module):
                 action_one_hot.scatter_(1, action, 1)
 
                 action_encoding_tmp = action_one_hot.unsqueeze(-1).unsqueeze(-1)
-                action_encoding = action_encoding_tmp.expand(latent_state.shape[0], self.action_space_size, latent_state.shape[2], latent_state.shape[3])
+                action_encoding = action_encoding_tmp.expand(
+                    latent_state.shape[0], self.action_space_size, latent_state.shape[2], latent_state.shape[3]
+                )
 
             elif self.discrete_action_encoding_type == 'not_one_hot':
                 # Stack latent_state with the normalized encoded action.
@@ -393,7 +395,9 @@ class SampledEfficientZeroModel(nn.Module):
                     # e.g.,  -> torch.Size([8, 1, 1, 1])
                     action = action.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
 
-                action_encoding = action.expand(latent_state.shape[0], 1, latent_state.shape[2], latent_state.shape[3]) / self.action_space_size
+                action_encoding = action.expand(
+                    latent_state.shape[0], 1, latent_state.shape[2], latent_state.shape[3]
+                ) / self.action_space_size
         else:
             # continuous action space
             if len(action.shape) == 2:
@@ -406,7 +410,9 @@ class SampledEfficientZeroModel(nn.Module):
                 action = action.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
 
             action_encoding_tmp = action
-            action_encoding = action_encoding_tmp.expand(latent_state.shape[0], self.action_space_size, latent_state.shape[2], latent_state.shape[3])
+            action_encoding = action_encoding_tmp.expand(
+                latent_state.shape[0], self.action_space_size, latent_state.shape[2], latent_state.shape[3]
+            )
 
         action_encoding = action_encoding.to(latent_state.device).float()
         # state_action_encoding shape: (batch_size, latent_state[1] + action_dim, latent_state[2], latent_state[3]) or
