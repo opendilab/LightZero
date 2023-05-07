@@ -100,13 +100,10 @@ class EfficientZeroModel(nn.Module):
         self.action_space_size = action_space_size
         assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
         self.discrete_action_encoding_type = discrete_action_encoding_type
-        if self.continuous_action_space:
+        if self.discrete_action_encoding_type == 'one_hot':
             self.action_encoding_dim = action_space_size
-        else:
-            if self.discrete_action_encoding_type == 'one_hot':
-                self.action_encoding_dim = action_space_size
-            elif self.discrete_action_encoding_type == 'not_one_hot':
-                self.action_encoding_dim = 1
+        elif self.discrete_action_encoding_type == 'not_one_hot':
+            self.action_encoding_dim = 1
         self.lstm_hidden_size = lstm_hidden_size
         self.proj_hid = proj_hid
         self.proj_out = proj_out
@@ -147,6 +144,7 @@ class EfficientZeroModel(nn.Module):
         )
         self.dynamics_network = DynamicsNetwork(
             observation_shape,
+            self.action_encoding_dim,
             num_res_blocks,
             num_channels + self.action_encoding_dim,
             reward_head_channels,
@@ -491,7 +489,7 @@ class DynamicsNetwork(nn.Module):
                 ResBlock(
                     in_channels=num_channels - self.action_encoding_dim,
                     activation=self.activation,
-                    norm_type=norm_type,
+                    norm_type='BN',
                     res_type='basic',
                     bias=False
                 ) for _ in range(num_res_blocks)
@@ -502,7 +500,7 @@ class DynamicsNetwork(nn.Module):
                 ResBlock(
                     in_channels=num_channels - self.action_encoding_dim,
                     activation=self.activation,
-                    norm_type=norm_type,
+                    norm_type='BN',
                     res_type='basic',
                     bias=False
                 ) for _ in range(num_res_blocks)
@@ -567,7 +565,7 @@ class DynamicsNetwork(nn.Module):
         next_latent_state = x
 
         x = self.conv1x1_reward(next_latent_state)
-        x = self.bn_reward(x)
+        x = self.norm_reward(x)
         x = self.activation(x)
         x = x.reshape(-1, self.flatten_output_size_for_reward_head).unsqueeze(0)
 

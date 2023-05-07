@@ -36,8 +36,8 @@ class MZNetworkOutput:
 
 
 class DownSample(nn.Module):
-
-    def __init__(self, in_channels: int, out_channels: int, activation: nn.Module = nn.ReLU(inplace=True),
+            
+    def __init__(self, observation_shape: SequenceType, out_channels: int, activation: nn.Module = nn.ReLU(inplace=True),
                  norm_type: Optional[str] = 'BN',
                  ) -> None:
         """
@@ -46,7 +46,8 @@ class DownSample(nn.Module):
             This network is often used in video games like Atari. In board games like go and chess,
             we don't need this module.
         Arguments:
-            - in_channels (:obj:`int`): The input channel of observation data.
+            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[12, 96, 96]
+                for video games like atari, RGB 3 channel times stack 4 frames.
             - out_channels (:obj:`int`): The output channels of output hidden state.
             - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
                 Use the inplace operation to speed up.
@@ -56,7 +57,7 @@ class DownSample(nn.Module):
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
 
         self.conv1 = nn.Conv2d(
-            in_channels,
+            observation_shape[0],
             out_channels // 2,
             kernel_size=3,
             stride=2,
@@ -66,14 +67,14 @@ class DownSample(nn.Module):
         if norm_type == 'BN':
             self.norm1 = nn.BatchNorm2d(out_channels // 2)
         elif norm_type == 'LN':
-            self.norm1 = nn.LayerNorm(out_channels // 2)
+            self.norm1 = nn.LayerNorm([out_channels // 2, observation_shape[-2] // 2, observation_shape[-1] // 2])
 
         self.resblocks1 = nn.ModuleList(
             [
                 ResBlock(
                     in_channels=out_channels // 2,
                     activation=activation,
-                    norm_type=norm_type,
+                    norm_type='BN',
                     res_type='basic',
                     bias=False
                 ) for _ in range(1)
@@ -91,7 +92,7 @@ class DownSample(nn.Module):
             in_channels=out_channels // 2,
             out_channels=out_channels,
             activation=activation,
-            norm_type=norm_type,
+            norm_type='BN',
             res_type='downsample',
             bias=False
         )
@@ -169,7 +170,7 @@ class RepresentationNetwork(nn.Module):
         self.downsample = downsample
         if self.downsample:
             self.downsample_net = DownSample(
-                observation_shape[0],
+                observation_shape,
                 num_channels,
                 activation=activation,
                 norm_type=norm_type,

@@ -173,19 +173,22 @@ class SampledEfficientZeroModel(nn.Module):
         )
 
         self.dynamics_network = DynamicsNetwork(
-            action_encoding_dim=self.action_encoding_dim,
-            num_channels=num_channels + self.action_encoding_dim,
-            num_res_blocks=num_res_blocks,
-            reward_head_channels=reward_head_channels,
-            fc_reward_layers=fc_reward_layers,
-            output_support_size=self.reward_support_size,
-            flatten_output_size_for_reward_head=flatten_output_size_for_reward_head,
-            lstm_hidden_size=lstm_hidden_size,
+            observation_shape,
+            self.action_encoding_dim,
+            num_res_blocks,
+            num_channels + self.action_encoding_dim,
+            reward_head_channels,
+            fc_reward_layers,
+            self.reward_support_size,
+            flatten_output_size_for_reward_head,
+            downsample,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            norm_type=self.norm_type,
+            activation=activation,
+            norm_type=norm_type
         )
 
         self.prediction_network = PredictionNetwork(
+            observation_shape,
             self.continuous_action_space,
             action_space_size,
             num_res_blocks,
@@ -197,6 +200,7 @@ class SampledEfficientZeroModel(nn.Module):
             self.value_support_size,
             flatten_output_size_for_value_head,
             flatten_output_size_for_policy_head,
+            downsample,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             sigma_type=self.sigma_type,
             fixed_sigma_value=self.fixed_sigma_value,
@@ -543,7 +547,7 @@ class PredictionNetwork(nn.Module):
                 ResBlock(
                     in_channels=num_channels,
                     activation=activation,
-                    norm_type=self.norm_type,
+                    norm_type='BN',
                     res_type='basic',
                     bias=False
                 ) for _ in range(num_res_blocks)

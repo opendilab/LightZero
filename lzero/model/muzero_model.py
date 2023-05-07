@@ -100,15 +100,13 @@ class MuZeroModel(nn.Module):
             self.value_support_size = 1
 
         self.action_space_size = action_space_size
+
         assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
         self.discrete_action_encoding_type = discrete_action_encoding_type
-        if self.continuous_action_space:
+        if self.discrete_action_encoding_type == 'one_hot':
             self.action_encoding_dim = action_space_size
-        else:
-            if self.discrete_action_encoding_type == 'one_hot':
-                self.action_encoding_dim = action_space_size
-            elif self.discrete_action_encoding_type == 'not_one_hot':
-                self.action_encoding_dim = 1
+        elif self.discrete_action_encoding_type == 'not_one_hot':
+            self.action_encoding_dim = 1
         self.proj_hid = proj_hid
         self.proj_out = proj_out
         self.pred_hid = pred_hid
@@ -144,6 +142,7 @@ class MuZeroModel(nn.Module):
         )
         self.dynamics_network = DynamicsNetwork(
             observation_shape,
+            self.action_encoding_dim,
             num_res_blocks,
             num_channels + self.action_encoding_dim,
             reward_head_channels,
@@ -450,26 +449,27 @@ class DynamicsNetwork(nn.Module):
 
         self.num_channels = num_channels
         self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
+        self.action_encoding_dim = action_encoding_dim
 
-        self.conv = nn.Conv2d(num_channels, num_channels - 1, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv = nn.Conv2d(num_channels, num_channels - self.action_encoding_dim, kernel_size=3, stride=1, padding=1, bias=False)
         
         if norm_type == 'BN':
-            self.norm_common = nn.BatchNorm2d(num_channels - 1)
+            self.norm_common = nn.BatchNorm2d(num_channels - self.action_encoding_dim)
         elif norm_type == 'LN':
             if downsample:
-                self.norm_common = nn.LayerNorm([num_channels - 1, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                self.norm_common = nn.LayerNorm([num_channels - self.action_encoding_dim, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
             else:
-                self.norm_common = nn.LayerNorm([num_channels - 1, observation_shape[-2], observation_shape[-1]])
+                self.norm_common = nn.LayerNorm([num_channels - self.action_encoding_dim, observation_shape[-2], observation_shape[-1]])
             
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - 1, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=num_channels - self.action_encoding_dim, activation=activation, norm_type='BN', res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
 
-        self.conv1x1_reward = nn.Conv2d(num_channels - 1, reward_head_channels, 1)
+        self.conv1x1_reward = nn.Conv2d(num_channels - self.action_encoding_dim, reward_head_channels, 1)
 
         if norm_type == 'BN':
             self.norm_reward = nn.BatchNorm2d(reward_head_channels)
