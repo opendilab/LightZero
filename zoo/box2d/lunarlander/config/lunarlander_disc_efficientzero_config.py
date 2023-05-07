@@ -17,7 +17,7 @@ reanalyze_ratio = 0.
 
 lunarlander_disc_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/lunarlander_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_disc-onehot_adam3e-3_normtype-None_seed0',
+    f'data_ez_ctree/lunarlander_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='LunarLander-v2',
         continuous=False,
@@ -32,13 +32,10 @@ lunarlander_disc_efficientzero_config = dict(
             observation_shape=8,
             action_space_size=4,
             model_type='mlp',  # options={'mlp', 'conv'}
-            # norm_type='BN',
-            # norm_type='LN',
-            norm_type=None,
-
             lstm_hidden_size=256,
             latent_state_dim=256,
             discrete_action_encoding_type='one_hot',
+            res_connection_in_dynamics=True,
         ),
         cuda=True,
         env_type='not_board_games',
@@ -48,9 +45,6 @@ lunarlander_disc_efficientzero_config = dict(
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        # optim_type='SGD',
-        # lr_piecewise_constant_decay=True,
-        # learning_rate=0.2,
         grad_clip_value=0.5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

@@ -16,7 +16,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 lunarlander_muzero_config = dict(
-    exp_name=f'data_mz_ctree/lunarlander_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_mlp_adam3e-3_rcid-true_seed0',
+    exp_name=f'data_mz_ctree/lunarlander_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='LunarLander-v2',
         continuous=False,

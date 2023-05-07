@@ -425,18 +425,19 @@ class DynamicsNetwork(nn.Module):
             - reward (:obj:`torch.Tensor`): The predicted reward for input state.
         """
         if self.res_connection_in_dynamics:
-            # take the state encoding (latent_state), state_action_encoding[:, -self.action_encoding_dim]
-            # is action encoding
+            # take the state encoding (e.g. latent_state),
+            # state_action_encoding[:, -self.action_encoding_dim:] is action encoding
             latent_state = state_action_encoding[:, :-self.action_encoding_dim]
             x = self.fc_dynamics_1(state_action_encoding)
-            # the residual link: add state encoding to the state_action encoding
+            # the residual link: add the latent_state to the state_action encoding
             next_latent_state = x + latent_state
-            next_latent_state_ = self.fc_dynamics_2(next_latent_state)
+            next_latent_state_encoding = self.fc_dynamics_2(next_latent_state)
         else:
             next_latent_state = self.fc_dynamics(state_action_encoding)
-            next_latent_state_ = next_latent_state
+            next_latent_state_encoding = next_latent_state
 
-        reward = self.fc_reward_head(next_latent_state_)
+        reward = self.fc_reward_head(next_latent_state_encoding)
+
         return next_latent_state, reward
 
     def get_dynamic_mean(self) -> float:

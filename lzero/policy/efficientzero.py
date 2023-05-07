@@ -280,7 +280,7 @@ class EfficientZeroPolicy(Policy):
         # ==============================================================
         network_output = self._learn_model.initial_inference(obs_batch)
         # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
-        hidden_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(network_output)
+        latent_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(network_output)
 
         # transform the scaled value or its categorical representation to its original value,
         # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -289,7 +289,7 @@ class EfficientZeroPolicy(Policy):
         # Note: The following lines are just for debugging.
         predicted_value_prefixs = []
         if self._cfg.monitor_extra_statistics:
-            hidden_state_list = hidden_state.detach().cpu().numpy()
+            latent_state_list = latent_state.detach().cpu().numpy()
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
@@ -326,13 +326,13 @@ class EfficientZeroPolicy(Policy):
         # the core recurrent_inference in EfficientZero policy.
         # ==============================================================
         for step_i in range(self._cfg.num_unroll_steps):
-            # unroll with the dynamics function: predict the next ``hidden_state``, ``reward_hidden_state``,
-            # `` value_prefix`` given current ``hidden_state`` ``reward_hidden_state`` and ``action``.
+            # unroll with the dynamics function: predict the next ``latent_state``, ``reward_hidden_state``,
+            # `` value_prefix`` given current ``latent_state`` ``reward_hidden_state`` and ``action``.
             # And then predict policy_logits and value  with the prediction function.
             network_output = self._learn_model.recurrent_inference(
-                hidden_state, reward_hidden_state, action_batch[:, step_i]
+                latent_state, reward_hidden_state, action_batch[:, step_i]
             )
-            hidden_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(
+            latent_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(
                 network_output
             )
 
@@ -354,11 +354,11 @@ class EfficientZeroPolicy(Policy):
                     end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
                     network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
 
-                hidden_state = to_tensor(hidden_state)
+                latent_state = to_tensor(latent_state)
                 representation_state = to_tensor(network_output.latent_state)
 
                 # NOTE: no grad for the representation_state branch.
-                dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
+                dynamic_proj = self._learn_model.project(latent_state, with_grad=True)
                 observation_proj = self._learn_model.project(representation_state, with_grad=False)
                 temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
 
@@ -403,7 +403,7 @@ class EfficientZeroPolicy(Policy):
                 )
                 predicted_value_prefixs.append(original_value_prefixs_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
-                hidden_state_list = np.concatenate((hidden_state_list, hidden_state.detach().cpu().numpy()))
+                latent_state_list = np.concatenate((latent_state_list, latent_state.detach().cpu().numpy()))
 
         # ==============================================================
         # the core learn model update step.
@@ -446,7 +446,7 @@ class EfficientZeroPolicy(Policy):
                 transformed_target_value_prefix.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
                 target_value_prefix_categorical.detach().cpu().numpy(), target_value_categorical.detach().cpu().numpy(),
                 predicted_value_prefixs.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
-                target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), hidden_state_list
+                target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), latent_state_list
             )
 
         return {

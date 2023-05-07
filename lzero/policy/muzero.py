@@ -279,7 +279,7 @@ class MuZeroPolicy(Policy):
         network_output = self._learn_model.initial_inference(obs_batch)
 
         # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
-        hidden_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
+        latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
         # transform the scaled value or its categorical representation to its original value,
         # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -288,7 +288,7 @@ class MuZeroPolicy(Policy):
         # Note: The following lines are just for debugging.
         predicted_rewards = []
         if self._cfg.monitor_extra_statistics:
-            hidden_state_list = hidden_state.detach().cpu().numpy()
+            latent_state_list = latent_state.detach().cpu().numpy()
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
@@ -312,11 +312,11 @@ class MuZeroPolicy(Policy):
         # the core recurrent_inference in MuZero policy.
         # ==============================================================
         for step_i in range(self._cfg.num_unroll_steps):
-            # unroll with the dynamics function: predict the next ``hidden_state``, ``reward``,
-            # given current ``hidden_state`` and ``action``.
+            # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
+            # given current ``latent_state`` and ``action``.
             # And then predict policy_logits and value with the prediction function.
-            network_output = self._learn_model.recurrent_inference(hidden_state, action_batch[:, step_i])
-            hidden_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
+            network_output = self._learn_model.recurrent_inference(latent_state, action_batch[:, step_i])
+            latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
             # transform the scaled value or its categorical representation to its original value,
             # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -339,11 +339,11 @@ class MuZeroPolicy(Policy):
                         end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
                         network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
 
-                    hidden_state = to_tensor(hidden_state)
+                    latent_state = to_tensor(latent_state)
                     representation_state = to_tensor(network_output.latent_state)
 
                     # NOTE: no grad for the representation_state branch
-                    dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
+                    dynamic_proj = self._learn_model.project(latent_state, with_grad=True)
                     observation_proj = self._learn_model.project(representation_state, with_grad=False)
                     temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
                     consistency_loss += temp_loss
@@ -360,7 +360,7 @@ class MuZeroPolicy(Policy):
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_i])
 
             # Follow MuZero, set half gradient
-            # hidden_state.register_hook(lambda grad: grad * 0.5)
+            # latent_state.register_hook(lambda grad: grad * 0.5)
 
             if self._cfg.monitor_extra_statistics:
                 original_rewards = self.inverse_scalar_transform_handle(reward)
@@ -371,7 +371,7 @@ class MuZeroPolicy(Policy):
                 )
                 predicted_rewards.append(original_rewards_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
-                hidden_state_list = np.concatenate((hidden_state_list, hidden_state.detach().cpu().numpy()))
+                latent_state_list = np.concatenate((latent_state_list, latent_state.detach().cpu().numpy()))
 
         # ==============================================================
         # the core learn model update step.
@@ -420,7 +420,7 @@ class MuZeroPolicy(Policy):
                 predicted_values.detach().cpu().numpy(),
                 target_policy.detach().cpu().numpy(),
                 predicted_policies.detach().cpu().numpy(),
-                hidden_state_list,
+                latent_state_list,
             )
 
         return {
