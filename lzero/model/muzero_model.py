@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
+from numpy import ndarray
 
 from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
@@ -43,6 +44,7 @@ class MuZeroModel(nn.Module):
         state_norm: bool = False,
         downsample: bool = False,
         norm_type: Optional[str] = 'BN',
+        discrete_action_encoding_type: str = 'one_hot',
         *args,
         **kwargs
     ):
@@ -50,7 +52,7 @@ class MuZeroModel(nn.Module):
         Overview:
             The definition of the neural network model used in MuZero.
             MuZero model which consists of a representation network, a dynamics network and a prediction network.
-            The networks are build on convolution residual blocks and fully connected layers.
+            The networks are built on convolution residual blocks and fully connected layers.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96] for Atari.
             - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
@@ -81,10 +83,11 @@ class MuZeroModel(nn.Module):
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
                 we don't need this module.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
         """
         super(MuZeroModel, self).__init__()
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
-            # for vector obs input, e.g. classical control ad box2d environments
+            # for vector obs input, e.g. classical control and box2d environments
             # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
             observation_shape = [1, observation_shape, 1]
 
@@ -97,6 +100,15 @@ class MuZeroModel(nn.Module):
             self.value_support_size = 1
 
         self.action_space_size = action_space_size
+        assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
+        self.discrete_action_encoding_type = discrete_action_encoding_type
+        if self.continuous_action_space:
+            self.action_encoding_dim = action_space_size
+        else:
+            if self.discrete_action_encoding_type == 'one_hot':
+                self.action_encoding_dim = action_space_size
+            elif self.discrete_action_encoding_type == 'not_one_hot':
+                self.action_encoding_dim = 1
         self.proj_hid = proj_hid
         self.proj_out = proj_out
         self.pred_hid = pred_hid
@@ -127,19 +139,24 @@ class MuZeroModel(nn.Module):
             num_res_blocks,
             num_channels,
             downsample,
+            activation=activation,
             norm_type=norm_type
         )
         self.dynamics_network = DynamicsNetwork(
+            observation_shape,
             num_res_blocks,
-            num_channels + 1,
+            num_channels + self.action_encoding_dim,
             reward_head_channels,
             fc_reward_layers,
             self.reward_support_size,
             flatten_output_size_for_reward_head,
+            downsample,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            activation=activation,
             norm_type=norm_type
         )
         self.prediction_network = PredictionNetwork(
+            observation_shape,
             action_space_size,
             num_res_blocks,
             num_channels,
@@ -150,7 +167,9 @@ class MuZeroModel(nn.Module):
             self.value_support_size,
             flatten_output_size_for_value_head,
             flatten_output_size_for_policy_head,
+            downsample,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            activation=activation,
             norm_type=norm_type
         )
 
@@ -299,30 +318,44 @@ class MuZeroModel(nn.Module):
         # NOTE: the discrete action encoding type is important for some environments
 
         # discrete action space
-        # the final action_encoding shape is (batch_size, 1, latent_state[2], latent_state[3]), e.g. (8, 1, 4, 1).
-        action_encoding = (
-            torch.ones((
-                latent_state.shape[0],
-                1,
-                latent_state.shape[2],
-                latent_state.shape[3],
-            )).to(action.device).float()
-        )
-        if len(action.shape) == 2:
-            # (batch_size, action_dim) -> (batch_size, action_dim, 1)
-            # e.g.,  torch.Size([8, 1]) ->  torch.Size([8, 1, 1])
-            action = action.unsqueeze(-1)
-        elif len(action.shape) == 1:
-            # (batch_size,) -> (batch_size, action_dim=1, 1)
-            # e.g.,  -> torch.Size([8, 1]) ->  torch.Size([8, 1, 1])
-            action = action.unsqueeze(-1).unsqueeze(-1)
+        if self.discrete_action_encoding_type == 'one_hot':
+            # Stack latent_state with the one hot encoded action.
+            # The final action_encoding shape is (batch_size, action_space_size, latent_state[2], latent_state[3]), e.g. (8, 2, 4, 1).
+            if len(action.shape) == 1:
+                # (batch_size, ) -> (batch_size, 1)
+                # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
+                action = action.unsqueeze(-1)
 
-        # action[:, 0, None, None] shape:  (batch_size, action_dim, 1, 1) e.g. (8, 1, 1, 1)
-        # the final action_encoding shape: (batch_size, 1, latent_state[2], latent_state[3]) e.g. (8, 1, 4, 1),
-        # where each element is normalized as action[i]/action_space_size
-        action_encoding = (action[:, 0, None, None] * action_encoding / self.action_space_size)
+            # transform action to one-hot encoding.
+            # action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)
+            action_one_hot = torch.zeros(action.shape[0], self.action_space_size, device=action.device)
+            # transform action to torch.int64
+            action = action.long()
+            action_one_hot.scatter_(1, action, 1)
 
-        # state_action_encoding shape: (batch_size, latent_state[1] + 1, latent_state[2], latent_state[3])
+            action_encoding_tmp = action_one_hot.unsqueeze(-1).unsqueeze(-1)
+            action_encoding = action_encoding_tmp.expand(
+                latent_state.shape[0], self.action_space_size, latent_state.shape[2], latent_state.shape[3]
+            )
+
+        elif self.discrete_action_encoding_type == 'not_one_hot':
+            # Stack latent_state with the normalized encoded action.
+            # The final action_encoding shape is (batch_size, 1, latent_state[2], latent_state[3]), e.g. (8, 1, 4, 1).
+            if len(action.shape) == 2:
+                # (batch_size, action_dim=1) -> (batch_size, 1, 1, 1)
+                # e.g.,  torch.Size([8, 1]) ->  torch.Size([8, 1, 1, 1])
+                action = action.unsqueeze(-1).unsqueeze(-1)
+            elif len(action.shape) == 1:
+                # (batch_size,) -> (batch_size, 1, 1, 1)
+                # e.g.,  -> torch.Size([8, 1, 1, 1])
+                action = action.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+
+            action_encoding = action.expand(
+                latent_state.shape[0], 1, latent_state.shape[2], latent_state.shape[3]
+            ) / self.action_space_size
+
+        # state_action_encoding shape: (batch_size, latent_state[1] + action_dim, latent_state[2], latent_state[3]) or
+        # (batch_size, latent_state[1] + action_space_size, latent_state[2], latent_state[3]) depending on the discrete_action_encoding_type.
         state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
 
         next_latent_state, reward = self.dynamics_network(state_action_encoding)
@@ -377,12 +410,15 @@ class DynamicsNetwork(nn.Module):
 
     def __init__(
         self,
-        num_res_blocks: int,
-        num_channels: int,
-        reward_head_channels: int,
-        fc_reward_layers: SequenceType,
-        output_support_size: int,
-        flatten_output_size_for_reward_head: int,
+        observation_shape: SequenceType,
+        action_encoding_dim: int = 2,
+        num_res_blocks: int = 1,
+        num_channels: int = 64,
+        reward_head_channels: int = 64,
+        fc_reward_layers: SequenceType = [32],
+        output_support_size: int = 601,
+        flatten_output_size_for_reward_head: int = 64,
+        downsample: bool = False,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
         norm_type: Optional[str] = 'BN',
@@ -392,6 +428,8 @@ class DynamicsNetwork(nn.Module):
             The definition of dynamics network in MuZero algorithm, which is used to predict next latent state and
             reward given current latent state and action.
         Arguments:
+            - observation_shape (:obj:`SequenceType`): The shape of input observation, e.g., (12, 96, 96).
+            - action_encoding_dim (:obj:`int`): The dimension of action encoding.
             - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
             - num_channels (:obj:`int`): The channels of input, including obs and action encoding.
             - reward_head_channels (:obj:`int`): The channels of reward head.
@@ -399,28 +437,48 @@ class DynamicsNetwork(nn.Module):
             - output_support_size (:obj:`int`): The size of categorical reward output.
             - flatten_output_size_for_reward_head (:obj:`int`): The flatten size of output for reward head, i.e., \
                 the input size of reward head.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
+            - downsample (:obj:`bool`): Whether to downsample the input observation, default set it to False.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
                 reward mlp, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super().__init__()
+        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+        assert num_channels > action_encoding_dim, f'num_channels:{num_channels} <= action_encoding_dim:{action_encoding_dim}'
+
         self.num_channels = num_channels
         self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
 
         self.conv = nn.Conv2d(num_channels, num_channels - 1, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn = nn.BatchNorm2d(num_channels - 1)
+        
+        if norm_type == 'BN':
+            self.norm_common = nn.BatchNorm2d(num_channels - 1)
+        elif norm_type == 'LN':
+            if downsample:
+                self.norm_common = nn.LayerNorm([num_channels - 1, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+            else:
+                self.norm_common = nn.LayerNorm([num_channels - 1, observation_shape[-2], observation_shape[-1]])
+            
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - 1, activation=activation, norm_type=norm_type, res_type='basic', bias=False
+                    in_channels=num_channels - 1, activation=activation, norm_type='BN', res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
 
         self.conv1x1_reward = nn.Conv2d(num_channels - 1, reward_head_channels, 1)
-        self.bn_reward = nn.BatchNorm2d(reward_head_channels)
+
+        if norm_type == 'BN':
+            self.norm_reward = nn.BatchNorm2d(reward_head_channels)
+        elif norm_type == 'LN':
+            if downsample:
+                self.norm_reward = nn.LayerNorm([reward_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+            else:
+                self.norm_reward = nn.LayerNorm([reward_head_channels, observation_shape[-2], observation_shape[-1]])
+
         self.fc_reward_head = MLP(
             self.flatten_output_size_for_reward_head,
             hidden_channels=fc_reward_layers[0],
@@ -446,13 +504,13 @@ class DynamicsNetwork(nn.Module):
                     height, width).
             - reward (:obj:`torch.Tensor`): The predicted reward, with shape (batch_size, output_support_size).
          """
-        # take the state encoding (latent_state), state_action_encoding[:, -1, :, :] is action encoding
-        latent_state = state_action_encoding[:, :-1, :, :]
+        # take the state encoding, state_action_encoding[:, -self.action_encoding_dim:, :, :] is action encoding
+        state_encoding = state_action_encoding[:, :-self.action_encoding_dim:, :, :]
         x = self.conv(state_action_encoding)
-        x = self.bn(x)
+        x = self.norm_common(x)
 
         # the residual link: add state encoding to the state_action encoding
-        x += latent_state
+        x += state_encoding
         x = self.activation(x)
 
         for block in self.resblocks:
@@ -460,7 +518,7 @@ class DynamicsNetwork(nn.Module):
         next_latent_state = x
 
         x = self.conv1x1_reward(next_latent_state)
-        x = self.bn_reward(x)
+        x = self.norm_reward(x)
         x = self.activation(x)
         x = x.view(-1, self.flatten_output_size_for_reward_head)
 
@@ -472,5 +530,5 @@ class DynamicsNetwork(nn.Module):
     def get_dynamic_mean(self) -> float:
         return get_dynamic_mean(self)
 
-    def get_reward_mean(self) -> float:
+    def get_reward_mean(self) -> Tuple[ndarray, float]:
         return get_reward_mean(self)

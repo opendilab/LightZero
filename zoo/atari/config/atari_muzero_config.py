@@ -48,6 +48,8 @@ atari_muzero_config = dict(
             action_space_size=action_space_size,
             downsample=True,
             self_supervised_learning_loss=True,  # default is False
+            discrete_action_encoding_type='one_hot',
+            norm_type='LN',
         ),
         cuda=True,
         env_type='not_board_games',

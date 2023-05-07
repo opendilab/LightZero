@@ -32,7 +32,7 @@ pendulum_disc_efficientzero_config = dict(
         model=dict(
             observation_shape=3,
             action_space_size=11,
-            model_type='mlp',  # options={'mlp', 'conv'}
+            model_type='mlp', 
             lstm_hidden_size=128,
             latent_state_dim=128,
         ),

@@ -5,6 +5,7 @@ Overview:
     customize their custom algorithms, ensuring efficient and effective development.
     BTW, users can refer to the unittest of these model templates to learn how to use them.
 """
+import math
 from typing import Optional, Tuple
 from dataclasses import dataclass
 import numpy as np
@@ -27,7 +28,7 @@ class EZNetworkOutput:
 
 @dataclass
 class MZNetworkOutput:
-    # output format of the model of MuZero
+    # output format of the MuZero model
     value: torch.Tensor
     reward: torch.Tensor
     policy_logits: torch.Tensor
@@ -36,7 +37,9 @@ class MZNetworkOutput:
 
 class DownSample(nn.Module):
 
-    def __init__(self, in_channels: int, out_channels: int, activation: nn.Module = nn.ReLU(inplace=True)) -> None:
+    def __init__(self, in_channels: int, out_channels: int, activation: nn.Module = nn.ReLU(inplace=True),
+                 norm_type: Optional[str] = 'BN',
+                 ) -> None:
         """
         Overview:
             Define downSample convolution network. Encode the observation into hidden state.
@@ -47,8 +50,11 @@ class DownSample(nn.Module):
             - out_channels (:obj:`int`): The output channels of output hidden state.
             - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
                 Use the inplace operation to speed up.
+            - norm_type (:obj:`Optional[str]`): The normalization type used in network, defaults to 'BN'. 
         """
         super().__init__()
+        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+
         self.conv1 = nn.Conv2d(
             in_channels,
             out_channels // 2,
@@ -57,7 +63,11 @@ class DownSample(nn.Module):
             padding=1,
             bias=False,  # disable bias for better convergence
         )
-        self.bn1 = nn.BatchNorm2d(out_channels // 2)
+        if norm_type == 'BN':
+            self.norm1 = nn.BatchNorm2d(out_channels // 2)
+        elif norm_type == 'LN':
+            self.norm1 = nn.LayerNorm(out_channels // 2)
+
         self.resblocks1 = nn.ModuleList(
             [
                 ResBlock(
@@ -88,7 +98,7 @@ class DownSample(nn.Module):
         self.resblocks2 = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
+                    in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
                 ) for _ in range(1)
             ]
         )
@@ -96,7 +106,7 @@ class DownSample(nn.Module):
         self.resblocks3 = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
+                    in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
                 ) for _ in range(1)
             ]
         )
@@ -112,7 +122,7 @@ class DownSample(nn.Module):
                 output width, H_ is output height.
         """
         x = self.conv1(x)
-        x = self.bn1(x)
+        x = self.norm1(x)
         x = self.activation(x)
 
         for block in self.resblocks1:
@@ -154,21 +164,31 @@ class RepresentationNetwork(nn.Module):
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super().__init__()
+        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+
         self.downsample = downsample
         if self.downsample:
             self.downsample_net = DownSample(
                 observation_shape[0],
                 num_channels,
                 activation=activation,
+                norm_type=norm_type,
             )
         else:
             self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
 
-            self.bn = nn.BatchNorm2d(num_channels)
+            if norm_type == 'BN':
+                self.norm = nn.BatchNorm2d(num_channels)
+            elif norm_type == 'LN':
+                if downsample:
+                    self.norm = nn.LayerNorm([num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                else:
+                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]])
+            
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
+                    in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
@@ -186,7 +206,7 @@ class RepresentationNetwork(nn.Module):
             x = self.downsample_net(x)
         else:
             x = self.conv(x)
-            x = self.bn(x)
+            x = self.norm(x)
             x = self.activation(x)
 
         for block in self.resblocks:
@@ -210,13 +230,13 @@ class RepresentationNetwork(nn.Module):
 class RepresentationNetworkMLP(nn.Module):
 
     def __init__(
-        self,
-        observation_shape: int,
-        hidden_channels: int = 64,
-        layer_num: int = 2,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-        last_linear_layer_init_zero: bool = True,
-        norm_type: Optional[str] = 'BN',
+            self,
+            observation_shape: int,
+            hidden_channels: int = 64,
+            layer_num: int = 2,
+            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            last_linear_layer_init_zero: bool = True,
+            norm_type: Optional[str] = 'BN',
     ) -> torch.Tensor:
         """
         Overview:
@@ -263,6 +283,7 @@ class PredictionNetwork(nn.Module):
 
     def __init__(
             self,
+            observation_shape: SequenceType,
             action_space_size: int,
             num_res_blocks: int,
             num_channels: int,
@@ -273,6 +294,7 @@ class PredictionNetwork(nn.Module):
             output_support_size: int,
             flatten_output_size_for_value_head: int,
             flatten_output_size_for_policy_head: int,
+            downsample: bool = False,
             last_linear_layer_init_zero: bool = True,
             activation: nn.Module = nn.ReLU(inplace=True),
             norm_type: Optional[str] = 'BN',
@@ -282,6 +304,7 @@ class PredictionNetwork(nn.Module):
             The definition of policy and value prediction network, which is used to predict value and policy by the
             given latent state.
         Arguments:
+            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. (C, H, W) for image.
             - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
             - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
             - num_channels (:obj:`int`): The channels of hidden states.
@@ -295,6 +318,7 @@ class PredictionNetwork(nn.Module):
                 of the value head.
             - flatten_output_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
                 of the policy head.
+            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
                 dynamics/prediction mlp, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
@@ -302,19 +326,30 @@ class PredictionNetwork(nn.Module):
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super(PredictionNetwork, self).__init__()
+        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
 
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
+                    in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
 
         self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
         self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
-        self.bn_value = nn.BatchNorm2d(value_head_channels)
-        self.bn_policy = nn.BatchNorm2d(policy_head_channels)
+        
+        if norm_type == 'BN':
+            self.norm_value = nn.BatchNorm2d(value_head_channels)
+            self.norm_policy = nn.BatchNorm2d(policy_head_channels)
+        elif norm_type == 'LN':
+            if downsample:
+                self.norm_value = nn.LayerNorm([value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+            else:
+                self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]])
+                self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]])
+        
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
         self.activation = activation
@@ -358,11 +393,11 @@ class PredictionNetwork(nn.Module):
             latent_state = res_block(latent_state)
 
         value = self.conv1x1_value(latent_state)
-        value = self.bn_value(value)
+        value = self.norm_value(value)
         value = self.activation(value)
 
         policy = self.conv1x1_policy(latent_state)
-        policy = self.bn_policy(policy)
+        policy = self.norm_policy(policy)
         policy = self.activation(policy)
 
         value = value.reshape(-1, self.flatten_output_size_for_value_head)
@@ -376,16 +411,16 @@ class PredictionNetwork(nn.Module):
 class PredictionNetworkMLP(nn.Module):
 
     def __init__(
-        self,
-        action_space_size,
-        num_channels,
-        common_layer_num: int = 2,
-        fc_value_layers: SequenceType = [32],
-        fc_policy_layers: SequenceType = [32],
-        output_support_size: int = 601,
-        last_linear_layer_init_zero: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-        norm_type: Optional[str] = 'BN',
+            self,
+            action_space_size,
+            num_channels,
+            common_layer_num: int = 2,
+            fc_value_layers: SequenceType = [32],
+            fc_policy_layers: SequenceType = [32],
+            output_support_size: int = 601,
+            last_linear_layer_init_zero: bool = True,
+            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            norm_type: Optional[str] = 'BN',
     ):
         """
         Overview:

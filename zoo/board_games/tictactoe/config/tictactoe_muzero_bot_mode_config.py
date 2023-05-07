@@ -39,6 +39,7 @@ tictactoe_muzero_config = dict(
             support_scale=10,
             reward_support_size=21,
             value_support_size=21,
+            norm_type='LN',
         ),
         cuda=True,
         env_type='board_games',

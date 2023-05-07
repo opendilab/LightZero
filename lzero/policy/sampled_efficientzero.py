@@ -59,6 +59,12 @@ class SampledEfficientZeroPolicy(Policy):
             fixed_sigma_value=0.3,
             # (bool) whether to learn bias in the last linear layer in value and policy head.
             bias=True,
+            # (str) The type of action encoding. Options are ['one_hot', 'not_one_hot']. Default to 'one_hot'.
+            discrete_action_encoding_type='one_hot',
+            # (bool) whether to use res connection in dynamics.
+            res_connection_in_dynamics=True,
+            # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
+            norm_type='LN',
         ),
         # ****** common ******
         # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
