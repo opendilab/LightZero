@@ -4,4 +4,3 @@ from .train_muzero import train_muzero
 from .eval_muzero import eval_muzero
 from .eval_muzero_with_gym_env import eval_muzero_with_gym_env
 from .train_muzero_with_gym_env import train_muzero_with_gym_env
-from .train_gumbel_muzero import train_gumbel_muzero

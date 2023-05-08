@@ -196,7 +196,7 @@ class GameSegment:
             if self.config.sampled_algo:
                 self.root_sampled_actions.append(root_sampled_actions)
             # store the improved policy in Gumbel Muzero: \pi'=softmax(logits + \sigma(CompletedQ))
-            if improved_policy.all():
+            if improved_policy.any():
                 self.improved_policy_probs.append(improved_policy)
         else:
             self.child_visit_segment[idx] = [visit_count / sum_visits for visit_count in visit_counts]
