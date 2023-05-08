@@ -232,7 +232,7 @@ class PredictionNetwork(nn.Module):
             out_channels=output_support_size,
             layer_num=len(fc_value_layers) + 1,
             activation=activation,
-            norm_type='LN',
+            norm_type='BN', 
             output_activation=False,
             output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
@@ -243,7 +243,7 @@ class PredictionNetwork(nn.Module):
             out_channels=action_space_size,
             layer_num=len(fc_policy_layers) + 1,
             activation=activation,
-            norm_type='LN',
+            norm_type='BN', 
             output_activation=False,
             output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero

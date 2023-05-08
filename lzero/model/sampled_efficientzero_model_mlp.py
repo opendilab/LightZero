@@ -385,6 +385,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
     def get_params_mean(self):
         return get_params_mean(self)
 
+
 class PredictionNetworkMLP(nn.Module):
 
     def __init__(
@@ -410,7 +411,7 @@ class PredictionNetworkMLP(nn.Module):
         Overview:
             The definition of policy and value prediction network, which is used to predict value and policy by the
             given latent state.
-            The networks are mainly build on fully connected layers.
+            The networks are mainly built on fully connected layers.
         Arguments:
             - continuous_action_space (:obj:`bool`): The type of action space. default set it to False.
             - action_space_size: (:obj:`int`): Action space size, usually an integer number. For discrete action \
@@ -452,8 +453,10 @@ class PredictionNetworkMLP(nn.Module):
             layer_num=common_layer_num,
             activation=activation,
             norm_type=norm_type,
-            output_activation=False,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
+            output_activation=True,
+            output_norm=True,
+            # last_linear_layer_init_zero=False is important for convergence
+            last_linear_layer_init_zero=False,
         )
 
         # ******* value and policy head ******
@@ -465,6 +468,8 @@ class PredictionNetworkMLP(nn.Module):
             activation=activation,
             norm_type=norm_type,
             output_activation=False,
+            output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
@@ -490,20 +495,21 @@ class PredictionNetworkMLP(nn.Module):
                 norm_type=self.norm_type,
                 output_activation=False,
                 output_norm=False,
+                # last_linear_layer_init_zero=True is beneficial for convergence speed.
                 last_linear_layer_init_zero=last_linear_layer_init_zero
             )
 
     def forward(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-         Overview:
+        Overview:
              Forward computation of the prediction network.
-         Arguments:
+        Arguments:
              - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, in_channels).
-         Returns:
+        Returns:
              - policy (:obj:`torch.Tensor`): policy tensor. If action space is discrete, shape is (B, action_space_size).
                 If action space is continuous, shape is (B, action_space_size * 2).
              - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
-         """
+        """
         x_prediction_common = self.fc_prediction_common(latent_state)
         value = self.fc_value_head(x_prediction_common)
 

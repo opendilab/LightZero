@@ -83,7 +83,7 @@ class MuZeroModel(nn.Module):
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
                 we don't need this module.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
-            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
+            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
         """
         super(MuZeroModel, self).__init__()
         if isinstance(observation_shape, int) or len(observation_shape) == 1:

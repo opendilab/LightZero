@@ -36,7 +36,7 @@ lunarlander_disc_efficientzero_config = dict(
             latent_state_dim=256,
             discrete_action_encoding_type='one_hot',
             res_connection_in_dynamics=True,
-            norm_type='LN',
+            norm_type='BN', 
         ),
         cuda=True,
         env_type='not_board_games',

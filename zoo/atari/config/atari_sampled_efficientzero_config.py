@@ -51,7 +51,7 @@ atari_sampled_efficientzero_config = dict(
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             discrete_action_encoding_type='one_hot',
-            norm_type='LN',
+            norm_type='BN', 
         ),
         cuda=True,
         env_type='not_board_games',

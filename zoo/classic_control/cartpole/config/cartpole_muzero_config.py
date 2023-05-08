@@ -35,7 +35,7 @@ cartpole_muzero_config = dict(
             latent_state_dim=128,
             self_supervised_learning_loss=True,  # NOTE: default is False.
             discrete_action_encoding_type='one_hot',
-            norm_type='LN',
+            norm_type='BN', 
         ),
         cuda=True,
         env_type='not_board_games',

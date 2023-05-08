@@ -459,7 +459,7 @@ class DynamicsNetwork(nn.Module):
             - downsample (:obj:`bool`): Whether to downsample the input observation, default set it to False.
             - lstm_hidden_size (:obj:`int`): The hidden size of lstm in dynamics network.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
-                reward mlp, default sets it to True.
+                reward mlp, Default sets it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - norm_type (:obj:`str`): The type of normalization in networks. Default set it to 'BN'.

@@ -44,7 +44,7 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
             self_supervised_learning_loss=True,
             discrete_action_encoding_type='one_hot',
             res_connection_in_dynamics=True,
-            norm_type='LN',
+            norm_type='BN', 
         ),
         cuda=True,
         env_type='not_board_games',

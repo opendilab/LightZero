@@ -508,7 +508,7 @@ class PredictionNetwork(nn.Module):
             The networks are mainly build on res_conv_blocks and fully connected layers.
         Arguments:
             - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. (C, H, W) for image.
-            - continuous_action_space (:obj:`bool`): The type of action space. default set it to False.
+            - continuous_action_space (:obj:`bool`): The type of action space. Default sets it to False.
             - action_space_size: (:obj:`int`): Action space size, usually an integer number. For discrete action \
                 space, it is the number of discrete actions. For continuous action space, it is the dimension of \
                 continuous action.
@@ -522,15 +522,15 @@ class PredictionNetwork(nn.Module):
             - flatten_output_size_for_value_head (:obj:`int`): dim of flatten hidden states.
             - flatten_output_size_for_policy_head (:obj:`int`): dim of flatten hidden states.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default set it to True.
             # ==============================================================
             # specific sampled related config
             # ==============================================================
-            # see ``ReparameterizationHead`` in ``ding.model.common.head`` for more details about thee following arguments.
+            # see ``ReparameterizationHead`` in ``ding.model.common.head`` for more details about the following arguments.
             - sigma_type (:obj:`str`): the type of sigma in policy head of prediction network, options={'conditioned', 'fixed'}.
             - fixed_sigma_value (:obj:`float`): the fixed sigma value in policy head of prediction network,
-            - bound_type (:obj:`str`): The type of bound in networks.  default set it to None.
-            - norm_type (:obj:`str`): The type of normalization in networks. default set it to 'BN'.
+            - bound_type (:obj:`str`): The type of bound in networks.  Default sets it to None.
+            - norm_type (:obj:`str`): The type of normalization in networks. Default sets it to 'BN'.
         """
         super().__init__()
         self.continuous_action_space = continuous_action_space
@@ -579,6 +579,7 @@ class PredictionNetwork(nn.Module):
             norm_type=self.norm_type,
             output_activation=False,
             output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
@@ -604,6 +605,7 @@ class PredictionNetwork(nn.Module):
                 norm_type=self.norm_type,
                 output_activation=False,
                 output_norm=False,
+                # last_linear_layer_init_zero=True is beneficial for convergence speed.
                 last_linear_layer_init_zero=last_linear_layer_init_zero
             )
 

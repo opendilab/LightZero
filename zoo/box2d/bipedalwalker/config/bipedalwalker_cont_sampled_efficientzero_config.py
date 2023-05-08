@@ -41,7 +41,7 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
             latent_state_dim=256,
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
-            norm_type='LN',
+            norm_type='BN', 
         ),
         cuda=True,
         env_type='not_board_games',

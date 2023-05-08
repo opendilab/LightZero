@@ -40,7 +40,7 @@ lunarlander_cont_sampled_efficientzero_config = dict(
             lstm_hidden_size=256,
             latent_state_dim=256,
             res_connection_in_dynamics=True,
-            norm_type='LN',
+            norm_type='BN', 
         ),
         cuda=True,
         env_type='not_board_games',

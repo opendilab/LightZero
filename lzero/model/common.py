@@ -443,6 +443,7 @@ class PredictionNetworkMLP(nn.Module):
         super().__init__()
         self.num_channels = num_channels
 
+        # ******* common backbone ******
         self.fc_prediction_common = MLP(
             in_channels=self.num_channels,
             hidden_channels=self.num_channels,
@@ -456,6 +457,7 @@ class PredictionNetworkMLP(nn.Module):
             last_linear_layer_init_zero=False,
         )
 
+        # ******* value and policy head ******
         self.fc_value_head = MLP(
             in_channels=self.num_channels,
             hidden_channels=fc_value_layers[0],
