@@ -7,183 +7,31 @@ import torch
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
-from ding.worker.collector.base_serial_collector import ISerialCollector
 from torch.nn import L1Loss
 
+from lzero.worker.muzero_collector import MuZeroCollector
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('gumbel_muzero')
-class GumbelMuZeroCollector(ISerialCollector):
+class GumbelMuZeroCollector(MuZeroCollector):
     """
     Overview:
-        The Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
+        The Collector for MCTS+RL algorithms, including Gumbel Muzero.
     Interfaces:
         __init__, reset, reset_env, reset_policy, collect, close
     Property:
         envstep
     """
 
-    # TO be compatible with ISerialCollector
+    # TO be compatible with MuZeroCollector
     config = dict()
-
-    def __init__(
-            self,
-            collect_print_freq: int = 100,
-            env: BaseEnvManager = None,
-            policy: namedtuple = None,
-            tb_logger: 'SummaryWriter' = None,  # noqa
-            exp_name: Optional[str] = 'default_experiment',
-            instance_name: Optional[str] = 'collector',
-            policy_config: 'policy_config' = None,  # noqa
-    ) -> None:
-        """
-        Overview:
-            Init the collector according to input arguments.
-        Arguments:
-            - collect_print_freq (:obj:`int`): collect_print_frequency in terms of training_steps.
-            - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
-            - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
-            - tb_logger (:obj:`SummaryWriter`): tensorboard handle
-            - instance_name (:obj:`Optional[str]`): Name of this instance.
-            - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
-            - policy_config: Config of game.
-        """
-        self._exp_name = exp_name
-        self._instance_name = instance_name
-        self._collect_print_freq = collect_print_freq
-        self._timer = EasyTimer()
-        self._end_flag = False
-
-        if tb_logger is not None:
-            self._logger, _ = build_logger(
-                path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name, need_tb=False
-            )
-            self._tb_logger = tb_logger
-        else:
-            self._logger, self._tb_logger = build_logger(
-                path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name
-            )
-
-        self.policy_config = policy_config
-
-        self.reset(policy, env)
-
-    def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
-        """
-        Overview:
-            Reset the environment.
-            If _env is None, reset the old environment.
-            If _env is not None, replace the old environment in the collector with the new passed \
-                in environment and launch.
-        Arguments:
-            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-                env_manager(BaseEnvManager)
-        """
-        if _env is not None:
-            self._env = _env
-            self._env.launch()
-            self._env_num = self._env.env_num
-        else:
-            self._env.reset()
-
-    def reset_policy(self, _policy: Optional[namedtuple] = None) -> None:
-        """
-        Overview:
-            Reset the policy.
-            If _policy is None, reset the old policy.
-            If _policy is not None, replace the old policy in the collector with the new passed in policy.
-        Arguments:
-            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy
-        """
-        assert hasattr(self, '_env'), "please set env first"
-        if _policy is not None:
-            self._policy = _policy
-            self._default_n_episode = _policy.get_attribute('cfg').get('n_episode', None)
-            self._logger.debug(
-                'Set default n_episode mode(n_episode({}), env_num({}))'.format(self._default_n_episode, self._env_num)
-            )
-        self._policy.reset()
-
-    def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
-        """
-        Overview:
-            Reset the environment and policy.
-            If _env is None, reset the old environment.
-            If _env is not None, replace the old environment in the collector with the new passed \
-                in environment and launch.
-            If _policy is None, reset the old policy.
-            If _policy is not None, replace the old policy in the collector with the new passed in policy.
-        Arguments:
-            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy
-            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-                env_manager(BaseEnvManager)
-        """
-        if _env is not None:
-            self.reset_env(_env)
-        if _policy is not None:
-            self.reset_policy(_policy)
-
-        self._env_info = {env_id: {'time': 0., 'step': 0} for env_id in range(self._env_num)}
-
-        self._episode_info = []
-        self._total_envstep_count = 0
-        self._total_episode_count = 0
-        self._total_duration = 0
-        self._last_train_iter = 0
-        self._end_flag = False
-
-        # A game_segment_pool implementation based on the deque structure.
-        self.game_segment_pool = deque(maxlen=int(1e6))
-        self.unroll_plus_td_steps = self.policy_config.num_unroll_steps + self.policy_config.td_steps
-
-    def _reset_stat(self, env_id: int) -> None:
-        """
-        Overview:
-            Reset the collector's state. Including reset the traj_buffer, obs_pool, policy_output_pool\
-                and env_info. Reset these states according to env_id. You can refer to base_serial_collector\
-                to get more messages.
-        Arguments:
-            - env_id (:obj:`int`): the id where we need to reset the collector's state
-        """
-        self._env_info[env_id] = {'time': 0., 'step': 0}
-
-    @property
-    def envstep(self) -> int:
-        """
-        Overview:
-            Print the total envstep count.
-        Return:
-            - envstep (:obj:`int`): the total envstep count
-        """
-        return self._total_envstep_count
-
-    def close(self) -> None:
-        """
-        Overview:
-            Close the collector. If end_flag is False, close the environment, flush the tb_logger\
-                and close the tb_logger.
-        """
-        if self._end_flag:
-            return
-        self._end_flag = True
-        self._env.close()
-        self._tb_logger.flush()
-        self._tb_logger.close()
-
-    def __del__(self) -> None:
-        """
-        Overview:
-            Execute the close command and close the collector. __del__ is automatically called to \
-                destroy the collector instance when the collector finishes its work
-        """
-        self.close()
 
     # ==============================================================
     # MCTS+RL related core code
     # ==============================================================
-    def _compute_priorities(self, i, pred_values_lst, search_values_lst, new_policy_lst):
+    def _compute_priorities(self, i, pred_values_lst, search_values_lst, improved_policy_lst):
         """
         Overview:
             obtain the priorities at index i.
@@ -196,74 +44,19 @@ class GumbelMuZeroCollector(ISerialCollector):
             pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.policy_config.device).float().view(-1)
             search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.policy_config.device
                                                                                 ).float().view(-1)
-            new_policy = torch.from_numpy(np.array(new_policy_lst[i])).to(self.policy_config.device
+            # ==============================================================
+            # Gumbel Muzero related code
+            # ==============================================================
+            improved_policy = torch.from_numpy(np.array(improved_policy_lst[i])).to(self.policy_config.device
                                                                                 ).float().view(-1)
             priorities = L1Loss(reduction='none'
                                 )(pred_values,
-                                  search_values, new_policy).detach().cpu().numpy() + self.policy_config.prioritized_replay_eps
+                                  search_values, improved_policy).detach().cpu().numpy() + self.policy_config.prioritized_replay_eps
         else:
             # priorities is None -> use the max priority for all newly collected data
             priorities = None
 
         return priorities
-
-    def pad_and_save_last_trajectory(self, i, last_game_segments, last_game_priorities, game_segments, done) -> None:
-        """
-        Overview:
-            put the last game block into the pool if the current game is finished
-        Arguments:
-            - last_game_segments (:obj:`list`): list of the last game segments
-            - last_game_priorities (:obj:`list`): list of the last game priorities
-            - game_segments (:obj:`list`): list of the current game segments
-        Note:
-            (last_game_segments[i].obs_segment[-4:][j] == game_segments[i].obs_segment[:4][j]).all() is True
-        """
-        # pad over last block trajectory
-        beg_index = self.policy_config.model.frame_stack_num
-        end_index = beg_index + self.policy_config.num_unroll_steps
-
-        # the start <frame_stack_num> obs is init zero obs, so we take the [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
-        # e.g. the start 4 obs is init zero obs, the num_unroll_steps is 5, so we take the [4:9] obs as the pad obs
-        pad_obs_lst = game_segments[i].obs_segment[beg_index:end_index]
-        pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps]
-        # EfficientZero original repo bug:
-        # pad_child_visits_lst = game_segments[i].child_visit_segment[beg_index:end_index]
-
-        beg_index = 0
-        # self.unroll_plus_td_steps = self.policy_config.num_unroll_steps + self.policy_config.td_steps
-        end_index = beg_index + self.unroll_plus_td_steps - 1
-
-        pad_reward_lst = game_segments[i].reward_segment[beg_index:end_index]
-
-        beg_index = 0
-        end_index = beg_index + self.unroll_plus_td_steps
-
-        pad_root_values_lst = game_segments[i].root_value_segment[beg_index:end_index]
-
-        # pad over and save
-        last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
-        """
-        Note:
-            game_segment element shape:
-            obs: game_segment_length + stack + num_unroll_steps, 20+4 +5
-            rew: game_segment_length + stack + num_unroll_steps + td_steps -1  20 +5+3-1
-            action: game_segment_length -> 20
-            root_values:  game_segment_length + num_unroll_steps + td_steps -> 20 +5+3
-            child_visits： game_segment_length + num_unroll_steps -> 20 +5
-            to_play: game_segment_length -> 20
-            action_mask: game_segment_length -> 20
-        """
-
-        last_game_segments[i].game_segment_to_array()
-
-        # put the game block into the pool
-        self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
-
-        # reset last game_segments
-        last_game_segments[i] = None
-        last_game_priorities[i] = None
-
-        return None
 
     def collect(self,
                 n_episode: Optional[int] = None,
@@ -334,7 +127,7 @@ class GumbelMuZeroCollector(ISerialCollector):
         # for priorities in self-play
         search_values_lst = [[] for _ in range(env_nums)]
         pred_values_lst = [[] for _ in range(env_nums)]
-        new_policy_lst = [[] for _ in range(env_nums)]
+        improved_policy_lst = [[] for _ in range(env_nums)]
 
         # some logs
         eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros(env_nums)
@@ -382,7 +175,10 @@ class GumbelMuZeroCollector(ISerialCollector):
                         for k, v in policy_output.items()
                     }
                 value_dict_no_env_id = {k: v['value'] for k, v in policy_output.items()}
-                new_policy_dict_no_env_id = {k: v['new_policy_probs'] for k, v in policy_output.items()}
+                # ==============================================================
+                # Gumbel Muzero related code
+                # ==============================================================
+                improved_policy_dict_no_env_id = {k: v['improved_policy_probs'] for k, v in policy_output.items()}
                 pred_value_dict_no_env_id = {k: v['pred_value'] for k, v in policy_output.items()}
                 visit_entropy_dict_no_env_id = {
                     k: v['visit_count_distribution_entropy']
@@ -395,7 +191,7 @@ class GumbelMuZeroCollector(ISerialCollector):
                 if self.policy_config.sampled_algo:
                     root_sampled_actions_dict = {}
                 value_dict = {}
-                new_policy_dict = {}
+                improved_policy_dict = {}
                 pred_value_dict = {}
                 visit_entropy_dict = {}
                 for index, env_id in enumerate(ready_env_id):
@@ -404,7 +200,7 @@ class GumbelMuZeroCollector(ISerialCollector):
                     if self.policy_config.sampled_algo:
                         root_sampled_actions_dict[env_id] = root_sampled_actions_dict_no_env_id.pop(index)
                     value_dict[env_id] = value_dict_no_env_id.pop(index)
-                    new_policy_dict[env_id] = new_policy_dict_no_env_id.pop(index)
+                    improved_policy_dict[env_id] = improved_policy_dict_no_env_id.pop(index)
                     pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
                     visit_entropy_dict[env_id] = visit_entropy_dict_no_env_id.pop(index)
 
@@ -432,7 +228,7 @@ class GumbelMuZeroCollector(ISerialCollector):
                             distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
                         )
                     else:
-                        game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id], new_policy_dict = new_policy_dict[env_id])
+                        game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id], improved_policy = improved_policy_dict[env_id])
                     # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
                     # in ``game_segments[env_id].init``, we have append o_{t} in ``self.obs_segment``
                     game_segments[env_id].append(
@@ -454,7 +250,7 @@ class GumbelMuZeroCollector(ISerialCollector):
                     if self.policy_config.use_priority and not self.policy_config.use_max_priority_for_new_data:
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
-                        new_policy_lst[env_id].append(new_policy_dict[env_id])
+                        improved_policy_lst[env_id].append(improved_policy_dict[env_id])
 
                     # append the newest obs
                     observation_window_stack[env_id].append(to_ndarray(obs['observation']))
@@ -473,10 +269,10 @@ class GumbelMuZeroCollector(ISerialCollector):
                             )
 
                         # calculate priority
-                        priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst, new_policy_lst)
+                        priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst, improved_policy_lst)
                         pred_values_lst[env_id] = []
                         search_values_lst[env_id] = []
-                        new_policy_lst[env_id] = []
+                        improved_policy_lst[env_id] = []
 
                         # the current game_segments become last_game_segment
                         last_game_segments[env_id] = game_segments[env_id]
@@ -519,7 +315,7 @@ class GumbelMuZeroCollector(ISerialCollector):
                         )
 
                     # store current block trajectory
-                    priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst, new_policy_lst)
+                    priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst, improved_policy_lst)
 
                     # NOTE: put the last game block in one episode into the trajectory_pool
                     game_segments[env_id].game_segment_to_array()
@@ -579,7 +375,7 @@ class GumbelMuZeroCollector(ISerialCollector):
 
                     pred_values_lst[env_id] = []
                     search_values_lst[env_id] = []
-                    new_policy_lst[env_id] = []
+                    improved_policy_lst[env_id] = []
                     eps_steps_lst[env_id] = 0
                     visit_entropies_lst[env_id] = 0
 
@@ -608,46 +404,3 @@ class GumbelMuZeroCollector(ISerialCollector):
         # log
         self._output_log(train_iter)
         return return_data
-
-    def _output_log(self, train_iter: int) -> None:
-        """
-        Overview:
-            Print the output log information. You can refer to Docs/Best Practice/How to understand\
-             training generated folders/Serial mode/log/collector for more details.
-        Arguments:
-            - train_iter (:obj:`int`): the number of training iteration.
-        """
-        if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
-            self._last_train_iter = train_iter
-            episode_count = len(self._episode_info)
-            envstep_count = sum([d['step'] for d in self._episode_info])
-            duration = sum([d['time'] for d in self._episode_info])
-            episode_reward = [d['reward'] for d in self._episode_info]
-            visit_entropy = [d['visit_entropy'] for d in self._episode_info]
-            self._total_duration += duration
-            info = {
-                'episode_count': episode_count,
-                'envstep_count': envstep_count,
-                'avg_envstep_per_episode': envstep_count / episode_count,
-                'avg_envstep_per_sec': envstep_count / duration,
-                'avg_episode_per_sec': episode_count / duration,
-                'collect_time': duration,
-                'reward_mean': np.mean(episode_reward),
-                'reward_std': np.std(episode_reward),
-                'reward_max': np.max(episode_reward),
-                'reward_min': np.min(episode_reward),
-                'total_envstep_count': self._total_envstep_count,
-                'total_episode_count': self._total_episode_count,
-                'total_duration': self._total_duration,
-                'visit_entropy': np.mean(visit_entropy),
-                # 'each_reward': episode_reward,
-            }
-            self._episode_info.clear()
-            self._logger.info("collect end:\n{}".format('\n'.join(['{}: {}'.format(k, v) for k, v in info.items()])))
-            for k, v in info.items():
-                if k in ['each_reward']:
-                    continue
-                self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
-                if k in ['total_envstep_count']:
-                    continue
-                self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)

@@ -69,7 +69,7 @@ class GameSegment:
         self.target_rewards = []
         self.target_policies = []
 
-        self.new_policy_probs = []
+        self.improved_policy_probs = []
 
         if self.config.sampled_algo:
             self.root_sampled_actions = []
@@ -183,7 +183,7 @@ class GameSegment:
         return self.target_values[timestep], self.target_rewards[timestep], self.target_policies[timestep]
 
     def store_search_stats(
-            self, visit_counts: List, root_value: List, root_sampled_actions=None, new_policy_dict=None, idx: int = None
+            self, visit_counts: List, root_value: List, root_sampled_actions=None, improved_policy=None, idx: int = None
     ) -> None:
         """
         Overview:
@@ -195,7 +195,9 @@ class GameSegment:
             self.root_value_segment.append(root_value)
             if self.config.sampled_algo:
                 self.root_sampled_actions.append(root_sampled_actions)
-            self.new_policy_probs.append(new_policy_dict)
+            # store the improved policy in Gumbel Muzero: \pi'=softmax(logits + \sigma(CompletedQ))
+            if improved_policy.all():
+                self.improved_policy_probs.append(improved_policy)
         else:
             self.child_visit_segment[idx] = [visit_count / sum_visits for visit_count in visit_counts]
             self.root_value_segment[idx] = root_value

@@ -26,10 +26,10 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
 class GumeblMuZeroPolicy(Policy):
     """
     Overview:
-        The policy class for EfficientZero
+        The policy class for Gumbel Muzero
     """
 
-    # The default_config for GumbelMuZero policy.
+    # The default_config for Gumbel MuZero policy.
     config = dict(
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.
@@ -229,7 +229,7 @@ class GumeblMuZeroPolicy(Policy):
 
         # TODO(pu): priority
         current_batch, target_batch = data
-        obs_batch_ori, action_batch, new_policy_batch, mask_batch, indices, weights, make_time = current_batch
+        obs_batch_ori, action_batch, improved_policy_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
         obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
@@ -267,7 +267,7 @@ class GumeblMuZeroPolicy(Policy):
         target_value_categorical = phi_transform(self.value_support, transformed_target_value)
 
         # ==============================================================
-        # the core initial_inference in MuZero policy.
+        # the core initial_inference in Gumbel MuZero policy.
         # ==============================================================
         network_output = self._learn_model.initial_inference(obs_batch)
 
@@ -293,17 +293,8 @@ class GumeblMuZeroPolicy(Policy):
         # ==============================================================
         # calculate policy and value loss for the first step.
         # ==============================================================
-        # policy_loss = cross_entropy_loss(policy_logits, target_policy[:, 0])
         eps=1e-7
-        # policy_loss = cross_entropy_loss(policy_logits, target_policy[:, 0])
-        policy_loss = cross_entropy_loss(policy_logits, torch.from_numpy(new_policy_batch[:, 0]).to(self._cfg.device).detach())
-        # new_policy_batch = torch.from_numpy(np.transpose(new_policy_batch, (1,0,2))).to(self._cfg.device)
-        # policy_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
-        # policy_loss = self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)).double(), torch.from_numpy(new_policy_batch[:, 0]).to(self._cfg.device).detach().double())
-        # for new_policy in new_policy_batch[1:]:
-        #     # new_policy = torch.softmax(torch.randn(new_policy.shape), dim=-1).detach().to(self._cfg.device)
-        #     policy_loss += self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)).double(), new_policy.detach().double())
-        # policy_loss = ((new_policy_batch+eps).detach() * (torch.log((new_policy_batch+eps).detach())) - torch.log(torch.softmax(policy_logits, dim=-1))).sum(-1).mean(0)
+        policy_loss = self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)).double(), torch.from_numpy(improved_policy_batch[:, 0]).to(self._cfg.device).detach().double())
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
         reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
@@ -312,7 +303,7 @@ class GumeblMuZeroPolicy(Policy):
         gradient_scale = 1 / self._cfg.num_unroll_steps
 
         # ==============================================================
-        # the core recurrent_inference in MuZero policy.
+        # the core recurrent_inference in Gumbel MuZero policy.
         # ==============================================================
         for step_i in range(self._cfg.num_unroll_steps):
             # unroll with the dynamics function: predict the next ``hidden_state``, ``reward``,
@@ -357,9 +348,7 @@ class GumeblMuZeroPolicy(Policy):
             # calculate policy loss for the next ``num_unroll_steps`` unroll steps.
             # NOTE: the +=.
             # ==============================================================
-            # policy_loss += self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)).double(), torch.from_numpy(new_policy_batch[:, step_i + 1]).to(self._cfg.device).detach().double())
-            # policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
-            policy_loss += cross_entropy_loss(policy_logits, torch.from_numpy(new_policy_batch[:, step_i + 1]).to(self._cfg.device).detach())
+            policy_loss += self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)).double(), torch.from_numpy(improved_policy_batch[:, step_i + 1]).to(self._cfg.device).detach().double())
 
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_i])
@@ -525,8 +514,8 @@ class GumeblMuZeroPolicy(Policy):
             )  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
-            roots_new_policy_probs = roots.get_policies(self._cfg.discount_factor, self._cfg.model.action_space_size) # new policy constructed with completed Q in gumbel muzero
-            roots_new_policy_probs = np.array(roots_new_policy_probs)
+            roots_improved_policy_probs = roots.get_policies(self._cfg.discount_factor, self._cfg.model.action_space_size) # new policy constructed with completed Q in gumbel muzero
+            roots_improved_policy_probs = np.array(roots_improved_policy_probs)
 
             data_id = [i for i in range(active_collect_env_num)]
             output = {i: None for i in data_id}
@@ -535,7 +524,7 @@ class GumeblMuZeroPolicy(Policy):
                 ready_env_id = np.arange(active_collect_env_num)
 
             for i, env_id in enumerate(ready_env_id):
-                distributions, value, new_policy_probs = roots_visit_count_distributions[i], roots_values[i], roots_new_policy_probs[i]
+                distributions, value, improved_policy_probs = roots_visit_count_distributions[i], roots_values[i], roots_improved_policy_probs[i]
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
                 action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
@@ -549,7 +538,7 @@ class GumeblMuZeroPolicy(Policy):
                     'distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
                     'value': value,
-                    'new_policy_probs': new_policy_probs,
+                    'improved_policy_probs': improved_policy_probs,
                     'pred_value': pred_values[i],
                     'policy_logits': policy_logits[i],
                 }
