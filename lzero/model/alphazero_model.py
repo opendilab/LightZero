@@ -222,8 +222,8 @@ class PredictionNetwork(nn.Module):
 
         self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
         self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
-        self.bn_value = nn.BatchNorm2d(value_head_channels)
-        self.bn_policy = nn.BatchNorm2d(policy_head_channels)
+        self.norm_value = nn.BatchNorm2d(value_head_channels)
+        self.norm_policy = nn.BatchNorm2d(policy_head_channels)
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
         self.fc_value = MLP(
@@ -232,7 +232,7 @@ class PredictionNetwork(nn.Module):
             out_channels=output_support_size,
             layer_num=len(fc_value_layers) + 1,
             activation=activation,
-            norm_type='LN',
+            norm_type='BN', 
             output_activation=False,
             output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
@@ -243,7 +243,7 @@ class PredictionNetwork(nn.Module):
             out_channels=action_space_size,
             layer_num=len(fc_policy_layers) + 1,
             activation=activation,
-            norm_type='LN',
+            norm_type='BN', 
             output_activation=False,
             output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
@@ -263,11 +263,11 @@ class PredictionNetwork(nn.Module):
             x = block(x)
 
         value = self.conv1x1_value(x)
-        value = self.bn_value(value)
+        value = self.norm_value(value)
         value = self.activation(value)
 
         policy = self.conv1x1_policy(x)
-        policy = self.bn_policy(policy)
+        policy = self.norm_policy(policy)
         policy = self.activation(policy)
 
         value = value.reshape(-1, self.flatten_output_size_for_value_head)

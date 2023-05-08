@@ -46,6 +46,8 @@ atari_efficientzero_config = dict(
             frame_stack_num=4,
             action_space_size=action_space_size,
             downsample=True,
+            discrete_action_encoding_type='one_hot',
+            norm_type='BN', 
         ),
         cuda=True,
         env_type='not_board_games',

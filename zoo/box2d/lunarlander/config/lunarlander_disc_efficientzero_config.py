@@ -31,11 +31,12 @@ lunarlander_disc_efficientzero_config = dict(
         model=dict(
             observation_shape=8,
             action_space_size=4,
-            model_type='mlp',  # options={'mlp', 'conv'}
+            model_type='mlp', 
             lstm_hidden_size=256,
             latent_state_dim=256,
             discrete_action_encoding_type='one_hot',
             res_connection_in_dynamics=True,
+            norm_type='BN', 
         ),
         cuda=True,
         env_type='not_board_games',
@@ -49,7 +50,7 @@ lunarlander_disc_efficientzero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(2e3),
+        eval_freq=int(1e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 from ding.torch_utils import MLP
 from ding.utils import MODEL_REGISTRY, SequenceType
+from numpy import ndarray
 
 from .common import EZNetworkOutput, RepresentationNetworkMLP, PredictionNetworkMLP
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
@@ -107,7 +108,7 @@ class EfficientZeroModelMLP(nn.Module):
             observation_shape=observation_shape, hidden_channels=latent_state_dim, norm_type=norm_type
         )
 
-        self.dynamics_network = DynamicsNetwork(
+        self.dynamics_network = DynamicsNetworkMLP(
             action_encoding_dim=self.action_encoding_dim,
             num_channels=latent_state_dim + self.action_encoding_dim,
             common_layer_num=2,
@@ -336,7 +337,7 @@ class EfficientZeroModelMLP(nn.Module):
         return get_params_mean(self)
 
 
-class DynamicsNetwork(nn.Module):
+class DynamicsNetworkMLP(nn.Module):
 
     def __init__(
         self,
@@ -355,7 +356,7 @@ class DynamicsNetwork(nn.Module):
         Overview:
             The definition of dynamics network in EfficientZero algorithm, which is used to predict next latent state
             value_prefix and reward_hidden_state by the given current latent state and action.
-            The networks are mainly build on fully connected layers.
+            The networks are mainly built on fully connected layers.
         Arguments:
             - action_encoding_dim (:obj:`int`): The dimension of action encoding.
             - num_channels (:obj:`int`): The num of channels in latent states.
@@ -363,13 +364,15 @@ class DynamicsNetwork(nn.Module):
             - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical reward output.
             - lstm_hidden_size (:obj:`int`): The hidden size of lstm in dynamics network.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy head, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy head, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection in dynamics network.
         """
         super().__init__()
+        assert num_channels > action_encoding_dim, f'num_channels:{num_channels} <= action_encoding_dim:{action_encoding_dim}'
+
         self.num_channels = num_channels
         self.action_encoding_dim = action_encoding_dim
         self.latent_state_dim = self.num_channels - self.action_encoding_dim
@@ -466,5 +469,5 @@ class DynamicsNetwork(nn.Module):
     def get_dynamic_mean(self) -> float:
         return get_dynamic_mean(self)
 
-    def get_reward_mean(self) -> float:
+    def get_reward_mean(self) -> Tuple[ndarray, float]:
         return get_reward_mean(self)

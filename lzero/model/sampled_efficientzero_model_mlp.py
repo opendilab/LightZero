@@ -5,10 +5,10 @@ import torch.nn as nn
 from ding.model.common import ReparameterizationHead
 from ding.torch_utils import MLP
 from ding.utils import MODEL_REGISTRY, SequenceType
-from numpy import ndarray
 
 from .common import EZNetworkOutput, RepresentationNetworkMLP
-from .utils import renormalize, get_dynamic_mean, get_reward_mean, get_params_mean
+from .efficientzero_model_mlp import DynamicsNetworkMLP
+from .utils import renormalize, get_params_mean
 
 
 @MODEL_REGISTRY.register('SampledEfficientZeroModelMLP')
@@ -139,7 +139,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
             observation_shape=self.observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
         )
 
-        self.dynamics_network = DynamicsNetwork(
+        self.dynamics_network = DynamicsNetworkMLP(
             action_encoding_dim=self.action_encoding_dim,
             num_channels=self.latent_state_dim + self.action_encoding_dim,
             common_layer_num=2,
@@ -386,140 +386,6 @@ class SampledEfficientZeroModelMLP(nn.Module):
         return get_params_mean(self)
 
 
-class DynamicsNetwork(nn.Module):
-
-    def __init__(
-        self,
-        action_encoding_dim: int = 2,
-        num_channels: int = 64,
-        common_layer_num: int = 2,
-        lstm_hidden_size: int = 512,
-        fc_reward_layers: SequenceType = [32],
-        output_support_size: int = 601,
-        last_linear_layer_init_zero: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-        norm_type: Optional[str] = 'BN',
-        res_connection_in_dynamics: bool = False,
-    ):
-        """
-        Overview:
-            The definition of dynamics network in Sampled EfficientZero algorithm, which is used to predict next latent state
-            value_prefix and reward_hidden_state by the given current latent state and action.
-            The networks are mainly build on fully connected layers.
-        Arguments:
-            - action_encoding_dim (:obj:`int`): The dimension of action encoding.
-            - num_channels (:obj:`int`): The num of channels in latent states.
-            - common_layer_num (:obj:`int`): The number of common layers in dynamics network.
-            - lstm_hidden_size (:obj:`int`): The hidden size of lstm in dynamics network.
-            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
-            - output_support_size (:obj:`int`): The size of categorical reward output.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
-            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
-                operation to speedup, e.g. ReLU(inplace=True).
-            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
-            - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection in dynamics network.
-        """
-        super().__init__()
-        assert num_channels > action_encoding_dim, f'num_channels:{num_channels} <= action_encoding_dim:{action_encoding_dim}'
-
-        self.action_encoding_dim = action_encoding_dim
-        self.num_channels = num_channels
-        self.lstm_hidden_size = lstm_hidden_size
-        self.latent_state_dim = self.num_channels - self.action_encoding_dim
-        self.res_connection_in_dynamics = res_connection_in_dynamics
-
-        if self.res_connection_in_dynamics:
-            self.fc_dynamics_1 = MLP(
-                in_channels=self.num_channels,
-                hidden_channels=self.latent_state_dim,
-                layer_num=common_layer_num,
-                out_channels=self.latent_state_dim,
-                activation=activation,
-                norm_type=norm_type,
-                output_activation=True,
-                output_norm=True,
-                # last_linear_layer_init_zero=False is important for convergence
-                last_linear_layer_init_zero=False,
-            )
-            self.fc_dynamics_2 = MLP(
-                in_channels=self.latent_state_dim,
-                hidden_channels=self.latent_state_dim,
-                layer_num=common_layer_num,
-                out_channels=self.latent_state_dim,
-                activation=activation,
-                norm_type=norm_type,
-                output_activation=True,
-                output_norm=True,
-                # last_linear_layer_init_zero=False is important for convergence
-                last_linear_layer_init_zero=False,
-            )
-        else:
-            self.fc_dynamics = MLP(
-                in_channels=self.num_channels,
-                hidden_channels=self.latent_state_dim,
-                layer_num=common_layer_num,
-                out_channels=self.latent_state_dim,
-                activation=activation,
-                norm_type=norm_type,
-                output_activation=True,
-                output_norm=True,
-                # last_linear_layer_init_zero=False is important for convergence
-                last_linear_layer_init_zero=False,
-            )
-
-        # input_shape: （sequence_length，batch_size，input_size)
-        # output_shape: (sequence_length, batch_size, hidden_size)
-        self.lstm = nn.LSTM(input_size=self.latent_state_dim, hidden_size=self.lstm_hidden_size)
-
-        self.fc_reward_head = MLP(
-            in_channels=self.lstm_hidden_size,
-            hidden_channels=fc_reward_layers[0],
-            layer_num=2,
-            out_channels=output_support_size,
-            activation=activation,
-            norm_type=norm_type,
-            output_activation=False,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-
-    def forward(self, state_action_encoding: torch.Tensor, reward_hidden_state):
-        """
-        Overview:
-            Forward computation of the dynamics network. Predict next latent state given current latent state, action and reward hidden state.
-        Arguments:
-            - state_action_encoding (:obj:`torch.Tensor`): The state-action encoding, which is the concatenation of \
-                    latent state and action encoding, with shape (batch_size, num_channels, height, width).
-            - reward_hidden_state (:obj:`Tuple[torch.Tensor, torch.Tensor]`): The input hidden state of LSTM about reward.
-        Returns:
-            - next_latent_state (:obj:`torch.Tensor`): The next latent state, with shape (batch_size, latent_state_dim).
-            - next_reward_hidden_state (:obj:`torch.Tensor`): The input hidden state of LSTM about reward.
-            - value_prefix (:obj:`torch.Tensor`): The predicted prefix sum of value for input state.
-        """
-        if self.res_connection_in_dynamics:
-            # take the state encoding (latent_state), state_action_encoding[:, -self.action_encoding_dim]
-            # is action encoding
-            latent_state = state_action_encoding[:, :-self.action_encoding_dim]
-            x = self.fc_dynamics_1(state_action_encoding)
-            # the residual link: add state encoding to the state_action encoding
-            next_latent_state = x + latent_state
-            next_latent_state_ = self.fc_dynamics_2(next_latent_state)
-        else:
-            next_latent_state = self.fc_dynamics(state_action_encoding)
-            next_latent_state_ = next_latent_state
-
-        next_latent_state_unsqueeze = next_latent_state_.unsqueeze(0)
-        value_prefix, reward_hidden_state = self.lstm(next_latent_state_unsqueeze, reward_hidden_state)
-        value_prefix = self.fc_reward_head(value_prefix.squeeze(0))
-
-        return next_latent_state, reward_hidden_state, value_prefix
-
-    def get_dynamic_mean(self) -> float:
-        return get_dynamic_mean(self)
-
-    def get_reward_mean(self) -> Tuple[ndarray, float]:
-        return get_reward_mean(self)
-
-
 class PredictionNetworkMLP(nn.Module):
 
     def __init__(
@@ -545,7 +411,7 @@ class PredictionNetworkMLP(nn.Module):
         Overview:
             The definition of policy and value prediction network, which is used to predict value and policy by the
             given latent state.
-            The networks are mainly build on fully connected layers.
+            The networks are mainly built on fully connected layers.
         Arguments:
             - continuous_action_space (:obj:`bool`): The type of action space. default set it to False.
             - action_space_size: (:obj:`int`): Action space size, usually an integer number. For discrete action \
@@ -587,8 +453,10 @@ class PredictionNetworkMLP(nn.Module):
             layer_num=common_layer_num,
             activation=activation,
             norm_type=norm_type,
-            output_activation=False,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
+            output_activation=True,
+            output_norm=True,
+            # last_linear_layer_init_zero=False is important for convergence
+            last_linear_layer_init_zero=False,
         )
 
         # ******* value and policy head ******
@@ -600,6 +468,8 @@ class PredictionNetworkMLP(nn.Module):
             activation=activation,
             norm_type=norm_type,
             output_activation=False,
+            output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
@@ -625,20 +495,21 @@ class PredictionNetworkMLP(nn.Module):
                 norm_type=self.norm_type,
                 output_activation=False,
                 output_norm=False,
+                # last_linear_layer_init_zero=True is beneficial for convergence speed.
                 last_linear_layer_init_zero=last_linear_layer_init_zero
             )
 
     def forward(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-         Overview:
+        Overview:
              Forward computation of the prediction network.
-         Arguments:
+        Arguments:
              - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, in_channels).
-         Returns:
+        Returns:
              - policy (:obj:`torch.Tensor`): policy tensor. If action space is discrete, shape is (B, action_space_size).
                 If action space is continuous, shape is (B, action_space_size * 2).
              - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
-         """
+        """
         x_prediction_common = self.fc_prediction_common(latent_state)
         value = self.fc_value_head(x_prediction_common)
 
