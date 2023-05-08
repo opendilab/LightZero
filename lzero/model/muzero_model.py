@@ -42,6 +42,7 @@ class MuZeroModel(nn.Module):
         last_linear_layer_init_zero: bool = True,
         state_norm: bool = False,
         downsample: bool = False,
+        norm_type: Optional[str] = 'BN',
         *args,
         **kwargs
     ):
@@ -79,13 +80,14 @@ class MuZeroModel(nn.Module):
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
                 we don't need this module.
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super(MuZeroModel, self).__init__()
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
             # for vector obs input, e.g. classical control ad box2d environments
             # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
             observation_shape = [1, observation_shape, 1]
-            
+
         self.categorical_distribution = categorical_distribution
         if self.categorical_distribution:
             self.reward_support_size = reward_support_size
@@ -93,7 +95,7 @@ class MuZeroModel(nn.Module):
         else:
             self.reward_support_size = 1
             self.value_support_size = 1
-            
+
         self.action_space_size = action_space_size
         self.proj_hid = proj_hid
         self.proj_out = proj_out
@@ -125,6 +127,7 @@ class MuZeroModel(nn.Module):
             num_res_blocks,
             num_channels,
             downsample,
+            norm_type=norm_type
         )
         self.dynamics_network = DynamicsNetwork(
             num_res_blocks,
@@ -134,6 +137,7 @@ class MuZeroModel(nn.Module):
             self.reward_support_size,
             flatten_output_size_for_reward_head,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            norm_type=norm_type
         )
         self.prediction_network = PredictionNetwork(
             action_space_size,
@@ -147,6 +151,7 @@ class MuZeroModel(nn.Module):
             flatten_output_size_for_value_head,
             flatten_output_size_for_policy_head,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            norm_type=norm_type
         )
 
         if self.self_supervised_learning_loss:
@@ -380,6 +385,7 @@ class DynamicsNetwork(nn.Module):
         flatten_output_size_for_reward_head: int,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        norm_type: Optional[str] = 'BN',
     ):
         """
         Overview:
@@ -397,6 +403,7 @@ class DynamicsNetwork(nn.Module):
                 reward mlp, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super().__init__()
         self.num_channels = num_channels
@@ -407,7 +414,7 @@ class DynamicsNetwork(nn.Module):
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - 1, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=num_channels - 1, activation=activation, norm_type=norm_type, res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
@@ -420,9 +427,9 @@ class DynamicsNetwork(nn.Module):
             layer_num=len(fc_reward_layers) + 1,
             out_channels=output_support_size,
             activation=activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
-            output_norm_type=None,
+            norm_type=norm_type,
+            output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.activation = activation
@@ -439,7 +446,7 @@ class DynamicsNetwork(nn.Module):
                     height, width).
             - reward (:obj:`torch.Tensor`): The predicted reward, with shape (batch_size, output_support_size).
          """
-        # take the state encoding (latent_state),  state_action_encoding[:, -1, :, :] is action encoding
+        # take the state encoding (latent_state), state_action_encoding[:, -1, :, :] is action encoding
         latent_state = state_action_encoding[:, :-1, :, :]
         x = self.conv(state_action_encoding)
         x = self.bn(x)

@@ -79,27 +79,27 @@ namespace tree
         this->to_play = 0;
         this->value_prefix = 0.0;
         this->parent_value_prefix = 0.0;
-        this->latent_state_index_x = -1;
-        this->latent_state_index_y = -1;
+        this->current_latent_state_index = -1;
+        this->batch_index = -1;
     }
 
     CNode::~CNode() {}
 
-    void CNode::expand(int to_play, int latent_state_index_x, int latent_state_index_y, float value_prefix, const std::vector<float> &policy_logits)
+    void CNode::expand(int to_play, int current_latent_state_index, int batch_index, float value_prefix, const std::vector<float> &policy_logits)
     {
         /*
         Overview:
             Expand the child nodes of the current node.
         Arguments:
             - to_play: which player to play the game in the current node.
-            - latent_state_index_x: the x/first index of hidden state vector of the current node, i.e. the search depth.
-            - latent_state_index_y: the y/second index of hidden state vector of the current node, i.e. the index of batch root node, its maximum is ``batch_size``/``env_num``.
+            - current_latent_state_index: the x/first index of hidden state vector of the current node, i.e. the search depth.
+            - batch_index: the y/second index of hidden state vector of the current node, i.e. the index of batch root node, its maximum is ``batch_size``/``env_num``.
             - value_prefix: the value prefix of the current node.
             - policy_logits: the policy logit of the child nodes.
         */
         this->to_play = to_play;
-        this->latent_state_index_x = latent_state_index_x;
-        this->latent_state_index_y = latent_state_index_y;
+        this->current_latent_state_index = current_latent_state_index;
+        this->batch_index = batch_index;
         this->value_prefix = value_prefix;
 
         int action_num = policy_logits.size();
@@ -447,7 +447,7 @@ namespace tree
 
             if (node != root)
             {
-                // NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
+                // NOTE: in self-play-mode, value_prefix is not calculated according to the perspective of current player of node,
                 // but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
                 // true_reward = node.value_prefix - (- parent_value_prefix)
                 float true_reward = node->value_prefix - node->parent_value_prefix;
@@ -499,7 +499,7 @@ namespace tree
         assert(to_play == -1 || to_play == 1 || to_play == 2);
         if (to_play == -1)
         {
-            // for 1 player mode
+            // for play-with-bot-mode
             float bootstrap_value = value;
             int path_len = search_path.size();
             for (int i = path_len - 1; i >= 0; --i)
@@ -531,7 +531,7 @@ namespace tree
         }
         else
         {
-            // for 2 player mode
+            // for self-play-mode
             float bootstrap_value = value;
             int path_len = search_path.size();
             for (int i = path_len - 1; i >= 0; --i)
@@ -556,7 +556,7 @@ namespace tree
                     is_reset = parent->is_reset;
                 }
 
-                // NOTE: in 2 player mode, value_prefix is not calculated according to the perspective of current player of node,
+                // NOTE: in self-play-mode, value_prefix is not calculated according to the perspective of current player of node,
                 // but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
                 float true_reward = node->value_prefix - parent_value_prefix;
 
@@ -579,27 +579,27 @@ namespace tree
         }
     }
 
-    void cbatch_backpropagate(int latent_state_index_x, float discount_factor, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> is_reset_lst, std::vector<int> &to_play_batch)
+    void cbatch_backpropagate(int current_latent_state_index, float discount_factor, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> is_reset_list, std::vector<int> &to_play_batch)
     {
         /*
         Overview:
             Expand the nodes along the search path and update the infos.
         Arguments:
-            - latent_state_index_x: the index of hidden state vector.
+            - current_latent_state_index: The index of latent state of the leaf node in the search path.
             - discount_factor: the discount factor of reward.
             - value_prefixs: the value prefixs of nodes along the search path.
             - values: the values to propagate along the search path.
             - policies: the policy logits of nodes along the search path.
             - min_max_stats: a tool used to min-max normalize the q value.
             - results: the search results.
-            - is_reset_lst: the vector of is_reset nodes along the search path, where is_reset represents for whether the parent value prefix needs to be reset.
+            - is_reset_list: the vector of is_reset nodes along the search path, where is_reset represents for whether the parent value prefix needs to be reset.
             - to_play_batch: the batch of which player is playing on this node.
         */
         for (int i = 0; i < results.num; ++i)
         {
-            results.nodes[i]->expand(to_play_batch[i], latent_state_index_x, i, value_prefixs[i], policies[i]);
+            results.nodes[i]->expand(to_play_batch[i], current_latent_state_index, i, value_prefixs[i], policies[i]);
             // reset
-            results.nodes[i]->is_reset = is_reset_lst[i];
+            results.nodes[i]->is_reset = is_reset_list[i];
 
             cbackpropagate(results.search_paths[i], min_max_stats_lst->stats_lst[i], to_play_batch[i], values[i], discount_factor);
         }
@@ -780,8 +780,8 @@ namespace tree
 
             CNode *parent = results.search_paths[i][results.search_paths[i].size() - 2];
 
-            results.latent_state_index_x_lst.push_back(parent->latent_state_index_x);
-            results.latent_state_index_y_lst.push_back(parent->latent_state_index_y);
+            results.latent_state_index_in_search_path.push_back(parent->current_latent_state_index);
+            results.latent_state_index_in_batch.push_back(parent->batch_index);
 
             results.last_actions.push_back(last_action);
             results.search_lens.push_back(search_len);

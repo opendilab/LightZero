@@ -38,7 +38,7 @@ class AlphaZeroPolicy(Policy):
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
         optim_type='SGD',
-        # (float) Learning rate for training policy network. Ininitial lr for manually decay schedule.
+        # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.2,
         # (float) Weight decay for training policy network.
         weight_decay=1e-4,
@@ -109,7 +109,12 @@ class AlphaZeroPolicy(Policy):
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
         elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay, learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
+            self._optimizer = configure_optimizers(
+                model=self._model,
+                weight_decay=self._cfg.weight_decay,
+                learning_rate=self._cfg.learning_rate,
+                device_type=self._cfg.device
+            )
 
         if self._cfg.lr_piecewise_constant_decay:
             from torch.optim.lr_scheduler import LambdaLR
@@ -184,7 +189,7 @@ class AlphaZeroPolicy(Policy):
     def _init_collect(self) -> None:
         """
         Overview:
-            Collect mode init method. Called by ``self.__init__``. Ininitialize the collect model and MCTS utils.
+            Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
         self._collect_mcts = MCTS(self._cfg.mcts)
         self._collect_model = model_wrap(self._model, wrapper_name='base')
@@ -233,7 +238,7 @@ class AlphaZeroPolicy(Policy):
     def _init_eval(self) -> None:
         """
         Overview:
-            Evaluate mode init method. Called by ``self.__init__``. Ininitialize the eval model and MCTS utils.
+            Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_mcts = MCTS(self._cfg.mcts)
         self._eval_model = model_wrap(self._model, wrapper_name='base')

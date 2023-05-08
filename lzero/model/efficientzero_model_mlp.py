@@ -32,6 +32,9 @@ class EfficientZeroModelMLP(nn.Module):
         last_linear_layer_init_zero: bool = True,
         state_norm: bool = False,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        norm_type: Optional[str] = 'BN',
+        discrete_action_encoding_type: str = 'one_hot',
+        res_connection_in_dynamics: bool = False,
         *args,
         **kwargs,
     ):
@@ -63,6 +66,9 @@ class EfficientZeroModelMLP(nn.Module):
             - state_norm (:obj:`bool`): Whether to use normalization for latent states, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
+            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. default set it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+            - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection for dynamics network, default set it to False.
         """
         super(EfficientZeroModelMLP, self).__init__()
         if not categorical_distribution:
@@ -73,29 +79,44 @@ class EfficientZeroModelMLP(nn.Module):
             self.value_support_size = value_support_size
 
         self.action_space_size = action_space_size
+        self.continuous_action_space = False
+        # The dim of action space. For discrete action space, it is 1.
+        # For continuous action space, it is the dimension of continuous action.
+        self.action_space_dim = action_space_size if self.continuous_action_space else 1
+        assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
+        self.discrete_action_encoding_type = discrete_action_encoding_type
+        if self.continuous_action_space:
+            self.action_encoding_dim = action_space_size
+        else:
+            if self.discrete_action_encoding_type == 'one_hot':
+                self.action_encoding_dim = action_space_size
+            elif self.discrete_action_encoding_type == 'not_one_hot':
+                self.action_encoding_dim = 1
+
         self.lstm_hidden_size = lstm_hidden_size
-        # for discrete action space, we use one-hot encoding
-        self.action_encoding_dim = self.action_space_size
         self.proj_hid = proj_hid
         self.proj_out = proj_out
         self.pred_hid = pred_hid
         self.pred_out = pred_out
+        self.self_supervised_learning_loss = self_supervised_learning_loss
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
-        self.self_supervised_learning_loss = self_supervised_learning_loss
+        self.res_connection_in_dynamics = res_connection_in_dynamics
 
         self.representation_network = RepresentationNetworkMLP(
-            observation_shape=observation_shape, hidden_channels=latent_state_dim
+            observation_shape=observation_shape, hidden_channels=latent_state_dim, norm_type=norm_type
         )
 
         self.dynamics_network = DynamicsNetwork(
-            action_space_size=action_space_size,
+            action_encoding_dim=self.action_encoding_dim,
             num_channels=latent_state_dim + self.action_encoding_dim,
             common_layer_num=2,
             lstm_hidden_size=lstm_hidden_size,
             fc_reward_layers=fc_reward_layers,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            norm_type=norm_type,
+            res_connection_in_dynamics=self.res_connection_in_dynamics,
         )
 
         self.prediction_network = PredictionNetworkMLP(
@@ -105,6 +126,7 @@ class EfficientZeroModelMLP(nn.Module):
             fc_policy_layers=fc_policy_layers,
             output_support_size=self.value_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            norm_type=norm_type
         )
 
         if self.self_supervised_learning_loss:
@@ -249,22 +271,30 @@ class EfficientZeroModelMLP(nn.Module):
         # NOTE: the discrete action encoding type is important for some environments
 
         # discrete action space
-        # Stack latent_state with a one hot encoded action
-        # the final action_encoding shape is (batch_size, latent_state_dim+action_space_size), e.g. (8, 64+2).
-        if len(action.shape) == 1:
-            # (batch_size, ) -> (batch_size, 1)
-            # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
-            action = action.unsqueeze(-1)
+        if self.discrete_action_encoding_type == 'one_hot':
+            # Stack latent_state with the one hot encoded action
+            if len(action.shape) == 1:
+                # (batch_size, ) -> (batch_size, 1)
+                # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
+                action = action.unsqueeze(-1)
 
-        # transform action to one-hot encoding.
-        # action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)
-        action_one_hot = torch.zeros(action.shape[0], self.action_space_size, device=action.device)
-        # transform action to torch.int64
-        action = action.long()
-        action_one_hot.scatter_(1, action, 1)
-        action_encoding = action_one_hot
+            # transform action to one-hot encoding.
+            # action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)
+            action_one_hot = torch.zeros(action.shape[0], self.action_space_size, device=action.device)
+            # transform action to torch.int64
+            action = action.long()
+            action_one_hot.scatter_(1, action, 1)
+            action_encoding = action_one_hot
+        elif self.discrete_action_encoding_type == 'not_one_hot':
+            action_encoding = action / self.action_space_size
+            if len(action_encoding.shape) == 1:
+                # (batch_size, ) -> (batch_size, 1)
+                # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
+                action_encoding = action_encoding.unsqueeze(-1)
 
-        # state_action_encoding shape: (batch_size, latent_state[1] + action_dim])
+        action_encoding = action_encoding.to(latent_state.device).float()
+        # state_action_encoding shape: (batch_size, latent_state[1] + action_dim]) or
+        # (batch_size, latent_state[1] + action_space_size]) depending on the discrete_action_encoding_type.
         state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
 
         # NOTE: the key difference with MuZero
@@ -310,7 +340,7 @@ class DynamicsNetwork(nn.Module):
 
     def __init__(
         self,
-        action_space_size: int = 2,
+        action_encoding_dim: int = 2,
         num_channels: int = 64,
         common_layer_num: int = 2,
         fc_reward_layers: SequenceType = [32],
@@ -318,6 +348,8 @@ class DynamicsNetwork(nn.Module):
         lstm_hidden_size: int = 512,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        norm_type: Optional[str] = 'BN',
+        res_connection_in_dynamics: bool = False,
     ):
         """
         Overview:
@@ -325,36 +357,64 @@ class DynamicsNetwork(nn.Module):
             value_prefix and reward_hidden_state by the given current latent state and action.
             The networks are mainly build on fully connected layers.
         Arguments:
-            - action_space_size: (:obj:`int`): Action space size, usually an integer number. For discrete action \
-                space, it is the number of discrete actions. For continuous action space, it is the dimension of \
-                continuous action.
+            - action_encoding_dim (:obj:`int`): The dimension of action encoding.
             - num_channels (:obj:`int`): The num of channels in latent states.
             - common_layer_num (:obj:`int`): The number of common layers in dynamics network.
             - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical reward output.
             - lstm_hidden_size (:obj:`int`): The hidden size of lstm in dynamics network.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy head, default set it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+            - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection in dynamics network.
         """
         super().__init__()
         self.num_channels = num_channels
-        # for discrete action space, we use one-hot encoding
-        self.action_encoding_dim = action_space_size
+        self.action_encoding_dim = action_encoding_dim
         self.latent_state_dim = self.num_channels - self.action_encoding_dim
         self.lstm_hidden_size = lstm_hidden_size
         self.activation = activation
+        self.res_connection_in_dynamics = res_connection_in_dynamics
 
-        self.fc_dynamics = MLP(
-            in_channels=self.num_channels,
-            hidden_channels=self.latent_state_dim,
-            layer_num=common_layer_num,
-            out_channels=self.latent_state_dim,
-            activation=self.activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
+        if self.res_connection_in_dynamics:
+            self.fc_dynamics_1 = MLP(
+                in_channels=self.num_channels,
+                hidden_channels=self.latent_state_dim,
+                layer_num=common_layer_num,
+                out_channels=self.latent_state_dim,
+                activation=activation,
+                norm_type=norm_type,
+                output_activation=True,
+                output_norm=True,
+                # last_linear_layer_init_zero=False is important for convergence
+                last_linear_layer_init_zero=False,
+            )
+            self.fc_dynamics_2 = MLP(
+                in_channels=self.latent_state_dim,
+                hidden_channels=self.latent_state_dim,
+                layer_num=common_layer_num,
+                out_channels=self.latent_state_dim,
+                activation=activation,
+                norm_type=norm_type,
+                output_activation=True,
+                output_norm=True,
+                # last_linear_layer_init_zero=False is important for convergence
+                last_linear_layer_init_zero=False,
+            )
+        else:
+            self.fc_dynamics = MLP(
+                in_channels=self.num_channels,
+                hidden_channels=self.latent_state_dim,
+                layer_num=common_layer_num,
+                out_channels=self.latent_state_dim,
+                activation=activation,
+                norm_type=norm_type,
+                output_activation=True,
+                output_norm=True,
+                # last_linear_layer_init_zero=False is important for convergence
+                last_linear_layer_init_zero=False,
+            )
 
         # input_shape: （sequence_length，batch_size，input_size)
         # output_shape: (sequence_length, batch_size, hidden_size)
@@ -366,8 +426,9 @@ class DynamicsNetwork(nn.Module):
             layer_num=2,
             out_channels=output_support_size,
             activation=self.activation,
-            norm_type='BN',
-            output_activation=nn.Identity(),
+            norm_type=norm_type,
+            output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
@@ -384,8 +445,19 @@ class DynamicsNetwork(nn.Module):
             - next_reward_hidden_state (:obj:`torch.Tensor`): The input hidden state of LSTM about reward.
             - value_prefix (:obj:`torch.Tensor`): The predicted prefix sum of value for input state.
         """
-        next_latent_state = self.fc_dynamics(state_action_encoding)
-        next_latent_state_unsqueeze = next_latent_state.unsqueeze(0)
+        if self.res_connection_in_dynamics:
+            # take the state encoding (latent_state), state_action_encoding[:, -self.action_encoding_dim]
+            # is action encoding
+            latent_state = state_action_encoding[:, :-self.action_encoding_dim]
+            x = self.fc_dynamics_1(state_action_encoding)
+            # the residual link: add state encoding to the state_action encoding
+            next_latent_state = x + latent_state
+            next_latent_state_ = self.fc_dynamics_2(next_latent_state)
+        else:
+            next_latent_state = self.fc_dynamics(state_action_encoding)
+            next_latent_state_ = next_latent_state
+
+        next_latent_state_unsqueeze = next_latent_state_.unsqueeze(0)
         value_prefix, next_reward_hidden_state = self.lstm(next_latent_state_unsqueeze, reward_hidden_state)
         value_prefix = self.fc_reward_head(value_prefix.squeeze(0))
 

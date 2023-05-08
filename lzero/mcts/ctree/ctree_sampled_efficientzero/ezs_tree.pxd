@@ -43,13 +43,13 @@ cdef extern from "lib/cnode.h" namespace "tree":
     cdef cppclass CNode:
         CNode() except +
         CNode(float prior, vector[CAction] &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space) except +
-        int visit_count, to_play, latent_state_index_x, latent_state_index_y
+        int visit_count, to_play, current_latent_state_index, batch_index
         bool continuous_action_space
         CAction best_action
         float value_prefixs, prior, value_sum, parent_value_prefix
         vector[CNode]* ptr_node_pool;
 
-        void expand(int to_play, int latent_state_index_x, int latent_state_index_y, float value_prefixs, vector[float] policy_logits)
+        void expand(int to_play, int current_latent_state_index, int batch_index, float value_prefixs, vector[float] policy_logits)
         void add_exploration_noise(float exploration_fraction, vector[float] noises)
         float compute_mean_q(int isRoot, float parent_q, float discount_factor)
 
@@ -79,12 +79,12 @@ cdef extern from "lib/cnode.h" namespace "tree":
         CSearchResults() except +
         CSearchResults(int num) except +
         int num
-        vector[int] latent_state_index_x_lst, latent_state_index_y_lst,  search_lens
+        vector[int] latent_state_index_in_search_path, latent_state_index_in_batch,  search_lens
         vector[int] virtual_to_play_batchs
         vector[vector[float]] last_actions
         vector[CNode*] nodes
 
     cdef void cbackpropagate(vector[CNode*] &search_path, CMinMaxStats &min_max_stats, int to_play, float value, float discount_factor)
-    void cbatch_backpropagate(int latent_state_index_x, float discount_factor, vector[float] value_prefixs, vector[float] values, vector[vector[float]] policies,
-                               CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, vector[int] is_reset_lst, vector[int] &to_play_batch)
+    void cbatch_backpropagate(int current_latent_state_index, float discount_factor, vector[float] value_prefixs, vector[float] values, vector[vector[float]] policies,
+                               CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, vector[int] is_reset_list, vector[int] &to_play_batch)
     void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount_factor, CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, vector[int] &virtual_to_play_batch, bool continuous_action_space)
