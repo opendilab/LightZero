@@ -71,6 +71,7 @@ class TestSampledEfficientZeroModel:
         flatten_output_size_for_value_head = value_head_channels * observation_shape[1] * observation_shape[2]
         flatten_output_size_for_policy_head = policy_head_channels * observation_shape[1] * observation_shape[2]
         prediction_network = PredictionNetwork(
+            observation_shape=observation_shape,
             continuous_action_space=True,
             action_space_size=action_space_size,
             num_res_blocks=num_res_blocks,
@@ -106,10 +107,11 @@ class TestSampledEfficientZeroModel:
         flatten_output_size_for_reward_head = reward_head_channels * observation_shape[1] * observation_shape[2]
         state_action_embedding = torch.rand(batch_size, num_channels, observation_shape[1], observation_shape[2])
         dynamics_network = DynamicsNetwork(
+            observation_shape=observation_shape,
+            action_encoding_dim=action_space_size,
             num_res_blocks=num_res_blocks,
             num_channels=num_channels,
             lstm_hidden_size=lstm_hidden_size,
-            action_encoding_dim=action_space_size,
             reward_head_channels=reward_head_channels,
             fc_reward_layers=fc_reward_layers,
             output_support_size=output_support_size,
@@ -140,9 +142,10 @@ if __name__ == "__main__":
 
     state_action_embedding = torch.rand(batch_size, num_channels, observation_shape[1], observation_shape[2])
     dynamics_network = DynamicsNetwork(
+        observation_shape=observation_shape,
+        action_encoding_dim=action_space_size,
         num_res_blocks=num_res_blocks,
         num_channels=num_channels,
-        action_encoding_dim=action_space_size,
         reward_head_channels=reward_head_channels,
         fc_reward_layers=fc_reward_layers,
         output_support_size=output_support_size,
