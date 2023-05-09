@@ -1,1 +1,1 @@
-http://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env]
+git+http://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env]
