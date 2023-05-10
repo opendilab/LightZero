@@ -57,7 +57,7 @@ class SampledEfficientZeroModel(nn.Module):
         """
         Overview:
             The definition of the network model of Sampled EfficientZero, which is a generalization version for 2D image obs.
-            The networks are mainly build on convolution residual blocks and fully connected layers.
+            The networks are mainly built on convolution residual blocks and fully connected layers.
             Sampled EfficientZero model consists of a representation network, a dynamics network and a prediction network.
             The representation network is an MLP network which maps the raw observation to a latent state.
             The dynamics network is an MLP+LSTM network which predicts the next latent state, reward_hidden_state and value_prefix given the current latent state and action.
@@ -86,9 +86,9 @@ class SampledEfficientZeroModel(nn.Module):
                 for value, reward/value_prefix.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
-                value/policy mlp, default set it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
+                value/policy mlp, default sets it to True.
+            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default sets it to True.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
                 we don't need this module.
@@ -101,8 +101,8 @@ class SampledEfficientZeroModel(nn.Module):
             - sigma_type (:obj:`str`): the type of sigma in policy head of prediction network, options={'conditioned', 'fixed'}.
             - fixed_sigma_value (:obj:`float`): the fixed sigma value in policy head of prediction network,
             - bound_type (:obj:`str`): The type of bound in networks, default set it to None.
-            - norm_type (:obj:`str`): The type of normalization in networks, default set it to 'BN'.
-            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. default set it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
+            - norm_type (:obj:`str`): The type of normalization in networks, default sets it to 'BN'.
+            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
         """
         super(SampledEfficientZeroModel, self).__init__()
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
@@ -522,7 +522,7 @@ class PredictionNetwork(nn.Module):
             - flatten_output_size_for_value_head (:obj:`int`): dim of flatten hidden states.
             - flatten_output_size_for_policy_head (:obj:`int`): dim of flatten hidden states.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializationss for the last layer of value/policy mlp, default sets it to True.
             # ==============================================================
             # specific sampled related config
             # ==============================================================

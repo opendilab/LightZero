@@ -52,7 +52,7 @@ class EfficientZeroModel(nn.Module):
         """
         Overview:
             The definition of the network model of EfficientZero, which is a generalization version for 2D image obs.
-            The networks are build on convolution residual blocks and fully connected layers.
+            The networks are built on convolution residual blocks and fully connected layers.
             EfficientZero model which consists of a representation network, a dynamics network and a prediction network.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96] for Atari.
@@ -74,8 +74,8 @@ class EfficientZeroModel(nn.Module):
             - pred_out (:obj:`int`): The size of prediction output layer.
             - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical \
                 distribution for value and reward/value_prefix.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
-                dynamics/prediction mlp, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializationss for the last layer of \
+                dynamics/prediction mlp, default sets it to True.
             - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to False.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
@@ -83,7 +83,8 @@ class EfficientZeroModel(nn.Module):
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
-            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. default set it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
+            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. 
+                options = {'one_hot', 'not_one_hot'}
         """
         super(EfficientZeroModel, self).__init__()
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
@@ -385,7 +386,7 @@ class EfficientZeroModel(nn.Module):
         """
         Overview:
             Project the latent state to a lower dimension to calculate the self-supervised loss, which is proposed in EfficientZero.
-            For more details, please refer to paper ``Exploring Simple Siamese Representation Learning``.
+            For more details, please refer to the paper ``Exploring Simple Siamese Representation Learning``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
             - with_grad (:obj:`bool`): Whether to calculate gradient for the projection result.
@@ -444,7 +445,7 @@ class DynamicsNetwork(nn.Module):
     ):
         """
         Overview:
-            The definition of dynamics network in EfficientZero algorithm, which is used to predict next latent state
+            The definition of dynamics network in EfficientZero algorithm, which is used to predict the next latent state
             value_prefix and reward_hidden_state by the given current latent state and action.
         Arguments:
             - observation_shape (:obj:`SequenceType`): The shape of input observation, e.g., (12, 96, 96).
@@ -458,11 +459,11 @@ class DynamicsNetwork(nn.Module):
                 the input size of reward head.
             - downsample (:obj:`bool`): Whether to downsample the input observation, default set it to False.
             - lstm_hidden_size (:obj:`int`): The hidden size of lstm in dynamics network.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializationss for the last layer of \
                 reward mlp, Default sets it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
-            - norm_type (:obj:`str`): The type of normalization in networks. Default set it to 'BN'.
+            - norm_type (:obj:`str`): The type of normalization in networks. Default sets it to 'BN'.
         """
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"

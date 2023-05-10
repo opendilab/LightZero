@@ -51,7 +51,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
         """
         Overview:
             The definition of the network model of Sampled EfficientZero, which is a generalization version for 1D vector obs.
-            The networks are mainly build on fully connected layers.
+            The networks are mainly built on fully connected layers.
             Sampled EfficientZero model consists of a representation network, a dynamics network and a prediction network.
             The representation network is an MLP network which maps the raw observation to a latent state.
             The dynamics network is an MLP+LSTM network which predicts the next latent state, reward_hidden_state and value_prefix given the current latent state and action.
@@ -75,19 +75,19 @@ class SampledEfficientZeroModelMLP(nn.Module):
             - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.
+            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default sets it to True.
             # ==============================================================
             # specific sampled related config
             # ==============================================================
             - continuous_action_space (:obj:`bool`): The type of action space. default set it to False.
             - num_of_sampled_actions (:obj:`int`): the number of sampled actions, i.e. the K in original Sampled MuZero paper.
-            # see ``ReparameterizationHead`` in ``ding.model.common.head`` for more details about thee following arguments.
+            # see ``ReparameterizationHead`` in ``ding.model.common.head`` for more details about the following arguments.
             - sigma_type (:obj:`str`): the type of sigma in policy head of prediction network, options={'conditioned', 'fixed'}.
             - fixed_sigma_value (:obj:`float`): the fixed sigma value in policy head of prediction network,
-            - bound_type (:obj:`str`): The type of bound in networks.  default set it to None.
+            - bound_type (:obj:`str`): The type of bound in networks.  Default sets it to None.
             - norm_type (:obj:`str`): The type of normalization in networks. default set it to 'BN'.
-            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. default set it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
+            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
             - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection for dynamics network, default set it to False.
         """
         super(SampledEfficientZeroModelMLP, self).__init__()
@@ -359,7 +359,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
         """
         Overview:
             Project the latent state to a lower dimension to calculate the self-supervised loss, which is proposed in EfficientZero.
-            For more details, please refer to paper ``Exploring Simple Siamese Representation Learning``.
+            For more details, please refer to the paper ``Exploring Simple Siamese Representation Learning``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
             - with_grad (:obj:`bool`): Whether to calculate gradient for the projection result.
@@ -422,7 +422,7 @@ class PredictionNetworkMLP(nn.Module):
             - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
             - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
             - output_support_size (:obj:`int`): dim of value output.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.
             # ==============================================================
             # specific sampled related config
             # ==============================================================

@@ -18,7 +18,7 @@ from ding.utils import SequenceType
 # use dataclass to make the output of network more convenient to use
 @dataclass
 class EZNetworkOutput:
-    # output format of the model of EfficientZero
+    # output format of the EfficientZero model
     value: torch.Tensor
     value_prefix: torch.Tensor
     policy_logits: torch.Tensor
@@ -134,8 +134,8 @@ class DownSample(nn.Module):
         x = self.pooling1(x)
         for block in self.resblocks3:
             x = block(x)
-        x = self.pooling2(x)
-        return x
+        output = self.pooling2(x)
+        return output
 
 
 class RepresentationNetwork(nn.Module):
@@ -320,8 +320,8 @@ class PredictionNetwork(nn.Module):
             - flatten_output_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
                 of the policy head.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
-                dynamics/prediction mlp, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
+                dynamics/prediction mlp, default sets it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
@@ -434,8 +434,8 @@ class PredictionNetworkMLP(nn.Module):
             - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
             - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical value output.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
-                dynamics/prediction mlp, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
+                dynamics/prediction mlp, default sets it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.

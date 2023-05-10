@@ -76,8 +76,8 @@ class MuZeroModel(nn.Module):
                 distribution for value and reward.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
-                dynamics/prediction mlp, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
+                dynamics/prediction mlp, default sets it to True.
             - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to False.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
@@ -367,7 +367,7 @@ class MuZeroModel(nn.Module):
         Overview:
             Project the latent state to a lower dimension to calculate the self-supervised loss, which is involved in
             MuZero algorithm in EfficientZero.
-            For more details, please refer to paper ``Exploring Simple Siamese Representation Learning``.
+            For more details, please refer to the paper ``Exploring Simple Siamese Representation Learning``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
             - with_grad (:obj:`bool`): Whether to calculate gradient for the projection result.
@@ -437,8 +437,8 @@ class DynamicsNetwork(nn.Module):
             - flatten_output_size_for_reward_head (:obj:`int`): The flatten size of output for reward head, i.e., \
                 the input size of reward head.
             - downsample (:obj:`bool`): Whether to downsample the input observation, default set it to False.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
-                reward mlp, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializationss for the last layer of \
+                reward mlp, default sets it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
@@ -495,7 +495,7 @@ class DynamicsNetwork(nn.Module):
     def forward(self, state_action_encoding: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
          Overview:
-            Forward computation of the dynamics network. Predict next latent state given current latent state and action.
+            Forward computation of the dynamics network. Predict the next latent state given current latent state and action.
          Arguments:
              - state_action_encoding (:obj:`torch.Tensor`): The state-action encoding, which is the concatenation of \
                     latent state and action encoding, with shape (batch_size, num_channels, height, width).

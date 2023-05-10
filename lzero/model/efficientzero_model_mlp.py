@@ -42,7 +42,7 @@ class EfficientZeroModelMLP(nn.Module):
         """
         Overview:
             The definition of the network model of EfficientZero, which is a generalization version for 1D vector obs.
-            The networks are mainly build on fully connected layers.
+            The networks are mainly built on fully connected layers.
             Sampled EfficientZero model consists of a representation network, a dynamics network and a prediction network.
             The representation network is an MLP network which maps the raw observation to a latent state.
             The dynamics network is an MLP+LSTM network which predicts the next latent state, reward_hidden_state and value_prefix given the current latent state and action.
@@ -63,11 +63,11 @@ class EfficientZeroModelMLP(nn.Module):
             - pred_out (:obj:`int`): The size of prediction output layer.
             - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks in Sampled EfficientZero model, default set it to False.
             - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.
+            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default sets it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
-            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. default set it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
+            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection for dynamics network, default set it to False.
         """
@@ -309,8 +309,9 @@ class EfficientZeroModelMLP(nn.Module):
 
     def project(self, latent_state: torch.Tensor, with_grad=True):
         """
+        Overview:
             Project the latent state to a lower dimension to calculate the self-supervised loss, which is proposed in EfficientZero.
-            For more details, please refer to paper ``Exploring Simple Siamese Representation Learning``.
+            For more details, please refer to the paper ``Exploring Simple Siamese Representation Learning``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
             - with_grad (:obj:`bool`): Whether to calculate gradient for the projection result.
@@ -364,7 +365,7 @@ class DynamicsNetworkMLP(nn.Module):
             - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical reward output.
             - lstm_hidden_size (:obj:`int`): The hidden size of lstm in dynamics network.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy head, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializationss for the last layer of value/policy head, default sets it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
