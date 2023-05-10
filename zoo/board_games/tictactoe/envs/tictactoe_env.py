@@ -15,7 +15,7 @@ from zoo.board_games.tictactoe.envs.legal_actions_cython import legal_actions_cy
 from zoo.board_games.tictactoe.envs.get_done_winner_cython import get_done_winner_cython
 
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=512)
 def _legal_actions_func_lru(board_tuple):
     # Convert tuple to NumPy array.
     board_array = np.array(board_tuple, dtype=np.int32)
@@ -24,7 +24,7 @@ def _legal_actions_func_lru(board_tuple):
     return legal_actions_cython(board_view)
 
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=512)
 def _get_done_winner_func_lru(board_tuple):
     # Convert tuple to NumPy array.
     board_array = np.array(board_tuple, dtype=np.int32)
@@ -171,7 +171,8 @@ class TicTacToeEnv(BaseEnv):
             if timestep.done:
                 # TODO(pu): check
                 # the eval_episode_return is calculated from Player 1's perspective
-                timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs['to_play'] == 1 else timestep.reward
+                timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs[
+                                                                               'to_play'] == 1 else timestep.reward
             return timestep
         elif self.battle_mode == 'play_with_bot_mode':
             # player 1 battle with expert player 2

@@ -20,7 +20,7 @@ from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_c
     check_action_to_connect4
 
 
-@lru_cache(maxsize=1280)
+@lru_cache(maxsize=512)
 def _legal_actions_func_lru(board_size, board_tuple):
     # Convert tuple to NumPy array.
     board_array = np.array(board_tuple, dtype=np.int32)
@@ -29,7 +29,7 @@ def _legal_actions_func_lru(board_size, board_tuple):
     return legal_actions_cython(board_size, board_view)
 
 
-@lru_cache(maxsize=1280)
+@lru_cache(maxsize=512)
 def _get_done_winner_func_lru(board_size, board_tuple):
     # Convert tuple to NumPy array.
     board_array = np.array(board_tuple, dtype=np.int32)
@@ -69,7 +69,11 @@ class GomokuEnv(BaseEnv):
     # only for evaluation speed
     @property
     def legal_actions_cython(self):
-        return legal_actions_cython(self.board_size, list(self.board))
+        # Convert tuple to NumPy array.
+        board_array = np.array(tuple(map(tuple, self.board)), dtype=np.int32)
+        # Convert NumPy array to memory view.
+        board_view = board_array.view(dtype=np.int32).reshape(board_array.shape)
+        return legal_actions_cython(self.board_size, board_view)
 
     # only for evaluation speed
     @property

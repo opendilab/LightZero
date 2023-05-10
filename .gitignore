@@ -1433,6 +1433,7 @@ events.*
 /test_*
 # LightZero special key
 /zoo/board_games/**/*.c
+/zoo/board_games/**/*.cpp
 /lzero/mcts/**/*.cpp
 /zoo/**/*.c
 /lzero/mcts/**/*.so

@@ -108,7 +108,6 @@ def eval_get_done_winner_cython_lru():
 
 if __name__ == "__main__":
     eval_times = 10000
-    # eval_times = 1000000
 
     print(f"##### execute eval_get_done_winner {eval_times} times #####")
 

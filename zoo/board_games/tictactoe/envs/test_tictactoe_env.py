@@ -71,7 +71,6 @@ class TestTicTacToeEnv:
             """player 1"""
             # action = env.human_to_action()
             # action = env.random_action()
-            # action = env.legal_actions[-1]
 
             legal_actions = env.legal_actions
             print('legal_actions: ', legal_actions)
