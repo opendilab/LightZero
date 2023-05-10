@@ -23,7 +23,7 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 2000
+update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
@@ -50,6 +50,8 @@ atari_sampled_efficientzero_config = dict(
             downsample=True,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
+            discrete_action_encoding_type='one_hot',
+            norm_type='BN', 
         ),
         cuda=True,
         env_type='not_board_games',

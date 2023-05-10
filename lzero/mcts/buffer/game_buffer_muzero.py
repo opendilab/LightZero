@@ -398,7 +398,9 @@ class MuZeroGameBuffer(GameBuffer):
             if self._cfg.use_root_value:
                 # use the root values from MCTS, as in EfficiientZero
                 # the root values have limited improvement but require much more GPU actors;
-                _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(network_output, data_type='muzero')
+                _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
+                    network_output, data_type='muzero'
+                )
                 reward_pool = reward_pool.squeeze().tolist()
                 policy_logits_pool = policy_logits_pool.tolist()
                 noises = [

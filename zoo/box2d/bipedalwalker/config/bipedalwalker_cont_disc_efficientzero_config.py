@@ -37,18 +37,20 @@ bipedalwalker_cont_disc_efficientzero_config = dict(
             action_space_size=int(each_dim_disc_size ** 4),
             continuous_action_space=continuous_action_space,
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}
-            model_type='mlp',  # options={'mlp', 'conv'}
+            model_type='mlp', 
             lstm_hidden_size=256,
             latent_state_dim=256,
+            res_connection_in_dynamics=True,
+            norm_type='BN', 
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
+        learning_rate=0.003,
         # NOTE: this parameter is important for stability in bipedalwalker.
         grad_clip_value=0.5,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.

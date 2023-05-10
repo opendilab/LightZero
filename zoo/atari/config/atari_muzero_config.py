@@ -21,7 +21,7 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 2000
+update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
@@ -48,6 +48,8 @@ atari_muzero_config = dict(
             action_space_size=action_space_size,
             downsample=True,
             self_supervised_learning_loss=True,  # default is False
+            discrete_action_encoding_type='one_hot',
+            norm_type='BN', 
         ),
         cuda=True,
         env_type='not_board_games',

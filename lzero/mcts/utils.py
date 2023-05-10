@@ -69,7 +69,7 @@ def prepare_observation(observation_list, model_type='conv'):
     if model_type == 'conv':
         # for 3-dimensional image obs
         if len(observation_array.shape) == 3:
-            # for vector obs input, e.g. classical control ad box2d environments
+            # for vector obs input, e.g. classical control and box2d environments
             # to be compatible with LightZero model/policy,
             # observation_array: [B, S, O], where O is original obs shape
             # [B, S, O] -> [B, S, O, 1]
