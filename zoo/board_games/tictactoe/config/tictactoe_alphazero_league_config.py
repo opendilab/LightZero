@@ -10,7 +10,8 @@ num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
-sp_prob = 1
+sp_prob = 0.  # TODO(pu): 0, 0.8, 1
+
 
 # collector_env_num = 2
 # n_episode = 2
@@ -49,8 +50,6 @@ tictactoe_alphazero_league_config = dict(
             # We use the small size model for tictactoe.
             num_res_blocks=1,
             num_channels=16,
-            fc_value_layers=[8],
-            fc_policy_layers=[8],
         ),
         cuda=True,
         board_size=3,
@@ -88,6 +87,8 @@ tictactoe_alphazero_league_config = dict(
             ),
             use_pretrain=False,
             use_pretrain_init_historical=False,
+            # "use_bot_init_historica" means whether to use bot as an init historical player
+            use_bot_init_historical=True,
             payoff=dict(
                 type='battle',
                 decay=0.99,

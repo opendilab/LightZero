@@ -7,8 +7,10 @@ import torch
 from ding.envs import BaseEnvManager
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, dicts_to_lists
 from ding.torch_utils import to_tensor, to_ndarray
-from ding.worker.collector.base_serial_collector import ISerialCollector, CachePool, TrajBuffer, INF, to_tensor_transitions
-
+from ding.worker.collector.base_serial_collector import ISerialCollector, CachePool, TrajBuffer, INF, \
+    to_tensor_transitions
+from zoo.board_games.tictactoe.envs.rule_bot_v0 import TictactoeBotV0
+from zoo.board_games.gomoku.envs.rule_bot_v0 import GomokuBotV0
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_alphazero_battle')
 class BattleAlphaZeroCollector(ISerialCollector):
@@ -260,11 +262,13 @@ class BattleAlphaZeroCollector(ISerialCollector):
                         ready_env_id_player_2.append(k)
 
                 if len(ready_env_id_player_1) > 0:
-                    policy_output_player_1 = self._policy[0].forward(simulation_envs_player_1, obs_player_1, temperature)
+                    policy_output_player_1 = self._policy[0].forward(simulation_envs_player_1, obs_player_1,
+                                                                     temperature)
                 else:
                     policy_output_player_1 = {}
                 if len(ready_env_id_player_2) > 0:
-                    policy_output_player_2 = self._policy[1].forward(simulation_envs_player_2, obs_player_2, temperature)
+                    policy_output_player_2 = self._policy[1].forward(simulation_envs_player_2, obs_player_2,
+                                                                     temperature)
                 else:
                     policy_output_player_2 = {}
 
@@ -298,15 +302,24 @@ class BattleAlphaZeroCollector(ISerialCollector):
                     # for policy_id, policy in enumerate(self._policy):
                     #     policy_timestep_data = [d[policy_id] if not isinstance(d, bool) else d for d in timestep]
                     #     policy_timestep = type(timestep)(*policy_timestep_data)
-                        # transition = self._policy[policy_id].process_transition(
-                        #     self._obs_pool[env_id][policy_id], self._policy_output_pool[env_id][policy_id],
-                        #     policy_timestep
-                        # )
-                    transition = self._policy[policy_id].process_transition(
-                        self._obs_pool[env_id], self._policy_output_pool[env_id],
-                        timestep
-                    )
-                    transition['collect_iter'] = train_iter
+                    # transition = self._policy[policy_id].process_transition(
+                    #     self._obs_pool[env_id][policy_id], self._policy_output_pool[env_id][policy_id],
+                    #     policy_timestep
+                    # )
+                    if isinstance(self._policy[policy_id].forward.__self__, TictactoeBotV0) or isinstance(self._policy[policy_id].forward.__self__, GomokuBotV0):
+                        # bot policy does not need to process transition
+                        transition = self._policy[0].process_transition(
+                            self._obs_pool[env_id], self._policy_output_pool[env_id],
+                            timestep
+                        )
+                        transition['collect_iter'] = train_iter
+                    else:
+                        transition = self._policy[policy_id].process_transition(
+                            self._obs_pool[env_id], self._policy_output_pool[env_id],
+                            timestep
+                        )
+                        transition['collect_iter'] = train_iter
+
                     self._traj_buffer[env_id][policy_id].append(transition)
                     # prepare data
                     if timestep.done:

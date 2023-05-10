@@ -1,5 +1,4 @@
 import copy
-import copy
 import logging
 import os
 import shutil
@@ -72,6 +71,7 @@ class AlphaZeroLeague(BaseLeague):
         assert isinstance(player, ActivePlayer)
         if 'learner_step' in player_info:
             player.total_agent_step = player_info['learner_step']
+        # torch.save(player_info['state_dict'], player.checkpoint_path)
 
     # override
     @staticmethod
@@ -138,6 +138,11 @@ def train_alphazero_league(cfg, Env, seed=0):
 
     policies['historical'] = policy
 
+    # create bot policy
+    cfg.policy.type = cfg.policy.league.player_category[0] + '_bot_v0'
+    bot_policy = create_policy(cfg.policy, enable_field=['learn', 'collect', 'eval'])
+    policies['bot'] = bot_policy
+
     # create evaluator
     evaluator_env = SyncSubprocessEnvManager(
         env_fn=[partial(Env, evaluator_env_cfg) for _ in range(evaluator_env_num)], cfg=cfg.env.manager
@@ -169,18 +174,18 @@ def train_alphazero_league(cfg, Env, seed=0):
     set_pkg_seed(seed, use_cuda=cfg.policy.cuda)
     league_iter = 0
     while True:
-        if evaluator.should_eval(main_learner.train_iter):
-            stop_flag, eval_episode_info = evaluator.eval(
-                main_learner.save_checkpoint, main_learner.train_iter, main_collector.envstep
-            )
-            win_loss_result = win_loss_draw(eval_episode_info)
-
-            # set eval bot rating as 100.
-            main_player.rating = league.metric_env.rate_1vsC(
-                main_player.rating, league.metric_env.create_rating(mu=100, sigma=1e-8), win_loss_result
-            )
-            if stop_flag:
-                break
+        # if evaluator.should_eval(main_learner.train_iter):
+        #     stop_flag, eval_episode_info = evaluator.eval(
+        #         main_learner.save_checkpoint, main_learner.train_iter, main_collector.envstep
+        #     )
+        #     win_loss_result = win_loss_draw(eval_episode_info)
+        #
+        #     # set eval bot rating as 100.
+        #     main_player.rating = league.metric_env.rate_1vsC(
+        #         main_player.rating, league.metric_env.create_rating(mu=100, sigma=1e-8), win_loss_result
+        #     )
+        #     if stop_flag:
+        #         break
 
         for player_id, player_ckpt_path in zip(league.active_players_ids, league.active_players_ckpts):
             tb_logger.add_scalar(
@@ -192,10 +197,12 @@ def train_alphazero_league(cfg, Env, seed=0):
             job = league.get_job_info(player_id)
             opponent_player_id = job['player_id'][1]
             # print('job player: {}'.format(job['player_id']))
-            if 'historical' in opponent_player_id:
+            if 'historical' in opponent_player_id and 'bot' not in opponent_player_id:
                 opponent_policy = policies['historical'].collect_mode
                 opponent_path = job['checkpoint_path'][1]
                 opponent_policy.load_state_dict(torch.load(opponent_path, map_location='cpu'))
+            elif 'bot' in opponent_player_id:
+                opponent_policy = policies['bot'].collect_mode
             else:
                 opponent_policy = policies[opponent_player_id].collect_mode
 
@@ -223,6 +230,9 @@ def train_alphazero_league(cfg, Env, seed=0):
             player_info = learner.learn_info
             player_info['player_id'] = player_id
             league.update_active_player(player_info)
+
+            # player_info['state_dict'] = policies[player_id].learn_mode.state_dict()
+
             league.judge_snapshot(player_id)
             # set eval_flag=True to enable trueskill update
 
@@ -234,7 +244,7 @@ def train_alphazero_league(cfg, Env, seed=0):
                 'player_id': job['player_id'],
                 'result': win_loss_result,
             }
-            league.finish_job(job_finish_info)
+            league.finish_job(job_finish_info, league_iter)
 
         if league_iter % cfg.policy.league.log_freq == 0:
             payoff_string = repr(league.payoff)

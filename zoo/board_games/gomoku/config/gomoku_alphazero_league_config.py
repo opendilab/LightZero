@@ -13,7 +13,7 @@ num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
-sp_prob = 1  # TODO(pu): 0.8
+sp_prob = 0.  # TODO(pu): 0, 0.8, 1
 
 # collector_env_num = 2
 # n_episode = 2
@@ -22,6 +22,7 @@ sp_prob = 1  # TODO(pu): 0.8
 # update_per_collect = 5
 # batch_size = 2
 # max_env_step = int(2e5)
+# sp_prob = 0.8
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -90,6 +91,8 @@ gomoku_alphazero_league_config = dict(
             ),
             use_pretrain=False,
             use_pretrain_init_historical=False,
+            # "use_bot_init_historica" means whether to use bot as an init historical player
+            use_bot_init_historical=True,
             payoff=dict(
                 type='battle',
                 decay=0.99,
