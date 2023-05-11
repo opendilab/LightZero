@@ -1,24 +1,16 @@
 import copy
 import logging
-from random import random
+from collections import namedtuple
+from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
-from ding.policy.base_policy import Policy
-from collections import namedtuple
-from typing import Optional, List, Dict, Any, Tuple, Union
 import torch
-import copy
-import numpy as np
-from ding.torch_utils import to_device
-from ding.rl_utils import get_train_sample
+from ding.policy.base_policy import Policy
 from ding.utils import POLICY_REGISTRY
-from ding.utils.data import default_collate, default_decollate
+
 from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_case1, \
     check_action_to_special_connect4_case2, \
     check_action_to_connect4
-
-
-
 
 
 @POLICY_REGISTRY.register('gomoku_bot_v0')
@@ -59,6 +51,8 @@ class GomokuBotV0(Policy):
             - action (:obj:`int`): the expert action to take in the current game state.
         """
         board = obs['board']
+        current_player_to_compute_bot_action = -1 if obs['to_play'] == 1 else 1
+
         assert self.board_size >= 5, "current rule_bot_v0 is only support self.board_size>=5!"
         # To easily calculate expert action, we convert the chessboard notation:
         # from player 1:  1, player 2: 2
@@ -114,7 +108,7 @@ class GomokuBotV0(Policy):
                         )
                     else:
                         if zero_position_index.shape[0] == 2:
-                            ind = random.choice(zero_position_index)
+                            ind = np.random.choice(zero_position_index)
                         elif zero_position_index.shape[0] == 1:
                             ind = zero_position_index[0]
                         # convert ind to action
@@ -132,17 +126,17 @@ class GomokuBotV0(Policy):
                                 action_to_special_connect4_case2 = action
                             if check_action_to_connect4(shfit_tmp_board[i, :]):
                                 action_to_connect4 = action
-                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[i, :]) > 0) and abs(sum(
+                        if (current_player_to_compute_bot_action * sum(shfit_tmp_board[i, :]) > 0) and abs(sum(
                                 shfit_tmp_board[i, :])) == size_of_board_template - 1:
                             # immediately take the action that will lead a connect5 of current player's pieces
                             return action
-                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[i, :]) < 0) and abs(sum(
+                        if (current_player_to_compute_bot_action * sum(shfit_tmp_board[i, :]) < 0) and abs(sum(
                                 shfit_tmp_board[i, :])) == size_of_board_template - 1:
                             # memory the action that will lead a connect5 of opponent player's pieces, to avoid the forget
                             action_block_opponent_to_connect5 = action
 
                 if abs(sum(shfit_tmp_board[:, i])) >= min_to_connect:
-                    # if i-th vertical has three same pieces and two empty position, or four same pieces and one opponent piece.
+                    # if i-th vertical has three same pieces and two empty positions, or four same pieces and one opponent piece.
                     # e.g., case1: .xxx. , case2: oxxxx
 
                     # find the index in the i-th vertical line
@@ -153,7 +147,7 @@ class GomokuBotV0(Policy):
                         )
                     else:
                         if zero_position_index.shape[0] == 2:
-                            ind = random.choice(zero_position_index)
+                            ind = np.random.choice(zero_position_index)
                         elif zero_position_index.shape[0] == 1:
                             ind = zero_position_index[0]
 
@@ -172,22 +166,22 @@ class GomokuBotV0(Policy):
                                 action_to_special_connect4_case2 = action
                             if check_action_to_connect4(shfit_tmp_board[:, i]):
                                 action_to_connect4 = action
-                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[:, i]) > 0) and abs(sum(
+                        if (current_player_to_compute_bot_action * sum(shfit_tmp_board[:, i]) > 0) and abs(sum(
                                 shfit_tmp_board[:, i])) == size_of_board_template - 1:
                             # immediately take the action that will lead a connect5 of current player's pieces
                             return action
-                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[:, i]) < 0) and abs(sum(
+                        if (current_player_to_compute_bot_action * sum(shfit_tmp_board[:, i]) < 0) and abs(sum(
                                 shfit_tmp_board[:, i])) == size_of_board_template - 1:
-                            # memory the action that will lead a connect5 of opponent player's pieces, to avoid the forget
+                            # memory the action that will lead a connect5 of opponent player's pieces, to avoid the forgetting
                             action_block_opponent_to_connect5 = action
 
             # Diagonal checks
             diag = shfit_tmp_board.diagonal()
             anti_diag = np.fliplr(shfit_tmp_board).diagonal()
             if abs(sum(diag)) >= min_to_connect:
-                # if diagonal has three same pieces and two empty position, or four same pieces and one opponent piece.
+                # if diagonal has three same pieces and two empty positions, or four same pieces and one opponent piece.
                 # e.g., case1: .xxx. , case2: oxxxx
-                # find the index in the diag vector
+                #  finds the index in the diag vector
 
                 zero_position_index = np.where(diag == 0)[0]
                 if zero_position_index.shape[0] == 0:
@@ -195,7 +189,7 @@ class GomokuBotV0(Policy):
                         'there is no empty position in this searched five positions, continue to search...')
                 else:
                     if zero_position_index.shape[0] == 2:
-                        ind = random.choice(zero_position_index)
+                        ind = np.random.choice(zero_position_index)
                     elif zero_position_index.shape[0] == 1:
                         ind = zero_position_index[0]
 
@@ -214,11 +208,11 @@ class GomokuBotV0(Policy):
                             action_to_special_connect4_case2 = action
                         if check_action_to_connect4(diag):
                             action_to_connect4 = action
-                    if self.current_player_to_compute_bot_action * sum(diag) > 0 and abs(
+                    if current_player_to_compute_bot_action * sum(diag) > 0 and abs(
                             sum(diag)) == size_of_board_template - 1:
                         # immediately take the action that will lead a connect5 of current player's pieces
                         return action
-                    if self.current_player_to_compute_bot_action * sum(diag) < 0 and abs(
+                    if current_player_to_compute_bot_action * sum(diag) < 0 and abs(
                             sum(diag)) == size_of_board_template - 1:
                         # memory the action that will lead a connect5 of opponent player's pieces, to avoid the forget
                         action_block_opponent_to_connect5 = action
@@ -234,7 +228,7 @@ class GomokuBotV0(Policy):
                         'there is no empty position in this searched five positions, continue to search...')
                 else:
                     if zero_position_index.shape[0] == 2:
-                        ind = random.choice(zero_position_index)
+                        ind = np.random.choice(zero_position_index)
                     elif zero_position_index.shape[0] == 1:
                         ind = zero_position_index[0]
                     # convert ind to action
@@ -252,11 +246,11 @@ class GomokuBotV0(Policy):
                             action_to_special_connect4_case2 = action
                         if check_action_to_connect4(anti_diag):
                             action_to_connect4 = action
-                    if self.current_player_to_compute_bot_action * sum(anti_diag) > 0 and abs(
+                    if current_player_to_compute_bot_action * sum(anti_diag) > 0 and abs(
                             sum(anti_diag)) == size_of_board_template - 1:
                         # immediately take the action that will lead a connect5 of current player's pieces
                         return action
-                    if self.current_player_to_compute_bot_action * sum(anti_diag) < 0 and abs(
+                    if current_player_to_compute_bot_action * sum(anti_diag) < 0 and abs(
                             sum(anti_diag)) == size_of_board_template - 1:
                         # memory the action that will lead a connect5 of opponent player's pieces, to avoid the forget
                         action_block_opponent_to_connect5 = action
@@ -277,7 +271,7 @@ class GomokuBotV0(Policy):
 
     def _init_collect(self) -> None:
         self.board_size = self._cfg.board_size
-        pass
+        self.check_action_to_connect4_in_bot_v0 = False
 
     def _init_eval(self) -> None:
         pass

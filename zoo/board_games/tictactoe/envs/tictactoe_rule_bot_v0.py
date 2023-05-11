@@ -42,7 +42,7 @@ class TictactoeBotV0(Policy):
         """
         Overview:
             Hard coded expert agent for tictactoe env.
-            First random sample a action from legal_actions, then take the action that will lead a connect3 of current player's pieces.
+            First random sample an action from legal_actions, then take the action that will lead a connect3 of current player's pieces.
         Returns:
             - action (:obj:`int`): the expert action to take in the current game state.
         """

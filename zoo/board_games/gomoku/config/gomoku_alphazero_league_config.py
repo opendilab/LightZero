@@ -22,7 +22,7 @@ sp_prob = 0.  # TODO(pu): 0, 0.8, 1
 # update_per_collect = 5
 # batch_size = 2
 # max_env_step = int(2e5)
-# sp_prob = 0.8
+# sp_prob = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -76,7 +76,7 @@ gomoku_alphazero_league_config = dict(
             # log_freq=2,  # debug
             player_category=['gomoku'],
             # path to save policy of league player, user can specify this field
-            path_policy=f"gomoku_alphazero_league_policy_ckpt_sp-{sp_prob}",
+            path_policy=f"data_az_ptree_league/gomoku_alphazero_league_policy_ckpt_sp-{sp_prob}",
             active_players=dict(main_player=1, ),
             main_player=dict(
                 # An active player will be considered trained enough for snapshot after two phase steps.

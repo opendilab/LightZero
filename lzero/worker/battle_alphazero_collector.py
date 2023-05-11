@@ -9,8 +9,8 @@ from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, dicts
 from ding.torch_utils import to_tensor, to_ndarray
 from ding.worker.collector.base_serial_collector import ISerialCollector, CachePool, TrajBuffer, INF, \
     to_tensor_transitions
-from zoo.board_games.tictactoe.envs.rule_bot_v0 import TictactoeBotV0
-from zoo.board_games.gomoku.envs.rule_bot_v0 import GomokuBotV0
+from zoo.board_games.tictactoe.envs.tictactoe_rule_bot_v0 import TictactoeBotV0
+from zoo.board_games.gomoku.envs.gomoku_rule_bot_v0 import GomokuBotV0
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_alphazero_battle')
 class BattleAlphaZeroCollector(ISerialCollector):

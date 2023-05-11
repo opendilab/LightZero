@@ -72,7 +72,7 @@ tictactoe_alphazero_league_config = dict(
             # log_freq=2,  # debug
             player_category=['tictactoe'],
             # path to save policy of league player, user can specify this field
-            path_policy=f"tictactoe_alphazero_league_policy_ckpt_sp-{sp_prob}",
+            path_policy=f"data_az_ptree_league/tictactoe_alphazero_league_policy_ckpt_sp-{sp_prob}",
             active_players=dict(main_player=1, ),
             main_player=dict(
                 # An active player will be considered trained enough for snapshot after two phase steps.

@@ -174,18 +174,18 @@ def train_alphazero_league(cfg, Env, seed=0):
     set_pkg_seed(seed, use_cuda=cfg.policy.cuda)
     league_iter = 0
     while True:
-        # if evaluator.should_eval(main_learner.train_iter):
-        #     stop_flag, eval_episode_info = evaluator.eval(
-        #         main_learner.save_checkpoint, main_learner.train_iter, main_collector.envstep
-        #     )
-        #     win_loss_result = win_loss_draw(eval_episode_info)
-        #
-        #     # set eval bot rating as 100.
-        #     main_player.rating = league.metric_env.rate_1vsC(
-        #         main_player.rating, league.metric_env.create_rating(mu=100, sigma=1e-8), win_loss_result
-        #     )
-        #     if stop_flag:
-        #         break
+        if evaluator.should_eval(main_learner.train_iter):
+            stop_flag, eval_episode_info = evaluator.eval(
+                main_learner.save_checkpoint, main_learner.train_iter, main_collector.envstep
+            )
+            win_loss_result = win_loss_draw(eval_episode_info)
+
+            # set eval bot rating as 100.
+            main_player.rating = league.metric_env.rate_1vsC(
+                main_player.rating, league.metric_env.create_rating(mu=100, sigma=1e-8), win_loss_result
+            )
+            if stop_flag:
+                break
 
         for player_id, player_ckpt_path in zip(league.active_players_ids, league.active_players_ckpts):
             tb_logger.add_scalar(
