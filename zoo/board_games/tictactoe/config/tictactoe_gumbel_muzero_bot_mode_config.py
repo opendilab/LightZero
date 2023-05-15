@@ -17,7 +17,7 @@ reanalyze_ratio = 0.
 
 tictactoe_gumbel_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/tictactoe_gumbel_muzero_bot-mode_test_seed0',
+    f'data_mz_ctree/tictactoe_gumbel_muzero_not_stop_seed0',
     env=dict(
         battle_mode='play_with_bot_mode',
         collector_env_num=collector_env_num,
