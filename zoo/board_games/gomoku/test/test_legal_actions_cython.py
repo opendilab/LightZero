@@ -31,5 +31,17 @@ def test_legal_actions_cython():
     legal_actions = _legal_actions_func(board_size, tuple(map(tuple, board)))
     assert legal_actions == [3, 7, 11, 15], f"Error: {legal_actions}"
 
+    # case 4
+    board_size = 5
+    board = [[1, 1, 1, 1, 0], [2, 2, 1, 1, 0], [2, 2, 1, 2, 0], [2, 1, 2, 2, 0], [2, 1, 1, 2, 0]]
+    legal_actions = _legal_actions_func(board_size, tuple(map(tuple, board)))
+    assert legal_actions == [4, 9, 14, 19, 24], f"Error: {legal_actions}"
+
+    # case 5
+    board_size = 6
+    board = [[1, 1, 1, 1, 0, 1], [2, 2, 1, 1, 0, 2], [2, 2, 1, 2, 0, 1], [2, 1, 2, 2, 0, 2], [2, 1, 1, 2, 0, 1],  [1, 2, 1, 2, 0, 2]]
+    legal_actions = _legal_actions_func(board_size, tuple(map(tuple, board)))
+    assert legal_actions == [4, 10, 16, 22, 28, 34], f"Error: {legal_actions}"
+
 
 test_legal_actions_cython()
