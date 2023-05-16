@@ -12,7 +12,6 @@ from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner, create_buffer
 from tensorboardX import SummaryWriter
 
-from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.worker import AlphaZeroCollector, AlphaZeroEvaluator
 
@@ -94,7 +93,6 @@ def train_alphazero(
     # Learner's before_run hook.
     learner.call_hook('before_run')
     while True:
-        log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         collect_kwargs = {}
         # set temperature for visit count distributions according to the train_iter,
         # please refer to Appendix D in MuZero paper for details.

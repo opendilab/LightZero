@@ -213,9 +213,7 @@ class BattleAlphaZeroCollector(ISerialCollector):
         assert n_episode >= self._env_num, "Please make sure n_episode >= env_num"
         if policy_kwargs is None:
             policy_kwargs = {}
-        # temperature = policy_kwargs['temperature']
-        # TODO(pu)
-        temperature = 1.
+        temperature = policy_kwargs['temperature']
 
         collected_episode = 0
         return_data = [[] for _ in range(2)]

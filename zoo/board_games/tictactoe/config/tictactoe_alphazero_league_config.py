@@ -3,29 +3,34 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 5
-num_simulations = 25
-update_per_collect = 50
-batch_size = 256
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 5
+# num_simulations = 25
+# update_per_collect = 50
+# batch_size = 256
+# max_env_step = int(5e5)
+# sp_prob = 0  # TODO(pu): 0, 0.8, 1
+# snapshot_the_player_in_iter_zero = False
+# one_phase_step = int(1e5)
+
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+num_simulations = 2
+update_per_collect = 5
+batch_size = 2
 max_env_step = int(2e5)
-sp_prob = 0.  # TODO(pu): 0, 0.8, 1
+sp_prob = 0  # TODO(pu): 0, 0.8, 1
+snapshot_the_player_in_iter_zero = False
+one_phase_step = int(2e5)
 
-
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 2
-# update_per_collect = 5
-# batch_size = 2
-# max_env_step = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 tictactoe_alphazero_league_config = dict(
-    exp_name=f"data_az_ptree_league/tictactoe_alphazero_league_sp-{sp_prob}_seed0",
+    exp_name=f"data_az_ptree_league/tictactoe_alphazero_league_sp-{sp_prob}_iter-zero-init-{snapshot_the_player_in_iter_zero}_phase-step-{one_phase_step}_seed0",
     env=dict(
         board_size=3,
         battle_mode='self_play_mode',
@@ -68,15 +73,15 @@ tictactoe_alphazero_league_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         league=dict(
-            log_freq=50,
+            log_freq_for_payoff_rank=50,
             # log_freq=2,  # debug
             player_category=['tictactoe'],
             # path to save policy of league player, user can specify this field
-            path_policy=f"data_az_ptree_league/tictactoe_alphazero_league_policy_ckpt_sp-{sp_prob}",
+            path_policy=f"data_az_ptree_league/tictactoe_alphazero_league_sp-{sp_prob}_iter-zero-init-{snapshot_the_player_in_iter_zero}_phase-step-{one_phase_step}_policy_ckpt_seed0",
             active_players=dict(main_player=1, ),
             main_player=dict(
                 # An active player will be considered trained enough for snapshot after two phase steps.
-                one_phase_step=20000,
+                one_phase_step=one_phase_step,
                 # A namedtuple of probabilities of selecting different opponent branch.
                 # branch_probs=dict(pfsp=0.2, sp=0.8),
                 branch_probs=dict(pfsp=1-sp_prob, sp=sp_prob),
@@ -89,6 +94,8 @@ tictactoe_alphazero_league_config = dict(
             use_pretrain_init_historical=False,
             # "use_bot_init_historica" means whether to use bot as an init historical player
             use_bot_init_historical=True,
+            # "snapshot_the_player_in_iter_zero" means whether to snapshot the player in iter zero as historical_player.
+            snapshot_the_player_in_iter_zero=snapshot_the_player_in_iter_zero,
             payoff=dict(
                 type='battle',
                 decay=0.99,
@@ -134,4 +141,4 @@ create_config = tictactoe_alphazero_league_create_config
 if __name__ == "__main__":
     from lzero.entry import train_alphazero_league
     from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
-    train_alphazero_league(main_config, TicTacToeEnv)
+    train_alphazero_league(main_config, TicTacToeEnv, max_env_step=max_env_step)

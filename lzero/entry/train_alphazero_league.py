@@ -3,6 +3,7 @@ import logging
 import os
 import shutil
 from functools import partial
+from typing import Optional
 
 import torch
 from ding.config import compile_config
@@ -18,6 +19,7 @@ from tensorboardX import SummaryWriter
 from lzero.policy.alphazero import AlphaZeroPolicy
 from lzero.worker import AlphaZeroEvaluator
 from lzero.worker import BattleAlphaZeroCollector
+from lzero.policy import visit_count_temperature
 
 
 def win_loss_draw(episode_info):
@@ -79,7 +81,19 @@ class AlphaZeroLeague(BaseLeague):
         shutil.copy(src_checkpoint_path, dst_checkpoint_path)
 
 
-def train_alphazero_league(cfg, Env, seed=0):
+def train_alphazero_league(cfg, Env, seed=0, max_train_iter: Optional[int] = int(1e10), max_env_step: Optional[int] = int(1e10)) -> None:
+    """
+    Overview:
+        Train alphazero league
+    Arguments:
+        - cfg (:obj:`EasyDict`): Config dict
+        - Env (:obj:`BaseEnv`): Env class
+        - seed (:obj:`int`): Random seed
+        - max_train_iter (:obj:`Optional[int]`): Maximum policy update iterations in training.
+        - max_env_step (:obj:`Optional[int]`): Maximum collected environment interaction steps.
+    Returns:
+        - None
+    """
     # prepare config
     cfg = compile_config(
         cfg,
@@ -166,10 +180,12 @@ def train_alphazero_league(cfg, Env, seed=0):
         policies[player_id].learn_mode.load_state_dict(state_dict)
 
     league.load_checkpoint = load_checkpoint_fn
-    # snapshot the initial player as the first historical player
-    for player_id, player_ckpt_path in zip(league.active_players_ids, league.active_players_ckpts):
-        torch.save(policies[player_id].collect_mode.state_dict(), player_ckpt_path)
-        league.judge_snapshot(player_id, force=True)
+
+    if cfg.policy.league.snapshot_the_player_in_iter_zero:
+        # snapshot the initial player as the first historical player
+        for player_id, player_ckpt_path in zip(league.active_players_ids, league.active_players_ckpts):
+            torch.save(policies[player_id].collect_mode.state_dict(), player_ckpt_path)
+            league.judge_snapshot(player_id, force=True)
 
     set_pkg_seed(seed, use_cuda=cfg.policy.cuda)
     league_iter = 0
@@ -208,8 +224,18 @@ def train_alphazero_league(cfg, Env, seed=0):
 
             collector.reset_policy([policies[player_id].collect_mode, opponent_policy])
 
+            collect_kwargs = {}
+            # set temperature for visit count distributions according to the train_iter,
+            # please refer to Appendix D in MuZero paper for details.
+            collect_kwargs['temperature'] = visit_count_temperature(
+                cfg.policy.manual_temperature_decay,
+                cfg.policy.fixed_temperature_value,
+                cfg.policy.threshold_training_steps_for_final_temperature,
+                trained_steps=learner.train_iter
+            )
+
             new_data, episode_info = collector.collect(
-                train_iter=learner.train_iter, n_episode=cfg.policy.n_episode
+                train_iter=learner.train_iter, n_episode=cfg.policy.n_episode, policy_kwargs=collect_kwargs
             )
             # TODO(pu): new_data[1]
             new_data = sum(new_data[0], [])
@@ -246,10 +272,13 @@ def train_alphazero_league(cfg, Env, seed=0):
             }
             league.finish_job(job_finish_info, league_iter)
 
-        if league_iter % cfg.policy.league.log_freq == 0:
+        if league_iter % cfg.policy.league.log_freq_for_payoff_rank == 0:
             payoff_string = repr(league.payoff)
             rank_string = league.player_rank(string=True)
             tb_logger.add_text('payoff_step', payoff_string, main_collector.envstep)
             tb_logger.add_text('rank_step', rank_string, main_collector.envstep)
 
         league_iter += 1
+
+        if main_collector.envstep >= max_env_step or main_learner.train_iter >= max_train_iter:
+            break
