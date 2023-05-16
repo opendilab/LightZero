@@ -4,17 +4,17 @@ from functools import partial
 from typing import Optional, Tuple
 
 import torch
-from tensorboardX import SummaryWriter
-
 from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
+from tensorboardX import SummaryWriter
+
+from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroCollector, MuZeroEvaluator
-from lzero.entry.utils import buffer_memory_usage
 
 
 def train_muzero(
@@ -110,8 +110,7 @@ def train_muzero(
     # Learner's before_run hook.
     learner.call_hook('before_run')
     while True:
-        buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
-
+        log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         collect_kwargs = {}
         # set temperature for visit count distributions according to the train_iter,
         # please refer to Appendix D in MuZero paper for details.

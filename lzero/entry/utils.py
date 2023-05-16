@@ -2,9 +2,10 @@ import os
 
 import psutil
 from pympler.asizeof import asizeof
+from tensorboardX import SummaryWriter
 
 
-def buffer_memory_usage(train_iter, buffer, writer):
+def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:
     """
     Overview:
         Log the memory usage of the buffer and the current process to TensorBoard.
