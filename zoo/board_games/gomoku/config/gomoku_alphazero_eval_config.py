@@ -8,7 +8,6 @@ if __name__ == '__main__':
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
     """
-
     model_path = './ckpt/ckpt_best.pth.tar'
     seeds = [0]
     num_episodes_each_seed = 5

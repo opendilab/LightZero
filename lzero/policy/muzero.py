@@ -52,6 +52,12 @@ class MuZeroPolicy(Policy):
             support_scale=300,
             # (bool) whether to learn bias in the last linear layer in value and policy head.
             bias=True,
+            # (str) The type of action encoding. Options are ['one_hot', 'not_one_hot']. Default to 'one_hot'.
+            discrete_action_encoding_type='one_hot',
+            # (bool) whether to use res connection in dynamics.
+            res_connection_in_dynamics=True,
+            # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
+            norm_type='BN', 
         ),
         # ****** common ******
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
@@ -93,7 +99,7 @@ class MuZeroPolicy(Policy):
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
         optim_type='SGD',
-        # (float) Learning rate for training policy network. Ininitial lr for manually decay schedule.
+        # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.2,
         # (int) Frequency of target network update.
         target_update_freq=100,
@@ -103,13 +109,13 @@ class MuZeroPolicy(Policy):
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
         grad_clip_value=10,
-        # (int) The number of episode in each collecting stage.
+        # (int) The number of episodes in each collecting stage.
         n_episode=8,
         # (int) the number of simulations in MCTS.
         num_simulations=50,
         # (float) Discount factor (gamma) for returns.
         discount_factor=0.997,
-        # (int) The number of step for calculating target q_value.
+        # (int) The number of steps for calculating target q_value.
         td_steps=5,
         # (int) The number of unroll steps in dynamics network.
         num_unroll_steps=5,
@@ -173,7 +179,7 @@ class MuZeroPolicy(Policy):
     def _init_learn(self) -> None:
         """
         Overview:
-            Learn mode init method. Called by ``self.__init__``. Ininitialize the learn model, optimizer and MCTS utils.
+            Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
         assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
         # NOTE: in board_gmaes, for fixed lr 0.003, 'Adam' is better than 'SGD'.
@@ -189,7 +195,12 @@ class MuZeroPolicy(Policy):
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
         elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay, learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
+            self._optimizer = configure_optimizers(
+                model=self._model,
+                weight_decay=self._cfg.weight_decay,
+                learning_rate=self._cfg.learning_rate,
+                device_type=self._cfg.device
+            )
 
         if self._cfg.lr_piecewise_constant_decay:
             from torch.optim.lr_scheduler import LambdaLR
@@ -279,7 +290,7 @@ class MuZeroPolicy(Policy):
         network_output = self._learn_model.initial_inference(obs_batch)
 
         # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
-        hidden_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
+        latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
         # transform the scaled value or its categorical representation to its original value,
         # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -288,7 +299,7 @@ class MuZeroPolicy(Policy):
         # Note: The following lines are just for debugging.
         predicted_rewards = []
         if self._cfg.monitor_extra_statistics:
-            hidden_state_list = hidden_state.detach().cpu().numpy()
+            latent_state_list = latent_state.detach().cpu().numpy()
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
@@ -312,11 +323,11 @@ class MuZeroPolicy(Policy):
         # the core recurrent_inference in MuZero policy.
         # ==============================================================
         for step_i in range(self._cfg.num_unroll_steps):
-            # unroll with the dynamics function: predict the next ``hidden_state``, ``reward``,
-            # given current ``hidden_state`` and ``action``.
+            # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
+            # given current ``latent_state`` and ``action``.
             # And then predict policy_logits and value with the prediction function.
-            network_output = self._learn_model.recurrent_inference(hidden_state, action_batch[:, step_i])
-            hidden_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
+            network_output = self._learn_model.recurrent_inference(latent_state, action_batch[:, step_i])
+            latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
             # transform the scaled value or its categorical representation to its original value,
             # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -339,11 +350,11 @@ class MuZeroPolicy(Policy):
                         end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
                         network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
 
-                    hidden_state = to_tensor(hidden_state)
+                    latent_state = to_tensor(latent_state)
                     representation_state = to_tensor(network_output.latent_state)
 
                     # NOTE: no grad for the representation_state branch
-                    dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
+                    dynamic_proj = self._learn_model.project(latent_state, with_grad=True)
                     observation_proj = self._learn_model.project(representation_state, with_grad=False)
                     temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
                     consistency_loss += temp_loss
@@ -360,7 +371,7 @@ class MuZeroPolicy(Policy):
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_i])
 
             # Follow MuZero, set half gradient
-            # hidden_state.register_hook(lambda grad: grad * 0.5)
+            # latent_state.register_hook(lambda grad: grad * 0.5)
 
             if self._cfg.monitor_extra_statistics:
                 original_rewards = self.inverse_scalar_transform_handle(reward)
@@ -371,7 +382,7 @@ class MuZeroPolicy(Policy):
                 )
                 predicted_rewards.append(original_rewards_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
-                hidden_state_list = np.concatenate((hidden_state_list, hidden_state.detach().cpu().numpy()))
+                latent_state_list = np.concatenate((latent_state_list, latent_state.detach().cpu().numpy()))
 
         # ==============================================================
         # the core learn model update step.
@@ -420,7 +431,7 @@ class MuZeroPolicy(Policy):
                 predicted_values.detach().cpu().numpy(),
                 target_policy.detach().cpu().numpy(),
                 predicted_policies.detach().cpu().numpy(),
-                hidden_state_list,
+                latent_state_list,
             )
 
         return {
@@ -450,7 +461,7 @@ class MuZeroPolicy(Policy):
     def _init_collect(self) -> None:
         """
         Overview:
-            Collect mode init method. Called by ``self.__init__``. Ininitialize the collect model and MCTS utils.
+            Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
@@ -554,7 +565,7 @@ class MuZeroPolicy(Policy):
     def _init_eval(self) -> None:
         """
         Overview:
-            Evaluate mode init method. Called by ``self.__init__``. Ininitialize the eval model and MCTS utils.
+            Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
         if self._cfg.mcts_ctree:

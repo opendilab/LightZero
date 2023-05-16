@@ -33,10 +33,10 @@ cdef extern from "lib/cnode.h" namespace "tree":
     cdef cppclass CNode:
         CNode() except +
         CNode(float prior, vector[int] &legal_actions) except +
-        int visit_count, to_play, simulation_index, batch_index, best_action
+        int visit_count, to_play, current_latent_state_index, batch_index, best_action
         float value_prefixs, prior, value_sum, parent_value_prefix
 
-        void expand(int to_play, int simulation_index, int batch_index, float value_prefixs, vector[float] policy_logits)
+        void expand(int to_play, int current_latent_state_index, int batch_index, float value_prefixs, vector[float] policy_logits)
         void add_exploration_noise(float exploration_fraction, vector[float] noises)
         float compute_mean_q(int isRoot, float parent_q, float discount_factor)
 
@@ -68,6 +68,6 @@ cdef extern from "lib/cnode.h" namespace "tree":
         vector[CNode*] nodes
 
     cdef void cbackpropagate(vector[CNode*] &search_path, CMinMaxStats &min_max_stats, int to_play, float value, float discount_factor)
-    void cbatch_backpropagate(int simulation_index, float discount_factor, vector[float] value_prefixs, vector[float] values, vector[vector[float]] policies,
+    void cbatch_backpropagate(int current_latent_state_index, float discount_factor, vector[float] value_prefixs, vector[float] values, vector[vector[float]] policies,
                                CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, vector[int] &to_play_batch)
     void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount_factor, CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, vector[int] &virtual_to_play_batch)

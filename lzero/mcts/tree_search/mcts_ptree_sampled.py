@@ -123,9 +123,9 @@ class SampledEfficientZeroMCTSPtree(object):
                 # prepare a result wrapper to transport results between python and c++ parts
                 results = tree_sez.SearchResults(num=batch_size)
 
-                # latent_state_index_in_search_path: the first index of leaf node states in latent_state_batch_in_search_path, i.e. is simulation_index in one the search.
+                # latent_state_index_in_search_path: the first index of leaf node states in latent_state_batch_in_search_path, i.e. is current_latent_state_index in one the search.
                 # latent_state_index_in_batch: the second index of leaf node states in latent_state_batch_in_search_path, i.e. the index in the batch, whose maximum is ``batch_size``.
-                # e.g. the latent state of the leaf node in (x, y) is latent_state_batch_in_search_path[x, y], where x is simulation_index, y is batch_index.
+                # e.g. the latent state of the leaf node in (x, y) is latent_state_batch_in_search_path[x, y], where x is current_latent_state_index, y is batch_index.
                 # The index of value prefix hidden state of the leaf node are in the same manner.
                 """
                 MCTS stage 1: Selection
@@ -145,10 +145,10 @@ class SampledEfficientZeroMCTSPtree(object):
                     hidden_states_h_reward.append(reward_hidden_state_h_batch[ix][0][iy])
 
                 latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
-                hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)
-                                                          ).to(self._cfg.device).unsqueeze(0)
-                hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)
-                                                          ).to(self._cfg.device).unsqueeze(0)
+                hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(self._cfg.device
+                                                                                                 ).unsqueeze(0)
+                hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(self._cfg.device
+                                                                                                 ).unsqueeze(0)
 
                 if self._cfg.model.continuous_action_space is True:
                     # continuous action
@@ -169,7 +169,10 @@ class SampledEfficientZeroMCTSPtree(object):
                 )
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
-                    [network_output.latent_state, network_output.policy_logits, network_output.value_prefix, network_output.reward] = to_detach_cpu_numpy(
+                    [
+                        network_output.latent_state, network_output.policy_logits, network_output.value_prefix,
+                        network_output.reward
+                    ] = to_detach_cpu_numpy(
                         [
                             network_output.latent_state,
                             network_output.policy_logits,
@@ -199,10 +202,13 @@ class SampledEfficientZeroMCTSPtree(object):
                 reward_hidden_state_c_batch.append(reward_latent_state_batch[0])
                 reward_hidden_state_h_batch.append(reward_latent_state_batch[1])
 
-                # In ``batch_backpropagate()``, we first expand the leaf node using ``the policy_logits`` and 
+                # In ``batch_backpropagate()``, we first expand the leaf node using ``the policy_logits`` and
                 # ``reward`` predicted by the model, then perform backpropagation along the search path to update the
                 # statistics.
+
+                # NOTE: simulation_index + 1 is very important, which is the depth of the current leaf node.
+                current_latent_state_index = simulation_index + 1
                 tree_sez.batch_backpropagate(
-                    simulation_index, discount_factor, value_prefix_batch, value_batch, policy_logits_batch,
+                    current_latent_state_index, discount_factor, value_prefix_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, is_reset_list, virtual_to_play
                 )

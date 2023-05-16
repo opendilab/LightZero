@@ -59,6 +59,12 @@ class SampledEfficientZeroPolicy(Policy):
             fixed_sigma_value=0.3,
             # (bool) whether to learn bias in the last linear layer in value and policy head.
             bias=True,
+            # (str) The type of action encoding. Options are ['one_hot', 'not_one_hot']. Default to 'one_hot'.
+            discrete_action_encoding_type='one_hot',
+            # (bool) whether to use res connection in dynamics.
+            res_connection_in_dynamics=True,
+            # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
+            norm_type='BN', 
         ),
         # ****** common ******
         # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
@@ -191,7 +197,7 @@ class SampledEfficientZeroPolicy(Policy):
     def _init_learn(self) -> None:
         """
         Overview:
-            Learn mode init method. Called by ``self.__init__``. Ininitialize the learn model, optimizer and MCTS utils.
+            Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
         assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
         if self._cfg.model.continuous_action_space:
@@ -218,7 +224,12 @@ class SampledEfficientZeroPolicy(Policy):
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
         elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay, learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
+            self._optimizer = configure_optimizers(
+                model=self._model,
+                weight_decay=self._cfg.weight_decay,
+                learning_rate=self._cfg.learning_rate,
+                device_type=self._cfg.device
+            )
 
         if self._cfg.cos_lr_scheduler is True:
             from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -318,7 +329,7 @@ class SampledEfficientZeroPolicy(Policy):
         # ==============================================================
         network_output = self._learn_model.initial_inference(obs_batch)
         # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
-        hidden_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(network_output)
+        latent_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(network_output)
 
         # transform the scaled value or its categorical representation to its original value,
         # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -327,7 +338,7 @@ class SampledEfficientZeroPolicy(Policy):
         # Note: The following lines are just for logging.
         predicted_value_prefixs = []
         if self._cfg.monitor_extra_statistics:
-            hidden_state_list = hidden_state.detach().cpu().numpy()
+            latent_state_list = latent_state.detach().cpu().numpy()
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
@@ -365,13 +376,13 @@ class SampledEfficientZeroPolicy(Policy):
         # the core recurrent_inference in SampledEfficientZero policy.
         # ==============================================================
         for step_i in range(self._cfg.num_unroll_steps):
-            # unroll with the dynamics function: predict the next ``hidden_state``, ``reward_hidden_state``,
-            # `` value_prefix`` given current ``hidden_state`` ``reward_hidden_state`` and ``action``.
+            # unroll with the dynamics function: predict the next ``latent_state``, ``reward_hidden_state``,
+            # `` value_prefix`` given current ``latent_state`` ``reward_hidden_state`` and ``action``.
             # And then predict policy_logits and value  with the prediction function.
             network_output = self._learn_model.recurrent_inference(
-                hidden_state, reward_hidden_state, action_batch[:, step_i]
+                latent_state, reward_hidden_state, action_batch[:, step_i]
             )
-            hidden_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(
+            latent_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(
                 network_output
             )
 
@@ -396,11 +407,11 @@ class SampledEfficientZeroPolicy(Policy):
                         end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
                         network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
 
-                    hidden_state = to_tensor(hidden_state)
+                    latent_state = to_tensor(latent_state)
                     representation_state = to_tensor(network_output.latent_state)
 
                     # NOTE: no grad for the representation_state branch.
-                    dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
+                    dynamic_proj = self._learn_model.project(latent_state, with_grad=True)
                     observation_proj = self._learn_model.project(representation_state, with_grad=False)
                     temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
 
@@ -453,7 +464,7 @@ class SampledEfficientZeroPolicy(Policy):
                 )
                 predicted_value_prefixs.append(original_value_prefixs_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
-                hidden_state_list = np.concatenate((hidden_state_list, hidden_state.detach().cpu().numpy()))
+                latent_state_list = np.concatenate((latent_state_list, latent_state.detach().cpu().numpy()))
 
         # ==============================================================
         # the core learn model update step.
@@ -493,7 +504,7 @@ class SampledEfficientZeroPolicy(Policy):
                 transformed_target_value_prefix.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
                 target_value_prefix_categorical.detach().cpu().numpy(), target_value_categorical.detach().cpu().numpy(),
                 predicted_value_prefixs.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
-                target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), hidden_state_list
+                target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), latent_state_list
             )
 
         if self._cfg.model.continuous_action_space:
@@ -764,7 +775,7 @@ class SampledEfficientZeroPolicy(Policy):
     def _init_collect(self) -> None:
         """
           Overview:
-              Collect mode init method. Called by ``self.__init__``. Ininitialize the collect model and MCTS utils.
+              Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
           """
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
@@ -904,7 +915,7 @@ class SampledEfficientZeroPolicy(Policy):
     def _init_eval(self) -> None:
         """
          Overview:
-             Evaluate mode init method. Called by ``self.__init__``. Ininitialize the eval model and MCTS utils.
+             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
          """
         self._eval_model = self._model
         if self._cfg.mcts_ctree:
