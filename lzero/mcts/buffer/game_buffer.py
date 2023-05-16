@@ -398,7 +398,7 @@ class GameBuffer(ABC, object):
 
     def get_num_of_transitions(self) -> int:
         # total number of transitions
-        return len(self.game_pos_priorities)
+        return len(self.game_segment_game_pos_look_up)
 
     def __repr__(self):
-        return f'current buffer statistics is: num_of_episodes: {self.num_of_collected_episodes}, num of game segments: {len(self.game_segment_buffer)}, number of transitions: {len(self.game_pos_priorities)}'
+        return f'current buffer statistics is: num_of_all_collected_episodes: {self.num_of_collected_episodes}, num of game segments: {len(self.game_segment_buffer)}, number of transitions: {len(self.game_segment_game_pos_look_up)}'

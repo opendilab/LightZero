@@ -14,9 +14,9 @@ def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: Summa
         - buffer (:obj:`GameBuffer`): The game buffer.
         - writer (:obj:`SummaryWriter`): The TensorBoard writer.
     """
-    writer.add_scalar('Buffer/num_of_episodes', buffer.num_of_collected_episodes, train_iter)
+    writer.add_scalar('Buffer/num_of_all_collected_episodes', buffer.num_of_collected_episodes, train_iter)
     writer.add_scalar('Buffer/num_of_game_segments', len(buffer.game_segment_buffer), train_iter)
-    writer.add_scalar('Buffer/num_of_transitions', len(buffer.game_pos_priorities), train_iter)
+    writer.add_scalar('Buffer/num_of_transitions', len(buffer.game_segment_game_pos_look_up), train_iter)
 
     game_segment_buffer = buffer.game_segment_buffer
 
