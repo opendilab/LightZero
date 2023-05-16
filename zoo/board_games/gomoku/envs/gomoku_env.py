@@ -1,6 +1,7 @@
 import copy
 import random
 import sys
+from functools import lru_cache
 from typing import List
 
 import gym
@@ -9,6 +10,8 @@ from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
+from zoo.board_games.gomoku.envs.legal_actions_cython import legal_actions_cython
+from zoo.board_games.gomoku.envs.get_done_winner_cython import get_done_winner_cython
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
 from zoo.board_games.gomoku.envs.gomoku_rule_bot_v1 import GomokuRuleBotV1
@@ -17,9 +20,26 @@ from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_c
     check_action_to_connect4
 
 
+@lru_cache(maxsize=512)
+def _legal_actions_func_lru(board_size, board_tuple):
+    # Convert tuple to NumPy array.
+    board_array = np.array(board_tuple, dtype=np.int32)
+    # Convert NumPy array to memory view.
+    board_view = board_array.view(dtype=np.int32).reshape(board_array.shape)
+    return legal_actions_cython(board_size, board_view)
+
+
+@lru_cache(maxsize=512)
+def _get_done_winner_func_lru(board_size, board_tuple):
+    # Convert tuple to NumPy array.
+    board_array = np.array(board_tuple, dtype=np.int32)
+    # Convert NumPy array to memory view.
+    board_view = board_array.view(dtype=np.int32).reshape(board_array.shape)
+    return get_done_winner_cython(board_size, board_view)
+
+
 @ENV_REGISTRY.register('gomoku')
 class GomokuEnv(BaseEnv):
-
     config = dict(
         env_name="Gomoku",
         prob_random_agent=0,
@@ -41,11 +61,38 @@ class GomokuEnv(BaseEnv):
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
+    @property
+    def legal_actions(self):
+        # Convert NumPy arrays to nested tuples to make them hashable.
+        return _legal_actions_func_lru(self.board_size, tuple(map(tuple, self.board)))
+
+    # only for evaluation speed
+    @property
+    def legal_actions_cython(self):
+        # Convert tuple to NumPy array.
+        board_array = np.array(tuple(map(tuple, self.board)), dtype=np.int32)
+        # Convert NumPy array to memory view.
+        board_view = board_array.view(dtype=np.int32).reshape(board_array.shape)
+        return legal_actions_cython(self.board_size, board_view)
+
+    # only for evaluation speed
+    @property
+    def legal_actions_cython_lru(self):
+        # Convert NumPy arrays to nested tuples to make them hashable.
+        return _legal_actions_func_lru(self.board_size, tuple(map(tuple, self.board)))
+
+    def get_done_winner(self):
+        # Convert NumPy arrays to nested tuples to make them hashable.
+        return _get_done_winner_func_lru(self.board_size, tuple(map(tuple, self.board)))
+
     def __init__(self, cfg: dict = None):
         self.cfg = cfg
         self.battle_mode = cfg.battle_mode
-        # ``self.mcts_mode`` is only used in AlphaZero
-        self.mcts_mode = cfg.get('mcts_mode', cfg.battle_mode)
+        # The mode of interaction between the agent and the environment.
+        assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
+        # The mode of MCTS is only used in AlphaZero.
+        self.mcts_mode = 'self_play_mode'
+
         self.board_size = cfg.board_size
         self.prob_random_agent = cfg.prob_random_agent
         self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
@@ -69,7 +116,7 @@ class GomokuEnv(BaseEnv):
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.int32
         )
         self._action_space = gym.spaces.Discrete(self.board_size ** 2)
-        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1, ), dtype=np.float32)
+        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
@@ -118,7 +165,9 @@ class GomokuEnv(BaseEnv):
             if np.random.rand() < self.prob_random_agent:
                 action = self.random_action()
             timestep = self._player_step(action)
-            # print(self.board)
+            if timestep.done:
+                # The eval_episode_return is calculated from Player 1's perspective.
+                timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs['to_play'] == 1 else timestep.reward
             return timestep
         elif self.battle_mode == 'play_with_bot_mode':
             # player 1 battle with expert player 2
@@ -249,46 +298,6 @@ class GomokuEnv(BaseEnv):
             # (C, W, H) e.g. (3, 6, 6)
             return raw_obs, scale_obs
 
-    def get_done_winner(self):
-        """
-        Overview:
-             Check if the game is over and who the winner is. Return 'done' and 'winner'.
-        Returns:
-            - outputs (:obj:`Tuple`): Tuple containing 'done' and 'winner',
-                - if player 1 win,     'done' = True, 'winner' = 1
-                - if player 2 win,     'done' = True, 'winner' = 2
-                - if draw,             'done' = True, 'winner' = -1
-                - if game is not over, 'done' = False, 'winner' = -1
-        """
-        # has_legal_actions i.e. not done
-        has_legal_actions = False
-        directions = ((1, -1), (1, 0), (1, 1), (0, 1))
-        for i in range(self.board_size):
-            for j in range(self.board_size):
-                # if no stone is on the position, don't need to consider this position
-                if self.board[i][j] == 0:
-                    has_legal_actions = True
-                    continue
-                # value-value at a coord, i-row, j-col
-                player = self.board[i][j]
-                # check if there exist 5 in a line
-                for d in directions:
-                    x, y = i, j
-                    count = 0
-                    for _ in range(5):
-                        if (x not in range(self.board_size)) or (y not in range(self.board_size)):
-                            break
-                        if self.board[x][y] != player:
-                            break
-                        x += d[0]
-                        y += d[1]
-                        count += 1
-                        # if 5 in a line, store positions of all stones, return value
-                        if count == 5:
-                            return True, player
-        # if the players don't have legal actions, return done=True
-        return not has_legal_actions, -1
-
     def get_done_reward(self):
         """
         Overview:
@@ -312,15 +321,6 @@ class GomokuEnv(BaseEnv):
             # episode is not done
             reward = None
         return done, reward
-
-    @property
-    def legal_actions(self):
-        legal_actions = []
-        for i in range(self.board_size):
-            for j in range(self.board_size):
-                if self.board[i][j] == 0:
-                    legal_actions.append(self.coord_to_action(i, j))
-        return legal_actions
 
     def random_action(self):
         action_list = self.legal_actions
@@ -394,9 +394,9 @@ class GomokuEnv(BaseEnv):
             """
             shfit_tmp_board = copy.deepcopy(
                 board_deepcopy[shift_distance[board_block_index][0]:size_of_board_template +
-                               shift_distance[board_block_index][0],
-                               shift_distance[board_block_index][1]:size_of_board_template +
-                               shift_distance[board_block_index][1]]
+                                                                    shift_distance[board_block_index][0],
+                shift_distance[board_block_index][1]:size_of_board_template +
+                                                     shift_distance[board_block_index][1]]
             )
 
             # Horizontal and vertical checks
@@ -822,7 +822,6 @@ class GomokuEnv(BaseEnv):
         # In eval phase, we use ``eval_mode`` to make agent play with the built-in bot to
         # evaluate the performance of the current agent.
         cfg.battle_mode = 'eval_mode'
-
         return [cfg for _ in range(evaluator_env_num)]
 
     def __repr__(self) -> str:
