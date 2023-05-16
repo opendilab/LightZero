@@ -23,6 +23,10 @@ class AlphaZeroPolicy(Policy):
 
     # The default_config for AlphaZero policy.
     config = dict(
+        # (bool) Whether to use torch.compile method to speed up our model, which required torch>=2.0.
+        torch_compile=False,
+        # (bool) Whether to use TF32 for our model.
+        tensor_float_32=False,
         model=dict(
             # (tuple) The stacked obs shape.
             observation_shape=(3, 6, 6),

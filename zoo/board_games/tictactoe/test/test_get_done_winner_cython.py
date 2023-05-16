@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from zoo.board_games.tictactoe.envs.get_done_winner_cython import get_done_winner_cython
 
 
@@ -10,6 +11,7 @@ def _get_done_winner_func(board_tuple):
     return get_done_winner_cython(board_view)
 
 
+@pytest.mark.unittest
 def test_get_done_winner_cython():
     # case 1
     board = [[0, 0, 0], [0, 1, 2], [0, 2, 1]]
@@ -31,6 +33,3 @@ def test_get_done_winner_cython():
     board = [[1, 2, 1], [0, 2, 0], [1, 2, 0]]
     done_winner = _get_done_winner_func(tuple(map(tuple, board)))
     assert done_winner == (True, 2), f"Error: {done_winner}"
-
-
-test_get_done_winner_cython()

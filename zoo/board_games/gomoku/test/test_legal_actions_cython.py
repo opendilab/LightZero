@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from zoo.board_games.gomoku.envs.legal_actions_cython import legal_actions_cython
 
 
@@ -10,6 +11,7 @@ def _legal_actions_func(board_size, board_tuple):
     return legal_actions_cython(board_size, board_view)
 
 
+@pytest.mark.unittest
 def test_legal_actions_cython():
     # case 1
     board_size = 2
@@ -39,9 +41,7 @@ def test_legal_actions_cython():
 
     # case 5
     board_size = 6
-    board = [[1, 1, 1, 1, 0, 1], [2, 2, 1, 1, 0, 2], [2, 2, 1, 2, 0, 1], [2, 1, 2, 2, 0, 2], [2, 1, 1, 2, 0, 1],  [1, 2, 1, 2, 0, 2]]
+    board = [[1, 1, 1, 1, 0, 1], [2, 2, 1, 1, 0, 2], [2, 2, 1, 2, 0, 1], [2, 1, 2, 2, 0, 2], [2, 1, 1, 2, 0, 1],
+             [1, 2, 1, 2, 0, 2]]
     legal_actions = _legal_actions_func(board_size, tuple(map(tuple, board)))
     assert legal_actions == [4, 10, 16, 22, 28, 34], f"Error: {legal_actions}"
-
-
-test_legal_actions_cython()
