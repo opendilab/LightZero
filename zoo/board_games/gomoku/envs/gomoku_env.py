@@ -133,7 +133,6 @@ class GomokuEnv(BaseEnv):
                 'observation': self.current_state()[1],
                 'action_mask': action_mask,
                 'board': copy.deepcopy(self.board),
-                # 'board': self.board,  # TODO(pu): check correctness
                 'current_player_index': self.start_player_index,
                 'to_play': -1
             }
@@ -144,7 +143,6 @@ class GomokuEnv(BaseEnv):
                 'observation': self.current_state()[1],
                 'action_mask': action_mask,
                 'board': copy.deepcopy(self.board),
-                # 'board': self.board,  # TODO(pu): check correctness
                 'current_player_index': self.start_player_index,
                 'to_play': self.current_player
             }
@@ -168,8 +166,7 @@ class GomokuEnv(BaseEnv):
                 action = self.random_action()
             timestep = self._player_step(action)
             if timestep.done:
-                # TODO(pu): check
-                # the eval_episode_return is calculated from Player 1's perspective
+                # The eval_episode_return is calculated from Player 1's perspective.
                 timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs['to_play'] == 1 else timestep.reward
             return timestep
         elif self.battle_mode == 'play_with_bot_mode':
@@ -267,7 +264,6 @@ class GomokuEnv(BaseEnv):
             'observation': self.current_state()[1],
             'action_mask': action_mask,
             'board': copy.deepcopy(self.board),
-            # 'board': self.board,  # TODO(pu): check correctness
             'current_player_index': self.players.index(self.current_player),
             'to_play': self.current_player
         }
@@ -292,10 +288,6 @@ class GomokuEnv(BaseEnv):
             scale_obs = copy.deepcopy(raw_obs / 2)
         else:
             scale_obs = copy.deepcopy(raw_obs)
-        # if self.scale:
-        #     scale_obs = raw_obs / 2  # TODO(pu): check correctness
-        # else:
-        #     scale_obs = raw_obs
 
         if self.channel_last:
             # move channel dim to last axis

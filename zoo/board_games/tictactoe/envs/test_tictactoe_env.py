@@ -23,12 +23,13 @@ class TestTicTacToeEnv:
         while True:
             """player 1"""
             # action = env.human_to_action()
-            # action = env.random_action()
+            action = env.random_action()
             # action = env.bot_action()
 
-            legal_actions = env.legal_actions
-            print('legal_actions: ', legal_actions)
-            action = legal_actions[-1]
+            # test legal_actions
+            # legal_actions = env.legal_actions
+            # print('legal_actions: ', legal_actions)
+            # action = legal_actions[-1]
 
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
@@ -39,6 +40,7 @@ class TestTicTacToeEnv:
                 else:
                     print('draw')
                 break
+
             """player 2"""
             action = env.bot_action()
             print('player 2 (computer player): ' + env.action_to_string(action))
@@ -70,11 +72,12 @@ class TestTicTacToeEnv:
         while True:
             """player 1"""
             # action = env.human_to_action()
-            # action = env.random_action()
+            action = env.random_action()
 
-            legal_actions = env.legal_actions
-            print('legal_actions: ', legal_actions)
-            action = legal_actions[-1]
+            # test legal_actions
+            # legal_actions = env.legal_actions
+            # print('legal_actions: ', legal_actions)
+            # action = legal_actions[-1]
 
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)

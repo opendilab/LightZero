@@ -68,11 +68,7 @@ class TestGomokuEnv:
         while True:
             """player 1"""
             # action = env.human_to_action()
-            # action = env.random_action()
-
-            legal_actions = env.legal_actions
-            print('legal_actions: ', legal_actions)
-            action = legal_actions[-1]
+            action = env.random_action()
 
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
@@ -88,5 +84,5 @@ class TestGomokuEnv:
                 break
 
 
-test = TestGomokuEnv()
-test.test_play_with_bot_mode()
+# test = TestGomokuEnv()
+# test.test_play_with_bot_mode()
