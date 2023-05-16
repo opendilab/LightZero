@@ -55,6 +55,12 @@ def find_pyx(path=None):
             if fname.endswith('.pyx'):
                 pyx_files.append(os.path.join(root, fname))
 
+    path = os.path.join(here, 'zoo')
+    for root, dirs, filenames in os.walk(path):
+        for fname in filenames:
+            if fname.endswith('.pyx'):
+                pyx_files.append(os.path.join(root, fname))
+
     return pyx_files
 
 

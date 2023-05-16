@@ -14,7 +14,7 @@ class TestTicTacToeEnv:
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
-            bot_action_type='alpha_beta_pruning'
+            bot_action_type='v0'
         )
         env = TicTacToeEnv(cfg)
         env.reset()
@@ -25,6 +25,12 @@ class TestTicTacToeEnv:
             # action = env.human_to_action()
             action = env.random_action()
             # action = env.bot_action()
+
+            # test legal_actions
+            # legal_actions = env.legal_actions
+            # print('legal_actions: ', legal_actions)
+            # action = legal_actions[-1]
+
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
             env.render()
@@ -34,6 +40,7 @@ class TestTicTacToeEnv:
                 else:
                     print('draw')
                 break
+
             """player 2"""
             action = env.bot_action()
             print('player 2 (computer player): ' + env.action_to_string(action))
@@ -65,8 +72,13 @@ class TestTicTacToeEnv:
         while True:
             """player 1"""
             # action = env.human_to_action()
-            # action = env.random_action()
-            action = env.legal_actions[-1]
+            action = env.random_action()
+
+            # test legal_actions
+            # legal_actions = env.legal_actions
+            # print('legal_actions: ', legal_actions)
+            # action = legal_actions[-1]
+
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
             # reward is in the perspective of player1
@@ -82,4 +94,5 @@ class TestTicTacToeEnv:
 
 
 test = TestTicTacToeEnv()
+test.test_self_play_mode()
 test.test_play_with_bot_mode()
