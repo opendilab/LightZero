@@ -37,10 +37,11 @@ bipedalwalker_cont_disc_efficientzero_config = dict(
             action_space_size=int(each_dim_disc_size ** 4),
             continuous_action_space=continuous_action_space,
             sigma_type='conditioned',  # options={'conditioned', 'fixed'}
-            model_type='mlp',  # options={'mlp', 'conv'}
+            model_type='mlp', 
             lstm_hidden_size=256,
             latent_state_dim=256,
             res_connection_in_dynamics=True,
+            norm_type='BN', 
         ),
         cuda=True,
         env_type='not_board_games',

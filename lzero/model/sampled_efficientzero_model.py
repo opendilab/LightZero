@@ -6,10 +6,10 @@ import torch.nn as nn
 from ding.model.common import ReparameterizationHead
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
-from numpy import ndarray
 
 from .common import EZNetworkOutput, RepresentationNetwork
-from .utils import renormalize, get_dynamic_mean, get_reward_mean, get_params_mean
+from .efficientzero_model import DynamicsNetwork
+from .utils import renormalize, get_params_mean
 
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
@@ -17,47 +17,47 @@ from .utils import renormalize, get_dynamic_mean, get_reward_mean, get_params_me
 class SampledEfficientZeroModel(nn.Module):
 
     def __init__(
-        self,
-        observation_shape: SequenceType = (12, 96, 96),
-        action_space_size: int = 6,
-        num_res_blocks: int = 1,
-        num_channels: int = 64,
-        lstm_hidden_size: int = 512,
-        reward_head_channels: int = 16,
-        value_head_channels: int = 16,
-        policy_head_channels: int = 16,
-        fc_reward_layers: SequenceType = [32],
-        fc_value_layers: SequenceType = [32],
-        fc_policy_layers: SequenceType = [32],
-        reward_support_size: int = 601,
-        value_support_size: int = 601,
-        proj_hid: int = 1024,
-        proj_out: int = 1024,
-        pred_hid: int = 512,
-        pred_out: int = 1024,
-        self_supervised_learning_loss: bool = True,
-        categorical_distribution: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-        last_linear_layer_init_zero: bool = True,
-        state_norm: bool = False,
-        downsample: bool = False,
-        # ==============================================================
-        # specific sampled related config
-        # ==============================================================
-        continuous_action_space: bool = False,
-        num_of_sampled_actions: int = 6,
-        sigma_type='conditioned',
-        fixed_sigma_value: float = 0.3,
-        bound_type: str = None,
-        norm_type: str = 'BN',
-        discrete_action_encoding_type: str = 'one_hot',
-        *args,
-        **kwargs,
+            self,
+            observation_shape: SequenceType = (12, 96, 96),
+            action_space_size: int = 6,
+            num_res_blocks: int = 1,
+            num_channels: int = 64,
+            lstm_hidden_size: int = 512,
+            reward_head_channels: int = 16,
+            value_head_channels: int = 16,
+            policy_head_channels: int = 16,
+            fc_reward_layers: SequenceType = [32],
+            fc_value_layers: SequenceType = [32],
+            fc_policy_layers: SequenceType = [32],
+            reward_support_size: int = 601,
+            value_support_size: int = 601,
+            proj_hid: int = 1024,
+            proj_out: int = 1024,
+            pred_hid: int = 512,
+            pred_out: int = 1024,
+            self_supervised_learning_loss: bool = True,
+            categorical_distribution: bool = True,
+            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            last_linear_layer_init_zero: bool = True,
+            state_norm: bool = False,
+            downsample: bool = False,
+            # ==============================================================
+            # specific sampled related config
+            # ==============================================================
+            continuous_action_space: bool = False,
+            num_of_sampled_actions: int = 6,
+            sigma_type='conditioned',
+            fixed_sigma_value: float = 0.3,
+            bound_type: str = None,
+            norm_type: str = 'BN',
+            discrete_action_encoding_type: str = 'one_hot',
+            *args,
+            **kwargs,
     ):
         """
         Overview:
             The definition of the network model of Sampled EfficientZero, which is a generalization version for 2D image obs.
-            The networks are mainly build on convolution residual blocks and fully connected layers.
+            The networks are mainly built on convolution residual blocks and fully connected layers.
             Sampled EfficientZero model consists of a representation network, a dynamics network and a prediction network.
             The representation network is an MLP network which maps the raw observation to a latent state.
             The dynamics network is an MLP+LSTM network which predicts the next latent state, reward_hidden_state and value_prefix given the current latent state and action.
@@ -86,9 +86,9 @@ class SampledEfficientZeroModel(nn.Module):
                 for value, reward/value_prefix.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
-                value/policy mlp, default set it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
+                value/policy mlp, default sets it to True.
+            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default sets it to True.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
                 we don't need this module.
@@ -101,12 +101,12 @@ class SampledEfficientZeroModel(nn.Module):
             - sigma_type (:obj:`str`): the type of sigma in policy head of prediction network, options={'conditioned', 'fixed'}.
             - fixed_sigma_value (:obj:`float`): the fixed sigma value in policy head of prediction network,
             - bound_type (:obj:`str`): The type of bound in networks, default set it to None.
-            - norm_type (:obj:`str`): The type of normalization in networks, default set it to 'BN'.
-            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. default set it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
+            - norm_type (:obj:`str`): The type of normalization in networks, default sets it to 'BN'.
+            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
         """
         super(SampledEfficientZeroModel, self).__init__()
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
-            # for vector obs input, e.g. classical control ad box2d environments
+            # for vector obs input, e.g. classical control and box2d environments
             # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
             observation_shape = [1, observation_shape, 1]
         if not categorical_distribution:
@@ -173,19 +173,22 @@ class SampledEfficientZeroModel(nn.Module):
         )
 
         self.dynamics_network = DynamicsNetwork(
-            action_encoding_dim=self.action_encoding_dim,
-            num_channels=num_channels + self.action_encoding_dim,
-            num_res_blocks=num_res_blocks,
-            reward_head_channels=reward_head_channels,
-            fc_reward_layers=fc_reward_layers,
-            output_support_size=self.reward_support_size,
-            flatten_output_size_for_reward_head=flatten_output_size_for_reward_head,
-            lstm_hidden_size=lstm_hidden_size,
+            observation_shape,
+            self.action_encoding_dim,
+            num_res_blocks,
+            num_channels + self.action_encoding_dim,
+            reward_head_channels,
+            fc_reward_layers,
+            self.reward_support_size,
+            flatten_output_size_for_reward_head,
+            downsample,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            norm_type=self.norm_type,
+            activation=activation,
+            norm_type=norm_type
         )
 
         self.prediction_network = PredictionNetwork(
+            observation_shape,
             self.continuous_action_space,
             action_space_size,
             num_res_blocks,
@@ -197,6 +200,7 @@ class SampledEfficientZeroModel(nn.Module):
             self.value_support_size,
             flatten_output_size_for_value_head,
             flatten_output_size_for_policy_head,
+            downsample,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             sigma_type=self.sigma_type,
             fixed_sigma_value=self.fixed_sigma_value,
@@ -470,173 +474,32 @@ class SampledEfficientZeroModel(nn.Module):
         return get_params_mean(self)
 
 
-class DynamicsNetwork(nn.Module):
-
-    def __init__(
-        self,
-        action_encoding_dim: int = 2,
-        num_res_blocks: int = 1,
-        num_channels: int = 64,
-        reward_head_channels: int = 64,
-        fc_reward_layers: SequenceType = [32],
-        output_support_size: int = 601,
-        flatten_output_size_for_reward_head: int = 64,
-        lstm_hidden_size: int = 256,
-        momentum: float = 0.1,
-        last_linear_layer_init_zero: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-        norm_type: str = 'BN',
-    ):
-        """
-        Overview:
-            The definition of dynamics network in Sampled EfficientZero algorithm, which is used to predict next latent state
-            value_prefix and reward_hidden_state by the given current latent state and action.
-        Arguments:
-            - action_encoding_dim (:obj:`int`): The dimension of action encoding.
-            - num_res_blocks (:obj:`int`): The number of res blocks in Sampled EfficientZero model.
-            - num_channels (:obj:`int`): The channels of latent states.
-            - reward_head_channels (:obj:`int`): The channels of reward head.
-            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
-            - output_support_size (:obj:`int`): The size of categorical reward output.
-            - flatten_output_size_for_reward_head (:obj:`int`): The flatten size of output for reward head, i.e., \
-                the input size of reward head.
-            - lstm_hidden_size (:obj:`int`): The hidden size of lstm in dynamics network.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
-                reward mlp, default set it to True.
-            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
-                operation to speedup, e.g. ReLU(inplace=True).
-            - norm_type (:obj:`str`): The type of normalization in networks. Default set it to 'BN'.
-        """
-        super().__init__()
-        assert num_channels > action_encoding_dim, f'num_channels:{num_channels} <= action_encoding_dim:{action_encoding_dim}'
-        self.action_encoding_dim = action_encoding_dim
-        self.num_channels = num_channels
-        self.lstm_hidden_size = lstm_hidden_size
-        self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
-        self.norm_type = norm_type
-        self.activation = activation
-
-        self.conv = nn.Conv2d(
-            num_channels, num_channels - self.action_encoding_dim, kernel_size=3, stride=1, padding=1, bias=False
-        )
-        self.bn = nn.BatchNorm2d(num_channels - self.action_encoding_dim, momentum=momentum)
-        self.resblocks = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=num_channels - self.action_encoding_dim,
-                    activation=self.activation,
-                    norm_type=self.norm_type,
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(num_res_blocks)
-            ]
-        )
-        self.reward_resblocks = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=num_channels - self.action_encoding_dim,
-                    activation=self.activation,
-                    norm_type=self.norm_type,
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(num_res_blocks)
-            ]
-        )
-
-        self.conv1x1_reward = nn.Conv2d(num_channels - self.action_encoding_dim, reward_head_channels, 1)
-        self.bn_reward = nn.BatchNorm2d(reward_head_channels, momentum=momentum)
-        self.bn_value_prefix = nn.BatchNorm1d(self.lstm_hidden_size, momentum=momentum)
-
-        # input_shape: （sequence_length，batch_size，input_size)
-        # output_shape: (sequence_length, batch_size, hidden_size)
-        self.lstm = nn.LSTM(input_size=self.flatten_output_size_for_reward_head, hidden_size=self.lstm_hidden_size)
-
-        self.fc_reward_head = MLP(
-            in_channels=self.lstm_hidden_size,
-            hidden_channels=fc_reward_layers[0],
-            out_channels=output_support_size,
-            layer_num=len(fc_reward_layers) + 1,
-            activation=self.activation,
-            norm_type=self.norm_type,
-            output_activation=False,
-            output_norm=False,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-
-    def forward(self, state_action_encoding: torch.Tensor, reward_hidden_state: Tuple[torch.Tensor, torch.Tensor]):
-        """
-        Overview:
-            Forward computation of the dynamics network. Predict next latent state given current latent state, action and reward hidden state.
-        Arguments:
-            - state_action_encoding (:obj:`torch.Tensor`): The state-action encoding, which is the concatenation of \
-                    latent state and action encoding, with shape (batch_size, num_channels, height, width).
-            - reward_hidden_state (:obj:`Tuple[torch.Tensor, torch.Tensor]`): The input hidden state of LSTM about reward.
-        Returns:
-            - next_latent_state (:obj:`torch.Tensor`): The next latent state, with shape (batch_size, num_channels, \
-                    height, width).
-            - next_reward_hidden_state (:obj:`torch.Tensor`): The input hidden state of LSTM about reward.
-            - value_prefix (:obj:`torch.Tensor`): The predicted prefix sum of value for input state.
-        """
-        # take the state encoding,  state_action_encoding[:, -self.action_encoding_dim:, :, :] is action encoding
-        state_encoding = state_action_encoding[:, :-self.action_encoding_dim, :, :]
-        x = self.conv(state_action_encoding)
-        x = self.bn(x)
-
-        # the residual link: add state encoding to the state_action encoding
-        x += state_encoding
-        x = self.activation(x)
-
-        for block in self.resblocks:
-            x = block(x)
-        next_latent_state = x
-
-        x = self.conv1x1_reward(next_latent_state)
-        x = self.bn_reward(x)
-        x = self.activation(x)
-        x = x.contiguous().view(-1, self.flatten_output_size_for_reward_head).unsqueeze(0)
-
-        # use lstm to predict value_prefix and reward_hidden_state
-        value_prefix, next_reward_hidden_state = self.lstm(x, reward_hidden_state)
-
-        value_prefix = value_prefix.squeeze(0)
-        value_prefix = self.bn_value_prefix(value_prefix)
-        value_prefix = self.activation(value_prefix)
-        value_prefix = self.fc_reward_head(value_prefix)
-
-        return next_latent_state, next_reward_hidden_state, value_prefix
-
-    def get_dynamic_mean(self) -> float:
-        return get_dynamic_mean(self)
-
-    def get_reward_mean(self) -> Tuple[ndarray, float]:
-        return get_reward_mean(self)
-
-
 class PredictionNetwork(nn.Module):
 
     def __init__(
-        self,
-        continuous_action_space,
-        action_space_size,
-        num_res_blocks,
-        num_channels,
-        value_head_channels,
-        policy_head_channels,
-        fc_value_layers,
-        fc_policy_layers,
-        output_support_size,
-        flatten_output_size_for_value_head,
-        flatten_output_size_for_policy_head,
-        momentum: float = 0.1,
-        last_linear_layer_init_zero: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-        # ==============================================================
-        # specific sampled related config
-        # ==============================================================
-        sigma_type='conditioned',
-        fixed_sigma_value: float = 0.3,
-        bound_type: str = None,
-        norm_type: str = 'BN',
+            self,
+            observation_shape: SequenceType,
+            continuous_action_space,
+            action_space_size,
+            num_res_blocks,
+            num_channels,
+            value_head_channels,
+            policy_head_channels,
+            fc_value_layers,
+            fc_policy_layers,
+            output_support_size,
+            flatten_output_size_for_value_head,
+            flatten_output_size_for_policy_head,
+            downsample: bool = False,
+            last_linear_layer_init_zero: bool = True,
+            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            # ==============================================================
+            # specific sampled related config
+            # ==============================================================
+            sigma_type='conditioned',
+            fixed_sigma_value: float = 0.3,
+            bound_type: str = None,
+            norm_type: str = 'BN',
     ):
         """
         Overview:
@@ -644,7 +507,8 @@ class PredictionNetwork(nn.Module):
             given latent state.
             The networks are mainly build on res_conv_blocks and fully connected layers.
         Arguments:
-            - continuous_action_space (:obj:`bool`): The type of action space. default set it to False.
+            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. (C, H, W) for image.
+            - continuous_action_space (:obj:`bool`): The type of action space. Default sets it to False.
             - action_space_size: (:obj:`int`): Action space size, usually an integer number. For discrete action \
                 space, it is the number of discrete actions. For continuous action space, it is the dimension of \
                 continuous action.
@@ -657,15 +521,16 @@ class PredictionNetwork(nn.Module):
             - output_support_size (:obj:`int`): dim of value output.
             - flatten_output_size_for_value_head (:obj:`int`): dim of flatten hidden states.
             - flatten_output_size_for_policy_head (:obj:`int`): dim of flatten hidden states.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
+            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializationss for the last layer of value/policy mlp, default sets it to True.
             # ==============================================================
             # specific sampled related config
             # ==============================================================
-            # see ``ReparameterizationHead`` in ``ding.model.common.head`` for more details about thee following arguments.
+            # see ``ReparameterizationHead`` in ``ding.model.common.head`` for more details about the following arguments.
             - sigma_type (:obj:`str`): the type of sigma in policy head of prediction network, options={'conditioned', 'fixed'}.
             - fixed_sigma_value (:obj:`float`): the fixed sigma value in policy head of prediction network,
-            - bound_type (:obj:`str`): The type of bound in networks.  default set it to None.
-            - norm_type (:obj:`str`): The type of normalization in networks. default set it to 'BN'.
+            - bound_type (:obj:`str`): The type of bound in networks.  Default sets it to None.
+            - norm_type (:obj:`str`): The type of normalization in networks. Default sets it to 'BN'.
         """
         super().__init__()
         self.continuous_action_space = continuous_action_space
@@ -682,7 +547,7 @@ class PredictionNetwork(nn.Module):
                 ResBlock(
                     in_channels=num_channels,
                     activation=activation,
-                    norm_type=self.norm_type,
+                    norm_type='BN',
                     res_type='basic',
                     bias=False
                 ) for _ in range(num_res_blocks)
@@ -691,8 +556,19 @@ class PredictionNetwork(nn.Module):
 
         self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
         self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
-        self.bn_value = nn.BatchNorm2d(value_head_channels, momentum=momentum)
-        self.bn_policy = nn.BatchNorm2d(policy_head_channels, momentum=momentum)
+
+        if norm_type == 'BN':
+            self.norm_value = nn.BatchNorm2d(value_head_channels)
+            self.norm_policy = nn.BatchNorm2d(policy_head_channels)
+        elif norm_type == 'LN':
+            if downsample:
+                self.norm_value = nn.LayerNorm(
+                    [value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16),
+                                                 math.ceil(observation_shape[-1] / 16)])
+            else:
+                self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]])
+                self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]])
 
         self.fc_value_head = MLP(
             in_channels=self.flatten_output_size_for_value_head,
@@ -703,6 +579,7 @@ class PredictionNetwork(nn.Module):
             norm_type=self.norm_type,
             output_activation=False,
             output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
@@ -728,6 +605,7 @@ class PredictionNetwork(nn.Module):
                 norm_type=self.norm_type,
                 output_activation=False,
                 output_norm=False,
+                # last_linear_layer_init_zero=True is beneficial for convergence speed.
                 last_linear_layer_init_zero=last_linear_layer_init_zero
             )
 
@@ -746,11 +624,11 @@ class PredictionNetwork(nn.Module):
         for res_block in self.resblocks:
             latent_state = res_block(latent_state)
         value = self.conv1x1_value(latent_state)
-        value = self.bn_value(value)
+        value = self.norm_value(value)
         value = self.activation(value)
 
         policy = self.conv1x1_policy(latent_state)
-        policy = self.bn_policy(policy)
+        policy = self.norm_policy(policy)
         policy = self.activation(policy)
 
         value = value.reshape(-1, self.flatten_output_size_for_value_head)

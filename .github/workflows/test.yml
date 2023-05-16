@@ -70,6 +70,7 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-build.txt
           pip install -r requirements-test.txt
+          pip install -r requirements_git.txt
       - name: Run unittest on MacOS or Linux
         if: ${{ env.OS_NAME == 'MacOS' || env.OS_NAME == 'Linux'}}
         env:

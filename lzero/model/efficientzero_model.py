@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
+from numpy import ndarray
 
 from .common import EZNetworkOutput, RepresentationNetwork, PredictionNetwork
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
@@ -44,13 +45,14 @@ class EfficientZeroModel(nn.Module):
             downsample: bool = False,
             activation: Optional[nn.Module] = nn.ReLU(inplace=True),
             norm_type: Optional[str] = 'BN',
+            discrete_action_encoding_type: str = 'one_hot',
             *args,
             **kwargs
     ) -> None:
         """
         Overview:
             The definition of the network model of EfficientZero, which is a generalization version for 2D image obs.
-            The networks are build on convolution residual blocks and fully connected layers.
+            The networks are built on convolution residual blocks and fully connected layers.
             EfficientZero model which consists of a representation network, a dynamics network and a prediction network.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96] for Atari.
@@ -72,8 +74,8 @@ class EfficientZeroModel(nn.Module):
             - pred_out (:obj:`int`): The size of prediction output layer.
             - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical \
                 distribution for value and reward/value_prefix.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
-                dynamics/prediction mlp, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializationss for the last layer of \
+                dynamics/prediction mlp, default sets it to True.
             - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to False.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
@@ -81,10 +83,12 @@ class EfficientZeroModel(nn.Module):
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. 
+                options = {'one_hot', 'not_one_hot'}
         """
         super(EfficientZeroModel, self).__init__()
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
-            # for vector obs input, e.g. classical control ad box2d environments
+            # for vector obs input, e.g. classical control and box2d environments
             # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
             observation_shape = [1, observation_shape, 1]
         if not categorical_distribution:
@@ -95,6 +99,12 @@ class EfficientZeroModel(nn.Module):
             self.value_support_size = value_support_size
 
         self.action_space_size = action_space_size
+        assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
+        self.discrete_action_encoding_type = discrete_action_encoding_type
+        if self.discrete_action_encoding_type == 'one_hot':
+            self.action_encoding_dim = action_space_size
+        elif self.discrete_action_encoding_type == 'not_one_hot':
+            self.action_encoding_dim = 1
         self.lstm_hidden_size = lstm_hidden_size
         self.proj_hid = proj_hid
         self.proj_out = proj_out
@@ -134,18 +144,22 @@ class EfficientZeroModel(nn.Module):
             norm_type=self.norm_type,
         )
         self.dynamics_network = DynamicsNetwork(
+            observation_shape,
+            self.action_encoding_dim,
             num_res_blocks,
-            num_channels + 1,  # 1 denotes action dim
+            num_channels + self.action_encoding_dim,
             reward_head_channels,
             fc_reward_layers,
             self.reward_support_size,
             flatten_output_size_for_reward_head,
+            downsample,
             lstm_hidden_size=lstm_hidden_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             activation=self.activation,
             norm_type=self.norm_type,
         )
         self.prediction_network = PredictionNetwork(
+            observation_shape,
             action_space_size,
             num_res_blocks,
             num_channels,
@@ -156,6 +170,7 @@ class EfficientZeroModel(nn.Module):
             self.value_support_size,
             flatten_output_size_for_value_head,
             flatten_output_size_for_policy_head,
+            downsample,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             activation=self.activation,
             norm_type=self.norm_type,
@@ -318,30 +333,44 @@ class EfficientZeroModel(nn.Module):
         # NOTE: the discrete action encoding type is important for some environments
 
         # discrete action space
-        # the final action_encoding shape is (batch_size, 1, latent_state[2], latent_state[3]), e.g. (8, 1, 4, 1).
-        action_encoding = (
-            torch.ones((
-                latent_state.shape[0],
-                1,
-                latent_state.shape[2],
-                latent_state.shape[3],
-            )).to(action.device).float()
-        )
-        if len(action.shape) == 2:
-            # (batch_size, action_dim) -> (batch_size, action_dim, 1)
-            # e.g.,  torch.Size([8, 1]) ->  torch.Size([8, 1, 1])
-            action = action.unsqueeze(-1)
-        elif len(action.shape) == 1:
-            # (batch_size,) -> (batch_size, action_dim=1, 1)
-            # e.g.,  -> torch.Size([8, 1]) ->  torch.Size([8, 1, 1])
-            action = action.unsqueeze(-1).unsqueeze(-1)
+        if self.discrete_action_encoding_type == 'one_hot':
+            # Stack latent_state with the one hot encoded action.
+            # The final action_encoding shape is (batch_size, action_space_size, latent_state[2], latent_state[3]), e.g. (8, 2, 4, 1).
+            if len(action.shape) == 1:
+                # (batch_size, ) -> (batch_size, 1)
+                # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
+                action = action.unsqueeze(-1)
 
-        # action[:, 0, None, None] shape:  (batch_size, action_dim, 1, 1) e.g. (8, 1, 1, 1)
-        # the final action_encoding shape: (batch_size, 1, latent_state[2], latent_state[3]) e.g. (8, 1, 4, 1),
-        # where each element is normalized as action[i]/action_space_size
-        action_encoding = (action[:, 0, None, None] * action_encoding / self.action_space_size)
+            # transform action to one-hot encoding.
+            # action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)
+            action_one_hot = torch.zeros(action.shape[0], self.action_space_size, device=action.device)
+            # transform action to torch.int64
+            action = action.long()
+            action_one_hot.scatter_(1, action, 1)
 
-        # state_action_encoding shape: (batch_size, latent_state[1] + 1, latent_state[2], latent_state[3])
+            action_encoding_tmp = action_one_hot.unsqueeze(-1).unsqueeze(-1)
+            action_encoding = action_encoding_tmp.expand(
+                latent_state.shape[0], self.action_space_size, latent_state.shape[2], latent_state.shape[3]
+            )
+
+        elif self.discrete_action_encoding_type == 'not_one_hot':
+            # Stack latent_state with the normalized encoded action.
+            # The final action_encoding shape is (batch_size, 1, latent_state[2], latent_state[3]), e.g. (8, 1, 4, 1).
+            if len(action.shape) == 2:
+                # (batch_size, action_dim=1) -> (batch_size, 1, 1, 1)
+                # e.g.,  torch.Size([8, 1]) ->  torch.Size([8, 1, 1, 1])
+                action = action.unsqueeze(-1).unsqueeze(-1)
+            elif len(action.shape) == 1:
+                # (batch_size,) -> (batch_size, 1, 1, 1)
+                # e.g.,  -> torch.Size([8, 1, 1, 1])
+                action = action.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+
+            action_encoding = action.expand(
+                latent_state.shape[0], 1, latent_state.shape[2], latent_state.shape[3]
+            ) / self.action_space_size
+
+        # state_action_encoding shape: (batch_size, latent_state[1] + action_dim, latent_state[2], latent_state[3]) or
+        # (batch_size, latent_state[1] + action_space_size, latent_state[2], latent_state[3]) depending on the discrete_action_encoding_type.
         state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
 
         # NOTE: the key difference between EfficientZero and MuZero
@@ -357,7 +386,7 @@ class EfficientZeroModel(nn.Module):
         """
         Overview:
             Project the latent state to a lower dimension to calculate the self-supervised loss, which is proposed in EfficientZero.
-            For more details, please refer to paper ``Exploring Simple Siamese Representation Learning``.
+            For more details, please refer to the paper ``Exploring Simple Siamese Representation Learning``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
             - with_grad (:obj:`bool`): Whether to calculate gradient for the projection result.
@@ -400,12 +429,15 @@ class DynamicsNetwork(nn.Module):
 
     def __init__(
         self,
-        num_res_blocks: int,
-        num_channels: int,
-        reward_head_channels: int,
-        fc_reward_layers: SequenceType,
-        output_support_size: int,
-        flatten_output_size_for_reward_head: int,
+        observation_shape: SequenceType,
+        action_encoding_dim: int = 2,
+        num_res_blocks: int = 1,
+        num_channels: int = 64,
+        reward_head_channels: int = 64,
+        fc_reward_layers: SequenceType = [32],
+        output_support_size: int = 601,
+        flatten_output_size_for_reward_head: int = 64,
+        downsample: bool = False,
         lstm_hidden_size: int = 512,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
@@ -413,37 +445,52 @@ class DynamicsNetwork(nn.Module):
     ):
         """
         Overview:
-            The definition of dynamics network in EfficientZero algorithm, which is used to predict next latent state
+            The definition of dynamics network in EfficientZero algorithm, which is used to predict the next latent state
             value_prefix and reward_hidden_state by the given current latent state and action.
         Arguments:
+            - observation_shape (:obj:`SequenceType`): The shape of input observation, e.g., (12, 96, 96).
+            - action_encoding_dim (:obj:`int`): The dimension of action encoding.
             - num_res_blocks (:obj:`int`): The number of res blocks in EfficientZero model.
-            - num_channels (:obj:`int`): The channels of hidden states.
+            - num_channels (:obj:`int`): The channels of latent states.
             - reward_head_channels (:obj:`int`): The channels of reward head.
             - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical reward output.
             - flatten_output_size_for_reward_head (:obj:`int`): The flatten size of output for reward head, i.e., \
                 the input size of reward head.
+            - downsample (:obj:`bool`): Whether to downsample the input observation, default set it to False.
             - lstm_hidden_size (:obj:`int`): The hidden size of lstm in dynamics network.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
-                reward mlp, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializationss for the last layer of \
+                reward mlp, Default sets it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
-            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+            - norm_type (:obj:`str`): The type of normalization in networks. Default sets it to 'BN'.
         """
         super().__init__()
+        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+        assert num_channels > action_encoding_dim, f'num_channels:{num_channels} <= action_encoding_dim:{action_encoding_dim}'
+
+        self.action_encoding_dim = action_encoding_dim
         self.num_channels = num_channels
         self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
         self.lstm_hidden_size = lstm_hidden_size
         self.activation = activation
 
-        self.conv = nn.Conv2d(num_channels, num_channels - 1, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn = nn.BatchNorm2d(num_channels - 1)
+        self.conv = nn.Conv2d(num_channels, num_channels - self.action_encoding_dim, kernel_size=3, stride=1, padding=1, bias=False)
+        if norm_type == 'BN':
+            self.norm_common = nn.BatchNorm2d(num_channels - self.action_encoding_dim)
+        elif norm_type == 'LN':
+            if downsample:
+                self.norm_common = nn.LayerNorm(
+                    [num_channels - self.action_encoding_dim, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+            else:
+                self.norm_common = nn.LayerNorm([num_channels - self.action_encoding_dim, observation_shape[-2], observation_shape[-1]])
+
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - 1,
+                    in_channels=num_channels - self.action_encoding_dim,
                     activation=self.activation,
-                    norm_type=norm_type,
+                    norm_type='BN',
                     res_type='basic',
                     bias=False
                 ) for _ in range(num_res_blocks)
@@ -452,23 +499,30 @@ class DynamicsNetwork(nn.Module):
         self.reward_resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels - 1,
+                    in_channels=num_channels - self.action_encoding_dim,
                     activation=self.activation,
-                    norm_type=norm_type,
+                    norm_type='BN',
                     res_type='basic',
                     bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
 
-        self.conv1x1_reward = nn.Conv2d(num_channels - 1, reward_head_channels, 1)
-        self.bn_reward = nn.BatchNorm2d(reward_head_channels)
+        self.conv1x1_reward = nn.Conv2d(num_channels - self.action_encoding_dim, reward_head_channels, 1)
+        
+        if norm_type == 'BN':
+            self.norm_reward = nn.BatchNorm2d(reward_head_channels)
+        elif norm_type == 'LN':
+            if downsample:
+                self.norm_reward = nn.LayerNorm([reward_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+            else:
+                self.norm_reward = nn.LayerNorm([reward_head_channels, observation_shape[-2], observation_shape[-1]])
 
         # input_shape: （sequence_length，batch_size，input_size)
         # output_shape: (sequence_length, batch_size, hidden_size)
         self.lstm = nn.LSTM(input_size=self.flatten_output_size_for_reward_head, hidden_size=self.lstm_hidden_size)
 
-        self.bn_value_prefix = nn.BatchNorm1d(self.lstm_hidden_size)
+        self.norm_value_prefix = nn.BatchNorm1d(self.lstm_hidden_size)
 
         self.fc_reward_head = MLP(
             in_channels=self.lstm_hidden_size,
@@ -493,15 +547,15 @@ class DynamicsNetwork(nn.Module):
                     latent state and action encoding, with shape (batch_size, num_channels, height, width).
             - reward_hidden_state (:obj:`Tuple[torch.Tensor, torch.Tensor]`): The input hidden state of LSTM about reward.
         Returns:
-            - next_latent_state (:obj:`torch.Tensor`): The next latent state, with shape (batch_size, latent_state_dim).
+            - next_latent_state (:obj:`torch.Tensor`): The next latent state, with shape (batch_size, num_channels, \
+                    height, width).
             - next_reward_hidden_state (:obj:`torch.Tensor`): The input hidden state of LSTM about reward.
             - value_prefix (:obj:`torch.Tensor`): The predicted prefix sum of value for input state.
         """
-
-        # take the state encoding,  state_action_encoding[:, -1, :, :] is action encoding
-        state_encoding = state_action_encoding[:, :-1, :, :]
+        # take the state encoding, state_action_encoding[:, -self.action_encoding_dim:, :, :] is action encoding
+        state_encoding = state_action_encoding[:, :-self.action_encoding_dim:, :, :]
         x = self.conv(state_action_encoding)
-        x = self.bn(x)
+        x = self.norm_common(x)
 
         # the residual link: add state encoding to the state_action encoding
         x += state_encoding
@@ -512,7 +566,7 @@ class DynamicsNetwork(nn.Module):
         next_latent_state = x
 
         x = self.conv1x1_reward(next_latent_state)
-        x = self.bn_reward(x)
+        x = self.norm_reward(x)
         x = self.activation(x)
         x = x.reshape(-1, self.flatten_output_size_for_reward_head).unsqueeze(0)
 
@@ -520,7 +574,7 @@ class DynamicsNetwork(nn.Module):
         value_prefix, next_reward_hidden_state = self.lstm(x, reward_hidden_state)
 
         value_prefix = value_prefix.squeeze(0)
-        value_prefix = self.bn_value_prefix(value_prefix)
+        value_prefix = self.norm_value_prefix(value_prefix)
         value_prefix = self.activation(value_prefix)
         value_prefix = self.fc_reward_head(value_prefix)
 
@@ -529,5 +583,5 @@ class DynamicsNetwork(nn.Module):
     def get_dynamic_mean(self) -> float:
         return get_dynamic_mean(self)
 
-    def get_reward_mean(self) -> float:
+    def get_reward_mean(self) -> Tuple[ndarray, float]:
         return get_reward_mean(self)

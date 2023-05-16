@@ -40,7 +40,7 @@ class MuZeroModelMLP(nn.Module):
         """
         Overview:
             The definition of the network model of MuZero, which is a generalization version for 1D vector obs.
-            The networks are mainly build on fully connected layers.
+            The networks are mainly built on fully connected layers.
             The representation network is an MLP network which maps the raw observation to a latent state.
             The dynamics network is an MLP network which predicts the next latent state, and reward given the current latent state and action.
             The prediction network is an MLP network which predicts the value and policy given the current latent state.
@@ -61,8 +61,8 @@ class MuZeroModelMLP(nn.Module):
             - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.
+            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default sets it to True.
             - discrete_action_encoding_type (:obj:`str`): The encoding type of discrete action, which can be 'one_hot' or 'not_one_hot'.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection for dynamics network, default set it to False.
@@ -297,7 +297,7 @@ class MuZeroModelMLP(nn.Module):
         """
         Overview:
             Project the latent state to a lower dimension to calculate the self-supervised loss, which is proposed in EfficientZero.
-            For more details, please refer to paper ``Exploring Simple Siamese Representation Learning``.
+            For more details, please refer to the paper ``Exploring Simple Siamese Representation Learning``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
             - with_grad (:obj:`bool`): Whether to calculate gradient for the projection result.
@@ -342,14 +342,14 @@ class DynamicsNetwork(nn.Module):
         Overview:
             The definition of dynamics network in MuZero algorithm, which is used to predict next latent state
             reward by the given current latent state and action.
-            The networks are mainly build on fully connected layers.
+            The networks are mainly built on fully connected layers.
         Arguments:
             - action_encoding_dim (:obj:`int`): The dimension of action encoding.
             - num_channels (:obj:`int`): The num of channels in latent states.
             - common_layer_num (:obj:`int`): The number of common layers in dynamics network.
             - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical reward output.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of value/policy mlp, default set it to True.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
@@ -415,7 +415,7 @@ class DynamicsNetwork(nn.Module):
     def forward(self, state_action_encoding: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
-            Forward computation of the dynamics network. Predict next latent state given current latent state and action.
+            Forward computation of the dynamics network. Predict the next latent state given current latent state and action.
         Arguments:
             - state_action_encoding (:obj:`torch.Tensor`): The state-action encoding, which is the concatenation of \
                     latent state and action encoding, with shape (batch_size, num_channels, height, width).
