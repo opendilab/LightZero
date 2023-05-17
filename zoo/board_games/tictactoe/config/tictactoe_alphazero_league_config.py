@@ -10,7 +10,7 @@ num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
-sp_prob = 0.5  # TODO(pu): 0, 0.8, 1
+sp_prob = 0.  # TODO(pu): 0, 0.8, 1
 snapshot_the_player_in_iter_zero = False
 one_phase_step = int(2e4)
 

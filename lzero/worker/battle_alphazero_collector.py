@@ -319,24 +319,27 @@ class BattleAlphaZeroCollector(ISerialCollector):
                                 timestep
                             )
                             transition['collect_iter'] = train_iter
+                            self._traj_buffer[env_id][policy_id].append(transition)
                     else:
                         transition = self._policy[policy_id].process_transition(
                             self._obs_pool[env_id], self._policy_output_pool[env_id],
                             timestep
                         )
                         transition['collect_iter'] = train_iter
+                        self._traj_buffer[env_id][policy_id].append(transition)
 
-                    self._traj_buffer[env_id][policy_id].append(transition)
                     # prepare data
                     if timestep.done:
-                        transitions = to_tensor_transitions(
-                            self._traj_buffer[env_id][policy_id], not self._deepcopy_obs
-                        )
-                        # reward_shaping
-                        transitions = self.reward_shaping(transitions, timestep.info['eval_episode_return'])
+                        for policy_id in range(2):
+                            if len(self._traj_buffer[env_id][policy_id]) > 0:
+                                transitions = to_tensor_transitions(
+                                    self._traj_buffer[env_id][policy_id], not self._deepcopy_obs
+                                )
+                                # reward_shaping
+                                transitions = self.reward_shaping(transitions, timestep.info['eval_episode_return'])
 
-                        return_data[policy_id].append(transitions)
-                        self._traj_buffer[env_id][policy_id].clear()
+                                return_data[policy_id].append(transitions)
+                                self._traj_buffer[env_id][policy_id].clear()
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
 
