@@ -81,7 +81,8 @@ class AlphaZeroLeague(BaseLeague):
         shutil.copy(src_checkpoint_path, dst_checkpoint_path)
 
 
-def train_alphazero_league(cfg, Env, seed=0, max_train_iter: Optional[int] = int(1e10), max_env_step: Optional[int] = int(1e10)) -> None:
+def train_alphazero_league(cfg, Env, seed=0, max_train_iter: Optional[int] = int(1e10),
+                           max_env_step: Optional[int] = int(1e10)) -> None:
     """
     Overview:
         Train alphazero league
@@ -252,7 +253,10 @@ def train_alphazero_league(cfg, Env, seed=0, max_train_iter: Optional[int] = int
             new_data, episode_info = collector.collect(
                 train_iter=learner.train_iter, n_episode=cfg.policy.n_episode, policy_kwargs=collect_kwargs
             )
-            new_data = sum(new_data[0], new_data[1])
+            new_data_0 = sum(new_data[0], [])
+            new_data_1 = sum(new_data[1], [])
+            new_data = new_data_0 + new_data_1
+
             replay_buffer.push(new_data, cur_collector_envstep=collector.envstep)
             # Learn policy from collected data
             for i in range(cfg.policy.update_per_collect):

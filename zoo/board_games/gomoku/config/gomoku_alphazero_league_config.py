@@ -14,7 +14,7 @@ update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
 sp_prob = 0.  # TODO(pu): 0, 0.8, 1
-snapshot_the_player_in_iter_zero = False
+snapshot_the_player_in_iter_zero = True
 one_phase_step = int(1e5)
 
 # collector_env_num = 2
