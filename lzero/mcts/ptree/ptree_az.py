@@ -123,7 +123,7 @@ class MCTS(object):
             self,
             simulate_env: Type[BaseEnv],
             policy_forward_fn: Callable,
-            temperature: int = 1.0,
+            temperature: float = 1.0,
             sample: bool = True
     ) -> Tuple[int, List[float]]:
         """

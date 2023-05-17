@@ -217,12 +217,27 @@ def train_alphazero_league(cfg, Env, seed=0, max_train_iter: Optional[int] = int
                 opponent_policy = policies['historical'].collect_mode
                 opponent_path = job['checkpoint_path'][1]
                 opponent_policy.load_state_dict(torch.load(opponent_path, map_location='cpu'))
+                opponent_policy_info = {
+                    'policy': opponent_policy,
+                    'policy_id': opponent_player_id,
+                    'policy_type': 'historical'
+                }
             elif 'bot' in opponent_player_id:
                 opponent_policy = policies['bot'].collect_mode
+                opponent_policy_info = {
+                    'policy': opponent_policy,
+                    'policy_id': opponent_player_id,
+                    'policy_type': 'bot'
+                }
             else:
                 opponent_policy = policies[opponent_player_id].collect_mode
+                opponent_policy_info = {
+                    'policy': opponent_policy,
+                    'policy_id': opponent_player_id,
+                    'policy_type': 'main'
+                }
 
-            collector.reset_policy([policies[player_id].collect_mode, opponent_policy])
+            collector.reset_policy([policies[player_id].collect_mode, opponent_policy_info])
 
             collect_kwargs = {}
             # set temperature for visit count distributions according to the train_iter,

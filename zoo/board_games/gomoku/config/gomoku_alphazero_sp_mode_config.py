@@ -19,6 +19,7 @@ gomoku_alphazero_config = dict(
     exp_name=
     f'data_az_ptree/gomoku_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
+        stop_value=2,
         board_size=board_size,
         battle_mode='self_play_mode',
         bot_action_type='v0',

@@ -3,27 +3,27 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 5
-# num_simulations = 25
-# update_per_collect = 50
-# batch_size = 256
-# max_env_step = int(5e5)
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 5
+num_simulations = 25
+update_per_collect = 50
+batch_size = 256
+max_env_step = int(2e5)
+sp_prob = 0.5  # TODO(pu): 0, 0.8, 1
+snapshot_the_player_in_iter_zero = False
+one_phase_step = int(2e4)
+
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 2
+# update_per_collect = 5
+# batch_size = 2
+# max_env_step = int(2e5)
 # sp_prob = 0  # TODO(pu): 0, 0.8, 1
 # snapshot_the_player_in_iter_zero = False
-# one_phase_step = int(1e5)
-
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-num_simulations = 2
-update_per_collect = 5
-batch_size = 2
-max_env_step = int(2e5)
-sp_prob = 0  # TODO(pu): 0, 0.8, 1
-snapshot_the_player_in_iter_zero = False
-one_phase_step = int(2e5)
+# one_phase_step = int(5e4)
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -32,6 +32,7 @@ one_phase_step = int(2e5)
 tictactoe_alphazero_league_config = dict(
     exp_name=f"data_az_ptree_league/tictactoe_alphazero_league_sp-{sp_prob}_iter-zero-init-{snapshot_the_player_in_iter_zero}_phase-step-{one_phase_step}_seed0",
     env=dict(
+        stop_value=2,
         board_size=3,
         battle_mode='self_play_mode',
         channel_last=False,  # NOTE
@@ -46,7 +47,6 @@ tictactoe_alphazero_league_config = dict(
         prob_random_agent=0,
         prob_expert_agent=0,
         scale=True,
-        stop_value=2,
     ),
     policy=dict(
         model=dict(
@@ -98,6 +98,7 @@ tictactoe_alphazero_league_config = dict(
             snapshot_the_player_in_iter_zero=snapshot_the_player_in_iter_zero,
             payoff=dict(
                 type='battle',
+                # ``_decay``` controls how past game info (win, draw, loss) decays.
                 decay=0.99,
                 min_win_rate_games=4,
             ),

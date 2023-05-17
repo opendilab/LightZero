@@ -105,7 +105,10 @@ class BattleAlphaZeroCollector(ISerialCollector):
                 )
             )
         for p in self._policy:
-            p.reset()
+            if isinstance(p, dict):
+                p['policy'].reset()
+            else:
+                p.reset()
 
     def reset(self, _policy: Optional[List[namedtuple]] = None, _env: Optional[BaseEnvManager] = None) -> None:
         """
@@ -221,6 +224,7 @@ class BattleAlphaZeroCollector(ISerialCollector):
         ready_env_id = set()
         remain_episode = n_episode
 
+
         while True:
             # for policy_id, policy in enumerate(self._policy):
             with self._timer:
@@ -260,13 +264,21 @@ class BattleAlphaZeroCollector(ISerialCollector):
                         ready_env_id_player_2.append(k)
 
                 if len(ready_env_id_player_1) > 0:
-                    policy_output_player_1 = self._policy[0].forward(simulation_envs_player_1, obs_player_1,
-                                                                     temperature)
+                    if isinstance(self._policy[0], dict):
+                        policy_output_player_1 = self._policy[0]['policy'].forward(simulation_envs_player_1, obs_player_1,
+                                                                         temperature)
+                    else:
+                        policy_output_player_1 = self._policy[0].forward(simulation_envs_player_1, obs_player_1,
+                                                                         temperature)
                 else:
                     policy_output_player_1 = {}
                 if len(ready_env_id_player_2) > 0:
-                    policy_output_player_2 = self._policy[1].forward(simulation_envs_player_2, obs_player_2,
-                                                                     temperature)
+                    if isinstance(self._policy[1], dict):
+                        policy_output_player_2 = self._policy[1]['policy'].forward(simulation_envs_player_2, obs_player_2,
+                                                                         temperature)
+                    else:
+                        policy_output_player_2 = self._policy[1].forward(simulation_envs_player_2, obs_player_2,
+                                                                         temperature)
                 else:
                     policy_output_player_2 = {}
 
@@ -297,20 +309,16 @@ class BattleAlphaZeroCollector(ISerialCollector):
                 elif env_id in ready_env_id_player_2:
                     policy_id = 1
                 with self._timer:
-                    # for policy_id, policy in enumerate(self._policy):
-                    #     policy_timestep_data = [d[policy_id] if not isinstance(d, bool) else d for d in timestep]
-                    #     policy_timestep = type(timestep)(*policy_timestep_data)
-                    # transition = self._policy[policy_id].process_transition(
-                    #     self._obs_pool[env_id][policy_id], self._policy_output_pool[env_id][policy_id],
-                    #     policy_timestep
-                    # )
-                    if isinstance(self._policy[policy_id].forward.__self__, TictactoeBotV0) or isinstance(self._policy[policy_id].forward.__self__, GomokuBotV0):
-                        # bot policy does not need to process transition
-                        transition = self._policy[0].process_transition(
-                            self._obs_pool[env_id], self._policy_output_pool[env_id],
-                            timestep
-                        )
-                        transition['collect_iter'] = train_iter
+                    if isinstance(self._policy[policy_id], dict):
+                        if self._policy[policy_id]['policy_type'] in ['bot', 'historical']:
+                            # The data produced by bot and historical policy is not used for training.
+                            pass
+                        elif self._policy[policy_id]['policy_type'] == 'main':
+                            transition = self._policy[policy_id]['policy'].process_transition(
+                                self._obs_pool[env_id], self._policy_output_pool[env_id],
+                                timestep
+                            )
+                            transition['collect_iter'] = train_iter
                     else:
                         transition = self._policy[policy_id].process_transition(
                             self._obs_pool[env_id], self._policy_output_pool[env_id],
@@ -345,7 +353,12 @@ class BattleAlphaZeroCollector(ISerialCollector):
                     collected_episode += 1
                     self._episode_info.append(info)
                     for i, p in enumerate(self._policy):
-                        p.reset([env_id])
+                        # p.reset([env_id])
+                        if isinstance(p, dict):
+                            p['policy'].reset([env_id])
+                        else:
+                            p.reset([env_id])
+
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
                     for policy_id in range(2):
