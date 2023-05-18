@@ -1,5 +1,6 @@
 import copy
 import sys
+from functools import lru_cache
 from typing import List
 
 import gym
@@ -10,6 +11,26 @@ from ditk import logging
 from easydict import EasyDict
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
+from zoo.board_games.tictactoe.envs.legal_actions_cython import legal_actions_cython
+from zoo.board_games.tictactoe.envs.get_done_winner_cython import get_done_winner_cython
+
+
+@lru_cache(maxsize=512)
+def _legal_actions_func_lru(board_tuple):
+    # Convert tuple to NumPy array.
+    board_array = np.array(board_tuple, dtype=np.int32)
+    # Convert NumPy array to memory view.
+    board_view = board_array.view(dtype=np.int32).reshape(board_array.shape)
+    return legal_actions_cython(board_view)
+
+
+@lru_cache(maxsize=512)
+def _get_done_winner_func_lru(board_tuple):
+    # Convert tuple to NumPy array.
+    board_array = np.array(board_tuple, dtype=np.int32)
+    # Convert NumPy array to memory view.
+    board_view = board_array.view(dtype=np.int32).reshape(board_array.shape)
+    return get_done_winner_cython(board_view)
 
 
 @ENV_REGISTRY.register('tictactoe')
@@ -38,8 +59,10 @@ class TicTacToeEnv(BaseEnv):
         self.channel_last = cfg.channel_last
         self.scale = cfg.scale
         self.battle_mode = cfg.battle_mode
-        # ``self.mcts_mode`` is only used in AlphaZero
-        self.mcts_mode = cfg.get('mcts_mode', cfg.battle_mode)
+        # The mode of interaction between the agent and the environment.
+        assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
+        # The mode of MCTS is only used in AlphaZero.
+        self.mcts_mode = 'self_play_mode'
         self.board_size = 3
         self.players = [1, 2]
         self.total_num_actions = 9
@@ -53,6 +76,26 @@ class TicTacToeEnv(BaseEnv):
         self.bot_action_type = cfg.bot_action_type
         if 'alpha_beta_pruning' in self.bot_action_type:
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
+
+    @property
+    def legal_actions(self):
+        # Convert NumPy arrays to nested tuples to make them hashable.
+        return _legal_actions_func_lru(tuple(map(tuple, self.board)))
+
+    # only for evaluation speed
+    @property
+    def legal_actions_cython(self):
+        return legal_actions_cython(list(self.board))
+
+    # only for evaluation speed
+    @property
+    def legal_actions_cython_lru(self):
+        # Convert NumPy arrays to nested tuples to make them hashable.
+        return _legal_actions_func_lru(tuple(map(tuple, self.board)))
+
+    def get_done_winner(self):
+        # Convert NumPy arrays to nested tuples to make them hashable.
+        return _get_done_winner_func_lru(tuple(map(tuple, self.board)))
 
     def reset(self, start_player_index=0, init_state=None):
         """
@@ -71,7 +114,7 @@ class TicTacToeEnv(BaseEnv):
                 low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.uint8
             )
         self._action_space = gym.spaces.Discrete(self.board_size ** 2)
-        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1, ), dtype=np.float32)
+        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
@@ -125,7 +168,9 @@ class TicTacToeEnv(BaseEnv):
                     action = self.bot_action()
 
             timestep = self._player_step(action)
-            # print(self.board)
+            if timestep.done:
+                # The eval_episode_return is calculated from Player 1's perspective。
+                timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs['to_play'] == 1 else timestep.reward
             return timestep
         elif self.battle_mode == 'play_with_bot_mode':
             # player 1 battle with expert player 2
@@ -249,30 +294,6 @@ class TicTacToeEnv(BaseEnv):
             # (C, W, H)
             return raw_obs, scale_obs
 
-    def get_done_winner(self):
-        """
-        Overview:
-             Check if the game is over and who the winner is. Return 'done' and 'winner'.
-        Returns:
-            - outputs (:obj:`Tuple`): Tuple containing 'done' and 'winner',
-                - if player 1 win,     'done' = True, 'winner' = 1
-                - if player 2 win,     'done' = True, 'winner' = 2
-                - if draw,             'done' = True, 'winner' = -1
-                - if game is not over, 'done' = False, 'winner' = -1
-        """
-        have_winner, winner = self._get_have_winner_and_winner()
-        if have_winner:
-            done, winner = True, winner
-        elif len(self.legal_actions) == 0:
-            # the agent don't have legal_actions to move, so the episode is done
-            # winner = -1 indicates draw.
-            done, winner = True, -1
-        else:
-            # episode is not done.
-            done, winner = False, -1
-
-        return done, winner
-
     def get_done_reward(self):
         """
         Overview:
@@ -296,34 +317,6 @@ class TicTacToeEnv(BaseEnv):
             # episode is not done
             reward = None
         return done, reward
-
-    def _get_have_winner_and_winner(self):
-        # has_legal_actions i.e. not done
-        # Horizontal and vertical checks
-        for i in range(self.board_size):
-            if len(set(self.board[i, :])) == 1 and (self.board[i, 0] != 0):
-                return True, self.board[i, 0]
-            if len(set(self.board[:, i])) == 1 and (self.board[0, i] != 0):
-                return True, self.board[0, i]
-
-        # Diagonal checks
-        if self.board[0, 0] == self.board[1, 1] == self.board[2, 2] != 0:
-            return True, self.board[0, 0]
-        if self.board[2, 0] == self.board[1, 1] == self.board[0, 2] != 0:
-            return True, self.board[2, 0]
-
-        winner = -1
-        have_winner = False
-        return have_winner, winner
-
-    @property
-    def legal_actions(self):
-        legal_actions = []
-        for i in range(self.board_size):
-            for j in range(self.board_size):
-                if self.board[i][j] == 0:
-                    legal_actions.append(self.coord_to_action(i, j))
-        return legal_actions
 
     def random_action(self):
         action_list = self.legal_actions
@@ -497,8 +490,10 @@ class TicTacToeEnv(BaseEnv):
         """
         Overview:
             execute action and get next_simulator_env. used in AlphaZero.
+        Arguments:
+            - action: an integer from the action space.
         Returns:
-            Returns TicTacToeEnv instance.
+            - next_simulator_env: next simulator env after execute action.
         """
         if action not in self.legal_actions:
             raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
@@ -510,24 +505,29 @@ class TicTacToeEnv(BaseEnv):
         else:
             start_player_index = 0  # self.players = [1, 2], start_player = 1, start_player_index = 0
         next_simulator_env = copy.deepcopy(self)
-        next_simulator_env.reset(start_player_index, init_state=new_board)  # index
+        next_simulator_env.reset(start_player_index, init_state=new_board)
         return next_simulator_env
 
     def simulate_action_v2(self, board, start_player_index, action):
         """
         Overview:
-            execute action from board and get new_board, new_legal_actions. used in AlphaZero.
+            execute action from board and get new_board, new_legal_actions. used in alphabeta_pruning_bot.
+        Arguments:
+            - board (:obj:`np.array`): current board
+            - start_player_index (:obj:`int`): start player index
+            - action (:obj:`int`): action
         Returns:
-            - new_board (:obj:`np.array`):
-            - new_legal_actions (:obj:`np.array`):
+            - new_board (:obj:`np.array`): new board
+            - new_legal_actions (:obj:`list`): new legal actions
         """
-        self.reset(start_player_index, init_state=board)  # index
+        self.reset(start_player_index, init_state=board)
         if action not in self.legal_actions:
             raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
         row, col = self.action_to_coord(action)
         self.board[row, col] = self.current_player
         new_legal_actions = copy.deepcopy(self.legal_actions)
         new_board = copy.deepcopy(self.board)
+
         return new_board, new_legal_actions
 
     def clone(self):

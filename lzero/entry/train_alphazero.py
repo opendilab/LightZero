@@ -4,14 +4,14 @@ from functools import partial
 from typing import Optional, Tuple
 
 import torch
-from tensorboardX import SummaryWriter
-
 from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner, create_buffer
+from tensorboardX import SummaryWriter
+
 from lzero.policy import visit_count_temperature
 from lzero.worker import AlphaZeroCollector, AlphaZeroEvaluator
 
