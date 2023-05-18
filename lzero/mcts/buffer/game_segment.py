@@ -143,7 +143,7 @@ class GameSegment:
 
     def pad_over(
             self, next_segment_observations: List, next_segment_rewards: List, next_segment_root_values: List,
-            next_segment_child_visits: List
+            next_segment_child_visits: List, next_segment_improved_policy: List = None
     ) -> None:
         """
         Overview:
@@ -161,6 +161,8 @@ class GameSegment:
         assert len(next_segment_child_visits) <= self.config.num_unroll_steps
         assert len(next_segment_root_values) <= self.config.num_unroll_steps + self.config.td_steps
         assert len(next_segment_rewards) <= self.config.num_unroll_steps + self.config.td_steps - 1
+        if next_segment_improved_policy is not None:
+            assert len(next_segment_improved_policy) <= self.config.num_unroll_steps + self.config.td_steps
 
         # NOTE: next block observation should start from (stacked_observation - 1) in next trajectory
         for observation in next_segment_observations:
@@ -174,6 +176,10 @@ class GameSegment:
 
         for child_visits in next_segment_child_visits:
             self.child_visit_segment.append(child_visits)
+        
+        if next_segment_improved_policy is not None:
+            for improved_policy in next_segment_improved_policy:
+                self.improved_policy_probs.append(improved_policy)
 
     def get_targets(self, timestep: int) -> Tuple:
         """
@@ -201,6 +207,7 @@ class GameSegment:
         else:
             self.child_visit_segment[idx] = [visit_count / sum_visits for visit_count in visit_counts]
             self.root_value_segment[idx] = root_value
+            self.improved_policy_probs[idx] = improved_policy
 
     def game_segment_to_array(self) -> None:
         """
@@ -238,6 +245,7 @@ class GameSegment:
 
         self.child_visit_segment = np.array(self.child_visit_segment)
         self.root_value_segment = np.array(self.root_value_segment)
+        self.improved_policy_probs = np.array(self.improved_policy_probs)
 
         self.action_mask_segment = np.array(self.action_mask_segment)
         self.to_play_segment = np.array(self.to_play_segment)

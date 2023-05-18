@@ -295,7 +295,15 @@ class GumeblMuZeroPolicy(Policy):
         # ==============================================================
         eps=1e-7
         # improved_policy_batch = np.ones(improved_policy_batch.shape)
-        policy_loss = self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)), torch.softmax(torch.from_numpy(improved_policy_batch[:, 0]), dim=1).to(self._cfg.device).detach().float())
+        policy_loss = self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)), torch.from_numpy(improved_policy_batch[:, 0]).to(self._cfg.device).detach().float())
+        
+        # print("==================start=============")
+        # print(policy_logits[0])
+        # print(torch.softmax(policy_logits, dim=1)[0])
+        # print("=======")
+        # print(improved_policy_batch[:, 0][0])
+        # print(policy_loss)
+        
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
         reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
@@ -349,9 +357,16 @@ class GumeblMuZeroPolicy(Policy):
             # calculate policy loss for the next ``num_unroll_steps`` unroll steps.
             # NOTE: the +=.
             # ==============================================================
-            policy_loss += self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)).double(),torch.softmax(torch.from_numpy(improved_policy_batch[:, step_i + 1]), dim=1).to(self._cfg.device).detach().double())
+            policy_loss += self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1).double()),torch.from_numpy(improved_policy_batch[:, step_i + 1]).to(self._cfg.device).detach().double())
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_i])
+
+            # print("the ", step_i, "step:")
+            # print(policy_logits[0])
+            # print(torch.softmax(policy_logits, dim=1)[0])
+            # print("=======")
+            # print(improved_policy_batch[:, step_i + 1][0])
+            # print(policy_loss)
 
             # Follow MuZero, set half gradient
             # hidden_state.register_hook(lambda grad: grad * 0.5)

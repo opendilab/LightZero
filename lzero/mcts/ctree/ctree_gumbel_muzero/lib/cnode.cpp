@@ -329,7 +329,18 @@ namespace tree{
         for (int i=0;i<child_prior.size();i++){
             probs[this->legal_actions[i]] = child_prior[i] + completed_qvalues[i];
         }
+        // std::cout << "original "<< std::endl;
+        // for (int i=0;i<probs.size();i++){
+        //     std::cout << probs[i] << " ";
+        // }
+        // std::cout << std::endl;
         csoftmax(probs, probs.size());
+
+        // std::cout << "after softmax "<< std::endl;
+        // for (int i=0;i<probs.size();i++){
+        //     std::cout << probs[i] << " ";
+        // }
+        // std::cout << std::endl;
 
         return probs;
     }
@@ -894,7 +905,8 @@ namespace tree{
                 weighted_q_sum += child_prior[i] * q_values[i] / probs_sum;
             }
 
-        return (raw_value + visit_count_sum * weighted_q_sum) / (visit_count_sum+1);
+        // return (raw_value + visit_count_sum * weighted_q_sum) / (visit_count_sum+1);
+        return raw_value;
     }
 
     void rescale_qvalues(std::vector<float> &value, float epsilon){

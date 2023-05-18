@@ -60,10 +60,7 @@ class GumbelMuZeroGameBuffer(MuZeroGameBuffer):
                 for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
             ]
             # pad improved policy
-            _improved_policy += [
-                np.random.rand(game.action_space_size)
-                for _ in range(self._cfg.num_unroll_steps + 1 - len(_improved_policy))
-            ]
+            _improved_policy.extend(np.random.dirichlet(np.ones(game.action_space_size),size=self._cfg.num_unroll_steps + 1 - len(_improved_policy)))
 
             # obtain the input observations
             # pad if length of obs in game_segment is less than stack+num_unroll_steps
@@ -79,6 +76,11 @@ class GumbelMuZeroGameBuffer(MuZeroGameBuffer):
 
         # formalize the input observations
         obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
+
+        # print("==================")
+        # print(len(improved_policy_list))
+        # print(improved_policy_list[-1])
+        # print(np.sum(improved_policy_list, axis=-1))
 
         # formalize the inputs of a batch
         current_batch = [obs_list, action_list, improved_policy_list, mask_list, batch_index_list, weights_list, make_time_list]

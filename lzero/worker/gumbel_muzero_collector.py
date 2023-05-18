@@ -31,7 +31,7 @@ class GumbelMuZeroCollector(MuZeroCollector):
     # ==============================================================
     # MCTS+RL related core code
     # ==============================================================
-    def _compute_priorities(self, i, pred_values_lst, search_values_lst, improved_policy_lst):
+    def _compute_priorities(self, i, pred_values_lst, search_values_lst):
         """
         Overview:
             obtain the priorities at index i.
@@ -44,19 +44,76 @@ class GumbelMuZeroCollector(MuZeroCollector):
             pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.policy_config.device).float().view(-1)
             search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.policy_config.device
                                                                                 ).float().view(-1)
-            # ==============================================================
-            # Gumbel Muzero related code
-            # ==============================================================
-            improved_policy = torch.from_numpy(np.array(improved_policy_lst[i])).to(self.policy_config.device
-                                                                                ).float().view(-1)
             priorities = L1Loss(reduction='none'
                                 )(pred_values,
-                                  search_values, improved_policy).detach().cpu().numpy() + self.policy_config.prioritized_replay_eps
+                                  search_values).detach().cpu().numpy() + self.policy_config.prioritized_replay_eps
         else:
             # priorities is None -> use the max priority for all newly collected data
             priorities = None
 
         return priorities
+    
+
+    def pad_and_save_last_trajectory(self, i, last_game_segments, last_game_priorities, game_segments, done) -> None:
+        """
+        Overview:
+            put the last game block into the pool if the current game is finished
+        Arguments:
+            - last_game_segments (:obj:`list`): list of the last game segments
+            - last_game_priorities (:obj:`list`): list of the last game priorities
+            - game_segments (:obj:`list`): list of the current game segments
+        Note:
+            (last_game_segments[i].obs_segment[-4:][j] == game_segments[i].obs_segment[:4][j]).all() is True
+        """
+        # pad over last block trajectory
+        beg_index = self.policy_config.model.frame_stack_num
+        end_index = beg_index + self.policy_config.num_unroll_steps
+
+        # the start <frame_stack_num> obs is init zero obs, so we take the [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
+        # e.g. the start 4 obs is init zero obs, the num_unroll_steps is 5, so we take the [4:9] obs as the pad obs
+        pad_obs_lst = game_segments[i].obs_segment[beg_index:end_index]
+        pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps]
+        # EfficientZero original repo bug:
+        # pad_child_visits_lst = game_segments[i].child_visit_segment[beg_index:end_index]
+
+        beg_index = 0
+        # self.unroll_plus_td_steps = self.policy_config.num_unroll_steps + self.policy_config.td_steps
+        end_index = beg_index + self.unroll_plus_td_steps - 1
+
+        pad_reward_lst = game_segments[i].reward_segment[beg_index:end_index]
+
+        beg_index = 0
+        end_index = beg_index + self.unroll_plus_td_steps
+
+        pad_root_values_lst = game_segments[i].root_value_segment[beg_index:end_index]
+
+        pad_improved_policy_prob = game_segments[i].improved_policy_probs[beg_index:end_index]
+
+        # pad over and save
+        last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst, next_segment_improved_policy = pad_improved_policy_prob)
+        """
+        Note:
+            game_segment element shape:
+            obs: game_segment_length + stack + num_unroll_steps, 20+4 +5
+            rew: game_segment_length + stack + num_unroll_steps + td_steps -1  20 +5+3-1
+            action: game_segment_length -> 20
+            root_values:  game_segment_length + num_unroll_steps + td_steps -> 20 +5+3
+            child_visits： game_segment_length + num_unroll_steps -> 20 +5
+            to_play: game_segment_length -> 20
+            action_mask: game_segment_length -> 20
+        """
+
+        last_game_segments[i].game_segment_to_array()
+
+        # put the game block into the pool
+        self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
+
+        # reset last game_segments
+        last_game_segments[i] = None
+        last_game_priorities[i] = None
+
+        return None
+
 
     def collect(self,
                 n_episode: Optional[int] = None,
@@ -225,7 +282,7 @@ class GumbelMuZeroCollector(MuZeroCollector):
 
                     if self.policy_config.sampled_algo:
                         game_segments[env_id].store_search_stats(
-                            distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
+                            distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id], improved_policy = improved_policy_dict[env_id]
                         )
                     else:
                         game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id], improved_policy = improved_policy_dict[env_id])
@@ -269,7 +326,7 @@ class GumbelMuZeroCollector(MuZeroCollector):
                             )
 
                         # calculate priority
-                        priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst, improved_policy_lst)
+                        priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
                         pred_values_lst[env_id] = []
                         search_values_lst[env_id] = []
                         improved_policy_lst[env_id] = []
@@ -315,7 +372,7 @@ class GumbelMuZeroCollector(MuZeroCollector):
                         )
 
                     # store current block trajectory
-                    priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst, improved_policy_lst)
+                    priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
 
                     # NOTE: put the last game block in one episode into the trajectory_pool
                     game_segments[env_id].game_segment_to_array()
