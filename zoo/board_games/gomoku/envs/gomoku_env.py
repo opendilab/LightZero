@@ -200,11 +200,9 @@ class GomokuEnv(BaseEnv):
 
             # player 1's turn
             timestep_player1 = self._player_step(action)
-            if self.agent_vs_human:
-                print('player 1 (agent): ' + self.action_to_string(action))  # Note: visualize
-                self.render()
-
             if timestep_player1.done:
+                if self.agent_vs_human:
+                    print(self.board)
                 # in eval_mode, we set to_play as None/-1, because we don't consider the alternation between players
                 timestep_player1.obs['to_play'] = -1
                 return timestep_player1
@@ -217,9 +215,6 @@ class GomokuEnv(BaseEnv):
                 # bot_action = self.random_action()
 
             timestep_player2 = self._player_step(bot_action)
-            if self.agent_vs_human:
-                print('player 2 (human): ' + self.action_to_string(bot_action))  # Note: visualize
-                self.render()
 
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward

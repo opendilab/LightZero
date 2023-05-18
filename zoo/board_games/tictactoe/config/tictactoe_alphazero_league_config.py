@@ -10,7 +10,7 @@ num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
-sp_prob = 0.5  # TODO(pu): 0, 0.8, 1
+sp_prob = 0.5  # TODO(pu): 0, 0.5, 1
 snapshot_the_player_in_iter_zero = True
 one_phase_step = int(2e4)
 
@@ -21,7 +21,7 @@ one_phase_step = int(2e4)
 # update_per_collect = 5
 # batch_size = 2
 # max_env_step = int(2e5)
-# sp_prob = 0.5  # TODO(pu): 0, 0.8, 1
+# sp_prob = 0.5  # TODO(pu): 0, 0.5, 1
 # snapshot_the_player_in_iter_zero = True
 # one_phase_step = int(2)
 
@@ -49,6 +49,7 @@ tictactoe_alphazero_league_config = dict(
         scale=True,
     ),
     policy=dict(
+        env_type='board_games',
         model=dict(
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),
