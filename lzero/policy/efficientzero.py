@@ -322,15 +322,16 @@ class EfficientZeroPolicy(Policy):
         target_normalized_visit_count_init_step = target_policy[:, 0]
 
         # ******* NOTE: target_policy_entropy is only for debug.  ******
-        # Find the indices of the rows that do not contain all zeros
-        non_zero_rows = (target_normalized_visit_count_init_step != 0).any(dim=1)
-        # Check if there are any non-zero rows
-        if non_zero_rows.any():
-            # Calculate the entropy for the non-zero rows
-            target_dist = Categorical(target_normalized_visit_count_init_step[non_zero_rows])
+        non_masked_indices = torch.nonzero(mask_batch[:, 0]).squeeze(-1)
+        # Check if there are any unmasked rows
+        if len(non_masked_indices) > 0:
+            target_normalized_visit_count_masked = torch.index_select(
+                target_normalized_visit_count_init_step, 0, non_masked_indices
+            )
+            target_dist = Categorical(target_normalized_visit_count_masked)
             target_policy_entropy = target_dist.entropy().mean()
         else:
-            # Set the entropy to 0 if all rows are zero
+            # Set target_policy_entropy to 0 if all rows are masked
             target_policy_entropy = 0
 
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
@@ -395,16 +396,16 @@ class EfficientZeroPolicy(Policy):
             target_normalized_visit_count = target_policy[:, step_i + 1]
 
             # ******* NOTE: target_policy_entropy is only for debug.  ******
-            # Find the indices of the rows that do not contain all zeros
-            non_zero_rows = (target_normalized_visit_count != 0).any(dim=1)
-            # Check if there are any non-zero rows
-            if non_zero_rows.any():
-                # Calculate the entropy for the non-zero rows
-                target_dist = Categorical(target_normalized_visit_count_init_step[non_zero_rows])
-                # NOTE: the +=.
+            non_masked_indices = torch.nonzero(mask_batch[:, step_i + 1]).squeeze(-1)
+            # Check if there are any unmasked rows
+            if len(non_masked_indices) > 0:
+                target_normalized_visit_count_masked = torch.index_select(
+                    target_normalized_visit_count, 0, non_masked_indices
+                )
+                target_dist = Categorical(target_normalized_visit_count_masked)
                 target_policy_entropy += target_dist.entropy().mean()
             else:
-                # Set the entropy to 0 if all rows are zero
+                # Set target_policy_entropy to 0 if all rows are masked
                 target_policy_entropy += 0
 
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])

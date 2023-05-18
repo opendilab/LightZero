@@ -118,9 +118,9 @@ class MuZeroGameBuffer(GameBuffer):
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
                                               self._cfg.num_unroll_steps].tolist()
-            # add mask for invalid actions (out of trajectory)
+            # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
             mask_tmp = [1. for i in range(len(actions_tmp))]
-            mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps - len(mask_tmp))]
+            mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
             actions_tmp += [
@@ -130,7 +130,7 @@ class MuZeroGameBuffer(GameBuffer):
 
             # obtain the input observations
             # pad if length of obs in game_segment is less than stack+num_unroll_steps
-            # e.g. stack+num_unroll_steps  4+5
+            # e.g. stack+num_unroll_steps = 4+5
             obs_list.append(
                 game_segment_list[i].get_unroll_obs(
                     pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
