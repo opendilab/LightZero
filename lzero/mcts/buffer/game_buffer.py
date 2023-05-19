@@ -51,12 +51,11 @@ class GameBuffer(ABC, object):
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
-        self._cfg = cfg
         assert self._cfg.env_type in ['not_board_games', 'board_games']
         self.replay_buffer_size = self._cfg.replay_buffer_size
         self.batch_size = self._cfg.batch_size
-        self._alpha = self._cfg.priority_prob_alpha
-        self._beta = self._cfg.priority_prob_beta
+        self.alpha = self._cfg.priority_prob_alpha
+        self.beta = self._cfg.priority_prob_beta
 
         self.game_segment_buffer = []
         self.game_pos_priorities = []
@@ -80,6 +79,7 @@ class GameBuffer(ABC, object):
         Returns:
             - train_data (:obj:`List`): List of train data, including current_batch and target_batch.
         """
+        raise NotImplementedError
 
     @abstractmethod
     def _make_batch(self, orig_data: Any, reanalyze_ratio: float) -> Tuple[Any]:
@@ -96,7 +96,117 @@ class GameBuffer(ABC, object):
         Returns:
             - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch
         """
-        pass
+        raise NotImplementedError
+
+    @abstractmethod
+    def _prepare_reward_value_context(
+            self, batch_index_list: List[str], game_segment_list: List[Any], pos_in_game_segment_list: List[Any],
+            total_transitions: int
+    ) -> List[Any]:
+        """
+        Overview:
+            prepare the context of rewards and values for calculating TD value target in reanalyzing part.
+        Arguments:
+            - batch_index_list (:obj:`list`): the index of start transition of sampled minibatch in replay buffer
+            - game_segment_list (:obj:`list`): list of game segments
+            - pos_in_game_segment_list (:obj:`list`): list of transition index in game_segment
+            - total_transitions (:obj:`int`): number of collected transitions
+        Returns:
+            - reward_value_context (:obj:`list`): value_obs_lst, value_mask, state_index_lst, rewards_lst, game_segment_lens,
+              td_steps_lst, action_mask_segment, to_play_segment
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _prepare_policy_non_reanalyzed_context(
+            self, batch_index_list: List[int], game_segment_list: List[Any], pos_in_game_segment_list: List[int]
+    ) -> List[Any]:
+        """
+        Overview:
+            prepare the context of policies for calculating policy target in non-reanalyzing part, just return the policy in self-play
+        Arguments:
+            - batch_index_list (:obj:`list`): the index of start transition of sampled minibatch in replay buffer
+            - game_segment_list (:obj:`list`): list of game segments
+            - pos_in_game_segment_list (:obj:`list`): list transition index in game
+        Returns:
+            - policy_non_re_context (:obj:`list`): state_index_lst, child_visits, game_segment_lens, action_mask_segment, to_play_segment
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _prepare_policy_reanalyzed_context(
+            self, batch_index_list: List[str], game_segment_list: List[Any], pos_in_game_segment_list: List[str]
+    ) -> List[Any]:
+        """
+        Overview:
+            prepare the context of policies for calculating policy target in reanalyzing part.
+        Arguments:
+            - batch_index_list (:obj:'list'): start transition index in the replay buffer
+            - game_segment_list (:obj:'list'): list of game segments
+            - pos_in_game_segment_list (:obj:'list'): position of transition index in one game history
+        Returns:
+            - policy_re_context (:obj:`list`): policy_obs_lst, policy_mask, state_index_lst, indices,
+              child_visits, game_segment_lens, action_mask_segment, to_play_segment
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any) -> List[np.ndarray]:
+        """
+        Overview:
+            prepare reward and value targets from the context of rewards and values.
+        Arguments:
+            - reward_value_context (:obj:'list'): the reward value context
+            - model (:obj:'torch.tensor'):model of the target model
+        Returns:
+            - batch_value_prefixs (:obj:'np.ndarray): batch of value prefix
+            - batch_target_values (:obj:'np.ndarray): batch of value estimation
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any) -> np.ndarray:
+        """
+        Overview:
+            prepare policy targets from the reanalyzed context of policies
+        Arguments:
+            - policy_re_context (:obj:`List`): List of policy context to reanalyzed
+        Returns:
+            - batch_target_policies_re
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _compute_target_policy_non_reanalyzed(
+            self, policy_non_re_context: List[Any], policy_shape: Optional[int]
+    ) -> np.ndarray:
+        """
+        Overview:
+            prepare policy targets from the non-reanalyzed context of policies
+        Arguments:
+            - policy_non_re_context (:obj:`List`): List containing:
+                - pos_in_game_segment_list
+                - child_visits
+                - game_segment_lens
+                - action_mask_segment
+                - to_play_segment
+        Returns:
+            - batch_target_policies_non_re
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def update_priority(
+            self, train_data: Optional[List[Optional[np.ndarray]]], batch_priorities: Optional[Any]
+    ) -> None:
+        """
+        Overview:
+            Update the priority of training data.
+        Arguments:
+            - train_data (:obj:`Optional[List[Optional[np.ndarray]]]`): training data to be updated priority.
+            - batch_priorities (:obj:`batch_priorities`): priorities to update to.
+        """
+        raise NotImplementedError
 
     def _sample_orig_data(self, batch_size: int) -> Tuple:
         """
@@ -111,13 +221,13 @@ class GameBuffer(ABC, object):
             - batch_size (:obj:`int`): batch size
             - beta: float the parameter in PER for calculating the priority
         """
-        assert self._beta > 0
+        assert self.beta > 0, self.beta
         num_of_transitions = self.get_num_of_transitions()
         if self._cfg.use_priority is False:
             self.game_pos_priorities = np.ones_like(self.game_pos_priorities)
 
         # +1e-6 for numerical stability
-        probs = self.game_pos_priorities ** self._alpha + 1e-6
+        probs = self.game_pos_priorities ** self.alpha + 1e-6
         probs /= probs.sum()
 
         # sample according to transition index
@@ -128,7 +238,7 @@ class GameBuffer(ABC, object):
             # NOTE: used in reanalyze part
             batch_index_list.sort()
 
-        weights_list = (num_of_transitions * probs[batch_index_list]) ** (-self._beta)
+        weights_list = (num_of_transitions * probs[batch_index_list]) ** (-self.beta)
         weights_list /= weights_list.max()
 
         game_segment_list = []
@@ -188,116 +298,6 @@ class GameBuffer(ABC, object):
         action_mask = sum(action_mask, [])
 
         return to_play, action_mask
-
-    @abstractmethod
-    def _prepare_reward_value_context(
-            self, batch_index_list: List[str], game_segment_list: List[Any], pos_in_game_segment_list: List[Any],
-            total_transitions: int
-    ) -> List[Any]:
-        """
-        Overview:
-            prepare the context of rewards and values for calculating TD value target in reanalyzing part.
-        Arguments:
-            - batch_index_list (:obj:`list`): the index of start transition of sampled minibatch in replay buffer
-            - game_segment_list (:obj:`list`): list of game segments
-            - pos_in_game_segment_list (:obj:`list`): list of transition index in game_segment
-            - total_transitions (:obj:`int`): number of collected transitions
-        Returns:
-            - reward_value_context (:obj:`list`): value_obs_lst, value_mask, state_index_lst, rewards_lst, game_segment_lens,
-              td_steps_lst, action_mask_segment, to_play_segment
-        """
-        pass
-
-    @abstractmethod
-    def _prepare_policy_non_reanalyzed_context(
-            self, batch_index_list: List[int], game_segment_list: List[Any], pos_in_game_segment_list: List[int]
-    ) -> List[Any]:
-        """
-        Overview:
-            prepare the context of policies for calculating policy target in non-reanalyzing part, just return the policy in self-play
-        Arguments:
-            - batch_index_list (:obj:`list`): the index of start transition of sampled minibatch in replay buffer
-            - game_segment_list (:obj:`list`): list of game segments
-            - pos_in_game_segment_list (:obj:`list`): list transition index in game
-        Returns:
-            - policy_non_re_context (:obj:`list`): state_index_lst, child_visits, game_segment_lens, action_mask_segment, to_play_segment
-        """
-        pass
-
-    @abstractmethod
-    def _prepare_policy_reanalyzed_context(
-            self, batch_index_list: List[str], game_segment_list: List[Any], pos_in_game_segment_list: List[str]
-    ) -> List[Any]:
-        """
-        Overview:
-            prepare the context of policies for calculating policy target in reanalyzing part.
-        Arguments:
-            - batch_index_list (:obj:'list'): start transition index in the replay buffer
-            - game_segment_list (:obj:'list'): list of game segments
-            - pos_in_game_segment_list (:obj:'list'): position of transition index in one game history
-        Returns:
-            - policy_re_context (:obj:`list`): policy_obs_lst, policy_mask, state_index_lst, indices,
-              child_visits, game_segment_lens, action_mask_segment, to_play_segment
-        """
-        pass
-
-    @abstractmethod
-    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any) -> List[np.ndarray]:
-        """
-        Overview:
-            prepare reward and value targets from the context of rewards and values.
-        Arguments:
-            - reward_value_context (:obj:'list'): the reward value context
-            - model (:obj:'torch.tensor'):model of the target model
-        Returns:
-            - batch_value_prefixs (:obj:'np.ndarray): batch of value prefix
-            - batch_target_values (:obj:'np.ndarray): batch of value estimation
-        """
-        pass
-
-    @abstractmethod
-    def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any) -> np.ndarray:
-        """
-        Overview:
-            prepare policy targets from the reanalyzed context of policies
-        Arguments:
-            - policy_re_context (:obj:`List`): List of policy context to reanalyzed
-        Returns:
-            - batch_target_policies_re
-        """
-        pass
-
-    @abstractmethod
-    def _compute_target_policy_non_reanalyzed(
-            self, policy_non_re_context: List[Any], policy_shape: Optional[int]
-    ) -> np.ndarray:
-        """
-        Overview:
-            prepare policy targets from the non-reanalyzed context of policies
-        Arguments:
-            - policy_non_re_context (:obj:`List`): List containing:
-                - pos_in_game_segment_list
-                - child_visits
-                - game_segment_lens
-                - action_mask_segment
-                - to_play_segment
-        Returns:
-            - batch_target_policies_non_re
-        """
-        pass
-
-    @abstractmethod
-    def update_priority(
-            self, train_data: Optional[List[Optional[np.ndarray]]], batch_priorities: Optional[Any]
-    ) -> None:
-        """
-        Overview:
-            Update the priority of training data.
-        Arguments:
-            - train_data (:obj:`Optional[List[Optional[np.ndarray]]]`): training data to be updated priority.
-            - batch_priorities (:obj:`batch_priorities`): priorities to update to.
-        """
-        pass
 
     def push_game_segments(self, data_and_meta: Any) -> None:
         """

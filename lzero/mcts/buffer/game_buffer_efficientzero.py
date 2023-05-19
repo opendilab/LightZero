@@ -1,4 +1,5 @@
-from typing import Any, List
+from typing import Any, List, TYPE_CHECKING
+from easydict import EasyDict
 
 import numpy as np
 import torch
@@ -10,6 +11,9 @@ from lzero.mcts.utils import prepare_observation
 from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
 from .game_buffer_muzero import MuZeroGameBuffer
 
+if TYPE_CHECKING:
+    from ding.policy import Policy
+
 
 @BUFFER_REGISTRY.register('game_buffer_efficientzero')
 class EfficientZeroGameBuffer(MuZeroGameBuffer):
@@ -18,22 +22,17 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         The specific game buffer for EfficientZero policy.
     """
 
-    def __init__(self, cfg: dict):
-        super().__init__(cfg)
+    def __init__(self, cfg: EasyDict) -> None:
         """
         Overview:
             Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
             in the default configuration, the user-provided value will override the default configuration. Otherwise,
             the default configuration will be used.
         """
-        default_config = self.default_config()
-        default_config.update(cfg)
-        self._cfg = default_config
-        assert self._cfg.env_type in ['not_board_games', 'board_games']
+        super().__init__(cfg)
+        assert self._cfg.env_type in ['not_board_games', 'board_games'], self._cfg.env_type
         self.replay_buffer_size = self._cfg.replay_buffer_size
         self.batch_size = self._cfg.batch_size
-        self._alpha = self._cfg.priority_prob_alpha
-        self._beta = self._cfg.priority_prob_beta
 
         self.game_segment_buffer = []
         self.game_pos_priorities = []
@@ -44,15 +43,16 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         self.base_idx = 0
         self.clear_time = 0
 
-    def sample(self, batch_size: int, policy: Any) -> List[Any]:
+    def sample(self, batch_size: int, policy: 'Policy') -> List[Any]:
         """
         Overview:
-            sample data from ``GameBuffer`` and prepare the current and target batch for training
+            Sample a mini-batch of data for training, mainly including random sampling and preparing the current and \
+                target batch with/without reanalyzing operation mentioned in MuZero.
         Arguments:
-            - batch_size (:obj:`int`): batch size
-            - policy (:obj:`torch.tensor`): model of policy
+            - batch_size (:obj:`int`): The number of samples in a mini-batch.
+            - policy (:obj:`Policy`): The policy instance used to execute reanalyzing operation.
         Returns:
-            - train_data (:obj:`List`): List of train data
+            - train_data (:obj:`List`): List of sampled training data.
         """
         policy._target_model.to(self._cfg.device)
         policy._target_model.eval()
@@ -180,7 +180,6 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         to_play, action_mask = self._preprocess_to_play_and_action_mask(
             game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
         )
-
         legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
 
         # ==============================================================

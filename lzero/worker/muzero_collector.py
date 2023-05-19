@@ -1,14 +1,14 @@
-import time
-from collections import deque, namedtuple
 from typing import Optional, Any, List
+from collections import deque, namedtuple
 
+import time
 import numpy as np
 import torch
+from torch.nn import L1Loss
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
 from ding.worker.collector.base_serial_collector import ISerialCollector
-from torch.nn import L1Loss
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
@@ -261,8 +261,6 @@ class MuZeroCollector(ISerialCollector):
         last_game_segments[i] = None
         last_game_priorities[i] = None
 
-        return None
-
     def collect(self,
                 n_episode: Optional[int] = None,
                 train_iter: int = 0,
@@ -371,36 +369,19 @@ class MuZeroCollector(ISerialCollector):
                 # ==============================================================
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play)
 
-                actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
-                distributions_dict_no_env_id = {k: v['distributions'] for k, v in policy_output.items()}
-                if self.policy_config.sampled_algo:
-                    root_sampled_actions_dict_no_env_id = {
-                        k: v['root_sampled_actions']
-                        for k, v in policy_output.items()
-                    }
-                value_dict_no_env_id = {k: v['value'] for k, v in policy_output.items()}
-                pred_value_dict_no_env_id = {k: v['pred_value'] for k, v in policy_output.items()}
-                visit_entropy_dict_no_env_id = {
+                actions = {k: v['action'] for k, v in zip(ready_env_id, policy_output)}
+                distributions_dict = {k: v['distributions'] for k, v in zip(ready_env_id, policy_output)}
+                value_dict = {k: v['value'] for k, v in zip(ready_env_id, policy_output)}
+                pred_value_dict = {k: v['pred_value'] for k, v in zip(ready_env_id, policy_output)}
+                visit_entropy_dict = {
                     k: v['visit_count_distribution_entropy']
-                    for k, v in policy_output.items()
+                    for k, v in zip(ready_env_id, policy_output)
                 }
-
-                # TODO(pu): subprocess
-                actions = {}
-                distributions_dict = {}
                 if self.policy_config.sampled_algo:
-                    root_sampled_actions_dict = {}
-                value_dict = {}
-                pred_value_dict = {}
-                visit_entropy_dict = {}
-                for index, env_id in enumerate(ready_env_id):
-                    actions[env_id] = actions_no_env_id.pop(index)
-                    distributions_dict[env_id] = distributions_dict_no_env_id.pop(index)
-                    if self.policy_config.sampled_algo:
-                        root_sampled_actions_dict[env_id] = root_sampled_actions_dict_no_env_id.pop(index)
-                    value_dict[env_id] = value_dict_no_env_id.pop(index)
-                    pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
-                    visit_entropy_dict[env_id] = visit_entropy_dict_no_env_id.pop(index)
+                    root_sampled_actions_dict = {
+                        k: v['root_sampled_actions']
+                        for k, v in zip(ready_env_id, policy_output)
+                    }
 
                 # ==============================================================
                 # Interact with env.

@@ -11,7 +11,7 @@ from ding.utils import POLICY_REGISTRY
 from ding.utils.data import default_collate
 
 from lzero.mcts.ptree.ptree_az import MCTS
-from lzero.policy import configure_optimizers
+from .utils import configure_optimizers
 
 
 @POLICY_REGISTRY.register('alphazero')

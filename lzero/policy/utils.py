@@ -1,16 +1,13 @@
-import logging
 from typing import List, Tuple, Dict
 from easydict import EasyDict
 
+from ditk import logging
+import inspect
 import numpy as np
 import torch
-from scipy.stats import entropy
-import math
-import inspect
-
-import torch
 import torch.nn as nn
-from torch.nn import functional as F
+import torch.nn.functional as F
+from scipy.stats import entropy
 
 
 class LayerNorm(nn.Module):
@@ -215,14 +212,14 @@ def get_max_entropy(action_shape: int) -> np.float32:
     return -action_shape * p * np.log2(p)
 
 
-def select_action(visit_counts: np.ndarray,
+def select_action(visit_counts: List,
                   temperature: float = 1,
                   deterministic: bool = True) -> Tuple[np.int64, np.ndarray]:
     """
     Overview:
         Select action from visit counts of the root node.
     Arguments:
-        - visit_counts (:obj:`np.ndarray`): The visit counts of the root node.
+        - visit_counts (:obj:`List`): The visit counts of the root node.
         - temperature (:obj:`float`): The temperature used to adjust the sampling distribution.
         - deterministic (:obj:`bool`):  Whether to enable deterministic mode in action selection. True means to \
             select the argmax result, False indicates to sample action from the distribution.
@@ -360,3 +357,22 @@ def mz_network_output_unpack(network_output: Dict) -> Tuple:
     value = network_output.value  # shape: (batch_size, support_support_size)
     policy_logits = network_output.policy_logits  # shape: (batch_size, action_space_size)
     return latent_state, reward, value, policy_logits
+
+
+def visit_count_temperature(
+        manual_temperature_decay: bool, fixed_temperature_value: float,
+        threshold_training_steps_for_final_lr_temperature: int, trained_steps: int
+) -> float:
+    if manual_temperature_decay:
+        if trained_steps < 0.5 * threshold_training_steps_for_final_lr_temperature:
+            return 1.0
+        elif trained_steps < 0.75 * threshold_training_steps_for_final_lr_temperature:
+            return 0.5
+        else:
+            return 0.25
+    else:
+        return fixed_temperature_value
+
+
+def cross_entropy_loss(prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    return -(torch.log_softmax(prediction, dim=1) * target).sum(1)
