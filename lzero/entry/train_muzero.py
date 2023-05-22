@@ -109,6 +109,8 @@ def train_muzero(
     # ==============================================================
     # Learner's before_run hook.
     learner.call_hook('before_run')
+    if cfg.policy.update_per_collect is not None:
+        update_per_collect = cfg.policy.update_per_collect
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         collect_kwargs = {}
@@ -129,13 +131,17 @@ def train_muzero(
 
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+        if cfg.policy.update_per_collect is None:
+            # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
+            collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
+            update_per_collect = int(collected_transitions_num * cfg.policy.model_update_ratio)
         # save returned new_data collected by the collector
         replay_buffer.push_game_segments(new_data)
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
         # Learn policy from collected data.
-        for i in range(cfg.policy.update_per_collect):
+        for i in range(update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
             if replay_buffer.get_num_of_transitions() > batch_size:
                 train_data = replay_buffer.sample(batch_size, policy)

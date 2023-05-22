@@ -99,8 +99,11 @@ class SampledEfficientZeroPolicy(Policy):
         # Bigger "update_per_collect" means bigger off-policy.
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
-        # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
-        update_per_collect=100,
+        # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor.
+        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.
+        update_per_collect=None,
+        # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
+        model_update_ratio=0.1,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
