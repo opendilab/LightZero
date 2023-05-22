@@ -613,13 +613,18 @@ class SampledEfficientZeroPolicy(Policy):
         # take the init hypothetical step k=unroll_step
         target_normalized_visit_count = target_policy[:, unroll_step]
 
-        # Note: The target_policy_entropy is just for debugging.
-        target_normalized_visit_count_masked = torch.index_select(
-            target_normalized_visit_count, 0,
-            torch.nonzero(mask_batch[:, unroll_step]).squeeze(-1)
-        )
-        target_dist = Categorical(target_normalized_visit_count_masked)
-        target_policy_entropy = target_dist.entropy().mean()
+        # ******* NOTE: target_policy_entropy is only for debug.  ******
+        non_masked_indices = torch.nonzero(mask_batch[:, unroll_step]).squeeze(-1)
+        # Check if there are any unmasked rows
+        if len(non_masked_indices) > 0:
+            target_normalized_visit_count_masked = torch.index_select(
+                target_normalized_visit_count, 0, non_masked_indices
+            )
+            target_dist = Categorical(target_normalized_visit_count_masked)
+            target_policy_entropy = target_dist.entropy().mean()
+        else:
+            # Set target_policy_entropy to 0 if all rows are masked
+            target_policy_entropy = 0
 
         # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1) -> (batch_size,
         # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2, 1) ->  (4, 20, 2)
