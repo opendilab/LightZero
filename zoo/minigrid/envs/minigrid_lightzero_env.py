@@ -107,7 +107,7 @@ class MiniGridEnv(BaseEnv):
         np.random.seed(self._seed)
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
-        if action.shape == (1, ):
+        if isinstance(action, np.ndarray) and action.shape == (1, ):
             action = action.squeeze()  # 0-dim array
         if self._save_replay:
             self._frames.append(self._env.render())
@@ -129,7 +129,7 @@ class MiniGridEnv(BaseEnv):
                 self.display_frames_as_gif(self._frames, path)
                 self._save_replay_count += 1
         obs = to_ndarray(obs)
-        rew = to_ndarray([rew])  # wrapped to be transferred to a array with shape (1,)
+        rew = to_ndarray([rew])  # wrapped to be transferred to an array with shape (1,)
 
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}

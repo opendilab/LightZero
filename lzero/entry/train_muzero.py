@@ -12,7 +12,7 @@ from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
-from lzero.entry.utils import log_buffer_memory_usage
+from lzero.entry.utils import log_buffer_memory_usage, random_collect
 from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroCollector, MuZeroEvaluator
 
@@ -111,6 +111,13 @@ def train_muzero(
     learner.call_hook('before_run')
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
+
+    # Accumulate plenty of data at the beginning of training.
+    if cfg.policy.random_collect_episode_num > 0:
+        random_collect(cfg.policy, policy, collector, collector_env, replay_buffer)
+        # reset the random_collect_episode_num to 0
+        cfg.policy.random_collect_episode_num = 0
+
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         collect_kwargs = {}

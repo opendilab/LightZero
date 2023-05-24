@@ -115,11 +115,6 @@ class MujocoEnv(BaseEnv):
         if self._action_clip:
             action = np.clip(action, -1, 1)
         obs, rew, done, info = self._env.step(action)
-
-        action_mask = None
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
-
-
         self._eval_episode_return += rew
         if done:
             if self._save_replay_gif:
@@ -132,6 +127,10 @@ class MujocoEnv(BaseEnv):
 
         obs = to_ndarray(obs).astype(np.float32)
         rew = to_ndarray([rew]).astype(np.float32)
+
+        action_mask = None
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+
         return BaseEnvTimestep(obs, rew, done, info)
 
     def _make_env(self):

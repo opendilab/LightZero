@@ -88,6 +88,8 @@ class EfficientZeroPolicy(Policy):
         augmentation=['shift', 'intensity'],
 
         # ******* learn ******
+        # (int) Number of training episodes (randomly collected) in replay buffer when training starts.
+        random_collect_episode_num=0,
         # (int) How many updates(iterations) to train after collector's one collection.
         # Bigger "update_per_collect" means bigger off-policy.
         # collect data -> update policy-> collect data -> ...

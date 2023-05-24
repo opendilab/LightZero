@@ -100,11 +100,16 @@ class MuZeroCollector(ISerialCollector):
         assert hasattr(self, '_env'), "please set env first"
         if _policy is not None:
             self._policy = _policy
-            self._default_n_episode = _policy.get_attribute('cfg').get('n_episode', None)
+            if self.policy_config.random_collect_episode_num > 0:
+                self._default_n_episode = self.policy_config.random_collect_episode_num
+            else:
+                self._default_n_episode = _policy.get_attribute('cfg').get('n_episode', None)
+
             self._logger.debug(
                 'Set default n_episode mode(n_episode({}), env_num({}))'.format(self._default_n_episode, self._env_num)
             )
-        self._policy.reset()
+        if self.policy_config.random_collect_episode_num == 0:
+            self._policy.reset()
 
     def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
         """
@@ -208,7 +213,7 @@ class MuZeroCollector(ISerialCollector):
     def pad_and_save_last_trajectory(self, i, last_game_segments, last_game_priorities, game_segments, done) -> None:
         """
         Overview:
-            put the last game block into the pool if the current game is finished
+            put the last game segment into the pool if the current game is finished
         Arguments:
             - last_game_segments (:obj:`list`): list of the last game segments
             - last_game_priorities (:obj:`list`): list of the last game priorities
@@ -254,7 +259,7 @@ class MuZeroCollector(ISerialCollector):
 
         last_game_segments[i].game_segment_to_array()
 
-        # put the game block into the pool
+        # put the game segment into the pool
         self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
 
         # reset last game_segments
@@ -435,7 +440,7 @@ class MuZeroCollector(ISerialCollector):
                     )
 
                     # NOTE: the position of code snippet is very important.
-                    # the obs['action_mask'] and obs['to_play'] is corresponding to next action
+                    # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
                     action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                     to_play_dict[env_id] = to_ndarray(obs['to_play'])
 
@@ -453,14 +458,14 @@ class MuZeroCollector(ISerialCollector):
                     observation_window_stack[env_id].append(to_ndarray(obs['observation']))
 
                     # ==============================================================
-                    # we will save a game block if it is the end of the game or the next game block is finished.
+                    # we will save a game segment if it is the end of the game or the next game segment is finished.
                     # ==============================================================
 
-                    # if game block is full, we will save the last game block
+                    # if the game segment is full, we will save the last game segment
                     if game_segments[env_id].is_full():
                         # pad over last block trajectory
                         if last_game_segments[env_id] is not None:
-                            # TODO(pu): return the one game block
+                            # TODO(pu): return the one game segment
                             self.pad_and_save_last_trajectory(
                                 env_id, last_game_segments, last_game_priorities, game_segments, dones
                             )
@@ -500,10 +505,10 @@ class MuZeroCollector(ISerialCollector):
                     self._episode_info.append(info)
 
                     # ==============================================================
-                    # if it is the end of the game, we will save the game block
+                    # if it is the end of the game, we will save the game segment
                     # ==============================================================
 
-                    # NOTE: put the penultimate game block in one episode into the trajectory_pool
+                    # NOTE: put the penultimate game segment in one episode into the trajectory_pool
                     # pad over 2th last game_segment using the last game_segment
                     if last_game_segments[env_id] is not None:
                         self.pad_and_save_last_trajectory(
@@ -513,11 +518,11 @@ class MuZeroCollector(ISerialCollector):
                     # store current block trajectory
                     priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
 
-                    # NOTE: put the last game block in one episode into the trajectory_pool
+                    # NOTE: put the last game segment in one episode into the trajectory_pool
                     game_segments[env_id].game_segment_to_array()
 
                     # assert len(game_segments[env_id]) == len(priorities)
-                    # NOTE: save the last game block in one episode into the trajectory_pool if it's not null
+                    # NOTE: save the last game segment in one episode into the trajectory_pool if it's not null
                     if len(game_segments[env_id].reward_segment) != 0:
                         self.game_segment_pool.append((game_segments[env_id], priorities, dones[env_id]))
 
