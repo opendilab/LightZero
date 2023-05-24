@@ -210,6 +210,7 @@ class GomokuEnv(BaseEnv):
             # player 2's turn
             if self.agent_vs_human:
                 bot_action = self.human_to_action()
+                # print(self.board)
             else:
                 bot_action = self.bot_action()
                 # bot_action = self.random_action()
@@ -667,7 +668,7 @@ class GomokuEnv(BaseEnv):
         Returns:
             An integer from the action space.
         """
-        # print(self.board)
+        print(self.board)
         while True:
             try:
                 row = int(
