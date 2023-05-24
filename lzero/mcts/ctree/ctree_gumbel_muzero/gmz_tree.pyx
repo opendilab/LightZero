@@ -44,6 +44,9 @@ cdef class Roots:
 
     def get_distributions(self):
         return self.roots[0].get_distributions()
+
+    def get_children_values(self):
+        return self.roots[0].get_children_values()
     
     def get_policies(self, float discount, int action_space_size):
         return self.roots[0].get_policies(discount, action_space_size)

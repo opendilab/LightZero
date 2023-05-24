@@ -16,7 +16,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 lunarlander_gumbel_muzero_config = dict(
-    exp_name=f'data_mz_ctree/lunarlander_gumbel_muzero_visit50_value1_novaluenorm_seed0',
+    exp_name=f'data_mz_ctree/lunarlander_gumbel_muzero_visit50_value1_evalwithvalue_seed0',
     env=dict(
         env_name='LunarLander-v2',
         continuous=False,
@@ -44,7 +44,7 @@ lunarlander_gumbel_muzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
-        max_num_considered_actions=3,
+        max_num_considered_actions=4,
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         ssl_loss_weight=2,  # NOTE: default is 0.

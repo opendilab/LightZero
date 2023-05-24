@@ -44,6 +44,7 @@ namespace tree {
 
             std::vector<int> get_trajectory();
             std::vector<int> get_children_distribution();
+            std::vector<float> get_children_value();
             std::vector<float> get_policy(float discount, int action_space_size);
             CNode* get_child(int action);
     };
@@ -64,6 +65,7 @@ namespace tree {
             void clear();
             std::vector<std::vector<int> > get_trajectories();
             std::vector<std::vector<int> > get_distributions();
+            std::vector<std::vector<float> > get_children_values();
             std::vector<std::vector<float> > get_policies(float discount, int action_space_size);
             std::vector<float> get_values();
 

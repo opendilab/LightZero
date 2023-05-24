@@ -219,7 +219,7 @@ class GumeblMuZeroPolicy(Policy):
         self.inverse_scalar_transform_handle = InverseScalarTransform(
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
-        self.kl_loss = KLDivLoss(reduction="batchmean")
+        self.kl_loss = KLDivLoss(reduction='none')
 
 
     # @profile
@@ -294,16 +294,10 @@ class GumeblMuZeroPolicy(Policy):
         # calculate policy and value loss for the first step.
         # ==============================================================
         eps=1e-7
-        # improved_policy_batch = np.ones(improved_policy_batch.shape)
         policy_loss = self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)), torch.from_numpy(improved_policy_batch[:, 0]).to(self._cfg.device).detach().float())
-        
-        # print("==================start=============")
-        # print(policy_logits[0])
-        # print(torch.softmax(policy_logits, dim=1)[0])
-        # print("=======")
-        # print(improved_policy_batch[:, 0][0])
-        # print(policy_loss)
-        
+        policy_loss = policy_loss.mean(dim=-1)
+        entropy_loss = -torch.sum(torch.softmax(policy_logits, dim=1) * torch.log(torch.softmax(policy_logits, dim=1)), dim=-1)
+
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
         reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
@@ -357,16 +351,10 @@ class GumeblMuZeroPolicy(Policy):
             # calculate policy loss for the next ``num_unroll_steps`` unroll steps.
             # NOTE: the +=.
             # ==============================================================
-            policy_loss += self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1).double()),torch.from_numpy(improved_policy_batch[:, step_i + 1]).to(self._cfg.device).detach().double())
+            policy_loss += self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1).double()),torch.from_numpy(improved_policy_batch[:, step_i + 1]).to(self._cfg.device).detach().double()).mean(dim=-1)
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_i])
-
-            # print("the ", step_i, "step:")
-            # print(policy_logits[0])
-            # print(torch.softmax(policy_logits, dim=1)[0])
-            # print("=======")
-            # print(improved_policy_batch[:, step_i + 1][0])
-            # print(policy_loss)
+            entropy_loss += -torch.sum(torch.softmax(policy_logits, dim=1) * torch.log(torch.softmax(policy_logits, dim=1)), dim=-1)
 
             # Follow MuZero, set half gradient
             # hidden_state.register_hook(lambda grad: grad * 0.5)
@@ -411,7 +399,7 @@ class GumeblMuZeroPolicy(Policy):
         # packing loss info for tensorboard logging
         loss_info = (
             weighted_total_loss.item(), loss.mean().item(), policy_loss.mean().item(), reward_loss.mean().item(),
-            value_loss.mean().item(), consistency_loss.mean()
+            value_loss.mean().item(), consistency_loss.mean(), entropy_loss.mean()
         )
         if self._cfg.monitor_extra_statistics:
             predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
@@ -441,6 +429,7 @@ class GumeblMuZeroPolicy(Policy):
             'reward_loss': loss_info[3],
             'value_loss': loss_info[4],
             'consistency_loss': loss_info[5] / self._cfg.num_unroll_steps,
+            'entropy_loss': loss_info[6],
 
             # ==============================================================
             # priority related
@@ -547,7 +536,8 @@ class GumeblMuZeroPolicy(Policy):
                 )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
-                action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                valid_value = np.where(action_mask[i] == 1.0, improved_policy_probs, 0.0)
+                action = np.argmax([v for v in valid_value])
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,
@@ -619,6 +609,7 @@ class GumeblMuZeroPolicy(Policy):
             roots_visit_count_distributions = roots.get_distributions(
             )  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
+            roots_children_values = roots.get_children_values()
 
             data_id = [i for i in range(active_eval_env_num)]
             output = {i: None for i in data_id}
@@ -627,7 +618,7 @@ class GumeblMuZeroPolicy(Policy):
                 ready_env_id = np.arange(active_eval_env_num)
 
             for i, env_id in enumerate(ready_env_id):
-                distributions, value = roots_visit_count_distributions[i], roots_values[i]
+                distributions, value, children_value = roots_visit_count_distributions[i], roots_values[i], roots_children_values[i]
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
                 #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than
@@ -665,6 +656,7 @@ class GumeblMuZeroPolicy(Policy):
             'reward_loss',
             'value_loss',
             'consistency_loss',
+            'entropy_loss',
             'value_priority',
             'target_reward',
             'target_value',

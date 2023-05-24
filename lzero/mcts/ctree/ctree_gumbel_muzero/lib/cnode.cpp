@@ -288,6 +288,26 @@ namespace tree{
         return distribution;
     }
 
+    std::vector<float> CNode::get_children_value()
+    {
+        /*
+        Overview:
+            Get the distribution of child nodes in the format of visit_count.
+        Outputs:
+            - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
+        */
+        std::vector<float> children_value;
+        if (this->expanded())
+        {
+            for (auto a : this->legal_actions)
+            {
+                CNode *child = this->get_child(a);
+                children_value.push_back(child->value());
+            }
+        }
+        return children_value;
+    }
+
     CNode *CNode::get_child(int action)
     {
         /*
@@ -458,6 +478,24 @@ namespace tree{
             distributions.push_back(this->roots[i].get_children_distribution());
         }
         return distributions;
+    }
+
+    std::vector<std::vector<float> > CRoots::get_children_values()
+    {
+        /*
+        Overview:
+            Get the children distribution of each root.
+        Outputs:
+            - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
+        */
+        std::vector<std::vector<float> > children_values;
+        children_values.reserve(this->root_num);
+
+        for (int i = 0; i < this->root_num; ++i)
+        {
+            children_values.push_back(this->roots[i].get_children_value());
+        }
+        return children_values;
     }
 
     std::vector<std::vector<float> > CRoots::get_policies(float discount_factor, int action_space_size)
@@ -905,8 +943,7 @@ namespace tree{
                 weighted_q_sum += child_prior[i] * q_values[i] / probs_sum;
             }
 
-        // return (raw_value + visit_count_sum * weighted_q_sum) / (visit_count_sum+1);
-        return raw_value;
+        return (raw_value + visit_count_sum * weighted_q_sum) / (visit_count_sum+1);
     }
 
     void rescale_qvalues(std::vector<float> &value, float epsilon){
