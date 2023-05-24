@@ -1,11 +1,30 @@
 from easydict import EasyDict
 
+# options={'Hopper-v3', 'HalfCheetah-v3', 'Walker2d-v3', 'Ant-v3', 'Humanoid-v3'}
+env_name = 'Hopper-v3'
+
+if env_name == 'Hopper-v3':
+    action_space_size = 3
+    observation_shape = 11
+elif env_name in ['HalfCheetah-v3', 'Walker2d-v3']:
+    action_space_size = 6
+    observation_shape = 17
+elif env_name == 'Ant-v3':
+    action_space_size = 8
+    observation_shape = 111
+elif env_name == 'Humanoid-v3':
+    action_space_size = 17
+    observation_shape = 376
+
+
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
+continuous_action_space = True
+K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = 200
 batch_size = 256
@@ -15,10 +34,11 @@ reanalyze_ratio = 0.
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-lunarlander_muzero_config = dict(
-    exp_name=f'data_mz_ctree/lunarlander_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+mujoco_sampled_efficientzero_config = dict(
+    exp_name=
+    f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
-        env_name='LunarLander-v2',
+        env_name=env_name,
         continuous=False,
         manually_discretization=False,
         collector_env_num=collector_env_num,
@@ -28,15 +48,17 @@ lunarlander_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=8,
-            action_space_size=4,
-            model_type='mlp', 
+            observation_shape=observation_shape,
+            action_space_size=action_space_size,
+            continuous_action_space=continuous_action_space,
+            num_of_sampled_actions=K,
+            sigma_type='conditioned',
+            model_type='mlp',
             lstm_hidden_size=256,
             latent_state_dim=256,
-            self_supervised_learning_loss=True,  # NOTE: default is False.
-            discrete_action_encoding_type='one_hot',
+            self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
-            norm_type='BN', 
+            norm_type='BN',
         ),
         cuda=True,
         env_type='not_board_games',
@@ -46,38 +68,40 @@ lunarlander_muzero_config = dict(
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        ssl_loss_weight=2,  # NOTE: default is 0.
+        # NOTE: this parameter is important for stability in bipedalwalker.
         grad_clip_value=0.5,
+        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
+        policy_entropy_loss_weight=5e-3,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(1e3),
+        eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
 )
-lunarlander_muzero_config = EasyDict(lunarlander_muzero_config)
-main_config = lunarlander_muzero_config
 
-lunarlander_muzero_create_config = dict(
+mujoco_sampled_efficientzero_config = EasyDict(mujoco_sampled_efficientzero_config)
+main_config = mujoco_sampled_efficientzero_config
+
+mujoco_sampled_efficientzero_create_config = dict(
     env=dict(
-        type='lunarlander',
-        import_names=['zoo.box2d.lunarlander.envs.lunarlander_env'],
+        type='mujoco_lightzero',
+        import_names=['zoo.mujoco.envs.mujoco_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero',
-        import_names=['lzero.policy.muzero'],
+        type='sampled_efficientzero',
+        import_names=['lzero.policy.sampled_efficientzero'],
     ),
     collector=dict(
         type='episode_muzero',
-        get_train_sample=True,
         import_names=['lzero.worker.muzero_collector'],
     )
 )
-lunarlander_muzero_create_config = EasyDict(lunarlander_muzero_create_config)
-create_config = lunarlander_muzero_create_config
+mujoco_sampled_efficientzero_create_config = EasyDict(mujoco_sampled_efficientzero_create_config)
+create_config = mujoco_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     # Users can use different train entry by specifying the entry_type.
@@ -85,11 +109,11 @@ if __name__ == "__main__":
 
     if entry_type == "train_muzero":
         from lzero.entry import train_muzero
-        train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
     elif entry_type == "train_muzero_with_gym_env":
         """
         The ``train_muzero_with_gym_env`` entry means that the environment used in the training process is generated by wrapping the original gym environment with LightZeroEnvWrapper.
         Users can refer to lzero/envs/wrappers for more details.
         """
-        from lzero.entry import train_muzero_with_gym_env
-        train_muzero_with_gym_env([main_config, create_config], seed=0, max_env_step=max_env_step)
+        from lzero.entry import train_muzero_with_gym_env as train_muzero
+
+    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

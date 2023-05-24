@@ -161,7 +161,7 @@ class BipedalWalkerEnv(BaseEnv):
         return self._reward_space
 
     def __repr__(self) -> str:
-        return "DI-engine BipedalWalker Env"
+        return "LightZero BipedalWalker Env"
 
     @staticmethod
     def create_collector_env_cfg(cfg: dict) -> List[dict]:

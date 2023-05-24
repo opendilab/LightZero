@@ -111,7 +111,7 @@ class MuZeroGameBuffer(GameBuffer):
         game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
         batch_size = len(batch_index_list)
         obs_list, action_list, mask_list = [], [], []
-        # prepare the inputs of a batch
+        # prepare the inputs of a batchhopper_sac_config.py
         for i in range(batch_size):
             game = game_segment_list[i]
             pos_in_game_segment = pos_in_game_segment_list[i]
