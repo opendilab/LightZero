@@ -2,7 +2,7 @@
 # LightZero
 
 <div align="center">
-    <img width="1000px" height="auto" src="https://github.com/opendilab/LightZero/blob/main/roadmap.png"></a>
+    <img width="1000px" height="auto" src="https://github.com/TuTuHuss/LightZero/blob/main/LightZero.png"></a>
 </div>
 
 ---
