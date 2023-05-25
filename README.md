@@ -1,6 +1,12 @@
 
 # LightZero
 
+<div align="center">
+    <img width="1000px" height="auto" src="https://github.com/opendilab/LightZero/blob/main/roadmap.png"></a>
+</div>
+
+---
+
 [![Twitter](https://img.shields.io/twitter/url?style=social&url=https%3A%2F%2Ftwitter.com%2Fopendilab)](https://twitter.com/opendilab)
 [![PyPI](https://img.shields.io/pypi/v/LightZero)](https://pypi.org/project/LightZero/)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/LightZero)
