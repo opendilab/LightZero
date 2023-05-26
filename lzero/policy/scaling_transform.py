@@ -103,21 +103,6 @@ class InverseScalarTransform:
         return output
 
 
-def visit_count_temperature(
-        manual_temperature_decay: bool, fixed_temperature_value: float,
-        threshold_training_steps_for_final_lr_temperature: int, trained_steps: int
-) -> float:
-    if manual_temperature_decay:
-        if trained_steps < 0.5 * threshold_training_steps_for_final_lr_temperature:
-            return 1.0
-        elif trained_steps < 0.75 * threshold_training_steps_for_final_lr_temperature:
-            return 0.5
-        else:
-            return 0.25
-    else:
-        return fixed_temperature_value
-
-
 def phi_transform(discrete_support: DiscreteSupport, x: torch.Tensor) -> torch.Tensor:
     """
     Overview:

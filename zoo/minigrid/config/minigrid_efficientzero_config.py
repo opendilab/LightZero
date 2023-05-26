@@ -7,25 +7,27 @@ env_name = 'MiniGrid-Empty-8x8-v0'
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 50
-# update_per_collect = 200
-# batch_size = 256
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0.
-# random_collect_episode_num = 1000
-
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-num_simulations = 5
-update_per_collect = 2
-batch_size = 4
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 50
+update_per_collect = 200
+batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
-random_collect_episode_num = 2
+random_collect_episode_num = 0
+init_temperature_value_for_decay = 2.0
+td_steps = 20
+
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 10
+# update_per_collect = 2
+# batch_size = 4
+# max_env_step = int(1e6)
+# reanalyze_ratio = 0.
+# random_collect_episode_num = 2
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -33,7 +35,7 @@ random_collect_episode_num = 2
 
 minigrid_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/{env_name}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_mtd_rces-{random_collect_episode_num}_seed0',
+    f'data_ez_ctree/{env_name}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_mtd_itd-{init_temperature_value_for_decay}_td-{td_steps}_rces-{random_collect_episode_num}_seed0',
     env=dict(
         env_name=env_name,
         continuous=False,
@@ -54,6 +56,14 @@ minigrid_efficientzero_config = dict(
             norm_type='BN', 
         ),
         random_collect_episode_num=random_collect_episode_num,
+        td_steps=td_steps,
+        manual_temperature_decay=True,
+        # To make init policy be more random in sparse reward env.
+        init_temperature_value_for_decay=init_temperature_value_for_decay,
+        threshold_training_steps_for_final_temperature=int(5e4),
+        # TODO: test the effect
+        use_max_priority_for_new_data=False,
+        priority_prob_alpha=1,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
@@ -62,7 +72,6 @@ minigrid_efficientzero_config = dict(
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        manual_temperature_decay=True,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

@@ -140,6 +140,8 @@ class EfficientZeroPolicy(Policy):
         threshold_training_steps_for_final_lr=int(5e4),
         # (int) The number of final training iterations to control temperature, which is only used for manually decay.
         threshold_training_steps_for_final_temperature=int(1e5),
+        # (float) The initial temperature value for piecewise constant decay. This value is only used when manual_temperature_decay=True.
+        init_temperature_value_for_decay=1.0,
         # (bool) Whether to use manually decayed temperature.
         # i.e. temperature: 1 -> 0.5 -> 0.25
         manual_temperature_decay=False,
@@ -158,6 +160,8 @@ class EfficientZeroPolicy(Policy):
         # (float) The degree of correction to use. A value of 0 means no correction,
         # while a value of 1 means full correction.
         priority_prob_beta=0.4,
+        # (float) Epsilon to add to the TD errors when updating priorities.
+        prioritized_replay_eps=1e-11,
 
         # ****** UCB ******
         # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
@@ -514,7 +518,7 @@ class EfficientZeroPolicy(Policy):
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
-        self.collect_mcts_temperature = 1
+        self.collect_mcts_temperature = 1.0
 
     def _forward_collect(
         self,

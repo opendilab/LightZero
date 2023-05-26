@@ -13,6 +13,22 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
+def visit_count_temperature(
+        manual_temperature_decay: bool, fixed_temperature_value: float,
+        threshold_training_steps_for_final_lr_temperature: int, trained_steps: int,
+        init_temperature_value_for_decay: float = 1.0
+) -> float:
+    if manual_temperature_decay:
+        if trained_steps < 0.5 * threshold_training_steps_for_final_lr_temperature:
+            return init_temperature_value_for_decay
+        elif trained_steps < 0.75 * threshold_training_steps_for_final_lr_temperature:
+            return init_temperature_value_for_decay * 0.5
+        else:
+            return init_temperature_value_for_decay * 0.5 * 0.5
+    else:
+        return fixed_temperature_value
+
+
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -26,11 +42,11 @@ class LayerNorm(nn.Module):
 
 
 def configure_optimizers(
-    model: nn.Module,
-    weight_decay: float = 0,
-    learning_rate: float = 3e-3,
-    betas: tuple = (0.9, 0.999),
-    device_type: str = "cuda"
+        model: nn.Module,
+        weight_decay: float = 0,
+        learning_rate: float = 3e-3,
+        betas: tuple = (0.9, 0.999),
+        device_type: str = "cuda"
 ):
     """
     Overview:
@@ -90,7 +106,7 @@ def configure_optimizers(
     param_dict = {pn: p for pn, p in model.named_parameters()}
     inter_params = decay & no_decay
     union_params = decay | no_decay
-    assert len(inter_params) == 0, "parameters %s made it into both decay/no_decay sets!" % (str(inter_params), )
+    assert len(inter_params) == 0, "parameters %s made it into both decay/no_decay sets!" % (str(inter_params),)
     assert len(
         param_dict.keys() - union_params) == 0, "parameters %s were not separated into either decay/no_decay set!" \
                                                 % (str(param_dict.keys() - union_params),)

@@ -213,7 +213,7 @@ class RandomPolicy(Policy):
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
-        self.collect_mcts_temperature = 1
+        self.collect_mcts_temperature = 1.0
         self.inverse_scalar_transform_handle = InverseScalarTransform(
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
@@ -307,6 +307,7 @@ class RandomPolicy(Policy):
                 # ************* random action *************
                 action = int(np.random.choice(legal_actions[env_id], 1))
 
+                # NOTE: The action is randomly selected from the legal action set, the distribution is the real visit count distribution from the MCTS seraech.
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,

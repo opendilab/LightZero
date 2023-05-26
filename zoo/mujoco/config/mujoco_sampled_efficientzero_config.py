@@ -26,7 +26,7 @@ evaluator_env_num = 3
 continuous_action_space = True
 K = 20  # num_of_sampled_actions
 num_simulations = 50
-update_per_collect = 500
+update_per_collect = 200
 batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
@@ -36,7 +36,7 @@ reanalyze_ratio = 0.
 
 mujoco_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sigma03_seed0',
     env=dict(
         env_name=env_name,
         continuous=False,
@@ -60,6 +60,7 @@ mujoco_sampled_efficientzero_config = dict(
             res_connection_in_dynamics=True,
             norm_type='BN',
         ),
+        sigma_type='fixed',
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,

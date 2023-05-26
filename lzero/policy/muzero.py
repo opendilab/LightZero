@@ -139,6 +139,8 @@ class MuZeroPolicy(Policy):
         manual_temperature_decay=False,
         # (int) The number of final training iterations to control temperature, which is only used for manually decay.
         threshold_training_steps_for_final_temperature=int(1e5),
+        # (float) The initial temperature value for piecewise constant decay. This value is only used when manual_temperature_decay=True.
+        init_temperature_value_for_decay=1.0,
         # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
         # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
         fixed_temperature_value=0.25,
