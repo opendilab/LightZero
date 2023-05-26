@@ -210,7 +210,6 @@ class SampledEfficientZeroPolicy(Policy):
             init_w = self._cfg.init_w
             self._model.prediction_network.fc_policy_head.mu.weight.data.uniform_(-init_w, init_w)
             self._model.prediction_network.fc_policy_head.mu.bias.data.uniform_(-init_w, init_w)
-            self._model.prediction_network.fc_policy_head.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
             try:
                 self._model.prediction_network.fc_policy_head.log_sigma_layer.bias.data.uniform_(-init_w, init_w)
             except Exception as exception:

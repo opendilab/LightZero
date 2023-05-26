@@ -2,6 +2,8 @@ from easydict import EasyDict
 
 # options={'Hopper-v3', 'HalfCheetah-v3', 'Walker2d-v3', 'Ant-v3', 'Humanoid-v3'}
 env_name = 'Hopper-v3'
+# env_name = 'HalfCheetah-v3'
+
 
 if env_name == 'Hopper-v3':
     action_space_size = 3
@@ -36,7 +38,7 @@ reanalyze_ratio = 0.
 
 mujoco_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_sigma03_seed0',
+    f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_BN_mtd_gcv10_seed0',
     env=dict(
         env_name=env_name,
         continuous=False,
@@ -52,7 +54,7 @@ mujoco_sampled_efficientzero_config = dict(
             action_space_size=action_space_size,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            sigma_type='conditioned',
+            sigma_type='fixed',
             model_type='mlp',
             lstm_hidden_size=256,
             latent_state_dim=256,
@@ -60,7 +62,7 @@ mujoco_sampled_efficientzero_config = dict(
             res_connection_in_dynamics=True,
             norm_type='BN',
         ),
-        sigma_type='fixed',
+        random_collect_episode_num=0,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
@@ -69,8 +71,8 @@ mujoco_sampled_efficientzero_config = dict(
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        # NOTE: this parameter is important for stability in bipedalwalker.
-        grad_clip_value=0.5,
+        manual_temperature_decay=True,
+        grad_clip_value=10,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
         num_simulations=num_simulations,

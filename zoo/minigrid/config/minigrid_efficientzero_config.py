@@ -1,7 +1,7 @@
 from easydict import EasyDict
 
 env_name = 'MiniGrid-Empty-8x8-v0'
-# typical MiniGrid env id: {'MiniGrid-Empty-8x8-v0', 'MiniGrid-FourRooms-v0', 'MiniGrid-DoorKey-8x8-v0','MiniGrid-DoorKey-16x16-v0'},
+# The typical MiniGrid env id is {'MiniGrid-Empty-8x8-v0', 'MiniGrid-FourRooms-v0', 'MiniGrid-DoorKey-8x8-v0','MiniGrid-DoorKey-16x16-v0'},
 # please refer to https://github.com/Farama-Foundation/MiniGrid for details.
 
 # ==============================================================
@@ -17,7 +17,7 @@ max_env_step = int(1e6)
 reanalyze_ratio = 0.
 random_collect_episode_num = 0
 init_temperature_value_for_decay = 2.0
-td_steps = 20
+td_steps = 5
 
 # collector_env_num = 2
 # n_episode = 2
