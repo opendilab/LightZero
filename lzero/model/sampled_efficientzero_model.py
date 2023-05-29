@@ -234,7 +234,7 @@ class SampledEfficientZeroModel(nn.Module):
 
     def initial_inference(self, obs: torch.Tensor) -> EZNetworkOutput:
         """
-         Overview:
+        Overview:
             Initial inference of SampledEfficientZero model, which is the first step of the SampledEfficientZero model.
              To perform the initial inference, we first use the representation network to obtain the "latent_state" of the observation.
              Then we use the prediction network to predict the "value" and "policy_logits" of the "latent_state", and

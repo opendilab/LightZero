@@ -33,21 +33,24 @@ update_per_collect = 200
 batch_size = 1024
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
+each_dim_disc_size = 7
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-mujoco_sampled_efficientzero_config = dict(
+mujoco_disc_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_cos-lr_seed0',
+    f'data_sez_ctree/{env_name[:-3]}_bin-{each_dim_disc_size}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_cos-lr_seed0',
     env=dict(
         env_name=env_name,
-        continuous=True,
+        continuous=False,
         manually_discretization=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        each_dim_disc_size=each_dim_disc_size,
     ),
     policy=dict(
         model=dict(
@@ -85,7 +88,7 @@ mujoco_sampled_efficientzero_config = dict(
         # manual_temperature_decay=True,
         # grad_clip_value=10,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
-        policy_entropy_loss_weight=5e-3,
+        policy_entropy_loss_weight=0,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
@@ -96,13 +99,13 @@ mujoco_sampled_efficientzero_config = dict(
     ),
 )
 
-mujoco_sampled_efficientzero_config = EasyDict(mujoco_sampled_efficientzero_config)
-main_config = mujoco_sampled_efficientzero_config
+mujoco_disc_sampled_efficientzero_config = EasyDict(mujoco_disc_sampled_efficientzero_config)
+main_config = mujoco_disc_sampled_efficientzero_config
 
-mujoco_sampled_efficientzero_create_config = dict(
+mujoco_disc_sampled_efficientzero_create_config = dict(
     env=dict(
-        type='mujoco_lightzero',
-        import_names=['zoo.mujoco.envs.mujoco_lightzero_env'],
+        type='mujoco_disc_lightzero',
+        import_names=['zoo.mujoco.envs.mujoco_disc_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
@@ -114,8 +117,8 @@ mujoco_sampled_efficientzero_create_config = dict(
         import_names=['lzero.worker.muzero_collector'],
     )
 )
-mujoco_sampled_efficientzero_create_config = EasyDict(mujoco_sampled_efficientzero_create_config)
-create_config = mujoco_sampled_efficientzero_create_config
+mujoco_disc_sampled_efficientzero_create_config = EasyDict(mujoco_disc_sampled_efficientzero_create_config)
+create_config = mujoco_disc_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     # Users can use different train entry by specifying the entry_type.
