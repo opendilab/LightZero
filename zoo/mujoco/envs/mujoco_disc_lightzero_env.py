@@ -56,7 +56,7 @@ class MujocoDiscEnv(BaseEnv):
             self._observation_space = self._env.observation_space
             self._raw_action_space = self._env.action_space
             self._reward_space = gym.spaces.Box(
-                low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1, ), dtype=np.float32
+                low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1,), dtype=np.float32
             )
             self._init_flag = True
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
@@ -110,12 +110,13 @@ class MujocoDiscEnv(BaseEnv):
         if self._action_clip:
             action = np.clip(action, -1, 1)
         obs, rew, done, info = self._env.step(action)
+
         self._eval_episode_return += rew
 
         if done:
             if self._save_replay_gif:
                 path = os.path.join(
-                    self._replay_path_gif, '{}_episode_{}.gif'.format(self._cfg.env_id, self._save_replay_count)
+                    self._replay_path_gif, '{}_episode_{}.gif'.format(self._cfg.env_name, self._save_replay_count)
                 )
                 save_frames_as_gif(self._frames, path)
                 self._save_replay_count += 1
@@ -124,14 +125,14 @@ class MujocoDiscEnv(BaseEnv):
         obs = to_ndarray(obs).astype(np.float32)
         rew = to_ndarray([rew]).astype(np.float32)
 
-        action_mask = np.ones(self.K, 'int8')
+        action_mask = np.ones(self._action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
         return BaseEnvTimestep(obs, rew, done, info)
 
     def _make_env(self):
         return wrap_mujoco(
-            self._cfg.env_id,
+            self._cfg.env_name,
             norm_obs=self._cfg.get('norm_obs', None),
             norm_reward=self._cfg.get('norm_reward', None),
             delay_reward_step=self._delay_reward_step
@@ -148,7 +149,7 @@ class MujocoDiscEnv(BaseEnv):
         return self.action_space.sample()
 
     def __repr__(self) -> str:
-        return "DI-engine modified Mujoco Env({}) with manually discretized action space".format(self._cfg.env_id)
+        return "DI-engine modified Mujoco Env({}) with manually discretized action space".format(self._cfg.env_name)
 
     @staticmethod
     def create_collector_env_cfg(cfg: dict) -> List[dict]:

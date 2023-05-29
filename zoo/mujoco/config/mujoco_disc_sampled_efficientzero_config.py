@@ -25,7 +25,7 @@ elif env_name == 'Humanoid-v3':
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-continuous_action_space = True
+continuous_action_space = False
 K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = 200
@@ -33,7 +33,7 @@ update_per_collect = 200
 batch_size = 1024
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
-each_dim_disc_size = 7
+each_dim_disc_size = 5
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -41,7 +41,7 @@ each_dim_disc_size = 7
 
 mujoco_disc_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/{env_name[:-3]}_bin-{each_dim_disc_size}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_cos-lr_seed0',
+    f'data_sez_ctree/{env_name[:-3]}_bin-{each_dim_disc_size}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_adamw3e-3_seed0',
     env=dict(
         env_name=env_name,
         continuous=False,
@@ -55,7 +55,7 @@ mujoco_disc_sampled_efficientzero_config = dict(
     policy=dict(
         model=dict(
             observation_shape=observation_shape,
-            action_space_size=action_space_size,
+            action_space_size=int(each_dim_disc_size ** action_space_size),
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             # sigma_type='fixed',
@@ -74,16 +74,16 @@ mujoco_disc_sampled_efficientzero_config = dict(
         batch_size=batch_size,
         discount_factor=0.99,
 
-        # optim_type='AdamW',
-        # lr_piecewise_constant_decay=False,
-        # learning_rate=0.003,
-
-        # sampled muzero paper config
-        cos_lr_scheduler=True,
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
-        learning_rate=0.0001,
-        weight_decay=2e-5,
+        learning_rate=0.003,
+
+        # sampled muzero paper config
+        # cos_lr_scheduler=True,
+        # optim_type='AdamW',
+        # lr_piecewise_constant_decay=False,
+        # learning_rate=0.0001,
+        # weight_decay=2e-5,
 
         # manual_temperature_decay=True,
         # grad_clip_value=10,
