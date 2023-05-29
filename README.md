@@ -306,6 +306,15 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - ExpEnv: USPTO datasets
   - [Code](https://github.com/binghong-ml/retro_star)
 #### ICLR
+- [SpeedyZero: Mastering Atari with Limited Data and Time](https://openreview.net/pdf?id=Mg5CLXZgvLJ) 2023
+  - Yixuan Mei, Jiaxuan Gao, Weirui Ye, Shaohuai Liu, Yang Gao, Yi Wu
+  - Key: distributed RL system, Priority Refresh, Clipped LARS
+  - ExpEnv: Atari
+- [Efficient Offline Policy Optimization with a Learned Model](https://openreview.net/pdf?id=Yt-yM-JbYFO) 2023
+  - Zichen Liu, Siyi Li, Wee Sun Lee, Shuicheng YAN, Zhongwen Xu
+  - Key: Regularized One-Step Model-based algorithm for Offline-RL
+  - ExpEnv: Atari，BSuite
+  - [Code](https://github.com/sail-sg/rosmo/tree/main)
 - [Enabling Arbitrary Translation Objectives with Adaptive Tree Search](https://arxiv.org/pdf/2202.11444.pdf) 2022
   - Wang Ling, Wojciech Stokowiec, Domenic Donato, Chris Dyer, Lei Yu, Laurent Sartran, Austin Matthews
   - Key: adaptive tree search, translation models, autoregressive models, 
@@ -333,6 +342,11 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - Key: meta path planning algorithm, exploits a novel neural architecture which can learn promising search directions from problem structures.
   - ExpEnv: a 2d workspace with a 2 DoF (degrees of freedom) point robot, a 3 DoF stick robot and a 5 DoF snake robot
 #### NeurIPS
+- [Planning for Sample Efficient Imitation Learning](https://openreview.net/forum?id=BkN5UoAqF7) 2022
+  - Zhao-Heng Yin, Weirui Ye, Qifeng Chen, Yang Gao
+  - Key: Behavioral Cloning，Adversarial Imitation Learning (AIL)，MCTS-based RL，
+  - ExpEnv:  DeepMind Control Suite
+  - [Code](https://github.com/zhaohengyin/EfficientImitate)
 - [Evaluation Beyond Task Performance: Analyzing Concepts in AlphaZero in Hex](https://openreview.net/pdf?id=dwKwB2Cd-Km) 2022 
   - Charles Lovering, Jessica Zosa Forde, George Konidaris, Ellie Pavlick, Michael L. Littman
   - Key: AlphaZero’s internal representations, model probing and behavioral tests, how these concepts are captured in the network.
@@ -390,7 +404,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 ## Citation
 ```latex
 @misc{lightzero,
-    title={{LightZero: OpenDILab} A lightweight and efficient MCTS/AlphaZero/MuZero algorithm toolkits.},
+    title={{LightZero: OpenDILab} A lightweight and efficient toolkit designed for the MCTS, AlphaZero, and MuZero family of algorithms.},
     author={LightZero Contributors},
     publisher = {GitHub},
     howpublished = {\url{https://github.com/opendilab/LightZero}},
