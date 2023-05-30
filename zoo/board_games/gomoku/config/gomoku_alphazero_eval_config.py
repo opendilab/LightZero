@@ -11,13 +11,15 @@ if __name__ == '__main__':
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
     """
     # model_path = './ckpt/ckpt_best.pth.tar'
-    model_path = '/Users/puyuan/code/LightZero/league_tb_gomoku/ckpt_best_sp1.pth.tar'
+    # model_path = '/Users/puyuan/code/LightZero/league_tb_gomoku/ckpt_best_sp1.pth.tar'
+    model_path = '/Users/puyuan/code/LightZero/league_tb_gomoku_0531/ckpt_best_adamw.pth.tar'
 
     seeds = [0,1,2]
-    num_episodes_each_seed = 5
+    # seeds = [0]
+    num_episodes_each_seed = 10
     # If True, you can play with the agent.
-    main_config.env.agent_vs_human = False
-    # main_config.env.agent_vs_human = True
+    # main_config.env.agent_vs_human = False
+    main_config.env.agent_vs_human = True
 
     create_config.env_manager.type = 'base'
     main_config.env.evaluator_env_num = 1

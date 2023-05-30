@@ -4,7 +4,9 @@ from easydict import EasyDict
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 board_size = 6  # default_size is 15
-prob_random_action_in_bot = 0.5
+# prob_random_action_in_bot = 0.5
+prob_random_action_in_bot = 0
+
 
 collector_env_num = 32
 n_episode = 32
