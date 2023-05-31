@@ -52,7 +52,7 @@ class GumbelMuZeroGameBuffer(MuZeroGameBuffer):
                 _improved_policy = _improved_policy.tolist()
             # add mask for invalid actions (out of trajectory)
             mask_tmp = [1. for i in range(len(actions_tmp))]
-            mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps - len(mask_tmp))]
+            mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps+1 - len(mask_tmp))]
 
             # pad random action
             actions_tmp += [

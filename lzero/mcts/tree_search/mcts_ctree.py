@@ -384,7 +384,7 @@ class GumbelMuZeroMCTSCtree(object):
         )
     
     @classmethod
-    def roots(cls: int, active_collect_env_num: int, legal_actions: List[Any]) -> "mz_ctree":
+    def roots(cls: int, active_collect_env_num: int, legal_actions: List[Any]) -> "gmz_ctree":
         """
         Overview:
             The initialization of CRoots with root num and legal action lists.
@@ -409,7 +409,7 @@ class GumbelMuZeroMCTSCtree(object):
         with torch.no_grad():
             model.eval()
 
-            # preparation
+            # preparation some constant
             num = roots.num
             device = self._cfg.device
             discount = self._cfg.discount
@@ -422,7 +422,7 @@ class GumbelMuZeroMCTSCtree(object):
             min_max_stats_lst = tree_gumbel_muzero.MinMaxStatsList(num)
             min_max_stats_lst.set_delta(self._cfg.value_delta_max)
 
-            for index_simulation in range(self._cfg.num_simulations):
+            for simulation_index in range(self._cfg.num_simulations):
                 latent_states = []
 
                 # prepare a result wrapper to transport results between python and c++ parts
@@ -432,6 +432,12 @@ class GumbelMuZeroMCTSCtree(object):
                 # hidden_state_index_x_lst: the first index of leaf node states in hidden_state_pool
                 # hidden_state_index_y_lst: the second index of leaf node states in hidden_state_pool
                 # the hidden state of the leaf node is hidden_state_pool[x, y]; value prefix states are the same
+                """
+                MCTS stage 1: Selection
+                    Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
+                    In gumbel muzero, the action at the root node is selected using the Sequential Halving algorithm, while the action 
+                    at the interier node is selected based on the completion of the action values.
+                """
                 latent_state_index_x_lst, latent_state_index_y_lst, last_actions, virtual_to_play_batch = tree_gumbel_muzero.batch_traverse(
                     roots, self._cfg.num_simulations, self._cfg.max_num_considered_actions, discount, results, copy.deepcopy(to_play_batch)
                 )
@@ -444,7 +450,13 @@ class GumbelMuZeroMCTSCtree(object):
 
                 latent_states = torch.from_numpy(np.asarray(latent_states)).to(device).float()
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).long()
-
+                """
+                MCTS stage 2: Expansion
+                    At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function.
+                    Then we calculate the policy_logits and value for the leaf node (next_latent_state) by the prediction function. (aka. evaluation)
+                MCTS stage 3: Backup
+                    At the end of the simulation, the statistics along the trajectory are updated.
+                """
                 # evaluation for leaf nodes
                 network_output = model.recurrent_inference(latent_states, last_actions)
                 # TODO(pu)
@@ -462,6 +474,11 @@ class GumbelMuZeroMCTSCtree(object):
                 value_pool = network_output.value.reshape(-1).tolist()
                 policy_logits_pool = network_output.policy_logits.tolist()
 
+                # In ``batch_backpropagate()``, we first expand the leaf node using ``the policy_logits`` and
+                # ``reward`` predicted by the model, then perform backpropagation along the search path to update the
+                # statistics.
+
+                # NOTE: simulation_index + 1 is very important, which is the depth of the current leaf node.
                 latent_state_pool.append(latent_state_nodes)
                 latent_state_index_x += 1
 

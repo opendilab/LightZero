@@ -46,7 +46,7 @@ cdef extern from "lib/cnode.h" namespace "tree":
         float value()
         vector[int] get_trajectory()
         vector[int] get_children_distribution()
-        vector[float] get_children_value()
+        vector[float] get_children_value(float discount, int action_space_size)
         vector[float] get_policy(float discount, int action_space_size)
         CNode* get_child(int action)
 
@@ -62,7 +62,7 @@ cdef extern from "lib/cnode.h" namespace "tree":
         void clear()
         vector[vector[int]] get_trajectories()
         vector[vector[int]] get_distributions()
-        vector[vector[float]] get_children_values()
+        vector[vector[float]] get_children_values(float discount, int action_space_size)
         vector[vector[float]] get_policies(float discount, int action_space_size)
         vector[float] get_values()
 

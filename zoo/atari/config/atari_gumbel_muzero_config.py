@@ -21,7 +21,7 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 2000
+update_per_collect = None
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
@@ -31,7 +31,7 @@ reanalyze_ratio = 0.
 
 atari_gumbel_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}_gumbel_muzero_visit50_value1_novaluenorm_seed0',
+    f'data_mz_ctree/{env_name[:-14]}_gumbel_muzero_visit50_value01_add_mask_action6_upc_None_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -56,7 +56,7 @@ atari_gumbel_muzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='SGD',
-        max_num_considered_actions=3,
+        max_num_considered_actions=action_space_size,
         lr_piecewise_constant_decay=True,
         learning_rate=0.2,
         num_simulations=num_simulations,

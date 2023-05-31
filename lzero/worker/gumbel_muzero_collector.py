@@ -187,7 +187,7 @@ class GumbelMuZeroCollector(MuZeroCollector):
         improved_policy_lst = [[] for _ in range(env_nums)]
 
         # some logs
-        eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros(env_nums)
+        eps_steps_lst, visit_entropies_lst, completed_value_lst = np.zeros(env_nums), np.zeros(env_nums), np.zeros(env_nums)
         self_play_moves = 0.
         self_play_episodes = 0.
         self_play_moves_max = 0
@@ -241,6 +241,10 @@ class GumbelMuZeroCollector(MuZeroCollector):
                     k: v['visit_count_distribution_entropy']
                     for k, v in policy_output.items()
                 }
+                completed_value_no_env_id = {
+                    k: v['roots_completed_value']
+                    for k, v in policy_output.items()
+                }
 
                 # TODO(pu): subprocess
                 actions = {}
@@ -251,6 +255,7 @@ class GumbelMuZeroCollector(MuZeroCollector):
                 improved_policy_dict = {}
                 pred_value_dict = {}
                 visit_entropy_dict = {}
+                completed_value_dict = {}
                 for index, env_id in enumerate(ready_env_id):
                     actions[env_id] = actions_no_env_id.pop(index)
                     distributions_dict[env_id] = distributions_dict_no_env_id.pop(index)
@@ -260,6 +265,7 @@ class GumbelMuZeroCollector(MuZeroCollector):
                     improved_policy_dict[env_id] = improved_policy_dict_no_env_id.pop(index)
                     pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
                     visit_entropy_dict[env_id] = visit_entropy_dict_no_env_id.pop(index)
+                    completed_value_dict[env_id] = completed_value_no_env_id.pop(index)
 
                 # ==============================================================
                 # Interact with env.
@@ -300,6 +306,7 @@ class GumbelMuZeroCollector(MuZeroCollector):
 
                     dones[env_id] = done
                     visit_entropies_lst[env_id] += visit_entropy_dict[env_id]
+                    completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
 
                     eps_steps_lst[env_id] += 1
                     total_transitions += 1
@@ -356,6 +363,7 @@ class GumbelMuZeroCollector(MuZeroCollector):
                         'time': self._env_info[env_id]['time'],
                         'step': self._env_info[env_id]['step'],
                         'visit_entropy': visit_entropies_lst[env_id] / eps_steps_lst[env_id],
+                        'completed_value': completed_value_lst[env_id] / eps_steps_lst[env_id]
                     }
                     collected_episode += 1
                     self._episode_info.append(info)

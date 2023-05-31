@@ -57,7 +57,7 @@ namespace tree{
         this->reward = 0.0;
 
         // gumbel muzero related code
-        this->gumbel_scale = 1.0;
+        this->gumbel_scale = 10.0;
         this->gumbel_rng=0.0;
     }
 
@@ -74,7 +74,7 @@ namespace tree{
         this->latent_state_index_y = -1;
 
         // gumbel muzero related code
-        this->gumbel_scale = 1.0;
+        this->gumbel_scale = 10.0;
         this->gumbel_rng=0.0;
         this->gumbel = generate_gumbel(this->gumbel_scale, this->gumbel_rng, legal_actions.size());
     }
@@ -288,7 +288,7 @@ namespace tree{
         return distribution;
     }
 
-    std::vector<float> CNode::get_children_value()
+    std::vector<float> CNode::get_children_value(float discount_factor, int action_space_size)
     {
         /*
         Overview:
@@ -296,16 +296,26 @@ namespace tree{
         Outputs:
             - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
         */
-        std::vector<float> children_value;
-        if (this->expanded())
-        {
-            for (auto a : this->legal_actions)
-            {
-                CNode *child = this->get_child(a);
-                children_value.push_back(child->value());
-            }
+        float infymin = -std::numeric_limits<float>::infinity();
+        std::vector<int> child_visit_count;
+        std::vector<float> child_prior;
+        for(auto a: this->legal_actions){
+            CNode* child = this->get_child(a);
+            child_visit_count.push_back(child->visit_count);
+            child_prior.push_back(child->prior);
         }
-        return children_value;
+        assert(child_visit_count.size()==child_prior.size());
+        // compute the completed value
+        std::vector<float> completed_qvalues = qtransform_completed_by_mix_value(this, child_visit_count, child_prior, discount_factor);
+        std::vector<float> values;
+        for (int i=0;i<action_space_size;i++){
+            values.push_back(infymin);
+        }
+        for (int i=0;i<child_prior.size();i++){
+            values[this->legal_actions[i]] = completed_qvalues[i];
+        }
+
+        return values;
     }
 
     CNode *CNode::get_child(int action)
@@ -349,18 +359,8 @@ namespace tree{
         for (int i=0;i<child_prior.size();i++){
             probs[this->legal_actions[i]] = child_prior[i] + completed_qvalues[i];
         }
-        // std::cout << "original "<< std::endl;
-        // for (int i=0;i<probs.size();i++){
-        //     std::cout << probs[i] << " ";
-        // }
-        // std::cout << std::endl;
-        csoftmax(probs, probs.size());
 
-        // std::cout << "after softmax "<< std::endl;
-        // for (int i=0;i<probs.size();i++){
-        //     std::cout << probs[i] << " ";
-        // }
-        // std::cout << std::endl;
+        csoftmax(probs, probs.size());
 
         return probs;
     }
@@ -480,22 +480,23 @@ namespace tree{
         return distributions;
     }
 
-    std::vector<std::vector<float> > CRoots::get_children_values()
+    std::vector<std::vector<float> > CRoots::get_children_values(float discount_factor, int action_space_size)
     {
         /*
         Overview:
-            Get the children distribution of each root.
-        Outputs:
-            - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
+            Compute the improved policy of the current node.
+        Arguments:
+            - discount_factor: the discount_factor of reward.
+            - action_space_size: the action space size of environment.
         */
-        std::vector<std::vector<float> > children_values;
-        children_values.reserve(this->root_num);
+        std::vector<std::vector<float> > values;
+        values.reserve(this->root_num);
 
         for (int i = 0; i < this->root_num; ++i)
         {
-            children_values.push_back(this->roots[i].get_children_value());
+            values.push_back(this->roots[i].get_children_value(discount_factor, action_space_size));
         }
-        return children_values;
+        return values;
     }
 
     std::vector<std::vector<float> > CRoots::get_policies(float discount_factor, int action_space_size)
