@@ -95,7 +95,10 @@ class EfficientZeroPolicy(Policy):
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
-        update_per_collect=100,
+        # if we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.
+        update_per_collect=None,
+        # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
+        model_update_ratio=0.1,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
@@ -110,13 +113,13 @@ class EfficientZeroPolicy(Policy):
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
         grad_clip_value=10,
-        # (int) The number of episode in each collecting stage.
+        # (int) The number of episodes in each collecting stage.
         n_episode=8,
         # (float) the number of simulations in MCTS.
         num_simulations=50,
         # (float) Discount factor (gamma) for returns.
         discount_factor=0.997,
-        # (int) The number of step for calculating target q_value.
+        # (int) The number of steps for calculating target q_value.
         td_steps=5,
         # (int) The number of unroll steps in dynamics network.
         num_unroll_steps=5,
