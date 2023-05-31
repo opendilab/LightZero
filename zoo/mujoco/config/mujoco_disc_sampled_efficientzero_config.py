@@ -29,11 +29,11 @@ continuous_action_space = False
 K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = 200
-# batch_size = 256
-batch_size = 1024
+batch_size = 256
+# batch_size = 1024
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
-each_dim_disc_size = 5
+each_dim_disc_size = 4
 
 # ==============================================================
 # end of the most frequently changed config specified by the user

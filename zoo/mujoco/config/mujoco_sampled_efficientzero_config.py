@@ -29,8 +29,8 @@ continuous_action_space = True
 K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = 200
-# batch_size = 256
-batch_size = 1024
+batch_size = 256
+# batch_size = 1024
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
 # ==============================================================
@@ -39,7 +39,7 @@ reanalyze_ratio = 0.
 
 mujoco_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_cos-lr_seed0',
+    f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_adamw3e-3_seed0',
     env=dict(
         env_name=env_name,
         continuous=True,
@@ -71,16 +71,16 @@ mujoco_sampled_efficientzero_config = dict(
         batch_size=batch_size,
         discount_factor=0.99,
 
-        # optim_type='AdamW',
-        # lr_piecewise_constant_decay=False,
-        # learning_rate=0.003,
+        optim_type='AdamW',
+        lr_piecewise_constant_decay=False,
+        learning_rate=0.003,
 
         # sampled muzero paper config
         cos_lr_scheduler=True,
-        optim_type='AdamW',
-        lr_piecewise_constant_decay=False,
-        learning_rate=0.0001,
-        weight_decay=2e-5,
+        # optim_type='AdamW',
+        # lr_piecewise_constant_decay=False,
+        # learning_rate=0.0001,
+        # weight_decay=2e-5,
 
         # manual_temperature_decay=True,
         # grad_clip_value=10,
