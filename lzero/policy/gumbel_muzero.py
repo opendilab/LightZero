@@ -545,9 +545,6 @@ class GumeblMuZeroPolicy(Policy):
 
             roots_visit_count_distributions = roots.get_distributions(
             )  # shape: ``{list: batch_size} ->{list: action_space_size}``
-            for d in roots_visit_count_distributions:
-                print(len(d))
-            print("------------------")
             roots_values = roots.get_values()  # shape: {list: batch_size}
             roots_completed_values = roots.get_children_values(self._cfg.discount_factor, self._cfg.model.action_space_size)
 
