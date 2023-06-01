@@ -8,13 +8,13 @@ from numpy import ndarray
 
 from ..common import EZNetworkOutput, RepresentationNetworkMLP, PredictionNetworkMLP
 from ..utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
-from .gobigger_model import Encoder
+from .gobigger_encoder import Encoder
 import yaml
 from easydict import EasyDict
 from ding.utils.data import default_collate
 
-@MODEL_REGISTRY.register('EfficientZeroModelMLP')
-class GoBiggerEfficientZeroModelMLP(nn.Module):
+@MODEL_REGISTRY.register('GoBiggerEfficientZeroModel')
+class GoBiggerEfficientZeroModel(nn.Module):
 
     def __init__(
         self,
@@ -74,7 +74,7 @@ class GoBiggerEfficientZeroModelMLP(nn.Module):
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection for dynamics network, default set it to False.
         """
-        super(GoBiggerEfficientZeroModelMLP, self).__init__()
+        super(GoBiggerEfficientZeroModel, self).__init__()
         if not categorical_distribution:
             self.reward_support_size = 1
             self.value_support_size = 1

@@ -9,11 +9,10 @@ from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation
 from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
 from .game_buffer import GameBuffer
-from ding.torch_utils import to_device
+from ding.torch_utils import to_device, to_tensor
 
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
-from ding.torch_utils import to_tensor, squeeze
 
 @BUFFER_REGISTRY.register('gobigger_game_buffer_muzero')
 class GoBiggerMuZeroGameBuffer(GameBuffer):
