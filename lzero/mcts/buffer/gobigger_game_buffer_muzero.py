@@ -9,6 +9,7 @@ from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation
 from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
 from .game_buffer import GameBuffer
+from ding.torch_utils import to_device
 
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
@@ -383,6 +384,7 @@ class GoBiggerMuZeroGameBuffer(GameBuffer):
                 m_obs = value_obs_list[beg_index:end_index]
                 m_obs = to_tensor(m_obs)
                 m_obs = sum(m_obs, [])
+                m_obs = to_device(m_obs, self._cfg.device)
 
                 # calculate the target value
                 m_output = model.initial_inference(m_obs)

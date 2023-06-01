@@ -18,6 +18,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
     DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, negative_cosine_similarity, prepare_obs, \
     configure_optimizers
 from collections import defaultdict
+from ding.torch_utils import to_device
 
 
 @POLICY_REGISTRY.register('gobigger_efficientzero')
@@ -294,6 +295,8 @@ class GoBiggerEfficientZeroPolicy(Policy):
         # ==============================================================
         obs_batch = obs_batch.tolist()
         obs_batch = sum(obs_batch, [])
+        obs_batch = to_tensor(obs_batch)
+        obs_batch = to_device(obs_batch, self._cfg.device)
         network_output = self._learn_model.initial_inference(obs_batch)
         # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
         latent_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(network_output)
@@ -370,6 +373,8 @@ class GoBiggerEfficientZeroPolicy(Policy):
                 end_index = step_i + self._cfg.model.frame_stack_num
                 obs_target_batch_tmp = obs_target_batch[:, beg_index:end_index].tolist()
                 obs_target_batch_tmp = sum(obs_target_batch_tmp, [])
+                obs_target_batch_tmp = to_tensor(obs_target_batch_tmp)
+                obs_target_batch_tmp = to_device(obs_target_batch_tmp, self._cfg.device)
                 network_output = self._learn_model.initial_inference(obs_target_batch_tmp)
 
                 latent_state = to_tensor(latent_state)
@@ -550,6 +555,7 @@ class GoBiggerEfficientZeroPolicy(Policy):
         data = to_tensor(data)
         data = sum(sum(data, []), [])
         batch_size = len(data)
+        data = to_device(data, self._cfg.device)
         agent_num = batch_size // active_collect_env_num
         to_play = np.array(to_play).reshape(-1).tolist()
 
@@ -668,6 +674,7 @@ class GoBiggerEfficientZeroPolicy(Policy):
         data = to_tensor(data)
         data = sum(sum(data, []), [])
         batch_size = len(data)
+        data = to_device(data, self._cfg.device)
         agent_num = batch_size // active_eval_env_num
         to_play = np.array(to_play).reshape(-1).tolist()
 
