@@ -54,11 +54,11 @@ class GoBiggerLightZeroEnv(BaseEnv):
         obs = self.preprocess_obs(raw_obs)
         action_mask = [np.logical_not(o['action_mask']) for o in obs]
         to_play = [ -1 for _ in range(len(obs))]
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': to_play}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': to_play, 'raw_obs':raw_obs}
         return obs
             
-    def step(self, action: list) -> BaseEnvTimestep:
-        action = {i: self.transform_action(a) for i, a in enumerate(action)}
+    def step(self, action: dict) -> BaseEnvTimestep:
+        action = {k: self.transform_action(v) if np.isscalar(v) else v for k, v in action.items()}
         raw_obs, raw_rew, done, info = self._env.step(action)
         # print('current_frame={}'.format(raw_obs[0]['last_time']))
         # print('raw_rew={}'.format(raw_rew))
@@ -476,22 +476,22 @@ if __name__ == '__main__':
                 # save_frame=False,
                 save_frame=True,
                 save_dir='./',
-                save_name_prefix='gobigger-1',
+                save_name_prefix='gobigger-bot',
             ),
         ),
     ))
 
     env = GoBiggerLightZeroEnv(env_cfg)
-    env.reset()
-    import random
+    obs = env.reset()
+    from gobigger_rule_bot import BotAgent
+    bot = [BotAgent(i) for i in range(4)]
     while True:
-        actions = [random.randint(0, 26), random.randint(0, 26), random.randint(0, 26), random.randint(0, 26)]
-        # actions = {0: [random.uniform(-1, 1), random.uniform(-1, 1), -1],
-        #            1: [random.uniform(-1, 1), random.uniform(-1, 1), -1],
-        #            2: [random.uniform(-1, 1), random.uniform(-1, 1), -1],
-        #            3: [random.uniform(-1, 1), random.uniform(-1, 1), -1]}
-        timestep = env.step(actions)
-        if timestep.done:
+        actions = {}
+        for i in range(4):
+            # bot[i].step(obs['raw_obs'] is dict
+            actions.update(bot[i].step(obs['raw_obs']))
+        obs, rew, done, info = env.step(actions)
+        if done:
             break
 
     # from ding.envs import create_env_manager

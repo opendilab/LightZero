@@ -5,11 +5,11 @@ env_name = 'GoBigger'
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 16
-n_episode = 16
+collector_env_num = 32
+n_episode = 32
 evaluator_env_num = 5
 num_simulations = 50
-update_per_collect = 1000
+update_per_collect = 2000
 batch_size = 256
 reanalyze_ratio = 0.
 action_space_size = 27
@@ -69,7 +69,6 @@ atari_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            # observation_shape=(4, 96, 96),
             latent_state_dim=176,
             frame_stack_num=1,
             action_space_size=action_space_size,

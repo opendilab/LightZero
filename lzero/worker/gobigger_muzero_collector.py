@@ -377,8 +377,12 @@ class GoBiggerMuZeroCollector(ISerialCollector):
                 # policy forward
                 # ==============================================================
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play)
+                actions_no_env_id=defaultdict(dict)
+                for k,v in policy_output.items():
+                    for agent_id, act in enumerate(v['action']):
+                        actions_no_env_id[k][agent_id] = act
 
-                actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
+                # actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                 distributions_dict_no_env_id = {k: v['distributions'] for k, v in policy_output.items()}
                 if self.policy_config.sampled_algo:
                     root_sampled_actions_dict_no_env_id = {
@@ -562,7 +566,7 @@ class GoBiggerMuZeroCollector(ISerialCollector):
 
                         action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                         to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
-                        agent_num = len(init_obs[0]['action_mask'])
+
                         for agent_id in range(agent_num):
                             game_segments[env_id][agent_id] = GameSegment(
                                 self._env.action_space,
