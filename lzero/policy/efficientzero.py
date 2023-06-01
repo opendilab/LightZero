@@ -452,7 +452,7 @@ class EfficientZeroPolicy(Policy):
             self._learn_model.parameters(), self._cfg.grad_clip_value
         )
         self._optimizer.step()
-        if self._cfg.lr_piecewise_constant_decay is True:
+        if self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()
 
         # ==============================================================

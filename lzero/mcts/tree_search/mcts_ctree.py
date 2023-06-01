@@ -323,19 +323,17 @@ class MuZeroMCTSCtree(object):
                 """
                 network_output = model.recurrent_inference(latent_states, last_actions)
 
-                if not model.training:
-                    # if not in training, obtain the scalars of the value/reward
+                [
+                    network_output.latent_state, network_output.policy_logits, network_output.value,
+                    network_output.reward
+                ] = to_detach_cpu_numpy(
                     [
-                        network_output.latent_state, network_output.policy_logits, network_output.value,
-                        network_output.reward
-                    ] = to_detach_cpu_numpy(
-                        [
-                            network_output.latent_state,
-                            network_output.policy_logits,
-                            self.inverse_scalar_transform_handle(network_output.value),
-                            self.inverse_scalar_transform_handle(network_output.reward),
-                        ]
-                    )
+                        network_output.latent_state,
+                        network_output.policy_logits,
+                        self.inverse_scalar_transform_handle(network_output.value),
+                        self.inverse_scalar_transform_handle(network_output.reward),
+                    ]
+                )
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
                 # tolist() is to be compatible with cpp datatype.
@@ -355,12 +353,16 @@ class MuZeroMCTSCtree(object):
                 )
 
 class GumbelMuZeroMCTSCtree(object):
+    """
+    Overview:
+        MCTSCtree for Gumbel MuZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in C++.
+    Interfaces:
+        __init__, roots, search
+        
+    """
     config = dict(
-        device='cpu',
-        support_size=300,
-        discount=0.997,
+        # (int) The max limitation of simluation times during the simulation.
         num_simulations=50,
-        lstm_horizon_len=5,
         # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
         root_dirichlet_alpha=0.3,
         # (float) The noise weight at the root node of the search tree.
@@ -375,7 +377,13 @@ class GumbelMuZeroMCTSCtree(object):
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
-    def __init__(self, cfg: EasyDict = None):
+    def __init__(self, cfg: EasyDict = None) -> None:
+        """
+        Overview:
+            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
+            in the default configuration, the user-provided value will override the default configuration. Otherwise,
+            the default configuration will be used.
+        """
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
@@ -396,7 +404,8 @@ class GumbelMuZeroMCTSCtree(object):
         return ctree.Roots(active_collect_env_num, legal_actions)
 
     def search(self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-                                                                                                          List[Any]]):
+                                                                                                          List[Any]]
+    ) -> None:
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
@@ -410,23 +419,23 @@ class GumbelMuZeroMCTSCtree(object):
             model.eval()
 
             # preparation some constant
-            num = roots.num
+            batch_size = roots.num
             device = self._cfg.device
-            discount = self._cfg.discount
+            discount_factor = self._cfg.discount_factor
             # the data storage of hidden states: storing the states of all the tree nodes
-            latent_state_pool = [latent_state_roots]
+            latent_state_batch_in_search_path = [latent_state_roots]
 
-            # the index of each layer in the tree
-            latent_state_index_x = 0
             # minimax value storage
-            min_max_stats_lst = tree_gumbel_muzero.MinMaxStatsList(num)
+            min_max_stats_lst = tree_gumbel_muzero.MinMaxStatsList(batch_size)
             min_max_stats_lst.set_delta(self._cfg.value_delta_max)
 
             for simulation_index in range(self._cfg.num_simulations):
+                # In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.
+
                 latent_states = []
 
                 # prepare a result wrapper to transport results between python and c++ parts
-                results = tree_gumbel_muzero.ResultsWrapper(num=num)
+                results = tree_gumbel_muzero.ResultsWrapper(num=batch_size)
 
                 # traverse to select actions for each root
                 # hidden_state_index_x_lst: the first index of leaf node states in hidden_state_pool
@@ -438,17 +447,16 @@ class GumbelMuZeroMCTSCtree(object):
                     In gumbel muzero, the action at the root node is selected using the Sequential Halving algorithm, while the action 
                     at the interier node is selected based on the completion of the action values.
                 """
-                latent_state_index_x_lst, latent_state_index_y_lst, last_actions, virtual_to_play_batch = tree_gumbel_muzero.batch_traverse(
-                    roots, self._cfg.num_simulations, self._cfg.max_num_considered_actions, discount, results, copy.deepcopy(to_play_batch)
+                latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_gumbel_muzero.batch_traverse(
+                    roots, self._cfg.num_simulations, self._cfg.max_num_considered_actions, discount_factor, results, copy.deepcopy(to_play_batch)
                 )
-                # obtain the search horizon for leaf nodes
-                search_lens = results.get_search_len()
 
                 # obtain the states for leaf nodes
-                for ix, iy in zip(latent_state_index_x_lst, latent_state_index_y_lst):
-                    latent_states.append(latent_state_pool[ix][iy])
+                for ix, iy in zip(latent_state_index_in_search_path, latent_state_index_in_batch):
+                    latent_states.append(latent_state_batch_in_search_path[ix][iy])
 
                 latent_states = torch.from_numpy(np.asarray(latent_states)).to(device).float()
+                # .long() is only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).unsqueeze(1).long()
                 """
                 MCTS stage 2: Expansion
@@ -457,33 +465,35 @@ class GumbelMuZeroMCTSCtree(object):
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
-                # evaluation for leaf nodes
                 network_output = model.recurrent_inference(latent_states, last_actions)
-                # TODO(pu)
-                if not model.training:
-                    # if not in training, obtain the scalars of the value/reward
-                    network_output.value = self.inverse_scalar_transform_handle(network_output.value
-                                                                                ).detach().cpu().numpy()
-                    network_output.reward = self.inverse_scalar_transform_handle(network_output.reward
-                                                                                ).detach().cpu().numpy()
-                    network_output.latent_state = network_output.latent_state.detach().cpu().numpy()
-                    network_output.policy_logits = network_output.policy_logits.detach().cpu().numpy()
 
-                latent_state_nodes = network_output.latent_state
-                reward_pool = network_output.reward.reshape(-1).tolist()
-                value_pool = network_output.value.reshape(-1).tolist()
-                policy_logits_pool = network_output.policy_logits.tolist()
+                [
+                    network_output.latent_state, network_output.policy_logits, network_output.value,
+                    network_output.reward
+                ] = to_detach_cpu_numpy(
+                    [
+                        network_output.latent_state,
+                        network_output.policy_logits,
+                        self.inverse_scalar_transform_handle(network_output.value),
+                        self.inverse_scalar_transform_handle(network_output.reward),
+                    ]
+                )
+
+                latent_state_batch_in_search_path.append(network_output.latent_state)
+                # tolist() is to be compatible with cpp datatype.
+                reward_batch = network_output.reward.reshape(-1).tolist()
+                value_batch = network_output.value.reshape(-1).tolist()
+                policy_logits_batch = network_output.policy_logits.tolist()
 
                 # In ``batch_backpropagate()``, we first expand the leaf node using ``the policy_logits`` and
                 # ``reward`` predicted by the model, then perform backpropagation along the search path to update the
                 # statistics.
 
                 # NOTE: simulation_index + 1 is very important, which is the depth of the current leaf node.
-                latent_state_pool.append(latent_state_nodes)
-                latent_state_index_x += 1
+                current_latent_state_index = simulation_index + 1
 
                 # backpropagation along the search path to update the attributes
                 tree_gumbel_muzero.batch_back_propagate(
-                    latent_state_index_x, discount, reward_pool, value_pool, policy_logits_pool,
+                    current_latent_state_index, discount_factor, reward_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, virtual_to_play_batch
                 )

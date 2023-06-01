@@ -1,3 +1,5 @@
+// C++11
+
 #ifndef CNODE_H
 #define CNODE_H
 
@@ -18,11 +20,9 @@ namespace tree {
 
     class CNode {
         public:
-            int visit_count, to_play, latent_state_index_x, latent_state_index_y, best_action;
+            int visit_count, to_play, current_latent_state_index, batch_index, best_action;
             float reward, prior, value_sum, raw_value, gumbel_scale, gumbel_rng;
-//            float parent_value_prefix;
             std::vector<int> children_index;
-            // std::vector<CNode>* ptr_node_pool;
             std::map<int, CNode> children;
 
             std::vector<int> legal_actions;
@@ -32,7 +32,7 @@ namespace tree {
             CNode(float prior, std::vector<int> &legal_actions);
             ~CNode();
 
-            void expand(int to_play, int latent_state_index_x, int latent_state_index_y, float reward, float value, const std::vector<float> &policy_logits);
+            void expand(int to_play, int current_latent_state_index, int batch_index, float reward, float value, const std::vector<float> &policy_logits);
             void add_exploration_noise(float exploration_fraction, const std::vector<float> &noises);
             std::vector<float> get_q(float discount);
             float compute_mean_q(int isRoot, float parent_q, float discount);
@@ -53,7 +53,6 @@ namespace tree {
         public:
             int root_num;
             std::vector<CNode> roots;
-            // std::vector<std::vector<CNode> > node_pools;
             std::vector<std::vector<int> > legal_actions_list;
 
             CRoots();
@@ -74,7 +73,7 @@ namespace tree {
     class CSearchResults{
         public:
             int num;
-            std::vector<int> latent_state_index_x_lst, latent_state_index_y_lst, last_actions, search_lens;
+            std::vector<int> latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, search_lens;
             std::vector<int> virtual_to_play_batchs;
             std::vector<CNode*> nodes;
             std::vector<std::vector<CNode*> > search_paths;
@@ -89,7 +88,7 @@ namespace tree {
     //*********************************************************
     void update_tree_q(CNode* root, tools::CMinMaxStats &min_max_stats, float discount, int players);
     void cback_propagate(std::vector<CNode*> &search_path, tools::CMinMaxStats &min_max_stats, int to_play, float value, float discount);
-    void cbatch_back_propagate(int latent_state_index_x, float discount, const std::vector<float> &rewards, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &to_play_batch);
+    void cbatch_back_propagate(int current_latent_state_index, float discount, const std::vector<float> &rewards, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &to_play_batch);
     int cselect_root_child(CNode* root, float discount, int num_simulations, int max_num_considered_actions);
     int cselect_interior_child(CNode* root, float discount);
     int cselect_child(CNode* root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount, float mean_q, int players);

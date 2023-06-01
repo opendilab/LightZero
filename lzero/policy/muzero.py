@@ -167,7 +167,7 @@ class MuZeroPolicy(Policy):
     def default_model(self) -> Tuple[str, List[str]]:
         """
         Overview:
-            Return this algorithm default model setting.
+            Return this algorithm default model setting for demonstration.
         Returns:
             - model_info (:obj:`Tuple[str, List[str]]`): model name and model import_names.
                 - model_type (:obj:`str`): The model type used in this algorithm, which is registered in ModelRegistry.
@@ -407,7 +407,7 @@ class MuZeroPolicy(Policy):
             self._learn_model.parameters(), self._cfg.grad_clip_value
         )
         self._optimizer.step()
-        if self._cfg.lr_piecewise_constant_decay is True:
+        if self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()
 
         # ==============================================================

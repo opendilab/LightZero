@@ -1,13 +1,9 @@
 from typing import Any, List, Tuple, Union, TYPE_CHECKING, Optional
 
 import numpy as np
-import torch
 from ding.utils import BUFFER_REGISTRY
 
-from lzero.mcts.tree_search.mcts_ctree import GumbelMuZeroMCTSCtree as MCTSCtree
-from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation
-from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
 from lzero.mcts.buffer import MuZeroGameBuffer
 
 @BUFFER_REGISTRY.register('game_buffer_gumbel_muzero')
@@ -36,6 +32,11 @@ class GumbelMuZeroGameBuffer(MuZeroGameBuffer):
         orig_data = self._sample_orig_data(batch_size)
         game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
         batch_size = len(batch_index_list)
+
+        # ==============================================================
+        # The core difference between GumbelMuZero and MuZero
+        # ==============================================================
+        # The main difference between Gumbel MuZero and MuZero lies in the preprocessing of improved_policy.
         obs_list, action_list, improved_policy_list, mask_list = [], [], [], []
         # prepare the inputs of a batch
         for i in range(batch_size):
@@ -44,12 +45,11 @@ class GumbelMuZeroGameBuffer(MuZeroGameBuffer):
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
                                               self._cfg.num_unroll_steps].tolist()
-            # ==============================================================
-            # Gumbel Muzero related code
-            # ==============================================================
+            
             _improved_policy = game.improved_policy_probs[pos_in_game_segment:pos_in_game_segment + self._cfg.num_unroll_steps]
             if not isinstance(_improved_policy, list):
                 _improved_policy = _improved_policy.tolist()
+
             # add mask for invalid actions (out of trajectory)
             mask_tmp = [1. for i in range(len(actions_tmp))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps+1 - len(mask_tmp))]
@@ -59,7 +59,8 @@ class GumbelMuZeroGameBuffer(MuZeroGameBuffer):
                 np.random.randint(0, game.action_space_size)
                 for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
             ]
-            # pad improved policy
+
+            # pad improved policy with with a value such that the sum of the values is equal to 1
             _improved_policy.extend(np.random.dirichlet(np.ones(game.action_space_size),size=self._cfg.num_unroll_steps + 1 - len(_improved_policy)))
 
             # obtain the input observations
@@ -76,11 +77,6 @@ class GumbelMuZeroGameBuffer(MuZeroGameBuffer):
 
         # formalize the input observations
         obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
-
-        # print("==================")
-        # print(len(improved_policy_list))
-        # print(improved_policy_list[-1])
-        # print(np.sum(improved_policy_list, axis=-1))
 
         # formalize the inputs of a batch
         current_batch = [obs_list, action_list, improved_policy_list, mask_list, batch_index_list, weights_list, make_time_list]
@@ -121,22 +117,3 @@ class GumbelMuZeroGameBuffer(MuZeroGameBuffer):
 
         context = reward_value_context, policy_re_context, policy_non_re_context, current_batch
         return context
-
-    def update_priority(self, train_data: List[np.ndarray], batch_priorities: Any) -> None:
-        """
-        Overview:
-            Update the priority of training data.
-        Arguments:
-            - train_data (:obj:`Optional[List[Optional[np.ndarray]]]`): training data to be updated priority.
-            - batch_priorities (:obj:`batch_priorities`): priorities to update to.
-        NOTE:
-            train_data = [current_batch, target_batch]
-            current_batch = [obs_list, action_list, mask_list, batch_index_list, weights, make_time_list]
-        """
-        indices = train_data[0][4]
-        metas = {'make_time': train_data[0][6], 'batch_priorities': batch_priorities}
-        # only update the priorities for data still in replay buffer
-        for i in range(len(indices)):
-            if metas['make_time'][i] > self.clear_time:
-                idx, prio = indices[i], metas['batch_priorities'][i]
-                self.game_pos_priorities[idx] = prio

@@ -47,20 +47,14 @@ def train_muzero(
 
     if create_cfg.policy.type == 'muzero':
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
-        from lzero.worker import MuZeroCollector as Collector
-        from lzero.worker import MuZeroEvaluator as Evaluator
     elif create_cfg.policy.type == 'efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
-        from lzero.worker import MuZeroCollector as Collector
-        from lzero.worker import MuZeroEvaluator as Evaluator
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
-        from lzero.worker import MuZeroCollector as Collector
-        from lzero.worker import MuZeroEvaluator as Evaluator
     elif create_cfg.policy.type == 'gumbel_muzero':
         from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
-        from lzero.worker import GumbelMuZeroCollector as Collector
-        from lzero.worker import MuZeroEvaluator as Evaluator
+    from lzero.worker import MuZeroCollector as Collector
+    from lzero.worker import MuZeroEvaluator as Evaluator
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'

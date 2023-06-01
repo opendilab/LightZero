@@ -74,17 +74,17 @@ cdef class Node:
     def __cinit__(self, float prior, vector[int] &legal_actions):
         pass
 
-    def expand(self, int to_play, int latent_state_index_x, int latent_state_index_y, float value_prefix, float value, list policy_logits):
+    def expand(self, int to_play, int current_latent_state_index, int batch_index, float value_prefix, float value, list policy_logits):
         cdef vector[float] cpolicy = policy_logits
-        self.cnode.expand(to_play, latent_state_index_x, latent_state_index_y, value_prefix, value, cpolicy)        
+        self.cnode.expand(to_play, current_latent_state_index, batch_index, value_prefix, value, cpolicy)        
 
-def batch_back_propagate(int latent_state_index_x, float discount, list value_prefixs, list values, list policies, MinMaxStatsList min_max_stats_lst, ResultsWrapper results, list to_play_batch):
+def batch_back_propagate(int current_latent_state_index, float discount, list value_prefixs, list values, list policies, MinMaxStatsList min_max_stats_lst, ResultsWrapper results, list to_play_batch):
     cdef int i
     cdef vector[float] cvalue_prefixs = value_prefixs
     cdef vector[float] cvalues = values
     cdef vector[vector[float]] cpolicies = policies
 
-    cbatch_back_propagate(latent_state_index_x, discount, cvalue_prefixs, cvalues, cpolicies,
+    cbatch_back_propagate(current_latent_state_index, discount, cvalue_prefixs, cvalues, cpolicies,
                           min_max_stats_lst.cmin_max_stats_lst, results.cresults, to_play_batch)
 
 
@@ -92,7 +92,7 @@ def batch_traverse(Roots roots, int num_simulations, int max_num_considered_acti
 
     cbatch_traverse(roots.roots, num_simulations, max_num_considered_actions, discount, results.cresults, virtual_to_play_batch)
 
-    return results.cresults.latent_state_index_x_lst, results.cresults.latent_state_index_y_lst, results.cresults.last_actions, results.cresults.virtual_to_play_batchs
+    return results.cresults.latent_state_index_in_search_path, results.cresults.latent_state_index_in_batch, results.cresults.last_actions, results.cresults.virtual_to_play_batchs
 
 def select_root_child(Node roots, float discount, int num_simulations, int max_num_considered_actions):
 

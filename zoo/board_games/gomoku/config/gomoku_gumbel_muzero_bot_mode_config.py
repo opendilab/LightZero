@@ -21,7 +21,7 @@ prob_random_action_in_bot = 0.5
 
 gomoku_gumbel_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/gomoku_gumbel_muzero_visit50_value1_purevaluenetwork_deletepriority_deletetargetsoftmax_seed0',
+    f'data_mz_ctree/gomoku_b{board_size}_rand{prob_random_action_in_bot}_gumbel_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         board_size=board_size,
         battle_mode='play_with_bot_mode',

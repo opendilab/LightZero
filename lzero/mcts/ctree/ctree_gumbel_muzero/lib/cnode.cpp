@@ -1,3 +1,5 @@
+// C++11
+
 #include <iostream>
 #include "cnode.h"
 #include <algorithm>
@@ -61,7 +63,15 @@ namespace tree{
         this->gumbel_rng=0.0;
     }
 
-    CNode::CNode(float prior, std::vector<int> &legal_actions){
+    CNode::CNode(float prior, std::vector<int> &legal_actions)
+    {
+        /*
+        Overview:
+            Initialization of CNode with prior value and legal actions.
+        Arguments:
+            - prior: the prior value of this node.
+            - legal_actions: a vector of legal actions of this node.
+        */
         this->prior = prior;
         this->legal_actions = legal_actions;
 
@@ -70,8 +80,8 @@ namespace tree{
         this->raw_value = 0; // the value network approximation of value
         this->best_action = -1;
         this->to_play = 0;
-        this->latent_state_index_x = -1;
-        this->latent_state_index_y = -1;
+        this->current_latent_state_index = -1;
+        this->batch_index = -1;
 
         // gumbel muzero related code
         this->gumbel_scale = 10.0;
@@ -81,22 +91,22 @@ namespace tree{
 
     CNode::~CNode(){}
 
-    void CNode::expand(int to_play, int latent_state_index_x, int latent_state_index_y, float reward, float value, const std::vector<float> &policy_logits)
+    void CNode::expand(int to_play, int current_latent_state_index, int batch_index, float reward, float value, const std::vector<float> &policy_logits)
     {
         /*
         Overview:
             Expand the child nodes of the current node.
         Arguments:
             - to_play: which player to play the game in the current node.
-            - latent_state_index_x: the index of hidden state vector of the current node.
-            - latent_state_index_y: the index of hidden state vector of the current node.
+            - current_latent_state_index: The index of latent state of the leaf node in the search path of the current node.
+            - batch_index: The index of latent state of the leaf node in the search path of the current node.
             - reward: the reward of the current node.
             - value: the value network approximation of current node.
             - policy_logits: the logit of the child nodes.
         */
         this->to_play = to_play;
-        this->latent_state_index_x = latent_state_index_x;
-        this->latent_state_index_y = latent_state_index_y;
+        this->current_latent_state_index = current_latent_state_index;
+        this->batch_index = batch_index;
         this->reward = reward;
         this->raw_value = value;
 
@@ -163,6 +173,10 @@ namespace tree{
             child->prior = prior * (1 - exploration_fraction) + noise * exploration_fraction;
         }
     }
+
+    //*********************************************************
+    // Gumbel Muzero related code
+    //*********************************************************
 
     std::vector<float> CNode::get_q(float discount_factor)
     {
@@ -287,14 +301,19 @@ namespace tree{
         }
         return distribution;
     }
+    
+    //*********************************************************
+    // Gumbel Muzero related code
+    //*********************************************************
 
     std::vector<float> CNode::get_children_value(float discount_factor, int action_space_size)
     {
         /*
         Overview:
-            Get the distribution of child nodes in the format of visit_count.
+            Get the completed value of child nodes.
         Outputs:
-            - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
+            - discount_factor: the discount_factor of reward.
+            - action_space_size: the size of action space.
         */
         float infymin = -std::numeric_limits<float>::infinity();
         std::vector<int> child_visit_count;
@@ -480,11 +499,15 @@ namespace tree{
         return distributions;
     }
 
+    //*********************************************************
+    // Gumbel Muzero related code
+    //*********************************************************
+
     std::vector<std::vector<float> > CRoots::get_children_values(float discount_factor, int action_space_size)
     {
         /*
         Overview:
-            Compute the improved policy of the current node.
+            Compute the completed value of each root.
         Arguments:
             - discount_factor: the discount_factor of reward.
             - action_space_size: the action space size of environment.
@@ -607,13 +630,13 @@ namespace tree{
         }
     }
 
-    void cbatch_back_propagate(int latent_state_index_x, float discount_factor, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &to_play_batch)
+    void cbatch_back_propagate(int current_latent_state_index, float discount_factor, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &to_play_batch)
     {
         /*
         Overview:
             Expand the nodes along the search path and update the infos.
         Arguments:
-            - latent_state_index_x: the index of hidden state vector.
+            - current_latent_state_index: The index of latent state of the leaf node in the search path.
             - discount_factor: the discount factor of reward.
             - value_prefixs: the value prefixs of nodes along the search path.
             - values: the values to propagate along the search path.
@@ -623,7 +646,7 @@ namespace tree{
             - to_play_batch: the batch of which player is playing on this node.
         */
         for(int i = 0; i < results.num; ++i){
-            results.nodes[i]->expand(to_play_batch[i], latent_state_index_x, i, value_prefixs[i], values[i], policies[i]);
+            results.nodes[i]->expand(to_play_batch[i], current_latent_state_index, i, value_prefixs[i], values[i], policies[i]);
             cback_propagate(results.search_paths[i], min_max_stats_lst->stats_lst[i], to_play_batch[i], values[i], discount_factor);
         }
     }
@@ -671,9 +694,9 @@ namespace tree{
         return action;
     }
 
-    /////////////////////////////
-    // gumbel muzero related code
-    /////////////////////////////
+    //*********************************************************
+    // Gumbel Muzero related code
+    //*********************************************************
 
     int cselect_root_child(CNode* root, float discount_factor, int num_simulations, int max_num_considered_actions)
     {
@@ -765,7 +788,6 @@ namespace tree{
         
         return max_action;
     }
-    //////////////////////////////
 
     float cucb_score(CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, float total_children_visit_counts, float pb_c_base, float pb_c_init, float discount_factor, int players)
     {
@@ -864,8 +886,8 @@ namespace tree{
 
             CNode* parent = results.search_paths[i][results.search_paths[i].size() - 2];
 
-            results.latent_state_index_x_lst.push_back(parent->latent_state_index_x);
-            results.latent_state_index_y_lst.push_back(parent->latent_state_index_y);
+            results.latent_state_index_in_search_path.push_back(parent->current_latent_state_index);
+            results.latent_state_index_in_batch.push_back(parent->batch_index);
 
             results.last_actions.push_back(last_action);
             results.search_lens.push_back(search_len);
@@ -875,9 +897,9 @@ namespace tree{
         }
     }
 
-    /////////////////////////////
-    // gumbel muzero related code
-    /////////////////////////////
+    //*********************************************************
+    // Gumbel Muzero related code
+    //*********************************************************
 
     void csoftmax(std::vector<float> &input, int input_len)
     {
@@ -892,7 +914,7 @@ namespace tree{
         assert (input_len != 0);
         int i;
         float m;
-        /* Find maximum value from input array */
+        // Find maximum value from input array
         m = input[0];
         for (i = 1; i < input_len; i++) {
             if (input[i] > m) {
@@ -921,7 +943,7 @@ namespace tree{
             - child_visit: the visit counts of the child nodes.
             - child_prior: the prior of the child nodes.
         Outputs:
-            -  mixed Q value.
+            - mixed Q value.
         */
         float visit_count_sum = 0.0;
         float probs_sum = 0.0;
@@ -1128,7 +1150,5 @@ namespace tree{
             gumbel.push_back(gumbel_scale * d(gen));
         return gumbel;
     }
-
-    /////////////////////////////
 
 }

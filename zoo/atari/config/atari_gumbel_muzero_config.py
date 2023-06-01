@@ -21,7 +21,7 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = None
+update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
@@ -31,7 +31,7 @@ reanalyze_ratio = 0.
 
 atari_gumbel_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}_gumbel_muzero_visit50_value01_add_mask_action6_upc_None_seed0',
+    f'data_mz_ctree/{env_name[:-14]}_gumbel_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -48,6 +48,8 @@ atari_gumbel_muzero_config = dict(
             action_space_size=action_space_size,
             downsample=True,
             self_supervised_learning_loss=True,  # default is False
+            discrete_action_encoding_type='one_hot',
+            norm_type='BN', 
         ),
         cuda=True,
         env_type='not_board_games',
@@ -83,8 +85,8 @@ atari_gumbel_muzero_create_config = dict(
         import_names=['lzero.policy.gumbel_muzero'],
     ),
     collector=dict(
-        type='gumbel_muzero',
-        import_names=['lzero.worker.gumbel_muzero_collector'],
+        type='episode_muzero',
+        import_names=['lzero.worker.muzero_collector'],
     )
 )
 atari_gumbel_muzero_create_config = EasyDict(atari_gumbel_muzero_create_config)

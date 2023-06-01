@@ -132,7 +132,7 @@ class GameSegment:
     ) -> None:
         """
         Overview:
-            append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
+            Append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}.
         """
         self.action_segment.append(action)
         self.obs_segment.append(obs)
@@ -156,12 +156,16 @@ class GameSegment:
             - next_segment_rewards (:obj:`list`): r_t from the next game_segment
             - next_segment_root_values (:obj:`list`): root values of MCTS from the next game_segment
             - next_segment_child_visits (:obj:`list`): root visit count distributions of MCTS from the next game_segment
+            - next_segment_improved_policy (:obj:`list`): root children select policy of MCTS from the next game_segment (Only used in Gumbel MuZero)
         """
         assert len(next_segment_observations) <= self.config.num_unroll_steps
         assert len(next_segment_child_visits) <= self.config.num_unroll_steps
         assert len(next_segment_root_values) <= self.config.num_unroll_steps + self.config.td_steps
         assert len(next_segment_rewards) <= self.config.num_unroll_steps + self.config.td_steps - 1
-        if next_segment_improved_policy is not None:
+        # ==============================================================
+        # The core difference between GumbelMuZero and MuZero
+        # ==============================================================
+        if self.config.gumbel_algo:
             assert len(next_segment_improved_policy) <= self.config.num_unroll_steps + self.config.td_steps
 
         # NOTE: next block observation should start from (stacked_observation - 1) in next trajectory
@@ -177,7 +181,7 @@ class GameSegment:
         for child_visits in next_segment_child_visits:
             self.child_visit_segment.append(child_visits)
         
-        if next_segment_improved_policy is not None:
+        if self.config.gumbel_algo:
             for improved_policy in next_segment_improved_policy:
                 self.improved_policy_probs.append(improved_policy)
 
