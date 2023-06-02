@@ -154,10 +154,10 @@ class EfficientZeroMCTSCtree(object):
                     latent_states, (hidden_states_c_reward, hidden_states_h_reward), last_actions
                 )
 
-                [network_output.latent_state] = to_detach_cpu_numpy([network_output.latent_state])
-                [network_output.policy_logits] = to_detach_cpu_numpy([network_output.policy_logits])
-                [network_output.value] = to_detach_cpu_numpy([self.inverse_scalar_transform_handle(network_output.value)])
-                [network_output.value_prefix] = to_detach_cpu_numpy([self.inverse_scalar_transform_handle(network_output.value_prefix)])
+                network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
+                network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
+                network_output.value = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value))
+                network_output.value_prefix = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value_prefix))
 
                 network_output.reward_hidden_state = (
                     network_output.reward_hidden_state[0].detach().cpu().numpy(),
@@ -316,10 +316,10 @@ class MuZeroMCTSCtree(object):
                 """
                 network_output = model.recurrent_inference(latent_states, last_actions)
 
-                [network_output.latent_state] = to_detach_cpu_numpy([network_output.latent_state])
-                [network_output.policy_logits] = to_detach_cpu_numpy([network_output.policy_logits])
-                [network_output.value] = to_detach_cpu_numpy([self.inverse_scalar_transform_handle(network_output.value)])
-                [network_output.reward] = to_detach_cpu_numpy([self.inverse_scalar_transform_handle(network_output.reward)])
+                network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
+                network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
+                network_output.value = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value))
+                network_output.reward = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.reward))
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
                 # tolist() is to be compatible with cpp datatype.
@@ -453,10 +453,10 @@ class GumbelMuZeroMCTSCtree(object):
                 """
                 network_output = model.recurrent_inference(latent_states, last_actions)
 
-                [network_output.latent_state] = to_detach_cpu_numpy([network_output.latent_state])
-                [network_output.policy_logits] = to_detach_cpu_numpy([network_output.policy_logits])
-                [network_output.value] = to_detach_cpu_numpy([self.inverse_scalar_transform_handle(network_output.value)])
-                [network_output.reward] = to_detach_cpu_numpy([self.inverse_scalar_transform_handle(network_output.reward)])
+                network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
+                network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
+                network_output.value = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value))
+                network_output.reward = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.reward))
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
                 # tolist() is to be compatible with cpp datatype.
