@@ -41,6 +41,7 @@ cartpole_sampled_efficientzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN', 
         ),
+        # policy_entropy_loss_weight=0.005,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,

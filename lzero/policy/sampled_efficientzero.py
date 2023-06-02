@@ -95,6 +95,8 @@ class SampledEfficientZeroPolicy(Policy):
         augmentation=['shift', 'intensity'],
 
         # ******* learn ******
+        # (int) Number of training episodes (randomly collected) in replay buffer when training starts.
+        random_collect_episode_num=0,
         # (int) How many updates(iterations) to train after collector's one collection.
         # Bigger "update_per_collect" means bigger off-policy.
         # collect data -> update policy-> collect data -> ...
@@ -357,19 +359,29 @@ class SampledEfficientZeroPolicy(Policy):
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
         policy_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+
+        policy_entropy = torch.zeros(1, device=self._cfg.device)
+        policy_entropy_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+        target_policy_entropy = torch.zeros(1, device=self._cfg.device)
+
+
         # ==============================================================
         # sampled related core code: calculate policy loss, typically cross_entropy_loss
         # ==============================================================
         if self._cfg.model.continuous_action_space:
             """continuous action space"""
-            policy_loss, policy_entropy, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont(
+            # NOTE: the policy_loss is cumulative, i.e. the sum of policy_loss at each unroll step.
+            policy_loss, policy_entropy_one_step, policy_entropy_loss_one_step, target_policy_entropy_one_step, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont(
                 policy_loss, policy_logits, target_policy, mask_batch, child_sampled_actions_batch, unroll_step=0
             )
         else:
             """discrete action space"""
-            policy_loss, policy_entropy, policy_entropy_loss, target_policy_entropy, target_sampled_actions = self._calculate_policy_loss_disc(
+            policy_loss, policy_entropy_one_step, policy_entropy_loss_one_step, target_policy_entropy_one_step, target_sampled_actions = self._calculate_policy_loss_disc(
                 policy_loss, policy_logits, target_policy, mask_batch, child_sampled_actions_batch, unroll_step=0
             )
+        policy_entropy += policy_entropy_one_step
+        policy_entropy_loss += policy_entropy_loss_one_step
+        target_policy_entropy += target_policy_entropy_one_step
 
         value_prefix_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
@@ -430,7 +442,7 @@ class SampledEfficientZeroPolicy(Policy):
             # ==============================================================
             if self._cfg.model.continuous_action_space:
                 """continuous action space"""
-                policy_loss, policy_entropy, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont(
+                policy_loss, policy_entropy_one_step, policy_entropy_loss_one_step, target_policy_entropy_one_step, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont(
                     policy_loss,
                     policy_logits,
                     target_policy,
@@ -440,7 +452,7 @@ class SampledEfficientZeroPolicy(Policy):
                 )
             else:
                 """discrete action space"""
-                policy_loss, policy_entropy, policy_entropy_loss, target_policy_entropy, target_sampled_actions = self._calculate_policy_loss_disc(
+                policy_loss, policy_entropy_one_step, policy_entropy_loss_one_step, target_policy_entropy_one_step, target_sampled_actions = self._calculate_policy_loss_disc(
                     policy_loss,
                     policy_logits,
                     target_policy,
@@ -448,6 +460,9 @@ class SampledEfficientZeroPolicy(Policy):
                     child_sampled_actions_batch,
                     unroll_step=step_i + 1
                 )
+            policy_entropy += policy_entropy_one_step
+            policy_entropy_loss += policy_entropy_loss_one_step
+            target_policy_entropy += target_policy_entropy_one_step
 
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
             value_prefix_loss += cross_entropy_loss(value_prefix, target_value_prefix_categorical[:, step_i])

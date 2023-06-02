@@ -15,12 +15,19 @@ update_per_collect = 200
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0
+random_collect_episode_num = 0
+init_temperature_value_for_decay = 1.0
+td_steps = 5
+
+eval_sample_action = False
+policy_entropy_loss_weight = 0.005
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 minigrid_muzero_config = dict(
-    exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_eval-sample-{eval_sample_action}_pelw{policy_entropy_loss_weight}_seed0',
     env=dict(
         env_name=env_name,
         continuous=False,
@@ -37,10 +44,24 @@ minigrid_muzero_config = dict(
             model_type='mlp', 
             lstm_hidden_size=256,
             latent_state_dim=256,
-            self_supervised_learning_loss=True,  # NOTE: default is False.
             discrete_action_encoding_type='one_hot',
-            norm_type='BN', 
+            norm_type='BN',
+            self_supervised_learning_loss=True,  # NOTE: default is False.
         ),
+        eval_sample_action=eval_sample_action,
+        policy_entropy_loss_weight=policy_entropy_loss_weight,
+
+        random_collect_episode_num=random_collect_episode_num,
+        td_steps=td_steps,
+        manual_temperature_decay=True,
+        # To make init policy be more random in sparse reward env.
+        init_temperature_value_for_decay=init_temperature_value_for_decay,
+        threshold_training_steps_for_final_temperature=int(5e4),
+        # TODO: test the effect
+        # use_max_priority_for_new_data=False,
+        # priority_prob_alpha=1,
+        use_max_priority_for_new_data=True,
+        priority_prob_alpha=0.6,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
@@ -49,7 +70,6 @@ minigrid_muzero_config = dict(
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        manual_temperature_decay=True,
         ssl_loss_weight=2,  # NOTE: default is 0.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

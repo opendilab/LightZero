@@ -17,11 +17,12 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+seed = 0
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 1000
+update_per_collect = 2000
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
@@ -30,8 +31,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=
-    f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_adamw3e-3_sslw2_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -49,7 +49,7 @@ atari_muzero_config = dict(
             downsample=True,
             self_supervised_learning_loss=True,  # default is False
             discrete_action_encoding_type='one_hot',
-            norm_type='BN', 
+            norm_type='BN',
         ),
         cuda=True,
         env_type='not_board_games',
@@ -57,12 +57,19 @@ atari_muzero_config = dict(
         use_augmentation=True,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,
+
+        # optim_type='SGD',
+        # lr_piecewise_constant_decay=True,
+        # learning_rate=0.2,
+
+        optim_type='AdamW',
+        lr_piecewise_constant_decay=False,
+        learning_rate=0.003,
+        grad_clip_value=0.5,
+        ssl_loss_weight=2,  # default is 0
+
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
@@ -93,4 +100,4 @@ create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)

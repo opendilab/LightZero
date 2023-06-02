@@ -361,44 +361,31 @@ class DynamicsNetwork(nn.Module):
         self.latent_state_dim = self.num_channels - self.action_encoding_dim
 
         self.res_connection_in_dynamics = res_connection_in_dynamics
-        if self.res_connection_in_dynamics:
-            self.fc_dynamics_1 = MLP(
-                in_channels=self.num_channels,
-                hidden_channels=self.latent_state_dim,
-                layer_num=common_layer_num,
-                out_channels=self.latent_state_dim,
-                activation=activation,
-                norm_type=norm_type,
-                output_activation=True,
-                output_norm=True,
-                # last_linear_layer_init_zero=False is important for convergence
-                last_linear_layer_init_zero=False,
-            )
-            self.fc_dynamics_2 = MLP(
-                in_channels=self.latent_state_dim,
-                hidden_channels=self.latent_state_dim,
-                layer_num=common_layer_num,
-                out_channels=self.latent_state_dim,
-                activation=activation,
-                norm_type=norm_type,
-                output_activation=True,
-                output_norm=True,
-                # last_linear_layer_init_zero=False is important for convergence
-                last_linear_layer_init_zero=False,
-            )
-        else:
-            self.fc_dynamics = MLP(
-                in_channels=self.num_channels,
-                hidden_channels=self.latent_state_dim,
-                layer_num=common_layer_num,
-                out_channels=self.latent_state_dim,
-                activation=activation,
-                norm_type=norm_type,
-                output_activation=True,
-                output_norm=True,
-                # last_linear_layer_init_zero=False is important for convergence
-                last_linear_layer_init_zero=False,
-            )
+
+        self.fc_dynamics_1 = MLP(
+            in_channels=self.num_channels,
+            hidden_channels=self.latent_state_dim,
+            layer_num=common_layer_num,
+            out_channels=self.latent_state_dim,
+            activation=activation,
+            norm_type=norm_type,
+            output_activation=True,
+            output_norm=True,
+            # last_linear_layer_init_zero=False is important for convergence
+            last_linear_layer_init_zero=False,
+        )
+        self.fc_dynamics_2 = MLP(
+            in_channels=self.latent_state_dim,
+            hidden_channels=self.latent_state_dim,
+            layer_num=common_layer_num,
+            out_channels=self.latent_state_dim,
+            activation=activation,
+            norm_type=norm_type,
+            output_activation=True,
+            output_norm=True,
+            # last_linear_layer_init_zero=False is important for convergence
+            last_linear_layer_init_zero=False,
+        )
 
         self.fc_reward_head = MLP(
             in_channels=self.latent_state_dim,
@@ -432,8 +419,8 @@ class DynamicsNetwork(nn.Module):
             next_latent_state = x + latent_state
             next_latent_state_encoding = self.fc_dynamics_2(next_latent_state)
         else:
-            next_latent_state = self.fc_dynamics(state_action_encoding)
-            next_latent_state_encoding = next_latent_state
+            next_latent_state = self.fc_dynamics_1(state_action_encoding)
+            next_latent_state_encoding = self.fc_dynamics_2(next_latent_state)
 
         reward = self.fc_reward_head(next_latent_state_encoding)
 

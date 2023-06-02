@@ -37,6 +37,7 @@ minigrid_efficientzero_config = dict(
     exp_name=
     f'data_ez_ctree/{env_name}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_mtd_itd-{init_temperature_value_for_decay}_td-{td_steps}_rces-{random_collect_episode_num}_seed0',
     env=dict(
+        stop_value=int(1e6),
         env_name=env_name,
         continuous=False,
         manually_discretization=False,
@@ -53,7 +54,8 @@ minigrid_efficientzero_config = dict(
             lstm_hidden_size=256,
             latent_state_dim=256,
             discrete_action_encoding_type='one_hot',
-            norm_type='BN', 
+            norm_type='BN',
+            self_supervised_learning_loss=True,  # NOTE: default is False.
         ),
         random_collect_episode_num=random_collect_episode_num,
         td_steps=td_steps,
@@ -72,6 +74,7 @@ minigrid_efficientzero_config = dict(
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
+        ssl_loss_weight=2,  # NOTE: default is 0.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

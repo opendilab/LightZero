@@ -8,6 +8,7 @@ from ding.model import model_wrap
 from ding.policy.base_policy import Policy
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
+from torch.distributions import Categorical
 from torch.nn import L1Loss
 
 from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
@@ -89,6 +90,10 @@ class MuZeroPolicy(Policy):
         augmentation=['shift', 'intensity'],
 
         # ******* learn ******
+        # (int) Number of training episodes (randomly collected) in replay buffer when training starts.
+        random_collect_episode_num=0,
+        # (bool) Whether to use sampling action in eval phase.
+        eval_sample_action=False,
         # (int) How many updates(iterations) to train after collector's one collection.
         # Bigger "update_per_collect" means bigger off-policy.
         # collect data -> update policy-> collect data -> ...
@@ -128,6 +133,8 @@ class MuZeroPolicy(Policy):
         value_loss_weight=0.25,
         # (float) The weight of policy loss.
         policy_loss_weight=1,
+        # (float) The weight of policy entropy loss.
+        policy_entropy_loss_weight=0,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
@@ -319,6 +326,10 @@ class MuZeroPolicy(Policy):
         policy_loss = cross_entropy_loss(policy_logits, target_policy[:, 0])
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
+        prob = torch.softmax(policy_logits, dim=-1)
+        dist = Categorical(prob)
+        policy_entropy_loss = -dist.entropy()
+
         reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
 
@@ -372,6 +383,10 @@ class MuZeroPolicy(Policy):
             # ==============================================================
             policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
 
+            prob = torch.softmax(policy_logits, dim=-1)
+            dist = Categorical(prob)
+            policy_entropy_loss += -dist.entropy()
+
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_i])
 
@@ -395,7 +410,8 @@ class MuZeroPolicy(Policy):
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
             self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
+            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss +
+            self._cfg.policy_entropy_loss_weight * policy_entropy_loss
         )
         weighted_total_loss = (weights * loss).mean()
 
@@ -445,6 +461,9 @@ class MuZeroPolicy(Policy):
             'weighted_total_loss': loss_info[0],
             'total_loss': loss_info[1],
             'policy_loss': loss_info[2],
+
+            'policy_entropy': - policy_entropy_loss.item() / (self._cfg.num_unroll_steps + 1),
+
             'reward_loss': loss_info[3],
             'value_loss': loss_info[4],
             'consistency_loss': loss_info[5] / self._cfg.num_unroll_steps,
@@ -639,9 +658,14 @@ class MuZeroPolicy(Policy):
                 # the index within the legal action set, rather than the index in the entire action set.
                 #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than
                 # sampling during the evaluation phase.
-                action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=1, deterministic=True
-                )
+                if self._cfg.eval_sample_action:
+                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=0.25, deterministic=False
+                    )
+                else:
+                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=1, deterministic=True
+                    )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]

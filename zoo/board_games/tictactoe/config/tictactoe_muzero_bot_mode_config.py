@@ -17,8 +17,9 @@ reanalyze_ratio = 0.
 
 tictactoe_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_adamw3e-3_sslw0_seed0',
     env=dict(
+        stop_value=2,
         battle_mode='play_with_bot_mode',
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -39,17 +40,19 @@ tictactoe_muzero_config = dict(
             support_scale=10,
             reward_support_size=21,
             value_support_size=21,
-            norm_type='BN', 
+            norm_type='BN',
+            # self_supervised_learning_loss=True,
         ),
         cuda=True,
         env_type='board_games',
         game_segment_length=5,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
+        optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         grad_clip_value=0.5,
+        # ssl_loss_weight=2,  # NOTE: default is 0.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.

@@ -33,13 +33,15 @@ batch_size = 256
 # batch_size = 1024
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
+policy_entropy_loss_weight = 0.005
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 mujoco_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_adamw3e-3_seed0',
+    f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_pelw{policy_entropy_loss_weight}_seed0',
     env=dict(
         env_name=env_name,
         continuous=True,
@@ -55,7 +57,6 @@ mujoco_sampled_efficientzero_config = dict(
             action_space_size=action_space_size,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            # sigma_type='fixed',
             model_type='mlp',
             lstm_hidden_size=256,
             latent_state_dim=256,
@@ -63,7 +64,9 @@ mujoco_sampled_efficientzero_config = dict(
             res_connection_in_dynamics=True,
             norm_type='BN',
         ),
-        random_collect_episode_num=0,
+        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
+        policy_entropy_loss_weight=policy_entropy_loss_weight,
+
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
@@ -76,7 +79,7 @@ mujoco_sampled_efficientzero_config = dict(
         learning_rate=0.003,
 
         # sampled muzero paper config
-        cos_lr_scheduler=True,
+        # cos_lr_scheduler=True,
         # optim_type='AdamW',
         # lr_piecewise_constant_decay=False,
         # learning_rate=0.0001,
@@ -84,8 +87,7 @@ mujoco_sampled_efficientzero_config = dict(
 
         # manual_temperature_decay=True,
         # grad_clip_value=10,
-        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
-        policy_entropy_loss_weight=5e-3,
+
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
