@@ -61,7 +61,6 @@ class GoBiggerLightZeroEnv(BaseEnv):
         action = {k: self.transform_action(v) if np.isscalar(v) else v for k, v in action.items()}
         raw_obs, raw_rew, done, info = self._env.step(action)
         # print('current_frame={}'.format(raw_obs[0]['last_time']))
-        # print('raw_rew={}'.format(raw_rew))
         # print('action={}'.format(action))
         # print('raw_rew={}, done={}'.format(raw_rew, done))
         rew = self.transform_reward(raw_obs)
@@ -346,16 +345,7 @@ class GoBiggerLightZeroEnv(BaseEnv):
                                                             last_action_type=last_action_type)
             game_player_obs['action_mask'] = action_mask
             env_player_obs.append(game_player_obs)
-        # env_player_obs = default_collate_with_dim(env_player_obs)
         return env_player_obs
-
-    # def collate_obs(self, env_player_obs):
-    #     processed_obs_list = []
-    #     for env_id, env_obs in env_player_obs.items():
-    #         for game_player_id, game_player_obs in env_obs.items():
-    #             processed_obs_list.append(game_player_obs)
-    #     obs_batch = default_collate_with_dim(processed_obs_list, device=self.device)
-    #     return obs_batch
 
     def preprocess_obs(self, obs_list, env_status=None, eval_vsbot=False):
         env_player_obs = self._preprocess_obs(obs_list, env_status, eval_vsbot)
@@ -493,15 +483,3 @@ if __name__ == '__main__':
         obs, rew, done, info = env.step(actions)
         if done:
             break
-
-    # from ding.envs import create_env_manager
-    # from functools import partial
-    # env_manager=EasyDict({'episode_num': float('inf'), 'max_retry': 1, 'retry_type': 'reset', 'auto_reset': True, 
-    #              'step_timeout': None, 'reset_timeout': None, 'retry_waiting_time': 0.1, 'cfg_type': 'BaseEnvManagerDict', 
-    #              'type': 'base', 'shared_memory': False})
-
-    # collector_env = create_env_manager(env_manager, [partial(GoBiggerLightZeroEnv, cfg=c) for c in [env_cfg]])
-    # collector_env.launch()
-    # print(collector_env._env_num)
-    # for i in range(500):
-    #     timestep = collector_env.step({0:[0,0,0,0]})
