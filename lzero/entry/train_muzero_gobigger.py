@@ -42,13 +42,15 @@ def train_muzero_gobigger(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['gobigger_efficientzero', 'gobigger_muzero'], \
-        "train_muzero entry now only support the following algo.: 'gobigger_efficientzero', 'gobigger_muzero'"
+    assert create_cfg.policy.type in ['gobigger_efficientzero', 'gobigger_muzero', 'gobigger_sampled_efficientzero'], \
+        "train_muzero entry now only support the following algo.: 'gobigger_efficientzero', 'gobigger_muzero', 'gobigger_sampled_efficientzero'"
 
     if create_cfg.policy.type == 'gobigger_efficientzero':
         from lzero.mcts import GoBiggerEfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'gobigger_muzero':
         from lzero.mcts import GoBiggerMuZeroGameBuffer as GameBuffer
+    elif create_cfg.policy.type == 'gobigger_sampled_efficientzero':
+        from lzero.mcts import GoBiggerSampledEfficientZeroGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
