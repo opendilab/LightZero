@@ -475,7 +475,7 @@ class MuZeroCollector(ISerialCollector):
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
                         if self.policy_config.gumbel_algo:
-                                improved_policy_lst[env_id].append(improved_policy_dict[env_id])
+                            improved_policy_lst[env_id].append(improved_policy_dict[env_id])
 
                     # append the newest obs
                     observation_window_stack[env_id].append(to_ndarray(obs['observation']))
@@ -520,21 +520,14 @@ class MuZeroCollector(ISerialCollector):
                 if timestep.done:
                     self._total_episode_count += 1
                     reward = timestep.info['eval_episode_return']
+                    info = {
+                        'reward': reward,
+                        'time': self._env_info[env_id]['time'],
+                        'step': self._env_info[env_id]['step'],
+                        'visit_entropy': visit_entropies_lst[env_id] / eps_steps_lst[env_id],
+                    }
                     if self.policy_config.gumbel_algo:
-                        info = {
-                            'reward': reward,
-                            'time': self._env_info[env_id]['time'],
-                            'step': self._env_info[env_id]['step'],
-                            'visit_entropy': visit_entropies_lst[env_id] / eps_steps_lst[env_id],
-                            'completed_value': completed_value_lst[env_id] / eps_steps_lst[env_id]
-                        }
-                    else:
-                        info = {
-                            'reward': reward,
-                            'time': self._env_info[env_id]['time'],
-                            'step': self._env_info[env_id]['step'],
-                            'visit_entropy': visit_entropies_lst[env_id] / eps_steps_lst[env_id],
-                        }
+                        info['completed_value'] = completed_value_lst[env_id] / eps_steps_lst[env_id]
                     collected_episode += 1
                     self._episode_info.append(info)
 
@@ -657,43 +650,25 @@ class MuZeroCollector(ISerialCollector):
             if self.policy_config.gumbel_algo:
                 completed_value = [d['completed_value'] for d in self._episode_info]
             self._total_duration += duration
+            info = {
+                'episode_count': episode_count,
+                'envstep_count': envstep_count,
+                'avg_envstep_per_episode': envstep_count / episode_count,
+                'avg_envstep_per_sec': envstep_count / duration,
+                'avg_episode_per_sec': episode_count / duration,
+                'collect_time': duration,
+                'reward_mean': np.mean(episode_reward),
+                'reward_std': np.std(episode_reward),
+                'reward_max': np.max(episode_reward),
+                'reward_min': np.min(episode_reward),
+                'total_envstep_count': self._total_envstep_count,
+                'total_episode_count': self._total_episode_count,
+                'total_duration': self._total_duration,
+                'visit_entropy': np.mean(visit_entropy),
+                # 'each_reward': episode_reward,
+            }
             if self.policy_config.gumbel_algo:
-                info = {
-                    'episode_count': episode_count,
-                    'envstep_count': envstep_count,
-                    'avg_envstep_per_episode': envstep_count / episode_count,
-                    'avg_envstep_per_sec': envstep_count / duration,
-                    'avg_episode_per_sec': episode_count / duration,
-                    'collect_time': duration,
-                    'reward_mean': np.mean(episode_reward),
-                    'reward_std': np.std(episode_reward),
-                    'reward_max': np.max(episode_reward),
-                    'reward_min': np.min(episode_reward),
-                    'total_envstep_count': self._total_envstep_count,
-                    'total_episode_count': self._total_episode_count,
-                    'total_duration': self._total_duration,
-                    'visit_entropy': np.mean(visit_entropy),
-                    'completed_value': np.mean(completed_value)
-                    # 'each_reward': episode_reward,
-                }
-            else:
-                info = {
-                    'episode_count': episode_count,
-                    'envstep_count': envstep_count,
-                    'avg_envstep_per_episode': envstep_count / episode_count,
-                    'avg_envstep_per_sec': envstep_count / duration,
-                    'avg_episode_per_sec': episode_count / duration,
-                    'collect_time': duration,
-                    'reward_mean': np.mean(episode_reward),
-                    'reward_std': np.std(episode_reward),
-                    'reward_max': np.max(episode_reward),
-                    'reward_min': np.min(episode_reward),
-                    'total_envstep_count': self._total_envstep_count,
-                    'total_episode_count': self._total_episode_count,
-                    'total_duration': self._total_duration,
-                    'visit_entropy': np.mean(visit_entropy),
-                    # 'each_reward': episode_reward,
-                }
+                info['completed_value'] = np.mean(completed_value)
             self._episode_info.clear()
             self._logger.info("collect end:\n{}".format('\n'.join(['{}: {}'.format(k, v) for k, v in info.items()])))
             for k, v in info.items():

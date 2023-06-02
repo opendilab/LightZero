@@ -268,8 +268,8 @@ class MuZeroPolicy(Policy):
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
         data_list = [
             mask_batch,
-            target_reward.astype('float64'),
-            target_value.astype('float64'), target_policy, weights
+            target_reward.astype('float32'),
+            target_value.astype('float32'), target_policy, weights
         ]
         [mask_batch, target_reward, target_value, target_policy,
          weights] = to_torch_float_tensor(data_list, self._cfg.device)
@@ -415,51 +415,31 @@ class MuZeroPolicy(Policy):
         # ==============================================================
         self._target_model.update(self._learn_model.state_dict())
 
-        # packing loss info for tensorboard logging
-        loss_info = (
-            weighted_total_loss.item(), loss.mean().item(), policy_loss.mean().item(), reward_loss.mean().item(),
-            value_loss.mean().item(), consistency_loss.mean()
-        )
         if self._cfg.monitor_extra_statistics:
             predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
             predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
 
-            td_data = (
-                value_priority,
-                target_reward.detach().cpu().numpy(),
-                target_value.detach().cpu().numpy(),
-                transformed_target_reward.detach().cpu().numpy(),
-                transformed_target_value.detach().cpu().numpy(),
-                target_reward_categorical.detach().cpu().numpy(),
-                target_value_categorical.detach().cpu().numpy(),
-                predicted_rewards.detach().cpu().numpy(),
-                predicted_values.detach().cpu().numpy(),
-                target_policy.detach().cpu().numpy(),
-                predicted_policies.detach().cpu().numpy(),
-                latent_state_list,
-            )
-
         return {
             'collect_mcts_temperature': self.collect_mcts_temperature,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
-            'weighted_total_loss': loss_info[0],
-            'total_loss': loss_info[1],
-            'policy_loss': loss_info[2],
-            'reward_loss': loss_info[3],
-            'value_loss': loss_info[4],
-            'consistency_loss': loss_info[5] / self._cfg.num_unroll_steps,
+            'weighted_total_loss': weighted_total_loss.item(),
+            'total_loss': loss.mean().item(),
+            'policy_loss': policy_loss.mean().item(),
+            'reward_loss': reward_loss.mean().item(),
+            'value_loss': value_loss.mean().item(),
+            'consistency_loss': consistency_loss.mean() / self._cfg.num_unroll_steps,
 
             # ==============================================================
             # priority related
             # ==============================================================
             'value_priority_orig': value_priority,
-            'value_priority': td_data[0].flatten().mean().item(),
-            'target_reward': td_data[1].flatten().mean().item(),
-            'target_value': td_data[2].flatten().mean().item(),
-            'transformed_target_reward': td_data[3].flatten().mean().item(),
-            'transformed_target_value': td_data[4].flatten().mean().item(),
-            'predicted_rewards': td_data[7].flatten().mean().item(),
-            'predicted_values': td_data[8].flatten().mean().item(),
+            'value_priority': value_priority.mean().item(),
+            'target_reward': target_reward.detach().cpu().numpy().mean().item(),
+            'target_value': target_value.detach().cpu().numpy().mean().item(),
+            'transformed_target_reward': transformed_target_reward.detach().cpu().numpy().mean().item(),
+            'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
+            'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
+            'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
             'total_grad_norm_before_clip': total_grad_norm_before_clip
         }
 
@@ -514,11 +494,9 @@ class MuZeroPolicy(Policy):
             network_output = self._collect_model.initial_inference(data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            if not self._learn_model.training:
-                # if not in training, obtain the scalars of the value/reward
-                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
-                latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                policy_logits = policy_logits.detach().cpu().numpy().tolist()
+            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
+            latent_state_roots = latent_state_roots.detach().cpu().numpy()
+            policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
             # the only difference between collect and eval is the dirichlet noise

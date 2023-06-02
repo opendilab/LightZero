@@ -6,7 +6,7 @@ from easydict import EasyDict
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-num_simulations = 5
+num_simulations = 50
 update_per_collect = 200
 batch_size = 256
 max_env_step = int(5e6)

@@ -81,7 +81,7 @@ class EfficientZeroMCTSCtree(object):
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
-             Use the cpp ctree.
+            Use the cpp ctree.
         Arguments:
             - roots (:obj:`Any`): a batch of expanded root nodes
             - latent_state_roots (:obj:`list`): the hidden states of the roots
@@ -153,23 +153,16 @@ class EfficientZeroMCTSCtree(object):
                 network_output = model.recurrent_inference(
                     latent_states, (hidden_states_c_reward, hidden_states_h_reward), last_actions
                 )
-                if not model.training:
-                    # if not in training, obtain the scalars of the value/value_prefix
-                    [
-                        network_output.latent_state, network_output.policy_logits, network_output.value,
-                        network_output.value_prefix
-                    ] = to_detach_cpu_numpy(
-                        [
-                            network_output.latent_state,
-                            network_output.policy_logits,
-                            self.inverse_scalar_transform_handle(network_output.value),
-                            self.inverse_scalar_transform_handle(network_output.value_prefix),
-                        ]
-                    )
-                    network_output.reward_hidden_state = (
-                        network_output.reward_hidden_state[0].detach().cpu().numpy(),
-                        network_output.reward_hidden_state[1].detach().cpu().numpy()
-                    )
+
+                [network_output.latent_state] = to_detach_cpu_numpy([network_output.latent_state])
+                [network_output.policy_logits] = to_detach_cpu_numpy([network_output.policy_logits])
+                [network_output.value] = to_detach_cpu_numpy([self.inverse_scalar_transform_handle(network_output.value)])
+                [network_output.value_prefix] = to_detach_cpu_numpy([self.inverse_scalar_transform_handle(network_output.value_prefix)])
+
+                network_output.reward_hidden_state = (
+                    network_output.reward_hidden_state[0].detach().cpu().numpy(),
+                    network_output.reward_hidden_state[1].detach().cpu().numpy()
+                )
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
                 # tolist() is to be compatible with cpp datatype.
@@ -267,7 +260,7 @@ class MuZeroMCTSCtree(object):
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
-             Use the cpp ctree.
+            Use the cpp ctree.
         Arguments:
             - roots (:obj:`Any`): a batch of expanded root nodes
             - latent_state_roots (:obj:`list`): the hidden states of the roots
@@ -323,17 +316,10 @@ class MuZeroMCTSCtree(object):
                 """
                 network_output = model.recurrent_inference(latent_states, last_actions)
 
-                [
-                    network_output.latent_state, network_output.policy_logits, network_output.value,
-                    network_output.reward
-                ] = to_detach_cpu_numpy(
-                    [
-                        network_output.latent_state,
-                        network_output.policy_logits,
-                        self.inverse_scalar_transform_handle(network_output.value),
-                        self.inverse_scalar_transform_handle(network_output.reward),
-                    ]
-                )
+                [network_output.latent_state] = to_detach_cpu_numpy([network_output.latent_state])
+                [network_output.policy_logits] = to_detach_cpu_numpy([network_output.policy_logits])
+                [network_output.value] = to_detach_cpu_numpy([self.inverse_scalar_transform_handle(network_output.value)])
+                [network_output.reward] = to_detach_cpu_numpy([self.inverse_scalar_transform_handle(network_output.reward)])
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
                 # tolist() is to be compatible with cpp datatype.
@@ -409,7 +395,7 @@ class GumbelMuZeroMCTSCtree(object):
         """
         Overview:
             Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
-             Use the cpp tree.
+            Use the cpp tree.
         Arguments:
             - roots (:obj:`Any`): a batch of expanded root nodes
             - latent_state_roots (:obj:`list`): the hidden states of the roots
@@ -467,17 +453,10 @@ class GumbelMuZeroMCTSCtree(object):
                 """
                 network_output = model.recurrent_inference(latent_states, last_actions)
 
-                [
-                    network_output.latent_state, network_output.policy_logits, network_output.value,
-                    network_output.reward
-                ] = to_detach_cpu_numpy(
-                    [
-                        network_output.latent_state,
-                        network_output.policy_logits,
-                        self.inverse_scalar_transform_handle(network_output.value),
-                        self.inverse_scalar_transform_handle(network_output.reward),
-                    ]
-                )
+                [network_output.latent_state] = to_detach_cpu_numpy([network_output.latent_state])
+                [network_output.policy_logits] = to_detach_cpu_numpy([network_output.policy_logits])
+                [network_output.value] = to_detach_cpu_numpy([self.inverse_scalar_transform_handle(network_output.value)])
+                [network_output.reward] = to_detach_cpu_numpy([self.inverse_scalar_transform_handle(network_output.reward)])
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
                 # tolist() is to be compatible with cpp datatype.
