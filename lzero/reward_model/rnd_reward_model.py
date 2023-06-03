@@ -65,10 +65,10 @@ class RndRewardModel(BaseRewardModel):
            | ``_size_list``      (int)    128]         |                                        |
         6  | ``update_per_``     int      100          | Number of updates per collect          |
            | ``collect``                               |                                        |
-        7  | ``latent_state_norm``        bool     True         | Observation normalization              |
-        8  | ``latent_state_norm_``       int      0            | min clip value for obs normalization   |
+        7  | ``input_norm``        bool     True         | Observation normalization              |
+        8  | ``input_norm_``       int      0            | min clip value for obs normalization   |
            | ``clamp_min``
-        9  | ``latent_state_norm_``       int      1            | max clip value for obs normalization   |
+        9  | ``input_norm_``       int      1            | max clip value for obs normalization   |
            | ``clamp_max``
         10 | ``intrinsic_``      float    0.01         | the weight of intrinsic reward         | r = w*r_i + r_e
              ``reward_weight``
@@ -96,11 +96,11 @@ class RndRewardModel(BaseRewardModel):
         # collect data -> update policy-> collect data -> ...
         update_per_collect=100,
         # (bool) Observation normalization: transform obs to mean 0, std 1.
-        latent_state_norm=True,
+        input_norm=True,
         # (int) Min clip value for observation normalization.
-        latent_state_norm_clamp_min=-1,
+        input_norm_clamp_min=-1,
         # (int) Max clip value for observation normalization.
-        latent_state_norm_clamp_max=1,
+        input_norm_clamp_max=1,
         # Means the relative weight of RND intrinsic_reward.
         # (float) The weight of intrinsic reward
         # r = intrinsic_reward_weight * r_i + r_e.
@@ -116,20 +116,27 @@ class RndRewardModel(BaseRewardModel):
                  representation_network: nn.Module = None) -> None:  # noqa
         super(RndRewardModel, self).__init__()
         self.cfg = config
-        self.device = device
         self.representation_network = representation_network
+        self.input_type = self.cfg.input_type
+        assert self.input_type in ['obs', 'latent_state'], self.input_type
+        self.device = device
+        assert self.device == "cpu" or self.device.startswith("cuda")
         self.rnd_buffer_size = config.rnd_buffer_size
-        assert device == "cpu" or device.startswith("cuda")
-        if tb_logger is None:  # TODO
+        self.intrinsic_reward_type = self.cfg.intrinsic_reward_type
+        if tb_logger is None:
             from tensorboardX import SummaryWriter
             tb_logger = SummaryWriter('rnd_reward_model')
         self.tb_logger = tb_logger
-        # self.reward_model = RndNetwork(config.obs_shape, config.hidden_size_list)
-        self.reward_model = RndNetwork(self.cfg.latent_state_dim, self.cfg.hidden_size_list).to(self.device)
-        self.intrinsic_reward_type = self.cfg.intrinsic_reward_type
+        if self.input_type == 'obs':
+            self.input_shape = self.cfg.obs_shape
+        elif self.input_type == 'latent_state':
+            self.input_shape = self.cfg.latent_state_dim
+        self.reward_model = RndNetwork(self.input_shape, self.cfg.hidden_size_list).to(self.device)
         assert self.intrinsic_reward_type in ['add', 'new', 'assign']
-        # self.train_obs = []
-        self.train_latent_state = []
+        if self.input_type == 'obs':
+            self.train_obs = []
+        if self.input_type == 'latent_state':
+            self.train_latent_state = []
 
         self._optimizer_rnd = configure_optimizers(
             model=self.reward_model.predictor,
@@ -142,32 +149,39 @@ class RndRewardModel(BaseRewardModel):
         self.train_cnt_rnd = 0
         self._running_mean_std_rnd_obs = RunningMeanStd(epsilon=1e-4)
 
-    def _train(self) -> None:
-        # train_data = random.sample(self.train_obs, self.cfg.batch_size)
-        if len(self.train_latent_state) > self.cfg.batch_size:
+    def _train_with_data_one_step(self) -> None:
+        if self.input_type == 'obs':
+            train_data = random.sample(self.train_obs, self.cfg.batch_size)
+        elif self.input_type == 'latent_state':
             train_data = random.sample(self.train_latent_state, self.cfg.batch_size)
-        else:
-            train_data = self.train_latent_state
-
         train_data = torch.stack(train_data).to(self.device)
-        if self.cfg.latent_state_norm:
+
+        if self.cfg.input_norm:
             # Note: observation normalization: transform obs to mean 0, std 1
             self._running_mean_std_rnd_obs.update(train_data.detach().cpu().numpy())
-            train_data = (train_data - to_tensor(self._running_mean_std_rnd_obs.mean).to(self.device)) / to_tensor(
+            normalized_train_data = (train_data - to_tensor(self._running_mean_std_rnd_obs.mean).to(
+                self.device)) / to_tensor(
                 self._running_mean_std_rnd_obs.std
             ).to(self.device)
-            train_data = torch.clamp(train_data, min=self.cfg.latent_state_norm_clamp_min, max=self.cfg.latent_state_norm_clamp_max)
+            train_data = torch.clamp(normalized_train_data, min=self.cfg.input_norm_clamp_min,
+                                                max=self.cfg.input_norm_clamp_max)
 
         predict_feature, target_feature = self.reward_model(train_data)
-        loss = F.mse_loss(predict_feature, target_feature.detach())
-        self.tb_logger.add_scalar('rnd_reward/loss', loss, self.train_cnt_rnd)
+        loss = F.mse_loss(predict_feature, target_feature)
+
+        self.tb_logger.add_scalar('rnd_reward_model/rnd_mse_loss', loss, self.train_cnt_rnd)
         self._optimizer_rnd.zero_grad()
-        loss.backward(retain_graph=True)
+        loss.backward()
         self._optimizer_rnd.step()
 
-    def train(self) -> None:
+    def train_with_data(self) -> None:
         for _ in range(self.cfg.update_per_collect):
-            self._train()
+            # for name, param in self.reward_model.named_parameters():
+            #     if param.grad is not None:
+            #         print(f"{name}: {torch.isnan(param.grad).any()}, {torch.isinf(param.grad).any()}")
+            #         print(f"{name}: grad min: {param.grad.min()}, grad max: {param.grad.max()}")
+            # torch.autograd.set_detect_anomaly(True)  # 添加这行以启用异常检测
+            self._train_with_data_one_step()
             self.train_cnt_rnd += 1
 
     def estimate(self, data: list) -> List[Dict]:
@@ -175,18 +189,22 @@ class RndRewardModel(BaseRewardModel):
         Rewrite the reward key in each row of the data.
         """
         # current_batch, target_batch = data
-        # obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
+        # obs_batch_orig, action_batch, mask_batch, indices, weights, make_time = current_batch
         # target_reward, target_value, target_policy = target_batch
-        obs_batch_ori = data[0][0]
+        obs_batch_orig = data[0][0]
         target_reward = data[1][0]
-        batch_size = obs_batch_ori.shape[0]
+        batch_size = obs_batch_orig.shape[0]
         # 重塑数组为 (4, 2835, 6)
-        obs_batch_tmp = np.reshape(obs_batch_ori, (batch_size, self.cfg.obs_shape, 6))
+        obs_batch_tmp = np.reshape(obs_batch_orig, (batch_size, self.cfg.obs_shape, 6))
         # 重塑数组为 (24, 2835)
         obs_batch_tmp = np.reshape(obs_batch_tmp, (batch_size*6, self.cfg.obs_shape))
 
-        latent_state = self.representation_network(torch.from_numpy(obs_batch_tmp).to(self.device))
-        obs = latent_state
+        if self.input_type == 'latent_state':
+            with torch.no_grad():
+                latent_state = self.representation_network(torch.from_numpy(obs_batch_tmp).to(self.device))
+            input_data = latent_state
+        elif self.input_type == 'obs':
+            input_data = to_tensor(obs_batch_tmp).to(self.device)
 
         # NOTE: deepcopy reward part of data is very important,
         # otherwise the reward of data in the replay buffer will be incorrectly modified.
@@ -194,26 +212,28 @@ class RndRewardModel(BaseRewardModel):
         # 重塑数组为 (4*6, 1)
         target_reward_augmented = np.reshape(target_reward_augmented, (batch_size*6, 1))
 
-        if self.cfg.latent_state_norm:
+        if self.cfg.input_norm:
+            input_data = input_data.clone()  # 添加这一行，以创建一个新的张量，以避免在原始张量上进行原地操作。
             # Note: observation normalization: transform obs to mean 0, std 1
-            obs = (obs - to_tensor(self._running_mean_std_rnd_obs.mean
+            input_data = (input_data - to_tensor(self._running_mean_std_rnd_obs.mean
                                    ).to(self.device)) / to_tensor(self._running_mean_std_rnd_obs.std).to(self.device)
-            obs = torch.clamp(obs, min=self.cfg.latent_state_norm_clamp_min, max=self.cfg.latent_state_norm_clamp_max)
-
+            input_data = torch.clamp(input_data, min=self.cfg.input_norm_clamp_min, max=self.cfg.input_norm_clamp_max)
+        else:
+            input_data = input_data
         with torch.no_grad():
-            predict_feature, target_feature = self.reward_model(obs)
+            predict_feature, target_feature = self.reward_model(input_data)
             mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=1)
-            self._running_mean_std_rnd_reward.update(mse.cpu().numpy())
+            self._running_mean_std_rnd_reward.update(mse.detach().cpu().numpy())
 
             # Note: according to the min-max normalization, transform rnd reward to [0,1]
             rnd_reward = (mse - mse.min()) / (mse.max() - mse.min() + 1e-6)
 
             # save the rnd_reward statistics into tb_logger
             self.estimate_cnt_rnd += 1
-            self.tb_logger.add_scalar('rnd_reward/rnd_reward_max', rnd_reward.max(), self.estimate_cnt_rnd)
-            self.tb_logger.add_scalar('rnd_reward/rnd_reward_mean', rnd_reward.mean(), self.estimate_cnt_rnd)
-            self.tb_logger.add_scalar('rnd_reward/rnd_reward_min', rnd_reward.min(), self.estimate_cnt_rnd)
-            self.tb_logger.add_scalar('rnd_reward/rnd_reward_std', rnd_reward.std(), self.estimate_cnt_rnd)
+            self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_max', rnd_reward.max(), self.estimate_cnt_rnd)
+            self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_mean', rnd_reward.mean(), self.estimate_cnt_rnd)
+            self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_min', rnd_reward.min(), self.estimate_cnt_rnd)
+            self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_std', rnd_reward.std(), self.estimate_cnt_rnd)
 
         rnd_reward = rnd_reward.to(self.device).unsqueeze(1).cpu().numpy()
         if self.intrinsic_reward_type == 'add':
@@ -241,15 +261,20 @@ class RndRewardModel(BaseRewardModel):
 
     def collect_data(self, data: list) -> None:
         collected_transitions = np.concatenate([game_segment.obs_segment for game_segment in data[0]], axis=0)
-        # self.train_obs.extend(collected_transitions)
-        self.train_latent_state.extend(
-            self.representation_network(torch.from_numpy(collected_transitions).to(self.device)))
+        if self.input_type == 'latent_state':
+            with torch.no_grad():
+                self.train_latent_state.extend(
+                    self.representation_network(torch.from_numpy(collected_transitions).to(self.device)))
+        elif self.input_type == 'obs':
+            self.train_obs.extend(to_tensor(collected_transitions).to(self.device))
 
     def clear_old_data(self) -> None:
-        # self.train_obs.clear()
-        # self.train_latent_state.clear()
-        if len(self.train_latent_state) >= self.cfg.rnd_buffer_size:
-            self.train_latent_state = self.train_latent_state[-self.cfg.rnd_buffer_size:]
+        if self.input_type == 'latent_state':
+            if len(self.train_latent_state) >= self.cfg.rnd_buffer_size:
+                self.train_latent_state = self.train_latent_state[-self.cfg.rnd_buffer_size:]
+        elif self.input_type == 'obs':
+            if len(self.train_obs) >= self.cfg.rnd_buffer_size:
+                self.train_obs = self.train_obs[-self.cfg.rnd_buffer_size:]
 
     def state_dict(self) -> Dict:
         return self.reward_model.state_dict()
@@ -258,4 +283,6 @@ class RndRewardModel(BaseRewardModel):
         self.reward_model.load_state_dict(_state_dict)
 
     def clear_data(self):
+        pass
+    def train(self):
         pass

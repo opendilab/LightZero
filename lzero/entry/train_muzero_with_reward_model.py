@@ -18,7 +18,7 @@ from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroCollector, MuZeroEvaluator
 
 from lzero.reward_model.rnd_reward_model import RndRewardModel
-def train_muzero_reward_model(
+def train_muzero_with_reward_model(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -153,7 +153,14 @@ def train_muzero_reward_model(
         # collect data for reward_model training
         reward_model.collect_data(new_data)
         # update reward_model
-        reward_model.train()
+        if reward_model.cfg.input_type == 'latent_state':
+            # train reward_model with latent_state
+            if len(reward_model.train_latent_state) > reward_model.cfg.batch_size:
+                reward_model.train_with_data()
+        elif reward_model.cfg.input_type == 'obs':
+            # train reward_model with obs
+            if len(reward_model.train_obs) > reward_model.cfg.batch_size:
+                reward_model.train_with_data()
         # clear old data in reward_model
         reward_model.clear_old_data()
 

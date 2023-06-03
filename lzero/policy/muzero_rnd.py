@@ -259,10 +259,10 @@ class MuZeroRNDPolicy(Policy):
         self._target_model.train()
 
         current_batch, target_batch = data
-        obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
+        obs_batch_orig, action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
-        obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+        obs_batch, obs_target_batch = prepare_obs(obs_batch_orig, self._cfg)
 
         # do augmentations
         if self._cfg.use_augmentation:
