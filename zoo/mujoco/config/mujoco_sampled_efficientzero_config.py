@@ -31,7 +31,7 @@ num_simulations = 50
 update_per_collect = 200
 batch_size = 256
 # batch_size = 1024
-max_env_step = int(5e6)
+max_env_step = int(3e6)
 reanalyze_ratio = 0.
 policy_entropy_loss_weight = 0.005
 
@@ -77,16 +77,6 @@ mujoco_sampled_efficientzero_config = dict(
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-
-        # sampled muzero paper config
-        # cos_lr_scheduler=True,
-        # optim_type='AdamW',
-        # lr_piecewise_constant_decay=False,
-        # learning_rate=0.0001,
-        # weight_decay=2e-5,
-
-        # manual_temperature_decay=True,
-        # grad_clip_value=10,
 
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

@@ -457,12 +457,13 @@ class MuZeroPolicy(Policy):
 
         return {
             'collect_mcts_temperature': self.collect_mcts_temperature,
+            'collect_epsilon': self.collect_epsilon,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
             'weighted_total_loss': loss_info[0],
             'total_loss': loss_info[1],
             'policy_loss': loss_info[2],
 
-            'policy_entropy': - policy_entropy_loss.item() / (self._cfg.num_unroll_steps + 1),
+            'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),
 
             'reward_loss': loss_info[3],
             'value_loss': loss_info[4],
@@ -493,6 +494,7 @@ class MuZeroPolicy(Policy):
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
         self.collect_mcts_temperature = 1
+        self.collect_epsilon = 1
 
     def _forward_collect(
             self,
@@ -500,7 +502,8 @@ class MuZeroPolicy(Policy):
             action_mask: list = None,
             temperature: float = 1,
             to_play: List = [-1],
-            ready_env_id=None
+            epsilon: float = 0.25,
+            ready_env_id: List = None,
     ) -> Dict:
         """
         Overview:
@@ -527,6 +530,7 @@ class MuZeroPolicy(Policy):
         """
         self._collect_model.eval()
         self.collect_mcts_temperature = temperature
+        self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
@@ -569,12 +573,22 @@ class MuZeroPolicy(Policy):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
-                action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=self.collect_mcts_temperature, deterministic=False
-                )
-                # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
-                # entire action set.
-                action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+
+                if self._cfg.eps.eps_greedy_exploration_in_collect:
+                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=self.collect_mcts_temperature, deterministic=True
+                    )
+                    if np.random.rand() < self.collect_epsilon:
+                        action = np.random.choice(legal_actions[i])
+                else:
+                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=self.collect_mcts_temperature, deterministic=False
+                    )
+
+                    # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
+                    # entire action set.
+                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,
@@ -689,6 +703,7 @@ class MuZeroPolicy(Policy):
         """
         return [
             'collect_mcts_temperature',
+            'collect_epsilon',
             'cur_lr',
             'weighted_total_loss',
             'total_loss',

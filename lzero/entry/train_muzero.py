@@ -9,6 +9,7 @@ from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
+from ding.rl_utils import get_epsilon_greedy_fn
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
@@ -131,7 +132,13 @@ def train_muzero(
             init_temperature_value_for_decay=policy_config.init_temperature_value_for_decay,
         )
 
-        # Evaluate policy performance.
+        if policy_config.eps.eps_greedy_exploration_in_collect:
+            epsilon_greedy_fn = get_epsilon_greedy_fn(start=policy_config.eps.start, end=policy_config.eps.end, decay=policy_config.eps.decay, type_=policy_config.eps.type)
+            collect_kwargs['epsilon'] = epsilon_greedy_fn(learner.train_iter)
+        else:
+            collect_kwargs['epsilon'] = 0.0
+
+            # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:

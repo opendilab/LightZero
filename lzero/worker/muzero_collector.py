@@ -291,6 +291,7 @@ class MuZeroCollector(ISerialCollector):
         if policy_kwargs is None:
             policy_kwargs = {}
         temperature = policy_kwargs['temperature']
+        epsilon = policy_kwargs['epsilon']
 
         collected_episode = 0
         env_nums = self._env_num
@@ -374,7 +375,7 @@ class MuZeroCollector(ISerialCollector):
                 # ==============================================================
                 # policy forward
                 # ==============================================================
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play)
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon)
 
                 actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                 distributions_dict_no_env_id = {k: v['distributions'] for k, v in policy_output.items()}
