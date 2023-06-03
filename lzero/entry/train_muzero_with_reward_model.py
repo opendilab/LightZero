@@ -18,6 +18,8 @@ from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroCollector, MuZeroEvaluator
 
 from lzero.reward_model.rnd_reward_model import RndRewardModel
+
+
 def train_muzero_with_reward_model(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
@@ -104,7 +106,8 @@ def train_muzero_with_reward_model(
         exp_name=cfg.exp_name,
         policy_config=policy_config
     )
-    reward_model = RndRewardModel(cfg.reward_model, policy.collect_mode.get_attribute('device'), tb_logger, policy._learn_model.representation_network)
+    reward_model = RndRewardModel(cfg.reward_model, policy.collect_mode.get_attribute('device'), tb_logger,
+                                  policy._learn_model.representation_network)
 
     # ==============================================================
     # Main loop
@@ -135,7 +138,8 @@ def train_muzero_with_reward_model(
         )
 
         if policy_config.eps.eps_greedy_exploration_in_collect:
-            epsilon_greedy_fn = get_epsilon_greedy_fn(start=policy_config.eps.start, end=policy_config.eps.end, decay=policy_config.eps.decay, type_=policy_config.eps.type)
+            epsilon_greedy_fn = get_epsilon_greedy_fn(start=policy_config.eps.start, end=policy_config.eps.end,
+                                                      decay=policy_config.eps.decay, type_=policy_config.eps.type)
             collect_kwargs['epsilon'] = epsilon_greedy_fn(learner.train_iter)
         else:
             collect_kwargs['epsilon'] = 0.0

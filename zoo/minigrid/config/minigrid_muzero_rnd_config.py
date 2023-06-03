@@ -36,10 +36,8 @@ eval_sample_action = False
 
 policy_entropy_loss_weight = 0.
 # policy_entropy_loss_weight = 0.005
-
 threshold_training_steps_for_final_temperature = int(5e4)
 # threshold_training_steps_for_final_temperature = int(5e5)
-
 eps_greedy_exploration_in_collect = False
 # eps_greedy_exploration_in_collect = True
 
@@ -143,9 +141,7 @@ minigrid_muzero_create_config = dict(
         type='minigrid_lightzero',
         import_names=['zoo.minigrid.envs.minigrid_lightzero_env'],
     ),
-    env_manager=dict(type='base'),
-
-    # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='subprocess'),
     policy=dict(
         type='muzero_rnd',
         import_names=['lzero.policy.muzero_rnd'],
