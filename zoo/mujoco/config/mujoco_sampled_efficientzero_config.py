@@ -1,7 +1,8 @@
 from easydict import EasyDict
 
 # options={'Hopper-v3', 'HalfCheetah-v3', 'Walker2d-v3', 'Ant-v3', 'Humanoid-v3'}
-env_name = 'Hopper-v3'
+# env_name = 'Hopper-v3'
+env_name = 'Walker2d-v3'
 # env_name = 'HalfCheetah-v3'
 
 
@@ -30,7 +31,6 @@ K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = 200
 batch_size = 256
-# batch_size = 1024
 max_env_step = int(3e6)
 reanalyze_ratio = 0.
 policy_entropy_loss_weight = 0.005
@@ -66,17 +66,26 @@ mujoco_sampled_efficientzero_config = dict(
         ),
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=policy_entropy_loss_weight,
+        eval_sample_action=False,
+        eps=dict(
+            eps_greedy_exploration_in_collect=False,
+            type='exp',
+            start=1.,
+            end=0.05,
+            decay=int(1e6),
+        ),
 
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        discount_factor=0.99,
+        discount_factor=0.997,
 
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
+        grad_clip_value=0.5,
 
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

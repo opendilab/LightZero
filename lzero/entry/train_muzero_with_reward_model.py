@@ -140,7 +140,7 @@ def train_muzero_with_reward_model(
         if policy_config.eps.eps_greedy_exploration_in_collect:
             epsilon_greedy_fn = get_epsilon_greedy_fn(start=policy_config.eps.start, end=policy_config.eps.end,
                                                       decay=policy_config.eps.decay, type_=policy_config.eps.type)
-            collect_kwargs['epsilon'] = epsilon_greedy_fn(learner.train_iter)
+            collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
         else:
             collect_kwargs['epsilon'] = 0.0
 

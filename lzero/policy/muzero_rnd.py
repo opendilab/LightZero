@@ -578,6 +578,7 @@ class MuZeroRNDPolicy(Policy):
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                         distributions, temperature=self.collect_mcts_temperature, deterministic=True
                     )
+                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                     if np.random.rand() < self.collect_epsilon:
                         action = np.random.choice(legal_actions[i])
                 else:
