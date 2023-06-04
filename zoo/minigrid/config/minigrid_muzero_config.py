@@ -13,7 +13,7 @@ max_env_step = int(10e6)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-seed = 0
+seed = 1
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
@@ -39,7 +39,7 @@ eps_greedy_exploration_in_collect = True
 # ==============================================================
 
 minigrid_muzero_config = dict(
-    exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_eval-sample-{eval_sample_action}_pelw{policy_entropy_loss_weight}_temp-final-steps-{threshold_training_steps_for_final_temperature}_collect-eps-{eps_greedy_exploration_in_collect}_seed{seed}',
+    exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_eval-sample-{eval_sample_action}_pelw{policy_entropy_loss_weight}_temp-final-steps-{threshold_training_steps_for_final_temperature}_collect-eps-{eps_greedy_exploration_in_collect}-decay-1e6-env_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -54,7 +54,7 @@ minigrid_muzero_config = dict(
         model=dict(
             observation_shape=2835,
             action_space_size=7,
-            model_type='mlp', 
+            model_type='mlp',
             lstm_hidden_size=256,
             latent_state_dim=512,
             discrete_action_encoding_type='one_hot',
@@ -69,6 +69,8 @@ minigrid_muzero_config = dict(
             start=1.,
             end=0.05,
             decay=int(1e6),
+            # decay=int(2e5),
+
         ),
         random_collect_episode_num=random_collect_episode_num,
         td_steps=td_steps,

@@ -95,6 +95,16 @@ class SampledEfficientZeroPolicy(Policy):
         augmentation=['shift', 'intensity'],
 
         # ******* learn ******
+        eps=dict(
+            eps_greedy_exploration_in_collect=False,
+            type='exp',
+            start=1.,
+            end=0.05,
+            decay=int(2e5),
+
+        ),
+        ignore_done=False,
+
         # (int) Number of training episodes (randomly collected) in replay buffer when training starts.
         random_collect_episode_num=0,
         # (int) How many updates(iterations) to train after collector's one collection.

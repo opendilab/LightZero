@@ -260,7 +260,8 @@ class RndRewardModel(BaseRewardModel):
         return train_data_augmented
 
     def collect_data(self, data: list) -> None:
-        collected_transitions = np.concatenate([game_segment.obs_segment for game_segment in data[0]], axis=0)
+        # TODO
+        collected_transitions = np.concatenate([game_segment.obs_segment[:300] for game_segment in data[0]], axis=0)
         if self.input_type == 'latent_state':
             with torch.no_grad():
                 self.train_latent_state.extend(

@@ -41,14 +41,15 @@ threshold_training_steps_for_final_temperature = int(5e4)
 eps_greedy_exploration_in_collect = False
 # eps_greedy_exploration_in_collect = True
 
-input_type = 'latent_state'  # 'obs' or 'latent_state'
+# input_type = 'latent_state'  # 'obs' or 'latent_state'
+input_type = 'obs'  # 'obs' or 'latent_state'
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 minigrid_muzero_config = dict(
-    exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_pelw{policy_entropy_loss_weight}_temp-final-steps-{threshold_training_steps_for_final_temperature}_collect-eps-{eps_greedy_exploration_in_collect}_rnd-rew-{input_type}_seed{seed}',
+    exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_pelw{policy_entropy_loss_weight}_temp-final-steps-{threshold_training_steps_for_final_temperature}_collect-eps-{eps_greedy_exploration_in_collect}_rnd-rew-{input_type}_rndbs1e6_gsl300_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -75,7 +76,8 @@ minigrid_muzero_config = dict(
         weight_decay=1e-4,
         batch_size=batch_size,
         update_per_collect=100,
-        rnd_buffer_size=int(1e5),
+        # rnd_buffer_size=int(1e5),
+        rnd_buffer_size=int(1e6),
         input_norm=True,
         input_norm_clamp_max=5,
         input_norm_clamp_min=-5,
@@ -116,7 +118,8 @@ minigrid_muzero_config = dict(
         priority_prob_alpha=0.6,
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=50,
+        # game_segment_length=50,
+        game_segment_length=300,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='AdamW',

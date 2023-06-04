@@ -445,7 +445,11 @@ class MuZeroCollector(ISerialCollector):
                     action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                     to_play_dict[env_id] = to_ndarray(obs['to_play'])
 
-                    dones[env_id] = done
+                    if self.policy_config.ignore_done:
+                        dones[env_id] = False
+                    else:
+                        dones[env_id] = done
+
                     visit_entropies_lst[env_id] += visit_entropy_dict[env_id]
 
                     eps_steps_lst[env_id] += 1

@@ -2,8 +2,8 @@ from easydict import EasyDict
 
 # options={'Hopper-v3', 'HalfCheetah-v3', 'Walker2d-v3', 'Ant-v3', 'Humanoid-v3'}
 # env_name = 'Hopper-v3'
-env_name = 'Walker2d-v3'
-# env_name = 'HalfCheetah-v3'
+# env_name = 'Walker2d-v3'
+env_name = 'HalfCheetah-v3'
 
 
 if env_name == 'Hopper-v3':
@@ -41,7 +41,7 @@ policy_entropy_loss_weight = 0.005
 
 mujoco_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_pelw{policy_entropy_loss_weight}_seed0',
+    f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_pelw{policy_entropy_loss_weight}_igdone_seed0',
     env=dict(
         env_name=env_name,
         continuous=True,
@@ -74,6 +74,7 @@ mujoco_sampled_efficientzero_config = dict(
             end=0.05,
             decay=int(1e6),
         ),
+        ignore_done=True,
 
         cuda=True,
         env_type='not_board_games',
