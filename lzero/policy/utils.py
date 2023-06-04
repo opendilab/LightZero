@@ -314,12 +314,13 @@ def to_torch_float_tensor(data_list: Union[np.ndarray, List[np.ndarray]], device
     """
     if isinstance(data_list, np.ndarray):
         return (torch.from_numpy(data_list).to(device).float())
-    else:
+    elif isinstance(data_list, list) and all(isinstance(data, np.ndarray) for data in data_list):
         output_data_list = []
         for data in data_list:
             output_data_list.append(torch.from_numpy(data).to(device).float())
         return output_data_list
-
+    else:
+        raise TypeError("The type of input must be np.ndarray or List[np.ndarray]")
 
 def to_detach_cpu_numpy(data_list: Union[torch.Tensor, List[torch.Tensor]]) -> Union[np.ndarray,List[np.ndarray]]:
     """
@@ -332,12 +333,13 @@ def to_detach_cpu_numpy(data_list: Union[torch.Tensor, List[torch.Tensor]]) -> U
     """
     if isinstance(data_list, torch.Tensor):
         return data_list.detach().cpu().numpy()
-    else:
+    elif isinstance(data_list, list) and all(isinstance(data, torch.Tensor) for data in data_list):
         output_data_list = []
         for data in data_list:
             output_data_list.append(data.detach().cpu().numpy())
         return output_data_list
-
+    else:
+        raise TypeError("The type of input must be torch.Tensor or List[torch.Tensor]")
 
 def ez_network_output_unpack(network_output: Dict) -> Tuple:
     """

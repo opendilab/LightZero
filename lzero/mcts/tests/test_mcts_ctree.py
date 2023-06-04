@@ -4,13 +4,20 @@ import torch
 from easydict import EasyDict
 
 from lzero.policy import inverse_scalar_transform, select_action
-from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTSCtree
 
 
+policy = 'GumbelMuZero'
+
+if policy == 'EfficientZero':
+    from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTSCtree
+elif policy == 'GumbelMuZero':
+    from lzero.mcts.tree_search.mcts_ctree import GumbelMuZeroMCTSCtree as MCTSCtree
+else:
+    raise KeyError('Only support test for EfficientZero and GumbelMuZero.')
 class MuZeroModelFake(torch.nn.Module):
     """
     Overview:
-        Fake MuZero model just for test EfficientZeroMCTSPtree.
+        Fake MuZero model just for test EfficientZeroMCTSCtree and GumbelMuZeroMCTSCtree.
     Interfaces:
         __init__, initial_inference, recurrent_inference
     """
@@ -36,10 +43,15 @@ class MuZeroModelFake(torch.nn.Module):
             'latent_state': latent_state,
             'reward_hidden_state': reward_hidden_state_roots
         }
+        if policy == 'GumbelMuZero':
+            output['reward'] = value_prefix
 
         return EasyDict(output)
 
-    def recurrent_inference(self, latent_states, reward_hidden_states, actions):
+    def recurrent_inference(self, latent_states, reward_hidden_states, actions=None):
+        if policy == 'GumbelMuZero':
+            assert actions==None
+            actions = reward_hidden_states
         batch_size = latent_states.shape[0]
         latent_state = torch.zeros(size=(batch_size, 12, 3, 3))
         reward_hidden_state_roots = (torch.zeros(size=(1, batch_size, 16)), torch.zeros(size=(1, batch_size, 16)))
@@ -54,6 +66,8 @@ class MuZeroModelFake(torch.nn.Module):
             'latent_state': latent_state,
             'reward_hidden_state': reward_hidden_state_roots
         }
+        if policy == 'GumbelMuZero':
+            output['reward'] = value_prefix
 
         return EasyDict(output)
 
@@ -64,6 +78,7 @@ policy_config = EasyDict(
     batch_size=16,
     pb_c_base=1,
     pb_c_init=1,
+    max_num_considered_actions = 6,
     discount_factor=0.9,
     root_dirichlet_alpha=0.3,
     root_noise_weight=0.2,
@@ -143,11 +158,18 @@ def test_mcts_vs_bot_to_play():
                             ).astype(np.float32).tolist() for _ in range(env_nums)
     ]
     # In ctree, to_play must be list, not None
-    roots.prepare(
-        policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, [0 for _ in range(env_nums)]
-    )
-    MCTSCtree(policy_config
-              ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
+    if policy == 'EfficientZero':
+        roots.prepare(
+            policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, [0 for _ in range(env_nums)]
+        )
+        MCTSCtree(policy_config
+                ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
+    elif policy == 'GumbelMuZero':
+        roots.prepare(
+            policy_config.root_noise_weight, noises, value_prefix_pool, list(pred_values_pool), policy_logits_pool, [0 for _ in range(env_nums)]
+        )
+        MCTSCtree(policy_config
+                ).search(roots, model, latent_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert np.array(roots_distributions).shape == (batch_size, action_space_size)
@@ -193,11 +215,18 @@ def test_mcts_vs_bot_to_play_large():
                             ).astype(np.float32).tolist() for _ in range(env_nums)
     ]
     # In ctree, to_play must be list, not None
-    roots.prepare(
-        policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, [0 for _ in range(env_nums)]
-    )
-    MCTSCtree(policy_config
-              ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
+    if policy == 'EfficientZero':
+        roots.prepare(
+            policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, [0 for _ in range(env_nums)]
+        )
+        MCTSCtree(policy_config
+                ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
+    elif policy == 'GumbelMuZero':
+        roots.prepare(
+            policy_config.root_noise_weight, noises, value_prefix_pool, list(pred_values_pool), policy_logits_pool, [0 for _ in range(env_nums)]
+        )
+        MCTSCtree(policy_config
+                ).search(roots, model, latent_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert np.array(roots_distributions).shape == (policy_config.batch_size, policy_config.model.action_space_size)
@@ -216,11 +245,18 @@ def test_mcts_vs_bot_to_play_legal_action():
     ]
 
     # In ctree, to_play must be list, not None
-    roots.prepare(
-        policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, [0 for _ in range(env_nums)]
-    )
-    MCTSCtree(policy_config
-              ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
+    if policy == 'EfficientZero':
+        roots.prepare(
+            policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, [0 for _ in range(env_nums)]
+        )
+        MCTSCtree(policy_config
+                ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
+    elif policy == 'GumbelMuZero':
+        roots.prepare(
+            policy_config.root_noise_weight, noises, value_prefix_pool, list(pred_values_pool), policy_logits_pool, [0 for _ in range(env_nums)]
+        )
+        MCTSCtree(policy_config
+                ).search(roots, model, latent_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert len(roots_values) == env_nums
@@ -249,8 +285,18 @@ def test_mcts_self_play():
                             ).astype(np.float32).tolist() for _ in range(env_nums)
     ]
     # In ctree, to_play must be list, not None
-    roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
-    MCTSCtree(policy_config).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
+    if policy == 'EfficientZero':
+        roots.prepare(
+            policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, [0 for _ in range(env_nums)]
+        )
+        MCTSCtree(policy_config
+                ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
+    elif policy == 'GumbelMuZero':
+        roots.prepare(
+            policy_config.root_noise_weight, noises, value_prefix_pool, list(pred_values_pool), policy_logits_pool, [0 for _ in range(env_nums)]
+        )
+        MCTSCtree(policy_config
+                ).search(roots, model, latent_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert np.array(roots_distributions).shape == (batch_size, action_space_size)
@@ -268,8 +314,18 @@ def test_mcts_self_play_legal_action():
         for j in range(env_nums)
     ]
     # In ctree, to_play must be list, not None
-    roots.prepare(policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
-    MCTSCtree(policy_config).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
+    if policy == 'EfficientZero':
+        roots.prepare(
+            policy_config.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, [0 for _ in range(env_nums)]
+        )
+        MCTSCtree(policy_config
+                ).search(roots, model, latent_state_roots, reward_hidden_state_roots, [0 for _ in range(env_nums)])
+    elif policy == 'GumbelMuZero':
+        roots.prepare(
+            policy_config.root_noise_weight, noises, value_prefix_pool, list(pred_values_pool), policy_logits_pool, [0 for _ in range(env_nums)]
+        )
+        MCTSCtree(policy_config
+                ).search(roots, model, latent_state_roots, [0 for _ in range(env_nums)])
     roots_distributions = roots.get_distributions()
     roots_values = roots.get_values()
     assert len(roots_values) == env_nums
