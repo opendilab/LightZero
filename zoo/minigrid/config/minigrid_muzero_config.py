@@ -1,10 +1,10 @@
 from easydict import EasyDict
 
-# env_name = 'MiniGrid-Empty-8x8-v0'
-# max_env_step = int(1e6)
+env_name = 'MiniGrid-Empty-8x8-v0'
+max_env_step = int(1e6)
 
-env_name = 'MiniGrid-FourRooms-v0'
-max_env_step = int(10e6)
+# env_name = 'MiniGrid-FourRooms-v0'
+# max_env_step = int(2e6)
 
 
 # typical MiniGrid env id: {'MiniGrid-Empty-8x8-v0', 'MiniGrid-FourRooms-v0', 'MiniGrid-DoorKey-8x8-v0','MiniGrid-DoorKey-16x16-v0'},
@@ -20,6 +20,14 @@ evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 200
 batch_size = 256
+
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 5
+# update_per_collect = 2
+# batch_size = 2
+
 reanalyze_ratio = 0
 random_collect_episode_num = 0
 init_temperature_value_for_decay = 1.0
@@ -39,7 +47,7 @@ eps_greedy_exploration_in_collect = True
 # ==============================================================
 
 minigrid_muzero_config = dict(
-    exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_eval-sample-{eval_sample_action}_pelw{policy_entropy_loss_weight}_temp-final-steps-{threshold_training_steps_for_final_temperature}_collect-eps-{eps_greedy_exploration_in_collect}-decay-1e6-env_seed{seed}',
+    exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_eval-sample-{eval_sample_action}_pelw{policy_entropy_loss_weight}_temp-final-steps-{threshold_training_steps_for_final_temperature}_collect-eps-{eps_greedy_exploration_in_collect}-decay-linear-2e5-env_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -65,12 +73,10 @@ minigrid_muzero_config = dict(
         policy_entropy_loss_weight=policy_entropy_loss_weight,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            type='exp',
+            type='linear',
             start=1.,
             end=0.05,
-            decay=int(1e6),
-            # decay=int(2e5),
-
+            decay=int(2e5),
         ),
         random_collect_episode_num=random_collect_episode_num,
         td_steps=td_steps,

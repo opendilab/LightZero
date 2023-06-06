@@ -1,10 +1,10 @@
 from easydict import EasyDict
 
-env_name = 'MiniGrid-Empty-8x8-v0'
-max_env_step = int(1e6)
+# env_name = 'MiniGrid-Empty-8x8-v0'
+# max_env_step = int(1e6)
 
-# env_name = 'MiniGrid-FourRooms-v0'
-# max_env_step = int(10e6)
+env_name = 'MiniGrid-FourRooms-v0'
+max_env_step = int(2e6)
 
 # typical MiniGrid env id: {'MiniGrid-Empty-8x8-v0', 'MiniGrid-FourRooms-v0', 'MiniGrid-DoorKey-8x8-v0','MiniGrid-DoorKey-16x16-v0'},
 # please refer to https://github.com/Farama-Foundation/MiniGrid for details.
@@ -88,7 +88,7 @@ minigrid_muzero_config = dict(
         model=dict(
             observation_shape=2835,
             action_space_size=7,
-            model_type='mlp', 
+            model_type='mlp',
             lstm_hidden_size=256,
             latent_state_dim=512,
             discrete_action_encoding_type='one_hot',
@@ -99,11 +99,12 @@ minigrid_muzero_config = dict(
         policy_entropy_loss_weight=policy_entropy_loss_weight,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            type='exp',
+            type='linear',
             start=1.,
             end=0.05,
-            decay=int(1e6),
+            decay=int(2e5),
         ),
+        ignore_done=False,
 
         random_collect_episode_num=random_collect_episode_num,
         td_steps=td_steps,

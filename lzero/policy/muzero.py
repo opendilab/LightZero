@@ -504,7 +504,7 @@ class MuZeroPolicy(Policy):
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
         self.collect_mcts_temperature = 1
-        self.collect_epsilon = 1
+        self.collect_epsilon = 0
 
     def _forward_collect(
             self,
@@ -512,7 +512,7 @@ class MuZeroPolicy(Policy):
             action_mask: list = None,
             temperature: float = 1,
             to_play: List = [-1],
-            epsilon: float = 0.25,
+            epsilon: float = 0.,
             ready_env_id: List = None,
     ) -> Dict:
         """
