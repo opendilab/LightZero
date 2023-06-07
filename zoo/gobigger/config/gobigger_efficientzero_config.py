@@ -56,8 +56,7 @@ atari_efficientzero_config = dict(
         playback_settings=dict(
             playback_type='by_frame',
             by_frame=dict(
-                save_frame=False,
-                # save_frame=True,
+                save_frame=False, # when training should set as False
                 save_dir='./',
                 save_name_prefix='gobigger',
             ),

@@ -5,3 +5,4 @@ from .eval_muzero import eval_muzero
 from .eval_muzero_with_gym_env import eval_muzero_with_gym_env
 from .train_muzero_with_gym_env import train_muzero_with_gym_env
 from .train_muzero_gobigger import train_muzero_gobigger
+from .eval_muzero_gobigger import eval_muzero_gobigger
