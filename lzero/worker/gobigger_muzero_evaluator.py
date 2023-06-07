@@ -501,7 +501,8 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
 
         for i in range(env_nums):
             for k, v in init_obs[i].items():
-                init_obs[i][k] = v[:agent_num]
+                if k != 'raw_obs':
+                    init_obs[i][k] = v[:agent_num]
 
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
@@ -522,6 +523,7 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
 
         ready_env_id = set()
         remain_episode = n_episode
+        eat_info = defaultdict()
 
         with self._timer:
             while not eval_monitor.is_finished():
@@ -623,6 +625,7 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
                         self._policy.reset([env_id])
                         reward = t.info['eval_episode_return'][0]
                         bot_reward = t.info['eval_episode_return'][1]
+                        eat_info[env_id] = t.info['eats']
                         if 'episode_info' in t.info:
                             eval_monitor.update_info(env_id, t.info['episode_info'])
                         eval_monitor.update_reward(env_id, reward)
@@ -707,9 +710,14 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
             'bot_reward_min': np.min(bot_episode_return),
         }
         # add eat info
-        for i in range(len(t.info['eats'])):
-            for k,v in t.info['eats'][i].items():
-                info['agent_{}_{}'.format(i, k)] = v
+        for k,v in eat_info.items():
+            for i in range(len(v)):
+                for k1, v1 in v[i].items():
+                    info['agent_{}_{}'.format(i, k1)] = info.get('agent_{}_{}'.format(i, k1), []) + [v1]
+        
+        for k,v in info.items():
+            if 'agent' in k:
+                info[k] = np.mean(v)
 
         episode_info = eval_monitor.get_episode_info()
         if episode_info is not None:

@@ -346,7 +346,7 @@ class GoBiggerLightZeroEnv(BaseEnv):
 
     def preprocess_obs(self, raw_obs):
         env_player_obs = []
-        for game_player_id in range(self.player_num_per_team):
+        for game_player_id in range(self.player_num_per_team*self.team_num):
             last_action_type = self.last_action_types[game_player_id]
             if self.use_action_mask:
                 can_eject = raw_obs[1][game_player_id]['can_eject']
