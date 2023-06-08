@@ -721,7 +721,7 @@ namespace tree{
         assert(child_visit_count.size()==child_prior.size());
 
         std::vector<float> completed_qvalues = qtransform_completed_by_mix_value(root, child_visit_count, child_prior, discount_factor);
-        std::vector<std::vector<int>> visit_table = get_table_of_considered_visits(max_num_considered_actions, num_simulations);
+        std::vector<std::vector<int> > visit_table = get_table_of_considered_visits(max_num_considered_actions, num_simulations);
         
         int num_valid_actions = root->legal_actions.size();
         int num_considered = std::min(max_num_considered_actions, num_simulations);
@@ -1076,7 +1076,7 @@ namespace tree{
         return visit_seq_slice;
     }
 
-    std::vector<std::vector<int>> get_table_of_considered_visits(int max_num_considered_actions, int num_simulations)
+    std::vector<std::vector<int> > get_table_of_considered_visits(int max_num_considered_actions, int num_simulations)
     {
         /*
         Overview:
@@ -1087,7 +1087,7 @@ namespace tree{
         Outputs:
             - the table of considered visits.
         */
-        std::vector<std::vector<int>> table;
+        std::vector<std::vector<int> > table;
         for (int m=0;m < max_num_considered_actions+1;m++){
             table.push_back(get_sequence_of_considered_visits(m, num_simulations));
         }
@@ -1142,7 +1142,7 @@ namespace tree{
         Outputs:
             - gumbel vectors.
         */
-        std::mt19937 gen{gumbel_rng};
+        std::mt19937 gen;{gumbel_rng};
         std::extreme_value_distribution<float> d(0, 1);
 
         std::vector<float> gumbel;
