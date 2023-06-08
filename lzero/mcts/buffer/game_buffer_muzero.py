@@ -683,14 +683,14 @@ class MuZeroGameBuffer(GameBuffer):
         Overview:
             Update the priority of training data.
         Arguments:
-            - train_data (:obj:`Optional[List[Optional[np.ndarray]]]`): training data to be updated priority.
+            - train_data (:obj:`List[np.ndarray]`): training data to be updated priority.
             - batch_priorities (:obj:`batch_priorities`): priorities to update to.
         NOTE:
             train_data = [current_batch, target_batch]
-            current_batch = [obs_list, action_list, mask_list, batch_index_list, weights, make_time_list]
+            current_batch = [obs_list, action_list, improved_policy_list(only in Gumbel MuZero), mask_list, batch_index_list, weights, make_time_list]
         """
-        indices = train_data[0][3]
-        metas = {'make_time': train_data[0][5], 'batch_priorities': batch_priorities}
+        indices = train_data[0][-3]
+        metas = {'make_time': train_data[0][-1], 'batch_priorities': batch_priorities}
         # only update the priorities for data still in replay buffer
         for i in range(len(indices)):
             if metas['make_time'][i] > self.clear_time:

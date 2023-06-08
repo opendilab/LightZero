@@ -15,7 +15,8 @@ from tensorboardX import SummaryWriter
 
 from lzero.entry.utils import log_buffer_memory_usage, random_collect
 from lzero.policy import visit_count_temperature
-from lzero.worker import MuZeroCollector, MuZeroEvaluator
+from lzero.worker import MuZeroCollector as Collector
+from lzero.worker import MuZeroEvaluator as Evaluator
 
 
 def train_muzero(
@@ -28,7 +29,7 @@ def train_muzero(
 ) -> 'Policy':  # noqa
     """
     Overview:
-        The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
+        The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel Muzero.
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
             ``Tuple[dict, dict]`` type means [user_config, create_cfg].
@@ -44,8 +45,8 @@ def train_muzero(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero'], \
-        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero'"
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'], \
+        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'"
 
     if create_cfg.policy.type == 'muzero':
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
@@ -53,6 +54,8 @@ def train_muzero(
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
+    elif create_cfg.policy.type == 'gumbel_muzero':
+        from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
@@ -87,14 +90,14 @@ def train_muzero(
     batch_size = policy_config.batch_size
     # specific game buffer for MCTS+RL algorithms
     replay_buffer = GameBuffer(policy_config)
-    collector = MuZeroCollector(
+    collector = Collector(
         env=collector_env,
         policy=policy.collect_mode,
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
         policy_config=policy_config
     )
-    evaluator = MuZeroEvaluator(
+    evaluator = Evaluator(
         eval_freq=cfg.policy.eval_freq,
         n_evaluator_episode=cfg.env.n_evaluator_episode,
         stop_value=cfg.env.stop_value,
