@@ -22,8 +22,8 @@ class TestAtariLightZeroEnvVisualization:
         env.close()
 
     def test_lightzero_env(self):
-        create_config.env_manager.type = 'base'  # when visualize must set as  base
-        main_config.env.evaluator_env_num = 1    # when visualize must set as 1
+        create_config.env_manager.type = 'base'  # Visualization requires the 'type' to be set as base
+        main_config.env.evaluator_env_num = 1    # Visualization requires the 'env_num' to be set as 1
         main_config.env.n_evaluator_episode = 2
         main_config.env.render_mode_human = True
         main_config.env.save_video = True
