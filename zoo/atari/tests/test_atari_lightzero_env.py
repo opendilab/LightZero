@@ -39,4 +39,3 @@ class TestAtariLightZeroEnv:
             if done:
                 print(info)
                 break
-TestAtariLightZeroEnv().test_naive()
