@@ -1142,7 +1142,7 @@ namespace tree{
         Outputs:
             - gumbel vectors.
         */
-        std::mt19937 gen;{gumbel_rng};
+        std::mt19937 gen(gumbel_rng);
         std::extreme_value_distribution<float> d(0, 1);
 
         std::vector<float> gumbel;
