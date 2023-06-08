@@ -92,6 +92,8 @@ def train_alphazero(
     # ==============================================================
     # Learner's before_run hook.
     learner.call_hook('before_run')
+    if cfg.policy.update_per_collect is not None:
+        update_per_collect = cfg.policy.update_per_collect
     while True:
         collect_kwargs = {}
         # set temperature for visit count distributions according to the train_iter,
@@ -116,10 +118,14 @@ def train_alphazero(
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         new_data = sum(new_data, [])
+        if cfg.policy.update_per_collect is None:
+            # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
+            collected_transitions_num = len(new_data)
+            update_per_collect = int(collected_transitions_num * cfg.policy.model_update_ratio)
         replay_buffer.push(new_data, cur_collector_envstep=collector.envstep)
 
         # Learn policy from collected data
-        for i in range(cfg.policy.update_per_collect):
+        for i in range(update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
             train_data = replay_buffer.sample(batch_size, learner.train_iter)
             if train_data is None:

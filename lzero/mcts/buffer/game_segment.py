@@ -69,6 +69,8 @@ class GameSegment:
         self.target_rewards = []
         self.target_policies = []
 
+        self.improved_policy_probs = []
+
         if self.config.sampled_algo:
             self.root_sampled_actions = []
 
@@ -130,7 +132,7 @@ class GameSegment:
     ) -> None:
         """
         Overview:
-            append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
+            Append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}.
         """
         self.action_segment.append(action)
         self.obs_segment.append(obs)
@@ -141,7 +143,7 @@ class GameSegment:
 
     def pad_over(
             self, next_segment_observations: List, next_segment_rewards: List, next_segment_root_values: List,
-            next_segment_child_visits: List
+            next_segment_child_visits: List, next_segment_improved_policy: List = None
     ) -> None:
         """
         Overview:
@@ -154,11 +156,17 @@ class GameSegment:
             - next_segment_rewards (:obj:`list`): r_t from the next game_segment
             - next_segment_root_values (:obj:`list`): root values of MCTS from the next game_segment
             - next_segment_child_visits (:obj:`list`): root visit count distributions of MCTS from the next game_segment
+            - next_segment_improved_policy (:obj:`list`): root children select policy of MCTS from the next game_segment (Only used in Gumbel MuZero)
         """
         assert len(next_segment_observations) <= self.config.num_unroll_steps
         assert len(next_segment_child_visits) <= self.config.num_unroll_steps
         assert len(next_segment_root_values) <= self.config.num_unroll_steps + self.config.td_steps
         assert len(next_segment_rewards) <= self.config.num_unroll_steps + self.config.td_steps - 1
+        # ==============================================================
+        # The core difference between GumbelMuZero and MuZero
+        # ==============================================================
+        if self.config.gumbel_algo:
+            assert len(next_segment_improved_policy) <= self.config.num_unroll_steps + self.config.td_steps
 
         # NOTE: next block observation should start from (stacked_observation - 1) in next trajectory
         for observation in next_segment_observations:
@@ -172,6 +180,10 @@ class GameSegment:
 
         for child_visits in next_segment_child_visits:
             self.child_visit_segment.append(child_visits)
+        
+        if self.config.gumbel_algo:
+            for improved_policy in next_segment_improved_policy:
+                self.improved_policy_probs.append(improved_policy)
 
     def get_targets(self, timestep: int) -> Tuple:
         """
@@ -181,7 +193,7 @@ class GameSegment:
         return self.target_values[timestep], self.target_rewards[timestep], self.target_policies[timestep]
 
     def store_search_stats(
-            self, visit_counts: List, root_value: List, root_sampled_actions=None, idx: int = None
+            self, visit_counts: List, root_value: List, root_sampled_actions: List = None, improved_policy: List = None, idx: int = None
     ) -> None:
         """
         Overview:
@@ -193,9 +205,13 @@ class GameSegment:
             self.root_value_segment.append(root_value)
             if self.config.sampled_algo:
                 self.root_sampled_actions.append(root_sampled_actions)
+            # store the improved policy in Gumbel Muzero: \pi'=softmax(logits + \sigma(CompletedQ))
+            if self.config.gumbel_algo:
+                self.improved_policy_probs.append(improved_policy)
         else:
             self.child_visit_segment[idx] = [visit_count / sum_visits for visit_count in visit_counts]
             self.root_value_segment[idx] = root_value
+            self.improved_policy_probs[idx] = improved_policy
 
     def game_segment_to_array(self) -> None:
         """
@@ -233,6 +249,7 @@ class GameSegment:
 
         self.child_visit_segment = np.array(self.child_visit_segment)
         self.root_value_segment = np.array(self.root_value_segment)
+        self.improved_policy_probs = np.array(self.improved_policy_probs)
 
         self.action_mask_segment = np.array(self.action_mask_segment)
         self.to_play_segment = np.array(self.to_play_segment)
