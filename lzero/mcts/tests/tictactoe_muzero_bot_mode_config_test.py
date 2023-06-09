@@ -35,6 +35,7 @@ tictactoe_muzero_config = dict(
     ),
     policy=dict(
         sampled_algo=False,
+        gumbel_algo=False,
         model=dict(
             observation_shape=(3, 3, 3),
             action_space_size=9,
