@@ -39,6 +39,3 @@ class TestAtariLightZeroEnvVisualization:
             model_path=model_path
         )
         print(returns_mean, returns)
-
-TestAtariLightZeroEnvVisualization().test_naive_env()
-TestAtariLightZeroEnvVisualization().test_lightzero_env()

@@ -44,6 +44,7 @@ atari_efficientzero_config = dict(
     ),
     policy=dict(
         sampled_algo=False,
+        gumbel_algo=False,
         mcts_ctree=True,
         model=dict(
             observation_shape=(4, 96, 96),
