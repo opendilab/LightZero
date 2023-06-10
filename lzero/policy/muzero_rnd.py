@@ -249,6 +249,7 @@ class MuZeroRNDPolicy(Policy):
             )
         elif self._cfg.target_model_for_intrinsic_reward_update_type=='momentum':
             self._target_model_for_intrinsic_reward = model_wrap(
+                self._target_model,
                 wrapper_name='target',
                 update_type='momentum',
                 update_kwargs={'theta': self._cfg.target_update_theta_for_intrinsic_reward}

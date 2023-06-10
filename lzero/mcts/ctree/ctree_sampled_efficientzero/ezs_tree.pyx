@@ -45,18 +45,20 @@ cdef class Roots:
     cdef int num_of_sampled_actions
     cdef CRoots *roots
     cdef bool continuous_action_space
+    cdef bool action_tanh
+
 
     def __cinit__(self):
         pass
 
     def __cinit__(self, int root_num, list legal_actions_list, int action_space_size, int num_of_sampled_actions,
-                  bool continuous_action_space):
+                  bool continuous_action_space, bool action_tanh):
         #def __cinit__(self, int root_num, list legal_actions_list, int action_space_size, int num_of_sampled_actions):
         self.root_num = root_num
         self.action_space_size = action_space_size
         self.num_of_sampled_actions = num_of_sampled_actions
         self.roots = new CRoots(root_num, legal_actions_list, action_space_size, num_of_sampled_actions,
-                                continuous_action_space)
+                                continuous_action_space, action_tanh)
 
     def prepare(self, float root_noise_weight, list noises, list value_prefix_pool, list policy_logits_pool,
                 vector[int] & to_play_batch):
@@ -90,13 +92,14 @@ cdef class Roots:
 cdef class Node:
     cdef CNode cnode
     cdef bool continuous_action_space
+    cdef bool action_tanh
 
     def __cinit__(self):
         pass
 
     #def __cinit__(self, float prior, vector[int] &legal_actions, int action_space_size, int num_of_sampled_actions):
     def __cinit__(self, float prior, vector[int] & legal_actions, int action_space_size, int num_of_sampled_actions,
-                  bool continuous_action_space):
+                  bool continuous_action_space, bool action_tanh):
         pass
 
     def expand(self, int to_play, int current_latent_state_index, int batch_index, float value_prefix,

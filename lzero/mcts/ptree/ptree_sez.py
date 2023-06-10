@@ -25,6 +25,7 @@ class Node:
             action_space_size: int = 9,
             num_of_sampled_actions: int = 20,
             continuous_action_space: bool = False,
+            action_tanh: bool = True,
     ) -> None:
         self.prior = prior
         self.mu = None
@@ -44,6 +45,7 @@ class Node:
         self.children_index = []
         self.simulation_index = 0
         self.batch_index = 0
+        self.action_tanh = action_tanh
 
     def expand(
             self, to_play: int, simulation_index: int, batch_index: int, value_prefix: float, policy_logits: List[float]
@@ -94,11 +96,16 @@ class Node:
             # print(dist.batch_shape, dist.event_shape)
             sampled_actions_before_tanh = dist.sample(torch.tensor([self.num_of_sampled_actions]))
 
-            sampled_actions = torch.tanh(sampled_actions_before_tanh)
-            y = 1 - sampled_actions.pow(2) + 1e-6
-            # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
-            log_prob = dist.log_prob(sampled_actions_before_tanh).unsqueeze(-1)
-            log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
+            if self.action_tanh:
+                sampled_actions = torch.tanh(sampled_actions_before_tanh)
+                y = 1 - sampled_actions.pow(2) + 1e-6
+                # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
+                log_prob = dist.log_prob(sampled_actions_before_tanh).unsqueeze(-1)
+                log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
+            else:
+                # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
+                log_prob = dist.log_prob(sampled_actions_before_tanh).unsqueeze(-1)
+                sampled_actions = sampled_actions_before_tanh
             self.legal_actions = []
 
             for action_index in range(self.num_of_sampled_actions):
@@ -106,7 +113,8 @@ class Node:
                     log_prob[action_index],
                     action_space_size=self.action_space_size,
                     num_of_sampled_actions=self.num_of_sampled_actions,
-                    continuous_action_space=self.continuous_action_space
+                    continuous_action_space=self.continuous_action_space,
+                    action_tanh=self.action_tanh
                 )
                 self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
         else:
@@ -124,10 +132,11 @@ class Node:
             for action_index in range(self.num_of_sampled_actions):
                 self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
                     # prob[action_index], # NOTE: this is a bug
-                    prob[sampled_actions[action_index]],  #
+                    prob[sampled_actions[action_index]],
                     action_space_size=self.action_space_size,
                     num_of_sampled_actions=self.num_of_sampled_actions,
-                    continuous_action_space=self.continuous_action_space
+                    continuous_action_space=self.continuous_action_space,
+                    action_tanh=self.action_tanh
                 )
                 self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
 
@@ -272,12 +281,14 @@ class Roots:
             action_space_size: int = 9,
             num_of_sampled_actions: int = 20,
             continuous_action_space: bool = False,
+            action_tanh: bool = True,
     ) -> None:
         self.num = root_num
         self.root_num = root_num
         self.legal_actions_list = legal_actions_list  # list of list
         self.num_of_sampled_actions = num_of_sampled_actions
         self.continuous_action_space = continuous_action_space
+        self.action_tanh = action_tanh
 
         self.roots = []
 
@@ -293,7 +304,8 @@ class Roots:
                         legal_actions_list[i],
                         action_space_size=action_space_size,
                         num_of_sampled_actions=self.num_of_sampled_actions,
-                        continuous_action_space=self.continuous_action_space
+                        continuous_action_space=self.continuous_action_space,
+                        action_tanh=self.action_tanh
                     )
                 )
             elif isinstance(legal_actions_list, int):
@@ -304,7 +316,8 @@ class Roots:
                         None,
                         action_space_size=action_space_size,
                         num_of_sampled_actions=self.num_of_sampled_actions,
-                        continuous_action_space=self.continuous_action_space
+                        continuous_action_space=self.continuous_action_space,
+                        action_tanh=self.action_tanh
                     )
                 )
             elif legal_actions_list is None:
@@ -315,7 +328,8 @@ class Roots:
                         None,
                         action_space_size=action_space_size,
                         num_of_sampled_actions=self.num_of_sampled_actions,
-                        continuous_action_space=self.continuous_action_space
+                        continuous_action_space=self.continuous_action_space,
+                        action_tanh=self.action_tanh
                     )
                 )
 

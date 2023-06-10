@@ -1,10 +1,10 @@
 from easydict import EasyDict
 
 # options={'Hopper-v3', 'HalfCheetah-v3', 'Walker2d-v3', 'Ant-v3', 'Humanoid-v3'}
-# env_name = 'Hopper-v3'
+env_name = 'Hopper-v3'
 # env_name = 'Walker2d-v3'
 # env_name = 'HalfCheetah-v3'
-env_name = 'Humanoid-v3'
+# env_name = 'Humanoid-v3'
 
 if env_name == 'Hopper-v3':
     action_space_size = 3
@@ -26,15 +26,25 @@ if env_name == 'HalfCheetah-v3':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-seed = 1
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
+seed = 0
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# continuous_action_space = True
+# K = 20  # num_of_sampled_actions
+# num_simulations = 50
+# update_per_collect = 200
+# batch_size = 256
+
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
 continuous_action_space = True
-K = 20  # num_of_sampled_actions
-num_simulations = 50
-update_per_collect = 200
-batch_size = 256
+K = 4  # num_of_sampled_actions
+num_simulations = 5
+update_per_collect = 2
+batch_size = 3
+
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
 policy_entropy_loss_weight = 0.005
@@ -48,6 +58,7 @@ mujoco_sampled_efficientzero_config = dict(
     f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_pelw{policy_entropy_loss_weight}_seed{seed}',
     env=dict(
         env_name=env_name,
+        action_clip=True,
         continuous=True,
         manually_discretization=False,
         collector_env_num=collector_env_num,
@@ -68,6 +79,8 @@ mujoco_sampled_efficientzero_config = dict(
             res_connection_in_dynamics=True,
             norm_type='BN',
         ),
+        mcts_ctree=False,
+        action_tanh=False,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=policy_entropy_loss_weight,
         eval_sample_action=False,

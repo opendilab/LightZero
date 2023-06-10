@@ -21,19 +21,19 @@ threshold_training_steps_for_final_temperature = int(5e4)
 # ==============================================================
 seed = 0
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-num_simulations = 50
-update_per_collect = 200
-batch_size = 256
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# num_simulations = 50
+# update_per_collect = 200
+# batch_size = 256
 
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# num_simulations = 3
-# update_per_collect = 2
-# batch_size = 4
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 3
+update_per_collect = 2
+batch_size = 4
 
 reanalyze_ratio = 0
 random_collect_episode_num = 0
@@ -43,8 +43,8 @@ eval_sample_action = False
 
 policy_entropy_loss_weight = 0.
 # policy_entropy_loss_weight = 0.005
-eps_greedy_exploration_in_collect = False
-# eps_greedy_exploration_in_collect = True
+# eps_greedy_exploration_in_collect = False
+eps_greedy_exploration_in_collect = True
 
 # input_type = 'latent_state'  # 'obs' or 'latent_state'
 # input_type = 'obs'  # 'obs' or 'latent_state'

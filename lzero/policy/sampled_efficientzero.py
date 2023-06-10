@@ -646,22 +646,23 @@ class SampledEfficientZeroPolicy(Policy):
             # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
             # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
 
-            # way 1:
-            # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
+            if self._cfg.action_tanh:
+                # way 1: SAC-like
+                y = 1 - target_sampled_actions[:, k, :].pow(2)
 
-            # way 2: SAC-like
-            y = 1 - target_sampled_actions[:, k, :].pow(2)
+                # NOTE: for numerical stability.
+                target_sampled_actions_clamped = torch.clamp(
+                    target_sampled_actions[:, k, :], torch.tensor(-1 + 1e-6), torch.tensor(1 - 1e-6)
+                )
+                target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
 
-            # NOTE: for numerical stability.
-            target_sampled_actions_clamped = torch.clamp(
-                target_sampled_actions[:, k, :], torch.tensor(-1 + 1e-6), torch.tensor(1 - 1e-6)
-            )
-            target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
-
-            # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
-            log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
-            log_prob = log_prob - torch.log(y + 1e-6).sum(-1, keepdim=True)
-            log_prob = log_prob.squeeze(-1)
+                # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
+                log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
+                log_prob = log_prob - torch.log(y + 1e-6).sum(-1, keepdim=True)
+                log_prob = log_prob.squeeze(-1)
+            else:
+                # way 2:
+                log_prob = dist.log_prob(target_sampled_actions[:, k, :])
 
             log_prob_sampled_actions.append(log_prob)
 
@@ -855,13 +856,13 @@ class SampledEfficientZeroPolicy(Policy):
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(
                     active_collect_env_num, legal_actions, self._cfg.model.action_space_size,
-                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space, self._cfg.action_tanh
                 )
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(
                     active_collect_env_num, legal_actions, self._cfg.model.action_space_size,
-                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space, self._cfg.action_tanh
                 )
 
             # the only difference between collect and eval is the dirichlet noise
@@ -989,13 +990,13 @@ class SampledEfficientZeroPolicy(Policy):
             if self._cfg.mcts_ctree:
                 roots = MCTSCtree.roots(
                     active_eval_env_num, legal_actions, self._cfg.model.action_space_size,
-                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space, self._cfg.action_tanh
                 )
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(
                     active_eval_env_num, legal_actions, self._cfg.model.action_space_size,
-                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space, self._cfg.action_tanh
                 )
 
             roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)

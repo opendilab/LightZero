@@ -46,6 +46,7 @@ mujoco_disc_sampled_efficientzero_config = dict(
     f'data_sez_ctree/{env_name[:-3]}_bin-{each_dim_disc_size}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_pelw{policy_entropy_loss_weight}_seed0',
     env=dict(
         env_name=env_name,
+        action_clip=True,
         continuous=False,
         manually_discretization=False,
         collector_env_num=collector_env_num,
