@@ -64,7 +64,7 @@ class SampledEfficientZeroPolicy(Policy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
-            norm_type='BN', 
+            norm_type='BN',
         ),
         # ****** common ******
         # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
@@ -103,7 +103,6 @@ class SampledEfficientZeroPolicy(Policy):
             start=1.,
             end=0.05,
             decay=int(2e5),
-
         ),
         ignore_done=False,
 
@@ -376,7 +375,6 @@ class SampledEfficientZeroPolicy(Policy):
         policy_entropy_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         target_policy_entropy = torch.zeros(1, device=self._cfg.device)
 
-
         # ==============================================================
         # sampled related core code: calculate policy loss, typically cross_entropy_loss
         # ==============================================================
@@ -527,59 +525,63 @@ class SampledEfficientZeroPolicy(Policy):
             predicted_value_prefixs = predicted_value_prefixs.reshape(-1).unsqueeze(-1)
 
         return_data = {
-                'cur_lr': self._optimizer.param_groups[0]['lr'],
-                'collect_mcts_temperature': self.collect_mcts_temperature,
-                'weighted_total_loss': weighted_total_loss.item(),
-                'total_loss': loss.mean().item(),
-                'policy_loss': policy_loss.mean().item(),
-                'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'value_prefix_loss': value_prefix_loss.mean().item(),
-                'value_loss': value_loss.mean().item(),
-                'consistency_loss': consistency_loss.mean() / self._cfg.num_unroll_steps,
+            'cur_lr': self._optimizer.param_groups[0]['lr'],
+            'collect_mcts_temperature': self.collect_mcts_temperature,
+            'weighted_total_loss': weighted_total_loss.item(),
+            'total_loss': loss.mean().item(),
+            'policy_loss': policy_loss.mean().item(),
+            'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+            'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+            'value_prefix_loss': value_prefix_loss.mean().item(),
+            'value_loss': value_loss.mean().item(),
+            'consistency_loss': consistency_loss.mean() / self._cfg.num_unroll_steps,
 
-                # ==============================================================
-                # priority related
-                # ==============================================================
-                'value_priority': value_priority.flatten().mean().item(),
-                'value_priority_orig': value_priority,
-                'target_value_prefix': target_value_prefix.detach().cpu().numpy().mean().item(),
-                'target_value': target_value.detach().cpu().numpy().mean().item(),
-                'transformed_target_value_prefix': transformed_target_value_prefix.detach().cpu().numpy().mean().item(),
-                'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
-                'predicted_value_prefixs': predicted_value_prefixs.detach().cpu().numpy().mean().item(),
-                'predicted_values': predicted_values.detach().cpu().numpy().mean().item()
+            # ==============================================================
+            # priority related
+            # ==============================================================
+            'value_priority': value_priority.flatten().mean().item(),
+            'value_priority_orig': value_priority,
+            'target_value_prefix': target_value_prefix.detach().cpu().numpy().mean().item(),
+            'target_value': target_value.detach().cpu().numpy().mean().item(),
+            'transformed_target_value_prefix': transformed_target_value_prefix.detach().cpu().numpy().mean().item(),
+            'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
+            'predicted_value_prefixs': predicted_value_prefixs.detach().cpu().numpy().mean().item(),
+            'predicted_values': predicted_values.detach().cpu().numpy().mean().item()
         }
 
         if self._cfg.model.continuous_action_space:
-            return_data.update({
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                'policy_mu_max': mu[:, 0].max().item(),
-                'policy_mu_min': mu[:, 0].min().item(),
-                'policy_mu_mean': mu[:, 0].mean().item(),
-                'policy_sigma_max': sigma.max().item(),
-                'policy_sigma_min': sigma.min().item(),
-                'policy_sigma_mean': sigma.mean().item(),
-                # take the fist dim in action space
-                'target_sampled_actions_max': target_sampled_actions[:, :, 0].max().item(),
-                'target_sampled_actions_min': target_sampled_actions[:, :, 0].min().item(),
-                'target_sampled_actions_mean': target_sampled_actions[:, :, 0].mean().item(),
-                'total_grad_norm_before_clip': total_grad_norm_before_clip
-            })
+            return_data.update(
+                {
+                    # ==============================================================
+                    # sampled related core code
+                    # ==============================================================
+                    'policy_mu_max': mu[:, 0].max().item(),
+                    'policy_mu_min': mu[:, 0].min().item(),
+                    'policy_mu_mean': mu[:, 0].mean().item(),
+                    'policy_sigma_max': sigma.max().item(),
+                    'policy_sigma_min': sigma.min().item(),
+                    'policy_sigma_mean': sigma.mean().item(),
+                    # take the fist dim in action space
+                    'target_sampled_actions_max': target_sampled_actions[:, :, 0].max().item(),
+                    'target_sampled_actions_min': target_sampled_actions[:, :, 0].min().item(),
+                    'target_sampled_actions_mean': target_sampled_actions[:, :, 0].mean().item(),
+                    'total_grad_norm_before_clip': total_grad_norm_before_clip
+                }
+            )
         else:
-            return_data.update({
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                # take the fist dim in action space
-                'target_sampled_actions_max': target_sampled_actions[:, :].float().max().item(),
-                'target_sampled_actions_min': target_sampled_actions[:, :].float().min().item(),
-                'target_sampled_actions_mean': target_sampled_actions[:, :].float().mean().item(),
-                'total_grad_norm_before_clip': total_grad_norm_before_clip
-            })
-        
+            return_data.update(
+                {
+                    # ==============================================================
+                    # sampled related core code
+                    # ==============================================================
+                    # take the fist dim in action space
+                    'target_sampled_actions_max': target_sampled_actions[:, :].float().max().item(),
+                    'target_sampled_actions_min': target_sampled_actions[:, :].float().min().item(),
+                    'target_sampled_actions_mean': target_sampled_actions[:, :].float().mean().item(),
+                    'total_grad_norm_before_clip': total_grad_norm_before_clip
+                }
+            )
+
         return return_data
 
     def _calculate_policy_loss_cont(
@@ -790,7 +792,13 @@ class SampledEfficientZeroPolicy(Policy):
         self.collect_mcts_temperature = 1
 
     def _forward_collect(
-        self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1, epsilon: float = 0, ready_env_id=None
+        self,
+        data: torch.Tensor,
+        action_mask: list = None,
+        temperature: float = 1,
+        to_play: List = [-1],
+        epsilon: float = 0.,
+        ready_env_id=None
     ):
         """
         Overview:
@@ -828,8 +836,7 @@ class SampledEfficientZeroPolicy(Policy):
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             reward_hidden_state_roots = (
-                reward_hidden_state_roots[0].detach().cpu().numpy(),
-                reward_hidden_state_roots[1].detach().cpu().numpy()
+                reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()
             )
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 

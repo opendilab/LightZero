@@ -1,10 +1,17 @@
 from easydict import EasyDict
 
-# env_name = 'MiniGrid-Empty-8x8-v0'
-# max_env_step = int(1e6)
+env_name = 'MiniGrid-Empty-8x8-v0'
+max_env_step = int(1e6)
+threshold_training_steps_for_final_temperature = int(5e4)
 
-env_name = 'MiniGrid-FourRooms-v0'
-max_env_step = int(2e6)
+# env_name = 'MiniGrid-FourRooms-v0'
+# max_env_step = int(2e6)
+# threshold_training_steps_for_final_temperature = int(5e4)
+
+# env_name = 'MiniGrid-DoorKey-8x8-v0'
+# max_env_step = int(5e6)
+# threshold_training_steps_for_final_temperature = int(5e5)
+
 
 # typical MiniGrid env id: {'MiniGrid-Empty-8x8-v0', 'MiniGrid-FourRooms-v0', 'MiniGrid-DoorKey-8x8-v0','MiniGrid-DoorKey-16x16-v0'},
 # please refer to https://github.com/Farama-Foundation/MiniGrid for details.
@@ -36,20 +43,20 @@ eval_sample_action = False
 
 policy_entropy_loss_weight = 0.
 # policy_entropy_loss_weight = 0.005
-threshold_training_steps_for_final_temperature = int(5e4)
-# threshold_training_steps_for_final_temperature = int(5e5)
 eps_greedy_exploration_in_collect = False
 # eps_greedy_exploration_in_collect = True
 
 # input_type = 'latent_state'  # 'obs' or 'latent_state'
-input_type = 'obs'  # 'obs' or 'latent_state'
+# input_type = 'obs'  # 'obs' or 'latent_state'
+input_type = 'obs_latent_state'  # 'obs' or 'latent_state'
+target_model_for_intrinsic_reward_update_type = 'assign'  # 'assign' or 'momentum'
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 minigrid_muzero_config = dict(
-    exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_pelw{policy_entropy_loss_weight}_temp-final-steps-{threshold_training_steps_for_final_temperature}_collect-eps-{eps_greedy_exploration_in_collect}_rnd-rew-{input_type}_rndbs1e6_gsl300_seed{seed}',
+    exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_pelw{policy_entropy_loss_weight}_temp-final-steps-{threshold_training_steps_for_final_temperature}_collect-eps-{eps_greedy_exploration_in_collect}_rnd-rew-{input_type}-{target_model_for_intrinsic_reward_update_type}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -75,7 +82,7 @@ minigrid_muzero_config = dict(
         learning_rate=3e-3,
         weight_decay=1e-4,
         batch_size=batch_size,
-        update_per_collect=100,
+        update_per_collect=200,
         # rnd_buffer_size=int(1e5),
         rnd_buffer_size=int(1e6),
         input_norm=True,
@@ -95,6 +102,12 @@ minigrid_muzero_config = dict(
             norm_type='BN',
             self_supervised_learning_loss=True,  # NOTE: default is False.
         ),
+
+        use_momentum_representation_network=True,
+        target_model_for_intrinsic_reward_update_type=target_model_for_intrinsic_reward_update_type,
+        target_update_freq_for_intrinsic_reward=1000,
+        target_update_theta_for_intrinsic_reward=0.005,
+
         eval_sample_action=eval_sample_action,
         policy_entropy_loss_weight=policy_entropy_loss_weight,
         eps=dict(

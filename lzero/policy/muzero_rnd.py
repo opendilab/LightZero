@@ -64,6 +64,7 @@ class MuZeroRNDPolicy(Policy):
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
         # this variable is used in ``collector``.
         sampled_algo=False,
+        gumbel_algo=False,
         # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
         mcts_ctree=True,
         # (bool) Whether to use cuda for network.
@@ -72,9 +73,9 @@ class MuZeroRNDPolicy(Policy):
         collector_env_num=8,
         # (int) The number of environments used in evaluating policy.
         evaluator_env_num=3,
-        # (str) The type of environment. Options is ['not_board_games', 'board_games'].
+        # (str) The type of environment. Options are ['not_board_games', 'board_games'].
         env_type='not_board_games',
-        # (str) The type of battle mode. Options is ['play_with_bot_mode', 'self_play_mode'].
+        # (str) The type of battle mode. Options are ['play_with_bot_mode', 'self_play_mode'].
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,
@@ -119,6 +120,8 @@ class MuZeroRNDPolicy(Policy):
         learning_rate=0.2,
         # (int) Frequency of target network update.
         target_update_freq=100,
+        # (int) Frequency of target network update.
+        target_update_freq_for_intrinsic_reward=1000,
         # (float) Weight decay for training policy network.
         weight_decay=1e-4,
         # (float) One-order Momentum in optimizer, which stabilizes the training process (gradient direction).
@@ -237,6 +240,20 @@ class MuZeroRNDPolicy(Policy):
             update_type='assign',
             update_kwargs={'freq': self._cfg.target_update_freq}
         )
+        if self._cfg.target_model_for_intrinsic_reward_update_type=='assign':
+            self._target_model_for_intrinsic_reward = model_wrap(
+                self._target_model,
+                wrapper_name='target',
+                update_type='assign',
+                update_kwargs={'freq': self._cfg.target_update_freq_for_intrinsic_reward}
+            )
+        elif self._cfg.target_model_for_intrinsic_reward_update_type=='momentum':
+            self._target_model_for_intrinsic_reward = model_wrap(
+                wrapper_name='target',
+                update_type='momentum',
+                update_kwargs={'theta': self._cfg.target_update_theta_for_intrinsic_reward}
+            )
+
         self._learn_model = self._model
 
         if self._cfg.use_augmentation:
@@ -265,6 +282,8 @@ class MuZeroRNDPolicy(Policy):
         """
         self._learn_model.train()
         self._target_model.train()
+        self._target_model_for_intrinsic_reward.train()
+
 
         current_batch, target_batch = data
         obs_batch_orig, action_batch, mask_batch, indices, weights, make_time = current_batch
@@ -438,6 +457,8 @@ class MuZeroRNDPolicy(Policy):
         # the core target model update step.
         # ==============================================================
         self._target_model.update(self._learn_model.state_dict())
+        self._target_model_for_intrinsic_reward.update(self._learn_model.state_dict())
+
 
         # packing loss info for tensorboard logging
         loss_info = (
@@ -531,6 +552,7 @@ class MuZeroRNDPolicy(Policy):
             - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
             - temperature: :math:`(1, )`.
             - to_play: :math:`(N, 1)`, where N is the number of collect_env.
+            - epsilon: :math:`(1, )`. The epsilon for epsilon-greedy.
             - ready_env_id: None
         Returns:
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \

@@ -56,7 +56,7 @@ class EfficientZeroPolicy(Policy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
-            norm_type='BN', 
+            norm_type='BN',
         ),
         # ****** common ******
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
@@ -524,6 +524,7 @@ class EfficientZeroPolicy(Policy):
         action_mask: list = None,
         temperature: float = 1,
         to_play: List = [-1],
+        epsilon: float = 0.,
         ready_env_id=None
     ):
         """

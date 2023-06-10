@@ -467,6 +467,7 @@ class GumeblMuZeroPolicy(Policy):
             action_mask: list = None,
             temperature: float = 1,
             to_play: List = [-1],
+            epsilon: float = 0.,
             ready_env_id=None
     ) -> Dict:
         """

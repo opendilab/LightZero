@@ -107,7 +107,10 @@ def train_muzero_with_reward_model(
         policy_config=policy_config
     )
     reward_model = RndRewardModel(cfg.reward_model, policy.collect_mode.get_attribute('device'), tb_logger,
-                                  policy._learn_model.representation_network)
+                                  policy._learn_model.representation_network,
+                                  policy._target_model_for_intrinsic_reward.representation_network,
+                                  cfg.policy.use_momentum_representation_network
+                                  )
 
     # ==============================================================
     # Main loop
@@ -161,7 +164,7 @@ def train_muzero_with_reward_model(
             # train reward_model with latent_state
             if len(reward_model.train_latent_state) > reward_model.cfg.batch_size:
                 reward_model.train_with_data()
-        elif reward_model.cfg.input_type == 'obs':
+        elif reward_model.cfg.input_type in ['obs', 'latent_state']:
             # train reward_model with obs
             if len(reward_model.train_obs) > reward_model.cfg.batch_size:
                 reward_model.train_with_data()
