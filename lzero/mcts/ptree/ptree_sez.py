@@ -1,6 +1,7 @@
 """
 The Node, Roots class and related core functions for Sampled EfficientZero.
 """
+import itertools
 import math
 import random
 from typing import List, Any, Tuple, Union
@@ -26,6 +27,8 @@ class Node:
             num_of_sampled_actions: int = 20,
             continuous_action_space: bool = False,
             action_tanh: bool = True,
+            sample_fixed_extreme_action: bool = True,
+            fixed_actions_num: int = 2,
     ) -> None:
         self.prior = prior
         self.mu = None
@@ -46,6 +49,8 @@ class Node:
         self.simulation_index = 0
         self.batch_index = 0
         self.action_tanh = action_tanh
+        self.sample_fixed_extreme_action = sample_fixed_extreme_action
+        self.fixed_actions_num = fixed_actions_num
 
     def expand(
             self, to_play: int, simulation_index: int, batch_index: int, value_prefix: float, policy_logits: List[float]
@@ -92,20 +97,74 @@ class Node:
                                        ), torch.tensor(policy_logits[-self.action_space_size:])
             self.mu = mu
             self.sigma = sigma
+
+            # for debugging
+            # import torch
+            # from torch.distributions import Normal, Independent
+            # num_of_sampled_actions = 10
+            # fixed_actions_num = 2
+            # action_tanh = True
+            # sample_fixed_extreme_action = True
+            # mu = torch.tensor([-0.0028, 0.0012, 0.0023])
+            # sigma = torch.ones(mu.shape)
+
             dist = Independent(Normal(mu, sigma), 1)
-            # print(dist.batch_shape, dist.event_shape)
-            sampled_actions_before_tanh = dist.sample(torch.tensor([self.num_of_sampled_actions]))
 
             if self.action_tanh:
+                # each dim: [-3,3]
+
+                # Generate all possible combinations of {-3, 3} for each action dimension
+                action_combinations = list(itertools.product([-3, 3], repeat=mu.shape[0]))
+                # Randomly select 'fixed_actions_num' unique actions from the combinations
+                selected_actions = random.sample(action_combinations, self.fixed_actions_num)
+                # Convert the selected_actions list to a tensor
+                fixed_actions_before_tanh = torch.tensor(selected_actions, dtype=torch.float32)
+
+                # fixed_actions_before_tanh = torch.randint(0, 2, (self.fixed_actions_num, *mu.shape), dtype=torch.float32) * 6 - 3
+
+                num_remaining_actions = self.num_of_sampled_actions - (
+                    self.fixed_actions_num if self.sample_fixed_extreme_action else 0)
+                sampled_remaining_actions_before_tanh = dist.sample([num_remaining_actions])
+
+                if self.sample_fixed_extreme_action:
+                    sampled_actions_before_tanh = torch.cat(
+                        [fixed_actions_before_tanh, sampled_remaining_actions_before_tanh])
+                else:
+                    sampled_actions_before_tanh = sampled_remaining_actions_before_tanh
+
                 sampled_actions = torch.tanh(sampled_actions_before_tanh)
                 y = 1 - sampled_actions.pow(2) + 1e-6
-                # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
                 log_prob = dist.log_prob(sampled_actions_before_tanh).unsqueeze(-1)
                 log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
             else:
-                # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
+                # each dim: [-1,1]
+
+                # Generate all possible combinations of {-1, 1} for each action dimension
+                action_combinations = list(itertools.product([-1, 1], repeat=mu.shape[0]))
+                # Randomly select 'fixed_actions_num' unique actions from the combinations
+                selected_actions = random.sample(action_combinations, self.fixed_actions_num)
+                # Convert the selected_actions list to a tensor
+                fixed_actions_before_tanh = torch.tensor(selected_actions, dtype=torch.float32)
+
+                # 可能有重复的动作，导致返回的visit_count的维度是变化的
+                # fixed_actions_before_tanh = torch.randint(0, 2, (self.fixed_actions_num, *mu.shape), dtype=torch.float32) * 2 - 1
+
+                num_remaining_actions = self.num_of_sampled_actions - (
+                    self.fixed_actions_num if self.sample_fixed_extreme_action else 0)
+                sampled_remaining_actions_before_tanh = dist.sample([num_remaining_actions])
+
+                if self.sample_fixed_extreme_action:
+                    sampled_actions_before_tanh = torch.cat(
+                        [fixed_actions_before_tanh, sampled_remaining_actions_before_tanh])
+                else:
+                    sampled_actions_before_tanh = sampled_remaining_actions_before_tanh
+
                 log_prob = dist.log_prob(sampled_actions_before_tanh).unsqueeze(-1)
                 sampled_actions = sampled_actions_before_tanh
+
+            # print(sampled_actions)
+            # print(log_prob)
+
             self.legal_actions = []
 
             for action_index in range(self.num_of_sampled_actions):
@@ -114,7 +173,9 @@ class Node:
                     action_space_size=self.action_space_size,
                     num_of_sampled_actions=self.num_of_sampled_actions,
                     continuous_action_space=self.continuous_action_space,
-                    action_tanh=self.action_tanh
+                    action_tanh=self.action_tanh,
+                    sample_fixed_extreme_action=self.sample_fixed_extreme_action,
+                    fixed_actions_num=self.fixed_actions_num,
                 )
                 self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
         else:
@@ -136,7 +197,9 @@ class Node:
                     action_space_size=self.action_space_size,
                     num_of_sampled_actions=self.num_of_sampled_actions,
                     continuous_action_space=self.continuous_action_space,
-                    action_tanh=self.action_tanh
+                    action_tanh=self.action_tanh,
+                    sample_fixed_extreme_action=self.sample_fixed_extreme_action,
+                    fixed_actions_num=self.fixed_actions_num,
                 )
                 self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
 
@@ -282,6 +345,8 @@ class Roots:
             num_of_sampled_actions: int = 20,
             continuous_action_space: bool = False,
             action_tanh: bool = True,
+            sample_fixed_extreme_action: bool = True,
+            fixed_actions_num: int = 2
     ) -> None:
         self.num = root_num
         self.root_num = root_num
@@ -289,7 +354,8 @@ class Roots:
         self.num_of_sampled_actions = num_of_sampled_actions
         self.continuous_action_space = continuous_action_space
         self.action_tanh = action_tanh
-
+        self.sample_fixed_extreme_action = sample_fixed_extreme_action
+        self.fixed_actions_num = fixed_actions_num
         self.roots = []
 
         # ==============================================================
@@ -305,7 +371,9 @@ class Roots:
                         action_space_size=action_space_size,
                         num_of_sampled_actions=self.num_of_sampled_actions,
                         continuous_action_space=self.continuous_action_space,
-                        action_tanh=self.action_tanh
+                        action_tanh=self.action_tanh,
+                        sample_fixed_extreme_action=self.sample_fixed_extreme_action,
+                        fixed_actions_num=self.fixed_actions_num,
                     )
                 )
             elif isinstance(legal_actions_list, int):
@@ -317,7 +385,9 @@ class Roots:
                         action_space_size=action_space_size,
                         num_of_sampled_actions=self.num_of_sampled_actions,
                         continuous_action_space=self.continuous_action_space,
-                        action_tanh=self.action_tanh
+                        action_tanh=self.action_tanh,
+                        sample_fixed_extreme_action=self.sample_fixed_extreme_action,
+                        fixed_actions_num=self.fixed_actions_num,
                     )
                 )
             elif legal_actions_list is None:
@@ -329,7 +399,9 @@ class Roots:
                         action_space_size=action_space_size,
                         num_of_sampled_actions=self.num_of_sampled_actions,
                         continuous_action_space=self.continuous_action_space,
-                        action_tanh=self.action_tanh
+                        action_tanh=self.action_tanh,
+                        sample_fixed_extreme_action=self.sample_fixed_extreme_action,
+                        fixed_actions_num=self.fixed_actions_num,
                     )
                 )
 
@@ -551,7 +623,7 @@ def compute_ucb_score(
         if continuous_action_space:
             # prior is log_prob
             prior_score = pb_c * (
-                torch.exp(child.prior) / (sum([torch.exp(node.prior) for node in parent.children.values()]) + 1e-6)
+                    torch.exp(child.prior) / (sum([torch.exp(node.prior) for node in parent.children.values()]) + 1e-6)
             )
         else:
             # prior is prob
@@ -601,12 +673,12 @@ def batch_traverse(
         - discount_factor (:obj:`float`): The discount factor used in calculating bootstrapped value, if env is board_games, we set discount_factor=1.
         - virtual_to_play (:obj:`list`): the to_play list used in self_play collecting and training in board games,
             `virtual` is to emphasize that actions are performed on an imaginary hidden state.
-        - continuous_action_space: whether the action space is continous in current env.
+        - continuous_action_space: whether the action space is continuous in current env.
     Returns:
-        - latent_state_index_in_search_path (:obj:`list`): the list of x/first index of hidden state vector of the searched node, i.e. the search depth.
-        - latent_state_index_in_batch (:obj:`list`): the list of y/second index of hidden state vector of the searched node, i.e. the index of batch root node, its maximum is ``batch_size``/``env_num``.
+        - latent_state_index_in_search_path (:obj:`list`): the list of first index of hidden state vector of the searched node, i.e. the search depth.
+        - latent_state_index_in_batch (:obj:`list`): the list of second index of hidden state vector of the searched node, i.e. the index of batch root node, its maximum is ``batch_size``/``env_num``.
         - last_actions (:obj:`list`): the action performed by the previous node.
-        - virtual_to_play (:obj:`list`): the to_play list used in self_play collecting and trainin gin board games,
+        - virtual_to_play (:obj:`list`): the to_play list used in self_play collecting and training in board games,
             `virtual` is to emphasize that actions are performed on an imaginary hidden state.
     """
     parent_q = 0.0
@@ -739,8 +811,8 @@ def backpropagate(
 
             # true_reward is in the perspective of current player of node
             bootstrap_value = (
-                -true_reward if node.to_play == to_play else true_reward
-            ) + discount_factor * bootstrap_value
+                                  -true_reward if node.to_play == to_play else true_reward
+                              ) + discount_factor * bootstrap_value
 
 
 def batch_backpropagate(

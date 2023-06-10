@@ -10,7 +10,7 @@
 #include <vector>
 #include <stack>
 #include <math.h>
-
+#include <numeric>
 #include <stdlib.h>
 #include <time.h>
 #include <cmath>
@@ -149,6 +149,10 @@ namespace tree
         this->num_of_sampled_actions = 20;
         this->continuous_action_space = false;
         this->action_tanh = true;
+        this->sample_fixed_extreme_action = true;
+        this->fixed_actions_num = 2;
+
+
 
 
         this->is_reset = 0;
@@ -162,7 +166,7 @@ namespace tree
         this->parent_value_prefix = 0.0;
     }
 
-    CNode::CNode(float prior, std::vector<CAction> &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space, bool action_tanh)
+    CNode::CNode(float prior, std::vector<CAction> &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space, bool action_tanh, bool sample_fixed_extreme_action, int fixed_actions_num)
     {
         /*
         Overview:
@@ -181,6 +185,8 @@ namespace tree
         this->num_of_sampled_actions = num_of_sampled_actions;
         this->continuous_action_space = continuous_action_space;
         this->action_tanh = action_tanh;
+        this->sample_fixed_extreme_action = sample_fixed_extreme_action;
+        this->fixed_actions_num = fixed_actions_num;
 
         this->is_reset = 0;
         this->visit_count = 0;
@@ -227,6 +233,8 @@ namespace tree
             all_actions.push_back(i);
         }
         std::vector<std::vector<float> > sampled_actions_after_tanh;
+        std::vector<std::vector<float> > sampled_actions_before_tanh;
+        std::vector<float> sampled_actions_log_probs_before_tanh;
         std::vector<float> sampled_actions_log_probs_after_tanh;
 
         std::vector<int> sampled_actions;
@@ -243,6 +251,7 @@ namespace tree
         if (this->continuous_action_space == true)
         {
             // continuous action space for sampled algo..
+            // std::cout << "Action space size: " << action_space_size << std::endl;
             this->action_space_size = policy_logits.size() / 2;
             std::vector<float> mu;
             std::vector<float> sigma;
@@ -252,63 +261,121 @@ namespace tree
                 sigma.push_back(policy_logits[this->action_space_size + i]);
             }
 
+            // SAC-like tanh, pleasee refer to paper https://arxiv.org/abs/1801.01290.
+
+            // 如果 action_tanh 为 True，则固定采样 -3, 3；如果 action_tanh 为 False，则固定采样 -1, 1
+            // std::vector<float> fixed_actions = this->action_tanh ? std::vector<float>(-3.0, 3.0) : std::vector<float>(-1.0, 1.0);
+
             // The number of nanoseconds that have elapsed since epoch(1970: 00: 00 UTC on January 1, 1970). unsigned type will truncate this value.
             unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-
-            // SAC-like tanh, pleasee refer to paper https://arxiv.org/abs/1801.01290.
-            std::vector<std::vector<float> > sampled_actions_before_tanh;
-
-            float sampled_action_one_dim_before_tanh;
-            std::vector<float> sampled_actions_log_probs_before_tanh;
-
             std::default_random_engine generator(seed);
-            if (this->action_tanh == true)
-            {
-                for (int i = 0; i < this->num_of_sampled_actions; ++i)
-                {
+            std::vector<std::vector<float> > fixed_actions_before_tanh;
+
+            // Generate all possible combinations of {-3, 3} or {-1, 1} for each action dimension
+            std::vector<std::vector<float> > possible_actions;
+            int num_combinations = static_cast<int>(std::pow(2, this->action_space_size));
+            for (int i = 0; i < num_combinations; ++i) {
+                std::vector<float> action;
+                for (int j = 0; j < this->action_space_size; ++j) {
+                    float value = (i & (1 << j)) ? (action_tanh ? 3.0f : 1.0f) : (action_tanh ? -3.0f : -1.0f);
+                    action.push_back(value);
+                }
+                possible_actions.push_back(action);
+            }
+
+            // Randomly select 'fixed_actions_num' unique actions from the combinations
+            std::shuffle(possible_actions.begin(), possible_actions.end(), generator);
+
+            for (int i = 0; i < this->fixed_actions_num && i < num_combinations; ++i) {
+                fixed_actions_before_tanh.push_back(possible_actions[i]);
+            }
+
+
+
+            // Add fixed_actions_before_tanh to sampled_actions_before_tanh and compute their probabilities
+            for (int i = 0; i < fixed_actions_before_tanh.size(); ++i) {
+                sampled_actions_before_tanh.push_back(fixed_actions_before_tanh[i]);
+                // Apply tanh to fixed_actions_before_tanh[i] and add the result to sampled_actions_after_tanh
+                std::vector<float> action_after_tanh;
+                for (float val : fixed_actions_before_tanh[i]) {
+                    action_after_tanh.push_back(tanh(val));
+                }
+                sampled_actions_after_tanh.push_back(action_after_tanh);
+            }
+            // std::cout << "Sampled actions after tanh size: " << sampled_actions_after_tanh.size() << std::endl;
+            // std::cout << "position 1" << std::endl;
+            float sampled_action_one_dim_before_tanh;
+            float sampled_action_one_dim;
+
+
+            int start_index = this->sample_fixed_extreme_action ? fixed_actions_before_tanh.size() : 0;
+            if (this->action_tanh) {
+                // for (int i = start_index; i < this->num_of_sampled_actions; ++i) {
+                for (int i_tanh = 0; i_tanh < this->num_of_sampled_actions; ++i_tanh) {
                     float sampled_action_prob_before_tanh = 1;
-                    // TODO(pu): why here
                     std::vector<float> sampled_action_before_tanh;
                     std::vector<float> sampled_action_after_tanh;
                     std::vector<float> y;
-
-                    for (int j = 0; j < this->action_space_size; ++j)
-                    {
+                    // std::cout << "position 2" << std::endl;
+                    for (int j = 0; j < this->action_space_size; ++j){
                         std::normal_distribution<float> distribution(mu[j], sigma[j]);
-                        sampled_action_one_dim_before_tanh = distribution(generator);
+
+                        if (i_tanh < start_index){
+                            sampled_action_one_dim_before_tanh = fixed_actions_before_tanh[i_tanh][j];
+                        }
+                        else
+                        {
+                            // 采样剩余的动作
+                            sampled_action_one_dim_before_tanh = distribution(generator);
+                        }
+                        sampled_action_before_tanh.push_back(sampled_action_one_dim_before_tanh);
                         // refer to python normal log_prob method
                         sampled_action_prob_before_tanh *= exp(-pow((sampled_action_one_dim_before_tanh - mu[j]), 2) / (2 * pow(sigma[j], 2)) - log(sigma[j]) - log(sqrt(2 * M_PI)));
-                        sampled_action_before_tanh.push_back(sampled_action_one_dim_before_tanh);
                         sampled_action_after_tanh.push_back(tanh(sampled_action_one_dim_before_tanh));
                         y.push_back(1 - pow(tanh(sampled_action_one_dim_before_tanh), 2) + 1e-6);
                     }
-                    sampled_actions_before_tanh.push_back(sampled_action_before_tanh);
-                    sampled_actions_after_tanh.push_back(sampled_action_after_tanh);
+                    if (i_tanh > start_index-1){
+                        // cheack
+                        sampled_actions_before_tanh.push_back(sampled_action_before_tanh);
+                        sampled_actions_after_tanh.push_back(sampled_action_after_tanh);
+                    }
                     sampled_actions_log_probs_before_tanh.push_back(log(sampled_action_prob_before_tanh));
                     float y_sum = std::accumulate(y.begin(), y.end(), 0.);
                     sampled_actions_log_probs_after_tanh.push_back(log(sampled_action_prob_before_tanh) - log(y_sum));
+                    std::cout << "position 3" << std::endl;
                 }
             }
-            else
-            {
-                for (int i = 0; i < this->num_of_sampled_actions; ++i)
-                {
+            else {
+                // 采样剩余的动作
+                for (int i_not_tanh; i_not_tanh < this->num_of_sampled_actions; ++i_not_tanh) {
                     float sampled_action_prob = 1;
                     std::vector<float> sampled_action;
 
                     for (int j = 0; j < this->action_space_size; ++j)
                     {
                         std::normal_distribution<float> distribution(mu[j], sigma[j]);
-                        float sampled_action_one_dim = distribution(generator);
+
+                        if (i_not_tanh < start_index){
+                            float sampled_action_one_dim = fixed_actions_before_tanh[i_not_tanh][j];
+                        }
+                        else{
+                            float sampled_action_one_dim = distribution(generator);
+                        }
+
+                        sampled_action.push_back(sampled_action_one_dim);
+
                         // refer to python normal log_prob method
                         sampled_action_prob *= exp(-pow((sampled_action_one_dim - mu[j]), 2) / (2 * pow(sigma[j], 2)) - log(sigma[j]) - log(sqrt(2 * M_PI)));
-                        sampled_action.push_back(sampled_action_one_dim);
                     }
 
-                    sampled_actions_after_tanh.push_back(sampled_action);
+                    if (i_not_tanh > start_index-1){
+                        // cheack
+                       sampled_actions_after_tanh.push_back(sampled_action);
+                    }
                     sampled_actions_log_probs_after_tanh.push_back(log(sampled_action_prob));
                 }
             }
+        
         }
         else
         {
@@ -450,9 +517,28 @@ namespace tree
 
             if (this->continuous_action_space == true)
             {
+                // std::cout << "position 4" << std::endl;
+                // 打印 sampled_actions_after_tanh
+                // std::cout << "sampled_actions_after_tanh:" << std::endl;
+                // for (size_t i = 0; i < sampled_actions_after_tanh.size(); ++i) {
+                //     for (size_t j = 0; j < sampled_actions_after_tanh[i].size(); ++j) {
+                //         std::cout << sampled_actions_after_tanh[i][j] << " ";
+                //     }
+                //     std::cout << std::endl;
+                // }
                 CAction action = CAction(sampled_actions_after_tanh[i], 0);
+                // std::cout << "position 5" << std::endl;
+                
                 std::vector<CAction> legal_actions;
-                this->children[action.get_combined_hash()] = CNode(sampled_actions_log_probs_after_tanh[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space, this->action_tanh); // only for muzero/efficient zero, not support alphazero
+                    // std::cout << "position 6" << std::endl;
+                // std::cout << "sampled_actions_log_probs_after_tanh:" << std::endl;
+                // for (size_t i = 0; i < sampled_actions_log_probs_after_tanh.size(); ++i) {
+                //     std::cout << sampled_actions_log_probs_after_tanh[i] << " ";
+                //     std::cout << std::endl;
+                // }
+                this->children[action.get_combined_hash()] = CNode(sampled_actions_log_probs_after_tanh[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space, this->action_tanh, this->sample_fixed_extreme_action, this->fixed_actions_num); // only for muzero/efficient zero, not support alphazero
+                    // std::cout << "position 7" << std::endl;
+                
                 this->legal_actions.push_back(action);
             }
             else
@@ -464,7 +550,7 @@ namespace tree
                 }
                 CAction action = CAction(sampled_action_tmp, 0);
                 std::vector<CAction> legal_actions;
-                this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space, this->action_tanh); // only for muzero/efficient zero, not support alphazero
+                this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space, this->action_tanh, this->sample_fixed_extreme_action, this->fixed_actions_num); // only for muzero/efficient zero, not support alphazero
                 this->legal_actions.push_back(action);
             }
         }
@@ -647,7 +733,7 @@ namespace tree
         this->num_of_sampled_actions = 20;
     }
 
-    CRoots::CRoots(int root_num, std::vector<std::vector<float> > legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space, bool action_tanh)
+    CRoots::CRoots(int root_num, std::vector<std::vector<float> > legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space, bool action_tanh, bool sample_fixed_extreme_action, int fixed_actions_num)
     {
         /*
         Overview:
@@ -663,6 +749,7 @@ namespace tree
         this->legal_actions_list = legal_actions_list;
         this->continuous_action_space = continuous_action_space;
         this->action_tanh = action_tanh;
+        this->fixed_actions_num = fixed_actions_num;
 
 
         // sampled related core code
@@ -675,14 +762,14 @@ namespace tree
             {
                 // continous action space
                 std::vector<CAction> legal_actions;
-                this->roots.push_back(CNode(0, legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space, this->action_tanh));
+                this->roots.push_back(CNode(0, legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space, this->action_tanh, this->sample_fixed_extreme_action, this->fixed_actions_num));
             }
             else if (this->continuous_action_space == false or this->legal_actions_list[0][0] == -1)
             {
                 // sampled
                 // discrete action space without action mask
                 std::vector<CAction> legal_actions;
-                this->roots.push_back(CNode(0, legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space, this->action_tanh));
+                this->roots.push_back(CNode(0, legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space, this->action_tanh, this->sample_fixed_extreme_action, this->fixed_actions_num));
             }
 
             else
@@ -694,7 +781,7 @@ namespace tree
                     CAction c_legal_action = CAction(legal_actions_list[i], 0);
                     c_legal_actions.push_back(c_legal_action);
                 }
-                this->roots.push_back(CNode(0, c_legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space, this->action_tanh));
+                this->roots.push_back(CNode(0, c_legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space, this->action_tanh, this->sample_fixed_extreme_action, this->fixed_actions_num));
             }
         }
     }

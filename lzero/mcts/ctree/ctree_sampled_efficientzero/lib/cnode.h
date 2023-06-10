@@ -45,6 +45,10 @@ namespace tree
         float parent_value_prefix;
         bool continuous_action_space;
         bool action_tanh;
+        bool sample_fixed_extreme_action;
+        int fixed_actions_num;
+
+
 
         std::vector<int> children_index;
         std::map<size_t, CNode> children;
@@ -53,7 +57,7 @@ namespace tree
 
         CNode();
         // sampled related core code
-        CNode(float prior, std::vector<CAction> &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space, bool action_tanh);
+        CNode(float prior, std::vector<CAction> &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space, bool action_tanh, bool sample_fixed_extreme_action, int fixed_actions_num);
         ~CNode();
 
         void expand(int to_play, int current_latent_state_index, int batch_index, float value_prefix, const std::vector<float> &policy_logits);
@@ -81,10 +85,12 @@ namespace tree
         std::vector<std::vector<float> > legal_actions_list;
         bool continuous_action_space;
         bool action_tanh;
+        bool sample_fixed_extreme_action;
+        int fixed_actions_num;
 
 
         CRoots();
-        CRoots(int root_num, std::vector<std::vector<float> > legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space, bool action_tanh);
+        CRoots(int root_num, std::vector<std::vector<float> > legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space, bool action_tanh, bool sample_fixed_extreme_action, int fixed_actions_num);
         ~CRoots();
 
         void prepare(float root_noise_weight, const std::vector<std::vector<float> > &noises, const std::vector<float> &value_prefixs, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch);

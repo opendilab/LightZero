@@ -62,7 +62,7 @@ class SampledEfficientZeroMCTSPtree(object):
     @classmethod
     def roots(
             cls: int, root_num: int, legal_action_lis: List[Any], action_space_size: int, num_of_sampled_actions: int,
-            continuous_action_space: bool
+            continuous_action_space: bool, action_tanh: bool = True, sample_fixed_extreme_action: bool = True, fixed_actions_num: int = 2
     ) -> "ptree.Roots":
         """
         Overview:
@@ -76,7 +76,7 @@ class SampledEfficientZeroMCTSPtree(object):
         """
         import lzero.mcts.ptree.ptree_sez as ptree
         return ptree.Roots(
-            root_num, legal_action_lis, action_space_size, num_of_sampled_actions, continuous_action_space
+            root_num, legal_action_lis, action_space_size, num_of_sampled_actions, continuous_action_space, action_tanh, sample_fixed_extreme_action, fixed_actions_num
         )
 
     def search(

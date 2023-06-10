@@ -42,10 +42,12 @@ cdef extern from "lib/cnode.h" namespace "tree":
 
     cdef cppclass CNode:
         CNode() except +
-        CNode(float prior, vector[CAction] &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space, bool action_tanh) except +
+        CNode(float prior, vector[CAction] &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space, bool action_tanh, bool sample_fixed_extreme_action, int fixed_actions_num) except +
         int visit_count, to_play, current_latent_state_index, batch_index
         bool continuous_action_space
         bool action_tanh
+        bool sample_fixed_extreme_action
+
         CAction best_action
         float value_prefixs, prior, value_sum, parent_value_prefix
         vector[CNode]* ptr_node_pool;
@@ -62,10 +64,12 @@ cdef extern from "lib/cnode.h" namespace "tree":
 
     cdef cppclass CRoots:
         CRoots() except +
-        CRoots(int root_num, vector[vector[float]] legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space, bool action_tanh) except +
+        CRoots(int root_num, vector[vector[float]] legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space, bool action_tanh, bool sample_fixed_extreme_action, int fixed_actions_num) except +
         int root_num, action_space_size, num_of_sampled_actions
         bool continuous_action_space
         bool action_tanh
+        bool sample_fixed_extreme_action
+
         vector[CNode] roots
         vector[vector[CNode]] node_pools
 

@@ -69,6 +69,10 @@ class SampledEfficientZeroPolicy(Policy):
         # ****** common ******
         # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
         sampled_algo=True,
+        # (bool) whether to use the tanh function in sampled actions.
+        action_tanh=True,
+        # (bool) whether to use the fixed extreme action in sampled actions.
+        sample_fixed_extreme_action=False,
         # (bool) Whether to enable the gumbel-based algorithm (e.g. Gumbel Muzero)
         gumbel_algo=False,
         # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
@@ -856,13 +860,13 @@ class SampledEfficientZeroPolicy(Policy):
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(
                     active_collect_env_num, legal_actions, self._cfg.model.action_space_size,
-                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space, self._cfg.action_tanh
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space, self._cfg.action_tanh, self._cfg.sample_fixed_extreme_action, self._cfg.fixed_actions_num
                 )
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(
                     active_collect_env_num, legal_actions, self._cfg.model.action_space_size,
-                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space, self._cfg.action_tanh
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space, self._cfg.action_tanh, self._cfg.sample_fixed_extreme_action, self._cfg.fixed_actions_num
                 )
 
             # the only difference between collect and eval is the dirichlet noise
@@ -876,8 +880,7 @@ class SampledEfficientZeroPolicy(Policy):
                 roots, self._collect_model, latent_state_roots, reward_hidden_state_roots, to_play
             )
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
             roots_sampled_actions = roots.get_sampled_actions()  # {list: 1}->{list:6}
 
@@ -990,13 +993,13 @@ class SampledEfficientZeroPolicy(Policy):
             if self._cfg.mcts_ctree:
                 roots = MCTSCtree.roots(
                     active_eval_env_num, legal_actions, self._cfg.model.action_space_size,
-                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space, self._cfg.action_tanh
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space, self._cfg.action_tanh, self._cfg.sample_fixed_extreme_action, self._cfg.fixed_actions_num
                 )
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(
                     active_eval_env_num, legal_actions, self._cfg.model.action_space_size,
-                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space, self._cfg.action_tanh
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space, self._cfg.action_tanh, self._cfg.sample_fixed_extreme_action, self._cfg.fixed_actions_num
                 )
 
             roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
