@@ -10,7 +10,7 @@ from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
 
-# from lzero.mcts import StochasticMuZeroMCTSCtree as MCTSCtree
+from lzero.mcts import StochasticMuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import StochasticMuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \

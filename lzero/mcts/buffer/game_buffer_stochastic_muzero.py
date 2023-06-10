@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from ding.utils import BUFFER_REGISTRY
 
-from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
+from lzero.mcts.tree_search.mcts_ctree_stochastic import StochasticMuZeroMCTSCtree as MCTSCtree
 from lzero.mcts.tree_search.mcts_ptree_stochastic import StochasticMuZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation
 from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
