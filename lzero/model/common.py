@@ -34,6 +34,15 @@ class MZNetworkOutput:
     policy_logits: torch.Tensor
     latent_state: torch.Tensor
 
+@dataclass
+class MZRNetworkOutput:
+    # output format of the MuZeroRecurrent model
+    value: torch.Tensor
+    reward: torch.Tensor
+    policy_logits: torch.Tensor
+    latent_state: torch.Tensor
+    dynamics_hidden_state: Tuple[torch.Tensor]
+
 
 class DownSample(nn.Module):
             

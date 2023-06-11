@@ -11,16 +11,16 @@ from ding.utils import POLICY_REGISTRY
 from torch.distributions import Categorical
 from torch.nn import L1Loss
 
-from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
-from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
+from lzero.mcts import MuZeroRMCTSCtree as MCTSCtree
+# from lzero.mcts import MuZeroRMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
+    DiscreteSupport, to_torch_float_tensor, mzr_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
     configure_optimizers
 
 
-@POLICY_REGISTRY.register('muzero')
-class MuZeroPolicy(Policy):
+@POLICY_REGISTRY.register('muzero_recurrent')
+class MuZeroRecurrentPolicy(Policy):
     """
     Overview:
         The policy class for MuZero.
@@ -139,6 +139,8 @@ class MuZeroPolicy(Policy):
         td_steps=5,
         # (int) The number of unroll steps in dynamics network.
         num_unroll_steps=5,
+        # (int) reset the hidden states in LSTM every ``lstm_horizon_len`` horizon steps.
+        lstm_horizon_len=5,
         # (float) The weight of reward loss.
         reward_loss_weight=1,
         # (float) The weight of value loss.
@@ -196,9 +198,9 @@ class MuZeroPolicy(Policy):
             by import_names path. For MuZero, ``lzero.model.muzero_model.MuZeroModel``
         """
         if self._cfg.model.model_type == "conv":
-            return 'MuZeroModel', ['lzero.model.muzero_model']
+            return 'MuZeroModelRecurrent', ['lzero.model.muzero_model_recurrent']
         elif self._cfg.model.model_type == "mlp":
-            return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
+            return 'MuZeroModelMLPR', ['lzero.model.muzero_model_mlp_recurrent']
 
     def _init_learn(self) -> None:
         """
@@ -314,7 +316,8 @@ class MuZeroPolicy(Policy):
         network_output = self._learn_model.initial_inference(obs_batch)
 
         # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
-        latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
+        # latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
+        latent_state, reward, dynamics_hidden_state, value, policy_logits = mzr_network_output_unpack(network_output)
 
         # transform the scaled value or its categorical representation to its original value,
         # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -354,8 +357,9 @@ class MuZeroPolicy(Policy):
             # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
             # given current ``latent_state`` and ``action``.
             # And then predict policy_logits and value with the prediction function.
-            network_output = self._learn_model.recurrent_inference(latent_state, action_batch[:, step_i])
-            latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
+            network_output = self._learn_model.recurrent_inference(latent_state, dynamics_hidden_state, action_batch[:, step_i])
+            latent_state, reward, dynamics_hidden_state, value, policy_logits = mzr_network_output_unpack(
+                network_output)
 
             # transform the scaled value or its categorical representation to its original value,
             # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -401,6 +405,13 @@ class MuZeroPolicy(Policy):
 
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_i])
+
+            # reset hidden states every ``lstm_horizon_len`` unroll steps.
+            if (step_i + 1) % self._cfg.lstm_horizon_len == 0:
+                reward_hidden_state = (
+                    torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
+                    torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
+                )
 
             # Follow MuZero, set half gradient
             # latent_state.register_hook(lambda grad: grad * 0.5)
@@ -522,10 +533,16 @@ class MuZeroPolicy(Policy):
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
-            latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
-
+            # latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
+            latent_state_roots, reward_roots, dynamics_hidden_state_roots, pred_values, policy_logits = mzr_network_output_unpack(
+                network_output
+            )
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
+            dynamics_hidden_state_roots = (
+                dynamics_hidden_state_roots[0].detach().cpu().numpy(),
+                dynamics_hidden_state_roots[1].detach().cpu().numpy()
+            )
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
@@ -542,7 +559,7 @@ class MuZeroPolicy(Policy):
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
+            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, dynamics_hidden_state_roots, to_play)
 
             roots_visit_count_distributions = roots.get_distributions(
             )  # shape: ``{list: batch_size} ->{list: action_space_size}``
@@ -624,12 +641,18 @@ class MuZeroPolicy(Policy):
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
-            latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
-
+            # latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
+            latent_state_roots, reward_roots, dynamics_hidden_state_roots, pred_values, policy_logits = mzr_network_output_unpack(
+                network_output
+            )
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
                 pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
                 latent_state_roots = latent_state_roots.detach().cpu().numpy()
+                dynamics_hidden_state_roots = (
+                    dynamics_hidden_state_roots[0].detach().cpu().numpy(),
+                    dynamics_hidden_state_roots[1].detach().cpu().numpy()
+                )
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
@@ -640,7 +663,7 @@ class MuZeroPolicy(Policy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play)
+            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, dynamics_hidden_state_roots, to_play)
 
             roots_visit_count_distributions = roots.get_distributions(
             )  # shape: ``{list: batch_size} ->{list: action_space_size}``

@@ -11,18 +11,19 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
-from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork
+from .common import MZRNetworkOutput, RepresentationNetwork, PredictionNetwork
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
-@MODEL_REGISTRY.register('MuZeroModel')
-class MuZeroModel(nn.Module):
+@MODEL_REGISTRY.register('MuZeroModelRecurrent')
+class MuZeroModelRecurrent(nn.Module):
 
     def __init__(
         self,
         observation_shape: SequenceType = (12, 96, 96),
         action_space_size: int = 6,
+        lstm_hidden_size: int = 512,
         num_res_blocks: int = 1,
         num_channels: int = 64,
         reward_head_channels: int = 16,
@@ -45,6 +46,7 @@ class MuZeroModel(nn.Module):
         downsample: bool = False,
         norm_type: Optional[str] = 'BN',
         discrete_action_encoding_type: str = 'one_hot',
+        res_connection_in_dynamics: bool = True,
         *args,
         **kwargs
     ):
@@ -85,7 +87,7 @@ class MuZeroModel(nn.Module):
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
         """
-        super(MuZeroModel, self).__init__()
+        super(MuZeroModelRecurrent, self).__init__()
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
             # for vector obs input, e.g. classical control and box2d environments
             # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
@@ -131,6 +133,8 @@ class MuZeroModel(nn.Module):
              math.ceil(observation_shape[2] / 16)) if downsample else
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
+        self.res_connection_in_dynamics = res_connection_in_dynamics
+        self.lstm_hidden_size = lstm_hidden_size
 
         self.representation_network = RepresentationNetwork(
             observation_shape,
@@ -148,11 +152,13 @@ class MuZeroModel(nn.Module):
             reward_head_channels,
             fc_reward_layers,
             self.reward_support_size,
+            lstm_hidden_size,
             flatten_output_size_for_reward_head,
             downsample,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             activation=activation,
-            norm_type=norm_type
+            norm_type=norm_type,
+            res_connection_in_dynamics=self.res_connection_in_dynamics,
         )
         self.prediction_network = PredictionNetwork(
             observation_shape,
@@ -196,7 +202,7 @@ class MuZeroModel(nn.Module):
                 nn.Linear(self.pred_hid, self.pred_out),
             )
 
-    def initial_inference(self, obs: torch.Tensor) -> MZNetworkOutput:
+    def initial_inference(self, obs: torch.Tensor) -> MZRNetworkOutput:
         """
         Overview:
             Initial inference of MuZero model, which is the first step of the MuZero model.
@@ -221,14 +227,22 @@ class MuZeroModel(nn.Module):
         batch_size = obs.size(0)
         latent_state = self._representation(obs)
         policy_logits, value = self._prediction(latent_state)
-        return MZNetworkOutput(
+        # zero initialization for dynamics hidden states
+        # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
+        dynamics_hidden_state = (
+            torch.zeros(1, batch_size,
+                        self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
+                                                                           self.lstm_hidden_size).to(obs.device)
+        )
+        return MZRNetworkOutput(
             value,
             [0. for _ in range(batch_size)],
             policy_logits,
             latent_state,
+            dynamics_hidden_state
         )
 
-    def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
+    def recurrent_inference(self, latent_state: torch.Tensor, dynamics_hidden_state: torch.Tensor, action: torch.Tensor) -> MZRNetworkOutput:
         """
         Overview:
             Recurrent inference of MuZero model, which is the rollout step of the MuZero model.
@@ -256,9 +270,9 @@ class MuZeroModel(nn.Module):
             - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
                 latent state, W_ is the width of latent state.
          """
-        next_latent_state, reward = self._dynamics(latent_state, action)
+        next_latent_state, dynamics_hidden_state, reward = self._dynamics(latent_state, dynamics_hidden_state, action)
         policy_logits, value = self._prediction(next_latent_state)
-        return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
+        return MZRNetworkOutput(value, reward, policy_logits, next_latent_state,  dynamics_hidden_state)
 
     def _representation(self, observation: torch.Tensor) -> torch.Tensor:
         """
@@ -295,7 +309,7 @@ class MuZeroModel(nn.Module):
         """
         return self.prediction_network(latent_state)
 
-    def _dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _dynamics(self, latent_state: torch.Tensor, dynamics_hidden_state: Tuple, action: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
             Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state``
@@ -357,10 +371,14 @@ class MuZeroModel(nn.Module):
         # (batch_size, latent_state[1] + action_space_size, latent_state[2], latent_state[3]) depending on the discrete_action_encoding_type.
         state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
 
-        next_latent_state, reward = self.dynamics_network(state_action_encoding)
+        # NOTE: the key difference with MuZero
+        next_latent_state, next_dynamics_hidden_state, reward = self.dynamics_network(
+            state_action_encoding, dynamics_hidden_state
+        )
+
         if self.state_norm:
             next_latent_state = renormalize(next_latent_state)
-        return next_latent_state, reward
+        return next_latent_state, next_dynamics_hidden_state, reward
 
     def project(self, latent_state: torch.Tensor, with_grad: bool = True) -> torch.Tensor:
         """
@@ -416,11 +434,13 @@ class DynamicsNetwork(nn.Module):
         reward_head_channels: int = 64,
         fc_reward_layers: SequenceType = [32],
         output_support_size: int = 601,
+        lstm_hidden_size: int = 512,
         flatten_output_size_for_reward_head: int = 64,
         downsample: bool = False,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
         norm_type: Optional[str] = 'BN',
+        res_connection_in_dynamics: bool = True,
     ):
         """
         Overview:
@@ -446,10 +466,13 @@ class DynamicsNetwork(nn.Module):
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
         assert num_channels > action_encoding_dim, f'num_channels:{num_channels} <= action_encoding_dim:{action_encoding_dim}'
+        self.lstm_hidden_size = lstm_hidden_size
+        self.res_connection_in_dynamics = res_connection_in_dynamics
 
         self.num_channels = num_channels
         self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
         self.action_encoding_dim = action_encoding_dim
+        self.num_channels_of_latent_state = num_channels - self.action_encoding_dim
 
         self.conv = nn.Conv2d(num_channels, num_channels - self.action_encoding_dim, kernel_size=3, stride=1, padding=1, bias=False)
 
@@ -472,15 +495,16 @@ class DynamicsNetwork(nn.Module):
         self.conv1x1_reward = nn.Conv2d(num_channels - self.action_encoding_dim, reward_head_channels, 1)
 
         if norm_type == 'BN':
-            self.norm_reward = nn.BatchNorm2d(reward_head_channels)
+            self.norm_before_lstm = nn.BatchNorm2d(reward_head_channels)
         elif norm_type == 'LN':
             if downsample:
-                self.norm_reward = nn.LayerNorm([reward_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                self.norm_before_lstm = nn.LayerNorm([reward_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
             else:
-                self.norm_reward = nn.LayerNorm([reward_head_channels, observation_shape[-2], observation_shape[-1]])
+                self.norm_before_lstm = nn.LayerNorm([reward_head_channels, observation_shape[-2], observation_shape[-1]])
 
         self.fc_reward_head = MLP(
-            self.flatten_output_size_for_reward_head,
+            # self.flatten_output_size_for_reward_head,
+            self.lstm_hidden_size,
             hidden_channels=fc_reward_layers[0],
             layer_num=len(fc_reward_layers) + 1,
             out_channels=output_support_size,
@@ -492,7 +516,38 @@ class DynamicsNetwork(nn.Module):
         )
         self.activation = activation
 
-    def forward(self, state_action_encoding: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        self.latent_state_dim = self.flatten_output_size_for_reward_head
+        # input_shape: （sequence_length，batch_size，input_size)
+        # output_shape: (sequence_length, batch_size, hidden_size)
+        self.lstm = nn.LSTM(input_size=self.latent_state_dim, hidden_size=self.lstm_hidden_size)
+
+        if downsample:
+            # In Atari, if the observation_shape is set to (12, 96, 96), which indicates the original shape of
+            # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
+            # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
+            # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
+            ceil_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
+            self.output_dim = self.num_channels_of_latent_state * ceil_size
+            self.output_shape = (self.num_channels_of_latent_state, math.ceil(observation_shape[1] / 16), math.ceil(observation_shape[2] / 16))
+
+        else:
+            self.output_dim = self.num_channels_of_latent_state * observation_shape[1] * observation_shape[2]
+            self.output_shape = (self.num_channels_of_latent_state, observation_shape[1], observation_shape[2])
+        self.fc_dynamics_2 = MLP(
+            # in_channels=self.latent_state_dim,
+            in_channels=self.lstm_hidden_size,
+            hidden_channels=self.lstm_hidden_size,
+            layer_num=2,
+            out_channels=self.output_dim,
+            activation=activation,
+            norm_type=norm_type,
+            output_activation=True,
+            output_norm=True,
+            # last_linear_layer_init_zero=False is important for convergence
+            last_linear_layer_init_zero=False,
+        )
+
+    def forward(self, state_action_encoding: torch.Tensor, dynamics_hidden_state) -> Tuple[torch.Tensor, torch.Tensor]:
         """
          Overview:
             Forward computation of the dynamics network. Predict the next latent state given current latent state and action.
@@ -505,12 +560,12 @@ class DynamicsNetwork(nn.Module):
             - reward (:obj:`torch.Tensor`): The predicted reward, with shape (batch_size, output_support_size).
          """
         # take the state encoding, state_action_encoding[:, -self.action_encoding_dim:, :, :] is action encoding
-        state_encoding = state_action_encoding[:, :-self.action_encoding_dim:, :, :]
+        latent_state = state_action_encoding[:, :-self.action_encoding_dim:, :, :]
         x = self.conv(state_action_encoding)
         x = self.norm_common(x)
 
         # the residual link: add state encoding to the state_action encoding
-        x += state_encoding
+        x += latent_state
         x = self.activation(x)
 
         for block in self.resblocks:
@@ -518,14 +573,22 @@ class DynamicsNetwork(nn.Module):
         next_latent_state = x
 
         x = self.conv1x1_reward(next_latent_state)
-        x = self.norm_reward(x)
+        x = self.norm_before_lstm(x)
         x = self.activation(x)
-        x = x.view(-1, self.flatten_output_size_for_reward_head)
+        x = x.reshape(-1, self.flatten_output_size_for_reward_head).unsqueeze(0)
 
-        # use the fully connected layer to predict reward
-        reward = self.fc_reward_head(x)
+        lstm_output, next_dynamics_hidden_state = self.lstm(x, dynamics_hidden_state)
+        reward = self.fc_reward_head(lstm_output.squeeze(0))
+        next_latent_state_encoding = self.fc_dynamics_2(lstm_output.squeeze(0))
 
-        return next_latent_state, reward
+        # the residual link: add the latent_state to the state_action encoding
+        if self.res_connection_in_dynamics:
+            next_latent_state = next_latent_state_encoding.reshape(latent_state.shape) + latent_state
+        else:
+            next_latent_state = next_latent_state_encoding.reshape(latent_state.shape)
+
+        return next_latent_state, next_dynamics_hidden_state, reward
+
 
     def get_dynamic_mean(self) -> float:
         return get_dynamic_mean(self)
