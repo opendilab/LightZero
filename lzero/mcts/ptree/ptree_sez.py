@@ -114,7 +114,10 @@ class Node:
                 # each dim: [-3,3]
 
                 # Generate all possible combinations of {-3, 3} for each action dimension
-                action_combinations = list(itertools.product([-3, 3], repeat=mu.shape[0]))
+                # action_combinations = list(itertools.product([-3, 3], repeat=mu.shape[0]))
+                # NOTE: for numerical stability.
+                action_combinations = list(itertools.product([-2, 2], repeat=mu.shape[0]))
+
                 # Randomly select 'fixed_actions_num' unique actions from the combinations
                 selected_actions = random.sample(action_combinations, self.fixed_actions_num)
                 # Convert the selected_actions list to a tensor

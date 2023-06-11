@@ -271,44 +271,58 @@ namespace tree
             std::default_random_engine generator(seed);
             std::vector<std::vector<float> > fixed_actions_before_tanh;
 
-            // Generate all possible combinations of {-3, 3} or {-1, 1} for each action dimension
-            std::vector<std::vector<float> > possible_actions;
-            int num_combinations = static_cast<int>(std::pow(2, this->action_space_size));
-            for (int i = 0; i < num_combinations; ++i) {
-                std::vector<float> action;
-                for (int j = 0; j < this->action_space_size; ++j) {
-                    float value = (i & (1 << j)) ? (action_tanh ? 3.0f : 1.0f) : (action_tanh ? -3.0f : -1.0f);
-                    action.push_back(value);
+
+            if (this->sample_fixed_extreme_action) {
+
+
+                // Generate all possible combinations of {-3, 3} or {-1, 1} for each action dimension
+                std::vector<std::vector<float> > possible_actions;
+                int num_combinations = static_cast<int>(std::pow(2, this->action_space_size));
+                for (int i = 0; i < num_combinations; ++i) {
+                    std::vector<float> action;
+                    for (int j = 0; j < this->action_space_size; ++j) {
+                        // float value = (i & (1 << j)) ? (action_tanh ? 3.0f : 1.0f) : (action_tanh ? -3.0f : -1.0f);
+                        // NOTE: for numerical stability.
+                        float value = (i & (1 << j)) ? (action_tanh ? 2.0f : 1.0f) : (action_tanh ? -2.0f : -1.0f);
+
+                        action.push_back(value);
+                    }
+                    possible_actions.push_back(action);
                 }
-                possible_actions.push_back(action);
-            }
 
-            // Randomly select 'fixed_actions_num' unique actions from the combinations
-            std::shuffle(possible_actions.begin(), possible_actions.end(), generator);
+                // Randomly select 'fixed_actions_num' unique actions from the combinations
+                std::shuffle(possible_actions.begin(), possible_actions.end(), generator);
 
-            for (int i = 0; i < this->fixed_actions_num && i < num_combinations; ++i) {
-                fixed_actions_before_tanh.push_back(possible_actions[i]);
-            }
-
-
-
-            // Add fixed_actions_before_tanh to sampled_actions_before_tanh and compute their probabilities
-            for (int i = 0; i < fixed_actions_before_tanh.size(); ++i) {
-                sampled_actions_before_tanh.push_back(fixed_actions_before_tanh[i]);
-                // Apply tanh to fixed_actions_before_tanh[i] and add the result to sampled_actions_after_tanh
-                std::vector<float> action_after_tanh;
-                for (float val : fixed_actions_before_tanh[i]) {
-                    action_after_tanh.push_back(tanh(val));
+                for (int i = 0; i < this->fixed_actions_num && i < num_combinations; ++i) {
+                    fixed_actions_before_tanh.push_back(possible_actions[i]);
                 }
-                sampled_actions_after_tanh.push_back(action_after_tanh);
-            }
+
+                // Add fixed_actions_before_tanh to sampled_actions_before_tanh and compute their probabilities
+                for (int i = 0; i < fixed_actions_before_tanh.size(); ++i) {
+                    sampled_actions_before_tanh.push_back(fixed_actions_before_tanh[i]);
+                    // Apply tanh to fixed_actions_before_tanh[i] and add the result to sampled_actions_after_tanh
+                    std::vector<float> action_after_tanh;
+                    for (float val : fixed_actions_before_tanh[i]) {
+                        action_after_tanh.push_back(tanh(val));
+                    }
+                    sampled_actions_after_tanh.push_back(action_after_tanh);
+                }
+             }
             // std::cout << "Sampled actions after tanh size: " << sampled_actions_after_tanh.size() << std::endl;
-            // std::cout << "position 1" << std::endl;
             float sampled_action_one_dim_before_tanh;
             float sampled_action_one_dim;
 
 
             int start_index = this->sample_fixed_extreme_action ? fixed_actions_before_tanh.size() : 0;
+
+            // debug
+            // std::cout << "==========" << std::endl;
+            // std::cout << "position 21" << std::endl;
+            // std::cout << "this->sample_fixed_extreme_action: " << this->sample_fixed_extreme_action << std::endl;
+            // std::cout << " start_index :" <<   start_index <<std::endl;
+            // std::cout << "==========" << std::endl;
+
+
             if (this->action_tanh) {
                 // for (int i = start_index; i < this->num_of_sampled_actions; ++i) {
                 for (int i_tanh = 0; i_tanh < this->num_of_sampled_actions; ++i_tanh) {
@@ -316,7 +330,6 @@ namespace tree
                     std::vector<float> sampled_action_before_tanh;
                     std::vector<float> sampled_action_after_tanh;
                     std::vector<float> y;
-                    // std::cout << "position 2" << std::endl;
                     for (int j = 0; j < this->action_space_size; ++j){
                         std::normal_distribution<float> distribution(mu[j], sigma[j]);
 
@@ -342,7 +355,7 @@ namespace tree
                     sampled_actions_log_probs_before_tanh.push_back(log(sampled_action_prob_before_tanh));
                     float y_sum = std::accumulate(y.begin(), y.end(), 0.);
                     sampled_actions_log_probs_after_tanh.push_back(log(sampled_action_prob_before_tanh) - log(y_sum));
-                    std::cout << "position 3" << std::endl;
+                    // std::cout << "position 3" << std::endl;
                 }
             }
             else {
@@ -375,7 +388,6 @@ namespace tree
                     sampled_actions_log_probs_after_tanh.push_back(log(sampled_action_prob));
                 }
             }
-        
         }
         else
         {
@@ -517,7 +529,7 @@ namespace tree
 
             if (this->continuous_action_space == true)
             {
-                // std::cout << "position 4" << std::endl;
+                // debug
                 // 打印 sampled_actions_after_tanh
                 // std::cout << "sampled_actions_after_tanh:" << std::endl;
                 // for (size_t i = 0; i < sampled_actions_after_tanh.size(); ++i) {
@@ -526,16 +538,18 @@ namespace tree
                 //     }
                 //     std::cout << std::endl;
                 // }
+
                 CAction action = CAction(sampled_actions_after_tanh[i], 0);
                 // std::cout << "position 5" << std::endl;
-                
                 std::vector<CAction> legal_actions;
-                    // std::cout << "position 6" << std::endl;
+                
+                // std::cout << "position 6" << std::endl;
                 // std::cout << "sampled_actions_log_probs_after_tanh:" << std::endl;
                 // for (size_t i = 0; i < sampled_actions_log_probs_after_tanh.size(); ++i) {
                 //     std::cout << sampled_actions_log_probs_after_tanh[i] << " ";
                 //     std::cout << std::endl;
                 // }
+
                 this->children[action.get_combined_hash()] = CNode(sampled_actions_log_probs_after_tanh[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space, this->action_tanh, this->sample_fixed_extreme_action, this->fixed_actions_num); // only for muzero/efficient zero, not support alphazero
                     // std::cout << "position 7" << std::endl;
                 
@@ -755,6 +769,20 @@ namespace tree
         // sampled related core code
         this->num_of_sampled_actions = num_of_sampled_actions;
         this->action_space_size = action_space_size;
+
+        // std::cout << "==========" << std::endl;
+        // std::cout << "position 22" << std::endl;
+        // std::cout << "this->sample_fixed_extreme_action: " << this->sample_fixed_extreme_action << std::endl;
+        // std::cout << "==========" << std::endl;
+
+        this->sample_fixed_extreme_action = sample_fixed_extreme_action;
+
+
+        // std::cout << "==========" << std::endl;
+        // std::cout << "position 23" << std::endl;
+        // std::cout << "this->sample_fixed_extreme_action: " << this->sample_fixed_extreme_action << std::endl;
+        // std::cout << "==========" << std::endl;
+
 
         for (int i = 0; i < this->root_num; ++i)
         {

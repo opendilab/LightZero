@@ -512,6 +512,18 @@ class SampledEfficientZeroPolicy(Policy):
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
+
+        # 打印梯度信息
+        # print("Gradients for each parameter:")
+        # for name, param in self._learn_model.named_parameters():
+        #     if param.grad is not None:
+        #         print(f"{name}: {param.grad}")
+
+        # print("Gradients for fc_policy_head:")
+        # for name, param in self._learn_model.prediction_network.fc_policy_head.named_parameters():
+        #     if param.grad is not None:
+        #         print(f"{name}: {param.grad}")
+
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
             self._learn_model.parameters(), self._cfg.grad_clip_value
         )
@@ -652,6 +664,7 @@ class SampledEfficientZeroPolicy(Policy):
 
             if self._cfg.action_tanh:
                 # way 1: SAC-like
+                target_sampled_actions = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
                 y = 1 - target_sampled_actions[:, k, :].pow(2)
 
                 # NOTE: for numerical stability.
@@ -664,6 +677,20 @@ class SampledEfficientZeroPolicy(Policy):
                 log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
                 log_prob = log_prob - torch.log(y + 1e-6).sum(-1, keepdim=True)
                 log_prob = log_prob.squeeze(-1)
+
+                # NOTE: for numerical stability.
+                # TODO: check if this is correct
+                # min_value_in_y = torch.min(y)
+                # epsilon = min_value_in_y if min_value_in_y < 0.1 else torch.tensor(1e-6)
+                # log_prob = log_prob - torch.log(y + epsilon).sum(-1, keepdim=True)
+                # log_prob = log_prob.squeeze(-1)
+
+                # min_value_in_y, _ = torch.min(y, dim=1, keepdim=True)
+                # epsilon = torch.where(min_value_in_y < 0.1, min_value_in_y, torch.tensor(1e-6))
+                # log_prob = log_prob - torch.log(y + epsilon).sum(-1, keepdim=True)
+                # log_prob = log_prob.squeeze(-1)
+
+                # assert (log_prob < 0).all(), "log_prob should be negative when dist is discrete distribution."
             else:
                 # way 2:
                 log_prob = dist.log_prob(target_sampled_actions[:, k, :])
@@ -690,7 +717,7 @@ class SampledEfficientZeroPolicy(Policy):
                 (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
             ).sum(-1) * mask_batch[:, unroll_step]
         elif self._cfg.policy_loss_type == 'cross_entropy':
-            # cross_entropy loss: - sum(p * log (q) )
+            # cross_entropy loss: - sum(p * log (q) )  ;   $$H(p, q) = -\sum_{i} p(i) \log{q(i)}$$
             policy_loss += -torch.sum(
                 torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
             ) * mask_batch[:, unroll_step]

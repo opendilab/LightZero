@@ -27,28 +27,32 @@ if env_name == 'HalfCheetah-v3':
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 seed = 0
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
+
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# continuous_action_space = True
+# K = 20 # num_of_sampled_actions
+# num_simulations = 50
+# update_per_collect = 200
+# batch_size = 256
+
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
 continuous_action_space = True
 K = 20  # num_of_sampled_actions
-num_simulations = 50
-update_per_collect = 200
-batch_size = 256
-
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# continuous_action_space = True
-# K = 20  # num_of_sampled_actions
-# num_simulations = 5
-# update_per_collect = 2
-# batch_size = 3
+num_simulations = 5
+update_per_collect = 2
+batch_size = 4
 
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
 policy_entropy_loss_weight = 0.005
+
+action_tanh = True
 sample_fixed_extreme_action = True
+# sample_fixed_extreme_action = False
 fixed_actions_num = 8
 
 # ==============================================================
@@ -57,7 +61,7 @@ fixed_actions_num = 8
 
 mujoco_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_pelw{policy_entropy_loss_weight}_sfea{sample_fixed_extreme_action}-{fixed_actions_num}_seed{seed}',
+    f'data_sez_ctree/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_pelw{policy_entropy_loss_weight}_tanh{action_tanh}_sfea{sample_fixed_extreme_action}-{fixed_actions_num}_seed{seed}',
     env=dict(
         env_name=env_name,
         action_clip=True,
@@ -82,7 +86,8 @@ mujoco_sampled_efficientzero_config = dict(
             norm_type='BN',
         ),
         mcts_ctree=True,
-        action_tanh=True,
+
+        action_tanh=action_tanh,
         sample_fixed_extreme_action=sample_fixed_extreme_action,
         fixed_actions_num=fixed_actions_num,
 
