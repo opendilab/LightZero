@@ -65,5 +65,3 @@ class TestGoBiggerLightZeroEnv:
             print(rew, info)
             if done:
                 break
-
-TestGoBiggerLightZeroEnv().test_env()

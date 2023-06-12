@@ -170,7 +170,10 @@ class GoBiggerLightZeroEnv(BaseEnv):
         all_players = np.array(all_players)
         player_padding_num = self.max_player_num - len(all_players)
         player_num = len(all_players)
-        all_players = np.pad(all_players, pad_width=((0, player_padding_num), (0, 0)), mode='constant')
+        if player_padding_num < 0:
+            all_players = all_players[:self.max_player_num,:]
+        else:
+            all_players = np.pad(all_players, pad_width=((0, player_padding_num), (0, 0)), mode='constant')
         team_info = {
             'alliance': all_players[:, 0].astype(np.int64),
             'view_x': np.round(all_players[:, 1]).astype(np.int64),
@@ -261,7 +264,11 @@ class GoBiggerLightZeroEnv(BaseEnv):
                 balls = np.concatenate([own_balls, teammate_balls, remain_enemy_balls], axis=0)
         balls_num = len(balls)
         ball_padding_num = self.max_ball_num - len(balls)
-        if padding or ball_padding_num < 0:
+        if ball_padding_num < 0:
+            balls = balls[:self.max_ball_num, :]
+            alliance = np.zeros(self.max_ball_num)
+            balls_num = self.max_ball_num
+        elif padding:
             balls = np.pad(balls, ((0, ball_padding_num), (0, 0)), 'constant', constant_values=0)
             alliance = np.zeros(self.max_ball_num)
             balls_num = min(self.max_ball_num, balls_num)
@@ -310,7 +317,10 @@ class GoBiggerLightZeroEnv(BaseEnv):
         food_y = all_balls[food_indices, -3]
         food_num = len(food_x)
         food_padding_num = self.max_food_num - len(food_x)
-        if padding or food_padding_num < 0:
+        if food_padding_num < 0:
+            food_x = food_x[:self.max_food_num]
+            food_y = food_y[:self.max_food_num]
+        elif padding:
             food_x = np.pad(food_x, (0, food_padding_num), 'constant', constant_values=0)
             food_y = np.pad(food_y, (0, food_padding_num), 'constant', constant_values=0)
         food_num = min(food_num, self.max_food_num)
@@ -320,7 +330,10 @@ class GoBiggerLightZeroEnv(BaseEnv):
         spore_y = all_balls[spore_indices, -3]
         spore_num = len(spore_x)
         spore_padding_num = self.max_spore_num - len(spore_x)
-        if padding or spore_padding_num < 0:
+        if spore_padding_num < 0:
+            spore_x = spore_x[:self.max_spore_num]
+            spore_y = spore_y[:self.max_spore_num]
+        elif padding:
             spore_x = np.pad(spore_x, (0, spore_padding_num), 'constant', constant_values=0)
             spore_y = np.pad(spore_y, (0, spore_padding_num), 'constant', constant_values=0)
         spore_num = min(spore_num, self.max_spore_num)
