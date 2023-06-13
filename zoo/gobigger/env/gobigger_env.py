@@ -25,6 +25,7 @@ class GoBiggerLightZeroEnv(BaseEnv):
         self.step_mul = self._cfg.get('step_mul', 8)
         self.setup_action()
         self.setup_feature()
+        self.contain_raw_obs = self._cfg.contain_raw_obs # for save memory
     
     def setup_feature(self):
         self.second_per_frame = 0.05
@@ -58,7 +59,10 @@ class GoBiggerLightZeroEnv(BaseEnv):
         # for alignment with other environments, reverse the action mask
         action_mask = [np.logical_not(o['action_mask']) for o in obs] 
         to_play = [ -1 for _ in range(len(obs))] # Moot, for alignment with other environments
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': to_play, 'raw_obs':raw_obs}
+        if self.contain_raw_obs:
+            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': to_play, 'raw_obs':raw_obs}
+        else:
+            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': to_play}
         return obs
 
     def postproecess(self, action_dict):

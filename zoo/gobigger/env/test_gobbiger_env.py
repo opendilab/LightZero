@@ -18,6 +18,7 @@ env_cfg=EasyDict(dict(
     use_action_mask=False,
     reward_div_value=0.1,
     reward_type='log_reward',
+    contain_raw_obs=True, # False on collect mode, True on eval vsbot mode, because bot need raw obs
     start_spirit_progress=0.2,
     end_spirit_progress=0.8,
     manager_settings=dict(

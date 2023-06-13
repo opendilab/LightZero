@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 import numpy as np
 import torch
 from tensorboardX import SummaryWriter
+import copy
 
 from ding.config import compile_config
 from ding.envs import create_env_manager
@@ -56,8 +57,14 @@ def eval_muzero_gobigger(
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
+    env_cfg = copy.deepcopy(evaluator_env_cfg[0])
+    env_cfg.contain_raw_obs = True
+    vsbot_evaluator_env_cfg = [env_cfg for _ in range(len(evaluator_env_cfg))]
+    vsbot_evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in vsbot_evaluator_env_cfg])
+
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
+    vsbot_evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
 
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
@@ -84,7 +91,17 @@ def eval_muzero_gobigger(
         exp_name=cfg.exp_name,
         policy_config=policy_config
     )
-
+    vsbot_evaluator = GoBiggerMuZeroEvaluator(
+        eval_freq=cfg.policy.eval_freq,
+        n_evaluator_episode=cfg.env.n_evaluator_episode,
+        stop_value=cfg.env.stop_value,
+        env=vsbot_evaluator_env,
+        policy=policy.eval_mode,
+        tb_logger=tb_logger,
+        exp_name=cfg.exp_name,
+        policy_config=policy_config,
+        instance_name='vsbot_evaluator'
+    )
     # ==============================================================
     # Main loop
     # ==============================================================
@@ -94,5 +111,5 @@ def eval_muzero_gobigger(
     # eval trained model
     # ==============================================================
     _, reward_sp = evaluator.eval(learner.save_checkpoint, learner.train_iter)
-    _, reward_vsbot= evaluator.eval_vsbot(learner.save_checkpoint, learner.train_iter)
+    _, reward_vsbot= vsbot_evaluator.eval_vsbot(learner.save_checkpoint, learner.train_iter)
     return reward_sp, reward_vsbot
