@@ -22,7 +22,7 @@ from ding.utils import ENV_REGISTRY
 class MiniGridEnv(BaseEnv):
     config = dict(
         stop_value=int(2),
-        env_id='MiniGrid-KeyCorridorS3R3-v0',
+        env_name='MiniGrid-Empty-8x8-v0',
         flat_obs=True,
         max_step=300,
     )
@@ -36,7 +36,7 @@ class MiniGridEnv(BaseEnv):
     def __init__(self, cfg: dict) -> None:
         self._cfg = cfg
         self._init_flag = False
-        self._env_id = cfg.env_id
+        self._env_name = cfg.env_name
         self._flat_obs = cfg.flat_obs
         self._save_replay = False
         self._max_step = cfg.max_step
@@ -44,15 +44,15 @@ class MiniGridEnv(BaseEnv):
     def reset(self) -> np.ndarray:
         if not self._init_flag:
             if self._save_replay:
-                self._env = gym.make(self._env_id, render_mode="rgb_array")  # using the Gymnasium make method
+                self._env = gym.make(self._env_name, render_mode="rgb_array")  # using the Gymnasium make method
             else:
-                self._env = gym.make(self._env_id)
+                self._env = gym.make(self._env_name)
 
-            if self._env_id in ['MiniGrid-AKTDT-13x13-v0' or 'MiniGrid-AKTDT-13x13-1-v0']:
+            if self._env_name in ['MiniGrid-AKTDT-13x13-v0' or 'MiniGrid-AKTDT-13x13-1-v0']:
                 # customize the agent field of view size, note this must be an odd number
                 # This also related to the observation space, see gym_minigrid.wrappers for more details
                 self._env = ViewSizeWrapper(self._env, agent_view_size=5)
-            if self._env_id == 'MiniGrid-AKTDT-7x7-1-v0':
+            if self._env_name == 'MiniGrid-AKTDT-7x7-1-v0':
                 self._env = ViewSizeWrapper(self._env, agent_view_size=3)
             if self._flat_obs:
                 self._env = FlatObsWrapper(self._env)
@@ -124,7 +124,7 @@ class MiniGridEnv(BaseEnv):
             info['max_step'] = self._max_step
             if self._save_replay:
                 path = os.path.join(
-                    self._replay_path, '{}_episode_{}.gif'.format(self._env_id, self._save_replay_count)
+                    self._replay_path, '{}_episode_{}.gif'.format(self._env_name, self._save_replay_count)
                 )
                 self.display_frames_as_gif(self._frames, path)
                 self._save_replay_count += 1
@@ -168,7 +168,7 @@ class MiniGridEnv(BaseEnv):
         return [cfg for _ in range(evaluator_env_num)]
 
     def __repr__(self) -> str:
-        return "LightZero MiniGrid Env({})".format(self._cfg.env_id)
+        return "LightZero MiniGrid Env({})".format(self._cfg.env_name)
 
     def enable_save_replay(self, replay_path: Optional[str] = None) -> None:
         if replay_path is None:

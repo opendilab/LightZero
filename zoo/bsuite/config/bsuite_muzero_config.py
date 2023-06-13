@@ -1,10 +1,11 @@
 from easydict import EasyDict
 
-# options={'memory_len/20', 'memory_len/50', 'bsuite_swingup/0', 'bandit_noise/0'}
-# TODO: 'memory_bit/20',
-env_name = 'memory_len/20'
+# options={'memory_len/0', 'memory_len/9', 'memory_len/17', 'memory_len/20', 'memory_len/22', 'memory_size/0', 'bsuite_swingup/0', 'bandit_noise/0'}
+env_name = 'memory_len/9'
 
-if env_name in ['memory_len/20', 'memory_len/50']:
+
+if env_name in ['memory_len/0', 'memory_len/9', 'memory_len/17', 'memory_len/20', 'memory_len/22']:
+    # memory_length=1, 10, 50, 80, 100
     action_space_size = 2
     observation_shape = 3
 elif env_name in ['bsuite_swingup/0']:
@@ -13,28 +14,29 @@ elif env_name in ['bsuite_swingup/0']:
 elif env_name == 'bandit_noise/0':
     action_space_size = 11
     observation_shape = 1
-elif env_name in ['memory_bit/20', 'memory_bit/50']:
+elif env_name in ['memory_size/0']:
     action_space_size = 2
-    observation_shape = 10
+    observation_shape = 3
 
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+seed = 0
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 100
 batch_size = 256
-max_env_step = int(1e6)
+max_env_step = int(5e5)
 reanalyze_ratio = 0
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 bsuite_muzero_config = dict(
-    exp_name=f'data_mz_ctree/bsuite_{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_mz_ctree/bsuite_{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
     env=dict(
         env_name=env_name,
         stop_value=int(1e6),
@@ -109,4 +111,4 @@ if __name__ == "__main__":
         """
         from lzero.entry import train_muzero_with_gym_env as train_muzero
 
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)
