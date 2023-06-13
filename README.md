@@ -110,22 +110,21 @@ LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of 
 - [MuZero](https://arxiv.org/abs/1911.08265)
 - [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Sampled MuZero](https://arxiv.org/abs/2104.06303)
-
-[comment]: <> (- [Gumbel MuZero]&#40;https://openreview.net/pdf?id=bERaNdoegnO&#41;)
+- [Gumbel MuZero](https://openreview.net/pdf?id=bERaNdoegnO&)
 
 The environments and algorithms currently supported by LightZero are shown in the table below:
 
-| Env./Alg.      | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero |
-| ------------- | --------- | ------ | ------------- | --------------------- |
-| Atari         | ---       | ✔    | ✔           | ✔                   |
-| tictactoe     | ✔       | ✔    | 🔒          | 🔒                  |
-| gomoku        | ✔       | ✔    | 🔒          | 🔒                  |
-| chess         | 🔒       | 🔒   | 🔒          | 🔒                  |
-| go            | 🔒       | 🔒   | 🔒          | 🔒                  |
-| lunarlander | ---       | ✔    | ✔           | ✔                   |
-| bipedalwalker   | ---       | ✔    | ✔           | ✔                   |
-| cartpole     | ---       | ✔    | ✔           | ✔                   |
-| pendulum      | ---       | ✔    | ✔           | ✔                   |
+| Env./Alg.      | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero |
+| ------------- | --------- | ------ | ------------- | --------------------- | ------------- |
+| Atari         | ---       | ✔    | ✔           | ✔                   | ✔             |
+| tictactoe     | ✔       | ✔    | 🔒          | 🔒                  | ✔             |
+| gomoku        | ✔       | ✔    | 🔒          | 🔒                  | ✔             |
+| chess         | 🔒       | 🔒   | 🔒          | 🔒                  | 🔒             |
+| go            | 🔒       | 🔒   | 🔒          | 🔒                  | 🔒             |
+| lunarlander | ---       | ✔    | ✔           | ✔                   | ✔             |
+| bipedalwalker   | ---       | ✔    | ✔           | ✔                   | 🔒             |
+| cartpole     | ---       | ✔    | ✔           | ✔                   | ✔             |
+| pendulum      | ---       | ✔    | ✔           | ✔                   | 🔒             |
 
 <sup>(1): "✔" means that the corresponding item is finished and well-tested.</sup>
 
