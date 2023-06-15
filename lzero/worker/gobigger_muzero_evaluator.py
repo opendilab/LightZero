@@ -729,8 +729,8 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
                 continue
             if not np.isscalar(v):
                 continue
-            self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name+'_vsbot') + k, v, train_iter)
-            self._tb_logger.add_scalar('{}_step/'.format(self._instance_name+'_vsbot') + k, v, envstep)
+            self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
+            self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, envstep)
         eval_reward = np.mean(episode_return)
         if eval_reward > self._max_eval_reward:
             if save_ckpt_fn:

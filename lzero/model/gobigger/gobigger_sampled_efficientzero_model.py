@@ -9,7 +9,7 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 from ..common import EZNetworkOutput, RepresentationNetworkMLP
 from ..efficientzero_model_mlp import DynamicsNetworkMLP
 from ..utils import renormalize, get_params_mean
-from .gobigger_encoder import Encoder
+from .gobigger_encoder import GoBiggerEncoder
 import yaml
 from easydict import EasyDict
 from ding.utils.data import default_collate
@@ -139,13 +139,7 @@ class GoBiggerSampledEfficientZeroModel(nn.Module):
         self.num_of_sampled_actions = num_of_sampled_actions
         self.res_connection_in_dynamics = res_connection_in_dynamics
 
-        # self.representation_network = RepresentationNetworkMLP(
-        #     observation_shape=self.observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
-        # )
-        with open('lzero/model/gobigger/default_model_config.yaml', "r") as f:
-            encoder_cfg = yaml.safe_load(f)
-        encoder_cfg = EasyDict(encoder_cfg)
-        self.representation_network = Encoder(encoder_cfg)
+        self.representation_network = GoBiggerEncoder()
 
         self.dynamics_network = DynamicsNetworkMLP(
             action_encoding_dim=self.action_encoding_dim,

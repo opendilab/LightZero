@@ -10,7 +10,8 @@ from .network.nn_module import fc_block, conv2d_block, MLP
 from .network.res_block import ResBlock
 from .network.transformer import Transformer
 from typing import Any, List, Tuple, Union, Optional, Callable
-
+from easydict import EasyDict
+from ding.utils.default_helper import deep_merge_dicts
 
 def sequence_mask(lengths: torch.Tensor, max_len: Optional[int] =None):
     r"""
@@ -35,7 +36,7 @@ class ScalarEncoder(nn.Module):
     def __init__(self, cfg):
         super(ScalarEncoder, self).__init__()
         self.whole_cfg = cfg
-        self.cfg = self.whole_cfg.model.scalar_encoder
+        self.cfg = self.whole_cfg.scalar_encoder
         self.encode_modules = nn.ModuleDict()
         for k, item in self.cfg.modules.items():
             if item['arc'] == 'time':
@@ -50,12 +51,12 @@ class ScalarEncoder(nn.Module):
                 print(f'cant implement {k} for arc {item["arc"]}')
                 raise NotImplementedError
 
-        self.layers = MLP(in_channels=self.cfg.input_dim, hidden_channels=self.cfg.hidden_dim,
-                          out_channels=self.cfg.output_dim,
-                          layer_num=self.cfg.layer_num,
+        self.layers = MLP(in_channels=self.cfg.mlp.input_dim, hidden_channels=self.cfg.mlp.hidden_dim,
+                          out_channels=self.cfg.mlp.output_dim,
+                          layer_num=self.cfg.mlp.layer_num,
                           layer_fn=fc_block,
-                          activation=self.cfg.activation,
-                          norm_type=self.cfg.norm_type,
+                          activation=self.cfg.mlp.activation,
+                          norm_type=self.cfg.mlp.norm_type,
                           use_dropout=False
                           )
 
@@ -74,7 +75,7 @@ class TeamEncoder(nn.Module):
     def __init__(self, cfg):
         super(TeamEncoder, self).__init__()
         self.whole_cfg = cfg
-        self.cfg = self.whole_cfg.model.team_encoder
+        self.cfg = self.whole_cfg.team_encoder
         self.encode_modules = nn.ModuleDict()
 
         for k, item in self.cfg.modules.items():
@@ -88,35 +89,30 @@ class TeamEncoder(nn.Module):
                 print(f'cant implement {k} for arc {item["arc"]}')
                 raise NotImplementedError
 
-        self.embedding_dim = self.cfg.embedding_dim
-        self.encoder_cfg = self.cfg.encoder
-        self.encode_layers = MLP(in_channels=self.encoder_cfg.input_dim,
-                                 hidden_channels=self.encoder_cfg.hidden_dim,
-                                 out_channels=self.embedding_dim,
-                                 layer_num=self.encoder_cfg.layer_num,
+        self.encode_layers = MLP(in_channels=self.cfg.mlp.input_dim,
+                                 hidden_channels=self.cfg.mlp.hidden_dim,
+                                 out_channels=self.cfg.mlp.output_dim,
+                                 layer_num=self.cfg.mlp.layer_num,
                                  layer_fn=fc_block,
-                                 activation=self.encoder_cfg.activation,
-                                 norm_type=self.encoder_cfg.norm_type,
+                                 activation=self.cfg.mlp.activation,
+                                 norm_type=self.cfg.mlp.norm_type,
                                  use_dropout=False)
-        # self.activation_type = self.cfg.activation
 
-        self.transformer_cfg = self.cfg.transformer
         self.transformer = Transformer(
-            n_heads=self.transformer_cfg.head_num,
-            embedding_size=self.embedding_dim,
-            ffn_size=self.transformer_cfg.ffn_size,
-            n_layers=self.transformer_cfg.layer_num,
+            n_heads=self.cfg.transformer.head_num,
+            embedding_size=self.cfg.transformer.embedding_dim,
+            ffn_size=self.cfg.transformer.ffn_size,
+            n_layers=self.cfg.transformer.layer_num,
             attention_dropout=0.0,
             relu_dropout=0.0,
             dropout=0.0,
-            activation=self.transformer_cfg.activation,
-            variant=self.transformer_cfg.variant,
+            activation=self.cfg.transformer.activation,
+            variant=self.cfg.transformer.variant,
         )
-        self.output_cfg = self.cfg.output
-        self.output_fc = fc_block(self.embedding_dim,
-                                  self.output_cfg.output_dim,
-                                  norm_type=self.output_cfg.norm_type,
-                                  activation=self.output_cfg.activation)
+        self.output_fc = fc_block(self.cfg.fc_block.input_dim,
+                                  self.cfg.fc_block.output_dim,
+                                  norm_type=self.cfg.fc_block.norm_type,
+                                  activation=self.cfg.fc_block.activation)
 
     def forward(self, x):
         embeddings = []
@@ -138,7 +134,7 @@ class BallEncoder(nn.Module):
     def __init__(self, cfg):
         super(BallEncoder, self).__init__()
         self.whole_cfg = cfg
-        self.cfg = self.whole_cfg.model.ball_encoder
+        self.cfg = self.whole_cfg.ball_encoder
         self.encode_modules = nn.ModuleDict()
         for k, item in self.cfg.modules.items():
             if item['arc'] == 'one_hot':
@@ -152,34 +148,30 @@ class BallEncoder(nn.Module):
             else:
                 print(f'cant implement {k} for arc {item["arc"]}')
                 raise NotImplementedError
-        self.embedding_dim = self.cfg.embedding_dim
-        self.encoder_cfg = self.cfg.encoder
-        self.encode_layers = MLP(in_channels=self.encoder_cfg.input_dim,
-                                 hidden_channels=self.encoder_cfg.hidden_dim,
-                                 out_channels=self.embedding_dim,
-                                 layer_num=self.encoder_cfg.layer_num,
+        self.encode_layers = MLP(in_channels=self.cfg.mlp.input_dim,
+                                 hidden_channels=self.cfg.mlp.hidden_dim,
+                                 out_channels=self.cfg.mlp.output_dim,
+                                 layer_num=self.cfg.mlp.layer_num,
                                  layer_fn=fc_block,
-                                 activation=self.encoder_cfg.activation,
-                                 norm_type=self.encoder_cfg.norm_type,
+                                 activation=self.cfg.mlp.activation,
+                                 norm_type=self.cfg.mlp.norm_type,
                                  use_dropout=False)
 
-        self.transformer_cfg = self.cfg.transformer
         self.transformer = Transformer(
-            n_heads=self.transformer_cfg.head_num,
-            embedding_size=self.embedding_dim,
-            ffn_size=self.transformer_cfg.ffn_size,
-            n_layers=self.transformer_cfg.layer_num,
+            n_heads=self.cfg.transformer.head_num,
+            embedding_size=self.cfg.transformer.embedding_dim,
+            ffn_size=self.cfg.transformer.ffn_size,
+            n_layers=self.cfg.transformer.layer_num,
             attention_dropout=0.0,
             relu_dropout=0.0,
             dropout=0.0,
-            activation=self.transformer_cfg.activation,
-            variant=self.transformer_cfg.variant,
+            activation=self.cfg.transformer.activation,
+            variant=self.cfg.transformer.variant,
         )
-        self.output_cfg = self.cfg.output
-        self.output_fc = fc_block(self.embedding_dim,
-                                  self.output_cfg.output_dim,
-                                  norm_type=self.output_cfg.norm_type,
-                                  activation=self.output_cfg.activation)
+        self.output_fc = fc_block(self.cfg.fc_block.input_dim,
+                                  self.cfg.fc_block.output_dim,
+                                  norm_type=self.cfg.fc_block.norm_type,
+                                  activation=self.cfg.fc_block.activation)
 
     def forward(self, x):
         ball_num = x['ball_num']
@@ -202,55 +194,54 @@ class SpatialEncoder(nn.Module):
     def __init__(self, cfg):
         super(SpatialEncoder, self).__init__()
         self.whole_cfg = cfg
-        self.cfg = self.whole_cfg.model.spatial_encoder
+        self.cfg = self.whole_cfg.spatial_encoder
 
         # scatter related
         self.spatial_x = 64
         self.spatial_y = 64
-        self.scatter_cfg = self.cfg.scatter
-        self.scatter_fc = fc_block(in_channels=self.scatter_cfg.input_dim, out_channels=self.scatter_cfg.output_dim,
-                                   activation=self.scatter_cfg.activation, norm_type=self.scatter_cfg.norm_type)
-        self.scatter_connection = ScatterConnection(self.scatter_cfg.scatter_type)
+        self.scatter_fc = fc_block(in_channels=self.cfg.scatter.input_dim, 
+                                   out_channels=self.cfg.scatter.output_dim,
+                                   activation=self.cfg.scatter.activation, 
+                                   norm_type=self.cfg.scatter.norm_type)
+        self.scatter_connection = ScatterConnection(self.cfg.scatter.scatter_type)
 
         # resnet related
-        self.resnet_cfg = self.cfg.resnet
         self.get_resnet_blocks()
 
-        self.output_cfg = self.cfg.output
         self.output_fc = fc_block(
-            in_channels=self.spatial_x // 8 * self.spatial_y // 8 * self.resnet_cfg.down_channels[-1],
-            out_channels=self.output_cfg.output_dim,
-            norm_type=self.output_cfg.norm_type,
-            activation=self.output_cfg.activation)
+            in_channels=self.spatial_x // 8 * self.spatial_y // 8 * self.cfg.resnet.down_channels[-1],
+            out_channels=self.cfg.fc_block.output_dim,
+            norm_type=self.cfg.fc_block.norm_type,
+            activation=self.cfg.fc_block.activation)
 
     def get_resnet_blocks(self):
         # 2 means food/spore embedding
-        project = conv2d_block(in_channels=self.scatter_cfg.output_dim + 2,
-                               out_channels=self.resnet_cfg.project_dim,
+        project = conv2d_block(in_channels=self.cfg.scatter.output_dim + 2,
+                               out_channels=self.cfg.resnet.project_dim,
                                kernel_size=1,
                                stride=1,
                                padding=0,
-                               activation=self.resnet_cfg.activation,
-                               norm_type=self.resnet_cfg.norm_type,
+                               activation=self.cfg.resnet.activation,
+                               norm_type=self.cfg.resnet.norm_type,
                                bias=False,
                                )
 
         layers = [project]
-        dims = [self.resnet_cfg.project_dim] + self.resnet_cfg.down_channels
+        dims = [self.cfg.resnet.project_dim] + self.cfg.resnet.down_channels
         for i in range(len(dims) - 1):
             layer = conv2d_block(in_channels=dims[i],
                                  out_channels=dims[i + 1],
                                  kernel_size=4,
                                  stride=2,
                                  padding=1,
-                                 activation=self.resnet_cfg.activation,
-                                 norm_type=self.resnet_cfg.norm_type,
+                                 activation=self.cfg.resnet.activation,
+                                 norm_type=self.cfg.resnet.norm_type,
                                  bias=False,
                                  )
             layers.append(layer)
             layers.append(ResBlock(in_channels=dims[i + 1],
-                                   activation=self.resnet_cfg.activation,
-                                   norm_type=self.resnet_cfg.norm_type))
+                                   activation=self.cfg.resnet.activation,
+                                   norm_type=self.cfg.resnet.norm_type))
         self.resnet = torch.nn.Sequential(*layers)
 
 
@@ -296,14 +287,61 @@ class SpatialEncoder(nn.Module):
         return x
 
 
-class Encoder(nn.Module):
-    def __init__(self, cfg):
-        super(Encoder, self).__init__()
-        self.whole_cfg = cfg
-        self.scalar_encoder = ScalarEncoder(cfg)
-        self.team_encoder = TeamEncoder(cfg)
-        self.ball_encoder = BallEncoder(cfg)
-        self.spatial_encoder = SpatialEncoder(cfg)
+class GoBiggerEncoder(nn.Module):
+    config=dict(
+        scalar_encoder=dict(
+            modules=dict(
+                view_x=dict(arc='sign_binary', num_embeddings=7),
+                view_y=dict(arc='sign_binary', num_embeddings=7),
+                view_width=dict(arc='binary', num_embeddings=7),
+                score=dict(arc='one_hot', num_embeddings=10),
+                team_score=dict(arc='one_hot', num_embeddings=10),
+                rank=dict(arc='one_hot', num_embeddings=4),
+                time=dict(arc='time', embedding_dim=8),
+                last_action_type=dict(arc='one_hot', num_embeddings=27),
+                ),
+            mlp=dict(input_dim=80, hidden_dim=64, layer_num=2, norm_type='none', output_dim=32, activation='relu'),
+        ),
+        team_encoder=dict(
+            modules=dict(
+                alliance=dict(arc='one_hot', num_embeddings=2),
+                view_x=dict(arc='sign_binary', num_embeddings=7),
+                view_y=dict(arc='sign_binary', num_embeddings=7),
+                ),
+            mlp=dict(input_dim=16, hidden_dim=32, layer_num=2, norm_type='none', output_dim=16, activation='relu'),
+            transformer=dict(head_num=4, ffn_size=32, layer_num=2, embedding_dim=16, activation='relu', variant='postnorm'),
+            fc_block=dict(input_dim=16, output_dim=16, activation='relu', norm_type='none'),
+        ),
+        ball_encoder=dict(
+            modules=dict(
+                alliance=dict(arc='one_hot', num_embeddings=4),
+                score=dict(arc='one_hot', num_embeddings=50),
+                radius=dict(arc='unsqueeze',),
+                rank=dict(arc='one_hot', num_embeddings=5),
+                x=dict(arc='sign_binary', num_embeddings=8),
+                y=dict(arc='sign_binary', num_embeddings=8),
+                next_x=dict(arc='sign_binary', num_embeddings=8),
+                next_y=dict(arc='sign_binary', num_embeddings=8),
+            ),
+            mlp=dict(input_dim=92, hidden_dim=128, layer_num=2, norm_type='none', output_dim=64, activation='relu'),
+            transformer=dict(head_num=4, ffn_size=64, layer_num=3,  embedding_dim=64, activation='relu', variant='postnorm'),
+            fc_block=dict(input_dim=64, output_dim=64, activation='relu', norm_type='none'),
+        ),
+        spatial_encoder=dict(
+            scatter=dict(input_dim=64, output_dim=16, scatter_type='add', activation='relu', norm_type='none'),
+            resnet=dict(project_dim=12, down_channels=[32, 32, 16 ], activation='relu', norm_type='none'),
+            fc_block=dict(output_dim=64, activation='relu', norm_type='none'),
+        ),
+    )
+
+    def __init__(self, cfg=None):
+        super(GoBiggerEncoder, self).__init__()
+        self._cfg = deep_merge_dicts(self.config, cfg)
+        self._cfg = EasyDict(self._cfg)
+        self.scalar_encoder = ScalarEncoder(self._cfg)
+        self.team_encoder = TeamEncoder(self._cfg)
+        self.ball_encoder = BallEncoder(self._cfg)
+        self.spatial_encoder = SpatialEncoder(self._cfg)
 
     def forward(self, x):
         scalar_info = self.scalar_encoder(x['scalar_info'])
