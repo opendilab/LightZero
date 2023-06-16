@@ -22,7 +22,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
 class StochasticMuZeroPolicy(Policy):
     """
     Overview:
-        The policy class for MuZero.
+        The policy class for Stochastic MuZero.
     """
 
     # The default_config for MuZero policy.
@@ -121,6 +121,12 @@ class StochasticMuZeroPolicy(Policy):
         value_loss_weight=0.25,
         # (float) The weight of policy loss.
         policy_loss_weight=1,
+        # (float) The weight of afterstate policy loss.
+        afterstate_policy_loss_weight=1,
+        # (float) The weight of afterstate value loss.
+        afterstate_value_loss_weight=0.25,
+        # (float) The weight of vqvae encoder commitment loss.
+        commitment_loss_weight=1.0,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
@@ -191,7 +197,12 @@ class StochasticMuZeroPolicy(Policy):
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
         elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay, learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
+            self._optimizer = configure_optimizers(
+                model=self._model,
+                weight_decay=self._cfg.weight_decay,
+                learning_rate=self._cfg.learning_rate,
+                device_type=self._cfg.device
+            )
 
         if self._cfg.lr_piecewise_constant_decay:
             from torch.optim.lr_scheduler import LambdaLR
@@ -238,17 +249,15 @@ class StochasticMuZeroPolicy(Policy):
         self._target_model.train()
 
         current_batch, target_batch = data
-        obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
+        obs_batch_orig, action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
-        
-        
 
-        obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+        obs_batch, obs_target_batch = prepare_obs(obs_batch_orig, self._cfg)
         encoder_image_list = []
         encoder_image_list.append(obs_batch)
-        for zt in range(5):
-            beg_index = self._cfg.model.image_channel * zt
-            end_index = self._cfg.model.image_channel * (zt + self._cfg.model.frame_stack_num)
+        for i in range(self._cfg.num_unroll_steps):
+            beg_index = self._cfg.model.image_channel * i
+            end_index = self._cfg.model.image_channel * (i + self._cfg.model.frame_stack_num)
             encoder_image_list.append(obs_target_batch[:, beg_index:end_index, :, :])
 
         # do augmentations
@@ -315,7 +324,7 @@ class StochasticMuZeroPolicy(Policy):
 
         reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
-        
+
         afterstate_policy_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         afterstate_value_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         commitment_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
@@ -326,20 +335,25 @@ class StochasticMuZeroPolicy(Policy):
         # the core recurrent_inference in MuZero policy.
         # ==============================================================
         for step_i in range(self._cfg.num_unroll_steps):
-            # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
-            # given current ``latent_state`` and ``action``.
-            # And then predict policy_logits and value with the prediction function.
-            network_output = self._learn_model.recurrent_inference(latent_state, action_batch[:, step_i], afterstate=False)
-            after_state, a_reward, a_value, a_policy_logits = mz_network_output_unpack(network_output)
-
-            former_frame = encoder_image_list[step_i]
-            latter_frame = encoder_image_list[step_i+1]
-            concat_frame = torch.cat((former_frame, latter_frame), dim=1)
+            # unroll with the afterstate dynamic function: predict 'afterstate state', 
+            # given current ``state`` and ``action``.
+            # 'afterstate reward' is not used, we kept it for the sake of uniformity between decision nodes and chance nodes.
+            # And then predict afterstate policy_logits and afterstate value with the afterstate prediction function.
+            network_output = self._learn_model.recurrent_inference(
+                latent_state, action_batch[:, step_i], afterstate=False
+            )
+            after_state, afterstate_reward, afterstate_value, afterstate_policy_logits = mz_network_output_unpack(network_output)
             
+            # concat consecutive frames to calculate ground truth chance
+            former_frame = encoder_image_list[step_i]
+            latter_frame = encoder_image_list[step_i + 1]
+            concat_frame = torch.cat((former_frame, latter_frame), dim=1)
             chance_code, encode_output = self._learn_model._encode_vqvae(concat_frame)
-            #chance_code, encode_output = self._learn_model._encode_vqvae(encoder_image_list[step_i])
             chance_code_long = torch.argmax(chance_code, dim=1).long().unsqueeze(-1)
             
+            # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
+            # given current ``after_state`` and ``chance_long``.
+            # And then predict policy_logits and value with the prediction function.
             network_output = self._learn_model.recurrent_inference(after_state, chance_code_long, afterstate=True)
             latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
@@ -380,10 +394,10 @@ class StochasticMuZeroPolicy(Policy):
             # NOTE: the +=.
             # ==============================================================
             policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
-            afterstate_policy_loss += cross_entropy_loss(a_policy_logits, chance_code)
+            afterstate_policy_loss += cross_entropy_loss(afterstate_policy_logits, chance_code)
             commitment_loss += cross_entropy_loss(encode_output, chance_code)
 
-            afterstate_value_loss += cross_entropy_loss(a_value, target_value_categorical[:, step_i])
+            afterstate_value_loss += cross_entropy_loss(afterstate_value, target_value_categorical[:, step_i])
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_i])
 
@@ -407,10 +421,9 @@ class StochasticMuZeroPolicy(Policy):
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
             self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
-            + self._cfg.policy_loss_weight * afterstate_policy_loss + self._cfg.value_loss_weight * afterstate_value_loss
-            + self._cfg.policy_loss_weight * commitment_loss
-            
+            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss +
+            self._cfg.afterstate_policy_loss_weight * afterstate_policy_loss +
+            self._cfg.afterstate_value_loss_weight * afterstate_value_loss + self._cfg.commitment_loss_weight * commitment_loss
         )
         weighted_total_loss = (weights * loss).mean()
 
@@ -432,10 +445,15 @@ class StochasticMuZeroPolicy(Policy):
 
         # packing loss info for tensorboard logging
         loss_info = (
-            weighted_total_loss.item(), loss.mean().item(), policy_loss.mean().item(), reward_loss.mean().item(),
-            value_loss.mean().item(), consistency_loss.mean(), afterstate_policy_loss.mean().item(), 
-            afterstate_value_loss.mean().item(), commitment_loss.mean().item(),
-            
+            weighted_total_loss.item(),
+            loss.mean().item(),
+            policy_loss.mean().item(),
+            reward_loss.mean().item(),
+            value_loss.mean().item(),
+            consistency_loss.mean(),
+            afterstate_policy_loss.mean().item(),
+            afterstate_value_loss.mean().item(),
+            commitment_loss.mean().item(),
         )
         if self._cfg.monitor_extra_statistics:
             predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)

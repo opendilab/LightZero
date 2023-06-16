@@ -54,6 +54,7 @@ class StochasticMuZeroModel(nn.Module):
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96] for Atari.
             - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
+            - chance_space_size: (:obj:`int`): Chance space size, the action space for decision node, usually an integer number for discrete action space.
             - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
             - num_channels (:obj:`int`): The channels of hidden states.
             - reward_head_channels (:obj:`int`): The channels of reward head.
@@ -846,7 +847,8 @@ class Encoder_function(nn.Module):
         self.onehot_argmax = StraightThroughEstimator()
     def forward(self, o_i):
         #https://openreview.net/pdf?id=X6D9bAHhBQ1 [page:5 chance outcome]
-        c_e_t = torch.nn.Softmax(-1)(self.encoder(o_i))
+        # c_e_t = torch.nn.Softmax(-1)(self.encoder(o_i))
+        c_e_t = self.encoder(o_i)
         #c_t= torch.zeros_like(c_e_t).scatter_(-1, torch.argmax(c_e_t, dim=-1,keepdim=True), 1.)
         c_t = self.onehot_argmax(c_e_t)
         return c_t,c_e_t

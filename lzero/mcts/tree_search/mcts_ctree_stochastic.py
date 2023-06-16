@@ -17,7 +17,7 @@ from lzero.mcts.ctree.ctree_stochastic_muzero import stochastic_mz_tree
 class StochasticMuZeroMCTSCtree(object):
     """
     Overview:
-        MCTSCtree for MuZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in C++.
+        MCTSCtree for Stochastic MuZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in C++.
 
     Interfaces:
         __init__, roots, search
