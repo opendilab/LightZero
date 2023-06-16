@@ -83,11 +83,6 @@ class StochasticMuZeroModel(nn.Module):
                 we don't need this module.
         """
         super(StochasticMuZeroModel, self).__init__()
-        if isinstance(observation_shape, int) or len(observation_shape) == 1:
-            # for vector obs input, e.g. classical control ad box2d environments
-            # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
-            observation_shape = [1, observation_shape, 1]
-            
         self.categorical_distribution = categorical_distribution
         if self.categorical_distribution:
             self.reward_support_size = reward_support_size
