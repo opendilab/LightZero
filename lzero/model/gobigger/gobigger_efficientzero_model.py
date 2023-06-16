@@ -8,7 +8,7 @@ from numpy import ndarray
 
 from ..common import EZNetworkOutput, RepresentationNetworkMLP, PredictionNetworkMLP
 from ..utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
-from .gobigger_encoder import GoBiggerEncoder
+from .network.gobigger_encoder import GoBiggerEncoder
 import yaml
 from easydict import EasyDict
 from ding.utils.data import default_collate

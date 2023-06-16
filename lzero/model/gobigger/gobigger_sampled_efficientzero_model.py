@@ -9,7 +9,7 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 from ..common import EZNetworkOutput, RepresentationNetworkMLP
 from ..efficientzero_model_mlp import DynamicsNetworkMLP
 from ..utils import renormalize, get_params_mean
-from .gobigger_encoder import GoBiggerEncoder
+from .network.gobigger_encoder import GoBiggerEncoder
 import yaml
 from easydict import EasyDict
 from ding.utils.data import default_collate

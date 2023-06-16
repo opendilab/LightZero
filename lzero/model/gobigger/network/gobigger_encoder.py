@@ -1,17 +1,14 @@
-from typing import Dict
-
+from typing import Dict, Optional
 import torch
 import torch.nn as nn
 from torch import Tensor
-
-from .network import sequence_mask, ScatterConnection
-from .network.encoder import SignBinaryEncoder, BinaryEncoder, OnehotEncoder, TimeEncoder, UnsqueezeEncoder
-from .network.nn_module import fc_block, conv2d_block, MLP
-from .network.res_block import ResBlock
-from .network.transformer import Transformer
-from typing import Any, List, Tuple, Union, Optional, Callable
-from easydict import EasyDict
 from ding.utils.default_helper import deep_merge_dicts
+from ding.torch_utils import MLP, fc_block, conv2d_block, ResBlock
+from ding.torch_utils import Transformer
+from easydict import EasyDict
+
+from .encoder import SignBinaryEncoder, BinaryEncoder, OnehotEncoder, TimeEncoder, UnsqueezeEncoder
+from .scatter_connection import ScatterConnection
 
 def sequence_mask(lengths: torch.Tensor, max_len: Optional[int] =None):
     r"""
@@ -57,8 +54,10 @@ class ScalarEncoder(nn.Module):
                           layer_fn=fc_block,
                           activation=self.cfg.mlp.activation,
                           norm_type=self.cfg.mlp.norm_type,
-                          use_dropout=False
-                          )
+                          use_dropout=False,
+                          output_activation=True,
+                          output_norm=True,
+                          last_linear_layer_init_zero=False)
 
     def forward(self, x: Dict[str, Tensor]):
         embeddings = []
@@ -96,18 +95,19 @@ class TeamEncoder(nn.Module):
                                  layer_fn=fc_block,
                                  activation=self.cfg.mlp.activation,
                                  norm_type=self.cfg.mlp.norm_type,
-                                 use_dropout=False)
+                                 use_dropout=False,
+                                 output_activation=True,
+                                 output_norm=True,
+                                 last_linear_layer_init_zero=False)
 
         self.transformer = Transformer(
-            n_heads=self.cfg.transformer.head_num,
-            embedding_size=self.cfg.transformer.embedding_dim,
-            ffn_size=self.cfg.transformer.ffn_size,
-            n_layers=self.cfg.transformer.layer_num,
-            attention_dropout=0.0,
-            relu_dropout=0.0,
-            dropout=0.0,
+            input_dim=self.cfg.transformer.input_dim,
+            output_dim=self.cfg.transformer.output_dim,
+            head_num=self.cfg.transformer.head_num,
+            head_dim=self.cfg.transformer.embedding_dim,
+            hidden_dim=self.cfg.transformer.ffn_size,
+            layer_num=self.cfg.transformer.layer_num,
             activation=self.cfg.transformer.activation,
-            variant=self.cfg.transformer.variant,
         )
         self.output_fc = fc_block(self.cfg.fc_block.input_dim,
                                   self.cfg.fc_block.output_dim,
@@ -155,18 +155,19 @@ class BallEncoder(nn.Module):
                                  layer_fn=fc_block,
                                  activation=self.cfg.mlp.activation,
                                  norm_type=self.cfg.mlp.norm_type,
-                                 use_dropout=False)
+                                 use_dropout=False,
+                                 output_activation=True,
+                                 output_norm=True,
+                                 last_linear_layer_init_zero=False)
 
         self.transformer = Transformer(
-            n_heads=self.cfg.transformer.head_num,
-            embedding_size=self.cfg.transformer.embedding_dim,
-            ffn_size=self.cfg.transformer.ffn_size,
-            n_layers=self.cfg.transformer.layer_num,
-            attention_dropout=0.0,
-            relu_dropout=0.0,
-            dropout=0.0,
+            input_dim=self.cfg.transformer.input_dim,
+            output_dim=self.cfg.transformer.output_dim,
+            head_num=self.cfg.transformer.head_num,
+            head_dim=self.cfg.transformer.embedding_dim,
+            hidden_dim=self.cfg.transformer.ffn_size,
+            layer_num=self.cfg.transformer.layer_num,
             activation=self.cfg.transformer.activation,
-            variant=self.cfg.transformer.variant,
         )
         self.output_fc = fc_block(self.cfg.fc_block.input_dim,
                                   self.cfg.fc_block.output_dim,
@@ -239,7 +240,8 @@ class SpatialEncoder(nn.Module):
                                  bias=False,
                                  )
             layers.append(layer)
-            layers.append(ResBlock(in_channels=dims[i + 1],
+            layers.append(ResBlock(res_type='basic',
+                                   in_channels=dims[i + 1],
                                    activation=self.cfg.resnet.activation,
                                    norm_type=self.cfg.resnet.norm_type))
         self.resnet = torch.nn.Sequential(*layers)
@@ -300,7 +302,7 @@ class GoBiggerEncoder(nn.Module):
                 time=dict(arc='time', embedding_dim=8),
                 last_action_type=dict(arc='one_hot', num_embeddings=27),
                 ),
-            mlp=dict(input_dim=80, hidden_dim=64, layer_num=2, norm_type='none', output_dim=32, activation='relu'),
+            mlp=dict(input_dim=80, hidden_dim=64, layer_num=2, norm_type='BN', output_dim=32, activation=nn.ReLU(inplace=True)),
         ),
         team_encoder=dict(
             modules=dict(
@@ -308,9 +310,9 @@ class GoBiggerEncoder(nn.Module):
                 view_x=dict(arc='sign_binary', num_embeddings=7),
                 view_y=dict(arc='sign_binary', num_embeddings=7),
                 ),
-            mlp=dict(input_dim=16, hidden_dim=32, layer_num=2, norm_type='none', output_dim=16, activation='relu'),
-            transformer=dict(head_num=4, ffn_size=32, layer_num=2, embedding_dim=16, activation='relu', variant='postnorm'),
-            fc_block=dict(input_dim=16, output_dim=16, activation='relu', norm_type='none'),
+            mlp=dict(input_dim=16, hidden_dim=32, layer_num=2, norm_type=None, output_dim=16, activation=nn.ReLU(inplace=True)),
+            transformer=dict(input_dim=16, output_dim=16, head_num=4, ffn_size=32, layer_num=2, embedding_dim=16, activation=nn.ReLU(inplace=True), variant='postnorm'),
+            fc_block=dict(input_dim=16, output_dim=16, activation=nn.ReLU(inplace=True), norm_type='BN'),
         ),
         ball_encoder=dict(
             modules=dict(
@@ -323,14 +325,14 @@ class GoBiggerEncoder(nn.Module):
                 next_x=dict(arc='sign_binary', num_embeddings=8),
                 next_y=dict(arc='sign_binary', num_embeddings=8),
             ),
-            mlp=dict(input_dim=92, hidden_dim=128, layer_num=2, norm_type='none', output_dim=64, activation='relu'),
-            transformer=dict(head_num=4, ffn_size=64, layer_num=3,  embedding_dim=64, activation='relu', variant='postnorm'),
-            fc_block=dict(input_dim=64, output_dim=64, activation='relu', norm_type='none'),
+            mlp=dict(input_dim=92, hidden_dim=128, layer_num=2, norm_type=None, output_dim=64, activation=nn.ReLU(inplace=True)),
+            transformer=dict(input_dim=64, output_dim=64, head_num=4, ffn_size=64, layer_num=3,  embedding_dim=64, activation=nn.ReLU(inplace=True), variant='postnorm'),
+            fc_block=dict(input_dim=64, output_dim=64, activation=nn.ReLU(inplace=True), norm_type='BN'),
         ),
         spatial_encoder=dict(
-            scatter=dict(input_dim=64, output_dim=16, scatter_type='add', activation='relu', norm_type='none'),
-            resnet=dict(project_dim=12, down_channels=[32, 32, 16 ], activation='relu', norm_type='none'),
-            fc_block=dict(output_dim=64, activation='relu', norm_type='none'),
+            scatter=dict(input_dim=64, output_dim=16, scatter_type='add', activation=nn.ReLU(inplace=True), norm_type=None),
+            resnet=dict(project_dim=12, down_channels=[32, 32, 16 ], activation=nn.ReLU(inplace=True), norm_type='BN'),
+            fc_block=dict(output_dim=64, activation=nn.ReLU(inplace=True), norm_type='BN'),
         ),
     )
 

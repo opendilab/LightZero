@@ -76,24 +76,6 @@ class ScatterConnection(nn.Module):
         elif self.scatter_type == 'add':
             output.scatter_add_(dim=2, index=indices, src=x)
         output = output.view(BatchSize, EmbeddingSize, H, W)
-
-        # device = x.device
-        # B, M, N = x.shape
-        # H, W = spatial_size
-        # index = location.view(-1, 2)
-        # bias = torch.arange(B).mul_(H * W).unsqueeze(1).repeat(1, M).view(-1).to(device)
-        # index = index[:, 0] * W + index[:, 1]
-        # index += bias
-        # index = index.repeat(N, 1)
-        # x = x.view(-1, N).permute(1, 0)
-        # output = torch.zeros(N, B * H * W, device=device)
-        # if self.scatter_type == 'cover':
-        #     output.scatter_(dim=1, index=index, src=x)
-        # elif self.scatter_type == 'add':
-        #     output.scatter_add_(dim=1, index=index, src=x)
-        # output = output.reshape(N, B, H, W)
-        # output = output.permute(1, 0, 2, 3).contiguous()
-
         return output
 
 
