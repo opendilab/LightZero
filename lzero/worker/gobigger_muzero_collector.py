@@ -287,6 +287,7 @@ class GoBiggerMuZeroCollector(ISerialCollector):
         if policy_kwargs is None:
             policy_kwargs = {}
         temperature = policy_kwargs['temperature']
+        epsilon = policy_kwargs['epsilon']
 
         collected_episode = 0
         env_nums = self._env_num
@@ -376,7 +377,7 @@ class GoBiggerMuZeroCollector(ISerialCollector):
                 # ==============================================================
                 # policy forward
                 # ==============================================================
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play)
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon)
                 actions_no_env_id=defaultdict(dict)
                 for k,v in policy_output.items():
                     for agent_id, act in enumerate(v['action']):
