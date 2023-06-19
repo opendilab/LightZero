@@ -138,9 +138,6 @@ def train_muzero_gobigger(
             policy_config.threshold_training_steps_for_final_temperature,
             trained_steps=learner.train_iter
         )
-        stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-        stop, reward = vsbot_evaluator.eval_vsbot(learner.save_checkpoint, learner.train_iter, collector.envstep)
-
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
