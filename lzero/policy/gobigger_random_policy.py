@@ -266,15 +266,14 @@ class GoBiggerRandomPolicy(Policy):
                 network_output
             )
 
-            if not self._learn_model.training:
-                # if not in training, obtain the scalars of the value/reward
-                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
-                latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                reward_hidden_state_roots = (
-                    reward_hidden_state_roots[0].detach().cpu().numpy(),
-                    reward_hidden_state_roots[1].detach().cpu().numpy()
-                )
-                policy_logits = policy_logits.detach().cpu().numpy().tolist()
+            # if not in training, obtain the scalars of the value/reward
+            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
+            latent_state_roots = latent_state_roots.detach().cpu().numpy()
+            reward_hidden_state_roots = (
+                reward_hidden_state_roots[0].detach().cpu().numpy(),
+                reward_hidden_state_roots[1].detach().cpu().numpy()
+            )
+            policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             action_mask = sum(action_mask, [])
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]

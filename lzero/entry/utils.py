@@ -27,6 +27,7 @@ def random_collect(
     # set temperature for visit count distributions according to the train_iter,
     # please refer to Appendix D in MuZero paper for details.
     collect_kwargs['temperature'] = 1
+    collect_kwargs['epsilon'] = 0.0
 
     # Collect data by default config n_sample/n_episode.
     new_data = collector.collect(train_iter=0, policy_kwargs=collect_kwargs)
