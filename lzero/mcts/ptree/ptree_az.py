@@ -246,8 +246,8 @@ class MCTS(object):
         action = None
         child = None
         best_score = -9999999
+        # print(simulate_env._raw_env._go.board, simulate_env.legal_actions)
         for action_tmp, child_tmp in node.children.items():
-            # print(a, simulate_env.legal_actions)
             if action_tmp in simulate_env.legal_actions:
                 score = self._ucb_score(node, child_tmp)
                 if score > best_score:
@@ -271,6 +271,7 @@ class MCTS(object):
             - leaf_value (:obj:`Bool`): the leaf node's value.
         """
         action_probs_dict, leaf_value = policy_forward_fn(simulate_env)
+        # simulate_env._raw_env._go.board
         for action, prior_p in action_probs_dict.items():
             if action in simulate_env.legal_actions:
                 node.children[action] = Node(parent=node, prior_p=prior_p)

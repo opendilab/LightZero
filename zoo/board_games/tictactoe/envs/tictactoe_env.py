@@ -94,6 +94,16 @@ class TicTacToeEnv(BaseEnv):
         return _legal_actions_func_lru(tuple(map(tuple, self.board)))
 
     def get_done_winner(self):
+        """
+        Overview:
+             Check if the game is over and who the winner is. Return 'done' and 'winner'.
+        Returns:
+            - outputs (:obj:`Tuple`): Tuple containing 'done' and 'winner',
+                - if player 1 win,     'done' = True, 'winner' = 1
+                - if player 2 win,     'done' = True, 'winner' = 2
+                - if draw,             'done' = True, 'winner' = -1
+                - if game is not over, 'done' = False, 'winner' = -1
+        """
         # Convert NumPy arrays to nested tuples to make them hashable.
         return _get_done_winner_func_lru(tuple(map(tuple, self.board)))
 

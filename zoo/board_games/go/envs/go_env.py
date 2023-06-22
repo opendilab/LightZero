@@ -1,16 +1,19 @@
-"""
-Adapt the Go environment in PettingZoo (https://github.com/Farama-Foundation/PettingZoo) to the BaseEnv interface.
-"""
+import copy
+from ditk import logging
 
 import os
 import sys
+from typing import List
 
+import gym
 import numpy as np
 import pygame
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
+from easydict import EasyDict
 from gym import spaces
-from pettingzoo.classic.go import coords, go
+from pettingzoo.classic import go_v5
+from pettingzoo.classic.go import coords, go_base
 from pettingzoo.utils.agent_selector import agent_selector
 
 
@@ -25,192 +28,406 @@ def get_image(path):
     return sfc
 
 
-@ENV_REGISTRY.register('Go')
+@ENV_REGISTRY.register('go')
 class GoEnv(BaseEnv):
+    """
+    Overview:
+        Go environment.
+        board: X black, O white, . empty
+        Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
 
-    def __init__(self, board_size: int = 19, komi: float = 7.5):
-        # board_size: a int, representing the board size (board has a board_size x board_size shape)
-        # komi: a float, representing points given to the second player.
-        self._overwrite_go_global_variables(board_size=board_size)
-        self._komi = komi
+        self._raw_env._go.to_play: 1 black, -1 white
+    Interface:
+        reset, step, seed, close, render, close, seed
+    Property:
+        action_space, observation_space, reward_range, spec
 
-        self.agents = ['black_0', 'white_0']
-        self.num_agents = len(self.agents)
+    """
 
-        self.possible_agents = self.agents[:]
-        self.has_reset = False
+    config = dict(
+        env_name="Go",
+        battle_mode='self_play_mode',
+        mcts_mode='self_play_mode',  # only used in AlphaZero
+        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+        agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        channel_last=True,
+        scale=True,
+        stop_value=1,
+    )
 
-        self.screen = None
-
-        self._observation_space = self._convert_to_dict(
-            [
-                spaces.Dict(
-                    {
-                        'observation': spaces.Box(low=0, high=1, shape=(self._N, self._N, 17), dtype=bool),
-                        'action_mask': spaces.Box(low=0, high=1, shape=((self._N * self._N) + 1, ), dtype=np.int8)
-                    }
-                ) for _ in range(self.num_agents)
-            ]
-        )
-
-        self._action_space = self._convert_to_dict(
-            [spaces.Discrete(self._N * self._N + 1) for _ in range(self.num_agents)]
-        )
-
-        self._agent_selector = agent_selector(self.agents)
-
-        self.board_history = np.zeros((self._N, self._N, 16), dtype=bool)
-
-    def _overwrite_go_global_variables(self, board_size: int):
-        self._N = board_size
-        go.N = self._N
-        go.ALL_COORDS = [(i, j) for i in range(self._N) for j in range(self._N)]
-        go.EMPTY_BOARD = np.zeros([self._N, self._N], dtype=np.int8)
-        go.NEIGHBORS = {
-            (x, y): list(filter(self._check_bounds, [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]))
-            for x, y in go.ALL_COORDS
-        }
-        go.DIAGONALS = {
-            (x, y): list(filter(self._check_bounds, [(x + 1, y + 1), (x + 1, y - 1), (x - 1, y + 1), (x - 1, y - 1)]))
-            for x, y in go.ALL_COORDS
-        }
-        return
-
-    def _check_bounds(self, c):
-        return 0 <= c[0] < self._N and 0 <= c[1] < self._N
-
-    def _encode_player_plane(self, agent):
-        if agent == self.possible_agents[0]:
-            return np.zeros([self._N, self._N], dtype=bool)
-        else:
-            return np.ones([self._N, self._N], dtype=bool)
-
-    def _encode_board_planes(self, agent):
-        agent_factor = go.BLACK if agent == self.possible_agents[0] else go.WHITE
-        current_agent_plane_idx = np.where(self._go.board == agent_factor)
-        opponent_agent_plane_idx = np.where(self._go.board == -agent_factor)
-        current_agent_plane = np.zeros([self._N, self._N], dtype=bool)
-        opponent_agent_plane = np.zeros([self._N, self._N], dtype=bool)
-        current_agent_plane[current_agent_plane_idx] = 1
-        opponent_agent_plane[opponent_agent_plane_idx] = 1
-        return current_agent_plane, opponent_agent_plane
-
-    def _int_to_name(self, ind):
-        return self.possible_agents[ind]
-
-    def _name_to_int(self, name):
-        return self.possible_agents.index(name)
-
-    def _convert_to_dict(self, list_of_list):
-        return dict(zip(self.possible_agents, list_of_list))
-
-    def _encode_legal_actions(self, actions):
-        return np.where(actions == 1)[0]
-
-    def _encode_rewards(self, result):
-        return [1, -1] if result == 1 else [-1, 1]
+    @classmethod
+    def default_config(cls: type) -> EasyDict:
+        cfg = EasyDict(copy.deepcopy(cls.config))
+        cfg.cfg_type = cls.__name__ + 'Dict'
+        return cfg
 
     @property
     def current_player(self):
-        return self.current_player_index
+        return self._current_player
+
+    @property
+    def current_player_index(self):
+        """
+        current_player_index = 0, current_player = 1
+        current_player_index = 1, current_player = 2
+        """
+        return 0 if self._current_player == 1 else 1
 
     @property
     def to_play(self):
-        return self.current_player_index
+        return self.players[0] if self.current_player == self.players[1] else self.players[1]
 
-    def reset(self):
+    @property
+    def current_player_to_compute_bot_action(self):
+        """
+        Overview: to compute expert action easily.
+        """
+        return -1 if self.current_player == 1 else 1
+
+    # def __init__(self, board_size: int = 19, komi: float = 7.5):
+    def __init__(self, cfg=None):
+
+        # board_size: a int, representing the board size (board has a board_size x board_size shape)
+        # komi: a float, representing points given to the second player.
+        self.cfg = cfg
+        self.channel_last = cfg.channel_last
+        self.scale = cfg.scale
+        self.battle_mode = cfg.battle_mode
+        # The mode of interaction between the agent and the environment.
+        assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
+        # The mode of MCTS is only used in AlphaZero.
+        self.mcts_mode = 'self_play_mode'
+
+        self.board_size = cfg.board_size
+        self.prob_random_agent = cfg.prob_random_agent
+        self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
+        self.channel_last = cfg.channel_last
+        self.scale = cfg.scale
+        self.agent_vs_human = cfg.agent_vs_human
+        self.bot_action_type = cfg.bot_action_type
+
+        self.players = [1, 2]
+        self.board_markers = [str(i + 1) for i in range(self.board_size)]
+        self.total_num_actions = self.board_size * self.board_size + 1
+
+        self._komi = cfg.komi
+        self.board_size = cfg.board_size
+        self.agents = ['black_0', 'white_0']
+        self.num_agents = len(self.agents)
+        self.possible_agents = self.agents[:]
+        self._agent_selector = agent_selector(self.agents)
+        self.has_reset = False
+        self.screen = None
+
+        self._observation_space = spaces.Dict(
+            {
+                'observation': spaces.Box(low=0, high=1, shape=(self.board_size, self.board_size, 17),
+                                          dtype=bool),
+                'action_mask': spaces.Box(low=0, high=1, shape=((self.board_size * self.board_size) + 1,),
+                                          dtype=np.int8)
+            })
+        self._action_space = spaces.Discrete(self.board_size * self.board_size + 1)
+        self._reward_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
+
+        self.board_history = np.zeros((self.board_size, self.board_size, 16), dtype=bool)
+
+
+    # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
+    def reset(self, start_player_index=0, init_state=None):
+        self.start_player_index = start_player_index
+        self._current_player = self.players[self.start_player_index]
+
+        if self.current_player == 1:
+            agent_id = 'black_0'
+            self._agent_selector = agent_selector(['black_0', 'white_0'])
+        elif self.current_player == 2:
+            agent_id = 'white_0'
+            self._agent_selector = agent_selector(['white_0', 'black_0'])
+
+        self.agent_selection = self._agent_selector.next()
+
         self.has_reset = True
-        self._go = go.Position(board=None, komi=self._komi)
-        self.agents = self.possible_agents[:]
-        self._agent_selector.reinit(self.agents)
-        self.agent_selection = self._agent_selector.reset()
+        self._go = go_v5.env(board_size=self.board_size, komi=self._komi)
+        # self._go = raw_env(board_size=self.board_size, komi=self._komi)
+        self._go.reset()
+        self._raw_env = self._go.env.env.env
+
+        if init_state is not None:
+            # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
+            self._raw_env._go = go_base.Position(board=copy.deepcopy(init_state), komi=self._komi,
+                                                 to_play=1 if self.start_player_index == 0 else -1)
+        else:
+            self._raw_env._go = go_base.Position(board=np.zeros((self.board_size, self.board_size), dtype="int32"),
+                                                 komi=self._komi, to_play=1 if self.start_player_index == 0 else -1)
+
         self._cumulative_rewards = self._convert_to_dict(np.array([0.0, 0.0]))
         self.rewards = self._convert_to_dict(np.array([0.0, 0.0]))
+
         self.dones = self._convert_to_dict([False for _ in range(self.num_agents)])
         self.infos = self._convert_to_dict([{} for _ in range(self.num_agents)])
-        self.next_legal_moves = self._encode_legal_actions(self._go.all_legal_moves())
-        self._last_obs = self.observe(self.agents[0])
-        self.board_history = np.zeros((self._N, self._N, 16), dtype=bool)
 
-        self.current_player_index = 0
+        self.next_legal_moves = self._raw_env._encode_legal_actions(self._raw_env._go.all_legal_moves())
+        self.board_history = np.zeros((self.board_size, self.board_size, 16), dtype=bool)
+
+        for agent, reward in self.rewards.items():
+            self._cumulative_rewards[agent] += reward
+
+        # obs = self._go.observe(agent_id)
+        # obs = self._raw_env.observe(agent_id)
+        obs = self.observe(agent_id)
+
+        # obs['action_mask'] is the action mask for the last player
+        self.action_mask = np.zeros(self.total_num_actions, 'int8')
+        self.action_mask[self.legal_actions] = 1
+
+        obs['action_mask'] = self.action_mask
+        obs['observation'] = obs['observation'].astype(int)
+        obs['board'] = copy.deepcopy(self._raw_env._go.board)
+        obs['current_player_index'] = self.current_player_index
+        obs['to_play'] = self.current_player
+
+        return obs
+
+    def _player_step(self, action):
+        if self.current_player == 1:
+            agent_id = 'black_0'
+        elif self.current_player == 2:
+            agent_id = 'white_0'
+
+        if action in self.legal_actions:
+            self._raw_env._go = self._raw_env._go.play_move(coords.from_flat(action))
+        else:
+            logging.warning(
+                f"You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
+                f"Now we randomly choice a action from self.legal_actions."
+            )
+            action = np.random.choice(self.legal_actions)
+            self._raw_env._go = self._raw_env._go.play_move(coords.from_flat(action))
+
+        # try:
+        #     self._raw_env._go = self._raw_env._go.play_move(coords.from_flat(action))
+        # except:
+        #     print('action: ', action)
+        #     print('board:', self._raw_env._go.board)
+        #     import sys
+        #     sys.exit(2)
+
+        # obs = self._go.observe(agent_id)
+        # obs = self._raw_env.observe(agent_id)
+        obs = self.observe(agent_id)
+
+        current_agent_plane, opponent_agent_plane = self._raw_env._encode_board_planes(agent_id)
+        self.board_history = np.dstack((current_agent_plane, opponent_agent_plane, self.board_history[:, :, :-2]))
+        # self.board_history[:,:,0], self.board_history[:,:,1]
+
+        # next_player: 'black_0', 'white_0'
+        """
+        NOTE: here exchange the player
+        """
+        self.agent_selection = self._agent_selector.next()
+        self._current_player = self.to_play
+
+        # obs['action_mask'] is the action mask for the last player
+        action_mask = np.zeros(self.total_num_actions, 'int8')
+        action_mask[self.legal_actions] = 1
+        obs['action_mask'] = action_mask
+        obs['observation'] = obs['observation'].astype(int)
+        obs['board'] = copy.deepcopy(self._raw_env._go.board)
+        # obs['current_player_index'] = self.players.index(self.current_player)
+        obs['current_player_index'] = self.current_player_index
+        obs['to_play'] = self.current_player
+
+        if self._raw_env._go.is_game_over():
+            self._raw_env.terminations = self._convert_to_dict(
+                [True for _ in range(self.num_agents)]
+            )
+            self.rewards = self._convert_to_dict(
+                self._encode_rewards(self._raw_env._go.result())
+            )
+            self.next_legal_moves = [self.board_size * self.board_size]
+        else:
+            self.next_legal_moves = self._encode_legal_actions(self._raw_env._go.all_legal_moves())
 
         for agent, reward in self.rewards.items():
             self._cumulative_rewards[agent] += reward
 
         agent = self.agent_selection
-        current_index = self.agents.index(agent)
-        self.current_player_index = current_index
-        obs = self.observe(agent)
-        return obs
+        # self.dones[agent] = (
+        #         self._raw_env.terminations[agent_id]
+        #         or self._raw_env.truncations[agent_id]
+        # )
+        self.dones[agent] = (
+                self._raw_env.terminations[agent]
+                or self._raw_env.truncations[agent]
+        )
+        if self.dones[agent]:
+            self.infos[agent]['eval_episode_return'] = self._cumulative_rewards[agent]
+
+        return BaseEnvTimestep(obs, self._cumulative_rewards[agent], self.dones[agent], self.infos[agent])
+
+    def step(self, action):
+        if self.battle_mode == 'self_play_mode':
+            if np.random.rand() < self.prob_random_agent:
+                action = self.random_action()
+            timestep = self._player_step(action)
+            if timestep.done:
+                # The eval_episode_return is calculated from Player 1's perspective.
+                timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs[
+                                                                               'to_play'] == 1 else timestep.reward
+            return timestep
+        elif self.battle_mode == 'play_with_bot_mode':
+            # player 1 battle with expert player 2
+
+            # player 1's turn
+            timestep_player1 = self._player_step(action)
+            # print('player 1 (efficientzero player): ' + self.action_to_string(action))  # Note: visualize
+            if timestep_player1.done:
+                # in play_with_bot_mode, we set to_play as None/-1, because we don't consider the alternation between players
+                timestep_player1.obs['to_play'] = -1
+                return timestep_player1
+
+            # player 2's turn
+            bot_action = self.bot_action()
+            # print('player 2 (expert player): ' + self.action_to_string(bot_action))  # Note: visualize
+            timestep_player2 = self._player_step(bot_action)
+            # self.render()  # Note: visualize
+            # the eval_episode_return is calculated from Player 1's perspective
+            timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
+            timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
+
+            timestep = timestep_player2
+            # NOTE: in play_with_bot_mode, we must set to_play as -1, because we don't consider the alternation between players.
+            # And the to_play is used in MCTS.
+            timestep.obs['to_play'] = -1
+            return timestep
+
+        elif self.battle_mode == 'eval_mode':
+            # player 1 battle with expert player 2
+
+            # player 1's turn
+            timestep_player1 = self._player_step(action)
+            if self.agent_vs_human:
+                print('player 1 (agent): ' + self.action_to_string(action))  # Note: visualize
+                self.render()
+
+            if timestep_player1.done:
+                # in eval_mode, we set to_play as None/-1, because we don't consider the alternation between players
+                timestep_player1.obs['to_play'] = -1
+                return timestep_player1
+
+            # player 2's turn
+            if self.agent_vs_human:
+                bot_action = self.human_to_action()
+            else:
+                bot_action = self.bot_action()
+                # bot_action = self.random_action()
+
+            timestep_player2 = self._player_step(bot_action)
+            if self.agent_vs_human:
+                print('player 2 (human): ' + self.action_to_string(bot_action))  # Note: visualize
+                self.render()
+
+            # the eval_episode_return is calculated from Player 1's perspective
+            timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
+            timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
+
+            timestep = timestep_player2
+            # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
+            # And the to_play is used in MCTS.
+            timestep.obs['to_play'] = -1
+            return timestep
+
+    def get_done_winner(self):
+        """
+        Overview:
+             Check if the game is over and who the winner is. Return 'done' and 'winner'.
+        Returns:
+            - outputs (:obj:`Tuple`): Tuple containing 'done' and 'winner',
+                - if player 1 win,     'done' = True, 'winner' = 1
+                - if player 2 win,     'done' = True, 'winner' = 2
+                - if draw,             'done' = True, 'winner' = -1
+                - if game is not over, 'done' = False, 'winner' = -1
+        """
+        if self._raw_env._go.is_game_over():
+            result = self._raw_env._go.result()
+            if result == 1:
+                return True, 1
+            elif result == -1:
+                return True, 2
+            elif result == 0:
+                return True, -1
+        else:
+            return False, -1
 
     def observe(self, agent):
-        player_plane = self._encode_player_plane(agent)
+        current_agent_plane, opponent_agent_plane = self._raw_env._encode_board_planes(agent)
+        player_plane = self._raw_env._encode_player_plane(agent)
+
         observation = np.dstack((self.board_history, player_plane))
+
         legal_moves = self.next_legal_moves if agent == self.agent_selection else []
-        action_mask = np.zeros((self._N * self._N) + 1, 'int8')
+        action_mask = np.zeros((self.board_size * self.board_size) + 1, "int8")
         for i in legal_moves:
             action_mask[i] = 1
 
-        return {'observation': observation, 'action_mask': action_mask}
+        return {"observation": observation, "action_mask": action_mask}
+    def current_state(self):
+        """
+        Overview:
+            self.board is nd-array, 0 indicates that no stones is placed here,
+            1 indicates that player 1's stone is placed here, 2 indicates player 2's stone is placed here
+        Arguments:
+            - raw_obs (:obj:`array`):
+                the 0 dim means which positions is occupied by self.current_player,
+                the 1 dim indicates which positions are occupied by self.to_play,
+                the 2 dim indicates which player is the to_play player, 1 means player 1, 2 means player 2
+        """
+        if self.current_player == 1:
+            agent_id = 'black_0'
+        elif self.current_player == 2:
+            agent_id = 'white_0'
+        # obs = self._go.observe(agent_id)
+        # obs = self._raw_env.observe(agent_id)
+        obs = self.observe(agent_id)
 
-    def set_game_result(self, result_val):
-        for i, name in enumerate(self.agents):
-            self.dones[name] = True
-            result_coef = 1 if i == 0 else -1
-            self.rewards[name] = result_val * result_coef
-            self.infos[name] = {'legal_moves': []}
 
-    def step(self, action):
-        if self.dones[self.agent_selection]:
-            return self._was_done_step(action)
-        self._go = self._go.play_move(coords.from_flat(action))
-        self._last_obs = self.observe(self.agent_selection)
-        current_agent_plane, opponent_agent_plane = self._encode_board_planes(self.agent_selection)
-        self.board_history = np.dstack((current_agent_plane, opponent_agent_plane, self.board_history[:, :, :-2]))
-        next_player = self._agent_selector.next()
+        obs['observation'] = obs['observation'].astype(int)
+        raw_obs = obs['observation']
 
-        current_agent = next_player  # 'black_0', 'white_0'
-        current_index = self.agents.index(current_agent)  # 0, 1
-        self.current_player_index = current_index
-
-        if self._go.is_game_over():
-            self.dones = self._convert_to_dict([True for _ in range(self.num_agents)])
-            self.rewards = self._convert_to_dict(self._encode_rewards(self._go.result()))
-            self.next_legal_moves = [self._N * self._N]
+        if self.channel_last:
+            # (W, H, C) (6, 6, 17)
+            return raw_obs, raw_obs
         else:
-            self.next_legal_moves = self._encode_legal_actions(self._go.all_legal_moves())
-        self.agent_selection = next_player if next_player else self._agent_selector.next()
+            # move channel dim to first axis
+            # (W, H, C) -> (C, W, H)
+            # e.g. (6, 6, 17) - > (17, 6, 6)
+            return np.transpose(raw_obs, [2, 0, 1]), np.transpose(raw_obs, [2, 0, 1])
 
-        # self._accumulate_rewards()
-        for agent, reward in self.rewards.items():
-            self._cumulative_rewards[agent] += reward
-        # observation, reward, done, info = env.last()
-        agent = self.agent_selection
-        current_index = self.agents.index(agent)
-        self.current_player_index = current_index
-        observation = self.observe(agent)
-        return BaseEnvTimestep(observation, self._cumulative_rewards[agent], self.dones[agent], self.infos[agent])
-
+    @property
     def legal_actions(self):
-        pass
+        return self.legal_moves()
 
     def legal_moves(self):
-        if self._go.is_game_over():
-            self.dones = self._convert_to_dict([True for _ in range(self.num_agents)])
-            self.rewards = self._convert_to_dict(self._encode_rewards(self._go.result()))
-            self.next_legal_moves = [self._N * self._N]
+        if self._raw_env._go.is_game_over():
+            self.terminations = self._convert_to_dict(
+                [True for _ in range(self.num_agents)]
+            )
+            self.rewards = self._convert_to_dict(
+                self._encode_rewards(self._raw_env._go.result())
+            )
+            self.next_legal_moves = [self.board_size * self.board_size]
         else:
-            self.next_legal_moves = self._encode_legal_actions(self._go.all_legal_moves())
+            self.next_legal_moves = self._encode_legal_actions(self._raw_env._go.all_legal_moves())
 
         return self.next_legal_moves
 
     def random_action(self):
-        action_list = self.legal_moves()
-        return np.random.choice(action_list)
+        return np.random.choice(self.legal_actions)
 
     def bot_action(self):
-        # TODO
-        pass
+        return self.random_action()
 
     def human_to_action(self):
         """
@@ -234,20 +451,24 @@ class GoEnv(BaseEnv):
         return choice
 
     def render(self, mode='human'):
+        if mode == "board":
+            print(self._raw_env._go.board)
+            return
+
         screen_width = 1026
         screen_height = 1026
 
         if self.screen is None:
             if mode == "human":
                 pygame.init()
+                pygame.display.init()
                 self.screen = pygame.display.set_mode((screen_width, screen_height))
             else:
                 self.screen = pygame.Surface((screen_width, screen_height))
         if mode == "human":
             pygame.event.get()
 
-        size = go.N
-
+        size = self.board_size
         # Load and scale all of the necessary images
         tile_size = (screen_width) / size
 
@@ -287,12 +508,14 @@ class GoEnv(BaseEnv):
                 self.screen.blit(tile_img, (0, (size - 1) * (tile_size)))
 
         offset = tile_size * (1 / 6)
+        board_tmp = np.transpose(self._raw_env._go.board)
+
         # Blit the necessary chips and their positions
         for i in range(0, size):
             for j in range(0, size):
-                if self._go.board[i][j] == go.BLACK:
+                if board_tmp[i][j] == go_base.BLACK:
                     self.screen.blit(black_stone, ((i * (tile_size) + offset), int(j) * (tile_size) + offset))
-                elif self._go.board[i][j] == go.WHITE:
+                elif board_tmp[i][j] == go_base.WHITE:
                     self.screen.blit(white_stone, ((i * (tile_size) + offset), int(j) * (tile_size) + offset))
 
         if mode == "human":
@@ -302,19 +525,81 @@ class GoEnv(BaseEnv):
 
         return np.transpose(observation, axes=(1, 0, 2)) if mode == "rgb_array" else None
 
-    def observation_space(self):
-        return self.observation_spaces
+    # def observation_space(self):
+    #     return self.observation_spaces
+    #
+    # def action_space(self):
+    #     return self._action_space
 
-    def action_space(self):
-        return self._action_space
+    def _check_bounds(self, c):
+        return 0 <= c[0] < self.board_size and 0 <= c[1] < self.board_size
+
+    def _encode_player_plane(self, agent):
+        if agent == self.possible_agents[0]:
+            return np.zeros([self.board_size, self.board_size], dtype=bool)
+        else:
+            return np.ones([self.board_size, self.board_size], dtype=bool)
+
+    def _int_to_name(self, ind):
+        return self.possible_agents[ind]
+
+    def _name_to_int(self, name):
+        return self.possible_agents.index(name)
+
+    def _convert_to_dict(self, list_of_list):
+        return dict(zip(self.possible_agents, list_of_list))
+
+    def _encode_legal_actions(self, actions):
+        return np.where(actions == 1)[0]
+
+    def _encode_rewards(self, result):
+        return [1, -1] if result == 1 else [-1, 1]
+
+    def set_game_result(self, result_val):
+        for i, name in enumerate(self.agents):
+            self.dones[name] = True
+            result_coef = 1 if i == 0 else -1
+            self.rewards[name] = result_val * result_coef
+            self.infos[name] = {'legal_moves': []}
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
         self._seed = seed
         self._dynamic_seed = dynamic_seed
         np.random.seed(self._seed)
 
-    def close(self) -> None:
-        pass
+    @property
+    def observation_space(self) -> gym.spaces.Space:
+        return self._observation_space
+
+    @property
+    def action_space(self) -> gym.spaces.Space:
+        return self._action_space
+
+    @property
+    def reward_space(self) -> gym.spaces.Space:
+        return self._reward_space
+
+    @current_player.setter
+    def current_player(self, value):
+        self._current_player = value
+
+    @staticmethod
+    def create_collector_env_cfg(cfg: dict) -> List[dict]:
+        collector_env_num = cfg.pop('collector_env_num')
+        cfg = copy.deepcopy(cfg)
+        return [cfg for _ in range(collector_env_num)]
+
+    @staticmethod
+    def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
+        evaluator_env_num = cfg.pop('evaluator_env_num')
+        cfg = copy.deepcopy(cfg)
+        # In eval phase, we use ``eval_mode`` to make agent play with the built-in bot to
+        # evaluate the performance of the current agent.
+        cfg.battle_mode = 'eval_mode'
+        return [cfg for _ in range(evaluator_env_num)]
 
     def __repr__(self) -> str:
         return "LightZero Go Env"
+
+    def close(self) -> None:
+        pass

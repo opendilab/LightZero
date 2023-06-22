@@ -11,19 +11,30 @@ num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(5e5)
-prob_random_action_in_bot = 0.5
+prob_random_action_in_bot = 0.
+
+# board_size = 6  # default_size is 15
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 2
+# update_per_collect = 2
+# batch_size = 2
+# max_env_step = int(5e5)
+# prob_random_action_in_bot = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-gomoku_alphazero_config = dict(
+go_alphazero_config = dict(
     exp_name=
-    f'data_az_ptree/gomoku_alphazero_bot-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
+    f'data_az_ptree/go_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         board_size=board_size,
-        battle_mode='play_with_bot_mode',
+        komi=7.5,
+        battle_mode='self_play_mode',
         bot_action_type='v0',
         prob_random_action_in_bot=prob_random_action_in_bot,
-        channel_last=False,  # NOTE
+        channel_last=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -33,8 +44,8 @@ gomoku_alphazero_config = dict(
         torch_compile=False,
         tensor_float_32=False,
         model=dict(
-            observation_shape=(3, board_size, board_size),
-            action_space_size=int(1 * board_size * board_size),
+            observation_shape=(board_size, board_size, 17),
+            action_space_size=int(1 * board_size * board_size + 1),
             num_res_blocks=1,
             num_channels=32,
         ),
@@ -45,6 +56,7 @@ gomoku_alphazero_config = dict(
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
+        manual_temperature_decay=True,
         grad_clip_value=0.5,
         value_weight=1.0,
         entropy_weight=0.0,
@@ -56,13 +68,13 @@ gomoku_alphazero_config = dict(
     ),
 )
 
-gomoku_alphazero_config = EasyDict(gomoku_alphazero_config)
-main_config = gomoku_alphazero_config
+go_alphazero_config = EasyDict(go_alphazero_config)
+main_config = go_alphazero_config
 
-gomoku_alphazero_create_config = dict(
+go_alphazero_create_config = dict(
     env=dict(
-        type='gomoku',
-        import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
+        type='go',
+        import_names=['zoo.board_games.go.envs.go_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
@@ -79,8 +91,8 @@ gomoku_alphazero_create_config = dict(
         import_names=['lzero.worker.alphazero_evaluator'],
     )
 )
-gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
-create_config = gomoku_alphazero_create_config
+go_alphazero_create_config = EasyDict(go_alphazero_create_config)
+create_config = go_alphazero_create_config
 
 if __name__ == '__main__':
     if main_config.policy.tensor_float_32:

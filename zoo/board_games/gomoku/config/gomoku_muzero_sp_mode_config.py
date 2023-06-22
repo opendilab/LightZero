@@ -48,7 +48,7 @@ gomoku_muzero_config = dict(
         game_segment_length=int(board_size * board_size),  # for battle_mode='self_play_mode'
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
+        optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         grad_clip_value=0.5,

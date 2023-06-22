@@ -49,7 +49,7 @@ gomoku_gumbel_muzero_config = dict(
         game_segment_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
+        optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         grad_clip_value=0.5,

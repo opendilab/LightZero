@@ -241,12 +241,14 @@ class AlphaZeroPolicy(Policy):
                 envs[env_id],
                 policy_forward_fn=self._policy_value_fn,
                 temperature=self.collect_mcts_temperature,
-                sample=True
+                # sample=False,
+                sample=True,
             )
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,
             }
+
         return output
 
     def _init_eval(self) -> None:
