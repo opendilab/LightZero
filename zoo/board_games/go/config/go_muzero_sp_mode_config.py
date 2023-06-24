@@ -1,6 +1,5 @@
 from easydict import EasyDict
 
-
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -13,6 +12,7 @@ from easydict import EasyDict
 # batch_size = 256
 # max_env_step = int(1e6)
 # prob_random_action_in_bot = 1
+# reanalyze_ratio = 0
 
 board_size = 6
 collector_env_num = 1
@@ -23,12 +23,15 @@ update_per_collect = 2
 batch_size = 2
 max_env_step = int(5e5)
 prob_random_action_in_bot = 0.
+reanalyze_ratio = 0
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-go_alphazero_config = dict(
+
+go_muzero_config = dict(
     exp_name=
-    f'data_az_ptree/go_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
+    f'data_mz_ctree/go_muzero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         board_size=board_size,
         komi=7.5,
@@ -42,69 +45,58 @@ go_alphazero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        torch_compile=False,
-        tensor_float_32=False,
         model=dict(
-            # observation_shape=(17, board_size, board_size),
-            observation_shape=(board_size, board_size, 17),
-            action_space_size=int(board_size * board_size + 1),
+            observation_shape=(17, board_size, board_size),
+            action_space_size=int(1 * board_size * board_size + 1),
+            image_channel=17,
             num_res_blocks=1,
             num_channels=32,
         ),
         cuda=True,
-        board_size=board_size,
+        env_type='board_games',
+        # game_segment_length=int(board_size * board_size),  # for battle_mode='self_play_mode'
+        game_segment_length=100,  # for battle_mode='self_play_mode'
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        manual_temperature_decay=True,
         grad_clip_value=0.5,
-        value_weight=1.0,
-        entropy_weight=0.0,
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
+        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
+        td_steps=int(board_size * board_size),  # for battle_mode='self_play_mode'
+        # NOTE：In board_games, we set discount_factor=1.
+        discount_factor=1,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        mcts=dict(num_simulations=num_simulations),
+        replay_buffer_size=int(1e5),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
 )
+go_muzero_config = EasyDict(go_muzero_config)
+main_config = go_muzero_config
 
-go_alphazero_config = EasyDict(go_alphazero_config)
-main_config = go_alphazero_config
-
-go_alphazero_create_config = dict(
+go_muzero_create_config = dict(
     env=dict(
         type='go',
         import_names=['zoo.board_games.go.envs.go_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='alphazero',
-        import_names=['lzero.policy.alphazero'],
+        type='muzero',
+        import_names=['lzero.policy.muzero'],
     ),
     collector=dict(
-        type='episode_alphazero',
-        get_train_sample=False,
-        import_names=['lzero.worker.alphazero_collector'],
-    ),
-    evaluator=dict(
-        type='alphazero',
-        import_names=['lzero.worker.alphazero_evaluator'],
+        type='episode_muzero',
+        get_train_sample=True,
+        import_names=['lzero.worker.muzero_collector'],
     )
 )
-go_alphazero_create_config = EasyDict(go_alphazero_create_config)
-create_config = go_alphazero_create_config
+go_muzero_create_config = EasyDict(go_muzero_create_config)
+create_config = go_muzero_create_config
 
-if __name__ == '__main__':
-    if main_config.policy.tensor_float_32:
-        import torch
-
-        # The flag below controls whether to allow TF32 on matmul. This flag defaults to False
-        # in PyTorch 1.12 and later.
-        torch.backends.cuda.matmul.allow_tf32 = True
-        # The flag below controls whether to allow TF32 on cuDNN. This flag defaults to True.
-        torch.backends.cudnn.allow_tf32 = True
-
-    from lzero.entry import train_alphazero
-    train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
+if __name__ == "__main__":
+    from lzero.entry import train_muzero
+    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

@@ -254,10 +254,6 @@ class GoEnv(BaseEnv):
             self._cumulative_rewards[agent] += reward
 
         agent = self.agent_selection
-        # self.dones[agent] = (
-        #         self._raw_env.terminations[agent_id]
-        #         or self._raw_env.truncations[agent_id]
-        # )
         self.dones[agent] = (
                 self._raw_env.terminations[agent]
                 or self._raw_env.truncations[agent]
