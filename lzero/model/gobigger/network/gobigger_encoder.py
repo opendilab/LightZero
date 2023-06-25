@@ -302,7 +302,7 @@ class GoBiggerEncoder(nn.Module):
                 time=dict(arc='time', embedding_dim=8),
                 last_action_type=dict(arc='one_hot', num_embeddings=27),
                 ),
-            mlp=dict(input_dim=80, hidden_dim=64, layer_num=2, norm_type=None, output_dim=32, activation=nn.ReLU(inplace=True)),
+            mlp=dict(input_dim=80, hidden_dim=64, layer_num=2, norm_type='BN', output_dim=32, activation=nn.ReLU(inplace=True)),
         ),
         team_encoder=dict(
             modules=dict(
@@ -312,7 +312,7 @@ class GoBiggerEncoder(nn.Module):
                 ),
             mlp=dict(input_dim=16, hidden_dim=32, layer_num=2, norm_type=None, output_dim=16, activation=nn.ReLU(inplace=True)),
             transformer=dict(input_dim=16, output_dim=16, head_num=4, ffn_size=32, layer_num=2, embedding_dim=16, activation=nn.ReLU(inplace=True), variant='postnorm'),
-            fc_block=dict(input_dim=16, output_dim=16, activation=nn.ReLU(inplace=True), norm_type=None),
+            fc_block=dict(input_dim=16, output_dim=16, activation=nn.ReLU(inplace=True), norm_type='BN'),
         ),
         ball_encoder=dict(
             modules=dict(
@@ -327,12 +327,12 @@ class GoBiggerEncoder(nn.Module):
             ),
             mlp=dict(input_dim=92, hidden_dim=128, layer_num=2, norm_type=None, output_dim=64, activation=nn.ReLU(inplace=True)),
             transformer=dict(input_dim=64, output_dim=64, head_num=4, ffn_size=64, layer_num=3,  embedding_dim=64, activation=nn.ReLU(inplace=True), variant='postnorm'),
-            fc_block=dict(input_dim=64, output_dim=64, activation=nn.ReLU(inplace=True), norm_type=None),
+            fc_block=dict(input_dim=64, output_dim=64, activation=nn.ReLU(inplace=True), norm_type='BN'),
         ),
         spatial_encoder=dict(
             scatter=dict(input_dim=64, output_dim=16, scatter_type='add', activation=nn.ReLU(inplace=True), norm_type=None),
-            resnet=dict(project_dim=12, down_channels=[32, 32, 16 ], activation=nn.ReLU(inplace=True), norm_type=None),
-            fc_block=dict(output_dim=64, activation=nn.ReLU(inplace=True), norm_type=None),
+            resnet=dict(project_dim=12, down_channels=[32, 32, 16 ], activation=nn.ReLU(inplace=True), norm_type='BN'),
+            fc_block=dict(output_dim=64, activation=nn.ReLU(inplace=True), norm_type='BN'),
         ),
     )
 
