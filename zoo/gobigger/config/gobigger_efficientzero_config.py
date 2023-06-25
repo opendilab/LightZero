@@ -89,7 +89,7 @@ atari_efficientzero_config = dict(
             type='exp',
             start=1.,
             end=0.05,
-            decay=int(1e5),
+            decay=int(1.5e4),
         ),
         use_augmentation=False,
         update_per_collect=update_per_collect,
