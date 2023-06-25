@@ -9,14 +9,14 @@ from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
 
 if TYPE_CHECKING:
-    from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
+    from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy, GumeblMuZeroPolicy
 
 
 @BUFFER_REGISTRY.register('game_buffer')
 class GameBuffer(ABC, object):
     """
     Overview:
-        The base game buffer class for MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy.
+        The base game buffer class for MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy, GumeblMuZeroPolicy.
     """
 
     @classmethod
@@ -69,14 +69,14 @@ class GameBuffer(ABC, object):
 
     @abstractmethod
     def sample(
-            self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
+            self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy", "GumeblMuZeroPolicy"]
     ) -> List[Any]:
         """
         Overview:
             sample data from ``GameBuffer`` and prepare the current and target batch for training.
         Arguments:
             - batch_size (:obj:`int`): batch size.
-            - policy (:obj:`Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]`): policy.
+            - policy (:obj:`Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy", "GumeblMuZeroPolicy"]`): policy.
         Returns:
             - train_data (:obj:`List`): List of train data, including current_batch and target_batch.
         """
