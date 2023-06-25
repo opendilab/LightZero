@@ -440,6 +440,7 @@ class GoBiggerMuZeroPolicy(Policy):
 
         return {
             'collect_mcts_temperature': self.collect_mcts_temperature,
+            'collect_epsilon': self.collect_epsilon,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
             'weighted_total_loss': loss_info[0],
             'total_loss': loss_info[1],
@@ -473,6 +474,7 @@ class GoBiggerMuZeroPolicy(Policy):
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
         self.collect_mcts_temperature = 1
+        self.collect_epsilon = 1
 
     def _forward_collect(
             self,
@@ -480,6 +482,7 @@ class GoBiggerMuZeroPolicy(Policy):
             action_mask: list = None,
             temperature: float = 1,
             to_play: List = [-1],
+            epsilon: float = 0.25,
             ready_env_id=None
     ) -> Dict:
         """
@@ -507,6 +510,7 @@ class GoBiggerMuZeroPolicy(Policy):
         """
         self._collect_model.eval()
         self.collect_mcts_temperature = temperature
+        self.collect_epsilon = epsilon
         active_collect_env_num = len(data)
         data = to_tensor(data)
         data = sum(sum(data, []), [])
@@ -555,14 +559,18 @@ class GoBiggerMuZeroPolicy(Policy):
 
             for i in range(batch_size):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
-                # the index within the legal action set, rather than the index in the entire action set.
-                action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=self.collect_mcts_temperature, deterministic=False
-                )
-                # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
-                # entire action set.
-                action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                if self._cfg.eps.eps_greedy_exploration_in_collect:
+                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=self.collect_mcts_temperature, deterministic=True
+                    )
+                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                    if np.random.rand() < self.collect_epsilon:
+                        action = np.random.choice(legal_actions[i])
+                else:
+                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=self.collect_mcts_temperature, deterministic=False
+                    )
+                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                 output[i // agent_num]['action'].append(action)
                 output[i // agent_num]['distributions'].append(distributions)
                 output[i // agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)

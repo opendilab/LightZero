@@ -5,6 +5,7 @@ env_name = 'GoBigger'
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+seed = 0
 collector_env_num = 32
 n_episode = 32
 evaluator_env_num = 5
@@ -14,12 +15,14 @@ batch_size = 256
 reanalyze_ratio = 0.
 action_space_size = 27
 direction_num = 12
+eps_greedy_exploration_in_collect = True
+random_collect_episode_num = 0
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
     env=dict(
         env_name=env_name,
         team_num=2,
@@ -77,6 +80,14 @@ atari_muzero_config = dict(
         mcts_ctree=True,
         env_type='not_board_games',
         game_segment_length=400,
+        random_collect_episode_num=random_collect_episode_num,
+        eps=dict(
+            eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
+            type='exp',
+            start=1.,
+            end=0.05,
+            decay=int(1.5e4),
+        ),
         use_augmentation=False,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
@@ -125,4 +136,4 @@ create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero_gobigger
-    train_muzero_gobigger([main_config, create_config], seed=0)
+    train_muzero_gobigger([main_config, create_config], seed=seed)
