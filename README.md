@@ -119,12 +119,11 @@ The environments and algorithms currently supported by LightZero are shown in th
 | Atari         | ---       | ✔    | ✔           | ✔                   | ✔             |
 | tictactoe     | ✔       | ✔    | 🔒          | 🔒                  | ✔             |
 | gomoku        | ✔       | ✔    | 🔒          | 🔒                  | ✔             |
-| chess         | 🔒       | 🔒   | 🔒          | 🔒                  | 🔒             |
 | go            | 🔒       | 🔒   | 🔒          | 🔒                  | 🔒             |
 | lunarlander | ---       | ✔    | ✔           | ✔                   | ✔             |
 | bipedalwalker   | ---       | ✔    | ✔           | ✔                   | 🔒             |
 | cartpole     | ---       | ✔    | ✔           | ✔                   | ✔             |
-| pendulum      | ---       | ✔    | ✔           | ✔                   | 🔒             |
+| pendulum      | ---       | ✔    | ✔           | ✔                   | ✔             |
 
 <sup>(1): "✔" means that the corresponding item is finished and well-tested.</sup>
 
