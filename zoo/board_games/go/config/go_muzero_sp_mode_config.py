@@ -3,27 +3,33 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# board_size = 6
-# collector_env_num = 32
-# n_episode = 32
-# evaluator_env_num = 5
-# num_simulations = 50
-# update_per_collect = 50
-# batch_size = 256
-# max_env_step = int(1e6)
-# prob_random_action_in_bot = 1
-# reanalyze_ratio = 0
-
 board_size = 6
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 2
-update_per_collect = 2
-batch_size = 2
-max_env_step = int(5e5)
-prob_random_action_in_bot = 0.
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 5
+update_per_collect = 50
+batch_size = 256
+max_env_step = int(1e6)
+prob_random_action_in_bot = 1
 reanalyze_ratio = 0
+
+if board_size == 19:
+    num_simulations = 800
+elif board_size == 9:
+    num_simulations = 180
+elif board_size == 6:
+    num_simulations = 80
+
+# board_size = 6
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 2
+# update_per_collect = 2
+# batch_size = 2
+# max_env_step = int(5e5)
+# prob_random_action_in_bot = 0.
+# reanalyze_ratio = 0
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -50,27 +56,28 @@ go_muzero_config = dict(
             action_space_size=int(1 * board_size * board_size + 1),
             image_channel=17,
             num_res_blocks=1,
-            num_channels=32,
+            num_channels=64,
         ),
         cuda=True,
         env_type='board_games',
         # game_segment_length=int(board_size * board_size),  # for battle_mode='self_play_mode'
-        game_segment_length=100,  # for battle_mode='self_play_mode'
+        game_segment_length=100,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        grad_clip_value=0.5,
+        grad_clip_value=10,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
-        td_steps=int(board_size * board_size),  # for battle_mode='self_play_mode'
+        # td_steps=int(board_size * board_size),  # for battle_mode='self_play_mode'
+        td_steps=100,
         # NOTE：In board_games, we set discount_factor=1.
         discount_factor=1,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        replay_buffer_size=int(1e5),
+        replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

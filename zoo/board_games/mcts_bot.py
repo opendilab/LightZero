@@ -64,22 +64,25 @@ class MCTSNode(ABC):
         return len(self.legal_actions) == 0
 
     def best_child(self, c_param=1.4):
-        '''
+        """
         Overview:
                  - computer ucb score.
                     ucb = (q / n) + c_param * np.sqrt((2 * np.log(visited_num) / n))
-                    - q: The estimated value of Node. 
+                    - q: The estimated value of Node.
                     - n: The simulation num of Node.
                     - visited_num: The visited num of Node
                     - c_param: constant num=1.4.
                  - Select the node with the highest ucb score.
-        '''
+        """
         choices_weights = [(c.q / c.n) + c_param * np.sqrt((2 * np.log(self.n) / c.n)) for c in self.children]
         self.best_action = self.parent_action[np.argmax(choices_weights)]
         return self.children[np.argmax(choices_weights)]
 
-    def rollout_policy(self, possible_actions):
-        return possible_actions[np.random.randint(len(possible_actions))]
+    def rollout_policy(self, legal_actions,  last_legal_actions=None, last_action=None):
+        if last_legal_actions is not None and last_legal_actions == [self.env.board_size ** 2] and last_action is not None and last_action == self.env.board_size ** 2:
+            # for Go env, if last_action is not None, and last_action == self.env.board_size ** 2, then pass
+            return legal_actions[-1]
+        return legal_actions[np.random.randint(len(legal_actions))]
 
 
 class TwoPlayersMCTSNode(MCTSNode):
@@ -98,16 +101,16 @@ class TwoPlayersMCTSNode(MCTSNode):
 
     @property
     def q(self):
-        '''
+        """
         Overview:
-                  The estimated value of Node. 
+                  The estimated value of Node.
                   self._results[1]  means current_player 1 number of wins.
                   self._results[-1] means current_player 2 number of wins.
         Example:
                 result[1] = 10, result[-1] = 5,
                 As current_player_1, q = 10 - 5 = 5
                 As current_player_2, q = 5 - 10 = -5
-        '''
+        """
         # print(self._results)
         # print('parent.current_player={}'.format(self.parent.env.current_player))
         if self.parent.env.current_player == 1:
@@ -139,13 +142,23 @@ class TwoPlayersMCTSNode(MCTSNode):
         # print('simulation begin')
         current_rollout_env = self.env
         # print(current_rollout_env.board)
+        step=0
+        last_action=None
+        last_legal_actions=None
         while not current_rollout_env.get_done_reward()[0]:
-            possible_actions = current_rollout_env.legal_actions
-            action = self.rollout_policy(possible_actions)
-            current_rollout_env = current_rollout_env.simulate_action(action)
-            # print('\n')
+            step += 1
+
+
+            legal_actions = current_rollout_env.legal_actions
+            action = self.rollout_policy(legal_actions, last_legal_actions, last_action)
+            # print('step={}'.format(step))
             # print(current_rollout_env.board)
-        # print('simulation end \n')
+            # print('legal_actions={}'.format(legal_actions))
+            # print('action={}'.format(action))
+            current_rollout_env = current_rollout_env.simulate_action(action)
+            last_action = action
+            last_legal_actions = legal_actions
+        # print('simulation end')
         return current_rollout_env.get_done_reward()[1]
 
     def backpropagate(self, result):

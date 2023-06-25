@@ -3,15 +3,31 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-board_size = 6  # default_size is 15
-collector_env_num = 32
-n_episode = 32
+board_size = 6
+collector_env_num = 8
+n_episode = 8
 evaluator_env_num = 5
-num_simulations = 50
 update_per_collect = 50
 batch_size = 256
-max_env_step = int(5e5)
-prob_random_action_in_bot = 0.5
+max_env_step = int(10e6)
+prob_random_action_in_bot = 1
+
+if board_size == 19:
+    num_simulations = 800
+elif board_size == 9:
+    num_simulations = 180
+elif board_size == 6:
+    num_simulations = 80
+
+# board_size = 6
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 2
+# update_per_collect = 2
+# batch_size = 2
+# max_env_step = int(5e5)
+# prob_random_action_in_bot = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -36,7 +52,7 @@ gomoku_alphazero_config = dict(
             observation_shape=(board_size, board_size, 17),
             action_space_size=int(1 * board_size * board_size + 1),
             num_res_blocks=1,
-            num_channels=32,
+            num_channels=64,
         ),
         cuda=True,
         board_size=board_size,
@@ -45,11 +61,12 @@ gomoku_alphazero_config = dict(
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        grad_clip_value=0.5,
+        grad_clip_value=10,
         value_weight=1.0,
         entropy_weight=0.0,
         n_episode=n_episode,
         eval_freq=int(2e3),
+        replay_buffer_size=int(1e6),
         mcts=dict(num_simulations=num_simulations),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

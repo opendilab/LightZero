@@ -4,31 +4,37 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# board_size = 6
-# collector_env_num = 32
-# n_episode = 32
-# evaluator_env_num = 5
-# num_simulations = 50
-# update_per_collect = 50
-# batch_size = 256
-# max_env_step = int(1e6)
-# prob_random_action_in_bot = 1
-
 board_size = 6
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 2
-update_per_collect = 2
-batch_size = 2
-max_env_step = int(5e5)
-prob_random_action_in_bot = 0.
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 5
+update_per_collect = 50
+batch_size = 256
+max_env_step = int(10e6)
+prob_random_action_in_bot = 1
+
+if board_size == 19:
+    num_simulations = 800
+elif board_size == 9:
+    num_simulations = 180
+elif board_size == 6:
+    num_simulations = 80
+
+# board_size = 6
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 2
+# update_per_collect = 2
+# batch_size = 2
+# max_env_step = int(5e5)
+# prob_random_action_in_bot = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 go_alphazero_config = dict(
     exp_name=
-    f'data_az_ptree/go_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
+    f'data_az_ptree/go_b{board_size}_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         board_size=board_size,
         komi=7.5,
@@ -42,14 +48,14 @@ go_alphazero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        env_type='board_games',
         torch_compile=False,
         tensor_float_32=False,
         model=dict(
-            # observation_shape=(17, board_size, board_size),
             observation_shape=(board_size, board_size, 17),
             action_space_size=int(board_size * board_size + 1),
             num_res_blocks=1,
-            num_channels=32,
+            num_channels=64,
         ),
         cuda=True,
         board_size=board_size,
@@ -59,11 +65,12 @@ go_alphazero_config = dict(
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         manual_temperature_decay=True,
-        grad_clip_value=0.5,
+        grad_clip_value=10,
         value_weight=1.0,
         entropy_weight=0.0,
         n_episode=n_episode,
         eval_freq=int(2e3),
+        replay_buffer_size=int(1e6),
         mcts=dict(num_simulations=num_simulations),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

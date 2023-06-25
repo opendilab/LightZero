@@ -1,4 +1,6 @@
 import copy
+
+from ding.torch_utils import to_list
 from ditk import logging
 
 import os
@@ -77,6 +79,10 @@ class GoEnv(BaseEnv):
 
     @property
     def to_play(self):
+        """
+        current_player_index = 0, current_player = 1, to_play = 2
+        current_player_index = 1, current_player = 2, to_play = 1
+        """
         return self.players[0] if self.current_player == self.players[1] else self.players[1]
 
     @property
@@ -156,6 +162,7 @@ class GoEnv(BaseEnv):
 
         if init_state is not None:
             # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
+            # Note, to_play in Position is different from to_play in GoEnv.
             self._raw_env._go = go_base.Position(board=copy.deepcopy(init_state), komi=self._komi,
                                                  to_play=1 if self.start_player_index == 0 else -1)
         else:
@@ -357,6 +364,29 @@ class GoEnv(BaseEnv):
         else:
             return False, -1
 
+
+    def get_done_reward(self):
+        """
+        Overview:
+             Check if the game is over and what is the reward in the perspective of player 1.
+             Return 'done' and 'reward'.
+        Returns:
+            - outputs (:obj:`Tuple`): Tuple containing 'done' and 'reward',
+                - if player 1 win,     'done' = True, 'reward' = 1
+                - if player 2 win,     'done' = True, 'reward' = -1
+                - if draw,             'done' = True, 'reward' = 0
+                - if game is not over, 'done' = False,'reward' = None
+        """
+        if self._raw_env._go.is_game_over():
+            result = self._raw_env._go.result()
+            if result == 1:
+                return True, 1
+            elif result == -1:
+                return True, -1
+            elif result == 0:
+                return True, 0
+        else:
+            return False, None
     def observe(self, agent):
         current_agent_plane, opponent_agent_plane = self._raw_env._encode_board_planes(agent)
         player_plane = self._raw_env._encode_player_plane(agent)
@@ -403,8 +433,11 @@ class GoEnv(BaseEnv):
 
     @property
     def legal_actions(self):
-        return self.legal_moves()
+        return to_list(self.legal_moves())
 
+    @property
+    def board(self):
+        return self._raw_env._go.board
     def legal_moves(self):
         if self._raw_env._go.is_game_over():
             self.terminations = self._convert_to_dict(
@@ -419,6 +452,57 @@ class GoEnv(BaseEnv):
 
         return self.next_legal_moves
 
+    def coord_to_action(self, i, j):
+        """
+        Overview:
+            convert coordinate i, j to action index a in [0, board_size**2)
+        """
+        return i * self.board_size + j
+
+    def action_to_coord(self, a):
+        """
+        Overview:
+            convert action index a in [0, board_size**2) to coordinate (i, j)
+        """
+        return a // self.board_size, a % self.board_size
+
+    def action_to_string(self, action_number):
+        """
+        Overview:
+            Convert an action number to a string representing the action.
+        Arguments:
+            - action_number: an integer from the action space.
+        Returns:
+            - String representing the action.
+        """
+        row = action_number // self.board_size + 1
+        col = action_number % self.board_size + 1
+        return f"Play row {row}, column {col}"
+
+    def simulate_action(self, action):
+        """
+        Overview:
+            execute action and get next_simulator_env. used in AlphaZero.
+        Returns:
+            Returns Gomoku instance.
+        """
+        if action not in self.legal_actions:
+            raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
+        if self.start_player_index == 0:
+            start_player_index = 1  # self.players = [1, 2], start_player = 2, start_player_index = 1
+        else:
+            start_player_index = 0  # self.players = [1, 2], start_player = 1, start_player_index = 0
+        # next_simulator_env = copy.deepcopy(self)
+        raw_env = copy.deepcopy(self._raw_env)
+        # tmp_position = next_simulator_env._raw_env._go.play_move(coords.from_flat(action))
+        tmp_position = raw_env._go.play_move(coords.from_flat(action))
+        new_board = copy.deepcopy(tmp_position.board)
+        next_simulator_env = copy.deepcopy(self)
+        next_simulator_env.reset(start_player_index, init_state=new_board)  # index
+        # NOTE: when call reset, self.recent is cleared
+        next_simulator_env._raw_env._go.recent = tmp_position.recent
+
+        return next_simulator_env
     def random_action(self):
         return np.random.choice(self.legal_actions)
 
@@ -436,11 +520,24 @@ class GoEnv(BaseEnv):
         # print(self.board)
         while True:
             try:
-                print(f"Current available actions for the player {self.to_play()} are:{self.legal_moves()}")
-                choice = int(input(f"Enter the index of next move for the player {self.to_play()}: "))
-                if choice in self.legal_moves():
+                row = int(
+                    input(
+                        f"Enter the row (1, 2, ...,{self.board_size}, from up to bottom) to play for the player {self.current_player}: "
+                    )
+                )
+                col = int(
+                    input(
+                        f"Enter the column (1, 2, ...,{self.board_size}, from left to right) to play for the player {self.current_player}: "
+                    )
+                )
+                choice = self.coord_to_action(row - 1, col - 1)
+                if (choice in self.legal_actions and 1 <= row and 1 <= col and row <= self.board_size
+                        and col <= self.board_size):
                     break
+                else:
+                    print("Wrong input, try again")
             except KeyboardInterrupt:
+                print("exit")
                 sys.exit(0)
             except Exception as e:
                 print("Wrong input, try again")
