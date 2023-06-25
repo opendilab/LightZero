@@ -25,7 +25,7 @@ from ding.torch_utils import to_device
 class GoBiggerRandomPolicy(Policy):
     """
     Overview:
-        The policy class for EfficientZero.
+        The policy class for GoBiggerRandom.
     """
 
     # The default_config for EfficientZero policy.

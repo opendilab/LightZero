@@ -21,7 +21,7 @@ from collections import namedtuple, deque
 class GoBiggerMuZeroEvaluator(ISerialEvaluator):
     """
     Overview:
-        The Evaluator for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
+        The Evaluator for GoBigger MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
     Interfaces:
         __init__, reset, reset_policy, reset_env, close, should_eval, eval
     Property:

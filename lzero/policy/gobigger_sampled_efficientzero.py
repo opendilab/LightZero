@@ -26,7 +26,7 @@ from ding.torch_utils import to_device
 class GoBiggerSampledEfficientZeroPolicy(Policy):
     """
     Overview:
-        The policy class for Sampled EfficientZero.
+        The policy class for GoBigger Sampled EfficientZero.
     """
 
     # The default_config for Sampled fEficientZero policy.

@@ -109,14 +109,17 @@ class GoBiggerLightZeroEnv(BaseEnv):
 
     @property
     def observation_space(self) -> gym.spaces.Space:
+        # The following ensures compatibility with the DI-engine Env class.
         return self._observation_space
 
     @property
     def action_space(self) -> gym.spaces.Space:
+        # The following ensures compatibility with the DI-engine Env class.
         return self._action_space
 
     @property
     def reward_space(self) -> gym.spaces.Space:
+        # The following ensures compatibility with the DI-engine Env class.
         return self._reward_space
 
     def __repr__(self) -> str:

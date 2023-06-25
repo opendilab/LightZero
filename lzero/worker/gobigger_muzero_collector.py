@@ -19,7 +19,8 @@ from collections import defaultdict
 class GoBiggerMuZeroCollector(ISerialCollector):
     """
     Overview:
-        The Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
+        The Collector for GoBigger MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
+        For GoBigger, add agent_num dim in game_segment.
     Interfaces:
         __init__, reset, reset_env, reset_policy, collect, close
     Property:
@@ -447,8 +448,6 @@ class GoBiggerMuZeroCollector(ISerialCollector):
                             )
                     else:
                         for agent_id in range(agent_num):
-                            if len(distributions_dict[env_id][agent_id]) != 27:
-                                print('')
                             game_segments[env_id][agent_id].store_search_stats(
                                 distributions_dict[env_id][agent_id], value_dict[env_id][agent_id]
                             )

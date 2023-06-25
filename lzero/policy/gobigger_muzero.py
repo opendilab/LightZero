@@ -24,7 +24,7 @@ from ding.torch_utils import to_device
 class GoBiggerMuZeroPolicy(Policy):
     """
     Overview:
-        The policy class for MuZero.
+        The policy class for GoBiggerMuZero.
     """
 
     # The default_config for MuZero policy.

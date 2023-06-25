@@ -28,7 +28,7 @@ def train_muzero_gobigger(
 ) -> 'Policy':  # noqa
     """
     Overview:
-        The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
+        The train entry for GoBigger MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
             ``Tuple[dict, dict]`` type means [user_config, create_cfg].

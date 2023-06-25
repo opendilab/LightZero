@@ -34,6 +34,7 @@ class GoBiggerBot(Policy):
             for agent in self.bot[env_id]:
                 agent.reset()
 
+    # The following ensures compatibility with the DI-engine Policy class.
     def _init_learn(self) -> None:
         pass
 
