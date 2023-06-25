@@ -66,7 +66,7 @@ class GoBiggerSampledEfficientZeroPolicy(Policy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
-            norm_type='BN', 
+            norm_type='BN',
         ),
         # ****** common ******
         # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
@@ -409,7 +409,6 @@ class GoBiggerSampledEfficientZeroPolicy(Policy):
                     obs_target_batch_tmp = to_tensor(obs_target_batch_tmp)
                     obs_target_batch_tmp = to_device(obs_target_batch_tmp, self._cfg.device)
                     network_output = self._learn_model.initial_inference(obs_target_batch_tmp)
-
 
                     latent_state = to_tensor(latent_state)
                     representation_state = to_tensor(network_output.latent_state)
@@ -851,13 +850,9 @@ class GoBiggerSampledEfficientZeroPolicy(Policy):
             if self._cfg.model.continuous_action_space is True:
                 # when the action space of the environment is continuous, action_mask[:] is None.
                 # NOTE: in continuous action space env: we set all legal_actions as -1
-                legal_actions = [
-                    [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(batch_size)
-                ]
+                legal_actions = [[-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(batch_size)]
             else:
-                legal_actions = [
-                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)
-                ]
+                legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
@@ -918,14 +913,13 @@ class GoBiggerSampledEfficientZeroPolicy(Policy):
                     elif len(action.shape) == 1:
                         action = int(action[0])
 
-                output[i//agent_num]['action'].append(action)
-                output[i//agent_num]['distributions'].append(distributions)
-                output[i//agent_num]['root_sampled_actions'].append(root_sampled_actions)
-                output[i//agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
-                output[i//agent_num]['value'].append(value)
-                output[i//agent_num]['pred_value'].append(pred_values[i])
-                output[i//agent_num]['policy_logits'].append(policy_logits[i])
-
+                output[i // agent_num]['action'].append(action)
+                output[i // agent_num]['distributions'].append(distributions)
+                output[i // agent_num]['root_sampled_actions'].append(root_sampled_actions)
+                output[i // agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
+                output[i // agent_num]['value'].append(value)
+                output[i // agent_num]['pred_value'].append(pred_values[i])
+                output[i // agent_num]['policy_logits'].append(policy_logits[i])
 
         return output
 
@@ -992,13 +986,9 @@ class GoBiggerSampledEfficientZeroPolicy(Policy):
             if self._cfg.model.continuous_action_space is True:
                 # when the action space of the environment is continuous, action_mask[:] is None.
                 # NOTE: in continuous action space env: we set all legal_actions as -1
-                legal_actions = [
-                    [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(batch_size)
-                ]
+                legal_actions = [[-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(batch_size)]
             else:
-                legal_actions = [
-                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)
-                ]
+                legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
 
             # cpp mcts_tree
             if self._cfg.mcts_ctree:
@@ -1060,13 +1050,13 @@ class GoBiggerSampledEfficientZeroPolicy(Policy):
                         action = int(action)
                     elif len(action.shape) == 1:
                         action = int(action[0])
-                output[i//agent_num]['action'].append(action)
-                output[i//agent_num]['distributions'].append(distributions)
-                output[i//agent_num]['root_sampled_actions'].append(root_sampled_actions)
-                output[i//agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
-                output[i//agent_num]['value'].append(value)
-                output[i//agent_num]['pred_value'].append(pred_values[i])
-                output[i//agent_num]['policy_logits'].append(policy_logits[i])
+                output[i // agent_num]['action'].append(action)
+                output[i // agent_num]['distributions'].append(distributions)
+                output[i // agent_num]['root_sampled_actions'].append(root_sampled_actions)
+                output[i // agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
+                output[i // agent_num]['value'].append(value)
+                output[i // agent_num]['pred_value'].append(pred_values[i])
+                output[i // agent_num]['policy_logits'].append(policy_logits[i])
 
         return output
 

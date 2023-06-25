@@ -16,11 +16,11 @@ if __name__ == "__main__":
     returns_mean_seeds = []
     returns_seeds = []
     seeds = [0]
-    create_config.env_manager.type = 'base' # when visualize must set as  base
-    main_config.env.evaluator_env_num = 1   # when visualize must set as 1
-    main_config.env.n_evaluator_episode = 2 # each seed eval episodes num
-    main_config.env.playback_settings.by_frame.save_frame=True
-    main_config.env.playback_settings.by_frame.save_name_prefix= 'gobigger'
+    create_config.env_manager.type = 'base'  # when visualize must set as  base
+    main_config.env.evaluator_env_num = 1  # when visualize must set as 1
+    main_config.env.n_evaluator_episode = 2  # each seed eval episodes num
+    main_config.env.playback_settings.by_frame.save_frame = True
+    main_config.env.playback_settings.by_frame.save_name_prefix = 'gobigger'
 
     for seed in seeds:
         returns_selfplay_mean, returns_vsbot_mean = eval_muzero_gobigger(

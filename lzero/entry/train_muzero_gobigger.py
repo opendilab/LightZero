@@ -17,6 +17,7 @@ from lzero.entry.utils import log_buffer_memory_usage, random_collect
 from lzero.policy import visit_count_temperature
 from lzero.worker import GoBiggerMuZeroCollector, GoBiggerMuZeroEvaluator
 
+
 def train_muzero_gobigger(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
@@ -144,7 +145,12 @@ def train_muzero_gobigger(
             trained_steps=learner.train_iter
         )
         if policy_config.eps.eps_greedy_exploration_in_collect:
-            epsilon_greedy_fn = get_epsilon_greedy_fn(start=policy_config.eps.start, end=policy_config.eps.end, decay=policy_config.eps.decay, type_=policy_config.eps.type)
+            epsilon_greedy_fn = get_epsilon_greedy_fn(
+                start=policy_config.eps.start,
+                end=policy_config.eps.end,
+                decay=policy_config.eps.decay,
+                type_=policy_config.eps.type
+            )
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
         else:
             collect_kwargs['epsilon'] = 0.0

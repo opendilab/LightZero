@@ -15,6 +15,7 @@ from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
 from lzero.worker import GoBiggerMuZeroEvaluator
 
+
 def eval_muzero_gobigger(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
@@ -111,5 +112,5 @@ def eval_muzero_gobigger(
     # eval trained model
     # ==============================================================
     _, reward_sp = evaluator.eval(learner.save_checkpoint, learner.train_iter)
-    _, reward_vsbot= vsbot_evaluator.eval_vsbot(learner.save_checkpoint, learner.train_iter)
+    _, reward_vsbot = vsbot_evaluator.eval_vsbot(learner.save_checkpoint, learner.train_iter)
     return reward_sp, reward_vsbot

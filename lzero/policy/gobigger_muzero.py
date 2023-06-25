@@ -19,6 +19,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
 from collections import defaultdict
 from ding.torch_utils import to_device
 
+
 @POLICY_REGISTRY.register('gobigger_muzero')
 class GoBiggerMuZeroPolicy(Policy):
     """
@@ -58,7 +59,7 @@ class GoBiggerMuZeroPolicy(Policy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
-            norm_type='BN', 
+            norm_type='BN',
         ),
         # ****** common ******
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
@@ -173,7 +174,6 @@ class GoBiggerMuZeroPolicy(Policy):
             by import_names path. For MuZero, ``lzero.model.muzero_model.MuZeroModel``
         """
         return 'GoBiggerMuZeroModel', ['lzero.model.gobigger.gobigger_muzero_model']
-    
 
     def _init_learn(self) -> None:
         """
@@ -543,7 +543,8 @@ class GoBiggerMuZeroPolicy(Policy):
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
             self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions(
+            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             data_id = [i for i in range(active_collect_env_num)]
@@ -562,12 +563,12 @@ class GoBiggerMuZeroPolicy(Policy):
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                output[i//agent_num]['action'].append(action)
-                output[i//agent_num]['distributions'].append(distributions)
-                output[i//agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
-                output[i//agent_num]['value'].append(value)
-                output[i//agent_num]['pred_value'].append(pred_values[i])
-                output[i//agent_num]['policy_logits'].append(policy_logits[i])
+                output[i // agent_num]['action'].append(action)
+                output[i // agent_num]['distributions'].append(distributions)
+                output[i // agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
+                output[i // agent_num]['value'].append(value)
+                output[i // agent_num]['pred_value'].append(pred_values[i])
+                output[i // agent_num]['policy_logits'].append(policy_logits[i])
 
         return output
 
@@ -640,7 +641,7 @@ class GoBiggerMuZeroPolicy(Policy):
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             data_id = [i for i in range(active_eval_env_num)]
-            output = {i: defaultdict(list)  for i in data_id}
+            output = {i: defaultdict(list) for i in data_id}
 
             if ready_env_id is None:
                 ready_env_id = np.arange(active_eval_env_num)
@@ -657,12 +658,12 @@ class GoBiggerMuZeroPolicy(Policy):
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                output[i//agent_num]['action'].append(action)
-                output[i//agent_num]['distributions'].append(distributions)
-                output[i//agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
-                output[i//agent_num]['value'].append(value)
-                output[i//agent_num]['pred_value'].append(pred_values[i])
-                output[i//agent_num]['policy_logits'].append(policy_logits[i])
+                output[i // agent_num]['action'].append(action)
+                output[i // agent_num]['distributions'].append(distributions)
+                output[i // agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
+                output[i // agent_num]['value'].append(value)
+                output[i // agent_num]['pred_value'].append(pred_values[i])
+                output[i // agent_num]['policy_logits'].append(policy_logits[i])
 
         return output
 

@@ -13,6 +13,7 @@ import yaml
 from easydict import EasyDict
 from ding.utils.data import default_collate
 
+
 @MODEL_REGISTRY.register('GoBiggerEfficientZeroModel')
 class GoBiggerEfficientZeroModel(nn.Module):
 
@@ -179,8 +180,10 @@ class GoBiggerEfficientZeroModel(nn.Module):
         policy_logits, value = self._prediction(latent_state)
         # zero initialization for reward hidden states
         # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
-        reward_hidden_state = (torch.zeros(1, batch_size, self.lstm_hidden_size).to(device), 
-                               torch.zeros(1, batch_size, self.lstm_hidden_size).to(device),)
+        reward_hidden_state = (
+            torch.zeros(1, batch_size, self.lstm_hidden_size).to(device),
+            torch.zeros(1, batch_size, self.lstm_hidden_size).to(device),
+        )
         return EZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, latent_state, reward_hidden_state)
 
     def recurrent_inference(

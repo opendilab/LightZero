@@ -18,7 +18,7 @@ class GoBiggerBot(Policy):
         self.env_num = env_num
         self.agent_id = agent_id
         self.bot = [[BotAgent(i) for i in self.agent_id] for _ in range(self.env_num)]
-    
+
     def forward(self, raw_obs):
         action = defaultdict(dict)
         for env_id in range(self.env_num):
@@ -63,6 +63,7 @@ class GoBiggerBot(Policy):
 
     def _monitor_vars_learn(self) -> List[str]:
         pass
+
 
 class BotAgent():
 
@@ -122,7 +123,7 @@ class BotAgent():
                 action_type = 2
             else:
                 action_type = 0
-        if direction.length()>0:
+        if direction.length() > 0:
             direction = direction.normalize()
         else:
             direction = Vector2(1, 1).normalize()
@@ -169,11 +170,11 @@ class BotAgent():
     def preprocess(self, overlap):
         new_overlap = {}
         for k, v in overlap.items():
-            if k =='clone':
+            if k == 'clone':
                 new_overlap[k] = []
                 for index, vv in enumerate(v):
-                    tmp={}
-                    tmp['position'] = Vector2(vv[0],vv[1])
+                    tmp = {}
+                    tmp['position'] = Vector2(vv[0], vv[1])
                     tmp['radius'] = vv[2]
                     tmp['player'] = int(vv[-2])
                     tmp['team'] = int(vv[-1])
@@ -181,8 +182,8 @@ class BotAgent():
             else:
                 new_overlap[k] = []
                 for index, vv in enumerate(v):
-                    tmp={}
-                    tmp['position'] = Vector2(vv[0],vv[1])
+                    tmp = {}
+                    tmp['position'] = Vector2(vv[0], vv[1])
                     tmp['radius'] = vv[2]
                     new_overlap[k].append(tmp)
         return new_overlap
@@ -195,17 +196,19 @@ class BotAgent():
                 new_overlap[k].append(vv)
                 new_overlap[k][index]['position'] = Vector2(*vv['position'])
         return new_overlap
-    
+
     def add_noise_to_direction(self, direction, noise_ratio=0.1):
-        direction = direction + Vector2(((random.random() * 2 - 1)*noise_ratio)*direction.x, 
-                                        ((random.random() * 2 - 1)*noise_ratio)*direction.y)
+        direction = direction + Vector2(
+            ((random.random() * 2 - 1) * noise_ratio) * direction.x,
+            ((random.random() * 2 - 1) * noise_ratio) * direction.y
+        )
         return direction
 
     def radius_to_score(self, radius):
-        return (math.pow(radius,2) - 0.15) / 0.042 * 100
-    
+        return (math.pow(radius, 2) - 0.15) / 0.042 * 100
+
     def can_eat(self, radius1, radius2):
         return self.radius_to_score(radius1) > 1.3 * self.radius_to_score(radius2)
-    
-    def reset(self,):
+
+    def reset(self, ):
         self.actions_queue.queue.clear()

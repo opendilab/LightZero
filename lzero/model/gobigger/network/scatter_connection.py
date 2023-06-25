@@ -24,15 +24,16 @@ class ScatterConnection(nn.Module):
         self.scatter_type = scatter_type
         assert self.scatter_type in ['cover', 'add']
 
-    def xy_forward(self, x: torch.Tensor, spatial_size: Tuple[int, int], coord_x: torch.Tensor,coord_y) -> torch.Tensor:
+    def xy_forward(
+            self, x: torch.Tensor, spatial_size: Tuple[int, int], coord_x: torch.Tensor, coord_y
+    ) -> torch.Tensor:
         device = x.device
         BatchSize, Num, EmbeddingSize = x.shape
         x = x.permute(0, 2, 1)
         H, W = spatial_size
         indices = (coord_x * W + coord_y).long()
         indices = indices.unsqueeze(dim=1).repeat(1, EmbeddingSize, 1)
-        output = torch.zeros(size=(BatchSize, EmbeddingSize, H, W), device=device).view(BatchSize, EmbeddingSize,
-                                                                                         H * W)
+        output = torch.zeros(size=(BatchSize, EmbeddingSize, H, W), device=device).view(BatchSize, EmbeddingSize, H * W)
         if self.scatter_type == 'cover':
             output.scatter_(dim=2, index=indices, src=x)
         elif self.scatter_type == 'add':
@@ -69,8 +70,7 @@ class ScatterConnection(nn.Module):
         H, W = spatial_size
         indices = location[:, :, 1] + location[:, :, 0] * W
         indices = indices.unsqueeze(dim=1).repeat(1, EmbeddingSize, 1)
-        output = torch.zeros(size=(BatchSize, EmbeddingSize, H, W), device=device).view(BatchSize, EmbeddingSize,
-                                                                                         H * W)
+        output = torch.zeros(size=(BatchSize, EmbeddingSize, H, W), device=device).view(BatchSize, EmbeddingSize, H * W)
         if self.scatter_type == 'cover':
             output.scatter_(dim=2, index=indices, src=x)
         elif self.scatter_type == 'add':

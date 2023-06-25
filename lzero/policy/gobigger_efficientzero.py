@@ -58,7 +58,7 @@ class GoBiggerEfficientZeroPolicy(Policy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
-            norm_type='BN', 
+            norm_type='BN',
         ),
         # ****** common ******
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
@@ -598,7 +598,8 @@ class GoBiggerEfficientZeroPolicy(Policy):
                 roots, self._collect_model, latent_state_roots, reward_hidden_state_roots, to_play
             )
 
-            roots_visit_count_distributions = roots.get_distributions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions(
+            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             data_id = [i for i in range(active_collect_env_num)]
@@ -620,13 +621,12 @@ class GoBiggerEfficientZeroPolicy(Policy):
                         distributions, temperature=self.collect_mcts_temperature, deterministic=False
                     )
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                output[i//agent_num]['action'].append(action)
-                output[i//agent_num]['distributions'].append(distributions)
-                output[i//agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
-                output[i//agent_num]['value'].append(value)
-                output[i//agent_num]['pred_value'].append(pred_values[i])
-                output[i//agent_num]['policy_logits'].append(policy_logits[i])
-                
+                output[i // agent_num]['action'].append(action)
+                output[i // agent_num]['distributions'].append(distributions)
+                output[i // agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
+                output[i // agent_num]['value'].append(value)
+                output[i // agent_num]['pred_value'].append(pred_values[i])
+                output[i // agent_num]['policy_logits'].append(policy_logits[i])
 
         return output
 
@@ -719,12 +719,12 @@ class GoBiggerEfficientZeroPolicy(Policy):
                 )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                output[i//agent_num]['action'].append(action)
-                output[i//agent_num]['distributions'].append(distributions)
-                output[i//agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
-                output[i//agent_num]['value'].append(value)
-                output[i//agent_num]['pred_value'].append(pred_values[i])
-                output[i//agent_num]['policy_logits'].append(policy_logits[i])
+                output[i // agent_num]['action'].append(action)
+                output[i // agent_num]['distributions'].append(distributions)
+                output[i // agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
+                output[i // agent_num]['value'].append(value)
+                output[i // agent_num]['pred_value'].append(pred_values[i])
+                output[i // agent_num]['policy_logits'].append(policy_logits[i])
 
         return output
 

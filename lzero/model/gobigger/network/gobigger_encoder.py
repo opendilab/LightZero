@@ -10,7 +10,8 @@ from easydict import EasyDict
 from .encoder import SignBinaryEncoder, BinaryEncoder, OnehotEncoder, TimeEncoder, UnsqueezeEncoder
 from .scatter_connection import ScatterConnection
 
-def sequence_mask(lengths: torch.Tensor, max_len: Optional[int] =None):
+
+def sequence_mask(lengths: torch.Tensor, max_len: Optional[int] = None):
     r"""
         Overview:
             create a mask for a batch sequences with different lengths
@@ -30,6 +31,7 @@ def sequence_mask(lengths: torch.Tensor, max_len: Optional[int] =None):
 
 
 class ScalarEncoder(nn.Module):
+
     def __init__(self, cfg):
         super(ScalarEncoder, self).__init__()
         self.whole_cfg = cfg
@@ -48,16 +50,19 @@ class ScalarEncoder(nn.Module):
                 print(f'cant implement {k} for arc {item["arc"]}')
                 raise NotImplementedError
 
-        self.layers = MLP(in_channels=self.cfg.mlp.input_dim, hidden_channels=self.cfg.mlp.hidden_dim,
-                          out_channels=self.cfg.mlp.output_dim,
-                          layer_num=self.cfg.mlp.layer_num,
-                          layer_fn=fc_block,
-                          activation=self.cfg.mlp.activation,
-                          norm_type=self.cfg.mlp.norm_type,
-                          use_dropout=False,
-                          output_activation=True,
-                          output_norm=True,
-                          last_linear_layer_init_zero=False)
+        self.layers = MLP(
+            in_channels=self.cfg.mlp.input_dim,
+            hidden_channels=self.cfg.mlp.hidden_dim,
+            out_channels=self.cfg.mlp.output_dim,
+            layer_num=self.cfg.mlp.layer_num,
+            layer_fn=fc_block,
+            activation=self.cfg.mlp.activation,
+            norm_type=self.cfg.mlp.norm_type,
+            use_dropout=False,
+            output_activation=True,
+            output_norm=True,
+            last_linear_layer_init_zero=False
+        )
 
     def forward(self, x: Dict[str, Tensor]):
         embeddings = []
@@ -71,6 +76,7 @@ class ScalarEncoder(nn.Module):
 
 
 class TeamEncoder(nn.Module):
+
     def __init__(self, cfg):
         super(TeamEncoder, self).__init__()
         self.whole_cfg = cfg
@@ -88,17 +94,19 @@ class TeamEncoder(nn.Module):
                 print(f'cant implement {k} for arc {item["arc"]}')
                 raise NotImplementedError
 
-        self.encode_layers = MLP(in_channels=self.cfg.mlp.input_dim,
-                                 hidden_channels=self.cfg.mlp.hidden_dim,
-                                 out_channels=self.cfg.mlp.output_dim,
-                                 layer_num=self.cfg.mlp.layer_num,
-                                 layer_fn=fc_block,
-                                 activation=self.cfg.mlp.activation,
-                                 norm_type=self.cfg.mlp.norm_type,
-                                 use_dropout=False,
-                                 output_activation=True,
-                                 output_norm=True,
-                                 last_linear_layer_init_zero=False)
+        self.encode_layers = MLP(
+            in_channels=self.cfg.mlp.input_dim,
+            hidden_channels=self.cfg.mlp.hidden_dim,
+            out_channels=self.cfg.mlp.output_dim,
+            layer_num=self.cfg.mlp.layer_num,
+            layer_fn=fc_block,
+            activation=self.cfg.mlp.activation,
+            norm_type=self.cfg.mlp.norm_type,
+            use_dropout=False,
+            output_activation=True,
+            output_norm=True,
+            last_linear_layer_init_zero=False
+        )
 
         self.transformer = Transformer(
             input_dim=self.cfg.transformer.input_dim,
@@ -109,10 +117,12 @@ class TeamEncoder(nn.Module):
             layer_num=self.cfg.transformer.layer_num,
             activation=self.cfg.transformer.activation,
         )
-        self.output_fc = fc_block(self.cfg.fc_block.input_dim,
-                                  self.cfg.fc_block.output_dim,
-                                  norm_type=self.cfg.fc_block.norm_type,
-                                  activation=self.cfg.fc_block.activation)
+        self.output_fc = fc_block(
+            self.cfg.fc_block.input_dim,
+            self.cfg.fc_block.output_dim,
+            norm_type=self.cfg.fc_block.norm_type,
+            activation=self.cfg.fc_block.activation
+        )
 
     def forward(self, x):
         embeddings = []
@@ -131,6 +141,7 @@ class TeamEncoder(nn.Module):
 
 
 class BallEncoder(nn.Module):
+
     def __init__(self, cfg):
         super(BallEncoder, self).__init__()
         self.whole_cfg = cfg
@@ -148,17 +159,19 @@ class BallEncoder(nn.Module):
             else:
                 print(f'cant implement {k} for arc {item["arc"]}')
                 raise NotImplementedError
-        self.encode_layers = MLP(in_channels=self.cfg.mlp.input_dim,
-                                 hidden_channels=self.cfg.mlp.hidden_dim,
-                                 out_channels=self.cfg.mlp.output_dim,
-                                 layer_num=self.cfg.mlp.layer_num,
-                                 layer_fn=fc_block,
-                                 activation=self.cfg.mlp.activation,
-                                 norm_type=self.cfg.mlp.norm_type,
-                                 use_dropout=False,
-                                 output_activation=True,
-                                 output_norm=True,
-                                 last_linear_layer_init_zero=False)
+        self.encode_layers = MLP(
+            in_channels=self.cfg.mlp.input_dim,
+            hidden_channels=self.cfg.mlp.hidden_dim,
+            out_channels=self.cfg.mlp.output_dim,
+            layer_num=self.cfg.mlp.layer_num,
+            layer_fn=fc_block,
+            activation=self.cfg.mlp.activation,
+            norm_type=self.cfg.mlp.norm_type,
+            use_dropout=False,
+            output_activation=True,
+            output_norm=True,
+            last_linear_layer_init_zero=False
+        )
 
         self.transformer = Transformer(
             input_dim=self.cfg.transformer.input_dim,
@@ -169,10 +182,12 @@ class BallEncoder(nn.Module):
             layer_num=self.cfg.transformer.layer_num,
             activation=self.cfg.transformer.activation,
         )
-        self.output_fc = fc_block(self.cfg.fc_block.input_dim,
-                                  self.cfg.fc_block.output_dim,
-                                  norm_type=self.cfg.fc_block.norm_type,
-                                  activation=self.cfg.fc_block.activation)
+        self.output_fc = fc_block(
+            self.cfg.fc_block.input_dim,
+            self.cfg.fc_block.output_dim,
+            norm_type=self.cfg.fc_block.norm_type,
+            activation=self.cfg.fc_block.activation
+        )
 
     def forward(self, x):
         ball_num = x['ball_num']
@@ -192,6 +207,7 @@ class BallEncoder(nn.Module):
 
 
 class SpatialEncoder(nn.Module):
+
     def __init__(self, cfg):
         super(SpatialEncoder, self).__init__()
         self.whole_cfg = cfg
@@ -200,10 +216,12 @@ class SpatialEncoder(nn.Module):
         # scatter related
         self.spatial_x = 64
         self.spatial_y = 64
-        self.scatter_fc = fc_block(in_channels=self.cfg.scatter.input_dim, 
-                                   out_channels=self.cfg.scatter.output_dim,
-                                   activation=self.cfg.scatter.activation, 
-                                   norm_type=self.cfg.scatter.norm_type)
+        self.scatter_fc = fc_block(
+            in_channels=self.cfg.scatter.input_dim,
+            out_channels=self.cfg.scatter.output_dim,
+            activation=self.cfg.scatter.activation,
+            norm_type=self.cfg.scatter.norm_type
+        )
         self.scatter_connection = ScatterConnection(self.cfg.scatter.scatter_type)
 
         # resnet related
@@ -213,72 +231,92 @@ class SpatialEncoder(nn.Module):
             in_channels=self.spatial_x // 8 * self.spatial_y // 8 * self.cfg.resnet.down_channels[-1],
             out_channels=self.cfg.fc_block.output_dim,
             norm_type=self.cfg.fc_block.norm_type,
-            activation=self.cfg.fc_block.activation)
+            activation=self.cfg.fc_block.activation
+        )
 
     def get_resnet_blocks(self):
         # 2 means food/spore embedding
-        project = conv2d_block(in_channels=self.cfg.scatter.output_dim + 2,
-                               out_channels=self.cfg.resnet.project_dim,
-                               kernel_size=1,
-                               stride=1,
-                               padding=0,
-                               activation=self.cfg.resnet.activation,
-                               norm_type=self.cfg.resnet.norm_type,
-                               bias=False,
-                               )
+        project = conv2d_block(
+            in_channels=self.cfg.scatter.output_dim + 2,
+            out_channels=self.cfg.resnet.project_dim,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            activation=self.cfg.resnet.activation,
+            norm_type=self.cfg.resnet.norm_type,
+            bias=False,
+        )
 
         layers = [project]
         dims = [self.cfg.resnet.project_dim] + self.cfg.resnet.down_channels
         for i in range(len(dims) - 1):
-            layer = conv2d_block(in_channels=dims[i],
-                                 out_channels=dims[i + 1],
-                                 kernel_size=4,
-                                 stride=2,
-                                 padding=1,
-                                 activation=self.cfg.resnet.activation,
-                                 norm_type=self.cfg.resnet.norm_type,
-                                 bias=False,
-                                 )
+            layer = conv2d_block(
+                in_channels=dims[i],
+                out_channels=dims[i + 1],
+                kernel_size=4,
+                stride=2,
+                padding=1,
+                activation=self.cfg.resnet.activation,
+                norm_type=self.cfg.resnet.norm_type,
+                bias=False,
+            )
             layers.append(layer)
-            layers.append(ResBlock(res_type='basic',
-                                   in_channels=dims[i + 1],
-                                   activation=self.cfg.resnet.activation,
-                                   norm_type=self.cfg.resnet.norm_type))
+            layers.append(
+                ResBlock(
+                    res_type='basic',
+                    in_channels=dims[i + 1],
+                    activation=self.cfg.resnet.activation,
+                    norm_type=self.cfg.resnet.norm_type
+                )
+            )
         self.resnet = torch.nn.Sequential(*layers)
 
-
-    def get_background_embedding(self, coord_x, coord_y, num, ):
+    def get_background_embedding(
+        self,
+        coord_x,
+        coord_y,
+        num,
+    ):
 
         background_ones = torch.ones(size=(coord_x.shape[0], coord_x.shape[1]), device=coord_x.device)
         background_mask = sequence_mask(num, max_len=coord_x.shape[1])
         background_ones = (background_ones * background_mask).unsqueeze(-1)
-        background_embedding = self.scatter_connection.xy_forward(background_ones,
-                                                                  spatial_size=[self.spatial_x, self.spatial_y],
-                                                                  coord_x=coord_x,
-                                                                  coord_y=coord_y)
+        background_embedding = self.scatter_connection.xy_forward(
+            background_ones, spatial_size=[self.spatial_x, self.spatial_y], coord_x=coord_x, coord_y=coord_y
+        )
 
         return background_embedding
 
-    def forward(self, inputs, ball_embeddings, ):
+    def forward(
+        self,
+        inputs,
+        ball_embeddings,
+    ):
         spatial_info = inputs['spatial_info']
         # food and spore
-        food_embedding = self.get_background_embedding(coord_x=spatial_info['food_x'],
-                                                       coord_y=spatial_info['food_y'],
-                                                       num=spatial_info['food_num'], )
+        food_embedding = self.get_background_embedding(
+            coord_x=spatial_info['food_x'],
+            coord_y=spatial_info['food_y'],
+            num=spatial_info['food_num'],
+        )
 
-        spore_embedding = self.get_background_embedding(coord_x=spatial_info['spore_x'],
-                                                        coord_y=spatial_info['spore_y'],
-                                                        num=spatial_info['spore_num'], )
+        spore_embedding = self.get_background_embedding(
+            coord_x=spatial_info['spore_x'],
+            coord_y=spatial_info['spore_y'],
+            num=spatial_info['spore_num'],
+        )
         # scatter ball embeddings
         ball_info = inputs['ball_info']
         ball_num = ball_info['ball_num']
         ball_mask = sequence_mask(ball_num, max_len=ball_embeddings.shape[1])
         ball_embedding = self.scatter_fc(ball_embeddings) * ball_mask.unsqueeze(dim=2)
 
-        ball_embedding = self.scatter_connection.xy_forward(ball_embedding,
-                                                            spatial_size=[self.spatial_x, self.spatial_y],
-                                                            coord_x=spatial_info['ball_x'],
-                                                            coord_y=spatial_info['ball_y'])
+        ball_embedding = self.scatter_connection.xy_forward(
+            ball_embedding,
+            spatial_size=[self.spatial_x, self.spatial_y],
+            coord_x=spatial_info['ball_x'],
+            coord_y=spatial_info['ball_y']
+        )
 
         x = torch.cat([food_embedding, spore_embedding, ball_embedding], dim=1)
 
@@ -290,7 +328,7 @@ class SpatialEncoder(nn.Module):
 
 
 class GoBiggerEncoder(nn.Module):
-    config=dict(
+    config = dict(
         scalar_encoder=dict(
             modules=dict(
                 view_x=dict(arc='sign_binary', num_embeddings=7),
@@ -301,37 +339,78 @@ class GoBiggerEncoder(nn.Module):
                 rank=dict(arc='one_hot', num_embeddings=4),
                 time=dict(arc='time', embedding_dim=8),
                 last_action_type=dict(arc='one_hot', num_embeddings=27),
-                ),
-            mlp=dict(input_dim=80, hidden_dim=64, layer_num=2, norm_type='BN', output_dim=32, activation=nn.ReLU(inplace=True)),
+            ),
+            mlp=dict(
+                input_dim=80,
+                hidden_dim=64,
+                layer_num=2,
+                norm_type='BN',
+                output_dim=32,
+                activation=nn.ReLU(inplace=True)
+            ),
         ),
         team_encoder=dict(
             modules=dict(
                 alliance=dict(arc='one_hot', num_embeddings=2),
                 view_x=dict(arc='sign_binary', num_embeddings=7),
                 view_y=dict(arc='sign_binary', num_embeddings=7),
-                ),
-            mlp=dict(input_dim=16, hidden_dim=32, layer_num=2, norm_type=None, output_dim=16, activation=nn.ReLU(inplace=True)),
-            transformer=dict(input_dim=16, output_dim=16, head_num=4, ffn_size=32, layer_num=2, embedding_dim=16, activation=nn.ReLU(inplace=True), variant='postnorm'),
+            ),
+            mlp=dict(
+                input_dim=16,
+                hidden_dim=32,
+                layer_num=2,
+                norm_type=None,
+                output_dim=16,
+                activation=nn.ReLU(inplace=True)
+            ),
+            transformer=dict(
+                input_dim=16,
+                output_dim=16,
+                head_num=4,
+                ffn_size=32,
+                layer_num=2,
+                embedding_dim=16,
+                activation=nn.ReLU(inplace=True),
+                variant='postnorm'
+            ),
             fc_block=dict(input_dim=16, output_dim=16, activation=nn.ReLU(inplace=True), norm_type='BN'),
         ),
         ball_encoder=dict(
             modules=dict(
                 alliance=dict(arc='one_hot', num_embeddings=4),
                 score=dict(arc='one_hot', num_embeddings=50),
-                radius=dict(arc='unsqueeze',),
+                radius=dict(arc='unsqueeze', ),
                 rank=dict(arc='one_hot', num_embeddings=5),
                 x=dict(arc='sign_binary', num_embeddings=8),
                 y=dict(arc='sign_binary', num_embeddings=8),
                 next_x=dict(arc='sign_binary', num_embeddings=8),
                 next_y=dict(arc='sign_binary', num_embeddings=8),
             ),
-            mlp=dict(input_dim=92, hidden_dim=128, layer_num=2, norm_type=None, output_dim=64, activation=nn.ReLU(inplace=True)),
-            transformer=dict(input_dim=64, output_dim=64, head_num=4, ffn_size=64, layer_num=3,  embedding_dim=64, activation=nn.ReLU(inplace=True), variant='postnorm'),
+            mlp=dict(
+                input_dim=92,
+                hidden_dim=128,
+                layer_num=2,
+                norm_type=None,
+                output_dim=64,
+                activation=nn.ReLU(inplace=True)
+            ),
+            transformer=dict(
+                input_dim=64,
+                output_dim=64,
+                head_num=4,
+                ffn_size=64,
+                layer_num=3,
+                embedding_dim=64,
+                activation=nn.ReLU(inplace=True),
+                variant='postnorm'
+            ),
             fc_block=dict(input_dim=64, output_dim=64, activation=nn.ReLU(inplace=True), norm_type='BN'),
         ),
         spatial_encoder=dict(
-            scatter=dict(input_dim=64, output_dim=16, scatter_type='add', activation=nn.ReLU(inplace=True), norm_type=None),
-            resnet=dict(project_dim=12, down_channels=[32, 32, 16 ], activation=nn.ReLU(inplace=True), norm_type='BN'),
+            scatter=dict(
+                input_dim=64, output_dim=16, scatter_type='add', activation=nn.ReLU(inplace=True), norm_type=None
+            ),
+            resnet=dict(project_dim=12, down_channels=[32, 32, 16], activation=nn.ReLU(inplace=True), norm_type='BN'),
             fc_block=dict(output_dim=64, activation=nn.ReLU(inplace=True), norm_type='BN'),
         ),
     )

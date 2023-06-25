@@ -15,7 +15,7 @@ update_per_collect = 2000
 batch_size = 256
 reanalyze_ratio = 0.
 action_space_size = 27
-direction_num=12
+direction_num = 12
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -36,25 +36,21 @@ atari_sampled_efficientzero_config = dict(
         use_action_mask=False,
         reward_div_value=0.1,
         reward_type='log_reward',
-        contain_raw_obs=False, # False on collect mode, True on eval vsbot mode, because bot need raw obs
+        contain_raw_obs=False,  # False on collect mode, True on eval vsbot mode, because bot need raw obs
         start_spirit_progress=0.2,
         end_spirit_progress=0.8,
         manager_settings=dict(
-                food_manager=dict(
-                    num_init=260,
-                    num_min=260,
-                    num_max=300,
-                ),
-                thorns_manager=dict(
-                    num_init=3,
-                    num_min=3,
-                    num_max=4,
-                ),
-                player_manager=dict(
-                    ball_settings=dict(
-                        score_init=13000,
-                    ),
-                ),
+            food_manager=dict(
+                num_init=260,
+                num_min=260,
+                num_max=300,
+            ),
+            thorns_manager=dict(
+                num_init=3,
+                num_min=3,
+                num_max=4,
+            ),
+            player_manager=dict(ball_settings=dict(score_init=13000, ), ),
         ),
         playback_settings=dict(
             playback_type='by_frame',
@@ -79,7 +75,7 @@ atari_sampled_efficientzero_config = dict(
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             discrete_action_encoding_type='one_hot',
-            norm_type='BN', 
+            norm_type='BN',
         ),
         cuda=True,
         mcts_ctree=True,
@@ -100,25 +96,15 @@ atari_sampled_efficientzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
-    learn=dict(
-        learner=dict(
-            log_policy=True,
-            hook=dict(
-                log_show_after_iter=10,
-            ),
-        ),
-    ),
-    collect=dict(
-        collector=dict(
-            collect_print_freq=10,
-        ),
-    ),
-    eval=dict(
-        evaluator=dict(
-            eval_freq=5000,
-            stop_value=10000000000,
-        ),
-    ),
+    learn=dict(learner=dict(
+        log_policy=True,
+        hook=dict(log_show_after_iter=10, ),
+    ), ),
+    collect=dict(collector=dict(collect_print_freq=10, ), ),
+    eval=dict(evaluator=dict(
+        eval_freq=5000,
+        stop_value=10000000000,
+    ), ),
 )
 atari_sampled_efficientzero_config = EasyDict(atari_sampled_efficientzero_config)
 main_config = atari_sampled_efficientzero_config

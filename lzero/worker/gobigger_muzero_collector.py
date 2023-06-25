@@ -194,9 +194,10 @@ class GoBiggerMuZeroCollector(ISerialCollector):
             - search_values_lst: The list of value obtained through search.
         """
         if self.policy_config.use_priority and not self.policy_config.use_max_priority_for_new_data:
-            pred_values = torch.from_numpy(np.array(pred_values_lst[i][agent_id])).to(self.policy_config.device).float().view(-1)
+            pred_values = torch.from_numpy(np.array(pred_values_lst[i][agent_id])).to(self.policy_config.device
+                                                                                      ).float().view(-1)
             search_values = torch.from_numpy(np.array(search_values_lst[i][agent_id])).to(self.policy_config.device
-                                                                                ).float().view(-1)
+                                                                                          ).float().view(-1)
             priorities = L1Loss(reduction='none'
                                 )(pred_values,
                                   search_values).detach().cpu().numpy() + self.policy_config.prioritized_replay_eps
@@ -206,7 +207,9 @@ class GoBiggerMuZeroCollector(ISerialCollector):
 
         return priorities
 
-    def pad_and_save_last_trajectory(self, i, agent_id, last_game_segments, last_game_priorities, game_segments, done) -> None:
+    def pad_and_save_last_trajectory(
+            self, i, agent_id, last_game_segments, last_game_priorities, game_segments, done
+    ) -> None:
         """
         Overview:
             put the last game block into the pool if the current game is finished
@@ -312,18 +315,23 @@ class GoBiggerMuZeroCollector(ISerialCollector):
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
         agent_num = len(init_obs[0]['action_mask'])
         game_segments = [
-            [GameSegment(
-                self._env.action_space,
-                game_segment_length=self.policy_config.game_segment_length,
-                config=self.policy_config
-            ) for _ in range(agent_num)] for _ in range(env_nums)
+            [
+                GameSegment(
+                    self._env.action_space,
+                    game_segment_length=self.policy_config.game_segment_length,
+                    config=self.policy_config
+                ) for _ in range(agent_num)
+            ] for _ in range(env_nums)
         ]
         # stacked observation windows in reset stage for init game_segments
         observation_window_stack = [[[] for _ in range(agent_num)] for _ in range(env_nums)]
         for env_id in range(env_nums):
             for agent_id in range(agent_num):
                 observation_window_stack[env_id][agent_id] = deque(
-                    [to_ndarray(init_obs[env_id]['observation'][agent_id]) for _ in range(self.policy_config.model.frame_stack_num)],
+                    [
+                        to_ndarray(init_obs[env_id]['observation'][agent_id])
+                        for _ in range(self.policy_config.model.frame_stack_num)
+                    ],
                     maxlen=self.policy_config.model.frame_stack_num
                 )
                 game_segments[env_id][agent_id].reset(observation_window_stack[env_id][agent_id])
@@ -335,7 +343,6 @@ class GoBiggerMuZeroCollector(ISerialCollector):
         search_values_lst = [[[] for _ in range(agent_num)] for _ in range(env_nums)]
         pred_values_lst = [[[] for _ in range(agent_num)] for _ in range(env_nums)]
 
-        
         # some logs
         eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros((env_nums, agent_num))
         self_play_moves = 0.
@@ -378,8 +385,8 @@ class GoBiggerMuZeroCollector(ISerialCollector):
                 # policy forward
                 # ==============================================================
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon)
-                actions_no_env_id=defaultdict(dict)
-                for k,v in policy_output.items():
+                actions_no_env_id = defaultdict(dict)
+                for k, v in policy_output.items():
                     for agent_id, act in enumerate(v['action']):
                         actions_no_env_id[k][agent_id] = act
 
@@ -435,18 +442,22 @@ class GoBiggerMuZeroCollector(ISerialCollector):
                     if self.policy_config.sampled_algo:
                         for agent_id in range(agent_num):
                             game_segments[env_id][agent_id].store_search_stats(
-                                distributions_dict[env_id][agent_id], value_dict[env_id][agent_id], root_sampled_actions_dict[env_id][agent_id])
+                                distributions_dict[env_id][agent_id], value_dict[env_id][agent_id],
+                                root_sampled_actions_dict[env_id][agent_id]
+                            )
                     else:
                         for agent_id in range(agent_num):
-                            if len(distributions_dict[env_id][agent_id])!=27:
+                            if len(distributions_dict[env_id][agent_id]) != 27:
                                 print('')
-                            game_segments[env_id][agent_id].store_search_stats(distributions_dict[env_id][agent_id], value_dict[env_id][agent_id])
+                            game_segments[env_id][agent_id].store_search_stats(
+                                distributions_dict[env_id][agent_id], value_dict[env_id][agent_id]
+                            )
                     # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
                     # in ``game_segments[env_id].init``, we have append o_{t} in ``self.obs_segment``
                     for agent_id in range(agent_num):
                         game_segments[env_id][agent_id].append(
-                            actions[env_id][agent_id], to_ndarray(obs['observation'][agent_id]), reward[agent_id], action_mask_dict[env_id][agent_id],
-                            to_play_dict[env_id]
+                            actions[env_id][agent_id], to_ndarray(obs['observation'][agent_id]), reward[agent_id],
+                            action_mask_dict[env_id][agent_id], to_play_dict[env_id]
                         )
 
                     # NOTE: the position of code snippet is very important.
@@ -575,11 +586,14 @@ class GoBiggerMuZeroCollector(ISerialCollector):
                                 config=self.policy_config
                             )
                             observation_window_stack[env_id][agent_id] = deque(
-                                [init_obs[env_id]['observation'][agent_id] for _ in range(self.policy_config.model.frame_stack_num)],
+                                [
+                                    init_obs[env_id]['observation'][agent_id]
+                                    for _ in range(self.policy_config.model.frame_stack_num)
+                                ],
                                 maxlen=self.policy_config.model.frame_stack_num
                             )
                             game_segments[env_id][agent_id].reset(observation_window_stack[env_id][agent_id])
-                        last_game_segments[env_id] = [None for _ in range(agent_num)] 
+                        last_game_segments[env_id] = [None for _ in range(agent_num)]
                         last_game_priorities[env_id] = [None for _ in range(agent_num)]
 
                     # log

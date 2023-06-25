@@ -21,12 +21,12 @@ class GoBiggerLightZeroEnv(BaseEnv):
         self.player_num_per_team = self._cfg.player_num_per_team
         self.direction_num = self._cfg.direction_num
         self.use_action_mask = self._cfg.use_action_mask
-        self.action_space_size = self._cfg.action_space_size   # discrete action space size
+        self.action_space_size = self._cfg.action_space_size  # discrete action space size
         self.step_mul = self._cfg.get('step_mul', 8)
         self.setup_action()
         self.setup_feature()
-        self.contain_raw_obs = self._cfg.contain_raw_obs # for save memory
-    
+        self.contain_raw_obs = self._cfg.contain_raw_obs  # for save memory
+
     def setup_feature(self):
         self.second_per_frame = 0.05
         self.spatial_x = 64
@@ -40,27 +40,38 @@ class GoBiggerLightZeroEnv(BaseEnv):
         self.player_init_score = self._cfg.manager_settings.player_manager.ball_settings.score_init
         self.start_spirit_progress = self._cfg.start_spirit_progress
         self.end_spirit_progress = self._cfg.end_spirit_progress
-        
+
     def reset(self) -> np.ndarray:
         if not self._init_flag:
             self._env = GoBiggerEnv(self._cfg, step_mul=self.step_mul)
             self._init_flag = True
-        self.last_action_types = {player_id: self.direction_num * 2 for player_id in range(self.player_num_per_team * self.team_num)}
+        self.last_action_types = {
+            player_id: self.direction_num * 2
+            for player_id in range(self.player_num_per_team * self.team_num)
+        }
         raw_obs = self._env.reset()
         obs = self.observation(raw_obs)
-        self.last_action_types = {player_id: self.direction_num * 2 for player_id in
-                                  range(self.player_num_per_team * self.team_num)}
-        self.last_leaderboard = {team_idx: self.player_init_score * self.player_num_per_team for team_idx in range(self.team_num)}
-        self.last_player_scores = {player_id: self.player_init_score for player_id in range(self.player_num_per_team * self.team_num)}
+        self.last_action_types = {
+            player_id: self.direction_num * 2
+            for player_id in range(self.player_num_per_team * self.team_num)
+        }
+        self.last_leaderboard = {
+            team_idx: self.player_init_score * self.player_num_per_team
+            for team_idx in range(self.team_num)
+        }
+        self.last_player_scores = {
+            player_id: self.player_init_score
+            for player_id in range(self.player_num_per_team * self.team_num)
+        }
         return obs
-    
+
     def observation(self, raw_obs):
         obs = self.preprocess_obs(raw_obs)
         # for alignment with other environments, reverse the action mask
-        action_mask = [np.logical_not(o['action_mask']) for o in obs] 
-        to_play = [ -1 for _ in range(len(obs))] # Moot, for alignment with other environments
+        action_mask = [np.logical_not(o['action_mask']) for o in obs]
+        to_play = [-1 for _ in range(len(obs))]  # Moot, for alignment with other environments
         if self.contain_raw_obs:
-            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': to_play, 'raw_obs':raw_obs}
+            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': to_play, 'raw_obs': raw_obs}
         else:
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': to_play}
         return obs
@@ -85,17 +96,17 @@ class GoBiggerLightZeroEnv(BaseEnv):
         if done:
             info['eval_episode_return'] = [raw_obs[0]['leaderboard'][i] for i in range(self.team_num)]
         return BaseEnvTimestep(obs, rew, done, info)
-    
+
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
         self._seed = seed
         self._dynamic_seed = dynamic_seed
         np.random.seed(self._seed)
-    
+
     def close(self) -> None:
         if self._init_flag:
             self._env.close()
         self._init_flag = False
-    
+
     @property
     def observation_space(self) -> gym.spaces.Space:
         return self._observation_space
@@ -107,11 +118,17 @@ class GoBiggerLightZeroEnv(BaseEnv):
     @property
     def reward_space(self) -> gym.spaces.Space:
         return self._reward_space
-    
+
     def __repr__(self) -> str:
         return "LightZero Env({})".format(self.cfg.env_name)
-    
-    def transform_obs(self, obs, own_player_id=1, padding=True, last_action_type=None, ):
+
+    def transform_obs(
+        self,
+        obs,
+        own_player_id=1,
+        padding=True,
+        last_action_type=None,
+    ):
         global_state, player_observations = obs
         player2team = self.get_player2team()
         leaderboard = global_state['leaderboard']
@@ -125,8 +142,10 @@ class GoBiggerLightZeroEnv(BaseEnv):
         # ===========
         scene_size = global_state['border'][0]
         own_left_top_x, own_left_top_y, own_right_bottom_x, own_right_bottom_y = own_player_obs['rectangle']
-        own_view_center = [(own_left_top_x + own_right_bottom_x - scene_size) / 2,
-                           (own_left_top_y + own_right_bottom_y - scene_size) / 2]
+        own_view_center = [
+            (own_left_top_x + own_right_bottom_x - scene_size) / 2,
+            (own_left_top_y + own_right_bottom_y - scene_size) / 2
+        ]
         # own_view_width == own_view_height
         own_view_width = float(own_right_bottom_x - own_left_top_x)
 
@@ -139,8 +158,10 @@ class GoBiggerLightZeroEnv(BaseEnv):
             'view_y': np.round(np.array(own_view_center[1])).astype(np.int64),
             'view_width': np.round(np.array(own_view_width)).astype(np.int64),
             'score': np.clip(np.round(np.log(np.array(own_score) / 10)).astype(np.int64), a_min=None, a_max=9),
-            'team_score': np.clip(np.round(np.log(np.array(own_team_score / 10))).astype(np.int64), a_min=None, a_max=9),
-            'time': np.array(global_state['last_time']//20, dtype=np.int64),
+            'team_score': np.clip(
+                np.round(np.log(np.array(own_team_score / 10))).astype(np.int64), a_min=None, a_max=9
+            ),
+            'time': np.array(global_state['last_time'] // 20, dtype=np.int64),
             'rank': np.array(own_rank, dtype=np.int64),
             'last_action_type': np.array(last_action_type, dtype=np.int64)
         }
@@ -166,16 +187,17 @@ class GoBiggerLightZeroEnv(BaseEnv):
                 game_player_view_x = (game_player_right_bottom_x + game_player_left_top_x - scene_size) / 2
                 game_player_view_y = (game_player_right_bottom_y + game_player_left_top_y - scene_size) / 2
 
-                all_players.append([alliance,
-                                    game_player_view_x,
-                                    game_player_view_y,
-                                    ])
+                all_players.append([
+                    alliance,
+                    game_player_view_x,
+                    game_player_view_y,
+                ])
 
         all_players = np.array(all_players)
         player_padding_num = self.max_player_num - len(all_players)
         player_num = len(all_players)
         if player_padding_num < 0:
-            all_players = all_players[:self.max_player_num,:]
+            all_players = all_players[:self.max_player_num, :]
         else:
             all_players = np.pad(all_players, pad_width=((0, player_padding_num), (0, 0)), mode='constant')
         team_info = {
@@ -198,24 +220,37 @@ class GoBiggerLightZeroEnv(BaseEnv):
         neutral_player_id = self.team_num * self.player_num_per_team
         neutral_team_rank = self.team_num
 
-        # clone = [type, score, player_id, team_id, team_rank, x, y, next_x, next_y] 
-        clone = [[ball_type_map['clone'], bl[3], bl[-2], bl[-1], team2rank[bl[-1]], bl[0], bl[1],
-                  *self.next_position(bl[0], bl[1], bl[4], bl[5])] for bl in clone]
-        
+        # clone = [type, score, player_id, team_id, team_rank, x, y, next_x, next_y]
+        clone = [
+            [
+                ball_type_map['clone'], bl[3], bl[-2], bl[-1], team2rank[bl[-1]], bl[0], bl[1],
+                *self.next_position(bl[0], bl[1], bl[4], bl[5])
+            ] for bl in clone
+        ]
+
         # thorn = [type, score, player_id, team_id, team_rank, x, y, next_x, next_y]
-        thorns = [[ball_type_map['thorns'], bl[3], neutral_player_id, neutral_team_id, neutral_team_rank, bl[0], bl[1],
-                   *self.next_position(bl[0], bl[1], bl[4], bl[5])] for bl in thorns]
-        
+        thorns = [
+            [
+                ball_type_map['thorns'], bl[3], neutral_player_id, neutral_team_id, neutral_team_rank, bl[0], bl[1],
+                *self.next_position(bl[0], bl[1], bl[4], bl[5])
+            ] for bl in thorns
+        ]
+
         # thorn = [type, score, player_id, team_id, team_rank, x, y, next_x, next_y]
         food = [
-            [ball_type_map['food'], bl[3], neutral_player_id, neutral_team_id, neutral_team_rank, bl[0], bl[1], bl[0],
-             bl[1]] for bl in food]
+            [
+                ball_type_map['food'], bl[3], neutral_player_id, neutral_team_id, neutral_team_rank, bl[0], bl[1],
+                bl[0], bl[1]
+            ] for bl in food
+        ]
 
         # spore = [type, score, player_id, team_id, team_rank, x, y, next_x, next_y]
         spore = [
-            [ball_type_map['spore'], bl[3], bl[-1], player2team[bl[-1]], team2rank[player2team[bl[-1]]], bl[0],
-             bl[1],
-             *self.next_position(bl[0], bl[1], bl[4], bl[5])] for bl in spore]
+            [
+                ball_type_map['spore'], bl[3], bl[-1], player2team[bl[-1]], team2rank[player2team[bl[-1]]], bl[0],
+                bl[1], *self.next_position(bl[0], bl[1], bl[4], bl[5])
+            ] for bl in spore
+        ]
 
         all_balls = clone + thorns + food + spore
 
@@ -238,7 +273,9 @@ class GoBiggerLightZeroEnv(BaseEnv):
         all_balls[:, -1] = ((all_balls[:, -1] - origin_y) / own_view_width * self.spatial_y)
 
         # ball
-        ball_indices = np.logical_and(all_balls[:, 0] != 2, all_balls[:, 0] != 4) # include player balls and thorn balls
+        ball_indices = np.logical_and(
+            all_balls[:, 0] != 2, all_balls[:, 0] != 4
+        )  # include player balls and thorn balls
         balls = all_balls[ball_indices]
 
         balls_num = len(balls)
@@ -286,7 +323,12 @@ class GoBiggerLightZeroEnv(BaseEnv):
         ## score&radius
         scale_score = balls[:, 1] / 100
         radius = np.clip(np.sqrt(scale_score * 0.042 + 0.15) / own_view_width, a_max=1, a_min=None)
-        score  = np.clip(np.round(np.clip(np.sqrt(scale_score * 0.042 + 0.15) / own_view_width, a_max=1, a_min=None)*50).astype(int), a_max=49, a_min=None)
+        score = np.clip(
+            np.round(np.clip(np.sqrt(scale_score * 0.042 + 0.15) / own_view_width, a_max=1, a_min=None) * 50
+                     ).astype(int),
+            a_max=49,
+            a_min=None
+        )
         ## rank:
         ball_rank = balls[:, 4]
 
@@ -363,7 +405,7 @@ class GoBiggerLightZeroEnv(BaseEnv):
 
     def preprocess_obs(self, raw_obs):
         env_player_obs = []
-        for game_player_id in range(self.player_num_per_team*self.team_num):
+        for game_player_id in range(self.player_num_per_team * self.team_num):
             last_action_type = self.last_action_types[game_player_id]
             if self.use_action_mask:
                 can_eject = raw_obs[1][game_player_id]['can_eject']
@@ -371,36 +413,38 @@ class GoBiggerLightZeroEnv(BaseEnv):
                 action_mask = self.generate_action_mask(can_eject=can_eject, can_split=can_split)
             else:
                 action_mask = self.generate_action_mask(can_eject=True, can_split=True)
-            game_player_obs = self.transform_obs(raw_obs, own_player_id=game_player_id, padding=True, last_action_type=last_action_type)
+            game_player_obs = self.transform_obs(
+                raw_obs, own_player_id=game_player_id, padding=True, last_action_type=last_action_type
+            )
             game_player_obs['action_mask'] = action_mask
             env_player_obs.append(game_player_obs)
         return env_player_obs
-    
+
     def generate_action_mask(self, can_eject, can_split):
         # action mask
         # 1 represent can not do this action
         # 0 represent can do this action
-        action_mask = np.zeros((self.action_space_size,), dtype=np.bool_)
+        action_mask = np.zeros((self.action_space_size, ), dtype=np.bool_)
         if not can_eject:
             action_mask[self.direction_num * 2 + 1] = True
         if not can_split:
             action_mask[self.direction_num * 2 + 2] = True
         return action_mask
-    
+
     def get_player2team(self, ):
         player2team = {}
         for player_id in range(self.player_num_per_team * self.team_num):
             player2team[player_id] = player_id // self.player_num_per_team
         return player2team
-    
+
     def next_position(self, x, y, vel_x, vel_y):
         next_x = x + self.second_per_frame * vel_x * self.step_mul
         next_y = y + self.second_per_frame * vel_y * self.step_mul
         return next_x, next_y
-    
+
     def transform_action(self, action_idx):
         return self.x_y_action_List[int(action_idx)]
-    
+
     def setup_action(self):
         theta = math.pi * 2 / self.direction_num
         self.x_y_action_List = [[0.3 * math.cos(theta * i), 0.3 * math.sin(theta * i), 0] for i in range(self.direction_num)] + \
@@ -415,7 +459,7 @@ class GoBiggerLightZeroEnv(BaseEnv):
             return spirit
         else:
             return 1
-        
+
     def transform_reward(self, next_obs):
         last_time = next_obs[0]['last_time']
         total_frame = next_obs[0]['total_frame']
@@ -440,11 +484,11 @@ class GoBiggerLightZeroEnv(BaseEnv):
                 score_rewards_list.append(score_reward)
             elif self.reward_type == 'sqrt_player':
                 player_reward = player_score - self.last_player_scores[game_player_id]
-                reward_sign =  (player_reward > 0) - (player_reward < 0) # np.sign
+                reward_sign = (player_reward > 0) - (player_reward < 0)  # np.sign
                 score_rewards_list.append(reward_sign * math.sqrt(abs(player_reward)) / 2)
             elif self.reward_type == 'sqrt_team':
                 team_reward = team_score - self.last_leaderboard[game_team_id]
-                reward_sign =  (team_reward > 0) - (team_reward < 0) # np.sign
+                reward_sign = (team_reward > 0) - (team_reward < 0)  # np.sign
                 score_rewards_list.append(reward_sign * math.sqrt(abs(team_reward)) / 2)
             else:
                 raise NotImplementedError

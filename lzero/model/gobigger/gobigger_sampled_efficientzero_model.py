@@ -216,8 +216,7 @@ class GoBiggerSampledEfficientZeroModel(nn.Module):
         # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
         reward_hidden_state = (
             torch.zeros(1, batch_size,
-                        self.lstm_hidden_size).to(device), torch.zeros(1, batch_size,
-                                                                           self.lstm_hidden_size).to(device)
+                        self.lstm_hidden_size).to(device), torch.zeros(1, batch_size, self.lstm_hidden_size).to(device)
         )
         return EZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, latent_state, reward_hidden_state)
 

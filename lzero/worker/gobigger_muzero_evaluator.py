@@ -239,16 +239,21 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
         dones = np.array([False for _ in range(env_nums)])
 
         game_segments = [
-            [GameSegment(
-                self._env.action_space,
-                game_segment_length=self.policy_config.game_segment_length,
-                config=self.policy_config
-            ) for _ in range(agent_num)] for _ in range(env_nums)
+            [
+                GameSegment(
+                    self._env.action_space,
+                    game_segment_length=self.policy_config.game_segment_length,
+                    config=self.policy_config
+                ) for _ in range(agent_num)
+            ] for _ in range(env_nums)
         ]
         for env_id in range(env_nums):
             for agent_id in range(agent_num):
                 game_segments[env_id][agent_id].reset(
-                    [to_ndarray(init_obs[env_id]['observation'][agent_id]) for _ in range(self.policy_config.model.frame_stack_num)]
+                    [
+                        to_ndarray(init_obs[env_id]['observation'][agent_id])
+                        for _ in range(self.policy_config.model.frame_stack_num)
+                    ]
                 )
 
         ready_env_id = set()
@@ -282,8 +287,8 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
                 # policy forward
                 # ==============================================================
                 policy_output = self._policy.forward(stack_obs, action_mask, to_play)
-                actions_no_env_id=defaultdict(dict)
-                for k,v in policy_output.items():
+                actions_no_env_id = defaultdict(dict)
+                for k, v in policy_output.items():
                     for agent_id, act in enumerate(v['action']):
                         actions_no_env_id[k][agent_id] = act
                 # actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
@@ -327,8 +332,8 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
 
                     for agent_id in range(agent_num):
                         game_segments[env_id][agent_id].append(
-                            actions[env_id][agent_id], to_ndarray(obs['observation'][agent_id]), reward[agent_id], action_mask_dict[env_id][agent_id],
-                            to_play_dict[env_id]
+                            actions[env_id][agent_id], to_ndarray(obs['observation'][agent_id]), reward[agent_id],
+                            action_mask_dict[env_id][agent_id], to_play_dict[env_id]
                         )
 
                     # NOTE: in evaluator, we only need save the ``o_{t+1} = obs['observation']``
@@ -421,8 +426,8 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
             'reward_min': np.min(episode_return),
         }
         # add eat info
-        for i in range(len(t.info['eats'])//2):
-            for k,v in t.info['eats'][i].items():
+        for i in range(len(t.info['eats']) // 2):
+            for k, v in t.info['eats'][i].items():
                 info['agent_{}_{}'.format(i, k)] = v
 
         episode_info = eval_monitor.get_episode_info()
@@ -479,12 +484,12 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
 
         self._env.reset()
         self._policy.reset()
-        self._bot_policy = GoBiggerBot(env_nums, agent_id=[2,3]) #TODO only support t2p2
+        self._bot_policy = GoBiggerBot(env_nums, agent_id=[2, 3])  #TODO only support t2p2
         self._bot_policy.reset()
 
         # initializations
         init_obs = self._env.ready_obs
-        agent_num = len(init_obs[0]['action_mask'])//2  #TODO only support t2p2
+        agent_num = len(init_obs[0]['action_mask']) // 2  #TODO only support t2p2
 
         retry_waiting_time = 0.001
         while len(init_obs.keys()) != self._env_num:
@@ -509,16 +514,21 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
         dones = np.array([False for _ in range(env_nums)])
 
         game_segments = [
-            [GameSegment(
-                self._env.action_space,
-                game_segment_length=self.policy_config.game_segment_length,
-                config=self.policy_config
-            ) for _ in range(agent_num)] for _ in range(env_nums)
+            [
+                GameSegment(
+                    self._env.action_space,
+                    game_segment_length=self.policy_config.game_segment_length,
+                    config=self.policy_config
+                ) for _ in range(agent_num)
+            ] for _ in range(env_nums)
         ]
         for env_id in range(env_nums):
             for agent_id in range(agent_num):
                 game_segments[env_id][agent_id].reset(
-                    [to_ndarray(init_obs[env_id]['observation'][agent_id]) for _ in range(self.policy_config.model.frame_stack_num)]
+                    [
+                        to_ndarray(init_obs[env_id]['observation'][agent_id])
+                        for _ in range(self.policy_config.model.frame_stack_num)
+                    ]
                 )
 
         ready_env_id = set()
@@ -529,7 +539,7 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
             while not eval_monitor.is_finished():
                 # Get current ready env obs.
                 obs = self._env.ready_obs
-                raw_obs = [v['raw_obs'] for k,v in obs.items()]
+                raw_obs = [v['raw_obs'] for k, v in obs.items()]
                 new_available_env_id = set(obs.keys()).difference(ready_env_id)
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
@@ -559,8 +569,8 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
                 # policy forward
                 # ==============================================================
                 policy_output = self._policy.forward(stack_obs, action_mask, to_play)
-                actions_no_env_id=defaultdict(dict)
-                for k,v in policy_output.items():
+                actions_no_env_id = defaultdict(dict)
+                for k, v in policy_output.items():
                     for agent_id, act in enumerate(v['action']):
                         actions_no_env_id[k][agent_id] = act
                 # actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
@@ -607,8 +617,8 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
 
                     for agent_id in range(agent_num):
                         game_segments[env_id][agent_id].append(
-                            actions[env_id][agent_id], to_ndarray(obs['observation'][agent_id]), reward[agent_id], action_mask_dict[env_id][agent_id],
-                            to_play_dict[env_id]
+                            actions[env_id][agent_id], to_ndarray(obs['observation'][agent_id]), reward[agent_id],
+                            action_mask_dict[env_id][agent_id], to_play_dict[env_id]
                         )
 
                     # NOTE: in evaluator, we only need save the ``o_{t+1} = obs['observation']``
@@ -710,12 +720,12 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
             'bot_reward_min': np.min(bot_episode_return),
         }
         # add eat info
-        for k,v in eat_info.items():
+        for k, v in eat_info.items():
             for i in range(len(v)):
                 for k1, v1 in v[i].items():
                     info['agent_{}_{}'.format(i, k1)] = info.get('agent_{}_{}'.format(i, k1), []) + [v1]
-        
-        for k,v in info.items():
+
+        for k, v in info.items():
             if 'agent' in k:
                 info[k] = np.mean(v)
 

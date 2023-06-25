@@ -43,6 +43,7 @@ def random_collect(
     # restore the policy
     collector.reset_policy(policy.collect_mode)
 
+
 def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:
     """
     Overview:
