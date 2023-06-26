@@ -201,7 +201,7 @@ Below are the benchmark results of [MuZero](https://github.com/opendilab/LightZe
 <p align="center">
   <img src="assets/benchmark/ablation/pong_gmz_ns.png" alt="Image Description 1" width="23%" height="auto" style="margin: 0 1%;">
   <img src="assets/benchmark/ablation/mspacman_gmz_ns.png" alt="Image Description 2" width="23%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/ablation/gomoku_gmz_ns.png" alt="Image Description 3" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/ablation/gomoku_bot-mode_gmz_ns.png" alt="Image Description 3" width="23%" height="auto" style="margin: 0 1%;">
   <img src="assets/benchmark/ablation/lunarlander_gmz_ns.png" alt="Image Description 3" width="23%" height="auto" style="margin: 0 1%;">
 </p>
 
@@ -231,17 +231,12 @@ The following are the overview MCTS principle diagrams of the above algorithms:
 
 <details><summary>Click to expand</summary>
 
-![mcts](assets/algo_overview/mcts.png)
-
-![alphazero](assets/algo_overview/alphazero.png)
-
-![muzero](assets/algo_overview/muzero.png)
-
-![efficientzero](assets/algo_overview/efficientzero.png)
-
-![sampled muzero](assets/algo_overview/sampled_muzero.png)
-
-![gumbel muzero](assets/algo_overview/gumbel_muzero.png)
+- [MCTS](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/mcts_overview.pdf)
+- [AlphaZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/alphazero_overview.pdf)
+- [MuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/muzero_overview.pdf)
+- [EfficientZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/efficientzero_overview.pdf)
+- [SampledMuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/sampled_muzero_overview.pdf)
+- [GumbelMuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/gumbel_muzero_overview.pdf)
 
 </details>
 
