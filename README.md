@@ -231,17 +231,17 @@ The following are the overview MCTS principle diagrams of the above algorithms:
 
 <details><summary>Click to expand</summary>
 
-![mcts](assets/algo_overview/mcts.png)
+![mcts](assets/algo_overview/mcts_overview.png)
 
-![alphazero](assets/algo_overview/alphazero.png)
+![alphazero](assets/algo_overview/alphazero_overview.png)
 
-![muzero](assets/algo_overview/muzero.png)
+![muzero](assets/algo_overview/muzero_overview.png)
 
-![efficientzero](assets/algo_overview/efficientzero.png)
+![efficientzero](assets/algo_overview/efficientzero_overview.png)
 
-![sampled muzero](assets/algo_overview/sampled_muzero.png)
+![sampled muzero](assets/algo_overview/sampled_muzero_overview.png)
 
-![gumbel muzero](assets/algo_overview/gumbel_muzero.png)
+![gumbel muzero](assets/algo_overview/gumbel_muzero_overview.png)
 
 </details>
 
