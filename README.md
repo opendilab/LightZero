@@ -201,7 +201,7 @@ Below are the benchmark results of [MuZero](https://github.com/opendilab/LightZe
 <p align="center">
   <img src="assets/benchmark/ablation/pong_gmz_ns.png" alt="Image Description 1" width="23%" height="auto" style="margin: 0 1%;">
   <img src="assets/benchmark/ablation/mspacman_gmz_ns.png" alt="Image Description 2" width="23%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/ablation/gomoku_gmz_ns.png" alt="Image Description 3" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/ablation/gomoku_bot-mode_gmz_ns.png" alt="Image Description 3" width="23%" height="auto" style="margin: 0 1%;">
   <img src="assets/benchmark/ablation/lunarlander_gmz_ns.png" alt="Image Description 3" width="23%" height="auto" style="margin: 0 1%;">
 </p>
 
