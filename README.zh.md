@@ -197,17 +197,17 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 <details closed>
 <summary>(点击查看更多)</summary>
 
-![mcts](assets/algo_overview/mcts_overview.png)
+![mcts](assets/algo_overview/mcts_overview.pdf)
 
-![alphazero](assets/algo_overview/alphazero_overview.png)
+![alphazero](assets/algo_overview/alphazero_overview.pdf)
 
-![muzero](assets/algo_overview/muzero_overview.png)
+![muzero](assets/algo_overview/muzero_overview.pdf)
 
-![efficientzero](assets/algo_overview/efficientzero_overview.png)
+![efficientzero](assets/algo_overview/efficientzero_overview.pdf)
 
-![sampled muzero](assets/algo_overview/sampled_muzero_overview.png)
+![sampled muzero](assets/algo_overview/sampled_muzero_overview.pdf)
 
-![gumbel muzero](assets/algo_overview/gumbel_muzero_overview.png)
+![gumbel muzero](assets/algo_overview/gumbel_muzero_overview.pdf)
 
 </details>
 
