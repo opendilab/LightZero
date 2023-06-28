@@ -15,6 +15,8 @@ from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
 from gym import spaces
 from pettingzoo.classic import go_v5
+from pettingzoo.classic.go.go import raw_env
+
 from pettingzoo.classic.go import coords, go_base
 from pettingzoo.utils.agent_selector import agent_selector
 
@@ -30,7 +32,7 @@ def get_image(path):
     return sfc
 
 
-@ENV_REGISTRY.register('go')
+@ENV_REGISTRY.register('go_lightzero')
 class GoEnv(BaseEnv):
     """
     Overview:
@@ -139,7 +141,6 @@ class GoEnv(BaseEnv):
 
         self.board_history = np.zeros((self.board_size, self.board_size, 16), dtype=bool)
 
-
     # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
     def reset(self, start_player_index=0, init_state=None):
         self.start_player_index = start_player_index
@@ -153,12 +154,8 @@ class GoEnv(BaseEnv):
             self._agent_selector = agent_selector(['white_0', 'black_0'])
 
         self.agent_selection = self._agent_selector.next()
-
-        self.has_reset = True
-        self._go = go_v5.env(board_size=self.board_size, komi=self._komi)
-        # self._go = raw_env(board_size=self.board_size, komi=self._komi)
-        self._go.reset()
-        self._raw_env = self._go.env.env.env
+        self._raw_env = raw_env(board_size=self.board_size, komi=self._komi)
+        self._raw_env.reset()
 
         if init_state is not None:
             # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
@@ -229,6 +226,7 @@ class GoEnv(BaseEnv):
         self.board_history = np.dstack((current_agent_plane, opponent_agent_plane, self.board_history[:, :, :-2]))
         # self.board_history[:,:,0], self.board_history[:,:,1]
 
+        current_agent = self.agent_selection
         # next_player: 'black_0', 'white_0'
         """
         NOTE: here exchange the player
@@ -268,7 +266,7 @@ class GoEnv(BaseEnv):
         if self.dones[agent]:
             self.infos[agent]['eval_episode_return'] = self._cumulative_rewards[agent]
 
-        return BaseEnvTimestep(obs, self._cumulative_rewards[agent], self.dones[agent], self.infos[agent])
+        return BaseEnvTimestep(obs, self.rewards[current_agent], self.dones[agent], self.infos[agent])
 
     def step(self, action):
         if self.battle_mode == 'self_play_mode':
@@ -364,7 +362,6 @@ class GoEnv(BaseEnv):
         else:
             return False, -1
 
-
     def get_done_reward(self):
         """
         Overview:
@@ -387,6 +384,7 @@ class GoEnv(BaseEnv):
                 return True, 0
         else:
             return False, None
+
     def observe(self, agent):
         current_agent_plane, opponent_agent_plane = self._raw_env._encode_board_planes(agent)
         player_plane = self._raw_env._encode_player_plane(agent)
@@ -399,6 +397,7 @@ class GoEnv(BaseEnv):
             action_mask[i] = 1
 
         return {"observation": observation, "action_mask": action_mask}
+
     def current_state(self):
         """
         Overview:
@@ -417,7 +416,6 @@ class GoEnv(BaseEnv):
         # obs = self._go.observe(agent_id)
         # obs = self._raw_env.observe(agent_id)
         obs = self.observe(agent_id)
-
 
         obs['observation'] = obs['observation'].astype(int)
         raw_obs = obs['observation']
@@ -438,6 +436,7 @@ class GoEnv(BaseEnv):
     @property
     def board(self):
         return self._raw_env._go.board
+
     def legal_moves(self):
         if self._raw_env._go.is_game_over():
             self.terminations = self._convert_to_dict(
@@ -499,10 +498,11 @@ class GoEnv(BaseEnv):
         new_board = copy.deepcopy(tmp_position.board)
         next_simulator_env = copy.deepcopy(self)
         next_simulator_env.reset(start_player_index, init_state=new_board)  # index
-        # NOTE: when call reset, self.recent is cleared
+        # NOTE: when calling reset method, self.recent is cleared, so we need to restore it.
         next_simulator_env._raw_env._go.recent = tmp_position.recent
 
         return next_simulator_env
+
     def random_action(self):
         return np.random.choice(self.legal_actions)
 

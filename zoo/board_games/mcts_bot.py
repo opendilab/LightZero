@@ -78,8 +78,9 @@ class MCTSNode(ABC):
         self.best_action = self.parent_action[np.argmax(choices_weights)]
         return self.children[np.argmax(choices_weights)]
 
-    def rollout_policy(self, legal_actions,  last_legal_actions=None, last_action=None):
-        if last_legal_actions is not None and last_legal_actions == [self.env.board_size ** 2] and last_action is not None and last_action == self.env.board_size ** 2:
+    def rollout_policy(self, legal_actions, last_legal_actions=None, last_action=None):
+        if last_legal_actions is not None and last_legal_actions == [
+            self.env.board_size ** 2] and last_action is not None and last_action == self.env.board_size ** 2:
             # for Go env, if last_action is not None, and last_action == self.env.board_size ** 2, then pass
             return legal_actions[-1]
         return legal_actions[np.random.randint(len(legal_actions))]
@@ -142,13 +143,11 @@ class TwoPlayersMCTSNode(MCTSNode):
         # print('simulation begin')
         current_rollout_env = self.env
         # print(current_rollout_env.board)
-        step=0
-        last_action=None
-        last_legal_actions=None
+        step = 0
+        last_action = None
+        last_legal_actions = None
         while not current_rollout_env.get_done_reward()[0]:
             step += 1
-
-
             legal_actions = current_rollout_env.legal_actions
             action = self.rollout_policy(legal_actions, last_legal_actions, last_action)
             # print('step={}'.format(step))
@@ -234,7 +233,7 @@ class MCTSBot:
     def get_actions(self, state, player_index):
         simulator_env = self.ENV(EasyDict(self.cfg))
         simulator_env.reset(start_player_index=player_index, init_state=state)
-        legal_actions = simulator_env.legal_actions
+        # legal_actions = simulator_env.legal_actions
         root = TwoPlayersMCTSNode(simulator_env)
         mcts = MCTSSearchNode(root)
         mcts.best_action(self.num_simulation)

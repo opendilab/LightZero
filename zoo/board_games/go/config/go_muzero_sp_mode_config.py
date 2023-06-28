@@ -87,7 +87,7 @@ main_config = go_muzero_config
 
 go_muzero_create_config = dict(
     env=dict(
-        type='go',
+        type='go_lightzero',
         import_names=['zoo.board_games.go.envs.go_env'],
     ),
     env_manager=dict(type='subprocess'),

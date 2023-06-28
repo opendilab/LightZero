@@ -4,31 +4,31 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-board_size = 6
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 5
-update_per_collect = 50
-batch_size = 256
-max_env_step = int(10e6)
-prob_random_action_in_bot = 1
-
-if board_size == 19:
-    num_simulations = 800
-elif board_size == 9:
-    num_simulations = 180
-elif board_size == 6:
-    num_simulations = 80
-
 # board_size = 6
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# num_simulations = 2
-# update_per_collect = 2
-# batch_size = 2
-# max_env_step = int(5e5)
-# prob_random_action_in_bot = 0.
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 5
+# update_per_collect = 50
+# batch_size = 256
+# max_env_step = int(10e6)
+# prob_random_action_in_bot = 1
+# 
+# if board_size == 19:
+#     num_simulations = 800
+# elif board_size == 9:
+#     num_simulations = 180
+# elif board_size == 6:
+#     num_simulations = 80
+
+board_size = 6
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 2
+update_per_collect = 2
+batch_size = 2
+max_env_step = int(5e5)
+prob_random_action_in_bot = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -82,7 +82,7 @@ main_config = go_alphazero_config
 
 go_alphazero_create_config = dict(
     env=dict(
-        type='go',
+        type='go_lightzero',
         import_names=['zoo.board_games.go.envs.go_env'],
     ),
     env_manager=dict(type='subprocess'),
