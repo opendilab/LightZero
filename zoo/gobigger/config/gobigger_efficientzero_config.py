@@ -77,6 +77,7 @@ atari_efficientzero_config = dict(
         ),
         cuda=True,
         mcts_ctree=True,
+        gumbel_algo=False,
         env_type='not_board_games',
         game_segment_length=400,
         random_collect_episode_num=random_collect_episode_num,
@@ -104,11 +105,6 @@ atari_efficientzero_config = dict(
     learn=dict(learner=dict(
         log_policy=True,
         hook=dict(log_show_after_iter=10, ),
-    ), ),
-    collect=dict(collector=dict(collect_print_freq=10, ), ),
-    eval=dict(evaluator=dict(
-        eval_freq=5000,
-        stop_value=10000000000,
     ), ),
 )
 atari_efficientzero_config = EasyDict(atari_efficientzero_config)

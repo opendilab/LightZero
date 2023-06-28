@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 class GoBiggerMuZeroGameBuffer(GameBuffer):
     """
     Overview:
-        The specific game buffer for MuZero policy.
+        The specific game buffer for GoBigger MuZero policy.
     """
 
     def __init__(self, cfg: dict):
@@ -48,7 +48,7 @@ class GoBiggerMuZeroGameBuffer(GameBuffer):
         self.game_pos_priorities = []
         self.game_segment_game_pos_look_up = []
 
-        self.tmp_obs = None # for value obs list [46 + 4(td_step)] not < 50(game_segment)
+        self.tmp_obs = None # a tmp value which records obs when value obs list [current_index + 4(td_step)] > 50(game_segment)
 
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
@@ -200,7 +200,6 @@ class GoBiggerMuZeroGameBuffer(GameBuffer):
             - reward_value_context (:obj:`list`): value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens,
               td_steps_list, action_mask_segment, to_play_segment
         """
-        # zero_obs = game_segment_list[0].zero_obs()
         value_obs_list = []
         # the value is valid or not (out of game_segment)
         value_mask = []

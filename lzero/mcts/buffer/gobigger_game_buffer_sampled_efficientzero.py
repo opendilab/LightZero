@@ -16,7 +16,7 @@ from ding.torch_utils import to_device, to_tensor, to_ndarray
 class GoBiggerSampledEfficientZeroGameBuffer(GoBiggerMuZeroGameBuffer):
     """
     Overview:
-        The specific game buffer for Sampled EfficientZero policy.
+        The specific game buffer for GoBigger Sampled EfficientZero policy.
     """
 
     def __init__(self, cfg: dict):

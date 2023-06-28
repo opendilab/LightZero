@@ -44,9 +44,7 @@ def train_muzero_gobigger(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['gobigger_efficientzero', 'gobigger_muzero', 'gobigger_sampled_efficientzero'], \
-        "train_muzero entry now only support the following algo.: 'gobigger_efficientzero', 'gobigger_muzero', 'gobigger_sampled_efficientzero'"
-
+    assert create_cfg.policy.type in ['gobigger_efficientzero', 'gobigger_muzero', 'gobigger_sampled_efficientzero']
     if create_cfg.policy.type == 'gobigger_efficientzero':
         from lzero.mcts import GoBiggerEfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'gobigger_muzero':
@@ -93,7 +91,6 @@ def train_muzero_gobigger(
     # specific game buffer for MCTS+RL algorithms
     replay_buffer = GameBuffer(policy_config)
     collector = GoBiggerMuZeroCollector(
-        collect_print_freq=cfg.collect.collector.collect_print_freq,
         env=collector_env,
         policy=policy.collect_mode,
         tb_logger=tb_logger,

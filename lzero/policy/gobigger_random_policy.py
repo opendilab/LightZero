@@ -3,17 +3,12 @@ from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch
-import torch.optim as optim
-from ding.model import model_wrap
 from ding.policy.base_policy import Policy
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
-from torch.distributions import Categorical
-from torch.nn import L1Loss
 
 from lzero.mcts import EfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts import EfficientZeroMCTSPtree as MCTSPtree
-from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, negative_cosine_similarity, prepare_obs, \
     configure_optimizers
@@ -28,7 +23,7 @@ class GoBiggerRandomPolicy(Policy):
         The policy class for GoBiggerRandom.
     """
 
-    # The default_config for EfficientZero policy.
+    # The default_config for GoBiggerRandom policy.
     config = dict(
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For 3-dimensional image obs, we use conv model.
@@ -180,28 +175,6 @@ class GoBiggerRandomPolicy(Policy):
         """
         return 'GoBiggerEfficientZeroModel', ['lzero.model.gobigger.gobigger_efficientzero_model']
 
-    def _init_learn(self) -> None:
-        """
-        Overview:
-            Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
-        """
-        pass
-
-    def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
-        """
-        Overview:
-            The forward function for learning policy in learn mode, which is the core of the learning process.
-            The data is sampled from replay buffer.
-            The loss is calculated by the loss function and the loss is backpropagated to update the model.
-        Arguments:
-            - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
-                The first tensor is the current_batch, the second tensor is the target_batch.
-        Returns:
-            - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
-                current learning loss and learning statistics.
-        """
-        pass
-
     def _init_collect(self) -> None:
         """
          Overview:
@@ -329,60 +302,27 @@ class GoBiggerRandomPolicy(Policy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
+    # be compatible with DI-engine Policy class
+    def _init_learn(self) -> None:
+        pass
+
+    def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
+        pass
+
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id=None):
-        """
-         Overview:
-             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
-             Choosing the action with the highest value (argmax) rather than sampling during the eval mode.
-         Arguments:
-             - data (:obj:`torch.Tensor`): The input data, i.e. the observation.
-             - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
-             - to_play (:obj:`int`): The player to play.
-             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
-         Shape:
-             - data (:obj:`torch.Tensor`):
-                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
-                     S is the number of stacked frames, H is the height of the image, W is the width of the image.
-                 - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
-             - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
-             - to_play: :math:`(N, 1)`, where N is the number of collect_env.
-             - ready_env_id: None
-         Returns:
-             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
-                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
-         """
         pass
 
     def _monitor_vars_learn(self) -> List[str]:
-        """
-         Overview:
-             Register the variables to be monitored in learn mode. The registered variables will be logged in
-             tensorboard according to the return value ``_forward_learn``.
-         """
         pass
 
     def _state_dict_learn(self) -> Dict[str, Any]:
-        """
-        Overview:
-            Return the state_dict of learn mode, usually including model and optimizer.
-        Returns:
-            - state_dict (:obj:`Dict[str, Any]`): the dict of current policy learn state, for saving and restoring.
-        """
         pass
 
     def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
-        """
-        Overview:
-            Load the state_dict variable into policy learn mode.
-        Arguments:
-            - state_dict (:obj:`Dict[str, Any]`): the dict of policy learn state saved before.
-        """
         pass
 
     def _process_transition(self, obs, policy_output, timestep):
-        # be compatible with DI-engine Policy class
         pass
 
     def _get_train_sample(self, data):
-        # be compatible with DI-engine Policy class
         pass

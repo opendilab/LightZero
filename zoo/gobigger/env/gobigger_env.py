@@ -1,9 +1,15 @@
 import gym
 import numpy as np
+from ditk import logging
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
-from gobigger.envs import GoBiggerEnv
 import math
+try:
+    from gobigger.envs import GoBiggerEnv
+except ImportError:
+    import sys
+    logging.warning("not found gobigger package, please install it through `pip install git+https://github.com/opendilab/GoBigger.git")
+    sys.exit(1)
 
 
 @ENV_REGISTRY.register('gobigger_lightzero')
