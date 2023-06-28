@@ -105,11 +105,6 @@ atari_efficientzero_config = dict(
         log_policy=True,
         hook=dict(log_show_after_iter=10, ),
     ), ),
-    collect=dict(collector=dict(collect_print_freq=10, ), ),
-    eval=dict(evaluator=dict(
-        eval_freq=5000,
-        stop_value=10000000000,
-    ), ),
 )
 atari_efficientzero_config = EasyDict(atari_efficientzero_config)
 main_config = atari_efficientzero_config

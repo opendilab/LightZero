@@ -8,10 +8,15 @@ if __name__ == "__main__":
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
     """
-    # sez
+    # ez
     # from gobigger_efficientzero_config import main_config, create_config
+
+    # sez
+    # from gobigger_sampled_efficientzero_config import main_config, create_config
+    
+    # mz
     from gobigger_muzero_config import main_config, create_config
-    model_path = "/path/ckpt/ckpt_best.pth.tar"
+    model_path = "exp_name/ckpt/ckpt_best.pth.tar"
 
     returns_mean_seeds = []
     returns_seeds = []

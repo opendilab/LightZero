@@ -16,7 +16,7 @@ from ding.torch_utils import to_device, to_tensor, to_ndarray
 class GoBiggerEfficientZeroGameBuffer(GoBiggerMuZeroGameBuffer):
     """
     Overview:
-        The specific game buffer for EfficientZero policy.
+        The specific game buffer for GoBigger EfficientZero policy.
     """
 
     def __init__(self, cfg: dict):
@@ -103,7 +103,6 @@ class GoBiggerEfficientZeroGameBuffer(GoBiggerMuZeroGameBuffer):
             - reward_value_context (:obj:`list`): value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens,
               td_steps_list, action_mask_segment, to_play_segment
         """
-        # zero_obs = game_segment_list[0].zero_obs()
         value_obs_list = []
         # the value is valid or not (out of trajectory)
         value_mask = []

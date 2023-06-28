@@ -17,6 +17,17 @@ def random_collect(
         replay_buffer: 'IBuffer',  # noqa
         postprocess_data_fn: Optional[Callable] = None
 ) -> None:  # noqa
+    """
+    Overview:
+        Collect data by random policy.
+    Arguments:
+        - policy_cfg (:obj:`EasyDict`): The policy config.
+        - policy (:obj:`Policy`): The policy.
+        - collector (:obj:`ISerialCollector`): The collector.
+        - collector_env (:obj:`BaseEnvManager`): The collector env manager.
+        - replay_buffer (:obj:`IBuffer`): The replay buffer.
+        - postprocess_data_fn (:obj:`Optional[Callable]`): The postprocess function for the collected data.
+    """
     assert policy_cfg.random_collect_episode_num > 0
 
     random_policy = GoBiggerRandomPolicy(cfg=policy_cfg)

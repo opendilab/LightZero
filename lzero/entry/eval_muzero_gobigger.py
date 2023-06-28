@@ -34,7 +34,8 @@ def eval_muzero_gobigger(
             point to the ckpt file of the pretrained model, and an absolute path is recommended.
             In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
     Returns:
-        - policy (:obj:`Policy`): Converged policy.
+        - reward_sp (:obj:`List`): reward of self-play mode.
+        - reward_vsbot (:obj:`List`): reward of vsbot mode.
     """
     cfg, create_cfg = input_cfg
     assert create_cfg.policy.type in ['gobigger_efficientzero', 'gobigger_muzero', 'gobigger_sampled_efficientzero'], \

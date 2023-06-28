@@ -5,7 +5,7 @@ import torch
 import math
 import queue
 import random
-from pygame.math import Vector2
+import numpy as np
 from typing import List, Dict, Any, Optional, Tuple, Union
 from collections import namedtuple
 from collections import defaultdict
@@ -116,7 +116,7 @@ class BotAgent():
                 if min_food_ball is not None:
                     direction = (min_food_ball['position'] - my_clone_balls[0]['position'])
                 else:
-                    direction = (Vector2(0, 0) - my_clone_balls[0]['position'])
+                    direction = (np.array([0, 0]) - my_clone_balls[0]['position'])
             action_random = random.random()
             if action_random < 0.02:
                 action_type = 1
@@ -124,12 +124,13 @@ class BotAgent():
                 action_type = 2
             else:
                 action_type = 0
-        if direction.length() > 0:
-            direction = direction.normalize()
+        if np.linalg.norm(direction) > 0:
+            direction = direction / np.linalg.norm(direction)
         else:
-            direction = Vector2(1, 1).normalize()
-        direction = self.add_noise_to_direction(direction).normalize()
-        self.actions_queue.put([direction.x, direction.y, action_type])
+            direction = np.array([1,1]) / np.linalg.norm(np.array([1,1]))
+        direction = self.add_noise_to_direction(direction)
+        direction = direction / np.linalg.norm(direction)
+        self.actions_queue.put([direction[0], direction[1], action_type])
         action_ret = self.actions_queue.get()
         return {self.game_player_id: action_ret}
 
@@ -152,7 +153,7 @@ class BotAgent():
         min_thorns_ball = None
         for thorns_ball in thorns_balls:
             if self.can_eat(my_max_clone_ball['radius'], thorns_ball['radius']):
-                distance = (thorns_ball['position'] - my_max_clone_ball['position']).length()
+                distance = np.linalg.norm((thorns_ball['position'] - my_max_clone_ball['position']))
                 if distance < min_distance:
                     min_distance = distance
                     min_thorns_ball = copy.deepcopy(thorns_ball)
@@ -162,7 +163,7 @@ class BotAgent():
         min_distance = 10000
         min_food_ball = None
         for food_ball in food_balls:
-            distance = (food_ball['position'] - my_max_clone_ball['position']).length()
+            distance = np.linalg.norm(food_ball['position'] - my_max_clone_ball['position'])
             if distance < min_distance:
                 min_distance = distance
                 min_food_ball = copy.deepcopy(food_ball)
@@ -175,7 +176,7 @@ class BotAgent():
                 new_overlap[k] = []
                 for index, vv in enumerate(v):
                     tmp = {}
-                    tmp['position'] = Vector2(vv[0], vv[1])
+                    tmp['position'] = np.array([vv[0], vv[1]])
                     tmp['radius'] = vv[2]
                     tmp['player'] = int(vv[-2])
                     tmp['team'] = int(vv[-1])
@@ -184,7 +185,7 @@ class BotAgent():
                 new_overlap[k] = []
                 for index, vv in enumerate(v):
                     tmp = {}
-                    tmp['position'] = Vector2(vv[0], vv[1])
+                    tmp['position'] = np.array([vv[0], vv[1]])
                     tmp['radius'] = vv[2]
                     new_overlap[k].append(tmp)
         return new_overlap
@@ -195,13 +196,13 @@ class BotAgent():
             new_overlap[k] = []
             for index, vv in enumerate(v):
                 new_overlap[k].append(vv)
-                new_overlap[k][index]['position'] = Vector2(*vv['position'])
+                new_overlap[k][index]['position'] = np.array(*vv['position'])
         return new_overlap
 
     def add_noise_to_direction(self, direction, noise_ratio=0.1):
-        direction = direction + Vector2(
-            ((random.random() * 2 - 1) * noise_ratio) * direction.x,
-            ((random.random() * 2 - 1) * noise_ratio) * direction.y
+        direction = direction + np.array(
+            ((random.random() * 2 - 1) * noise_ratio) * direction[0],
+            ((random.random() * 2 - 1) * noise_ratio) * direction[1]
         )
         return direction
 
