@@ -1,5 +1,5 @@
 import time
-from collections import deque, namedtuple
+from collections import deque, namedtuple, defaultdict
 from typing import Optional, Any, List
 
 import numpy as np
@@ -67,6 +67,10 @@ class MuZeroCollector(ISerialCollector):
             )
 
         self.policy_config = policy_config
+        if 'multi_agent' in self.policy_config.keys() and self.policy_config.multi_agent:
+            self._multi_agent = self.policy_config.multi_agent
+        else:
+            self._multi_agent = False
 
         self.reset(policy, env)
 
@@ -292,6 +296,7 @@ class MuZeroCollector(ISerialCollector):
         if policy_kwargs is None:
             policy_kwargs = {}
         temperature = policy_kwargs['temperature']
+        epsilon = policy_kwargs['epsilon']
 
         collected_episode = 0
         env_nums = self._env_num
@@ -315,34 +320,68 @@ class MuZeroCollector(ISerialCollector):
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
 
-        game_segments = [
-            GameSegment(
-                self._env.action_space,
-                game_segment_length=self.policy_config.game_segment_length,
-                config=self.policy_config
-            ) for _ in range(env_nums)
-        ]
-        # stacked observation windows in reset stage for init game_segments
-        observation_window_stack = [[] for _ in range(env_nums)]
-        for env_id in range(env_nums):
-            observation_window_stack[env_id] = deque(
-                [to_ndarray(init_obs[env_id]['observation']) for _ in range(self.policy_config.model.frame_stack_num)],
-                maxlen=self.policy_config.model.frame_stack_num
-            )
+        if self._multi_agent:
+            agent_num = len(init_obs[0]['action_mask'])
+            game_segments = [
+                [
+                    GameSegment(
+                        self._env.action_space,
+                        game_segment_length=self.policy_config.game_segment_length,
+                        config=self.policy_config
+                    ) for _ in range(agent_num)
+                ] for _ in range(env_nums)
+            ]
+            # stacked observation windows in reset stage for init game_segments
+            observation_window_stack = [[[] for _ in range(agent_num)] for _ in range(env_nums)]
+            for env_id in range(env_nums):
+                for agent_id in range(agent_num):
+                    observation_window_stack[env_id][agent_id] = deque(
+                        [
+                            to_ndarray(init_obs[env_id]['observation'][agent_id])
+                            for _ in range(self.policy_config.model.frame_stack_num)
+                        ],
+                        maxlen=self.policy_config.model.frame_stack_num
+                    )
+                    game_segments[env_id][agent_id].reset(observation_window_stack[env_id][agent_id])
 
-            game_segments[env_id].reset(observation_window_stack[env_id])
+            dones = np.array([False for _ in range(env_nums)])
+            last_game_segments = [[None for _ in range(agent_num)] for _ in range(env_nums)]
+            last_game_priorities = [[None for _ in range(agent_num)] for _ in range(env_nums)]
+            # for priorities in self-play
+            search_values_lst = [[[] for _ in range(agent_num)] for _ in range(env_nums)]
+            pred_values_lst = [[[] for _ in range(agent_num)] for _ in range(env_nums)]
+        else:
+            # some logs
+            game_segments = [
+                GameSegment(
+                    self._env.action_space,
+                    game_segment_length=self.policy_config.game_segment_length,
+                    config=self.policy_config
+                ) for _ in range(env_nums)
+            ]
+            # stacked observation windows in reset stage for init game_segments
+            observation_window_stack = [[] for _ in range(env_nums)]
+            for env_id in range(env_nums):
+                observation_window_stack[env_id] = deque(
+                    [to_ndarray(init_obs[env_id]['observation']) for _ in range(self.policy_config.model.frame_stack_num)],
+                    maxlen=self.policy_config.model.frame_stack_num
+                )
+                game_segments[env_id].reset(observation_window_stack[env_id])
 
-        dones = np.array([False for _ in range(env_nums)])
-        last_game_segments = [None for _ in range(env_nums)]
-        last_game_priorities = [None for _ in range(env_nums)]
-        # for priorities in self-play
-        search_values_lst = [[] for _ in range(env_nums)]
-        pred_values_lst = [[] for _ in range(env_nums)]
+            dones = np.array([False for _ in range(env_nums)])
+            last_game_segments = [None for _ in range(env_nums)]
+            last_game_priorities = [None for _ in range(env_nums)]
+            # for priorities in self-play
+            search_values_lst = [[] for _ in range(env_nums)]
+            pred_values_lst = [[] for _ in range(env_nums)]
         if self.policy_config.gumbel_algo:
             improved_policy_lst = [[] for _ in range(env_nums)]
 
         # some logs
-        eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros(env_nums)
+        if self._multi_agent:
+            eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros((env_nums, agent_num))
+        else:
+            eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros(env_nums)
         if self.policy_config.gumbel_algo:
             completed_value_lst = np.zeros(env_nums)
         self_play_moves = 0.
@@ -361,8 +400,13 @@ class MuZeroCollector(ISerialCollector):
                 new_available_env_id = set(obs.keys()).difference(ready_env_id)
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
-
-                stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
+                if self._multi_agent:
+                    stack_obs = defaultdict(list)
+                    for env_id in ready_env_id:
+                        for agent_id in range(agent_num):
+                            stack_obs[env_id].append(game_segments[env_id][agent_id].get_obs())
+                else:
+                    stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
 
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
@@ -372,16 +416,21 @@ class MuZeroCollector(ISerialCollector):
 
                 stack_obs = to_ndarray(stack_obs)
 
-                stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
-
-                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
+                if self.policy_config.model.model_type and self.policy_config.model.model_type in ['conv', 'mlp']:
+                    stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
+                    stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
 
                 # ==============================================================
                 # policy forward
                 # ==============================================================
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play)
-
-                actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon)
+                if self._multi_agent:
+                    actions_no_env_id = defaultdict(dict)
+                    for k, v in policy_output.items():
+                        for agent_id, act in enumerate(v['action']):
+                            actions_no_env_id[k][agent_id] = act
+                else:
+                    actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                 distributions_dict_no_env_id = {k: v['distributions'] for k, v in policy_output.items()}
                 if self.policy_config.sampled_algo:
                     root_sampled_actions_dict_no_env_id = {
@@ -444,19 +493,39 @@ class MuZeroCollector(ISerialCollector):
                     obs, reward, done, info = timestep.obs, timestep.reward, timestep.done, timestep.info
 
                     if self.policy_config.sampled_algo:
-                        game_segments[env_id].store_search_stats(
-                            distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
-                        )
+                        if self._multi_agent:
+                            for agent_id in range(agent_num):
+                                game_segments[env_id][agent_id].store_search_stats(
+                                    distributions_dict[env_id][agent_id], value_dict[env_id][agent_id],
+                                    root_sampled_actions_dict[env_id][agent_id]
+                                )
+                        else:
+                            game_segments[env_id].store_search_stats(
+                                distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
+                            )
                     elif self.policy_config.gumbel_algo:
                         game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id], improved_policy = improved_policy_dict[env_id])
                     else:
-                        game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
+                        if self._multi_agent:
+                            for agent_id in range(agent_num):
+                                game_segments[env_id][agent_id].store_search_stats(
+                                    distributions_dict[env_id][agent_id], value_dict[env_id][agent_id]
+                                )
+                        else:
+                            game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
                     # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
                     # in ``game_segments[env_id].init``, we have append o_{t} in ``self.obs_segment``
-                    game_segments[env_id].append(
-                        actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                        to_play_dict[env_id]
-                    )
+                    if self._multi_agent:
+                        for agent_id in range(agent_num):
+                            game_segments[env_id][agent_id].append(
+                                actions[env_id][agent_id], to_ndarray(obs['observation'][agent_id]), reward[agent_id],
+                                action_mask_dict[env_id][agent_id], to_play_dict[env_id]
+                            )
+                    else:
+                        game_segments[env_id].append(
+                            actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
+                            to_play_dict[env_id]
+                        )
 
                     # NOTE: the position of code snippet is very important.
                     # the obs['action_mask'] and obs['to_play'] is corresponding to next action
@@ -464,53 +533,94 @@ class MuZeroCollector(ISerialCollector):
                     to_play_dict[env_id] = to_ndarray(obs['to_play'])
 
                     dones[env_id] = done
-                    visit_entropies_lst[env_id] += visit_entropy_dict[env_id]
-                    if self.policy_config.gumbel_algo:
-                        completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
+                    if self._multi_agent:
+                        for agent_id in range(agent_num):
+                            visit_entropies_lst[env_id][agent_id] += visit_entropy_dict[env_id][agent_id]
+                    else:
+                        visit_entropies_lst[env_id] += visit_entropy_dict[env_id]
+                        if self.policy_config.gumbel_algo:
+                            completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
 
                     eps_steps_lst[env_id] += 1
                     total_transitions += 1
 
                     if self.policy_config.use_priority and not self.policy_config.use_max_priority_for_new_data:
-                        pred_values_lst[env_id].append(pred_value_dict[env_id])
-                        search_values_lst[env_id].append(value_dict[env_id])
-                        if self.policy_config.gumbel_algo:
-                            improved_policy_lst[env_id].append(improved_policy_dict[env_id])
+                        if self._multi_agent:
+                            for agent_id in range(agent_num):
+                                pred_values_lst[env_id][agent_id].append(pred_value_dict[env_id][agent_id])
+                                search_values_lst[env_id][agent_id].append(value_dict[env_id][agent_id])
+                        else:
+                            pred_values_lst[env_id].append(pred_value_dict[env_id])
+                            search_values_lst[env_id].append(value_dict[env_id])
+                            if self.policy_config.gumbel_algo:
+                                improved_policy_lst[env_id].append(improved_policy_dict[env_id])
 
                     # append the newest obs
-                    observation_window_stack[env_id].append(to_ndarray(obs['observation']))
+                    if self._multi_agent:
+                        observation_window_stack[env_id][agent_id].append(to_ndarray(obs['observation'][agent_id]))
+                    else:
+                        observation_window_stack[env_id].append(to_ndarray(obs['observation']))
 
                     # ==============================================================
                     # we will save a game block if it is the end of the game or the next game block is finished.
                     # ==============================================================
 
                     # if game block is full, we will save the last game block
-                    if game_segments[env_id].is_full():
-                        # pad over last block trajectory
-                        if last_game_segments[env_id] is not None:
-                            # TODO(pu): return the one game block
-                            self.pad_and_save_last_trajectory(
-                                env_id, last_game_segments, last_game_priorities, game_segments, dones
+                    if self._multi_agent:
+                        for agent_id in range(agent_num):
+                            if game_segments[env_id][agent_id].is_full():
+                                # pad over last block trajectory
+                                if last_game_segments[env_id][agent_id] is not None:
+                                    # TODO(pu): return the one game block
+                                    self.pad_and_save_last_trajectory(
+                                        env_id, agent_id, last_game_segments, last_game_priorities, game_segments, dones
+                                    )
+
+                                # calculate priority
+                                priorities = self._compute_priorities(env_id, agent_id, pred_values_lst, search_values_lst)
+                                # pred_values_lst[env_id] = []
+                                # search_values_lst[env_id] = []
+                                search_values_lst = [[[] for _ in range(agent_num)] for _ in range(env_nums)]
+                                pred_values_lst = [[[] for _ in range(agent_num)] for _ in range(env_nums)]
+
+                                # the current game_segments become last_game_segment
+                                last_game_segments[env_id][agent_id] = game_segments[env_id][agent_id]
+                                last_game_priorities[env_id][agent_id] = priorities
+
+                                # create new GameSegment
+                                game_segments[env_id][agent_id] = GameSegment(
+                                    self._env.action_space,
+                                    game_segment_length=self.policy_config.game_segment_length,
+                                    config=self.policy_config
+                                )
+                                game_segments[env_id][agent_id].reset(observation_window_stack[env_id][agent_id])
+                    else:
+                        if game_segments[env_id].is_full():
+                            # pad over last block trajectory
+                            if last_game_segments[env_id] is not None:
+                                # TODO(pu): return the one game block
+                                self.pad_and_save_last_trajectory(
+                                    env_id, last_game_segments, last_game_priorities, game_segments, dones
+                                )
+
+                            # calculate priority
+                            priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
+                            pred_values_lst[env_id] = []
+                            search_values_lst[env_id] = []
+                            if self.policy_config.gumbel_algo:
+                                improved_policy_lst[env_id] = []
+
+                            # the current game_segments become last_game_segment
+                            last_game_segments[env_id] = game_segments[env_id]
+                            last_game_priorities[env_id] = priorities
+
+                            # create new GameSegment
+                            game_segments[env_id] = GameSegment(
+                                self._env.action_space,
+                                game_segment_length=self.policy_config.game_segment_length,
+                                config=self.policy_config
                             )
-
-                        # calculate priority
-                        priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
-                        pred_values_lst[env_id] = []
-                        search_values_lst[env_id] = []
-                        if self.policy_config.gumbel_algo:
-                            improved_policy_lst[env_id] = []
-
-                        # the current game_segments become last_game_segment
-                        last_game_segments[env_id] = game_segments[env_id]
-                        last_game_priorities[env_id] = priorities
-
-                        # create new GameSegment
-                        game_segments[env_id] = GameSegment(
-                            self._env.action_space,
-                            game_segment_length=self.policy_config.game_segment_length,
-                            config=self.policy_config
-                        )
-                        game_segments[env_id].reset(observation_window_stack[env_id])
+                            game_segments[env_id].reset(observation_window_stack[env_id])
 
                     self._env_info[env_id]['step'] += 1
                     self._total_envstep_count += 1
@@ -537,21 +647,38 @@ class MuZeroCollector(ISerialCollector):
 
                     # NOTE: put the penultimate game block in one episode into the trajectory_pool
                     # pad over 2th last game_segment using the last game_segment
-                    if last_game_segments[env_id] is not None:
-                        self.pad_and_save_last_trajectory(
-                            env_id, last_game_segments, last_game_priorities, game_segments, dones
-                        )
+                    if self._multi_agent:
+                        for agent_id in range(agent_num):
+                            if last_game_segments[env_id] is not None:
+                                self.pad_and_save_last_trajectory(
+                                    env_id, agent_id, last_game_segments, last_game_priorities, game_segments, dones
+                                )
 
-                    # store current block trajectory
-                    priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
+                            # store current block trajectory
+                            priorities = self._compute_priorities(env_id, agent_id, pred_values_lst, search_values_lst)
 
-                    # NOTE: put the last game block in one episode into the trajectory_pool
-                    game_segments[env_id].game_segment_to_array()
+                            # NOTE: put the last game block in one episode into the trajectory_pool
+                            game_segments[env_id][agent_id].game_segment_to_array()
 
-                    # assert len(game_segments[env_id]) == len(priorities)
-                    # NOTE: save the last game block in one episode into the trajectory_pool if it's not null
-                    if len(game_segments[env_id].reward_segment) != 0:
-                        self.game_segment_pool.append((game_segments[env_id], priorities, dones[env_id]))
+                            # assert len(game_segments[env_id]) == len(priorities)
+                            # NOTE: save the last game block in one episode into the trajectory_pool if it's not null
+                            if len(game_segments[env_id][agent_id].reward_segment) != 0:
+                                self.game_segment_pool.append((game_segments[env_id][agent_id], priorities, dones[env_id]))
+                    else:
+                        if last_game_segments[env_id] is not None:
+                            self.pad_and_save_last_trajectory(
+                                env_id, last_game_segments, last_game_priorities, game_segments, dones
+                            )
+                        # store current block trajectory
+                        priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
+
+                        # NOTE: put the last game block in one episode into the trajectory_pool
+                        game_segments[env_id].game_segment_to_array()
+
+                        # assert len(game_segments[env_id]) == len(priorities)
+                        # NOTE: save the last game block in one episode into the trajectory_pool if it's not null
+                        if len(game_segments[env_id].reward_segment) != 0:
+                            self.game_segment_pool.append((game_segments[env_id], priorities, dones[env_id]))
 
                     # print(game_segments[env_id].reward_segment)
                     # reset the finished env and init game_segments
@@ -582,18 +709,37 @@ class MuZeroCollector(ISerialCollector):
                         action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                         to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
 
-                        game_segments[env_id] = GameSegment(
-                            self._env.action_space,
-                            game_segment_length=self.policy_config.game_segment_length,
-                            config=self.policy_config
-                        )
-                        observation_window_stack[env_id] = deque(
-                            [init_obs[env_id]['observation'] for _ in range(self.policy_config.model.frame_stack_num)],
-                            maxlen=self.policy_config.model.frame_stack_num
-                        )
-                        game_segments[env_id].reset(observation_window_stack[env_id])
-                        last_game_segments[env_id] = None
-                        last_game_priorities[env_id] = None
+                        if self._multi_agent:
+                            for agent_id in range(agent_num):
+                                game_segments[env_id][agent_id] = GameSegment(
+                                    self._env.action_space,
+                                    game_segment_length=self.policy_config.game_segment_length,
+                                    config=self.policy_config
+                                )
+                                observation_window_stack[env_id][agent_id] = deque(
+                                    [
+                                        init_obs[env_id]['observation'][agent_id]
+                                        for _ in range(self.policy_config.model.frame_stack_num)
+                                    ],
+                                    maxlen=self.policy_config.model.frame_stack_num
+                                )
+                                game_segments[env_id][agent_id].reset(observation_window_stack[env_id][agent_id])
+                            last_game_segments[env_id] = [None for _ in range(agent_num)]
+                            last_game_priorities[env_id] = [None for _ in range(agent_num)]
+
+                        else:
+                            game_segments[env_id] = GameSegment(
+                                self._env.action_space,
+                                game_segment_length=self.policy_config.game_segment_length,
+                                config=self.policy_config
+                            )
+                            observation_window_stack[env_id] = deque(
+                                [init_obs[env_id]['observation'] for _ in range(self.policy_config.model.frame_stack_num)],
+                                maxlen=self.policy_config.model.frame_stack_num
+                            )
+                            game_segments[env_id].reset(observation_window_stack[env_id])
+                            last_game_segments[env_id] = None
+                            last_game_priorities[env_id] = None
 
                     # log
                     self_play_moves_max = max(self_play_moves_max, eps_steps_lst[env_id])

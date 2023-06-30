@@ -1,6 +1,7 @@
 from easydict import EasyDict
 
 env_name = 'GoBigger'
+multi_agent = True
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -67,7 +68,9 @@ atari_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        multi_agent=multi_agent,
         model=dict(
+            model_type='structured',
             latent_state_dim=176,
             frame_stack_num=1,
             action_space_size=action_space_size,

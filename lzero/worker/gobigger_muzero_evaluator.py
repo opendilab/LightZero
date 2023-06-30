@@ -348,7 +348,7 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
                     if t.done:
                         # Env reset is done by env_manager automatically.
                         self._policy.reset([env_id])
-                        reward = t.info['eval_episode_return'][0]
+                        reward = t.info['eval_episode_return']
                         if 'episode_info' in t.info:
                             eval_monitor.update_info(env_id, t.info['episode_info'])
                         eval_monitor.update_reward(env_id, reward)
@@ -633,8 +633,8 @@ class GoBiggerMuZeroEvaluator(ISerialEvaluator):
                     if t.done:
                         # Env reset is done by env_manager automatically.
                         self._policy.reset([env_id])
-                        reward = t.info['eval_episode_return'][0]
-                        bot_reward = t.info['eval_episode_return'][1]
+                        reward = t.info['eval_episode_return']
+                        bot_reward = t.info['eval_bot_episode_return']
                         eat_info[env_id] = t.info['eats']
                         if 'episode_info' in t.info:
                             eval_monitor.update_info(env_id, t.info['episode_info'])

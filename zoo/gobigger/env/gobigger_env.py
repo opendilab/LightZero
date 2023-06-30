@@ -100,7 +100,8 @@ class GoBiggerLightZeroEnv(BaseEnv):
         # postprocess
         self.postproecess(action_dict)
         if done:
-            info['eval_episode_return'] = [raw_obs[0]['leaderboard'][i] for i in range(self.team_num)]
+            info['eval_episode_return'] = raw_obs[0]['leaderboard'][0]
+            info['eval_bot_episode_return'] = raw_obs[0]['leaderboard'][1] #TODO only support t2p2
         return BaseEnvTimestep(obs, rew, done, info)
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:

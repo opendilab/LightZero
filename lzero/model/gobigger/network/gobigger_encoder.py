@@ -4,11 +4,10 @@ import torch.nn as nn
 from torch import Tensor
 from ding.utils.default_helper import deep_merge_dicts
 from ding.torch_utils import MLP, fc_block, conv2d_block, ResBlock
-from ding.torch_utils import Transformer
+from ding.torch_utils import Transformer, ScatterConnection
 from easydict import EasyDict
 
 from .encoder import SignBinaryEncoder, BinaryEncoder, OnehotEncoder, TimeEncoder, UnsqueezeEncoder
-from .scatter_connection import ScatterConnection
 
 
 def sequence_mask(lengths: torch.Tensor, max_len: Optional[int] = None):
