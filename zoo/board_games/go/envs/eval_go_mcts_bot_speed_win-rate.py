@@ -7,11 +7,11 @@ import time
 import numpy as np
 
 
-def test_go_mcts_vs_random(num_simulations):
+def test_go_mcts_vs_random(num_simulations, eval_episodes):
     mcts_bot_time_list = []
     random_bot_time_list = []
     winner = []
-    for i in range(10):
+    for i in range(eval_episodes):
         print('-' * 10 + 'episode' + str(i) + '-' * 10)
 
         # player_0  num_simulation=1000, will win
@@ -70,11 +70,11 @@ def test_go_mcts_vs_random(num_simulations):
     )
 
 
-def test_go_mcts_vs_mcts(num_simulations_player_1, num_simulations_player_2):
+def test_go_mcts_vs_mcts(num_simulations_player_1, num_simulations_player_2, eval_episodes):
     mcts_bot_1_time_list = []
     mcts_bot_2_time_list = []
     winner = []
-    for i in range(10):
+    for i in range(eval_episodes):
         print('-' * 10 + 'episode' + str(i) + '-' * 10)
 
         # player_0  num_simulation=1000, will win
@@ -143,6 +143,7 @@ if __name__ == '__main__':
         num_simulations=2,
         num_simulations_player_1=2,
         num_simulations_player_2=2,
+        eval_episodes=3,
 
         # board_size=6,
         # komi=2.5,
@@ -176,10 +177,10 @@ if __name__ == '__main__':
     # ==============================================================
     # test win rate between mcts_bot and random_bot
     # ==============================================================
-    test_go_mcts_vs_random(num_simulations=cfg.num_simulations)
+    test_go_mcts_vs_random(num_simulations=cfg.num_simulations, eval_episodes=cfg.eval_episodes)
 
     # ==============================================================
     # test win rate between mcts_bot and mcts_bot
     # ==============================================================
     test_go_mcts_vs_mcts(num_simulations_player_1=cfg.num_simulations_player_1,
-                         num_simulations_player_2=cfg.num_simulations_player_2)
+                         num_simulations_player_2=cfg.num_simulations_player_2, eval_episodes=cfg.eval_episodes)

@@ -12,12 +12,13 @@ if __name__ == '__main__':
     """
     # model_path = './ckpt/ckpt_best.pth.tar'
     model_path = '/Users/puyuan/code/LightZero/tb_go_b9_sp/ckpt_best.pth.tar'
+    # model_path = None
 
     seeds = [0]
-    num_episodes_each_seed = 5
+    num_episodes_each_seed = 1
     # If True, you can play with the agent.
-    # main_config.env.agent_vs_human = False
-    main_config.env.agent_vs_human = True
+    main_config.env.agent_vs_human = False
+    # main_config.env.agent_vs_human = True
 
     create_config.env_manager.type = 'base'
     main_config.env.evaluator_env_num = 1

@@ -1,4 +1,8 @@
 import copy
+
+from ding.torch_utils import to_list
+from ditk import logging
+
 import os
 import sys
 from typing import List
@@ -7,16 +11,13 @@ import gym
 import numpy as np
 import pygame
 from ding.envs import BaseEnv, BaseEnvTimestep
-from ding.torch_utils import to_list
 from ding.utils import ENV_REGISTRY
-from ditk import logging
 from easydict import EasyDict
 from gym import spaces
-from pettingzoo.classic.go import coords, go_base
 from pettingzoo.classic.go.go import raw_env
-from pettingzoo.utils.agent_selector import agent_selector
 
-from zoo.board_games.go.envs.katago_play_for_lightzero import katago_move, GameState, str_coord
+from pettingzoo.classic.go import coords, go_base
+from pettingzoo.utils.agent_selector import agent_selector
 
 
 def get_image(path):
@@ -141,9 +142,6 @@ class GoEnv(BaseEnv):
 
     # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
     def reset(self, start_player_index=0, init_state=None):
-        # TODO(pu): katago_game_state init
-        self.katago_game_state = GameState(self.board_size)
-
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
 
@@ -211,6 +209,16 @@ class GoEnv(BaseEnv):
             action = np.random.choice(self.legal_actions)
             self._raw_env._go = self._raw_env._go.play_move(coords.from_flat(action))
 
+        # try:
+        #     self._raw_env._go = self._raw_env._go.play_move(coords.from_flat(action))
+        # except:
+        #     print('action: ', action)
+        #     print('board:', self._raw_env._go.board)
+        #     import sys
+        #     sys.exit(2)
+
+        # obs = self._go.observe(agent_id)
+        # obs = self._raw_env.observe(agent_id)
         obs = self.observe(agent_id)
 
         current_agent_plane, opponent_agent_plane = self._raw_env._encode_board_planes(agent_id)
@@ -298,19 +306,8 @@ class GoEnv(BaseEnv):
         elif self.battle_mode == 'eval_mode':
             # player 1 battle with expert player 2
 
-            # ****** player 1's turn ******
-            # TODO
-            action = self.random_action()
-            # ****** update katago internal game state ******
-            # TODO(pu): how to avoid this?
-            katago_flatten_action = self.lz_flatten_to_katago_flatten(action, self.board_size)
-            print('player 1:', str_coord(katago_flatten_action, self.katago_game_state.board))
-
+            # player 1's turn
             timestep_player1 = self._player_step(action)
-            print(self.board)
-            self.update_katago_internal_game_state(katago_flatten_action, to_play=1)
-            self.show_katago_board()
-
             if self.agent_vs_human:
                 print('player 1 (agent): ' + self.action_to_string(action))  # Note: visualize
                 self.render()
@@ -320,27 +317,14 @@ class GoEnv(BaseEnv):
                 timestep_player1.obs['to_play'] = -1
                 return timestep_player1
 
-            # ****** player 2's turn ******
+            # player 2's turn
             if self.agent_vs_human:
                 bot_action = self.human_to_action()
             else:
-                bot_action = self.get_katago_action(to_play=2)
-                if bot_action not in self.legal_actions:
-                    logging.warning(
-                        f"You input illegal *bot* action: {bot_action}, the legal_actions are {self.legal_actions}. "
-                        f"Now we randomly choice a action from self.legal_actions."
-                    )
-                    bot_action = np.random.choice(self.legal_actions)
-                # ****** update katago internal game state ******
-                # TODO(pu): how to avoid this?
-                katago_flatten_action = self.lz_flatten_to_katago_flatten(bot_action, self.board_size)
-                print('player 2:', str_coord(katago_flatten_action, self.katago_game_state.board))
-                self.update_katago_internal_game_state(katago_flatten_action, to_play=2)
+                bot_action = self.bot_action()
+                # bot_action = self.random_action()
 
             timestep_player2 = self._player_step(bot_action)
-            print(self.board)
-            # self.show_katago_board()
-
             if self.agent_vs_human:
                 print('player 2 (human): ' + self.action_to_string(bot_action))  # Note: visualize
                 self.render()
@@ -354,55 +338,6 @@ class GoEnv(BaseEnv):
             # And the to_play is used in MCTS.
             timestep.obs['to_play'] = -1
             return timestep
-
-    def update_katago_internal_game_state(self, katago_flatten_action, to_play):
-        # Note: cannot use self.to_play, because self.to_play is updated after the self._player_step(action)
-        # ****** update internal game state ******
-        gtp_action = str_coord(katago_flatten_action, self.katago_game_state.board)
-        if to_play == 1:
-            command = ['play', 'b', gtp_action]
-        else:
-            command = ['play', 'w', gtp_action]
-        katago_move(self.katago_game_state, command, to_play)
-
-    def get_katago_action(self, to_play):
-        command = ['get_katago_action']
-        # self.current_player is the player who will play
-        flatten_action = katago_move(self.katago_game_state, command, to_play=to_play)
-        return flatten_action
-
-    def show_katago_board(self):
-        command = ["showboard"]
-        # self.current_player is the player who will play
-        katago_move(self.katago_game_state, command)
-
-    def lz_flatten_to_katago_flatten(self, lz_flatten_action, board_size):
-        """ Convert lz Flattened Coordinate to katago Flattened Coordinate."""
-        # self.arrsize = (board_size + 1) * (board_size + 2) + 1
-        # xxxxxxxxxx
-        # .........x
-        # .........x
-        # .........x
-        # .........x
-        # .........x
-        # .........x
-        # .........x
-        # .........x
-        # .........x
-        # xxxxxxxxxx
-
-        if lz_flatten_action == board_size * board_size:
-            return 0  # Board.PASS_LOC
-        # convert action index in [0, board_size**2) to coordinate (i, j)
-        y, x = lz_flatten_action // board_size, lz_flatten_action % board_size
-        return (board_size + 1) * (y + 1) + x + 1
-        # 0 -> (0, 0) -> 11
-        # 1 -> (0, 1) -> 12
-        # 9 -> (1, 0) -> 21
-
-        # row = action_number // self.board_size + 1
-        # col = action_number % self.board_size + 1
-        # return f"Play row {row}, column {col}"
 
     def get_done_winner(self):
         """
@@ -573,7 +508,8 @@ class GoEnv(BaseEnv):
     def bot_action(self):
         return self.random_action()
 
-
+    def katago_action(self):
+        return self.random_action()
 
     def human_to_action(self):
         """
@@ -611,8 +547,7 @@ class GoEnv(BaseEnv):
 
     def render(self, mode='human'):
         if mode == "board":
-            # print(self._raw_env._go.board)
-            print(self.board)
+            print(self._raw_env._go.board)
             return
 
         screen_width = 1026

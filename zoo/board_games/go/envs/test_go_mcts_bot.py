@@ -7,10 +7,10 @@ import time
 import numpy as np
 
 cfg = EasyDict(dict(
-    # board_size=6,
-    # num_simulations=50,
-    num_simulations=20,
-    board_size=5,
+    board_size=6,
+    num_simulations=80,
+    # num_simulations=20,
+    # board_size=5,
     komi=7.5,
     prob_random_agent=0,
     prob_expert_agent=0,
@@ -26,6 +26,36 @@ cfg = EasyDict(dict(
 
 @pytest.mark.envtest
 class TestGoBot:
+
+    def test_go_mcts_vs_human(self):
+        # player_0  num_simulation=1000, will win
+        # player_1  num_simulation=1
+        env = GoEnv(cfg)
+        obs = env.reset()
+        state = obs['board']
+        player_1 = MCTSBot(GoEnv, cfg, 'player 1', cfg.num_simulations)  # player_index = 0, player = 1
+
+        player_index = 0  # player 1 first
+        print('#' * 15)
+        print(state)
+        while not env.get_done_reward()[0]:
+            if player_index == 0:
+                action = player_1.get_actions(state, player_index=player_index)
+                player_index = 1
+            else:
+                print('-' * 40)
+                # action = player_2.get_actions(state, player_index=player_index)
+                # action = env.random_action()
+                action = env.human_to_action()
+                player_index = 0
+
+            timestep = env.step(action)
+            env.render('human')
+            # time.sleep(0.1)
+            state = timestep.obs['board']
+            print('-' * 40)
+            print(state)
+        assert env.get_done_winner()[1] == 1, f'winner is {env.get_done_winner()[1]}, player 1 should win'
 
     def test_go_mcts_vs_random(self):
         # player_0  num_simulation=1000, will win
@@ -200,5 +230,7 @@ class TestGoBot:
 
 
 # test = TestGoBot().test_go_self_play_mode_player1_win()
-test = TestGoBot().test_go_self_play_mode_draw()
+# test = TestGoBot().test_go_self_play_mode_draw()
 # test = TestGoBot().test_go_self_play_mode_case_2()
+test = TestGoBot().test_go_mcts_vs_human()
+

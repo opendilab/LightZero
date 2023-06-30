@@ -4,7 +4,7 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# board_size = 6
+# board_size = 9
 # collector_env_num = 8
 # n_episode = 8
 # evaluator_env_num = 5
@@ -12,7 +12,7 @@ from easydict import EasyDict
 # batch_size = 256
 # max_env_step = int(10e6)
 # prob_random_action_in_bot = 1
-# 
+#
 # if board_size == 19:
 #     num_simulations = 800
 # elif board_size == 9:
@@ -20,7 +20,7 @@ from easydict import EasyDict
 # elif board_size == 6:
 #     num_simulations = 80
 
-board_size = 6
+board_size = 9
 collector_env_num = 1
 n_episode = 1
 evaluator_env_num = 1
@@ -55,7 +55,9 @@ go_alphazero_config = dict(
             observation_shape=(board_size, board_size, 17),
             action_space_size=int(board_size * board_size + 1),
             num_res_blocks=1,
-            num_channels=64,
+            # num_channels=64,
+            # TODO
+            num_channels=32,
         ),
         cuda=True,
         board_size=board_size,
