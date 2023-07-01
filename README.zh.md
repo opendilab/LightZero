@@ -76,16 +76,17 @@ LightZero 是基于 [PyTorch](https://pytorch.org/) 实现的 MCTS 算法库，�
 
 LightZero 目前支持的环境及算法如下表所示：
 
-| Env./Alg.      | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero |
-| ------------- | --------- | ------ | ------------- | --------------------- | ------------- |
-| Atari         | ---       | ✔    | ✔           | ✔                   | ✔             |
-| tictactoe     | ✔       | ✔    | 🔒          | 🔒                  | ✔             |
-| gomoku        | ✔       | ✔    | 🔒          | 🔒                  | ✔             |
-| go            | 🔒       | 🔒   | 🔒          | 🔒                  | 🔒             |
-| lunarlander | ---       | ✔    | ✔           | ✔                   | ✔             |
-| bipedalwalker   | ---       | ✔    | ✔           | ✔                   | 🔒             |
-| cartpole     | ---       | ✔    | ✔           | ✔                   | ✔             |
-| pendulum      | ---       | ✔    | ✔           | ✔                   | ✔             |
+| Env./Alg.     | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero |
+|---------------| --------- |--------| ------- | --------------------- | ------------ |
+| Atari         | ---       | ✔      | ✔       | ✔                   | ✔            |
+| TicTacToe     | ✔       | ✔      | 🔒      | 🔒                  | ✔            |
+| Gomoku        | ✔       | ✔      | 🔒      | 🔒                  | ✔            |
+| Go            | 🔒       | 🔒     | 🔒      | 🔒                  | 🔒            |
+| LunarLander   | ---       | ✔      | ✔       | ✔                   | ✔            |
+| BipedalWalker | ---       | ✔      | ✔       | ✔                   | 🔒            |
+| CartPole      | ---       | ✔      | ✔       | ✔                   | ✔            |
+| Pendulum      | ---       | ✔      | ✔       | ✔                   | ✔            |
+| MuJoCo        | ---       | 🔒     | 🔒      | ✔                   | 🔒            |
 
 
 <sup>(1): "✔" 表示对应的项目已经完成并经过良好的测试。</sup>
@@ -140,14 +141,19 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
   <img src="assets/benchmark/ablation/mspacman_sez_K.png" alt="Image Description 4" width="23%" height="auto" style="margin: 0 1%;">
 </p>
 
-以下是使用 ``Factored/Gaussian`` 策略表征方法的 [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) 在三个连续动作空间上的基线效果：[Pendulum-v1](https://github.com/opendilab/LightZero/blob/main/zoo/classic_control/pendulum/envs/pendulum_lightzero_env.py)，[LunarLanderContinuous-v2](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/lunarlander/envs/lunarlander_env.py) 和 [BipedalWalker-v3](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/bipedalwalker/envs/bipedalwalker_env.py)。
-> 其中 ``Factored Policy`` 表示 agent 学习一个输出离散分布的策略网络，上述三种环境手动离散化后的动作空间维度分别为11、49（7^2）和 256（4^4)。``Gaussian Policy``表示 agent 学习一个策略网络，该网络直接输出高斯分布的参数（mu 和 sigma）。
+以下是使用 ``Factored/Gaussian`` 策略表征方法的 [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) 在5个连续动作空间环境上的基线效果：[Pendulum-v1](https://github.com/opendilab/LightZero/blob/main/zoo/classic_control/pendulum/envs/pendulum_lightzero_env.py)，[LunarLanderContinuous-v2](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/lunarlander/envs/lunarlander_env.py)，[BipedalWalker-v3](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/bipedalwalker/envs/bipedalwalker_env.py)，[Hopper-v3](https://github.com/opendilab/LightZero/blob/main/zoo/mujoco/envs/mujoco_lightzero_env.py) 和 [Walker2d-v3](https://github.com/opendilab/LightZero/blob/main/zoo/mujoco/envs/mujoco_lightzero_env.py).
+> 其中 ``Factored Policy`` 表示 agent 学习一个输出离散分布的策略网络，上述三种环境手动离散化后的动作空间维度分别为11、49（7^2、256（4^4)、64 (4^3) and 4096 (4^6)。``Gaussian Policy``表示 agent 学习一个策略网络，该网络直接输出高斯分布的参数（mu 和 sigma）。
 
 <p align="center">
-  <img src="assets/benchmark/main/pendulum_main.png" alt="Image Description 1" width="23%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/ablation/pendulum_sez_K.png" alt="Image Description 2" width="23%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/lunarlander_main.png" alt="Image Description 3" width="23%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/bipedalwalker_main.png" alt="Image Description 3" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/pendulum_main.png" alt="Image Description 1" width="33%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/ablation/pendulum_sez_K.png" alt="Image Description 2" width="33%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/lunarlander_main.png" alt="Image Description 3" width="33%" height="auto" style="margin: 0 1%;">
+</p>
+
+<p align="center">
+  <img src="assets/benchmark/main/bipedalwalker_main.png" alt="Image Description 3" width="33%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/hopper_main.pdf" alt="Image Description 1" width="33%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/walker2d_main.pdf" alt="Image Description 3" width="33%" height="auto" style="margin: 0 1%;">
 </p>
 
 以下是在两个棋类游戏（[TicTacToe(井字棋)](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/tictactoe/envs/tictactoe_env.py) 和 [Gomoku(五子棋)](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py)）上 [AlphaZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/alphazero.py) 和 [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) 的基线效果：

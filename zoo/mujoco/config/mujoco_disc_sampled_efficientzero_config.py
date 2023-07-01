@@ -44,7 +44,7 @@ policy_entropy_loss_weight = 0.005
 
 mujoco_disc_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/{env_name[:-3]}_bin-{each_dim_disc_size}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_pelw{policy_entropy_loss_weight}_seed0',
+    f'data_sez_ctree/{env_name[:-3]}_bin-{each_dim_disc_size}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_pelw{policy_entropy_loss_weight}_seed0',
     env=dict(
         env_name=env_name,
         action_clip=True,
@@ -67,9 +67,7 @@ mujoco_disc_sampled_efficientzero_config = dict(
             latent_state_dim=256,
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
-            norm_type='BN',
         ),
-        mcts_ctree=True,
         cuda=True,
         policy_entropy_loss_weight=policy_entropy_loss_weight,
         ignore_done=ignore_done,

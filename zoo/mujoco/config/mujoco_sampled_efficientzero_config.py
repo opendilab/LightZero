@@ -66,11 +66,8 @@ mujoco_sampled_efficientzero_config = dict(
             latent_state_dim=256,
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
-            norm_type='BN',
         ),
-        mcts_ctree=True,
         cuda=True,
-        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=policy_entropy_loss_weight,
         ignore_done=ignore_done,
         env_type='not_board_games',
@@ -86,7 +83,7 @@ mujoco_sampled_efficientzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

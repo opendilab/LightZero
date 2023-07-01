@@ -116,14 +116,15 @@ The environments and algorithms currently supported by LightZero are shown in th
 
 | Env./Alg.      | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero |
 | ------------- | --------- | ------ | ------------- | --------------------- | ------------- |
-| Atari         | ---       | ✔    | ✔           | ✔                   | ✔             |
-| tictactoe     | ✔       | ✔    | 🔒          | 🔒                  | ✔             |
-| gomoku        | ✔       | ✔    | 🔒          | 🔒                  | ✔             |
-| go            | 🔒       | 🔒   | 🔒          | 🔒                  | 🔒             |
-| lunarlander | ---       | ✔    | ✔           | ✔                   | ✔             |
-| bipedalwalker   | ---       | ✔    | ✔           | ✔                   | 🔒             |
-| cartpole     | ---       | ✔    | ✔           | ✔                   | ✔             |
-| pendulum      | ---       | ✔    | ✔           | ✔                   | ✔             |
+| Atari         | ---       | ✔      | ✔       | ✔                   | ✔            |
+| TicTacToe     | ✔       | ✔      | 🔒      | 🔒                  | ✔            |
+| Gomoku        | ✔       | ✔      | 🔒      | 🔒                  | ✔            |
+| Go            | 🔒       | 🔒     | 🔒      | 🔒                  | 🔒            |
+| LunarLander   | ---       | ✔      | ✔       | ✔                   | ✔            |
+| BipedalWalker | ---       | ✔      | ✔       | ✔                   | 🔒            |
+| CartPole      | ---       | ✔      | ✔       | ✔                   | ✔            |
+| Pendulum      | ---       | ✔      | ✔       | ✔                   | ✔            |
+| MuJoCo        | ---       | 🔒     | 🔒      | ✔                   | 🔒            |
 
 <sup>(1): "✔" means that the corresponding item is finished and well-tested.</sup>
 
@@ -181,13 +182,18 @@ Below are the benchmark results of [MuZero](https://github.com/opendilab/LightZe
 </p>
 
 
-Below are the benchmark results of [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) with ``Factored/Gaussian`` policy representation on three continuous action space games: [Pendulum-v1](https://github.com/opendilab/LightZero/blob/main/zoo/classic_control/pendulum/envs/pendulum_lightzero_env.py), [LunarLanderContinuous-v2](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/lunarlander/envs/lunarlander_env.py), [BipedalWalker-v3](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/bipedalwalker/envs/bipedalwalker_env.py).
-> Where ``Factored Policy`` indicates that the agent learns a policy network that outputs a categorical distribution, the dimensions of the action space for the three environments are 11, 49 (7^2), and 256 (4^4), respectively, after manual discretization. On the other hand, ``Gaussian Policy`` indicates that the agent learns a policy network that outputs parameters (mu and sigma) for a Gaussian distribution.
+Below are the benchmark results of [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) with ``Factored/Gaussian`` policy representation on three classic continuous action space games: [Pendulum-v1](https://github.com/opendilab/LightZero/blob/main/zoo/classic_control/pendulum/envs/pendulum_lightzero_env.py), [LunarLanderContinuous-v2](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/lunarlander/envs/lunarlander_env.py), [BipedalWalker-v3](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/bipedalwalker/envs/bipedalwalker_env.py)
+and two MuJoCo continuous action space games: [Hopper-v3](https://github.com/opendilab/LightZero/blob/main/zoo/mujoco/envs/mujoco_lightzero_env.py), [Walker2d-v3](https://github.com/opendilab/LightZero/blob/main/zoo/mujoco/envs/mujoco_lightzero_env.py).
+> Where ``Factored Policy`` indicates that the agent learns a policy network that outputs a categorical distribution, the dimensions of the action space for the five environments are 11, 49 (7^2), 256 (4^4), 64 (4^3) and 4096 (4^6), respectively, after manual discretization. On the other hand, ``Gaussian Policy`` indicates that the agent learns a policy network that outputs parameters (mu and sigma) for a Gaussian distribution.
 <p align="center">
-  <img src="assets/benchmark/main/pendulum_main.png" alt="Image Description 1" width="23%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/ablation/pendulum_sez_K.png" alt="Image Description 2" width="23%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/lunarlander_main.png" alt="Image Description 3" width="23%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/bipedalwalker_main.png" alt="Image Description 3" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/pendulum_main.png" alt="Image Description 1" width="33%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/ablation/pendulum_sez_K.png" alt="Image Description 2" width="33%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/lunarlander_main.png" alt="Image Description 3" width="33%" height="auto" style="margin: 0 1%;">
+</p>
+<p align="center">
+  <img src="assets/benchmark/main/bipedalwalker_main.png" alt="Image Description 3" width="33%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/hopper_main.pdf" alt="Image Description 1" width="33%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/walker2d_main.pdf" alt="Image Description 3" width="33%" height="auto" style="margin: 0 1%;">
 </p>
 
 Below are the benchmark results of [AlphaZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/alphazero.py) and [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) on two board_games: [TicTacToe](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/tictactoe/envs/tictactoe_env.py), [Gomoku](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py).
