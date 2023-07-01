@@ -172,43 +172,41 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 
 <details open><summary>Click to collapse</summary>
 
-Below are the benchmark results of [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py), [MuZero w/ SSL](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) , [EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/efficientzero.py) and [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) on three discrete action space games in [Atari](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py).
-
+- Below are the benchmark results of [AlphaZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/alphazero.py) and [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) on two board games: [TicTacToe](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/tictactoe/envs/tictactoe_env.py), [Gomoku](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py).
 <p align="center">
-  <img src="assets/benchmark/main/pong_main.png" alt="Image Description 1" width="23%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/qbert_main.png" alt="Image Description 2" width="23%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/mspacman_main.png" alt="Image Description 3" width="23%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/ablation/mspacman_sez_K.png" alt="Image Description 4" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/tictactoe_bot-mode_main.png" alt="tictactoe_bot-mode_main" width="30%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/gomoku_bot-mode_main.png" alt="gomoku_bot-mode_main" width="30%" height="auto" style="margin: 0 1%;">
+</p>
+
+- Below are the benchmark results of [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py), [MuZero w/ SSL](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) , [EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/efficientzero.py) and [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) on three discrete action space games in [Atari](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py).
+<p align="center">
+  <img src="assets/benchmark/main/pong_main.png" alt="pong_main" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/qbert_main.png" alt="qbert_main" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/mspacman_main.png" alt="mspacman_main" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/ablation/mspacman_sez_K.png" alt="mspacman_sez_K" width="23%" height="auto" style="margin: 0 1%;">
 </p>
 
 
-Below are the benchmark results of [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) with ``Factored/Gaussian`` policy representation on three classic continuous action space games: [Pendulum-v1](https://github.com/opendilab/LightZero/blob/main/zoo/classic_control/pendulum/envs/pendulum_lightzero_env.py), [LunarLanderContinuous-v2](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/lunarlander/envs/lunarlander_env.py), [BipedalWalker-v3](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/bipedalwalker/envs/bipedalwalker_env.py)
+- Below are the benchmark results of [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) with ``Factored/Gaussian`` policy representation on three classic continuous action space games: [Pendulum-v1](https://github.com/opendilab/LightZero/blob/main/zoo/classic_control/pendulum/envs/pendulum_lightzero_env.py), [LunarLanderContinuous-v2](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/lunarlander/envs/lunarlander_env.py), [BipedalWalker-v3](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/bipedalwalker/envs/bipedalwalker_env.py)
 and two MuJoCo continuous action space games: [Hopper-v3](https://github.com/opendilab/LightZero/blob/main/zoo/mujoco/envs/mujoco_lightzero_env.py), [Walker2d-v3](https://github.com/opendilab/LightZero/blob/main/zoo/mujoco/envs/mujoco_lightzero_env.py).
-> Where ``Factored Policy`` indicates that the agent learns a policy network that outputs a categorical distribution, the dimensions of the action space for the five environments are 11, 49 (7^2), 256 (4^4), 64 (4^3) and 4096 (4^6), respectively, after manual discretization. On the other hand, ``Gaussian Policy`` indicates that the agent learns a policy network that outputs parameters (mu and sigma) for a Gaussian distribution.
+> "Factored Policy" indicates that the agent learns a policy network that outputs a categorical distribution. After manual discretization, the dimensions of the action space for the five environments are 11, 49 (7^2), 256 (4^4), 64 (4^3), and 4096 (4^6), respectively. On the other hand, "Gaussian Policy" refers to the agent learning a policy network that directly outputs parameters (mu and sigma) for a Gaussian distribution.
 <p align="center">
-  <img src="assets/benchmark/main/pendulum_main.png" alt="Image Description 1" width="33%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/ablation/pendulum_sez_K.png" alt="Image Description 2" width="33%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/lunarlander_main.png" alt="Image Description 3" width="33%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/pendulum_main.png" alt="pendulum_main" width="30%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/ablation/pendulum_sez_K.png" alt="pendulum_sez_K" width="30%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/lunarlander_main.png" alt="lunarlander_main" width="30%" height="auto" style="margin: 0 1%;">
 </p>
 <p align="center">
-  <img src="assets/benchmark/main/bipedalwalker_main.png" alt="Image Description 3" width="33%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/hopper_main.pdf" alt="Image Description 1" width="33%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/walker2d_main.pdf" alt="Image Description 3" width="33%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/bipedalwalker_main.png" alt="bipedalwalker_main" width="30%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/hopper_main.pdf" alt="hopper_main" width="30%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/walker2d_main.pdf" alt="walker2d_main" width="30%" height="auto" style="margin: 0 1%;">
 </p>
 
-Below are the benchmark results of [AlphaZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/alphazero.py) and [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) on two board_games: [TicTacToe](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/tictactoe/envs/tictactoe_env.py), [Gomoku](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py).
-
+- Below are the benchmark results of [GumbelMuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/gumbel_muzero.py) and [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) (under different simulation cost) on four environments: [PongNoFrameskip-v4](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py), [MsPacmanNoFrameskip-v4]((https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py)), [Gomoku](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py), and [LunarLanderContinuous-v2](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/lunarlander/envs/lunarlander_env.py).
 <p align="center">
-  <img src="assets/benchmark/main/tictactoe_bot-mode_main.png" alt="Image Description 1" width="45%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/gomoku_bot-mode_main.png" alt="Image Description 2" width="45%" height="auto" style="margin: 0 1%;">
-</p>
-
-Below are the benchmark results of [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) and [GumbelMuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/gumbel_muzero.py) on four environments: [PongNoFrameskip-v4](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py), [MsPacmanNoFrameskip-v4]((https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py)), [Gomoku](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py), and [LunarLanderContinuous-v2](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/lunarlander/envs/lunarlander_env.py).
-<p align="center">
-  <img src="assets/benchmark/ablation/pong_gmz_ns.png" alt="Image Description 1" width="23%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/ablation/mspacman_gmz_ns.png" alt="Image Description 2" width="23%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/ablation/gomoku_bot-mode_gmz_ns.png" alt="Image Description 3" width="23%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/ablation/lunarlander_gmz_ns.png" alt="Image Description 3" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/ablation/pong_gmz_ns.png" alt="pong_gmz_ns" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/ablation/mspacman_gmz_ns.png" alt="mspacman_gmz_ns" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/ablation/gomoku_bot-mode_gmz_ns.png" alt="gomoku_bot-mode_gmz_ns" width="23%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/ablation/lunarlander_gmz_ns.png" alt="lunarlander_gmz_ns" width="23%" height="auto" style="margin: 0 1%;">
 </p>
 
 </details>
