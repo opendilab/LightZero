@@ -70,7 +70,8 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-build.txt
           pip install -r requirements-test.txt
-          pip install -r requirements_git.txt
+          pip uninstall DI-engine -y
+          pip install git+http://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env]
       - name: Run unittest on MacOS or Linux
         if: ${{ env.OS_NAME == 'MacOS' || env.OS_NAME == 'Linux'}}
         env:

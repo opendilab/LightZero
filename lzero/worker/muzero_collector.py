@@ -18,9 +18,9 @@ from lzero.mcts.utils import prepare_observation
 class MuZeroCollector(ISerialCollector):
     """
     Overview:
-        The Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
+        The Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.
     Interfaces:
-        __init__, reset, reset_env, reset_policy, collect, close
+        __init__, reset, reset_env, reset_policy, _reset_stat, envstep, __del__, _compute_priorities, pad_and_save_last_trajectory, collect, _output_log, close
     Property:
         envstep
     """
@@ -208,7 +208,7 @@ class MuZeroCollector(ISerialCollector):
     def pad_and_save_last_trajectory(self, i, last_game_segments, last_game_priorities, game_segments, done) -> None:
         """
         Overview:
-            put the last game block into the pool if the current game is finished
+            put the last game segment into the pool if the current game is finished
         Arguments:
             - last_game_segments (:obj:`list`): list of the last game segments
             - last_game_priorities (:obj:`list`): list of the last game priorities
@@ -216,7 +216,7 @@ class MuZeroCollector(ISerialCollector):
         Note:
             (last_game_segments[i].obs_segment[-4:][j] == game_segments[i].obs_segment[:4][j]).all() is True
         """
-        # pad over last block trajectory
+        # pad over last segment trajectory
         beg_index = self.policy_config.model.frame_stack_num
         end_index = beg_index + self.policy_config.num_unroll_steps
 
@@ -238,8 +238,14 @@ class MuZeroCollector(ISerialCollector):
 
         pad_root_values_lst = game_segments[i].root_value_segment[beg_index:end_index]
 
+        if self.policy_config.gumbel_algo:
+            pad_improved_policy_prob = game_segments[i].improved_policy_probs[beg_index:end_index]
+
         # pad over and save
-        last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
+        if self.policy_config.gumbel_algo:
+            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst, next_segment_improved_policy = pad_improved_policy_prob)
+        else:
+            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
         """
         Note:
             game_segment element shape:
@@ -254,7 +260,7 @@ class MuZeroCollector(ISerialCollector):
 
         last_game_segments[i].game_segment_to_array()
 
-        # put the game block into the pool
+        # put the game segment into the pool
         self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
 
         # reset last game_segments
@@ -332,9 +338,13 @@ class MuZeroCollector(ISerialCollector):
         # for priorities in self-play
         search_values_lst = [[] for _ in range(env_nums)]
         pred_values_lst = [[] for _ in range(env_nums)]
+        if self.policy_config.gumbel_algo:
+            improved_policy_lst = [[] for _ in range(env_nums)]
 
         # some logs
         eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros(env_nums)
+        if self.policy_config.gumbel_algo:
+            completed_value_lst = np.zeros(env_nums)
         self_play_moves = 0.
         self_play_episodes = 0.
         self_play_moves_max = 0
@@ -385,6 +395,12 @@ class MuZeroCollector(ISerialCollector):
                     for k, v in policy_output.items()
                 }
 
+                if self.policy_config.gumbel_algo:
+                    improved_policy_dict_no_env_id = {k: v['improved_policy_probs'] for k, v in policy_output.items()}
+                    completed_value_no_env_id = {
+                        k: v['roots_completed_value']
+                        for k, v in policy_output.items()
+                    }
                 # TODO(pu): subprocess
                 actions = {}
                 distributions_dict = {}
@@ -393,6 +409,9 @@ class MuZeroCollector(ISerialCollector):
                 value_dict = {}
                 pred_value_dict = {}
                 visit_entropy_dict = {}
+                if self.policy_config.gumbel_algo:
+                    improved_policy_dict = {}
+                    completed_value_dict = {}
                 for index, env_id in enumerate(ready_env_id):
                     actions[env_id] = actions_no_env_id.pop(index)
                     distributions_dict[env_id] = distributions_dict_no_env_id.pop(index)
@@ -401,6 +420,9 @@ class MuZeroCollector(ISerialCollector):
                     value_dict[env_id] = value_dict_no_env_id.pop(index)
                     pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
                     visit_entropy_dict[env_id] = visit_entropy_dict_no_env_id.pop(index)
+                    if self.policy_config.gumbel_algo:
+                        improved_policy_dict[env_id] = improved_policy_dict_no_env_id.pop(index)
+                        completed_value_dict[env_id] = completed_value_no_env_id.pop(index)
 
                 # ==============================================================
                 # Interact with env.
@@ -425,6 +447,8 @@ class MuZeroCollector(ISerialCollector):
                         game_segments[env_id].store_search_stats(
                             distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
                         )
+                    elif self.policy_config.gumbel_algo:
+                        game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id], improved_policy = improved_policy_dict[env_id])
                     else:
                         game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
                     # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
@@ -435,12 +459,18 @@ class MuZeroCollector(ISerialCollector):
                     )
 
                     # NOTE: the position of code snippet is very important.
-                    # the obs['action_mask'] and obs['to_play'] is corresponding to next action
+                    # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
                     action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                     to_play_dict[env_id] = to_ndarray(obs['to_play'])
 
-                    dones[env_id] = done
+                    if self.policy_config.ignore_done:
+                        dones[env_id] = False
+                    else:
+                        dones[env_id] = done
+
                     visit_entropies_lst[env_id] += visit_entropy_dict[env_id]
+                    if self.policy_config.gumbel_algo:
+                        completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
 
                     eps_steps_lst[env_id] += 1
                     total_transitions += 1
@@ -448,19 +478,21 @@ class MuZeroCollector(ISerialCollector):
                     if self.policy_config.use_priority and not self.policy_config.use_max_priority_for_new_data:
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
+                        if self.policy_config.gumbel_algo:
+                            improved_policy_lst[env_id].append(improved_policy_dict[env_id])
 
                     # append the newest obs
                     observation_window_stack[env_id].append(to_ndarray(obs['observation']))
 
                     # ==============================================================
-                    # we will save a game block if it is the end of the game or the next game block is finished.
+                    # we will save a game segment if it is the end of the game or the next game segment is finished.
                     # ==============================================================
 
-                    # if game block is full, we will save the last game block
+                    # if game segment is full, we will save the last game segment
                     if game_segments[env_id].is_full():
-                        # pad over last block trajectory
+                        # pad over last segment trajectory
                         if last_game_segments[env_id] is not None:
-                            # TODO(pu): return the one game block
+                            # TODO(pu): return the one game segment
                             self.pad_and_save_last_trajectory(
                                 env_id, last_game_segments, last_game_priorities, game_segments, dones
                             )
@@ -469,6 +501,8 @@ class MuZeroCollector(ISerialCollector):
                         priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
                         pred_values_lst[env_id] = []
                         search_values_lst[env_id] = []
+                        if self.policy_config.gumbel_algo:
+                            improved_policy_lst[env_id] = []
 
                         # the current game_segments become last_game_segment
                         last_game_segments[env_id] = game_segments[env_id]
@@ -496,28 +530,30 @@ class MuZeroCollector(ISerialCollector):
                         'step': self._env_info[env_id]['step'],
                         'visit_entropy': visit_entropies_lst[env_id] / eps_steps_lst[env_id],
                     }
+                    if self.policy_config.gumbel_algo:
+                        info['completed_value'] = completed_value_lst[env_id] / eps_steps_lst[env_id]
                     collected_episode += 1
                     self._episode_info.append(info)
 
                     # ==============================================================
-                    # if it is the end of the game, we will save the game block
+                    # if it is the end of the game, we will save the game segment
                     # ==============================================================
 
-                    # NOTE: put the penultimate game block in one episode into the trajectory_pool
+                    # NOTE: put the penultimate game segment in one episode into the trajectory_pool
                     # pad over 2th last game_segment using the last game_segment
                     if last_game_segments[env_id] is not None:
                         self.pad_and_save_last_trajectory(
                             env_id, last_game_segments, last_game_priorities, game_segments, dones
                         )
 
-                    # store current block trajectory
+                    # store current segment trajectory
                     priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
 
-                    # NOTE: put the last game block in one episode into the trajectory_pool
+                    # NOTE: put the last game segment in one episode into the trajectory_pool
                     game_segments[env_id].game_segment_to_array()
 
                     # assert len(game_segments[env_id]) == len(priorities)
-                    # NOTE: save the last game block in one episode into the trajectory_pool if it's not null
+                    # NOTE: save the last game segment in one episode into the trajectory_pool if it's not null
                     if len(game_segments[env_id].reward_segment) != 0:
                         self.game_segment_pool.append((game_segments[env_id], priorities, dones[env_id]))
 
@@ -590,6 +626,7 @@ class MuZeroCollector(ISerialCollector):
                         'unroll_plus_td_steps': self.unroll_plus_td_steps
                     } for i in range(len(self.game_segment_pool))
                 ]
+                self.game_segment_pool.clear()
                 # for i in range(len(self.game_segment_pool)):
                 #     print(self.game_segment_pool[i][0].obs_segment.__len__())
                 #     print(self.game_segment_pool[i][0].reward_segment)
@@ -615,6 +652,8 @@ class MuZeroCollector(ISerialCollector):
             duration = sum([d['time'] for d in self._episode_info])
             episode_reward = [d['reward'] for d in self._episode_info]
             visit_entropy = [d['visit_entropy'] for d in self._episode_info]
+            if self.policy_config.gumbel_algo:
+                completed_value = [d['completed_value'] for d in self._episode_info]
             self._total_duration += duration
             info = {
                 'episode_count': episode_count,
@@ -633,6 +672,8 @@ class MuZeroCollector(ISerialCollector):
                 'visit_entropy': np.mean(visit_entropy),
                 # 'each_reward': episode_reward,
             }
+            if self.policy_config.gumbel_algo:
+                info['completed_value'] = np.mean(completed_value)
             self._episode_info.clear()
             self._logger.info("collect end:\n{}".format('\n'.join(['{}: {}'.format(k, v) for k, v in info.items()])))
             for k, v in info.items():

@@ -167,23 +167,22 @@ class SampledEfficientZeroMCTSPtree(object):
                 network_output = model.recurrent_inference(
                     latent_states, (hidden_states_c_reward, hidden_states_h_reward), last_actions
                 )
-                if not model.training:
-                    # if not in training, obtain the scalars of the value/reward
+
+                [
+                    network_output.latent_state, network_output.policy_logits, network_output.value,
+                    network_output.value_prefix
+                ] = to_detach_cpu_numpy(
                     [
-                        network_output.latent_state, network_output.policy_logits, network_output.value_prefix,
-                        network_output.reward
-                    ] = to_detach_cpu_numpy(
-                        [
-                            network_output.latent_state,
-                            network_output.policy_logits,
-                            self.inverse_scalar_transform_handle(network_output.value_prefix),
-                            self.inverse_scalar_transform_handle(network_output.reward),
-                        ]
-                    )
-                    network_output.reward_hidden_state = (
-                        network_output.reward_hidden_state[0].detach().cpu().numpy(),
-                        network_output.reward_hidden_state[1].detach().cpu().numpy()
-                    )
+                        network_output.latent_state,
+                        network_output.policy_logits,
+                        self.inverse_scalar_transform_handle(network_output.value),
+                        self.inverse_scalar_transform_handle(network_output.value_prefix),
+                    ]
+                )
+                network_output.reward_hidden_state = (
+                    network_output.reward_hidden_state[0].detach().cpu().numpy(),
+                    network_output.reward_hidden_state[1].detach().cpu().numpy()
+                )
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
                 reward_latent_state_batch = network_output.reward_hidden_state

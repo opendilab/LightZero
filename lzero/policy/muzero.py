@@ -63,6 +63,8 @@ class MuZeroPolicy(Policy):
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
         # this variable is used in ``collector``.
         sampled_algo=False,
+        # (bool) Whether to enable the gumbel-based algorithm (e.g. Gumbel Muzero)
+        gumbel_algo=False,
         # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
         mcts_ctree=True,
         # (bool) Whether to use cuda for network.
@@ -71,9 +73,9 @@ class MuZeroPolicy(Policy):
         collector_env_num=8,
         # (int) The number of environments used in evaluating policy.
         evaluator_env_num=3,
-        # (str) The type of environment. Options is ['not_board_games', 'board_games'].
+        # (str) The type of environment. Options are ['not_board_games', 'board_games'].
         env_type='not_board_games',
-        # (str) The type of battle mode. Options is ['play_with_bot_mode', 'self_play_mode'].
+        # (str) The type of battle mode. Options are ['play_with_bot_mode', 'self_play_mode'].
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,
@@ -89,12 +91,19 @@ class MuZeroPolicy(Policy):
         augmentation=['shift', 'intensity'],
 
         # ******* learn ******
+        # (bool) Whether to ignore the done flag in the training data. Typically, this value is set to False.
+        # However, for some environments with a fixed episode length, to ensure the accuracy of Q-value calculations,
+        # we should set it to True to avoid the influence of the done flag.
+        ignore_done=False,
         # (int) How many updates(iterations) to train after collector's one collection.
         # Bigger "update_per_collect" means bigger off-policy.
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
-        # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
-        update_per_collect=100,
+        # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor.
+        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.
+        update_per_collect=None,
+        # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
+        model_update_ratio=0.1,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
@@ -162,7 +171,7 @@ class MuZeroPolicy(Policy):
     def default_model(self) -> Tuple[str, List[str]]:
         """
         Overview:
-            Return this algorithm default model setting.
+            Return this algorithm default model setting for demonstration.
         Returns:
             - model_info (:obj:`Tuple[str, List[str]]`): model name and model import_names.
                 - model_type (:obj:`str`): The model type used in this algorithm, which is registered in ModelRegistry.
@@ -263,8 +272,8 @@ class MuZeroPolicy(Policy):
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
         data_list = [
             mask_batch,
-            target_reward.astype('float64'),
-            target_value.astype('float64'), target_policy, weights
+            target_reward.astype('float32'),
+            target_value.astype('float32'), target_policy, weights
         ]
         [mask_batch, target_reward, target_value, target_policy,
          weights] = to_torch_float_tensor(data_list, self._cfg.device)
@@ -402,7 +411,7 @@ class MuZeroPolicy(Policy):
             self._learn_model.parameters(), self._cfg.grad_clip_value
         )
         self._optimizer.step()
-        if self._cfg.lr_piecewise_constant_decay is True:
+        if self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()
 
         # ==============================================================
@@ -410,51 +419,31 @@ class MuZeroPolicy(Policy):
         # ==============================================================
         self._target_model.update(self._learn_model.state_dict())
 
-        # packing loss info for tensorboard logging
-        loss_info = (
-            weighted_total_loss.item(), loss.mean().item(), policy_loss.mean().item(), reward_loss.mean().item(),
-            value_loss.mean().item(), consistency_loss.mean()
-        )
         if self._cfg.monitor_extra_statistics:
             predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
             predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
 
-            td_data = (
-                value_priority,
-                target_reward.detach().cpu().numpy(),
-                target_value.detach().cpu().numpy(),
-                transformed_target_reward.detach().cpu().numpy(),
-                transformed_target_value.detach().cpu().numpy(),
-                target_reward_categorical.detach().cpu().numpy(),
-                target_value_categorical.detach().cpu().numpy(),
-                predicted_rewards.detach().cpu().numpy(),
-                predicted_values.detach().cpu().numpy(),
-                target_policy.detach().cpu().numpy(),
-                predicted_policies.detach().cpu().numpy(),
-                latent_state_list,
-            )
-
         return {
             'collect_mcts_temperature': self.collect_mcts_temperature,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
-            'weighted_total_loss': loss_info[0],
-            'total_loss': loss_info[1],
-            'policy_loss': loss_info[2],
-            'reward_loss': loss_info[3],
-            'value_loss': loss_info[4],
-            'consistency_loss': loss_info[5] / self._cfg.num_unroll_steps,
+            'weighted_total_loss': weighted_total_loss.item(),
+            'total_loss': loss.mean().item(),
+            'policy_loss': policy_loss.mean().item(),
+            'reward_loss': reward_loss.mean().item(),
+            'value_loss': value_loss.mean().item(),
+            'consistency_loss': consistency_loss.mean() / self._cfg.num_unroll_steps,
 
             # ==============================================================
             # priority related
             # ==============================================================
             'value_priority_orig': value_priority,
-            'value_priority': td_data[0].flatten().mean().item(),
-            'target_reward': td_data[1].flatten().mean().item(),
-            'target_value': td_data[2].flatten().mean().item(),
-            'transformed_target_reward': td_data[3].flatten().mean().item(),
-            'transformed_target_value': td_data[4].flatten().mean().item(),
-            'predicted_rewards': td_data[7].flatten().mean().item(),
-            'predicted_values': td_data[8].flatten().mean().item(),
+            'value_priority': value_priority.mean().item(),
+            'target_reward': target_reward.detach().cpu().numpy().mean().item(),
+            'target_value': target_value.detach().cpu().numpy().mean().item(),
+            'transformed_target_reward': transformed_target_reward.detach().cpu().numpy().mean().item(),
+            'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
+            'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
+            'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
             'total_grad_norm_before_clip': total_grad_norm_before_clip
         }
 
@@ -509,11 +498,9 @@ class MuZeroPolicy(Policy):
             network_output = self._collect_model.initial_inference(data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            if not self._learn_model.training:
-                # if not in training, obtain the scalars of the value/reward
-                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
-                latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                policy_logits = policy_logits.detach().cpu().numpy().tolist()
+            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
+            latent_state_roots = latent_state_roots.detach().cpu().numpy()
+            policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
             # the only difference between collect and eval is the dirichlet noise

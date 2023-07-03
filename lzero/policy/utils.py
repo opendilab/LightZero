@@ -1,5 +1,5 @@
 import logging
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Union
 from easydict import EasyDict
 
 import numpy as np
@@ -302,36 +302,44 @@ def concat_output(output_lst: List, data_type: str = 'muzero') -> Tuple:
         )
 
 
-def to_torch_float_tensor(data_list: List[np.ndarray], device: torch.device) -> List[torch.Tensor]:
+def to_torch_float_tensor(data_list: Union[np.ndarray, List[np.ndarray]], device: torch.device) -> Union[torch.Tensor, List[torch.Tensor]]:
     """
     Overview:
-        convert the data list to torch float tensor
+        convert the data or data list to torch float tensor
     Arguments:
-        - data_list (:obj:`List`): The data list.
+        - data_list (:obj:`Union[np.ndarray, List[np.ndarray]]`): The data or data list.
         - device (:obj:`torch.device`): The device.
     Returns:
-        - output_data_list (:obj:`List`): The output data list.
+        - output_data_list (:obj:`Union[torch.Tensor, List[torch.Tensor]]`): The output data or data list.
     """
-    output_data_list = []
-    for data in data_list:
-        output_data_list.append(torch.from_numpy(data).to(device).float())
-    return output_data_list
+    if isinstance(data_list, np.ndarray):
+        return (torch.from_numpy(data_list).to(device).float())
+    elif isinstance(data_list, list) and all(isinstance(data, np.ndarray) for data in data_list):
+        output_data_list = []
+        for data in data_list:
+            output_data_list.append(torch.from_numpy(data).to(device).float())
+        return output_data_list
+    else:
+        raise TypeError("The type of input must be np.ndarray or List[np.ndarray]")
 
-
-def to_detach_cpu_numpy(data_list: List[torch.Tensor]) -> List[np.ndarray]:
+def to_detach_cpu_numpy(data_list: Union[torch.Tensor, List[torch.Tensor]]) -> Union[np.ndarray,List[np.ndarray]]:
     """
     Overview:
-        convert the data list to detach cpu numpy.
+        convert the data or data list to detach cpu numpy.
     Arguments:
-        - data_list (:obj:`List`): the data list
+        - data_list (:obj:`Union[torch.Tensor, List[torch.Tensor]]`): the data or data list
     Returns:
-        - output_data_list (:obj:`List`): the output data list
+        - output_data_list (:obj:`Union[np.ndarray,List[np.ndarray]]`): the output data or data list
     """
-    output_data_list = []
-    for data in data_list:
-        output_data_list.append(data.detach().cpu().numpy())
-    return output_data_list
-
+    if isinstance(data_list, torch.Tensor):
+        return data_list.detach().cpu().numpy()
+    elif isinstance(data_list, list) and all(isinstance(data, torch.Tensor) for data in data_list):
+        output_data_list = []
+        for data in data_list:
+            output_data_list.append(data.detach().cpu().numpy())
+        return output_data_list
+    else:
+        raise TypeError("The type of input must be torch.Tensor or List[torch.Tensor]")
 
 def ez_network_output_unpack(network_output: Dict) -> Tuple:
     """
