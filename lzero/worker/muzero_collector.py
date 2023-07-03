@@ -557,7 +557,8 @@ class MuZeroCollector(ISerialCollector):
 
                     # append the newest obs
                     if self._multi_agent:
-                        observation_window_stack[env_id][agent_id].append(to_ndarray(obs['observation'][agent_id]))
+                        for agent_id in range(agent_num):
+                            observation_window_stack[env_id][agent_id].append(to_ndarray(obs['observation'][agent_id]))
                     else:
                         observation_window_stack[env_id].append(to_ndarray(obs['observation']))
 
