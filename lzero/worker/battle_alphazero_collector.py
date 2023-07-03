@@ -1,57 +1,56 @@
-from collections import namedtuple
-from typing import Optional, Any, List, Dict
-
+from typing import Optional, Any, List, Tuple
+from collections import namedtuple, deque
+from easydict import EasyDict
 import numpy as np
+import torch
+
 from ding.envs import BaseEnvManager
-from ding.torch_utils import to_ndarray
-from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
+from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, dicts_to_lists
+from ding.torch_utils import to_tensor, to_ndarray
 from ding.worker.collector.base_serial_collector import ISerialCollector, CachePool, TrajBuffer, INF, \
     to_tensor_transitions
+from zoo.board_games.tictactoe.envs.tictactoe_rule_bot_v0 import TictactoeBotV0
+from zoo.board_games.gomoku.envs.gomoku_rule_bot_v0 import GomokuBotV0
 
-
-@SERIAL_COLLECTOR_REGISTRY.register('episode_alphazero')
-class AlphaZeroCollector(ISerialCollector):
+@SERIAL_COLLECTOR_REGISTRY.register('episode_alphazero_battle')
+class BattleAlphaZeroCollector(ISerialCollector):
     """
     Overview:
-        AlphaZero collector (n_episode).
+        Episode collector(n_episode) with two policy battle
     Interfaces:
         __init__, reset, reset_env, reset_policy, collect, close
     Property:
         envstep
     """
 
-    # TO be compatible with ISerialCollector
-    config = dict()
+    config = dict(deepcopy_obs=False, transform_obs=False, collect_print_freq=100, get_train_sample=False)
 
     def __init__(
             self,
-            collect_print_freq: int = 100,
+            cfg: EasyDict,
             env: BaseEnvManager = None,
-            policy: namedtuple = None,
+            policy: List[namedtuple] = None,
             tb_logger: 'SummaryWriter' = None,  # noqa
             exp_name: Optional[str] = 'default_experiment',
-            instance_name: Optional[str] = 'collector',
-            env_config=None,
+            instance_name: Optional[str] = 'collector'
     ) -> None:
         """
-            Overview:
-                Init the AlphaZero collector according to input arguments.
-            Arguments:
-                - collect_print_freq (:obj:`int`): collect_print_frequency in terms of training_steps.
-                - env (:obj:`BaseEnvManager`): The env for the collection, the BaseEnvManager object or \
-                    its derivatives are supported.
-                - policy (:obj:`Policy`): The policy to be collected.
-                - tb_logger (:obj:`SummaryWriter`): Logger, defaultly set as 'SummaryWriter' for model summary.
-                - instance_name (:obj:`Optional[str]`): Name of this instance.
-                - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
-                - env_config: Config of environment
-            """
+        Overview:
+            Initialization method.
+        Arguments:
+            - cfg (:obj:`EasyDict`): Config dict
+            - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
+            - policy (:obj:`List[namedtuple]`): the api namedtuple of collect_mode policy
+            - tb_logger (:obj:`SummaryWriter`): tensorboard handle
+        """
         self._exp_name = exp_name
         self._instance_name = instance_name
-        self._collect_print_freq = collect_print_freq
+        self._collect_print_freq = cfg.collect_print_freq
+        self._deepcopy_obs = cfg.deepcopy_obs
+        self._transform_obs = cfg.transform_obs
+        self._cfg = cfg
         self._timer = EasyTimer()
         self._end_flag = False
-        self._env_config = env_config
 
         if tb_logger is not None:
             self._logger, _ = build_logger(
@@ -62,6 +61,7 @@ class AlphaZeroCollector(ISerialCollector):
             self._logger, self._tb_logger = build_logger(
                 path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name
             )
+        self._traj_len = float("inf")
         self.reset(policy, env)
 
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
@@ -82,29 +82,35 @@ class AlphaZeroCollector(ISerialCollector):
         else:
             self._env.reset()
 
-    def reset_policy(self, _policy: Optional[namedtuple] = None) -> None:
+    def reset_policy(self, _policy: Optional[List[namedtuple]] = None) -> None:
         """
         Overview:
             Reset the policy.
             If _policy is None, reset the old policy.
             If _policy is not None, replace the old policy in the collector with the new passed in policy.
         Arguments:
-            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy
+            - policy (:obj:`Optional[List[namedtuple]]`): the api namedtuple of collect_mode policy
         """
         assert hasattr(self, '_env'), "please set env first"
         if _policy is not None:
+            assert len(_policy) == 2, "1v1 episode collector needs 2 policy, but found {}".format(len(_policy))
             self._policy = _policy
-            self._default_n_episode = _policy.get_attribute('cfg').get('n_episode', None)
-            self._on_policy = _policy.get_attribute('cfg').on_policy
+            self._default_n_episode = _policy[0].get_attribute('cfg').collect.get('n_episode', None)
+            # self._unroll_len = _policy[0].get_attribute('unroll_len')
+            # self._on_policy = _policy[0].get_attribute('cfg').on_policy
             self._traj_len = INF
             self._logger.debug(
                 'Set default n_episode mode(n_episode({}), env_num({}), traj_len({}))'.format(
                     self._default_n_episode, self._env_num, self._traj_len
                 )
             )
-        self._policy.reset()
+        for p in self._policy:
+            if isinstance(p, dict):
+                p['policy'].reset()
+            else:
+                p.reset()
 
-    def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
+    def reset(self, _policy: Optional[List[namedtuple]] = None, _env: Optional[BaseEnvManager] = None) -> None:
         """
         Overview:
             Reset the environment and policy.
@@ -114,7 +120,7 @@ class AlphaZeroCollector(ISerialCollector):
             If _policy is None, reset the old policy.
             If _policy is not None, replace the old policy in the collector with the new passed in policy.
         Arguments:
-            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy
+            - policy (:obj:`Optional[List[namedtuple]]`): the api namedtuple of collect_mode policy
             - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
                 env_manager(BaseEnvManager)
         """
@@ -123,10 +129,14 @@ class AlphaZeroCollector(ISerialCollector):
         if _policy is not None:
             self.reset_policy(_policy)
 
-        self._obs_pool = CachePool('obs', self._env_num, deepcopy=False)
+        self._obs_pool = CachePool('obs', self._env_num, deepcopy=self._deepcopy_obs)
         self._policy_output_pool = CachePool('policy_output', self._env_num)
-        # _traj_buffer is {env_id: TrajBuffer}, is used to store traj_len pieces of transitions
-        self._traj_buffer = {env_id: TrajBuffer(maxlen=self._traj_len) for env_id in range(self._env_num)}
+        # _traj_buffer is {env_id: {policy_id: TrajBuffer}}, is used to store traj_len pieces of transitions
+        self._traj_buffer = {
+            env_id: {policy_id: TrajBuffer(maxlen=self._traj_len)
+                     for policy_id in range(2)}
+            for env_id in range(self._env_num)
+        }
         self._env_info = {env_id: {'time': 0., 'step': 0} for env_id in range(self._env_num)}
 
         self._episode_info = []
@@ -145,117 +155,11 @@ class AlphaZeroCollector(ISerialCollector):
         Arguments:
             - env_id (:obj:`int`): the id where we need to reset the collector's state
         """
-        self._traj_buffer[env_id].clear()
+        for i in range(2):
+            self._traj_buffer[env_id][i].clear()
         self._obs_pool.reset(env_id)
         self._policy_output_pool.reset(env_id)
         self._env_info[env_id] = {'time': 0., 'step': 0}
-
-    def collect(self,
-                n_episode: Optional[int] = None,
-                train_iter: int = 0,
-                policy_kwargs: Optional[dict] = None) -> List[Any]:
-        """
-        Overview:
-            Collect `n_episode` data with policy_kwargs, which is already trained `train_iter` iterations
-        Arguments:
-            - n_episode (:obj:`int`): the number of collecting data episode
-            - train_iter (:obj:`int`): the number of training iteration
-            - policy_kwargs (:obj:`dict`): the keyword args for policy forward
-        Returns:
-            - return_data (:obj:`List`): A list containing collected episodes.
-        """
-        if n_episode is None:
-            if self._default_n_episode is None:
-                raise RuntimeError("Please specify collect n_episode")
-            else:
-                n_episode = self._default_n_episode
-        assert n_episode >= self._env_num, "Please make sure n_episode >= env_num{}/{}".format(n_episode, self._env_num)
-        if policy_kwargs is None:
-            policy_kwargs = {}
-        temperature = policy_kwargs['temperature']
-        collected_episode = 0
-        return_data = []
-        ready_env_id = set()
-        remain_episode = n_episode
-
-        while True:
-            with self._timer:
-                # Get current env obs.
-                obs = self._env.ready_obs
-                new_available_env_id = set(obs.keys()).difference(ready_env_id)
-                ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
-                remain_episode -= min(len(new_available_env_id), remain_episode)
-                obs_ = {env_id: obs[env_id] for env_id in ready_env_id}
-                # Policy forward.
-                self._obs_pool.update(obs_)
-                simulation_envs = {}
-                for env_id in ready_env_id:
-                    # create the new simulation env instances from the current collect env using the same env_config.
-                    simulation_envs[env_id] = self._env._env_fn[env_id]()
-
-                # ==============================================================
-                # policy forward
-                # ==============================================================
-                policy_output = self._policy.forward(simulation_envs, obs_, temperature)
-                self._policy_output_pool.update(policy_output)
-                # Interact with env.
-                actions = {env_id: output['action'] for env_id, output in policy_output.items()}
-                actions = to_ndarray(actions)
-
-                # ==============================================================
-                # Interact with env.
-                # ==============================================================
-                timesteps = self._env.step(actions)
-
-            interaction_duration = self._timer.value / len(timesteps)
-            for env_id, timestep in timesteps.items():
-                with self._timer:
-                    if timestep.info.get('abnormal', False):
-                        # If there is an abnormal timestep, reset all the related variables(including this env).
-                        # suppose there is no reset param, just reset this env
-                        self._env.reset({env_id: None})
-                        self._policy.reset([env_id])
-                        self._reset_stat(env_id)
-                        self._logger.info('Env{} returns a abnormal step, its info is {}'.format(env_id, timestep.info))
-                        continue
-
-                    transition = self._policy.process_transition(
-                        self._obs_pool[env_id], self._policy_output_pool[env_id], timestep
-                    )
-                    transition['collect_iter'] = train_iter
-                    self._traj_buffer[env_id].append(transition)
-                    self._env_info[env_id]['step'] += 1
-                    self._total_envstep_count += 1
-                    # prepare data
-                    if timestep.done:
-                        transitions = to_tensor_transitions(self._traj_buffer[env_id])
-                        # reward_shaping
-                        transitions = self.reward_shaping(transitions, timestep.info['eval_episode_return'])
-
-                        return_data.append(transitions)
-                        self._traj_buffer[env_id].clear()
-
-                self._env_info[env_id]['time'] += self._timer.value + interaction_duration
-                if timestep.done:
-                    self._total_episode_count += 1
-                    # the eval_episode_return is calculated from Player 1's perspective
-                    reward = timestep.info['eval_episode_return']
-                    info = {
-                        'reward': reward,  # only means player1 reward
-                        'time': self._env_info[env_id]['time'],
-                        'step': self._env_info[env_id]['step'],
-                    }
-                    collected_episode += 1
-                    self._episode_info.append(info)
-                    self._policy.reset([env_id])
-                    self._reset_stat(env_id)
-                    ready_env_id.remove(env_id)
-
-            if collected_episode >= n_episode:
-                break
-        # log
-        self._output_log(train_iter)
-        return return_data
 
     @property
     def envstep(self) -> int:
@@ -288,6 +192,191 @@ class AlphaZeroCollector(ISerialCollector):
         """
         self.close()
 
+    def collect(self,
+                n_episode: Optional[int] = None,
+                train_iter: int = 0,
+                policy_kwargs: Optional[dict] = None) -> Tuple[List[Any], List[Any]]:
+        """
+        Overview:
+            Collect `n_episode` data with policy_kwargs, which is already trained `train_iter` iterations
+        Arguments:
+            - n_episode (:obj:`int`): the number of collecting data episode
+            - train_iter (:obj:`int`): the number of training iteration
+            - policy_kwargs (:obj:`dict`): the keyword args for policy forward
+        Returns:
+            - return_data (:obj:`Tuple[List, List]`): A tuple with training sample(data) and episode info, \
+                the former is a list containing collected episodes if not get_train_sample, \
+                otherwise, return train_samples split by unroll_len.
+        """
+        if n_episode is None:
+            if self._default_n_episode is None:
+                raise RuntimeError("Please specify collect n_episode")
+            else:
+                n_episode = self._default_n_episode
+        assert n_episode >= self._env_num, "Please make sure n_episode >= env_num"
+        if policy_kwargs is None:
+            policy_kwargs = {}
+        temperature = policy_kwargs['temperature']
+
+        collected_episode = 0
+        return_data = [[] for _ in range(2)]
+        return_info = [[] for _ in range(2)]
+        ready_env_id = set()
+        remain_episode = n_episode
+
+
+        while True:
+            # for policy_id, policy in enumerate(self._policy):
+            with self._timer:
+                # Get current env obs.
+                obs = self._env.ready_obs
+                new_available_env_id = set(obs.keys()).difference(ready_env_id)
+                ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
+                remain_episode -= min(len(new_available_env_id), remain_episode)
+
+                obs_ = {env_id: obs[env_id] for env_id in ready_env_id}
+                # Policy forward.
+                self._obs_pool.update(obs_)
+                simulation_envs = {}
+                for env_id in ready_env_id:
+                    # create the new simulation env instances from the current collect env using the same env_config.
+                    simulation_envs[env_id] = self._env._env_fn[env_id]()
+
+                # ==============================================================
+                # policy forward
+                # ==============================================================
+                # policy_output = policy.forward(simulation_envs, obs_, temperature)
+
+                obs_player_1 = {}
+                obs_player_2 = {}
+                simulation_envs_player_1 = {}
+                simulation_envs_player_2 = {}
+                ready_env_id_player_1 = []
+                ready_env_id_player_2 = []
+                for k, v in obs_.items():
+                    if v['to_play'] == 1:
+                        obs_player_1[k] = v
+                        simulation_envs_player_1[k] = simulation_envs[k]
+                        ready_env_id_player_1.append(k)
+                    elif v['to_play'] == 2:
+                        obs_player_2[k] = v
+                        simulation_envs_player_2[k] = simulation_envs[k]
+                        ready_env_id_player_2.append(k)
+
+                if len(ready_env_id_player_1) > 0:
+                    if isinstance(self._policy[0], dict):
+                        policy_output_player_1 = self._policy[0]['policy'].forward(simulation_envs_player_1, obs_player_1,
+                                                                         temperature)
+                    else:
+                        policy_output_player_1 = self._policy[0].forward(simulation_envs_player_1, obs_player_1,
+                                                                         temperature)
+                else:
+                    policy_output_player_1 = {}
+                if len(ready_env_id_player_2) > 0:
+                    if isinstance(self._policy[1], dict):
+                        policy_output_player_2 = self._policy[1]['policy'].forward(simulation_envs_player_2, obs_player_2,
+                                                                         temperature)
+                    else:
+                        policy_output_player_2 = self._policy[1].forward(simulation_envs_player_2, obs_player_2,
+                                                                         temperature)
+                else:
+                    policy_output_player_2 = {}
+
+                policy_output = {}
+                policy_output.update(policy_output_player_1)
+                policy_output.update(policy_output_player_2)
+
+                self._policy_output_pool.update(policy_output)
+                # Interact with env.
+                actions = {env_id: output['action'] for env_id, output in policy_output.items()}
+                actions = to_ndarray(actions)
+
+                # ==============================================================
+                # Interact with env.
+                # ==============================================================
+                timesteps = self._env.step(actions)
+
+            try:
+                interaction_duration = self._timer.value / len(timesteps)
+            except ZeroDivisionError:
+                interaction_duration = 0.
+
+            for env_id, timestep in timesteps.items():
+                self._env_info[env_id]['step'] += 1
+                self._total_envstep_count += 1
+                if env_id in ready_env_id_player_1:
+                    policy_id = 0
+                elif env_id in ready_env_id_player_2:
+                    policy_id = 1
+                with self._timer:
+                    if isinstance(self._policy[policy_id], dict):
+                        if self._policy[policy_id]['policy_type'] in ['bot', 'historical']:
+                            # The data produced by bot and historical policy is not used for training.
+                            pass
+                        elif self._policy[policy_id]['policy_type'] == 'main':
+                            transition = self._policy[policy_id]['policy'].process_transition(
+                                self._obs_pool[env_id], self._policy_output_pool[env_id],
+                                timestep
+                            )
+                            transition['collect_iter'] = train_iter
+                            self._traj_buffer[env_id][policy_id].append(transition)
+                    else:
+                        transition = self._policy[policy_id].process_transition(
+                            self._obs_pool[env_id], self._policy_output_pool[env_id],
+                            timestep
+                        )
+                        transition['collect_iter'] = train_iter
+                        self._traj_buffer[env_id][policy_id].append(transition)
+
+                    # prepare data
+                    if timestep.done:
+                        for policy_id in range(2):
+                            if len(self._traj_buffer[env_id][policy_id]) > 0:
+                                transitions = to_tensor_transitions(
+                                    self._traj_buffer[env_id][policy_id], not self._deepcopy_obs
+                                )
+                                # reward_shaping
+                                transitions = self.reward_shaping(transitions, timestep.info['eval_episode_return'])
+
+                                return_data[policy_id].append(transitions)
+                                self._traj_buffer[env_id][policy_id].clear()
+
+                self._env_info[env_id]['time'] += self._timer.value + interaction_duration
+
+                # If env is done, record episode info and reset
+                if timestep.done:
+                    self._total_episode_count += 1
+                    # the eval_episode_return is calculated from Player 1's perspective
+                    reward = timestep.info['eval_episode_return']
+                    info = {
+                        'reward': reward,
+                        'time': self._env_info[env_id]['time'],
+                        'step': self._env_info[env_id]['step'],
+                    }
+                    collected_episode += 1
+                    self._episode_info.append(info)
+                    for i, p in enumerate(self._policy):
+                        # p.reset([env_id])
+                        if isinstance(p, dict):
+                            p['policy'].reset([env_id])
+                        else:
+                            p.reset([env_id])
+
+                    self._reset_stat(env_id)
+                    ready_env_id.remove(env_id)
+                    for policy_id in range(2):
+                        # return_info[policy_id].append(timestep.info[policy_id])
+                        return_info[policy_id].append(timestep.info)
+
+                    # break the agent loop
+                    # break
+
+            if collected_episode >= n_episode:
+                break
+        # log
+        self._output_log(train_iter)
+        return return_data, return_info
+
     def _output_log(self, train_iter: int) -> None:
         """
         Overview:
@@ -301,7 +390,10 @@ class AlphaZeroCollector(ISerialCollector):
             episode_count = len(self._episode_info)
             envstep_count = sum([d['step'] for d in self._episode_info])
             duration = sum([d['time'] for d in self._episode_info])
+            # episode_return0 = [d['reward0'] for d in self._episode_info]
+            # episode_return1 = [d['reward1'] for d in self._episode_info]
             episode_reward = [d['reward'] for d in self._episode_info]
+
             self._total_duration += duration
             info = {
                 'episode_count': episode_count,
@@ -310,6 +402,16 @@ class AlphaZeroCollector(ISerialCollector):
                 'avg_envstep_per_sec': envstep_count / duration,
                 'avg_episode_per_sec': episode_count / duration,
                 'collect_time': duration,
+
+                # 'reward0_mean': np.mean(episode_return0),
+                # 'reward0_std': np.std(episode_return0),
+                # 'reward0_max': np.max(episode_return0),
+                # 'reward0_min': np.min(episode_return0),
+                # 'reward1_mean': np.mean(episode_return1),
+                # 'reward1_std': np.std(episode_return1),
+                # 'reward1_max': np.max(episode_return1),
+                # 'reward1_min': np.min(episode_return1),
+
                 'reward_mean': np.mean(episode_reward),
                 'reward_std': np.std(episode_reward),
                 'reward_max': np.max(episode_reward),
@@ -321,8 +423,6 @@ class AlphaZeroCollector(ISerialCollector):
             self._episode_info.clear()
             self._logger.info("collect end:\n{}".format('\n'.join(['{}: {}'.format(k, v) for k, v in info.items()])))
             for k, v in info.items():
-                if k in ['each_reward']:
-                    continue
                 self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
                 if k in ['total_envstep_count']:
                     continue

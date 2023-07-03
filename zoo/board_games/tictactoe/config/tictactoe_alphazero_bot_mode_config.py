@@ -17,6 +17,7 @@ max_env_step = int(2e5)
 tictactoe_alphazero_config = dict(
     exp_name=f'data_az_ptree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
+        stop_value=2,
         board_size=3,
         battle_mode='play_with_bot_mode',
         channel_last=False,  # NOTE

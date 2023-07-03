@@ -18,6 +18,15 @@ class AlphaZeroEvaluator(ISerialEvaluator):
     Property:
         env, policy
     """
+    config = dict(
+        # Evaluate every "eval_freq" training iterations.
+        eval_freq=1000,
+        render=dict(
+            # tensorboard video render is disabled by default
+            render_freq=-1,
+            mode='train_iter',
+        )
+    )
 
     def __init__(
             self,

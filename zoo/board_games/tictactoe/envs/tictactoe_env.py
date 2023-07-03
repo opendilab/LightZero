@@ -215,6 +215,8 @@ class TicTacToeEnv(BaseEnv):
             timestep_player1 = self._player_step(action)
             # self.env.render()
             if timestep_player1.done:
+                if self.agent_vs_human:
+                    print(self.board)
                 # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
                 # And the to_play is used in MCTS.
                 timestep_player1.obs['to_play'] = -1

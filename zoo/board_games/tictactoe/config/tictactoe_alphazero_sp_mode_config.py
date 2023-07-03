@@ -16,6 +16,7 @@ max_env_step = int(2e5)
 tictactoe_alphazero_config = dict(
     exp_name='data_az_ptree/tictactoe_sp-mode_alphazero_seed0',
     env=dict(
+        stop_value=2,
         board_size=3,
         battle_mode='self_play_mode',
         channel_last=False,  # NOTE
