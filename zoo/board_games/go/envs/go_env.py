@@ -16,7 +16,9 @@ from pettingzoo.classic.go import coords, go_base
 from pettingzoo.classic.go.go import raw_env
 from pettingzoo.utils.agent_selector import agent_selector
 
-from zoo.board_games.go.envs.katago_play_for_lightzero import katago_move, GameState, str_coord
+from zoo.board_games.go.envs.katago_policy_for_lightzero import str_coord, GameState, str_coord, KatagoPolicy
+import imageio
+import time
 
 
 def get_image(path):
@@ -29,6 +31,32 @@ def get_image(path):
     sfc.blit(image, (0, 0))
     return sfc
 
+
+from datetime import datetime
+
+
+def generate_gif_filename(prefix="go", extension=".gif"):
+    current_time = datetime.now()
+    timestamp = current_time.strftime("%Y%m%d-%H%M%S")
+    filename = f"{prefix}-{timestamp}{extension}"
+    return filename
+
+def flatten_action_to_gtp_action(flatten_action, board_size):
+    if flatten_action == board_size * board_size:
+        return "pass"
+
+    row = board_size - 1 - (flatten_action // board_size)
+    col = flatten_action % board_size
+
+    # 跳过字母 'I'
+    if col >= ord('I') - ord('A'):
+        col += 1
+
+    col_str = chr(col + ord('A'))
+    row_str = str(row + 1)
+
+    gtp_action = col_str + row_str
+    return gtp_action
 
 @ENV_REGISTRY.register('go_lightzero')
 class GoEnv(BaseEnv):
@@ -43,20 +71,25 @@ class GoEnv(BaseEnv):
         reset, step, seed, close, render, close, seed
     Property:
         action_space, observation_space, reward_range, spec
-
     """
 
     config = dict(
         env_name="Go",
+        stop_value=1,
+        board_size=6,
+        komi=7.5,
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',  # only used in AlphaZero
+        save_gif_replay=False,
+        save_gif_path='./',
+        render_in_ui=False,
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
         agent_vs_human=False,
         prob_random_agent=0,
         prob_expert_agent=0,
         channel_last=True,
         scale=True,
-        stop_value=1,
+        ignore_pass_if_have_other_legal_actions=True,
     )
 
     @classmethod
@@ -92,7 +125,6 @@ class GoEnv(BaseEnv):
         """
         return -1 if self.current_player == 1 else 1
 
-    # def __init__(self, board_size: int = 19, komi: float = 7.5):
     def __init__(self, cfg=None):
 
         # board_size: a int, representing the board size (board has a board_size x board_size shape)
@@ -139,11 +171,26 @@ class GoEnv(BaseEnv):
 
         self.board_history = np.zeros((self.board_size, self.board_size, 16), dtype=bool)
 
-    # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
-    def reset(self, start_player_index=0, init_state=None):
-        # TODO(pu): katago_game_state init
-        self.katago_game_state = GameState(self.board_size)
+        self.save_gif_replay = cfg.save_gif_replay
+        self.render_in_ui = cfg.render_in_ui
+        self.katago_checkpoint_path= cfg.katago_checkpoint_path
+        self.ignore_pass_if_have_other_legal_actions = cfg.ignore_pass_if_have_other_legal_actions
 
+        self.katago_policy = KatagoPolicy(checkpoint_path=self.katago_checkpoint_path, board_size=self.board_size,
+                                      ignore_pass_if_have_other_legal_actions=self.ignore_pass_if_have_other_legal_actions)
+
+    # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
+    def reset(self, start_player_index=0, init_state=None, katago_policy_init=True):
+        if katago_policy_init:
+            # 使用函数生成基于当前时间的 GIF 文件名
+            gif_filename = generate_gif_filename(prefix=f"go_bs{self.board_size}", )
+            # print(gif_filename)
+            self.save_gif_path = self.cfg.save_gif_path + gif_filename
+            self.frames = []
+            # TODO(pu): katago_game_state init
+            self.katago_game_state = GameState(self.board_size)
+
+        self.len_of_legal_actions_for_current_player = self.board_size*self.board_size+1
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
 
@@ -200,6 +247,13 @@ class GoEnv(BaseEnv):
             agent_id = 'black_0'
         elif self.current_player == 2:
             agent_id = 'white_0'
+        # the count of empty position
+        zero_count = np.count_nonzero(self.board == 0)
+        if zero_count == 1:
+            # must give pass
+            action = self.board_size*self.board_size  # pass
+
+        self.len_of_legal_actions_for_current_player = len(self.legal_actions)
 
         if action in self.legal_actions:
             self._raw_env._go = self._raw_env._go.play_move(coords.from_flat(action))
@@ -223,6 +277,7 @@ class GoEnv(BaseEnv):
         NOTE: here exchange the player
         """
         self.agent_selection = self._agent_selector.next()
+        next_agent = self.agent_selection
         self._current_player = self.to_play
 
         # obs['action_mask'] is the action mask for the last player
@@ -242,24 +297,41 @@ class GoEnv(BaseEnv):
             self.rewards = self._convert_to_dict(
                 self._encode_rewards(self._raw_env._go.result())
             )
+            # TODO(pu): modify the self._raw_env._go.result()
+            # if self.len_of_legal_actions_for_last_player > 1 and self.len_of_legal_actions_for_current_player == 1:
+            #     # The last player has other legal actions but chooses to pass, and the current player only has one legal action, which is to pass.
+            #     # This indicates that the last player wins.
+            #     self.rewards[current_agent] = -1
+            #     self.rewards[next_agent] = 1
+            #     print(f'current_agent: {current_agent}', f'self.len_of_legal_actions_for_last_player: {self.len_of_legal_actions_for_last_player}, '
+            #                                              f'self.len_of_legal_actions_for_current_player: {self.len_of_legal_actions_for_current_player}')
+
             self.next_legal_moves = [self.board_size * self.board_size]
         else:
             self.next_legal_moves = self._encode_legal_actions(self._raw_env._go.all_legal_moves())
 
+        self.len_of_legal_actions_for_last_player = self.len_of_legal_actions_for_current_player
+
         for agent, reward in self.rewards.items():
             self._cumulative_rewards[agent] += reward
 
-        agent = self.agent_selection
-        self.dones[agent] = (
-                self._raw_env.terminations[agent]
-                or self._raw_env.truncations[agent]
-        )
-        if self.dones[agent]:
-            self.infos[agent]['eval_episode_return'] = self._cumulative_rewards[agent]
 
-        return BaseEnvTimestep(obs, self.rewards[current_agent], self.dones[agent], self.infos[agent])
+        self.dones[current_agent] = (
+                self._raw_env.terminations[current_agent]
+                or self._raw_env.truncations[current_agent]
+        )
+        if self.dones[current_agent]:
+            self.infos[current_agent]['eval_episode_return'] = self._cumulative_rewards[current_agent]
+
+        # The returned reward and done is calculated from current_agent's perspective.
+        return BaseEnvTimestep(obs, self.rewards[current_agent], self.dones[current_agent], self.infos[current_agent])
 
     def step(self, action):
+        if self.save_gif_replay and not self.render_in_ui:
+            self.render_and_capture_frame(mode='only_save_gif')
+        if self.save_gif_replay and self.render_in_ui:
+            self.render_and_capture_frame(mode='render_in_ui')
+
         if self.battle_mode == 'self_play_mode':
             if np.random.rand() < self.prob_random_agent:
                 action = self.random_action()
@@ -268,6 +340,10 @@ class GoEnv(BaseEnv):
                 # The eval_episode_return is calculated from Player 1's perspective.
                 timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs[
                                                                                'to_play'] == 1 else timestep.reward
+                if self.save_gif_replay and len(self.frames) > 0:
+                    # Save the frames as a GIF file
+                    self.save_gif(self.save_gif_path)
+
             return timestep
         elif self.battle_mode == 'play_with_bot_mode':
             # player 1 battle with expert player 2
@@ -278,7 +354,10 @@ class GoEnv(BaseEnv):
             if timestep_player1.done:
                 # in play_with_bot_mode, we set to_play as None/-1, because we don't consider the alternation between players
                 timestep_player1.obs['to_play'] = -1
-                return timestep_player1
+
+                if self.save_gif_replay:
+                    # Save the frames as a GIF file
+                    self.save_gif(self.save_gif_path)
 
             # player 2's turn
             bot_action = self.bot_action()
@@ -296,33 +375,41 @@ class GoEnv(BaseEnv):
             return timestep
 
         elif self.battle_mode == 'eval_mode':
-            # player 1 battle with expert player 2
+            # player 1 battle with bot player 2
 
-            # ****** player 1's turn ******
-            # TODO
-            action = self.random_action()
+            # ==============================================================
+            # player 1's turn
+            # ==============================================================
             # ****** update katago internal game state ******
             # TODO(pu): how to avoid this?
             katago_flatten_action = self.lz_flatten_to_katago_flatten(action, self.board_size)
-            print('player 1:', str_coord(katago_flatten_action, self.katago_game_state.board))
+            # print('player 1:', str_coord(katago_flatten_action, self.katago_game_state.board))
+            self.update_katago_internal_game_state(katago_flatten_action, to_play=1)
 
             timestep_player1 = self._player_step(action)
-            print(self.board)
-            self.update_katago_internal_game_state(katago_flatten_action, to_play=1)
-            self.show_katago_board()
-
-            if self.agent_vs_human:
-                print('player 1 (agent): ' + self.action_to_string(action))  # Note: visualize
-                self.render()
+            # print(self.board)
+            # self.show_katago_board()
 
             if timestep_player1.done:
                 # in eval_mode, we set to_play as None/-1, because we don't consider the alternation between players
                 timestep_player1.obs['to_play'] = -1
+
+                if self.save_gif_replay:
+                    # Save the frames as a GIF file
+                    self.save_gif(self.save_gif_path)
+
                 return timestep_player1
 
-            # ****** player 2's turn ******
             if self.agent_vs_human:
-                bot_action = self.human_to_action()
+                print('player 1 (alphazero): ' + self.action_to_string(action))  # Note: visualize
+                self.render()
+
+            # ==============================================================
+            # player 2's turn
+            # ==============================================================
+            if self.agent_vs_human:
+                # bot_action = self.human_to_action()
+                bot_action = self.human_to_gtp_action()
             else:
                 bot_action = self.get_katago_action(to_play=2)
                 if bot_action not in self.legal_actions:
@@ -334,12 +421,17 @@ class GoEnv(BaseEnv):
                 # ****** update katago internal game state ******
                 # TODO(pu): how to avoid this?
                 katago_flatten_action = self.lz_flatten_to_katago_flatten(bot_action, self.board_size)
-                print('player 2:', str_coord(katago_flatten_action, self.katago_game_state.board))
+                # print('player 2:', str_coord(katago_flatten_action, self.katago_game_state.board))
                 self.update_katago_internal_game_state(katago_flatten_action, to_play=2)
 
             timestep_player2 = self._player_step(bot_action)
-            print(self.board)
+            # print(self.board)
             # self.show_katago_board()
+
+            if timestep_player2.done:
+                if self.save_gif_replay:
+                    # Save the frames as a GIF file
+                    self.save_gif(self.save_gif_path)
 
             if self.agent_vs_human:
                 print('player 2 (human): ' + self.action_to_string(bot_action))  # Note: visualize
@@ -363,18 +455,18 @@ class GoEnv(BaseEnv):
             command = ['play', 'b', gtp_action]
         else:
             command = ['play', 'w', gtp_action]
-        katago_move(self.katago_game_state, command, to_play)
+        self.katago_policy.katago_command(self.katago_game_state, command, to_play)
 
     def get_katago_action(self, to_play):
         command = ['get_katago_action']
         # self.current_player is the player who will play
-        flatten_action = katago_move(self.katago_game_state, command, to_play=to_play)
+        flatten_action = self.katago_policy.katago_command(self.katago_game_state, command, to_play=to_play)
         return flatten_action
 
     def show_katago_board(self):
         command = ["showboard"]
         # self.current_player is the player who will play
-        katago_move(self.katago_game_state, command)
+        self.katago_policy.katago_command(self.katago_game_state, command)
 
     def lz_flatten_to_katago_flatten(self, lz_flatten_action, board_size):
         """ Convert lz Flattened Coordinate to katago Flattened Coordinate."""
@@ -561,7 +653,7 @@ class GoEnv(BaseEnv):
         tmp_position = raw_env._go.play_move(coords.from_flat(action))
         new_board = copy.deepcopy(tmp_position.board)
         next_simulator_env = copy.deepcopy(self)
-        next_simulator_env.reset(start_player_index, init_state=new_board)  # index
+        next_simulator_env.reset(start_player_index, init_state=new_board, katago_policy_init=False)  # index
         # NOTE: when calling reset method, self.recent is cleared, so we need to restore it.
         next_simulator_env._raw_env._go.recent = tmp_position.recent
 
@@ -572,8 +664,6 @@ class GoEnv(BaseEnv):
 
     def bot_action(self):
         return self.random_action()
-
-
 
     def human_to_action(self):
         """
@@ -609,7 +699,55 @@ class GoEnv(BaseEnv):
                 print("Wrong input, try again")
         return choice
 
-    def render(self, mode='human'):
+    def human_to_gtp_action(self):
+        """
+        Overview:
+            For multiplayer games, ask the user for a legal action
+            and return the corresponding action number.
+        Returns:
+            An integer from the action space.
+        """
+        while True:
+            try:
+                gtp_action = str(
+                    input(
+                        f"Enter the GTP action to play for the player {self.current_player}: "
+                    )
+                )
+
+                flatten_action = self.gtp_action_to_flatten_action(gtp_action, board_size=self.board_size)
+                if flatten_action in self.legal_actions:
+                    break
+                else:
+                    print("Wrong input, try again")
+            except KeyboardInterrupt:
+                print("exit")
+                sys.exit(0)
+            except Exception as e:
+                print("Wrong input, try again")
+        return flatten_action
+
+    def gtp_action_to_flatten_action(self, gtp_action, board_size):
+        if gtp_action.lower() == "pass":
+            return board_size * board_size
+
+        col_str, row_str = gtp_action[0], gtp_action[1:]
+        col = ord(col_str.upper()) - ord('A')
+        if col >= ord('I') - ord('A'):
+            col -= 1  # 跳过字母 'I'
+        row = int(row_str) - 1
+
+        flatten_action = (board_size - 1 - row) * board_size + col
+        return flatten_action
+
+    def render_and_capture_frame(self, mode='only_save_gif'):
+        self.render(mode=mode)
+        self.capture_frame()
+
+    def render(self, mode='render_in_ui'):
+        if not hasattr(self, "frames"):
+            self.frames = []
+
         if mode == "board":
             # print(self._raw_env._go.board)
             print(self.board)
@@ -619,13 +757,13 @@ class GoEnv(BaseEnv):
         screen_height = 1026
 
         if self.screen is None:
-            if mode == "human":
+            if mode in ['only_save_gif', "rgb_array"]:
+                self.screen = pygame.Surface((screen_width, screen_height))
+            elif mode == "render_in_ui":
                 pygame.init()
                 pygame.display.init()
                 self.screen = pygame.display.set_mode((screen_width, screen_height))
-            else:
-                self.screen = pygame.Surface((screen_width, screen_height))
-        if mode == "human":
+        if mode in ["render_in_ui"]:
             pygame.event.get()
 
         size = self.board_size
@@ -678,18 +816,25 @@ class GoEnv(BaseEnv):
                 elif board_tmp[i][j] == go_base.WHITE:
                     self.screen.blit(white_stone, ((i * (tile_size) + offset), int(j) * (tile_size) + offset))
 
-        if mode == "human":
+        if mode == "render_in_ui":
             pygame.display.update()
 
         observation = np.array(pygame.surfarray.pixels3d(self.screen))
 
         return np.transpose(observation, axes=(1, 0, 2)) if mode == "rgb_array" else None
 
-    # def observation_space(self):
-    #     return self.observation_spaces
-    #
-    # def action_space(self):
-    #     return self._action_space
+    def capture_frame(self):
+        if not hasattr(self, "frames"):
+            self.frames = []
+
+        frame = np.array(pygame.surfarray.array3d(self.screen))
+        # Transpose the frame to fix the rotation issue
+        fixed_frame = np.transpose(frame, axes=(1, 0, 2))
+        self.frames.append(fixed_frame)
+
+    def save_gif(self, output_file, duration=20):
+        imageio.mimsave(output_file, self.frames, format="GIF", duration=duration)
+        print("Gif saved to {}".format(output_file))
 
     def _check_bounds(self, c):
         return 0 <= c[0] < self.board_size and 0 <= c[1] < self.board_size

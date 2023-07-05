@@ -236,6 +236,7 @@ class AlphaZeroPolicy(Policy):
             envs[env_id].reset(
                 start_player_index=start_player_index[env_id],
                 init_state=init_state[env_id],
+                katago_policy_init=False,
             )
             action, mcts_probs = self._collect_mcts.get_next_action(
                 envs[env_id],
@@ -282,6 +283,7 @@ class AlphaZeroPolicy(Policy):
             envs[env_id].reset(
                 start_player_index=start_player_index[env_id],
                 init_state=init_state[env_id],
+                katago_policy_init=False,
             )
             action, mcts_probs = self._eval_mcts.get_next_action(
                 envs[env_id], policy_forward_fn=self._policy_value_fn, temperature=1.0, sample=False

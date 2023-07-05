@@ -111,7 +111,7 @@ class GomokuEnv(BaseEnv):
         if self.bot_action_type == 'alpha_beta_pruning':
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 
-    def reset(self, start_player_index=0, init_state=None):
+    def reset(self, start_player_index=0, init_state=None, katago_policy_init=False):
         self._observation_space = gym.spaces.Box(
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.int32
         )

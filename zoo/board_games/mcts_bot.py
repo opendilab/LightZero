@@ -232,7 +232,7 @@ class MCTSBot:
 
     def get_actions(self, state, player_index):
         simulator_env = self.ENV(EasyDict(self.cfg))
-        simulator_env.reset(start_player_index=player_index, init_state=state)
+        simulator_env.reset(start_player_index=player_index, init_state=state, katago_policy_init=False)
         # legal_actions = simulator_env.legal_actions
         root = TwoPlayersMCTSNode(simulator_env)
         mcts = MCTSSearchNode(root)

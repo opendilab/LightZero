@@ -37,6 +37,7 @@ gomoku_alphazero_config = dict(
     env=dict(
         board_size=board_size,
         komi=7.5,
+        katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
         battle_mode='play_with_bot_mode',
         bot_action_type='v0',
         prob_random_action_in_bot=prob_random_action_in_bot,
