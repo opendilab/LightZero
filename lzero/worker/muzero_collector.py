@@ -774,6 +774,7 @@ class MuZeroCollector(ISerialCollector):
                         'unroll_plus_td_steps': self.unroll_plus_td_steps
                     } for i in range(len(self.game_segment_pool))
                 ]
+                self.game_segment_pool.clear()
                 # for i in range(len(self.game_segment_pool)):
                 #     print(self.game_segment_pool[i][0].obs_segment.__len__())
                 #     print(self.game_segment_pool[i][0].reward_segment)
