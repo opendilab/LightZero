@@ -69,6 +69,7 @@ atari_efficientzero_config = dict(
     ),
     policy=dict(
         multi_agent=multi_agent,
+        ignore_done=True,
         model=dict(
             model_type='structured',
             latent_state_dim=176,
