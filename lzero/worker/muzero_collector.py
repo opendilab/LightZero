@@ -532,7 +532,11 @@ class MuZeroCollector(ISerialCollector):
                     action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                     to_play_dict[env_id] = to_ndarray(obs['to_play'])
 
-                    dones[env_id] = done
+                    if self.policy_config.ignore_done:
+                        dones[env_id] = False
+                    else:
+                        dones[env_id] = done
+                    
                     if self._multi_agent:
                         for agent_id in range(agent_num):
                             visit_entropies_lst[env_id][agent_id] += visit_entropy_dict[env_id][agent_id]
@@ -670,14 +674,15 @@ class MuZeroCollector(ISerialCollector):
                             self.pad_and_save_last_trajectory(
                                 env_id, last_game_segments, last_game_priorities, game_segments, dones
                             )
-                        # store current block trajectory
+
+                        # store current segment trajectory
                         priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
 
-                        # NOTE: put the last game block in one episode into the trajectory_pool
+                        # NOTE: put the last game segment in one episode into the trajectory_pool
                         game_segments[env_id].game_segment_to_array()
 
                         # assert len(game_segments[env_id]) == len(priorities)
-                        # NOTE: save the last game block in one episode into the trajectory_pool if it's not null
+                        # NOTE: save the last game segment in one episode into the trajectory_pool if it's not null
                         if len(game_segments[env_id].reward_segment) != 0:
                             self.game_segment_pool.append((game_segments[env_id], priorities, dones[env_id]))
 
