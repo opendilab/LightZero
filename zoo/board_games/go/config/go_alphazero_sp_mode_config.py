@@ -26,7 +26,7 @@ elif board_size == 9:
 elif board_size == 6:
     num_simulations = 80
 
-# board_size = 9
+# board_size = 6
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
@@ -44,8 +44,10 @@ go_alphazero_config = dict(
     env=dict(
         board_size=board_size,
         komi=komi,
-        katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
-        # katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        use_katago_bot=True,
+        # katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        device='cuda',
         battle_mode='self_play_mode',
         bot_action_type='v0',
         prob_random_action_in_bot=0,
@@ -114,6 +116,9 @@ go_alphazero_create_config = EasyDict(go_alphazero_create_config)
 create_config = go_alphazero_create_config
 
 if __name__ == '__main__':
+    # To make sure katago policy model tp_device correctly
+    # import multiprocessing
+    # multiprocessing.set_start_method('spawn', force=True)
     if main_config.policy.tensor_float_32:
         import torch
 

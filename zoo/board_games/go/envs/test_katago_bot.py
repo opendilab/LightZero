@@ -5,7 +5,7 @@ import pytest
 from easydict import EasyDict
 
 from zoo.board_games.go.envs.go_env import GoEnv, flatten_action_to_gtp_action
-from zoo.board_games.go.envs.katago_policy_for_lightzero import str_coord
+from zoo.board_games.go.envs.katago_policy import str_coord
 cfg = EasyDict(
     board_size=19,
     # board_size=9,

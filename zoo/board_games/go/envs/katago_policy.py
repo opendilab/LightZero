@@ -5,8 +5,10 @@ import os
 import sys
 
 # 将 Katago 项目的路径添加到 sys.path 中
-sys.path.append(os.path.abspath('/Users/puyuan/code/KataGo/'))
-sys.path.append(os.path.abspath('/Users/puyuan/code/KataGo/python'))
+# sys.path.append(os.path.abspath('/Users/puyuan/code/KataGo/'))
+# sys.path.append(os.path.abspath('/Users/puyuan/code/KataGo/python'))
+sys.path.append(os.path.abspath('/mnt/nfs/puyuan/KataGo/'))
+sys.path.append(os.path.abspath('/mnt/nfs/puyuan/KataGo/python'))
 
 import argparse
 import math
@@ -354,7 +356,8 @@ input_feature_command_lookup = dict()
 class KatagoPolicy():
 
     def __init__(self, checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
-                 board_size=9, ignore_pass_if_have_other_legal_actions=False):
+                 board_size=9, ignore_pass_if_have_other_legal_actions=False, device='cpu'):
+        self.device = device
         self.load_katago_model(checkpoint_path, board_size)
         for i in range(self.model.bin_input_shape[1]):
             self.add_input_feature_visualizations("input-" + str(i), i, normalization_div=1)
@@ -394,7 +397,9 @@ class KatagoPolicy():
         np.set_printoptions(linewidth=150)
         torch.set_printoptions(precision=7, sci_mode=False, linewidth=100000, edgeitems=1000, threshold=1000000)
 
-        model, swa_model, _ = load_model(checkpoint_file, use_swa, device="cpu", pos_len=self.pos_len, verbose=True)
+        # model, swa_model, _ = load_model(checkpoint_file, use_swa, device="cpu", pos_len=self.pos_len, verbose=True)
+        model, swa_model, _ = load_model(checkpoint_file, use_swa, device=self.device, pos_len=self.pos_len, verbose=True)
+
         model.eval()
         model_config = model.config
         if swa_model is not None:

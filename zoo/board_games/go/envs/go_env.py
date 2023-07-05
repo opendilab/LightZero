@@ -16,9 +16,10 @@ from pettingzoo.classic.go import coords, go_base
 from pettingzoo.classic.go.go import raw_env
 from pettingzoo.utils.agent_selector import agent_selector
 
-from zoo.board_games.go.envs.katago_policy_for_lightzero import str_coord, GameState, str_coord, KatagoPolicy
+from zoo.board_games.go.envs.katago_policy import str_coord, GameState, str_coord, KatagoPolicy
 import imageio
 import time
+
 
 
 def get_image(path):
@@ -90,6 +91,8 @@ class GoEnv(BaseEnv):
         channel_last=True,
         scale=True,
         ignore_pass_if_have_other_legal_actions=True,
+        device='cpu',
+        katago_model=None,
     )
 
     @classmethod
@@ -175,9 +178,10 @@ class GoEnv(BaseEnv):
         self.render_in_ui = cfg.render_in_ui
         self.katago_checkpoint_path= cfg.katago_checkpoint_path
         self.ignore_pass_if_have_other_legal_actions = cfg.ignore_pass_if_have_other_legal_actions
-
-        self.katago_policy = KatagoPolicy(checkpoint_path=self.katago_checkpoint_path, board_size=self.board_size,
-                                      ignore_pass_if_have_other_legal_actions=self.ignore_pass_if_have_other_legal_actions)
+        self.device = cfg.device
+        self.katago_policy = cfg.katago_model
+        # self.katago_policy = KatagoPolicy(checkpoint_path=self.katago_checkpoint_path, board_size=self.board_size,
+        #                               ignore_pass_if_have_other_legal_actions=self.ignore_pass_if_have_other_legal_actions, device=self.device)
 
     # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
     def reset(self, start_player_index=0, init_state=None, katago_policy_init=True):

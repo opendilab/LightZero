@@ -14,6 +14,7 @@ from tensorboardX import SummaryWriter
 
 from lzero.policy import visit_count_temperature
 from lzero.worker import AlphaZeroCollector, AlphaZeroEvaluator
+from zoo.board_games.go.envs.katago_policy import KatagoPolicy
 
 
 def train_alphazero(
@@ -51,8 +52,14 @@ def train_alphazero(
         cfg.policy.device = 'cpu'
 
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
+
+    if cfg.env.use_katago_bot:
+        cfg.env.katago_model = KatagoPolicy(checkpoint_path=cfg.env.katago_checkpoint_path, board_size=cfg.env.board_size,
+                                      ignore_pass_if_have_other_legal_actions=cfg.env.ignore_pass_if_have_other_legal_actions, device=cfg.policy.device)
+
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
+
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
     collector_env.seed(cfg.seed)
