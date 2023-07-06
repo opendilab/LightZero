@@ -4,43 +4,58 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# board_size = 9
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 5
-# update_per_collect = 50
-# batch_size = 256
-# max_env_step = int(10e6)
-# prob_random_action_in_bot = 1
-#
-# if board_size == 19:
-#     num_simulations = 800
-# elif board_size == 9:
-#     num_simulations = 180
-# elif board_size == 6:
-#     num_simulations = 80
-
+# board_size = 6
 board_size = 9
-collector_env_num = 1
-n_episode = 1
+
+if board_size in [9, 19]:
+    komi = 7.5
+elif board_size == 6:
+    komi = 4
+
+collector_env_num = 8
+n_episode = 8
 evaluator_env_num = 1
-num_simulations = 2
-update_per_collect = 2
-batch_size = 2
-max_env_step = int(5e5)
-prob_random_action_in_bot = 0.
+update_per_collect = 50
+batch_size = 256
+max_env_step = int(10e6)
+
+if board_size == 19:
+    num_simulations = 800
+elif board_size == 9:
+    # num_simulations = 180
+    num_simulations = 50
+elif board_size == 6:
+    # num_simulations = 80
+    num_simulations = 50
+
+# board_size = 6
+# komi = 4
+# # board_size = 9
+# # komi = 7.5
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 2
+# update_per_collect = 2
+# batch_size = 2
+# max_env_step = int(5e5)
+# prob_random_action_in_bot = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 go_alphazero_config = dict(
     exp_name=
-    f'data_az_ptree/go_b{board_size}_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
+    f'data_az_ptree/go_b{board_size}-komi-{komi}_alphazero_sp-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         board_size=board_size,
-        komi=7.5,
+        komi=komi,
+        use_katago_bot=True,
+        katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        # katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        ignore_pass_if_have_other_legal_actions=True,
         battle_mode='self_play_mode',
         bot_action_type='v0',
-        prob_random_action_in_bot=prob_random_action_in_bot,
+        prob_random_action_in_bot=0,
         channel_last=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -55,9 +70,7 @@ go_alphazero_config = dict(
             observation_shape=(board_size, board_size, 17),
             action_space_size=int(board_size * board_size + 1),
             num_res_blocks=1,
-            # num_channels=64,
-            # TODO
-            num_channels=32,
+            num_channels=64,
         ),
         cuda=True,
         board_size=board_size,
@@ -106,6 +119,9 @@ go_alphazero_create_config = EasyDict(go_alphazero_create_config)
 create_config = go_alphazero_create_config
 
 if __name__ == '__main__':
+    # To make sure katago policy model tp_device correctly
+    # import multiprocessing
+    # multiprocessing.set_start_method('spawn', force=True)
     if main_config.policy.tensor_float_32:
         import torch
 

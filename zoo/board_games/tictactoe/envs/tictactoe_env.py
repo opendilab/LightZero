@@ -107,7 +107,7 @@ class TicTacToeEnv(BaseEnv):
         # Convert NumPy arrays to nested tuples to make them hashable.
         return _get_done_winner_func_lru(tuple(map(tuple, self.board)))
 
-    def reset(self, start_player_index=0, init_state=None):
+    def reset(self, start_player_index=0, init_state=None, katago_policy_init=False):
         """
         Overview:
             Env reset and custom state start by init_state
