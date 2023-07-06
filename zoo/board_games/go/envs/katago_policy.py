@@ -13,10 +13,29 @@ import torch
 import torch.nn
 
 # 将 Katago 项目的路径添加到 sys.path 中
-try:
-    sys.path.append(os.path.abspath('/Users/puyuan/code/KataGo/python'))
-except:
-    sys.path.append(os.path.abspath('/mnt/nfs/puyuan/KataGo/python'))
+def add_katago_paths():
+    user_paths = [
+        os.path.abspath('/Users/puyuan/code/KataGo/'),
+        os.path.abspath('/Users/puyuan/code/KataGo/python')
+    ]
+    server_paths = [
+        os.path.abspath('/mnt/nfs/puyuan/KataGo/'),
+        os.path.abspath('/mnt/nfs/puyuan/KataGo/python')
+    ]
+
+    # Check if user paths exist, otherwise use server paths
+    if os.path.exists(user_paths[0]):
+        paths_to_add = user_paths
+    else:
+        paths_to_add = server_paths
+
+    for path in paths_to_add:
+        if path not in sys.path:
+            sys.path.append(path)
+
+
+# Call the function to add KataGo paths
+add_katago_paths()
 
 from board import Board
 from features import Features
@@ -634,7 +653,7 @@ class KatagoPolicy:
             print('?%s ???\n\n' % (cmdid,), end='')
         sys.stdout.flush()
 
-    def get_outputs(self, gs, rules):
+    def get_outgiputs(self, gs, rules):
         with torch.no_grad():
             self.model.eval()
 

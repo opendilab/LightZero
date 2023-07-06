@@ -4,8 +4,8 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-board_size = 6
-# board_size = 9
+# board_size = 6
+board_size = 9
 
 if board_size in [9, 19]:
     komi = 7.5
