@@ -1,42 +1,33 @@
 """Adapted from https://github.com/lightvector/KataGo/blob/master/python/play.py"""
 
+import colorsys
+import logging
+import math
 # !/usr/bin/python3
 import os
+import re
 import sys
 
-# 将 Katago 项目的路径添加到 sys.path 中
-# sys.path.append(os.path.abspath('/Users/puyuan/code/KataGo/'))
-# sys.path.append(os.path.abspath('/Users/puyuan/code/KataGo/python'))
-sys.path.append(os.path.abspath('/mnt/nfs/puyuan/KataGo/'))
-sys.path.append(os.path.abspath('/mnt/nfs/puyuan/KataGo/python'))
-
-import argparse
-import math
-import re
-import logging
-import colorsys
 import numpy as np
-
 import torch
 import torch.nn
+
+# 将 Katago 项目的路径添加到 sys.path 中
+try:
+    sys.path.append(os.path.abspath('/Users/puyuan/code/KataGo/python'))
+except:
+    sys.path.append(os.path.abspath('/mnt/nfs/puyuan/KataGo/python'))
 
 from board import Board
 from features import Features
 from model_pytorch import EXTRA_SCORE_DISTR_RADIUS
 from load_model import load_model
 
-import sys
 
 description = """
 Play go with a trained neural net!
 Implements a basic GTP engine that uses the neural net directly to play moves.
 """
-# if __name__ == "__main__":
-# parser = argparse.ArgumentParser(description=description)
-# parser.add_argument('-checkpoint', help='Checkpoint to test', required=False)
-# parser.add_argument('-use-swa', help='Use SWA model', action="store_true", required=False)
-#
-# args = vars(parser.parse_args())
 
 # Basic parsing --------------------------------------------------------
 colstr = 'ABCDEFGHJKLMNOPQRST'
@@ -91,7 +82,7 @@ def katago_flatten_to_lz_flatten(loc, board):
         return board.size * board.size
     x = board.loc_x(loc)  # left_to_right 0,1,2,...,board.size-1
     y = board.loc_y(loc)  # upper_to_bottom 0,1,2,...,board.size-1
-    if y * board.size + x <0:
+    if y * board.size + x < 0:
         print('debug')
     return y * board.size + x
     # 11 -> (0,0) -> 0
@@ -332,9 +323,6 @@ known_analyze_commands = [
     'gfx/PassAlive/passalive',
 ]
 
-# board_size = BOARD_SIZE
-#
-# gs = GameState(board_size)
 
 rules = {
     "koRule": "KO_POSITIONAL",
@@ -353,22 +341,23 @@ rules = {
 input_feature_command_lookup = dict()
 
 
-class KatagoPolicy():
+class KatagoPolicy:
 
     def __init__(self, checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
                  board_size=9, ignore_pass_if_have_other_legal_actions=False, device='cpu'):
         self.device = device
-        self.load_katago_model(checkpoint_path, board_size)
+
+        self.load_katago_policy(checkpoint_path, board_size)
         for i in range(self.model.bin_input_shape[1]):
             self.add_input_feature_visualizations("input-" + str(i), i, normalization_div=1)
 
-        self.ignore_pass_if_have_other_legal_actions= ignore_pass_if_have_other_legal_actions
-    def load_katago_model(self,
+        self.ignore_pass_if_have_other_legal_actions = ignore_pass_if_have_other_legal_actions
+
+    def load_katago_policy(self,
                           checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
                           board_size=9):
         args = {}
         args["use_swa"] = False
-
         # TODO(pu)
         # download form https://media.katagotraining.org/uploaded/networks/zips/kata1/kata1-b18c384nbt-s6582191360-d3422816034.zip
         # unzip to /Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034
@@ -376,16 +365,10 @@ class KatagoPolicy():
 
         checkpoint_file = args["checkpoint"]
         use_swa = args["use_swa"]
-
-        BOARD_SIZE = board_size
-
-        # print(args)
-
         # Hardcoded max board size
         self.pos_len = 19
 
         # Model ----------------------------------------------------------------
-
         logging.root.handlers = []
         logging.basicConfig(
             level=logging.INFO,
@@ -398,7 +381,8 @@ class KatagoPolicy():
         torch.set_printoptions(precision=7, sci_mode=False, linewidth=100000, edgeitems=1000, threshold=1000000)
 
         # model, swa_model, _ = load_model(checkpoint_file, use_swa, device="cpu", pos_len=self.pos_len, verbose=True)
-        model, swa_model, _ = load_model(checkpoint_file, use_swa, device=self.device, pos_len=self.pos_len, verbose=True)
+        model, swa_model, _ = load_model(checkpoint_file, use_swa, device=self.device, pos_len=self.pos_len,
+                                         verbose=True)
 
         model.eval()
         model_config = model.config
@@ -408,6 +392,247 @@ class KatagoPolicy():
 
         self.features = Features(model_config, self.pos_len)
         self.model = model
+
+    def katago_command(self, game_state, command, to_play=None):
+        """
+        command = ['play', 'b', 'a4']
+        command = ['play', 'w', 'a4']
+        command = ['genmove', 'w', 'a4']
+        command = ['get_katago_action']
+        command = ['boardsize', 9]
+        command = ["showboard"]
+        """
+        gs = game_state
+        if re.match('\d+', command[0]):
+            cmdid = command[0]
+            command = command[1:]
+        else:
+            cmdid = ''
+
+        ret = ''
+        if command[0] == "showboard":
+            ret = "\n" + gs.board.to_string().strip()
+        elif command[0] == "komi":
+            rules["whiteKomi"] = float(command[1])
+        elif command[0] == "play":
+            pla = (Board.BLACK if command[1] == "B" or command[1] == "b" else Board.WHITE)
+            loc = parse_coord(command[2], gs.board)
+            gs.board.play(pla, loc)
+            gs.moves.append((pla, loc))
+            gs.boards.append(gs.board.copy())
+            return gs
+        elif command[0] == "genmove":
+            outputs = self.get_outputs(gs, rules)
+            loc = outputs["genmove_result"]
+            pla = gs.board.pla
+
+            if len(command) > 1:
+                pla = (Board.BLACK if command[1] == "B" or command[1] == "b" else Board.WHITE)
+            gs.board.play(pla, loc)
+            gs.moves.append((pla, loc))
+            gs.boards.append(gs.board.copy())
+            ret = str_coord(loc, gs.board)
+
+        elif command[0] == "get_katago_action":
+            # NOTE: here bot action may be illegal action in go_lightzero
+            outputs = self.get_outputs(gs, rules)
+            if to_play == 1:
+                moves_and_probs0 = outputs["moves_and_probs0"]
+                moves_and_probs = sorted(moves_and_probs0, key=lambda moveandprob: moveandprob[1], reverse=True)
+                katago_flatten_action = moves_and_probs[0][0]
+                if self.ignore_pass_if_have_other_legal_actions and len(moves_and_probs) > 1:
+                    if katago_flatten_action == Board.PASS_LOC:  # 0
+                        katago_flatten_action = moves_and_probs[1][0]
+                        # TODO
+                        # print('ignore_pass_if_have_other_legal_actions now!')
+            elif to_play == 2:
+                moves_and_probs1 = outputs["moves_and_probs1"]
+                moves_and_probs = sorted(moves_and_probs1, key=lambda moveandprob: moveandprob[1], reverse=True)
+                katago_flatten_action = moves_and_probs[0][0]  # moves_and_probs[0]: (katago_flatten_action, prior)
+                if self.ignore_pass_if_have_other_legal_actions and len(moves_and_probs) > 1:
+                    if katago_flatten_action == Board.PASS_LOC:  # 0
+                        katago_flatten_action = moves_and_probs[1][0]
+                        # print('ignore_pass_if_have_other_legal_actions now!')
+
+            # gtp_action = str_coord(katago_flatten_action, gs.board)
+            lz_flatten_action = katago_flatten_to_lz_flatten(katago_flatten_action, gs.board)
+            return lz_flatten_action
+
+        elif command[0] == "name":
+            ret = 'KataGo Raw Neural Net Debug/Test Script'
+        elif command[0] == "version":
+            ret = '1.0'
+        elif command[0] == "list_commands":
+            ret = '\n'.join(known_commands)
+        elif command[0] == "known_command":
+            ret = 'true' if command[1] in known_commands else 'false'
+        elif command[0] == "gogui-analyze_commands":
+            ret = '\n'.join(known_analyze_commands)
+        elif command[0] == "setrule":
+            ret = ""
+            if command[1] == "korule":
+                rules["koRule"] = command[2].upper()
+            elif command[1] == "scoringrule":
+                rules["scoringRule"] = command[2].upper()
+            elif command[1] == "taxrule":
+                rules["taxRule"] = command[2].upper()
+            elif command[1] == "multistonesuicidelegal":
+                rules["multiStoneSuicideLegal"] = (command[2].lower() == "true")
+            elif command[1] == "hasbutton":
+                rules["hasButton"] = (command[2].lower() == "true")
+            elif command[1] == "encorephase":
+                rules["encorePhase"] = int(command[2])
+            elif command[1] == "passwouldendphase":
+                rules["passWouldEndPhase"] = (command[2].lower() == "true")
+            elif command[1] == "whitekomi" or command[1] == "komi":
+                rules["whiteKomi"] = float(command[2])
+            elif command[1] == "asym":
+                rules["asymPowersOfTwo"] = float(command[2])
+            else:
+                ret = "Unknown rules setting"
+        elif command[0] == "policy":
+            outputs = self.get_outputs(gs, rules)
+            gfx_commands = get_gfx_commands_for_heatmap(outputs["moves_and_probs0"], gs.board, normalization_div=None,
+                                                        is_percent=True, value_and_score_from=outputs)
+            ret = "\n".join(gfx_commands)
+        elif command[0] == "policy1":
+            outputs = self.get_outputs(gs, rules)
+            gfx_commands = get_gfx_commands_for_heatmap(outputs["moves_and_probs1"], gs.board, normalization_div=None,
+                                                        is_percent=True, value_and_score_from=outputs)
+            ret = "\n".join(gfx_commands)
+        elif command[0] == "logpolicy":
+            outputs = self.get_outputs(gs, rules)
+            moves_and_logprobs = [(move, max(0.0, 4.9 + math.log10(prob))) for (move, prob) in
+                                  outputs["moves_and_probs0"]]
+            gfx_commands = get_gfx_commands_for_heatmap(moves_and_logprobs, gs.board, normalization_div=6,
+                                                        is_percent=False,
+                                                        value_and_score_from=outputs)
+            ret = "\n".join(gfx_commands)
+        elif command[0] == "ownership":
+            outputs = self.get_outputs(gs, rules)
+            gfx_commands = get_gfx_commands_for_heatmap(outputs["ownership_by_loc"], gs.board, normalization_div=None,
+                                                        is_percent=True, value_and_score_from=None, hotcold=True)
+            ret = "\n".join(gfx_commands)
+        elif command[0] == "scoring":
+            outputs = self.get_outputs(gs, rules)
+            gfx_commands = get_gfx_commands_for_heatmap(outputs["scoring_by_loc"], gs.board, normalization_div=None,
+                                                        is_percent=True, value_and_score_from=None, hotcold=True)
+            ret = "\n".join(gfx_commands)
+        elif command[0] == "futurepos0":
+            outputs = self.get_outputs(gs, rules)
+            gfx_commands = get_gfx_commands_for_heatmap(outputs["futurepos0_by_loc"], gs.board, normalization_div=None,
+                                                        is_percent=True, value_and_score_from=None, hotcold=True)
+            ret = "\n".join(gfx_commands)
+        elif command[0] == "futurepos1":
+            outputs = self.get_outputs(gs, rules)
+            gfx_commands = get_gfx_commands_for_heatmap(outputs["futurepos1_by_loc"], gs.board, normalization_div=None,
+                                                        is_percent=True, value_and_score_from=None, hotcold=True)
+            ret = "\n".join(gfx_commands)
+        elif command[0] == "seki":
+            outputs = self.get_outputs(gs, rules)
+            gfx_commands = get_gfx_commands_for_heatmap(outputs["seki_by_loc"], gs.board, normalization_div=None,
+                                                        is_percent=True, value_and_score_from=None)
+            ret = "\n".join(gfx_commands)
+        elif command[0] == "seki2":
+            outputs = self.get_outputs(gs, rules)
+            gfx_commands = get_gfx_commands_for_heatmap(outputs["seki_by_loc2"], gs.board, normalization_div=None,
+                                                        is_percent=True, value_and_score_from=None)
+            ret = "\n".join(gfx_commands)
+
+        elif command[0] == "policy_raw":
+            outputs = self.get_outputs(gs, rules)
+            ret = "\n"
+            policysum = 0.0
+            for y in range(gs.board.size):
+                for x in range(gs.board.size):
+                    loc = gs.board.loc(x, y)
+                    pos = self.features.loc_to_tensor_pos(loc, gs.board)
+                    gs.board.would_be_legal(gs.board.pla, loc)
+                    policysum += outputs["policy0"][pos]
+            loc = Board.PASS_LOC
+            pos = self.features.loc_to_tensor_pos(loc, gs.board)
+            policysum += outputs["policy0"][pos]
+
+            for y in range(gs.board.size):
+                for x in range(gs.board.size):
+                    loc = gs.board.loc(x, y)
+                    pos = self.features.loc_to_tensor_pos(loc, gs.board)
+                    if gs.board.would_be_legal(gs.board.pla, loc):
+                        ret += "%6.3f" % (100.0 * outputs["policy0"][pos] / policysum)
+                    else:
+                        ret += "  -   "
+                    ret += " "
+                ret += "\n"
+            loc = Board.PASS_LOC
+            pos = self.features.loc_to_tensor_pos(loc, gs.board)
+            ret += "Pass: %6.3f" % (100.0 * outputs["policy0"][pos] / policysum)
+
+        elif command[0] == "policy1_raw":
+            outputs = self.get_outputs(gs, rules)
+            ret = "\n"
+
+            for y in range(gs.board.size):
+                for x in range(gs.board.size):
+                    loc = gs.board.loc(x, y)
+                    pos = self.features.loc_to_tensor_pos(loc, gs.board)
+                    if gs.board.would_be_legal(gs.board.pla, loc):
+                        ret += "%6.3f" % (100.0 * outputs["policy1"][pos])
+                    else:
+                        ret += "  -   "
+                    ret += " "
+                ret += "\n"
+            loc = Board.PASS_LOC
+            pos = self.features.loc_to_tensor_pos(loc, gs.board)
+            ret += "Pass: %6.3f" % (100.0 * outputs["policy1"][pos])
+
+        elif command[0] == "ownership_raw":
+            outputs = self.get_outputs(gs, rules)
+            ret = self.get_board_matrix_str(outputs["ownership"], 100.0, "%+7.3f")
+        elif command[0] == "scoring_raw":
+            outputs = self.get_outputs(gs, rules)
+            ret = self.get_board_matrix_str(outputs["scoring"], 100.0, "%+7.3f")
+        elif command[0] == "futurepos0_raw":
+            outputs = self.get_outputs(gs, rules)
+            ret = self.get_board_matrix_str(outputs["futurepos"][0], 100.0, "%+7.3f")
+        elif command[0] == "futurepos1_raw":
+            outputs = self.get_outputs(gs, rules)
+            ret = self.get_board_matrix_str(outputs["futurepos"][1], 100.0, "%+7.3f")
+        elif command[0] == "seki_raw":
+            outputs = self.get_outputs(gs, rules)
+            ret = self.get_board_matrix_str(outputs["seki"], 100.0, "%+7.3f")
+        elif command[0] == "seki2_raw":
+            outputs = self.get_outputs(gs, rules)
+            ret = self.get_board_matrix_str(outputs["seki2"], 100.0, "%+7.3f")
+
+        elif command[0] in input_feature_command_lookup:
+            (feature_idx, normalization_div) = input_feature_command_lookup[command[0]]
+            locs_and_values = self.get_input_feature(gs, rules, feature_idx)
+            gfx_commands = get_gfx_commands_for_heatmap(locs_and_values, gs.board, normalization_div, is_percent=False)
+            ret = "\n".join(gfx_commands)
+
+        elif command[0] == "passalive":
+            locs_and_values = get_pass_alive(gs.board, rules)
+            gfx_commands = get_gfx_commands_for_heatmap(locs_and_values, gs.board, normalization_div=None,
+                                                        is_percent=False)
+            ret = "\n".join(gfx_commands)
+
+        elif command[0] == "scorebelief":
+            outputs = self.get_outputs(gs, rules)
+            ret = self.print_scorebelief(gs, outputs)
+
+        elif command[0] == "protocol_version":
+            ret = '2'
+        elif command[0] == "quit":
+            print('=%s \n\n' % (cmdid,), end='')
+        else:
+            print('Warning: Ignoring unknown command - %s' % (line,), file=sys.stderr)
+            ret = None
+
+        if ret is not None:
+            print('=%s %s\n\n' % (cmdid, ret,), end='')
+        else:
+            print('?%s ???\n\n' % (cmdid,), end='')
+        sys.stdout.flush()
 
     def get_outputs(self, gs, rules):
         with torch.no_grad():
@@ -431,8 +656,8 @@ class KatagoPolicy():
             # self.model_outputs = self.model(apply_symmetry(batch["binaryInputNCHW"],symmetry),batch["globalInputNC"])
 
             model_outputs = self.model(
-                torch.tensor(bin_input_data, dtype=torch.float32),
-                torch.tensor(global_input_data, dtype=torch.float32),
+                torch.tensor(bin_input_data, dtype=torch.float32, device=self.device),
+                torch.tensor(global_input_data, dtype=torch.float32, device=self.device),
             )
             outputs = self.model.postprocess_output(model_outputs)
             (
@@ -713,243 +938,3 @@ class KatagoPolicy():
             ret += "\n"
         return ret
 
-    def katago_command(self, game_state, command, to_play=None):
-        """
-        command = ['play', 'b', 'a4']
-        command = ['play', 'w', 'a4']
-        command = ['genmove', 'w', 'a4']
-        command = ['get_katago_action']
-        command = ['boardsize', 9]
-        command = ["showboard"]
-        """
-        gs = game_state
-        if re.match('\d+', command[0]):
-            cmdid = command[0]
-            command = command[1:]
-        else:
-            cmdid = ''
-
-        ret = ''
-        if command[0] == "showboard":
-            ret = "\n" + gs.board.to_string().strip()
-        elif command[0] == "komi":
-            rules["whiteKomi"] = float(command[1])
-        elif command[0] == "play":
-            pla = (Board.BLACK if command[1] == "B" or command[1] == "b" else Board.WHITE)
-            loc = parse_coord(command[2], gs.board)
-            gs.board.play(pla, loc)
-            gs.moves.append((pla, loc))
-            gs.boards.append(gs.board.copy())
-            return gs
-        elif command[0] == "genmove":
-            outputs = self.get_outputs(gs, rules)
-            loc = outputs["genmove_result"]
-            pla = gs.board.pla
-
-            if len(command) > 1:
-                pla = (Board.BLACK if command[1] == "B" or command[1] == "b" else Board.WHITE)
-            gs.board.play(pla, loc)
-            gs.moves.append((pla, loc))
-            gs.boards.append(gs.board.copy())
-            ret = str_coord(loc, gs.board)
-
-        elif command[0] == "get_katago_action":
-            # NOTE: here bot action may be illegal action in go_lightzero
-            outputs = self.get_outputs(gs, rules)
-            if to_play == 1:
-                moves_and_probs0 = outputs["moves_and_probs0"]
-                moves_and_probs = sorted(moves_and_probs0, key=lambda moveandprob: moveandprob[1], reverse=True)
-                katago_flatten_action = moves_and_probs[0][0]
-                if self.ignore_pass_if_have_other_legal_actions and len(moves_and_probs) > 1:
-                    if katago_flatten_action == Board.PASS_LOC:  # 0
-                        katago_flatten_action = moves_and_probs[1][0]
-                        # TODO
-                        # print('ignore_pass_if_have_other_legal_actions now!')
-            elif to_play == 2:
-                moves_and_probs1 = outputs["moves_and_probs1"]
-                moves_and_probs = sorted(moves_and_probs1, key=lambda moveandprob: moveandprob[1], reverse=True)
-                katago_flatten_action = moves_and_probs[0][0]  # moves_and_probs[0]: (katago_flatten_action, prior)
-                if self.ignore_pass_if_have_other_legal_actions and len(moves_and_probs)>1:
-                    if katago_flatten_action == Board.PASS_LOC:  # 0
-                        katago_flatten_action = moves_and_probs[1][0]
-                        # print('ignore_pass_if_have_other_legal_actions now!')
-
-            # gtp_action = str_coord(katago_flatten_action, gs.board)
-            lz_flatten_action = katago_flatten_to_lz_flatten(katago_flatten_action, gs.board)
-            return lz_flatten_action
-
-        elif command[0] == "name":
-            ret = 'KataGo Raw Neural Net Debug/Test Script'
-        elif command[0] == "version":
-            ret = '1.0'
-        elif command[0] == "list_commands":
-            ret = '\n'.join(known_commands)
-        elif command[0] == "known_command":
-            ret = 'true' if command[1] in known_commands else 'false'
-        elif command[0] == "gogui-analyze_commands":
-            ret = '\n'.join(known_analyze_commands)
-        elif command[0] == "setrule":
-            ret = ""
-            if command[1] == "korule":
-                rules["koRule"] = command[2].upper()
-            elif command[1] == "scoringrule":
-                rules["scoringRule"] = command[2].upper()
-            elif command[1] == "taxrule":
-                rules["taxRule"] = command[2].upper()
-            elif command[1] == "multistonesuicidelegal":
-                rules["multiStoneSuicideLegal"] = (command[2].lower() == "true")
-            elif command[1] == "hasbutton":
-                rules["hasButton"] = (command[2].lower() == "true")
-            elif command[1] == "encorephase":
-                rules["encorePhase"] = int(command[2])
-            elif command[1] == "passwouldendphase":
-                rules["passWouldEndPhase"] = (command[2].lower() == "true")
-            elif command[1] == "whitekomi" or command[1] == "komi":
-                rules["whiteKomi"] = float(command[2])
-            elif command[1] == "asym":
-                rules["asymPowersOfTwo"] = float(command[2])
-            else:
-                ret = "Unknown rules setting"
-        elif command[0] == "policy":
-            outputs = self.get_outputs(gs, rules)
-            gfx_commands = get_gfx_commands_for_heatmap(outputs["moves_and_probs0"], gs.board, normalization_div=None,
-                                                        is_percent=True, value_and_score_from=outputs)
-            ret = "\n".join(gfx_commands)
-        elif command[0] == "policy1":
-            outputs = self.get_outputs(gs, rules)
-            gfx_commands = get_gfx_commands_for_heatmap(outputs["moves_and_probs1"], gs.board, normalization_div=None,
-                                                        is_percent=True, value_and_score_from=outputs)
-            ret = "\n".join(gfx_commands)
-        elif command[0] == "logpolicy":
-            outputs = self.get_outputs(gs, rules)
-            moves_and_logprobs = [(move, max(0.0, 4.9 + math.log10(prob))) for (move, prob) in
-                                  outputs["moves_and_probs0"]]
-            gfx_commands = get_gfx_commands_for_heatmap(moves_and_logprobs, gs.board, normalization_div=6,
-                                                        is_percent=False,
-                                                        value_and_score_from=outputs)
-            ret = "\n".join(gfx_commands)
-        elif command[0] == "ownership":
-            outputs = self.get_outputs(gs, rules)
-            gfx_commands = get_gfx_commands_for_heatmap(outputs["ownership_by_loc"], gs.board, normalization_div=None,
-                                                        is_percent=True, value_and_score_from=None, hotcold=True)
-            ret = "\n".join(gfx_commands)
-        elif command[0] == "scoring":
-            outputs = self.get_outputs(gs, rules)
-            gfx_commands = get_gfx_commands_for_heatmap(outputs["scoring_by_loc"], gs.board, normalization_div=None,
-                                                        is_percent=True, value_and_score_from=None, hotcold=True)
-            ret = "\n".join(gfx_commands)
-        elif command[0] == "futurepos0":
-            outputs = self.get_outputs(gs, rules)
-            gfx_commands = get_gfx_commands_for_heatmap(outputs["futurepos0_by_loc"], gs.board, normalization_div=None,
-                                                        is_percent=True, value_and_score_from=None, hotcold=True)
-            ret = "\n".join(gfx_commands)
-        elif command[0] == "futurepos1":
-            outputs = self.get_outputs(gs, rules)
-            gfx_commands = get_gfx_commands_for_heatmap(outputs["futurepos1_by_loc"], gs.board, normalization_div=None,
-                                                        is_percent=True, value_and_score_from=None, hotcold=True)
-            ret = "\n".join(gfx_commands)
-        elif command[0] == "seki":
-            outputs = self.get_outputs(gs, rules)
-            gfx_commands = get_gfx_commands_for_heatmap(outputs["seki_by_loc"], gs.board, normalization_div=None,
-                                                        is_percent=True, value_and_score_from=None)
-            ret = "\n".join(gfx_commands)
-        elif command[0] == "seki2":
-            outputs = self.get_outputs(gs, rules)
-            gfx_commands = get_gfx_commands_for_heatmap(outputs["seki_by_loc2"], gs.board, normalization_div=None,
-                                                        is_percent=True, value_and_score_from=None)
-            ret = "\n".join(gfx_commands)
-
-        elif command[0] == "policy_raw":
-            outputs = self.get_outputs(gs, rules)
-            ret = "\n"
-            policysum = 0.0
-            for y in range(gs.board.size):
-                for x in range(gs.board.size):
-                    loc = gs.board.loc(x, y)
-                    pos = self.features.loc_to_tensor_pos(loc, gs.board)
-                    gs.board.would_be_legal(gs.board.pla, loc)
-                    policysum += outputs["policy0"][pos]
-            loc = Board.PASS_LOC
-            pos = self.features.loc_to_tensor_pos(loc, gs.board)
-            policysum += outputs["policy0"][pos]
-
-            for y in range(gs.board.size):
-                for x in range(gs.board.size):
-                    loc = gs.board.loc(x, y)
-                    pos = self.features.loc_to_tensor_pos(loc, gs.board)
-                    if gs.board.would_be_legal(gs.board.pla, loc):
-                        ret += "%6.3f" % (100.0 * outputs["policy0"][pos] / policysum)
-                    else:
-                        ret += "  -   "
-                    ret += " "
-                ret += "\n"
-            loc = Board.PASS_LOC
-            pos = self.features.loc_to_tensor_pos(loc, gs.board)
-            ret += "Pass: %6.3f" % (100.0 * outputs["policy0"][pos] / policysum)
-
-        elif command[0] == "policy1_raw":
-            outputs = self.get_outputs(gs, rules)
-            ret = "\n"
-
-            for y in range(gs.board.size):
-                for x in range(gs.board.size):
-                    loc = gs.board.loc(x, y)
-                    pos = self.features.loc_to_tensor_pos(loc, gs.board)
-                    if gs.board.would_be_legal(gs.board.pla, loc):
-                        ret += "%6.3f" % (100.0 * outputs["policy1"][pos])
-                    else:
-                        ret += "  -   "
-                    ret += " "
-                ret += "\n"
-            loc = Board.PASS_LOC
-            pos = self.features.loc_to_tensor_pos(loc, gs.board)
-            ret += "Pass: %6.3f" % (100.0 * outputs["policy1"][pos])
-
-        elif command[0] == "ownership_raw":
-            outputs = self.get_outputs(gs, rules)
-            ret = self.get_board_matrix_str(outputs["ownership"], 100.0, "%+7.3f")
-        elif command[0] == "scoring_raw":
-            outputs = self.get_outputs(gs, rules)
-            ret = self.get_board_matrix_str(outputs["scoring"], 100.0, "%+7.3f")
-        elif command[0] == "futurepos0_raw":
-            outputs = self.get_outputs(gs, rules)
-            ret = self.get_board_matrix_str(outputs["futurepos"][0], 100.0, "%+7.3f")
-        elif command[0] == "futurepos1_raw":
-            outputs = self.get_outputs(gs, rules)
-            ret = self.get_board_matrix_str(outputs["futurepos"][1], 100.0, "%+7.3f")
-        elif command[0] == "seki_raw":
-            outputs = self.get_outputs(gs, rules)
-            ret = self.get_board_matrix_str(outputs["seki"], 100.0, "%+7.3f")
-        elif command[0] == "seki2_raw":
-            outputs = self.get_outputs(gs, rules)
-            ret = self.get_board_matrix_str(outputs["seki2"], 100.0, "%+7.3f")
-
-        elif command[0] in input_feature_command_lookup:
-            (feature_idx, normalization_div) = input_feature_command_lookup[command[0]]
-            locs_and_values = self.get_input_feature(gs, rules, feature_idx)
-            gfx_commands = get_gfx_commands_for_heatmap(locs_and_values, gs.board, normalization_div, is_percent=False)
-            ret = "\n".join(gfx_commands)
-
-        elif command[0] == "passalive":
-            locs_and_values = get_pass_alive(gs.board, rules)
-            gfx_commands = get_gfx_commands_for_heatmap(locs_and_values, gs.board, normalization_div=None,
-                                                        is_percent=False)
-            ret = "\n".join(gfx_commands)
-
-        elif command[0] == "scorebelief":
-            outputs = self.get_outputs(gs, rules)
-            ret = self.print_scorebelief(gs, outputs)
-
-        elif command[0] == "protocol_version":
-            ret = '2'
-        elif command[0] == "quit":
-            print('=%s \n\n' % (cmdid,), end='')
-        else:
-            print('Warning: Ignoring unknown command - %s' % (line,), file=sys.stderr)
-            ret = None
-
-        if ret is not None:
-            print('=%s %s\n\n' % (cmdid, ret,), end='')
-        else:
-            print('?%s ???\n\n' % (cmdid,), end='')
-        sys.stdout.flush()

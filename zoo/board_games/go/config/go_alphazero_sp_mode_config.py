@@ -14,7 +14,7 @@ elif board_size == 6:
 
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 2
+evaluator_env_num = 1
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(10e6)
@@ -22,11 +22,16 @@ max_env_step = int(10e6)
 if board_size == 19:
     num_simulations = 800
 elif board_size == 9:
-    num_simulations = 180
+    # num_simulations = 180
+    num_simulations = 50
 elif board_size == 6:
-    num_simulations = 80
+    # num_simulations = 80
+    num_simulations = 50
 
 # board_size = 6
+# komi = 4
+# # board_size = 9
+# # komi = 7.5
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
@@ -45,9 +50,9 @@ go_alphazero_config = dict(
         board_size=board_size,
         komi=komi,
         use_katago_bot=True,
-        # katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
-        katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
-        device='cuda',
+        katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        # katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        ignore_pass_if_have_other_legal_actions=True,
         battle_mode='self_play_mode',
         bot_action_type='v0',
         prob_random_action_in_bot=0,
@@ -66,8 +71,6 @@ go_alphazero_config = dict(
             action_space_size=int(board_size * board_size + 1),
             num_res_blocks=1,
             num_channels=64,
-            # TODO:
-            # num_channels=32,
         ),
         cuda=True,
         board_size=board_size,

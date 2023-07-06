@@ -92,7 +92,7 @@ class GoEnv(BaseEnv):
         scale=True,
         ignore_pass_if_have_other_legal_actions=True,
         device='cpu',
-        katago_model=None,
+        katago_policy=None,
     )
 
     @classmethod
@@ -100,33 +100,6 @@ class GoEnv(BaseEnv):
         cfg = EasyDict(copy.deepcopy(cls.config))
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
-
-    @property
-    def current_player(self):
-        return self._current_player
-
-    @property
-    def current_player_index(self):
-        """
-        current_player_index = 0, current_player = 1
-        current_player_index = 1, current_player = 2
-        """
-        return 0 if self._current_player == 1 else 1
-
-    @property
-    def to_play(self):
-        """
-        current_player_index = 0, current_player = 1, to_play = 2
-        current_player_index = 1, current_player = 2, to_play = 1
-        """
-        return self.players[0] if self.current_player == self.players[1] else self.players[1]
-
-    @property
-    def current_player_to_compute_bot_action(self):
-        """
-        Overview: to compute expert action easily.
-        """
-        return -1 if self.current_player == 1 else 1
 
     def __init__(self, cfg=None):
 
@@ -178,8 +151,8 @@ class GoEnv(BaseEnv):
         self.render_in_ui = cfg.render_in_ui
         self.katago_checkpoint_path= cfg.katago_checkpoint_path
         self.ignore_pass_if_have_other_legal_actions = cfg.ignore_pass_if_have_other_legal_actions
-        self.device = cfg.device
-        self.katago_policy = cfg.katago_model
+        # self.device = cfg.device
+        self.katago_policy = cfg.katago_policy
         # self.katago_policy = KatagoPolicy(checkpoint_path=self.katago_checkpoint_path, board_size=self.board_size,
         #                               ignore_pass_if_have_other_legal_actions=self.ignore_pass_if_have_other_legal_actions, device=self.device)
 
@@ -415,7 +388,10 @@ class GoEnv(BaseEnv):
                 # bot_action = self.human_to_action()
                 bot_action = self.human_to_gtp_action()
             else:
+                s_time = time.time()
                 bot_action = self.get_katago_action(to_play=2)
+                e_time = time.time()
+                print(f'katago_action time: {e_time - s_time}')
                 if bot_action not in self.legal_actions:
                     logging.warning(
                         f"You input illegal *bot* action: {bot_action}, the legal_actions are {self.legal_actions}. "
@@ -425,7 +401,7 @@ class GoEnv(BaseEnv):
                 # ****** update katago internal game state ******
                 # TODO(pu): how to avoid this?
                 katago_flatten_action = self.lz_flatten_to_katago_flatten(bot_action, self.board_size)
-                # print('player 2:', str_coord(katago_flatten_action, self.katago_game_state.board))
+                print('player 2 (katago):', str_coord(katago_flatten_action, self.katago_game_state.board))
                 self.update_katago_internal_game_state(katago_flatten_action, to_play=2)
 
             timestep_player2 = self._player_step(bot_action)
@@ -461,6 +437,9 @@ class GoEnv(BaseEnv):
             command = ['play', 'w', gtp_action]
         self.katago_policy.katago_command(self.katago_game_state, command, to_play)
 
+    # ==============================================================
+    # katago related
+    # ==============================================================
     def get_katago_action(self, to_play):
         command = ['get_katago_action']
         # self.current_player is the player who will play
@@ -588,14 +567,6 @@ class GoEnv(BaseEnv):
             # (W, H, C) -> (C, W, H)
             # e.g. (6, 6, 17) - > (17, 6, 6)
             return np.transpose(raw_obs, [2, 0, 1]), np.transpose(raw_obs, [2, 0, 1])
-
-    @property
-    def legal_actions(self):
-        return to_list(self.legal_moves())
-
-    @property
-    def board(self):
-        return self._raw_env._go.board
 
     def legal_moves(self):
         if self._raw_env._go.is_game_over():
@@ -744,6 +715,10 @@ class GoEnv(BaseEnv):
         flatten_action = (board_size - 1 - row) * board_size + col
         return flatten_action
 
+    # ==============================================================
+    # render related
+    # ==============================================================
+
     def render_and_capture_frame(self, mode='only_save_gif'):
         self.render(mode=mode)
         self.capture_frame()
@@ -840,20 +815,11 @@ class GoEnv(BaseEnv):
         imageio.mimsave(output_file, self.frames, format="GIF", duration=duration)
         print("Gif saved to {}".format(output_file))
 
-    def _check_bounds(self, c):
-        return 0 <= c[0] < self.board_size and 0 <= c[1] < self.board_size
-
     def _encode_player_plane(self, agent):
         if agent == self.possible_agents[0]:
             return np.zeros([self.board_size, self.board_size], dtype=bool)
         else:
             return np.ones([self.board_size, self.board_size], dtype=bool)
-
-    def _int_to_name(self, ind):
-        return self.possible_agents[ind]
-
-    def _name_to_int(self, name):
-        return self.possible_agents.index(name)
 
     def _convert_to_dict(self, list_of_list):
         return dict(zip(self.possible_agents, list_of_list))
@@ -864,17 +830,48 @@ class GoEnv(BaseEnv):
     def _encode_rewards(self, result):
         return [1, -1] if result == 1 else [-1, 1]
 
-    def set_game_result(self, result_val):
-        for i, name in enumerate(self.agents):
-            self.dones[name] = True
-            result_coef = 1 if i == 0 else -1
-            self.rewards[name] = result_val * result_coef
-            self.infos[name] = {'legal_moves': []}
-
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
         self._seed = seed
         self._dynamic_seed = dynamic_seed
         np.random.seed(self._seed)
+
+    @property
+    def current_player(self):
+        return self._current_player
+
+    @property
+    def current_player_index(self):
+        """
+        current_player_index = 0, current_player = 1
+        current_player_index = 1, current_player = 2
+        """
+        return 0 if self._current_player == 1 else 1
+
+    @property
+    def to_play(self):
+        """
+        current_player_index = 0, current_player = 1, to_play = 2
+        current_player_index = 1, current_player = 2, to_play = 1
+        """
+        return self.players[0] if self.current_player == self.players[1] else self.players[1]
+
+    @property
+    def current_player_to_compute_bot_action(self):
+        """
+        Overview: to compute expert action easily.
+        """
+        return -1 if self.current_player == 1 else 1
+
+    @current_player.setter
+    def current_player(self, value):
+        self._current_player = value
+    @property
+    def legal_actions(self):
+        return to_list(self.legal_moves())
+
+    @property
+    def board(self):
+        return self._raw_env._go.board
 
     @property
     def observation_space(self) -> gym.spaces.Space:
@@ -887,10 +884,6 @@ class GoEnv(BaseEnv):
     @property
     def reward_space(self) -> gym.spaces.Space:
         return self._reward_space
-
-    @current_player.setter
-    def current_player(self, value):
-        self._current_player = value
 
     @staticmethod
     def create_collector_env_cfg(cfg: dict) -> List[dict]:

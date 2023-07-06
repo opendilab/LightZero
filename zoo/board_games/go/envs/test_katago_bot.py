@@ -5,11 +5,12 @@ import pytest
 from easydict import EasyDict
 
 from zoo.board_games.go.envs.go_env import GoEnv, flatten_action_to_gtp_action
-from zoo.board_games.go.envs.katago_policy import str_coord
+from zoo.board_games.go.envs.katago_policy import str_coord, KatagoPolicy
+
 cfg = EasyDict(
-    board_size=19,
+    # board_size=19,
     # board_size=9,
-    # board_size=6,
+    board_size=5,
     save_gif_replay=True,
     render_in_ui=True,
     # save_gif_replay=False,
@@ -18,7 +19,6 @@ cfg = EasyDict(
     ignore_pass_if_have_other_legal_actions=True,
     save_gif_path='./',
     komi=7.5,
-    # komi=7,
     battle_mode='self_play_mode',
     prob_random_agent=0,
     channel_last=False,
@@ -28,7 +28,12 @@ cfg = EasyDict(
     prob_random_action_in_bot=0.,
     check_action_to_connect4_in_bot_v0=False,
     stop_value=1,
+    katago_device='cpu',
 )
+
+cfg.katago_policy = KatagoPolicy(checkpoint_path=cfg.katago_checkpoint_path, board_size=cfg.board_size,
+                                 ignore_pass_if_have_other_legal_actions=cfg.ignore_pass_if_have_other_legal_actions,
+                                 device=cfg.katago_device)
 
 
 @pytest.mark.envtest
@@ -37,10 +42,11 @@ class TestKataGoBot:
     def test_katago_bot(self):
 
         env = GoEnv(cfg)
-        test_episodes = 1
+        test_episodes = 2
         for i in range(test_episodes):
+            print('=' * 20)
             print(f'episode {i}')
-            print('='*20)
+            print('=' * 20)
 
             obs = env.reset()
             # print(obs['observation'].shape, obs['action_mask'].shape)

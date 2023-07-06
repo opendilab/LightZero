@@ -54,7 +54,7 @@ def train_alphazero(
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
 
     if cfg.env.use_katago_bot:
-        cfg.env.katago_model = KatagoPolicy(checkpoint_path=cfg.env.katago_checkpoint_path, board_size=cfg.env.board_size,
+        cfg.env.katago_policy = KatagoPolicy(checkpoint_path=cfg.env.katago_checkpoint_path, board_size=cfg.env.board_size,
                                       ignore_pass_if_have_other_legal_actions=cfg.env.ignore_pass_if_have_other_legal_actions, device=cfg.policy.device)
 
     # Create main components: env, policy
