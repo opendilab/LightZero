@@ -6,12 +6,12 @@ chance_space_size=  16
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 1
-n_episode = 1
+collector_env_num = 8
+n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50  # TODO(pu):100
-update_per_collect = 100
-batch_size = 1024
+update_per_collect = 200
+batch_size = 512
 max_env_step = int(1e8)
 reanalyze_ratio = 0.
 
@@ -28,7 +28,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 game_2048_stochastic_muzero_config = dict(
-    exp_name=f'june05_data_stomz_ctree/game_2048_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_sslw2_rew-morm-false_seed0',
+    exp_name=f'july10_data_stomz_ctree/game_2048_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_sslw2_rew-morm-false_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -71,7 +71,7 @@ game_2048_stochastic_muzero_config = dict(
         learning_rate=0.003,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=0,  # default is 0
+        ssl_loss_weight=0.1,  # default is 0
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(2e7),  # the size/capacity of replay_buffer, in the terms of transitions.
