@@ -842,8 +842,8 @@ class Encoder_function(nn.Module):
         self.onehot_argmax = StraightThroughEstimator()
     def forward(self, o_i):
         #https://openreview.net/pdf?id=X6D9bAHhBQ1 [page:5 chance outcome]
-        # c_e_t = torch.nn.Softmax(-1)(self.encoder(o_i))
-        c_e_t = self.encoder(o_i)
+        c_e_t = torch.nn.Softmax(-1)(self.encoder(o_i))
+        #c_e_t = self.encoder(o_i)
         #c_t= torch.zeros_like(c_e_t).scatter_(-1, torch.argmax(c_e_t, dim=-1,keepdim=True), 1.)
         c_t = self.onehot_argmax(c_e_t)
         return c_t,c_e_t

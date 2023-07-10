@@ -195,6 +195,7 @@ class Game2048Env(gym.Env):
         action_mask[self.legal_actions] = 1
 
         if self.obs_type == 'dict_observation':
+            observation[0,0,0] = self.chance
             observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1, 'chance': self.chance}
         elif self.obs_type == 'array':
             observation = self.board 
@@ -285,8 +286,8 @@ class Game2048Env(gym.Env):
         empty = empty_location[empty_idx]
         logging.debug("Adding %s at %s", val, (empty[0], empty[1]))
         val_chance_cum = 0
-        # if val == 4:
-        #     val_chance_cum = 16
+        if val == 4:
+            val_chance_cum = 16
         self.chance = val_chance_cum + 4 * empty[0] + empty[1]
         self.set(empty[0], empty[1], val)
 
