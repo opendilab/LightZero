@@ -195,7 +195,6 @@ class Game2048Env(gym.Env):
         action_mask[self.legal_actions] = 1
 
         if self.obs_type == 'dict_observation':
-            observation[0,0,0] = self.chance
             observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1, 'chance': self.chance}
         elif self.obs_type == 'array':
             observation = self.board 
