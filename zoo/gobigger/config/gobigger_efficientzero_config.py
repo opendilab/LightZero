@@ -26,42 +26,7 @@ atari_efficientzero_config = dict(
     exp_name=
     f'data_ez_ctree/{env_name}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
     env=dict(
-        env_name=env_name,
-        team_num=2,
-        player_num_per_team=2,
-        direction_num=direction_num,
-        step_mul=8,
-        map_width=64,
-        map_height=64,
-        frame_limit=3600,
-        action_space_size=action_space_size,
-        use_action_mask=False,
-        reward_div_value=0.1,
-        reward_type='log_reward',
-        contain_raw_obs=False,  # False on collect mode, True on eval vsbot mode, because bot need raw obs
-        start_spirit_progress=0.2,
-        end_spirit_progress=0.8,
-        manager_settings=dict(
-            food_manager=dict(
-                num_init=260,
-                num_min=260,
-                num_max=300,
-            ),
-            thorns_manager=dict(
-                num_init=3,
-                num_min=3,
-                num_max=4,
-            ),
-            player_manager=dict(ball_settings=dict(score_init=13000, ), ),
-        ),
-        playback_settings=dict(
-            playback_type='by_frame',
-            by_frame=dict(
-                save_frame=False,  # when training should set as False
-                save_dir='./',
-                save_name_prefix='gobigger',
-            ),
-        ),
+        env_name=env_name, # default is 'GoBigger T2P2'
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -87,10 +52,10 @@ atari_efficientzero_config = dict(
         random_collect_episode_num=random_collect_episode_num,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            type='exp',
+            type='linear',
             start=1.,
             end=0.05,
-            decay=int(1.5e4),
+            decay=int(1e5),
         ),
         use_augmentation=False,
         update_per_collect=update_per_collect,
@@ -133,5 +98,5 @@ atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
 create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_gobigger
+    from zoo.gobigger.entry import train_muzero_gobigger
     train_muzero_gobigger([main_config, create_config], seed=seed)

@@ -2,8 +2,9 @@ import gym
 import numpy as np
 from ditk import logging
 from ding.envs import BaseEnv, BaseEnvTimestep
-from ding.utils import ENV_REGISTRY
+from ding.utils import ENV_REGISTRY, deep_merge_dicts
 import math
+from easydict import EasyDict
 try:
     from gobigger.envs import GoBiggerEnv
 except ImportError:
@@ -12,11 +13,51 @@ except ImportError:
     sys.exit(1)
 
 
+default_t2p2_config = dict(
+        team_num=2,
+        player_num_per_team=2,
+        direction_num=12,
+        step_mul=8,
+        map_width=64,
+        map_height=64,
+        frame_limit=3600,
+        action_space_size=27,
+        use_action_mask=False,
+        reward_div_value=0.1,
+        reward_type='log_reward',
+        contain_raw_obs=False,  # False on collect mode, True on eval vsbot mode, because bot need raw obs
+        start_spirit_progress=0.2,
+        end_spirit_progress=0.8,
+        manager_settings=dict(
+            food_manager=dict(
+                num_init=260,
+                num_min=260,
+                num_max=300,
+            ),
+            thorns_manager=dict(
+                num_init=3,
+                num_min=3,
+                num_max=4,
+            ),
+            player_manager=dict(ball_settings=dict(score_init=13000, ), ),
+        ),
+        playback_settings=dict(
+            playback_type='by_frame',
+            by_frame=dict(
+                save_frame=False,  # when training should set as False
+                save_dir='./',
+                save_name_prefix='gobigger',
+            ),
+        ),
+    )
+
+
 @ENV_REGISTRY.register('gobigger_lightzero')
 class GoBiggerLightZeroEnv(BaseEnv):
 
     def __init__(self, cfg: dict) -> None:
-        self._cfg = cfg
+        self._cfg = deep_merge_dicts(default_t2p2_config, cfg)
+        self._cfg = EasyDict(self._cfg)
         # ding env info
         self._init_flag = False
         self._observation_space = None

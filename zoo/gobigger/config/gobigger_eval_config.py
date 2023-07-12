@@ -1,5 +1,5 @@
 # According to the model you want to evaluate, import the corresponding config.
-from lzero.entry import eval_muzero_gobigger
+from zoo.gobigger.entry import eval_muzero_gobigger
 import numpy as np
 
 if __name__ == "__main__":
