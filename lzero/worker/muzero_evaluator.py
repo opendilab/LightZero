@@ -13,6 +13,7 @@ from ding.utils import build_logger, EasyTimer
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
+from collections import defaultdict
 
 
 class MuZeroEvaluator(ISerialEvaluator):
@@ -92,6 +93,11 @@ class MuZeroEvaluator(ISerialEvaluator):
         # ==============================================================
         self.policy_config = policy_config
 
+        if 'multi_agent' in self.policy_config.keys() and self.policy_config.multi_agent:
+            self._multi_agent = self.policy_config.multi_agent
+        else:
+            self._multi_agent = False
+        
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
         """
         Overview:
@@ -183,6 +189,9 @@ class MuZeroEvaluator(ISerialEvaluator):
             return False
         self._last_eval_iter = train_iter
         return True
+    
+    def _add_info(self, last_timestep, info):
+        pass
 
     def eval(
             self,
@@ -234,17 +243,37 @@ class MuZeroEvaluator(ISerialEvaluator):
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
         dones = np.array([False for _ in range(env_nums)])
 
-        game_segments = [
-            GameSegment(
-                self._env.action_space,
-                game_segment_length=self.policy_config.game_segment_length,
-                config=self.policy_config
-            ) for _ in range(env_nums)
-        ]
-        for i in range(env_nums):
-            game_segments[i].reset(
-                [to_ndarray(init_obs[i]['observation']) for _ in range(self.policy_config.model.frame_stack_num)]
-            )
+        if self._multi_agent:
+            agent_num = len(init_obs[0]['action_mask'])
+            game_segments = [
+                [
+                    GameSegment(
+                        self._env.action_space,
+                        game_segment_length=self.policy_config.game_segment_length,
+                        config=self.policy_config
+                    ) for _ in range(agent_num)
+                ] for _ in range(env_nums)
+            ]
+            for env_id in range(env_nums):
+                for agent_id in range(agent_num):
+                    game_segments[env_id][agent_id].reset(
+                        [
+                            to_ndarray(init_obs[env_id]['observation'][agent_id])
+                            for _ in range(self.policy_config.model.frame_stack_num)
+                        ]
+                    )
+        else:
+            game_segments = [
+                GameSegment(
+                    self._env.action_space,
+                    game_segment_length=self.policy_config.game_segment_length,
+                    config=self.policy_config
+                ) for _ in range(env_nums)
+            ]
+            for i in range(env_nums):
+                game_segments[i].reset(
+                    [to_ndarray(init_obs[i]['observation']) for _ in range(self.policy_config.model.frame_stack_num)]
+                )
 
         ready_env_id = set()
         remain_episode = n_episode
@@ -257,7 +286,13 @@ class MuZeroEvaluator(ISerialEvaluator):
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
 
-                stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
+                if self._multi_agent:
+                    stack_obs = defaultdict(list)
+                    for env_id in ready_env_id:
+                        for agent_id in range(agent_num):
+                            stack_obs[env_id].append(game_segments[env_id][agent_id].get_obs())
+                else:
+                    stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
 
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
@@ -266,15 +301,21 @@ class MuZeroEvaluator(ISerialEvaluator):
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
 
                 stack_obs = to_ndarray(stack_obs)
-                stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
-                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
+                if self.policy_config.model.model_type and self.policy_config.model.model_type in ['conv', 'mlp']:
+                    stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
+                    stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
 
                 # ==============================================================
                 # policy forward
                 # ==============================================================
                 policy_output = self._policy.forward(stack_obs, action_mask, to_play)
-
-                actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
+                if self._multi_agent:
+                    actions_no_env_id = defaultdict(dict)
+                    for k, v in policy_output.items():
+                        for agent_id, act in enumerate(v['action']):
+                            actions_no_env_id[k][agent_id] = act
+                else:
+                    actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                 distributions_dict_no_env_id = {k: v['distributions'] for k, v in policy_output.items()}
                 if self.policy_config.sampled_algo:
                     root_sampled_actions_dict_no_env_id = {
@@ -312,11 +353,17 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                 for env_id, t in timesteps.items():
                     obs, reward, done, info = t.obs, t.reward, t.done, t.info
-
-                    game_segments[env_id].append(
-                        actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                        to_play_dict[env_id]
-                    )
+                    if self._multi_agent:
+                        for agent_id in range(agent_num):
+                            game_segments[env_id][agent_id].append(
+                                actions[env_id][agent_id], to_ndarray(obs['observation'][agent_id]), reward[agent_id],
+                                action_mask_dict[env_id][agent_id], to_play_dict[env_id]
+                            )
+                    else:
+                        game_segments[env_id].append(
+                            actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
+                            to_play_dict[env_id]
+                        )
 
                     # NOTE: in evaluator, we only need save the ``o_{t+1} = obs['observation']``
                     # game_segments[env_id].obs_segment.append(to_ndarray(obs['observation']))
@@ -370,18 +417,33 @@ class MuZeroEvaluator(ISerialEvaluator):
                             action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                             to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
 
-                            game_segments[env_id] = GameSegment(
-                                self._env.action_space,
-                                game_segment_length=self.policy_config.game_segment_length,
-                                config=self.policy_config
-                            )
+                            if self._multi_agent:
+                                for agent_id in range(agent_num):
+                                    game_segments[env_id][agent_id] = GameSegment(
+                                        self._env.action_space,
+                                        game_segment_length=self.policy_config.game_segment_length,
+                                        config=self.policy_config
+                                    )
 
-                            game_segments[env_id].reset(
-                                [
-                                    init_obs[env_id]['observation']
-                                    for _ in range(self.policy_config.model.frame_stack_num)
-                                ]
-                            )
+                                    game_segments[env_id][agent_id].reset(
+                                        [
+                                            init_obs[env_id]['observation'][agent_id]
+                                            for _ in range(self.policy_config.model.frame_stack_num)
+                                        ]
+                                    )
+                            else:
+                                game_segments[env_id] = GameSegment(
+                                    self._env.action_space,
+                                    game_segment_length=self.policy_config.game_segment_length,
+                                    config=self.policy_config
+                                )
+
+                                game_segments[env_id].reset(
+                                    [
+                                        init_obs[env_id]['observation']
+                                        for _ in range(self.policy_config.model.frame_stack_num)
+                                    ]
+                                )
 
                         # Env reset is done by env_manager automatically.
                         self._policy.reset([env_id])
@@ -405,8 +467,10 @@ class MuZeroEvaluator(ISerialEvaluator):
             'reward_std': np.std(episode_return),
             'reward_max': np.max(episode_return),
             'reward_min': np.min(episode_return),
-            # 'each_reward': episode_return,
         }
+
+        # add other info
+        info = self._add_info(t, info)
         episode_info = eval_monitor.get_episode_info()
         if episode_info is not None:
             info.update(episode_info)

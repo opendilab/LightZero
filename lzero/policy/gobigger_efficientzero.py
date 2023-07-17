@@ -1,11 +1,8 @@
-import copy
 from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch
-import torch.optim as optim
-from ding.model import model_wrap
-from ding.policy.base_policy import Policy
+from .efficientzero import EfficientZeroPolicy
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from torch.distributions import Categorical
@@ -13,7 +10,6 @@ from torch.nn import L1Loss
 
 from lzero.mcts import EfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts import EfficientZeroMCTSPtree as MCTSPtree
-from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, negative_cosine_similarity, prepare_obs, \
     configure_optimizers
@@ -22,146 +18,11 @@ from ding.torch_utils import to_device
 
 
 @POLICY_REGISTRY.register('gobigger_efficientzero')
-class GoBiggerEfficientZeroPolicy(Policy):
+class GoBiggerEfficientZeroPolicy(EfficientZeroPolicy):
     """
     Overview:
         The policy class for GoBiggerEfficientZero.
     """
-
-    # The default_config for EfficientZero policy.
-    config = dict(
-        model=dict(
-            # (str) The model type. For 1-dimensional vector obs, we use mlp model. For 3-dimensional image obs, we use conv model.
-            model_type='conv',  # options={'mlp', 'conv'}
-            # (bool) If True, the action space of the environment is continuous, otherwise discrete.
-            continuous_action_space=False,
-            # (tuple) The stacked obs shape.
-            # observation_shape=(1, 96, 96),  # if frame_stack_num=1
-            observation_shape=(4, 96, 96),  # if frame_stack_num=4
-            # (bool) Whether to use the self-supervised learning loss.
-            self_supervised_learning_loss=True,
-            # (bool) Whether to use discrete support to represent categorical distribution for value/reward/value_prefix.
-            categorical_distribution=True,
-            # (int) The image channel in image observation.
-            image_channel=1,
-            # (int) The number of frames to stack together.
-            frame_stack_num=1,
-            # (int) The scale of supports used in categorical distribution.
-            # This variable is only effective when ``categorical_distribution=True``.
-            support_scale=300,
-            # (int) The hidden size in LSTM.
-            lstm_hidden_size=512,
-            # (bool) whether to learn bias in the last linear layer in value and policy head.
-            bias=True,
-            # (str) The type of action encoding. Options are ['one_hot', 'not_one_hot']. Default to 'one_hot'.
-            discrete_action_encoding_type='one_hot',
-            # (bool) whether to use res connection in dynamics.
-            res_connection_in_dynamics=True,
-            # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
-            norm_type='BN',
-        ),
-        # ****** common ******
-        # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
-        # this variable is used in ``collector``.
-        sampled_algo=False,
-        # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
-        mcts_ctree=True,
-        # (bool) Whether to use cuda for network.
-        cuda=True,
-        # (int) The number of environments used in collecting data.
-        collector_env_num=8,
-        # (int) The number of environments used in evaluating policy.
-        evaluator_env_num=3,
-        # (str) The type of environment. The options are ['not_board_games', 'board_games'].
-        env_type='not_board_games',
-        # (str) The type of battle mode. The options are ['play_with_bot_mode', 'self_play_mode'].
-        battle_mode='play_with_bot_mode',
-        # (bool) Whether to monitor extra statistics in tensorboard.
-        monitor_extra_statistics=True,
-        # (int) The transition number of one ``GameSegment``.
-        game_segment_length=200,
-
-        # ****** observation ******
-        # (bool) Whether to transform image to string to save memory.
-        transform2string=False,
-        # (bool) Whether to use data augmentation.
-        use_augmentation=False,
-        # (list) The style of augmentation.
-        augmentation=['shift', 'intensity'],
-
-        # ******* learn ******
-        # (int) How many updates(iterations) to train after collector's one collection.
-        # Bigger "update_per_collect" means bigger off-policy.
-        # collect data -> update policy-> collect data -> ...
-        # For different env, we have different episode_length,
-        # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
-        update_per_collect=100,
-        # (int) Minibatch size for one gradient descent.
-        batch_size=256,
-        # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
-        optim_type='SGD',
-        # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
-        learning_rate=0.2,
-        # (int) Frequency of target network update.
-        target_update_freq=100,
-        # (float) Weight decay for training policy network.
-        weight_decay=1e-4,
-        # (float) One-order Momentum in optimizer, which stabilizes the training process (gradient direction).
-        momentum=0.9,
-        # (float) The maximum constraint value of gradient norm clipping.
-        grad_clip_value=10,
-        # (int) The number of episode in each collecting stage.
-        n_episode=8,
-        # (float) the number of simulations in MCTS.
-        num_simulations=50,
-        # (float) Discount factor (gamma) for returns.
-        discount_factor=0.997,
-        # (int) The number of step for calculating target q_value.
-        td_steps=5,
-        # (int) The number of unroll steps in dynamics network.
-        num_unroll_steps=5,
-        # (int) reset the hidden states in LSTM every ``lstm_horizon_len`` horizon steps.
-        lstm_horizon_len=5,
-        # (float) The weight of reward loss.
-        reward_loss_weight=1,
-        # (float) The weight of value loss.
-        value_loss_weight=0.25,
-        # (float) The weight of policy loss.
-        policy_loss_weight=1,
-        # (float) The weight of ssl (self-supervised learning) loss.
-        ssl_loss_weight=2,
-        # (bool) Whether to use piecewise constant learning rate decay.
-        # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=True,
-        # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
-        threshold_training_steps_for_final_lr=int(5e4),
-        # (int) The number of final training iterations to control temperature, which is only used for manually decay.
-        threshold_training_steps_for_final_temperature=int(1e5),
-        # (bool) Whether to use manually decayed temperature.
-        # i.e. temperature: 1 -> 0.5 -> 0.25
-        manual_temperature_decay=False,
-        # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
-        # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
-        fixed_temperature_value=0.25,
-
-        # ****** Priority ******
-        # (bool) Whether to use priority when sampling training data from the buffer.
-        use_priority=True,
-        # (bool) Whether to use the maximum priority for new collecting data.
-        use_max_priority_for_new_data=True,
-        # (float) The degree of prioritization to use. A value of 0 means no prioritization,
-        # while a value of 1 means full prioritization.
-        priority_prob_alpha=0.6,
-        # (float) The degree of correction to use. A value of 0 means no correction,
-        # while a value of 1 means full correction.
-        priority_prob_beta=0.4,
-
-        # ****** UCB ******
-        # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
-        root_dirichlet_alpha=0.3,
-        # (float) The noise weight at the root node of the search tree.
-        root_noise_weight=0.25,
-    )
 
     def default_model(self) -> Tuple[str, List[str]]:
         """
@@ -176,63 +37,6 @@ class GoBiggerEfficientZeroPolicy(Policy):
             by import_names path. For EfficientZero, ``lzero.model.efficientzero_model.EfficientZeroModel``
         """
         return 'GoBiggerEfficientZeroModel', ['lzero.model.gobigger.gobigger_efficientzero_model']
-
-    def _init_learn(self) -> None:
-        """
-        Overview:
-            Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
-        """
-        assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
-        if self._cfg.optim_type == 'SGD':
-            self._optimizer = optim.SGD(
-                self._model.parameters(),
-                lr=self._cfg.learning_rate,
-                momentum=self._cfg.momentum,
-                weight_decay=self._cfg.weight_decay,
-            )
-
-        elif self._cfg.optim_type == 'Adam':
-            self._optimizer = optim.Adam(
-                self._model.parameters(),
-                lr=self._cfg.learning_rate,
-                weight_decay=self._cfg.weight_decay,
-            )
-        elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = configure_optimizers(
-                model=self._model,
-                weight_decay=self._cfg.weight_decay,
-                learning_rate=self._cfg.learning_rate,
-                device_type=self._cfg.device
-            )
-
-        if self._cfg.lr_piecewise_constant_decay:
-            from torch.optim.lr_scheduler import LambdaLR
-            max_step = self._cfg.threshold_training_steps_for_final_lr
-            # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
-            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
-            self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
-
-        # use model_wrapper for specialized demands of different modes
-        self._target_model = copy.deepcopy(self._model)
-        self._target_model = model_wrap(
-            self._target_model,
-            wrapper_name='target',
-            update_type='assign',
-            update_kwargs={'freq': self._cfg.target_update_freq}
-        )
-        self._learn_model = self._model
-
-        if self._cfg.use_augmentation:
-            self.image_transforms = ImageTransforms(
-                self._cfg.augmentation,
-                image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
-            )
-        self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
-        self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
-
-        self.inverse_scalar_transform_handle = InverseScalarTransform(
-            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
-        )
 
     def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
         """
@@ -506,25 +310,13 @@ class GoBiggerEfficientZeroPolicy(Policy):
             'total_grad_norm_before_clip': total_grad_norm_before_clip
         }
 
-    def _init_collect(self) -> None:
-        """
-         Overview:
-             Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
-         """
-        self._collect_model = self._model
-        if self._cfg.mcts_ctree:
-            self._mcts_collect = MCTSCtree(self._cfg)
-        else:
-            self._mcts_collect = MCTSPtree(self._cfg)
-        self.collect_mcts_temperature = 1
-        self.collect_epsilon = 1
-
     def _forward_collect(
         self,
         data: torch.Tensor,
         action_mask: list = None,
         temperature: float = 1,
         to_play: List = [-1],
+        random_collect_episode_num: int = 0,
         epsilon: float = 0.25,
         ready_env_id=None
     ):
@@ -609,18 +401,25 @@ class GoBiggerEfficientZeroPolicy(Policy):
 
             for i in range(batch_size):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                if self._cfg.eps.eps_greedy_exploration_in_collect:
-                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self.collect_mcts_temperature, deterministic=True
-                    )
-                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                    if np.random.rand() < self.collect_epsilon:
-                        action = np.random.choice(legal_actions[i])
-                else:
+                if random_collect_episode_num>0:  # random collect
+                    distributions, value = roots_visit_count_distributions[i], roots_values[i]
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                         distributions, temperature=self.collect_mcts_temperature, deterministic=False
                     )
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                else: 
+                    if self._cfg.eps.eps_greedy_exploration_in_collect:  # eps greedy collect
+                        action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                            distributions, temperature=self.collect_mcts_temperature, deterministic=True
+                        )
+                        action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                        if np.random.rand() < self.collect_epsilon:
+                            action = np.random.choice(legal_actions[i])
+                    else: # collect
+                        action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                            distributions, temperature=self.collect_mcts_temperature, deterministic=False
+                        )
+                        action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                 output[i // agent_num]['action'].append(action)
                 output[i // agent_num]['distributions'].append(distributions)
                 output[i // agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
@@ -629,17 +428,6 @@ class GoBiggerEfficientZeroPolicy(Policy):
                 output[i // agent_num]['policy_logits'].append(policy_logits[i])
 
         return output
-
-    def _init_eval(self) -> None:
-        """
-        Overview:
-            Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
-        """
-        self._eval_model = self._model
-        if self._cfg.mcts_ctree:
-            self._mcts_eval = MCTSCtree(self._cfg)
-        else:
-            self._mcts_eval = MCTSPtree(self._cfg)
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id=None):
         """
@@ -728,62 +516,3 @@ class GoBiggerEfficientZeroPolicy(Policy):
 
         return output
 
-    def _monitor_vars_learn(self) -> List[str]:
-        """
-         Overview:
-             Register the variables to be monitored in learn mode. The registered variables will be logged in
-             tensorboard according to the return value ``_forward_learn``.
-         """
-        return [
-            'collect_mcts_temperature',
-            'collect_epsilon',
-            'cur_lr',
-            'weighted_total_loss',
-            'total_loss',
-            'policy_loss',
-            'policy_entropy',
-            'target_policy_entropy',
-            'value_prefix_loss',
-            'value_loss',
-            'consistency_loss',
-            'value_priority',
-            'target_value_prefix',
-            'target_value',
-            'predicted_value_prefixs',
-            'predicted_values',
-            'transformed_target_value_prefix',
-            'transformed_target_value',
-            'total_grad_norm_before_clip',
-        ]
-
-    def _state_dict_learn(self) -> Dict[str, Any]:
-        """
-        Overview:
-            Return the state_dict of learn mode, usually including model and optimizer.
-        Returns:
-            - state_dict (:obj:`Dict[str, Any]`): the dict of current policy learn state, for saving and restoring.
-        """
-        return {
-            'model': self._learn_model.state_dict(),
-            'target_model': self._target_model.state_dict(),
-            'optimizer': self._optimizer.state_dict(),
-        }
-
-    def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
-        """
-        Overview:
-            Load the state_dict variable into policy learn mode.
-        Arguments:
-            - state_dict (:obj:`Dict[str, Any]`): the dict of policy learn state saved before.
-        """
-        self._learn_model.load_state_dict(state_dict['model'])
-        self._target_model.load_state_dict(state_dict['target_model'])
-        self._optimizer.load_state_dict(state_dict['optimizer'])
-
-    def _process_transition(self, obs, policy_output, timestep):
-        # be compatible with DI-engine Policy class
-        pass
-
-    def _get_train_sample(self, data):
-        # be compatible with DI-engine Policy class
-        pass

@@ -13,7 +13,7 @@ from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 import copy
 from ding.rl_utils import get_epsilon_greedy_fn
-from lzero.entry.utils import log_buffer_memory_usage, random_collect
+from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.worker import GoBiggerMuZeroCollector, GoBiggerMuZeroEvaluator
 
@@ -126,7 +126,14 @@ def train_muzero_gobigger(
     # Learner's before_run hook.
     learner.call_hook('before_run')
     if cfg.policy.random_collect_episode_num > 0:
-        random_collect(cfg.policy, policy, collector, collector_env, replay_buffer)
+        collect_kwargs = {}
+        collect_kwargs['temperature'] = 1
+        collect_kwargs['epsilon'] = 0.0
+        new_data = collector.collect(n_episode=cfg.policy.random_collect_episode_num, train_iter=0, policy_kwargs=collect_kwargs)
+        # save returned new_data collected by the collector
+        replay_buffer.push_game_segments(new_data)
+        # remove the oldest data if the replay buffer is full.
+        replay_buffer.remove_oldest_data_to_fit()
         # reset the random_collect_episode_num to 0
         cfg.policy.random_collect_episode_num = 0
 
@@ -151,9 +158,6 @@ def train_muzero_gobigger(
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
         else:
             collect_kwargs['epsilon'] = 0.0
-        
-        stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-        stop, reward = vsbot_evaluator.eval_vsbot(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):

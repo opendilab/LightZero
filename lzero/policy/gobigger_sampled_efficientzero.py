@@ -1,11 +1,8 @@
-import copy
 from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch
-import torch.optim as optim
-from ding.model import model_wrap
-from ding.policy.base_policy import Policy
+from .sampled_efficientzero import SampledEfficientZeroPolicy
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from ditk import logging
@@ -14,7 +11,6 @@ from torch.nn import L1Loss
 
 from lzero.mcts import SampledEfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts import SampledEfficientZeroMCTSPtree as MCTSPtree
-from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, ez_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
     configure_optimizers
@@ -23,160 +19,11 @@ from ding.torch_utils import to_device
 
 
 @POLICY_REGISTRY.register('gobigger_sampled_efficientzero')
-class GoBiggerSampledEfficientZeroPolicy(Policy):
+class GoBiggerSampledEfficientZeroPolicy(SampledEfficientZeroPolicy):
     """
     Overview:
         The policy class for GoBigger Sampled EfficientZero.
     """
-
-    # The default_config for Sampled fEficientZero policy.
-    config = dict(
-        model=dict(
-            # (str) The model type. For 1-dimensional vector obs, we use mlp model. For 3-dimensional image obs, we use conv model.
-            model_type='conv',  # options={'mlp', 'conv'}
-            # (bool) If True, the action space of the environment is continuous, otherwise discrete.
-            continuous_action_space=False,
-            # (tuple) the stacked obs shape.
-            # observation_shape=(1, 96, 96),  # if frame_stack_num=1
-            observation_shape=(4, 96, 96),  # if frame_stack_num=4
-            # (bool) Whether to use the self-supervised learning loss.
-            self_supervised_learning_loss=True,
-            # (int) The size of action space. For discrete action space, it is the number of actions.
-            # For continuous action space, it is the dimension of action.
-            action_space_size=6,
-            # (bool) Whether to use discrete support to represent categorical distribution for value/reward/value_prefix.
-            categorical_distribution=True,
-            # (int) the image channel in image observation.
-            image_channel=1,
-            # (int) The number of frames to stack together.
-            frame_stack_num=1,
-            # (int) The scale of supports used in categorical distribution.
-            # This variable is only effective when ``categorical_distribution=True``.
-            support_scale=300,
-            # (int) The hidden size in LSTM.
-            lstm_hidden_size=512,
-            # (str) The type of sigma. options={'conditioned', 'fixed'}
-            sigma_type='conditioned',
-            # (float) The fixed sigma value. Only effective when ``sigma_type='fixed'``.
-            fixed_sigma_value=0.3,
-            # (bool) whether to learn bias in the last linear layer in value and policy head.
-            bias=True,
-            # (str) The type of action encoding. Options are ['one_hot', 'not_one_hot']. Default to 'one_hot'.
-            discrete_action_encoding_type='one_hot',
-            # (bool) whether to use res connection in dynamics.
-            res_connection_in_dynamics=True,
-            # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
-            norm_type='BN',
-        ),
-        # ****** common ******
-        # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
-        sampled_algo=True,
-        # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
-        mcts_ctree=True,
-        # (bool) Whether to use cuda in policy.
-        cuda=True,
-        # (int) The number of environments used in collecting data.
-        collector_env_num=8,
-        # (int) The number of environments used in evaluating policy.
-        evaluator_env_num=3,
-        # (str) The type of environment. The options are ['not_board_games', 'board_games'].
-        env_type='not_board_games',
-        # (str) The type of battle mode. The options are ['play_with_bot_mode', 'self_play_mode'].
-        battle_mode='play_with_bot_mode',
-        # (bool) Whether to monitor extra statistics in tensorboard.
-        monitor_extra_statistics=True,
-        # (int) The transition number of one ``GameSegment``.
-        game_segment_length=200,
-
-        # ****** observation ******
-        # (bool) Whether to transform image to string to save memory.
-        transform2string=False,
-        # (bool) Whether to use data augmentation.
-        use_augmentation=False,
-        # (list) The style of augmentation.
-        augmentation=['shift', 'intensity'],
-
-        # ******* learn ******
-        # (int) How many updates(iterations) to train after collector's one collection.
-        # Bigger "update_per_collect" means bigger off-policy.
-        # collect data -> update policy-> collect data -> ...
-        # For different env, we have different episode_length,
-        # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
-        update_per_collect=100,
-        # (int) Minibatch size for one gradient descent.
-        batch_size=256,
-        # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
-        optim_type='SGD',
-        learning_rate=0.2,  # init lr for manually decay schedule
-        # optim_type='Adam',
-        # lr_piecewise_constant_decay=False,
-        # learning_rate=0.003,  # lr for Adam optimizer
-        # (float) Weight uniform initialization range in the last output layer
-        init_w=3e-3,
-        normalize_prob_of_sampled_actions=False,
-        policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
-        # (int) Frequency of target network update.
-        target_update_freq=100,
-        weight_decay=1e-4,
-        momentum=0.9,
-        grad_clip_value=10,
-        # You can use either "n_sample" or "n_episode" in collector.collect.
-        # Get "n_episode" episodes per collect.
-        n_episode=8,
-        # (float) the number of simulations in MCTS.
-        num_simulations=50,
-        # (float) Discount factor (gamma) for returns.
-        discount_factor=0.997,
-        # (int) The number of step for calculating target q_value.
-        td_steps=5,
-        # (int) The number of unroll steps in dynamics network.
-        num_unroll_steps=5,
-        # (int) reset the hidden states in LSTM every ``lstm_horizon_len`` horizon steps.
-        lstm_horizon_len=5,
-        # (float) The weight of reward loss.
-        reward_loss_weight=1,
-        # (float) The weight of value loss.
-        value_loss_weight=0.25,
-        # (float) The weight of policy loss.
-        policy_loss_weight=1,
-        # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=0,
-        # (float) The weight of ssl (self-supervised learning) loss.
-        ssl_loss_weight=2,
-        # (bool) Whether to use the cosine learning rate decay.
-        cos_lr_scheduler=False,
-        # (bool) Whether to use piecewise constant learning rate decay.
-        # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=True,
-        # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
-        threshold_training_steps_for_final_lr=int(5e4),
-        # (int) The number of final training iterations to control temperature, which is only used for manually decay.
-        threshold_training_steps_for_final_temperature=int(1e5),
-        # (bool) Whether to use manually decayed temperature.
-        # i.e. temperature: 1 -> 0.5 -> 0.25
-        manual_temperature_decay=False,
-        # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
-        # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
-        fixed_temperature_value=0.25,
-
-        # ****** Priority ******
-        # (bool) Whether to use priority when sampling training data from the buffer.
-        use_priority=True,
-        # (bool) Whether to use the maximum priority for new collecting data.
-        use_max_priority_for_new_data=True,
-        # (float) The degree of prioritization to use. A value of 0 means no prioritization,
-        # while a value of 1 means full prioritization.
-        priority_prob_alpha=0.6,
-        # (float) The degree of correction to use. A value of 0 means no correction,
-        # while a value of 1 means full correction.
-        priority_prob_beta=0.4,
-
-        # ****** UCB ******
-        # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
-        root_dirichlet_alpha=0.3,
-        # (float) The noise weight at the root node of the search tree.
-        root_noise_weight=0.25,
-    )
 
     def default_model(self) -> Tuple[str, List[str]]:
         """
@@ -192,75 +39,6 @@ class GoBiggerSampledEfficientZeroPolicy(Policy):
             by import_names path. For Sampled EfficientZero, ``lzero.model.sampled_efficientzero_model.SampledEfficientZeroModel``
         """
         return 'GoBiggerSampledEfficientZeroModel', ['lzero.model.gobigger.gobigger_sampled_efficientzero_model']
-
-    def _init_learn(self) -> None:
-        """
-        Overview:
-            Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
-        """
-        assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
-        if self._cfg.model.continuous_action_space:
-            # Weight Init for the last output layer of gaussian policy head in prediction network.
-            init_w = self._cfg.init_w
-            self._model.prediction_network.fc_policy_head.mu.weight.data.uniform_(-init_w, init_w)
-            self._model.prediction_network.fc_policy_head.mu.bias.data.uniform_(-init_w, init_w)
-            self._model.prediction_network.fc_policy_head.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
-            try:
-                self._model.prediction_network.fc_policy_head.log_sigma_layer.bias.data.uniform_(-init_w, init_w)
-            except Exception as exception:
-                logging.warning(exception)
-
-        if self._cfg.optim_type == 'SGD':
-            self._optimizer = optim.SGD(
-                self._model.parameters(),
-                lr=self._cfg.learning_rate,
-                momentum=self._cfg.momentum,
-                weight_decay=self._cfg.weight_decay,
-            )
-
-        elif self._cfg.optim_type == 'Adam':
-            self._optimizer = optim.Adam(
-                self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
-            )
-        elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = configure_optimizers(
-                model=self._model,
-                weight_decay=self._cfg.weight_decay,
-                learning_rate=self._cfg.learning_rate,
-                device_type=self._cfg.device
-            )
-
-        if self._cfg.cos_lr_scheduler is True:
-            from torch.optim.lr_scheduler import CosineAnnealingLR
-            self.lr_scheduler = CosineAnnealingLR(self._optimizer, 1e6, eta_min=0, last_epoch=-1)
-
-        if self._cfg.lr_piecewise_constant_decay:
-            from torch.optim.lr_scheduler import LambdaLR
-            max_step = self._cfg.threshold_training_steps_for_final_lr
-            # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
-            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
-            self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
-
-        # use model_wrapper for specialized demands of different modes
-        self._target_model = copy.deepcopy(self._model)
-        self._target_model = model_wrap(
-            self._target_model,
-            wrapper_name='target',
-            update_type='assign',
-            update_kwargs={'freq': self._cfg.target_update_freq}
-        )
-        self._learn_model = self._model
-
-        if self._cfg.use_augmentation:
-            self.image_transforms = ImageTransforms(
-                self._cfg.augmentation,
-                image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
-            )
-        self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
-        self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
-        self.inverse_scalar_transform_handle = InverseScalarTransform(
-            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
-        )
 
     def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
         """
@@ -486,7 +264,7 @@ class GoBiggerSampledEfficientZeroPolicy(Policy):
             self._learn_model.parameters(), self._cfg.grad_clip_value
         )
         self._optimizer.step()
-        if self._cfg.cos_lr_scheduler is True or self._cfg.lr_piecewise_constant_decay is True:
+        if self._cfg.cos_lr_scheduler or self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()
 
         # ==============================================================
@@ -494,47 +272,38 @@ class GoBiggerSampledEfficientZeroPolicy(Policy):
         # ==============================================================
         self._target_model.update(self._learn_model.state_dict())
 
-        loss_data = (
-            weighted_total_loss.item(), loss.mean().item(), policy_loss.mean().item(), value_prefix_loss.mean().item(),
-            value_loss.mean().item(), consistency_loss.mean()
-        )
         if self._cfg.monitor_extra_statistics:
             predicted_value_prefixs = torch.stack(predicted_value_prefixs).transpose(1, 0).squeeze(-1)
             predicted_value_prefixs = predicted_value_prefixs.reshape(-1).unsqueeze(-1)
 
-            td_data = (
-                value_priority, target_value_prefix.detach().cpu().numpy(), target_value.detach().cpu().numpy(),
-                transformed_target_value_prefix.detach().cpu().numpy(), transformed_target_value.detach().cpu().numpy(),
-                target_value_prefix_categorical.detach().cpu().numpy(), target_value_categorical.detach().cpu().numpy(),
-                predicted_value_prefixs.detach().cpu().numpy(), predicted_values.detach().cpu().numpy(),
-                target_policy.detach().cpu().numpy(), predicted_policies.detach().cpu().numpy(), latent_state_list
-            )
-
-        if self._cfg.model.continuous_action_space:
-            return {
+        return_data = {
                 'cur_lr': self._optimizer.param_groups[0]['lr'],
+                'collect_epsilon': self.collect_epsilon,
                 'collect_mcts_temperature': self.collect_mcts_temperature,
-                'weighted_total_loss': loss_data[0],
-                'total_loss': loss_data[1],
-                'policy_loss': loss_data[2],
+                'weighted_total_loss': weighted_total_loss.item(),
+                'total_loss': loss.mean().item(),
+                'policy_loss': policy_loss.mean().item(),
                 'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
                 'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'value_prefix_loss': loss_data[3],
-                'value_loss': loss_data[4],
-                'consistency_loss': loss_data[5] / self._cfg.num_unroll_steps,
+                'value_prefix_loss': value_prefix_loss.mean().item(),
+                'value_loss': value_loss.mean().item(),
+                'consistency_loss': consistency_loss.mean() / self._cfg.num_unroll_steps,
 
                 # ==============================================================
                 # priority related
                 # ==============================================================
-                'value_priority': td_data[0].flatten().mean().item(),
+                'value_priority': value_priority.flatten().mean().item(),
                 'value_priority_orig': value_priority,
-                'target_value_prefix': td_data[1].flatten().mean().item(),
-                'target_value': td_data[2].flatten().mean().item(),
-                'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
-                'transformed_target_value': td_data[4].flatten().mean().item(),
-                'predicted_value_prefixs': td_data[7].flatten().mean().item(),
-                'predicted_values': td_data[8].flatten().mean().item(),
+                'target_value_prefix': target_value_prefix.detach().cpu().numpy().mean().item(),
+                'target_value': target_value.detach().cpu().numpy().mean().item(),
+                'transformed_target_value_prefix': transformed_target_value_prefix.detach().cpu().numpy().mean().item(),
+                'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
+                'predicted_value_prefixs': predicted_value_prefixs.detach().cpu().numpy().mean().item(),
+                'predicted_values': predicted_values.detach().cpu().numpy().mean().item()
+        }
 
+        if self._cfg.model.continuous_action_space:
+            return_data.update({
                 # ==============================================================
                 # sampled related core code
                 # ==============================================================
@@ -549,32 +318,9 @@ class GoBiggerSampledEfficientZeroPolicy(Policy):
                 'target_sampled_actions_min': target_sampled_actions[:, :, 0].min().item(),
                 'target_sampled_actions_mean': target_sampled_actions[:, :, 0].mean().item(),
                 'total_grad_norm_before_clip': total_grad_norm_before_clip
-            }
+            })
         else:
-            return {
-                'cur_lr': self._optimizer.param_groups[0]['lr'],
-                'collect_mcts_temperature': self.collect_mcts_temperature,
-                'weighted_total_loss': loss_data[0],
-                'total_loss': loss_data[1],
-                'policy_loss': loss_data[2],
-                'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'value_prefix_loss': loss_data[3],
-                'value_loss': loss_data[4],
-                'consistency_loss': loss_data[5] / self._cfg.num_unroll_steps,
-
-                # ==============================================================
-                # priority related
-                # ==============================================================
-                'value_priority': td_data[0].flatten().mean().item(),
-                'value_priority_orig': value_priority,
-                'target_value_prefix': td_data[1].flatten().mean().item(),
-                'target_value': td_data[2].flatten().mean().item(),
-                'transformed_target_value_prefix': td_data[3].flatten().mean().item(),
-                'transformed_target_value': td_data[4].flatten().mean().item(),
-                'predicted_value_prefixs': td_data[7].flatten().mean().item(),
-                'predicted_values': td_data[8].flatten().mean().item(),
-
+            return_data.update({
                 # ==============================================================
                 # sampled related core code
                 # ==============================================================
@@ -583,217 +329,12 @@ class GoBiggerSampledEfficientZeroPolicy(Policy):
                 'target_sampled_actions_min': target_sampled_actions[:, :].float().min().item(),
                 'target_sampled_actions_mean': target_sampled_actions[:, :].float().mean().item(),
                 'total_grad_norm_before_clip': total_grad_norm_before_clip
-            }
-
-    def _calculate_policy_loss_cont(
-            self, policy_loss: torch.Tensor, policy_logits: torch.Tensor, target_policy: torch.Tensor,
-            mask_batch: torch.Tensor, child_sampled_actions_batch: torch.Tensor, unroll_step: int
-    ) -> Tuple[torch.Tensor]:
-        """
-        Overview:
-            Calculate the policy loss for continuous action space.
-        Arguments:
-            - policy_loss (:obj:`torch.Tensor`): The policy loss tensor.
-            - policy_logits (:obj:`torch.Tensor`): The policy logits tensor.
-            - target_policy (:obj:`torch.Tensor`): The target policy tensor.
-            - mask_batch (:obj:`torch.Tensor`): The mask tensor.
-            - child_sampled_actions_batch (:obj:`torch.Tensor`): The child sampled actions tensor.
-            - unroll_step (:obj:`int`): The unroll step.
-        Returns:
-            - policy_loss (:obj:`torch.Tensor`): The policy loss tensor.
-            - policy_entropy (:obj:`torch.Tensor`): The policy entropy tensor.
-            - policy_entropy_loss (:obj:`torch.Tensor`): The policy entropy loss tensor.
-            - target_policy_entropy (:obj:`torch.Tensor`): The target policy entropy tensor.
-            - target_sampled_actions (:obj:`torch.Tensor`): The target sampled actions tensor.
-            - mu (:obj:`torch.Tensor`): The mu tensor.
-            - sigma (:obj:`torch.Tensor`): The sigma tensor.
-        """
-        (mu, sigma
-         ) = policy_logits[:, :self._cfg.model.action_space_size], policy_logits[:, -self._cfg.model.action_space_size:]
-
-        dist = Independent(Normal(mu, sigma), 1)
-
-        # take the init hypothetical step k=unroll_step
-        target_normalized_visit_count = target_policy[:, unroll_step]
-
-        # ******* NOTE: target_policy_entropy is only for debug.  ******
-        non_masked_indices = torch.nonzero(mask_batch[:, unroll_step]).squeeze(-1)
-        # Check if there are any unmasked rows
-        if len(non_masked_indices) > 0:
-            target_normalized_visit_count_masked = torch.index_select(
-                target_normalized_visit_count, 0, non_masked_indices
-            )
-            target_dist = Categorical(target_normalized_visit_count_masked)
-            target_policy_entropy = target_dist.entropy().mean()
-        else:
-            # Set target_policy_entropy to 0 if all rows are masked
-            target_policy_entropy = 0
-
-        # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1) -> (batch_size,
-        # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2, 1) ->  (4, 20, 2)
-        target_sampled_actions = child_sampled_actions_batch[:, unroll_step].squeeze(-1)
-
-        policy_entropy = dist.entropy().mean()
-        policy_entropy_loss = -dist.entropy()
-
-        # Project the sampled-based improved policy back onto the space of representable policies. calculate KL
-        # loss (batch_size, num_of_sampled_actions) -> (4,20) target_normalized_visit_count is
-        # categorical distribution, the range of target_log_prob_sampled_actions is (-inf, 0), add 1e-6 for
-        # numerical stability.
-        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
-        log_prob_sampled_actions = []
-        for k in range(self._cfg.model.num_of_sampled_actions):
-            # target_sampled_actions[:,i,:].shape: batch_size, action_dim -> 4,2
-            # dist.log_prob(target_sampled_actions[:,i,:]).shape: batch_size -> 4
-            # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
-
-            # way 1:
-            # log_prob = dist.log_prob(target_sampled_actions[:, k, :])
-
-            # way 2: SAC-like
-            y = 1 - target_sampled_actions[:, k, :].pow(2)
-
-            # NOTE: for numerical stability.
-            target_sampled_actions_clamped = torch.clamp(
-                target_sampled_actions[:, k, :], torch.tensor(-1 + 1e-6), torch.tensor(1 - 1e-6)
-            )
-            target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
-
-            # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
-            log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
-            log_prob = log_prob - torch.log(y + 1e-6).sum(-1, keepdim=True)
-            log_prob = log_prob.squeeze(-1)
-
-            log_prob_sampled_actions.append(log_prob)
-
-        # shape: (batch_size, num_of_sampled_actions) e.g. (4,20)
-        log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
-
-        if self._cfg.normalize_prob_of_sampled_actions:
-            # normalize the prob of sampled actions
-            prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(
-                -1
-            ).unsqueeze(-1).repeat(1, log_prob_sampled_actions.shape[-1]).detach()
-            # the above line is equal to the following line.
-            # prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-6)
-            log_prob_sampled_actions = torch.log(prob_sampled_actions_norm + 1e-6)
-
-        # NOTE: the +=.
-        if self._cfg.policy_loss_type == 'KL':
-            # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
-            policy_loss += (
-                torch.exp(target_log_prob_sampled_actions.detach()) *
-                (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
-            ).sum(-1) * mask_batch[:, unroll_step]
-        elif self._cfg.policy_loss_type == 'cross_entropy':
-            # cross_entropy loss: - sum(p * log (q) )
-            policy_loss += -torch.sum(
-                torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
-            ) * mask_batch[:, unroll_step]
-
-        return policy_loss, policy_entropy, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
-
-    def _calculate_policy_loss_disc(
-            self, policy_loss: torch.Tensor, policy_logits: torch.Tensor, target_policy: torch.Tensor,
-            mask_batch: torch.Tensor, child_sampled_actions_batch: torch.Tensor, unroll_step: int
-    ) -> Tuple[torch.Tensor]:
-        """
-        Overview:
-            Calculate the policy loss for discrete action space.
-        Arguments:
-            - policy_loss (:obj:`torch.Tensor`): The policy loss tensor.
-            - policy_logits (:obj:`torch.Tensor`): The policy logits tensor.
-            - target_policy (:obj:`torch.Tensor`): The target policy tensor.
-            - mask_batch (:obj:`torch.Tensor`): The mask tensor.
-            - child_sampled_actions_batch (:obj:`torch.Tensor`): The child sampled actions tensor.
-            - unroll_step (:obj:`int`): The unroll step.
-        Returns:
-            - policy_loss (:obj:`torch.Tensor`): The policy loss tensor.
-            - policy_entropy (:obj:`torch.Tensor`): The policy entropy tensor.
-            - policy_entropy_loss (:obj:`torch.Tensor`): The policy entropy loss tensor.
-            - target_policy_entropy (:obj:`torch.Tensor`): The target policy entropy tensor.
-            - target_sampled_actions (:obj:`torch.Tensor`): The target sampled actions tensor.
-        """
-        prob = torch.softmax(policy_logits, dim=-1)
-        dist = Categorical(prob)
-
-        # take the init hypothetical step k=unroll_step
-        target_normalized_visit_count = target_policy[:, unroll_step]
-
-        # Note: The target_policy_entropy is just for debugging.
-        target_normalized_visit_count_masked = torch.index_select(
-            target_normalized_visit_count, 0,
-            torch.nonzero(mask_batch[:, unroll_step]).squeeze(-1)
-        )
-        target_dist = Categorical(target_normalized_visit_count_masked)
-        target_policy_entropy = target_dist.entropy().mean()
-
-        # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1) -> (batch_size,
-        # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2, 1) ->  (4, 20, 2)
-        target_sampled_actions = child_sampled_actions_batch[:, unroll_step].squeeze(-1)
-
-        policy_entropy = dist.entropy().mean()
-        policy_entropy_loss = -dist.entropy()
-
-        # Project the sampled-based improved policy back onto the space of representable policies. calculate KL
-        # loss (batch_size, num_of_sampled_actions) -> (4,20) target_normalized_visit_count is
-        # categorical distribution, the range of target_log_prob_sampled_actions is (-inf, 0), add 1e-6 for
-        # numerical stability.
-        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
-
-        log_prob_sampled_actions = []
-        for k in range(self._cfg.model.num_of_sampled_actions):
-            # target_sampled_actions[:,i,:] shape: (batch_size, action_dim) e.g. (4,2)
-            # dist.log_prob(target_sampled_actions[:,i,:]) shape: batch_size e.g. 4
-            # dist is normal distribution, the range of log_prob_sampled_actions is (-inf, inf)
-
-            if len(target_sampled_actions.shape) == 2:
-                target_sampled_actions = target_sampled_actions.unsqueeze(-1)
-
-            log_prob = torch.log(prob.gather(-1, target_sampled_actions[:, k].long()).squeeze(-1) + 1e-6)
-            log_prob_sampled_actions.append(log_prob)
-
-        # (batch_size, num_of_sampled_actions) e.g. (4,20)
-        log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
-
-        if self._cfg.normalize_prob_of_sampled_actions:
-            # normalize the prob of sampled actions
-            prob_sampled_actions_norm = torch.exp(log_prob_sampled_actions) / torch.exp(log_prob_sampled_actions).sum(
-                -1
-            ).unsqueeze(-1).repeat(1, log_prob_sampled_actions.shape[-1]).detach()
-            # the above line is equal to the following line.
-            # prob_sampled_actions_norm = F.normalize(torch.exp(log_prob_sampled_actions), p=1., dim=-1, eps=1e-6)
-            log_prob_sampled_actions = torch.log(prob_sampled_actions_norm + 1e-6)
-
-        # NOTE: the +=.
-        if self._cfg.policy_loss_type == 'KL':
-            # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
-            policy_loss += (
-                torch.exp(target_log_prob_sampled_actions.detach()) *
-                (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
-            ).sum(-1) * mask_batch[:, unroll_step]
-        elif self._cfg.policy_loss_type == 'cross_entropy':
-            # cross_entropy loss: - sum(p * log (q) )
-            policy_loss += -torch.sum(
-                torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
-            ) * mask_batch[:, unroll_step]
-
-        return policy_loss, policy_entropy, policy_entropy_loss, target_policy_entropy, target_sampled_actions
-
-    def _init_collect(self) -> None:
-        """
-          Overview:
-              Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
-          """
-        self._collect_model = self._model
-        if self._cfg.mcts_ctree:
-            self._mcts_collect = MCTSCtree(self._cfg)
-        else:
-            self._mcts_collect = MCTSPtree(self._cfg)
-        self.collect_mcts_temperature = 1
+            })
+        
+        return return_data
 
     def _forward_collect(
-        self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1, ready_env_id=None
+        self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1, epsilon: float = 0.25, ready_env_id=None
     ):
         """
         Overview:
@@ -820,6 +361,7 @@ class GoBiggerSampledEfficientZeroPolicy(Policy):
         """
         self._collect_model.eval()
         self.collect_mcts_temperature = temperature
+        self.collect_epsilon = epsilon
 
         active_collect_env_num = len(data)
         data = to_tensor(data)
@@ -922,17 +464,6 @@ class GoBiggerSampledEfficientZeroPolicy(Policy):
                 output[i // agent_num]['policy_logits'].append(policy_logits[i])
 
         return output
-
-    def _init_eval(self) -> None:
-        """
-         Overview:
-             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
-         """
-        self._eval_model = self._model
-        if self._cfg.mcts_ctree:
-            self._mcts_eval = MCTSCtree(self._cfg)
-        else:
-            self._mcts_eval = MCTSPtree(self._cfg)
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id=None):
         """
@@ -1059,108 +590,3 @@ class GoBiggerSampledEfficientZeroPolicy(Policy):
                 output[i // agent_num]['policy_logits'].append(policy_logits[i])
 
         return output
-
-    def _monitor_vars_learn(self) -> List[str]:
-        """
-        Overview:
-             Register the variables to be monitored in learn mode. The registered variables will be logged in
-             tensorboard according to the return value ``_forward_learn``.
-        """
-        if self._cfg.model.continuous_action_space:
-            return [
-                'collect_mcts_temperature',
-                'cur_lr',
-                'total_loss',
-                'weighted_total_loss',
-                'policy_loss',
-                'value_prefix_loss',
-                'value_loss',
-                'consistency_loss',
-                'value_priority',
-                'target_value_prefix',
-                'target_value',
-                'predicted_value_prefixs',
-                'predicted_values',
-                'transformed_target_value_prefix',
-                'transformed_target_value',
-
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                'policy_entropy',
-                'target_policy_entropy',
-                'policy_mu_max',
-                'policy_mu_min',
-                'policy_mu_mean',
-                'policy_sigma_max',
-                'policy_sigma_min',
-                'policy_sigma_mean',
-                # take the fist dim in action space
-                'target_sampled_actions_max',
-                'target_sampled_actions_min',
-                'target_sampled_actions_mean',
-                'total_grad_norm_before_clip',
-            ]
-        else:
-            return [
-                'collect_mcts_temperature',
-                'cur_lr',
-                'total_loss',
-                'weighted_total_loss',
-                'loss_mean',
-                'policy_loss',
-                'value_prefix_loss',
-                'value_loss',
-                'consistency_loss',
-                'value_priority',
-                'target_value_prefix',
-                'target_value',
-                'predicted_value_prefixs',
-                'predicted_values',
-                'transformed_target_value_prefix',
-                'transformed_target_value',
-
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                'policy_entropy',
-                'target_policy_entropy',
-
-                # take the fist dim in action space
-                'target_sampled_actions_max',
-                'target_sampled_actions_min',
-                'target_sampled_actions_mean',
-                'total_grad_norm_before_clip',
-            ]
-
-    def _state_dict_learn(self) -> Dict[str, Any]:
-        """
-        Overview:
-            Return the state_dict of learn mode, usually including model and optimizer.
-        Returns:
-            - state_dict (:obj:`Dict[str, Any]`): the dict of current policy learn state, for saving and restoring.
-        """
-        return {
-            'model': self._learn_model.state_dict(),
-            'target_model': self._target_model.state_dict(),
-            'optimizer': self._optimizer.state_dict(),
-        }
-
-    def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
-        """
-        Overview:
-            Load the state_dict variable into policy learn mode.
-        Arguments:
-            - state_dict (:obj:`Dict[str, Any]`): the dict of policy learn state saved before.
-        """
-        self._learn_model.load_state_dict(state_dict['model'])
-        self._target_model.load_state_dict(state_dict['target_model'])
-        self._optimizer.load_state_dict(state_dict['optimizer'])
-
-    def _process_transition(self, obs, policy_output, timestep):
-        # be compatible with DI-engine Policy class
-        pass
-
-    def _get_train_sample(self, data):
-        # be compatible with DI-engine Policy class
-        pass

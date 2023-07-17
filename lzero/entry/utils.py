@@ -6,55 +6,6 @@ from easydict import EasyDict
 from pympler.asizeof import asizeof
 from tensorboardX import SummaryWriter
 
-from lzero.policy.gobigger_random_policy import GoBiggerRandomPolicy
-
-
-def random_collect(
-        policy_cfg: 'EasyDict',  # noqa
-        policy: 'Policy',  # noqa
-        collector: 'ISerialCollector',  # noqa
-        collector_env: 'BaseEnvManager',  # noqa
-        replay_buffer: 'IBuffer',  # noqa
-        postprocess_data_fn: Optional[Callable] = None
-) -> None:  # noqa
-    """
-    Overview:
-        Collect data by random policy.
-    Arguments:
-        - policy_cfg (:obj:`EasyDict`): The policy config.
-        - policy (:obj:`Policy`): The policy.
-        - collector (:obj:`ISerialCollector`): The collector.
-        - collector_env (:obj:`BaseEnvManager`): The collector env manager.
-        - replay_buffer (:obj:`IBuffer`): The replay buffer.
-        - postprocess_data_fn (:obj:`Optional[Callable]`): The postprocess function for the collected data.
-    """
-    assert policy_cfg.random_collect_episode_num > 0
-
-    random_policy = GoBiggerRandomPolicy(cfg=policy_cfg)
-    # set the policy to random policy
-    collector.reset_policy(random_policy.collect_mode)
-
-    collect_kwargs = {}
-    # set temperature for visit count distributions according to the train_iter,
-    # please refer to Appendix D in MuZero paper for details.
-    collect_kwargs['temperature'] = 1
-    collect_kwargs['epsilon'] = 0.0
-
-    # Collect data by default config n_sample/n_episode.
-    new_data = collector.collect(train_iter=0, policy_kwargs=collect_kwargs)
-
-    if postprocess_data_fn is not None:
-        new_data = postprocess_data_fn(new_data)
-
-    # save returned new_data collected by the collector
-    replay_buffer.push_game_segments(new_data)
-    # remove the oldest data if the replay buffer is full.
-    replay_buffer.remove_oldest_data_to_fit()
-
-    # restore the policy
-    collector.reset_policy(policy.collect_mode)
-
-
 def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:
     """
     Overview:

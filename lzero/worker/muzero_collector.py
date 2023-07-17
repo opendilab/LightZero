@@ -292,6 +292,9 @@ class MuZeroCollector(ISerialCollector):
                 raise RuntimeError("Please specify collect n_episode")
             else:
                 n_episode = self._default_n_episode
+            random_collect_episode_num = 0
+        else:
+            random_collect_episode_num = n_episode
         assert n_episode >= self._env_num, "Please make sure n_episode >= env_num{}/{}".format(n_episode, self._env_num)
         if policy_kwargs is None:
             policy_kwargs = {}
@@ -423,7 +426,7 @@ class MuZeroCollector(ISerialCollector):
                 # ==============================================================
                 # policy forward
                 # ==============================================================
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon)
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, random_collect_episode_num, epsilon)
                 if self._multi_agent:
                     actions_no_env_id = defaultdict(dict)
                     for k, v in policy_output.items():
