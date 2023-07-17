@@ -402,11 +402,11 @@ class GoBiggerEfficientZeroPolicy(EfficientZeroPolicy):
             for i in range(batch_size):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 if random_collect_episode_num>0:  # random collect
-                    distributions, value = roots_visit_count_distributions[i], roots_values[i]
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                         distributions, temperature=self.collect_mcts_temperature, deterministic=False
                     )
-                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                    # action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                    action = np.random.choice(legal_actions[i])
                 else: 
                     if self._cfg.eps.eps_greedy_exploration_in_collect:  # eps greedy collect
                         action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
