@@ -9,6 +9,7 @@ from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
+from ding.rl_utils import get_epsilon_greedy_fn
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
@@ -112,8 +113,22 @@ def train_muzero(
     # ==============================================================
     # Learner's before_run hook.
     learner.call_hook('before_run')
+    
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
+
+    if cfg.policy.random_collect_episode_num > 0:
+        collect_kwargs = {}
+        collect_kwargs['temperature'] = 1
+        collect_kwargs['epsilon'] = 0.0
+        new_data = collector.collect(n_episode=cfg.policy.random_collect_episode_num, train_iter=0, policy_kwargs=collect_kwargs)
+        # save returned new_data collected by the collector
+        replay_buffer.push_game_segments(new_data)
+        # remove the oldest data if the replay buffer is full.
+        replay_buffer.remove_oldest_data_to_fit()
+        # reset the random_collect_episode_num to 0
+        cfg.policy.random_collect_episode_num = 0
+
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         collect_kwargs = {}
@@ -125,6 +140,17 @@ def train_muzero(
             policy_config.threshold_training_steps_for_final_temperature,
             trained_steps=learner.train_iter
         )
+
+        if policy_config.eps.eps_greedy_exploration_in_collect:
+            epsilon_greedy_fn = get_epsilon_greedy_fn(
+                start=policy_config.eps.start,
+                end=policy_config.eps.end,
+                decay=policy_config.eps.decay,
+                type_=policy_config.eps.type
+            )
+            collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
+        else:
+            collect_kwargs['epsilon'] = 0.0
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
