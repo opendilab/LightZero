@@ -168,6 +168,24 @@ class EfficientZeroPolicy(Policy):
         root_dirichlet_alpha=0.3,
         # (float) The noise weight at the root node of the search tree.
         root_noise_weight=0.25,
+
+        # ****** Explore by random collect******
+        random_collect_episode_num=0,
+        # (int) The number of episode using random collecting at initial stage.
+
+        # ****** Explore by eps greedy ******
+        eps=dict(
+            eps_greedy_exploration_in_collect=False,
+            # (bool) Whether to use eps greedy exploration in collecting data.
+            type='linear', 
+            # 'linear', 'exp'
+            start=1.,
+            # (float) The start value of eps.
+            end=0.05,
+            # (float) The end value of eps.
+            decay=int(1e5),
+            # (int) The decay steps from start to end eps.
+        ),
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
@@ -515,7 +533,7 @@ class EfficientZeroPolicy(Policy):
         to_play: List = [-1],
         random_collect_episode_num: int = 0,
         epsilon: float = 0.25,
-        ready_env_id=None
+        ready_env_id = None
     ):
         """
         Overview:
@@ -586,21 +604,23 @@ class EfficientZeroPolicy(Policy):
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                if random_collect_episode_num>0:  # random collect
+                if random_collect_episode_num>0:
+                    # random collect
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                         distributions, temperature=self.collect_mcts_temperature, deterministic=False
                     )
-                    # action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                     action = np.random.choice(legal_actions[i])
                 else:
-                    if self._cfg.eps.eps_greedy_exploration_in_collect:
+                    if self._cfg.eps.eps_greedy_exploration_in_collect: 
+                        # eps-greedy collect
                         action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                             distributions, temperature=self.collect_mcts_temperature, deterministic=True
                         )
                         action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                         if np.random.rand() < self.collect_epsilon:
                             action = np.random.choice(legal_actions[i])
-                    else:
+                    else: 
+                        # normal collect
                         # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                         # the index within the legal action set, rather than the index in the entire action set.
                         action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(

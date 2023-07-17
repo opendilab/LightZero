@@ -118,9 +118,7 @@ def train_muzero(
         update_per_collect = cfg.policy.update_per_collect
 
     if cfg.policy.random_collect_episode_num > 0:
-        collect_kwargs = {}
-        collect_kwargs['temperature'] = 1
-        collect_kwargs['epsilon'] = 0.0
+        collect_kwargs = {'temperature':1, 'epsilon':0.0}
         new_data = collector.collect(n_episode=cfg.policy.random_collect_episode_num, train_iter=0, policy_kwargs=collect_kwargs)
         # save returned new_data collected by the collector
         replay_buffer.push_game_segments(new_data)
