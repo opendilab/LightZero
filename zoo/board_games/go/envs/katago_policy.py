@@ -653,7 +653,7 @@ class KatagoPolicy:
             print('?%s ???\n\n' % (cmdid,), end='')
         sys.stdout.flush()
 
-    def get_outgiputs(self, gs, rules):
+    def get_outputs(self, gs, rules):
         with torch.no_grad():
             self.model.eval()
 

@@ -25,6 +25,7 @@ cartpole_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        stop_valuee=int(1e6),
     ),
     policy=dict(
         model=dict(

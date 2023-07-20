@@ -1,0 +1,68 @@
+"""
+The Node and MCTS class for AlphaZero.
+"""
+
+import copy
+import math
+
+import numpy as np
+import torch
+import torch.nn as nn
+from easydict import EasyDict
+from typing import List, Dict, Any, Tuple, Union, Callable, Type
+from ding.envs import BaseEnv
+
+
+cdef class Node:
+    cdef Node _parent
+    cdef dict _children
+    cdef int _visit_count
+    cdef float _value_sum, prior_p
+
+    def __cinit__(self, Node parent=None, float prior_p=1.0):
+        self._parent = parent
+        self._children = {}
+        self._visit_count = 0
+        self._value_sum = 0
+        self.prior_p = prior_p
+
+    cpdef float value(self):
+        if self._visit_count == 0:
+            return 0
+        return self._value_sum / self._visit_count
+
+    cpdef update(self, float value):
+        self._visit_count += 1
+        self._value_sum += value
+
+    cpdef update_recursive(self, float leaf_value, str mcts_mode):
+        if mcts_mode == 'self_play_mode':
+            self.update(leaf_value)
+            if self._parent is None:
+                return
+            self._parent.update_recursive(-leaf_value, mcts_mode)
+        if mcts_mode == 'play_with_bot_mode':
+            self.update(leaf_value)
+            if self._parent is None:
+                return
+            self._parent.update_recursive(leaf_value, mcts_mode)
+
+    cpdef dict is_leaf(self):
+        return self._children == {}
+
+    cpdef bint is_root(self):
+        return self._parent is None
+
+    @property
+    def parent(self) -> None:
+        return self._parent
+
+    @property
+    def children(self) -> None:
+        return self._children
+
+    @property
+    def visit_count(self) -> None:
+        return self._visit_count
+
+

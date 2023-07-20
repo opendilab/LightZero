@@ -77,6 +77,11 @@ class TicTacToeEnv(BaseEnv):
         if 'alpha_beta_pruning' in self.bot_action_type:
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 
+    def legal_actions_func(self):
+        # Convert NumPy arrays to nested tuples to make them hashable.
+        return _legal_actions_func_lru(tuple(map(tuple, self.board)))
+
+
     @property
     def legal_actions(self):
         # Convert NumPy arrays to nested tuples to make them hashable.

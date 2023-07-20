@@ -10,7 +10,11 @@ from ding.torch_utils import to_device
 from ding.utils import POLICY_REGISTRY
 from ding.utils.data import default_collate
 
-from lzero.mcts.ptree.ptree_az import MCTS
+from lzero.mcts.ptree.ptree_az_cnode import MCTS
+import sys
+sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree/alphazero/ctree_alphazero/build')
+import mcts_alphazero
+
 from lzero.policy import configure_optimizers
 
 
@@ -37,6 +41,8 @@ class AlphaZeroPolicy(Policy):
             # (int) The number of channels of hidden states in AlphaZero model.
             num_channels=32,
         ),
+        # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
+        mcts_ctree=True,
         # (bool) Whether to use cuda for network.
         cuda=False,
         # (int) How many updates(iterations) to train after collector's one collection.
@@ -208,8 +214,14 @@ class AlphaZeroPolicy(Policy):
         Overview:
             Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
-        self._collect_mcts = MCTS(self._cfg.mcts)
+        # self._collect_mcts = MCTS(self._cfg.mcts)
         self._collect_model = self._model
+        if self._cfg.mcts_ctree:
+            self._collect_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves, self._cfg.mcts.num_simulations, self._cfg.mcts.pb_c_base,
+                                                     self._cfg.mcts.pb_c_init, self._cfg.mcts.root_dirichlet_alpha, self._cfg.mcts.root_noise_weight)
+        else:
+            self._collect_mcts = MCTS(self._cfg.mcts)
+      
         self.collect_mcts_temperature = 1
 
     @torch.no_grad()
@@ -240,13 +252,20 @@ class AlphaZeroPolicy(Policy):
                 init_state=init_state[env_id],
                 katago_policy_init=False,
             )
+            # action, mcts_probs = self._collect_mcts.get_next_action(
+            #     envs[env_id],
+            #     policy_forward_fn=self._policy_value_fn,
+            #     temperature=self.collect_mcts_temperature,
+            #     sample=True,
+            # )
             action, mcts_probs = self._collect_mcts.get_next_action(
                 envs[env_id],
-                policy_forward_fn=self._policy_value_fn,
-                temperature=self.collect_mcts_temperature,
-                # sample=False,
-                sample=True,
+                self._policy_value_fn,
+                self.collect_mcts_temperature,
+                True,
             )
+            # sample=False,
+
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,
@@ -259,7 +278,18 @@ class AlphaZeroPolicy(Policy):
         Overview:
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
-        self._eval_mcts = MCTS(self._cfg.mcts)
+        # self._eval_mcts = MCTS(self._cfg.mcts)
+
+        if self._cfg.mcts_ctree:
+            self._eval_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves, self._cfg.mcts.num_simulations, self._cfg.mcts.pb_c_base,
+                                            self._cfg.mcts.pb_c_init, self._cfg.mcts.root_dirichlet_alpha, self._cfg.mcts.root_noise_weight)
+            print("="*20)
+            print(self._eval_mcts)
+            print("="*20)
+
+        else:
+            self._eval_mcts = MCTS(self._cfg.mcts)
+
         self._eval_model = self._model
 
     def _forward_eval(self, envs: Dict, obs: Dict) -> Dict[str, torch.Tensor]:
@@ -287,9 +317,16 @@ class AlphaZeroPolicy(Policy):
                 init_state=init_state[env_id],
                 katago_policy_init=False,
             )
-            action, mcts_probs = self._eval_mcts.get_next_action(
-                envs[env_id], policy_forward_fn=self._policy_value_fn, temperature=1.0, sample=False
-            )
+            try:
+                action, mcts_probs = self._eval_mcts.get_next_action(envs[env_id], self._policy_value_fn, 1.0, False)
+            except Exception as e:
+                print(f"Exception occurred: {e}")
+                print(f"Type of envs[env_id]: {type(envs[env_id])}")
+                print(f"Is self._policy_value_fn callable? {callable(self._policy_value_fn)}")
+                raise  # re-raise the exception
+            print("="*20)
+            print(action, mcts_probs)
+            print("="*20)
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,
