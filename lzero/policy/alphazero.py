@@ -1,3 +1,4 @@
+import sys
 from collections import namedtuple
 from typing import List, Dict, Tuple
 
@@ -11,8 +12,8 @@ from ding.utils import POLICY_REGISTRY
 from ding.utils.data import default_collate
 
 from lzero.mcts.ptree.ptree_az_cnode import MCTS
-import sys
-sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree/alphazero/ctree_alphazero/build')
+
+sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree_alphazero/build')
 import mcts_alphazero
 
 from lzero.policy import configure_optimizers
@@ -265,7 +266,6 @@ class AlphaZeroPolicy(Policy):
                 True,
             )
             # sample=False,
-
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,
@@ -278,14 +278,12 @@ class AlphaZeroPolicy(Policy):
         Overview:
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
-        # self._eval_mcts = MCTS(self._cfg.mcts)
-
         if self._cfg.mcts_ctree:
             self._eval_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves, self._cfg.mcts.num_simulations, self._cfg.mcts.pb_c_base,
                                             self._cfg.mcts.pb_c_init, self._cfg.mcts.root_dirichlet_alpha, self._cfg.mcts.root_noise_weight)
-            print("="*20)
-            print(self._eval_mcts)
-            print("="*20)
+            # print("="*20)
+            # print(self._eval_mcts)
+            # print("="*20)
 
         else:
             self._eval_mcts = MCTS(self._cfg.mcts)
@@ -324,9 +322,9 @@ class AlphaZeroPolicy(Policy):
                 print(f"Type of envs[env_id]: {type(envs[env_id])}")
                 print(f"Is self._policy_value_fn callable? {callable(self._policy_value_fn)}")
                 raise  # re-raise the exception
-            print("="*20)
-            print(action, mcts_probs)
-            print("="*20)
+            # print("="*20)
+            # print(action, mcts_probs)
+            # print("="*20)
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,

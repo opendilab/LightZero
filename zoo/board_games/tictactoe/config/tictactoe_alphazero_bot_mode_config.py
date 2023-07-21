@@ -25,6 +25,7 @@ tictactoe_alphazero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        use_katago_bot=False,
     ),
     policy=dict(
         model=dict(
