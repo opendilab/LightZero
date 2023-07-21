@@ -6,7 +6,7 @@ from easydict import EasyDict
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 5
-num_simulations = 25
+num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
@@ -15,6 +15,7 @@ max_env_step = int(2e5)
 # ==============================================================
 
 tictactoe_alphazero_config = dict(
+    # exp_name=f'data_az_ctree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
     exp_name=f'data_az_ptree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         stop_value=2,
@@ -28,6 +29,7 @@ tictactoe_alphazero_config = dict(
         use_katago_bot=False,
     ),
     policy=dict(
+        mcts_ctree=False,
         model=dict(
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),

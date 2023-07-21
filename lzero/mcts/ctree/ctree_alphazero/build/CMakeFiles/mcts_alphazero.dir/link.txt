@@ -1,1 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/c++  -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -bundle -Wl,-headerpad_max_install_names -Xlinker -undefined -Xlinker dynamic_lookup -flto -o mcts_alphazero.cpython-38-darwin.so CMakeFiles/mcts_alphazero.dir/mcts_alphazero.cpp.o CMakeFiles/mcts_alphazero.dir/node_alphazero.cpp.o 

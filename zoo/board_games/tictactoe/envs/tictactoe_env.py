@@ -81,7 +81,6 @@ class TicTacToeEnv(BaseEnv):
         # Convert NumPy arrays to nested tuples to make them hashable.
         return _legal_actions_func_lru(tuple(map(tuple, self.board)))
 
-
     @property
     def legal_actions(self):
         # Convert NumPy arrays to nested tuples to make them hashable.

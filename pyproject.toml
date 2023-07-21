@@ -4,6 +4,7 @@ requires = [
     "wheel",
     "Cython",
     "numpy>=1.18.0",
+    "pybind11",
 ]
 
 [tool.cibuildwheel]
