@@ -56,7 +56,7 @@ class EfficientZeroPolicy(Policy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
-            norm_type='BN', 
+            norm_type='BN',
         ),
         # ****** common ******
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
@@ -169,15 +169,11 @@ class EfficientZeroPolicy(Policy):
         # (float) The noise weight at the root node of the search tree.
         root_noise_weight=0.25,
 
-        # ****** Explore by random collect******
-        random_collect_episode_num=0,
-        # (int) The number of episode using random collecting at initial stage.
-
         # ****** Explore by eps greedy ******
         eps=dict(
             eps_greedy_exploration_in_collect=False,
             # (bool) Whether to use eps greedy exploration in collecting data.
-            type='linear', 
+            type='linear',
             # 'linear', 'exp'
             start=1.,
             # (float) The start value of eps.
@@ -488,6 +484,7 @@ class EfficientZeroPolicy(Policy):
 
         return {
             'collect_mcts_temperature': self.collect_mcts_temperature,
+            'collect_epsilon': self.collect_epsilon,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
             'total_loss': loss.mean().item(),
@@ -523,7 +520,7 @@ class EfficientZeroPolicy(Policy):
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
         self.collect_mcts_temperature = 1
-        self.collect_epsilon = 1
+        self.collect_epsilon = 0.0
 
     def _forward_collect(
         self,
@@ -531,7 +528,6 @@ class EfficientZeroPolicy(Policy):
         action_mask: list = None,
         temperature: float = 1,
         to_play: List = [-1],
-        random_collect_episode_num: int = 0,
         epsilon: float = 0.25,
         ready_env_id = None
     ):
@@ -560,6 +556,7 @@ class EfficientZeroPolicy(Policy):
         """
         self._collect_model.eval()
         self.collect_mcts_temperature = temperature
+        self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
@@ -604,30 +601,23 @@ class EfficientZeroPolicy(Policy):
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                if random_collect_episode_num>0:
-                    # random collect
+                if self._cfg.eps.eps_greedy_exploration_in_collect:
+                    # eps-greedy collect
+                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=self.collect_mcts_temperature, deterministic=True
+                    )
+                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                    if np.random.rand() < self.collect_epsilon:
+                        action = np.random.choice(legal_actions[i])
+                else:
+                    # normal collect
+                    # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                    # the index within the legal action set, rather than the index in the entire action set.
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                         distributions, temperature=self.collect_mcts_temperature, deterministic=False
                     )
-                    action = np.random.choice(legal_actions[i])
-                else:
-                    if self._cfg.eps.eps_greedy_exploration_in_collect: 
-                        # eps-greedy collect
-                        action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                            distributions, temperature=self.collect_mcts_temperature, deterministic=True
-                        )
-                        action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                        if np.random.rand() < self.collect_epsilon:
-                            action = np.random.choice(legal_actions[i])
-                    else: 
-                        # normal collect
-                        # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
-                        # the index within the legal action set, rather than the index in the entire action set.
-                        action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                            distributions, temperature=self.collect_mcts_temperature, deterministic=False
-                        )
-                        # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
-                        action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                    # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
+                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,

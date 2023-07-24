@@ -15,8 +15,10 @@ from tensorboardX import SummaryWriter
 
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
+from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
+from .utils import random_collect
 
 
 def train_muzero(
@@ -117,13 +119,9 @@ def train_muzero(
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
 
+    # Accumulate plenty of data at the beginning of training.
     if cfg.policy.random_collect_episode_num > 0:
-        collect_kwargs = {'temperature':1, 'epsilon':0.0}
-        new_data = collector.collect(n_episode=cfg.policy.random_collect_episode_num, train_iter=0, policy_kwargs=collect_kwargs)
-        # save returned new_data collected by the collector
-        replay_buffer.push_game_segments(new_data)
-        # remove the oldest data if the replay buffer is full.
-        replay_buffer.remove_oldest_data_to_fit()
+        random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
         # reset the random_collect_episode_num to 0
         cfg.policy.random_collect_episode_num = 0
 

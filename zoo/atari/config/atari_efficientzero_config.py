@@ -26,8 +26,8 @@ batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
 
-random_collect_episode_num=0
-eps_greedy_exploration_in_collect=False
+random_collect_episode_num = 0
+eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -50,7 +50,7 @@ atari_efficientzero_config = dict(
             action_space_size=action_space_size,
             downsample=True,
             discrete_action_encoding_type='one_hot',
-            norm_type='BN', 
+            norm_type='BN',
         ),
         cuda=True,
         env_type='not_board_games',
