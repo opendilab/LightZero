@@ -26,7 +26,7 @@ def random_collect(
     collect_kwargs = {'temperature': 1, 'epsilon': 0.0}
 
     # Collect data by default config n_sample/n_episode.
-    new_data = collector.collect(train_iter=0, policy_kwargs=collect_kwargs)
+    new_data = collector.collect(n_episode=policy_cfg.random_collect_episode_num, train_iter=0, policy_kwargs=collect_kwargs)
 
     if postprocess_data_fn is not None:
         new_data = postprocess_data_fn(new_data)
