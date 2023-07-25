@@ -29,7 +29,6 @@ tictactoe_alphazero_config = dict(
         use_katago_bot=False,
     ),
     policy=dict(
-        mcts_ctree=False,
         model=dict(
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),
@@ -39,11 +38,12 @@ tictactoe_alphazero_config = dict(
             fc_value_layers=[8],
             fc_policy_layers=[8],
         ),
+        mcts_ctree=False,
         cuda=True,
         board_size=3,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
+        optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         grad_clip_value=0.5,

@@ -16,10 +16,9 @@ from pettingzoo.classic.go import coords, go_base
 from pettingzoo.classic.go.go import raw_env
 from pettingzoo.utils.agent_selector import agent_selector
 
-from zoo.board_games.go.envs.katago_policy import str_coord, GameState, str_coord, KatagoPolicy
+from zoo.board_games.go.envs.katago_policy import str_coord, GameState, str_coord, KatagoPolicy, parse_coord
 import imageio
 import time
-
 
 
 def get_image(path):
@@ -149,7 +148,7 @@ class GoEnv(BaseEnv):
 
         self.save_gif_replay = cfg.save_gif_replay
         self.render_in_ui = cfg.render_in_ui
-        self.katago_checkpoint_path= cfg.katago_checkpoint_path
+        self.katago_checkpoint_path = cfg.katago_checkpoint_path
         self.ignore_pass_if_have_other_legal_actions = cfg.ignore_pass_if_have_other_legal_actions
         # self.device = cfg.device
         self.katago_policy = cfg.katago_policy
@@ -164,8 +163,11 @@ class GoEnv(BaseEnv):
             # print(gif_filename)
             self.save_gif_path = self.cfg.save_gif_path + gif_filename
             self.frames = []
-            # TODO(pu): katago_game_state init
-            self.katago_game_state = GameState(self.board_size)
+
+        # TODO(pu): katago_game_state init
+        self.katago_game_state = GameState(self.board_size)
+        # from katago_policy import Board
+        # self.katago_board = Board(self.board_size)
 
         self.len_of_legal_actions_for_current_player = self.board_size*self.board_size+1
         self.start_player_index = start_player_index
@@ -216,6 +218,8 @@ class GoEnv(BaseEnv):
         obs['board'] = copy.deepcopy(self._raw_env._go.board)
         obs['current_player_index'] = self.current_player_index
         obs['to_play'] = self.current_player
+        obs['katago_game_state'] = self.katago_game_state
+
 
         return obs
 
@@ -224,6 +228,7 @@ class GoEnv(BaseEnv):
             agent_id = 'black_0'
         elif self.current_player == 2:
             agent_id = 'white_0'
+
         # the count of empty position
         zero_count = np.count_nonzero(self.board == 0)
         if zero_count == 1:
@@ -241,6 +246,18 @@ class GoEnv(BaseEnv):
             )
             action = np.random.choice(self.legal_actions)
             self._raw_env._go = self._raw_env._go.play_move(coords.from_flat(action))
+
+        # ****** update katago internal game state ******
+        # self.update_katago_internal_game_state(katago_flatten_action, to_play=pla)
+        pla = (1 if agent_id == 'black_0' else 2)
+        gtp_action = flatten_action_to_gtp_action(action, self.board_size)
+        # loc = parse_coord(gtp_action, self.katago_board)
+        # self.katago_board.play(pla, loc)
+        loc = parse_coord(gtp_action, self.katago_game_state.board)
+        self.katago_game_state.board.play(pla, loc)
+        self.katago_game_state.moves.append((pla, loc))
+        self.katago_game_state.boards.append(self.katago_game_state.board.copy())
+        # ****** update katago internal game state ******
 
         obs = self.observe(agent_id)
 
@@ -266,6 +283,7 @@ class GoEnv(BaseEnv):
         # obs['current_player_index'] = self.players.index(self.current_player)
         obs['current_player_index'] = self.current_player_index
         obs['to_play'] = self.current_player
+        obs['katago_game_state'] = self.katago_game_state
 
         if self._raw_env._go.is_game_over():
             self._raw_env.terminations = self._convert_to_dict(
@@ -361,7 +379,7 @@ class GoEnv(BaseEnv):
             # TODO(pu): how to avoid this?
             katago_flatten_action = self.lz_flatten_to_katago_flatten(action, self.board_size)
             # print('player 1:', str_coord(katago_flatten_action, self.katago_game_state.board))
-            self.update_katago_internal_game_state(katago_flatten_action, to_play=1)
+            # self.update_katago_internal_game_state(katago_flatten_action, to_play=1)
 
             timestep_player1 = self._player_step(action)
             # print(self.board)
@@ -402,7 +420,7 @@ class GoEnv(BaseEnv):
                 # TODO(pu): how to avoid this?
                 katago_flatten_action = self.lz_flatten_to_katago_flatten(bot_action, self.board_size)
                 print('player 2 (katago):', str_coord(katago_flatten_action, self.katago_game_state.board))
-                self.update_katago_internal_game_state(katago_flatten_action, to_play=2)
+                # self.update_katago_internal_game_state(katago_flatten_action, to_play=2)
 
             timestep_player2 = self._player_step(bot_action)
             # print(self.board)
@@ -830,6 +848,8 @@ class GoEnv(BaseEnv):
     def _encode_rewards(self, result):
         return [1, -1] if result == 1 else [-1, 1]
 
+    def clone(self):
+        return copy.deepcopy(self)
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
         self._seed = seed
         self._dynamic_seed = dynamic_seed

@@ -1,16 +1,17 @@
+from collections import namedtuple
 from typing import Optional, Any, List, Tuple
-from collections import namedtuple, deque
-from easydict import EasyDict
-import numpy as np
-import torch
 
+import numpy as np
 from ding.envs import BaseEnvManager
-from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, dicts_to_lists
-from ding.torch_utils import to_tensor, to_ndarray
+from ding.torch_utils import to_ndarray
+from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
 from ding.worker.collector.base_serial_collector import ISerialCollector, CachePool, TrajBuffer, INF, \
     to_tensor_transitions
-from zoo.board_games.tictactoe.envs.tictactoe_rule_bot_v0 import TictactoeBotV0
-from zoo.board_games.gomoku.envs.gomoku_rule_bot_v0 import GomokuBotV0
+from easydict import EasyDict
+from zoo.board_games.go.envs.go_bot_policy_v0 import GoBotPolicyV0
+from zoo.board_games.gomoku.envs.gomoku_bot_policy_v0 import GomokuBotPolicyV0
+from zoo.board_games.tictactoe.envs.tictactoe_bot_policy_v0 import TictactoeBotPolicyV0
+
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_alphazero_battle')
 class BattleAlphaZeroCollector(ISerialCollector):
@@ -223,7 +224,6 @@ class BattleAlphaZeroCollector(ISerialCollector):
         return_info = [[] for _ in range(2)]
         ready_env_id = set()
         remain_episode = n_episode
-
 
         while True:
             # for policy_id, policy in enumerate(self._policy):

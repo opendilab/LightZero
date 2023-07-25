@@ -5,12 +5,12 @@ import pytest
 from easydict import EasyDict
 
 from zoo.board_games.go.envs.go_env import GoEnv, flatten_action_to_gtp_action
-from zoo.board_games.go.envs.katago_policy import str_coord, KatagoPolicy
+from zoo.board_games.go.envs.katago_policy import str_coord, KatagoPolicy, GameState
 
 cfg = EasyDict(
     # board_size=19,
-    # board_size=9,
-    board_size=5,
+    board_size=9,
+    # board_size=5,
     save_gif_replay=True,
     render_in_ui=True,
     # save_gif_replay=False,
@@ -42,7 +42,7 @@ class TestKataGoBot:
     def test_katago_bot(self):
 
         env = GoEnv(cfg)
-        test_episodes = 2
+        test_episodes = 1
         for i in range(test_episodes):
             print('=' * 20)
             print(f'episode {i}')
@@ -69,11 +69,15 @@ class TestKataGoBot:
                         f"Now we randomly choice a action from self.legal_actions."
                     )
                     bot_action = np.random.choice(env.legal_actions)
-                # ****** update katago internal game state ******
-                # TODO(pu): how to avoid this?
+
                 katago_flatten_action = env.lz_flatten_to_katago_flatten(bot_action, env.board_size)
                 print('player 1:', str_coord(katago_flatten_action, env.katago_game_state.board))
-                env.update_katago_internal_game_state(katago_flatten_action, to_play=1)
+
+                # TODO(pu): wheather to keep the history boards and moves?
+                # env.katago_game_state = GameState(env.board_size)
+                # env.katago_game_state.board = env.katago_board
+
+                # env.update_katago_internal_game_state(katago_flatten_action, to_play=1)
 
                 action = bot_action
                 # action = actions_black[i]
@@ -108,7 +112,9 @@ class TestKataGoBot:
                 # TODO(pu): how to avoid this?
                 katago_flatten_action = env.lz_flatten_to_katago_flatten(bot_action, env.board_size)
                 print('player 2:', str_coord(katago_flatten_action, env.katago_game_state.board))
-                env.update_katago_internal_game_state(katago_flatten_action, to_play=2)
+                # TODO(pu): wheather to keep the history boards and moves?
+                # env.update_katago_internal_game_state(katago_flatten_action, to_play=2)
+
                 # action = env.random_action()
                 action = bot_action
 
@@ -129,4 +135,4 @@ class TestKataGoBot:
                         print('draw')
                     break
 
-# TestKataGoBot().test_katago_bot()
+TestKataGoBot().test_katago_bot()

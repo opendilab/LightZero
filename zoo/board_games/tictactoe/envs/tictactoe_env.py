@@ -61,7 +61,7 @@ class TicTacToeEnv(BaseEnv):
         self.battle_mode = cfg.battle_mode
         # The mode of interaction between the agent and the environment.
         assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
-        # The mode of MCTS is only used in AlphaZero.
+        # The mode of MCTS, which is only used in AlphaZero.
         self.mcts_mode = 'self_play_mode'
         self.board_size = 3
         self.players = [1, 2]

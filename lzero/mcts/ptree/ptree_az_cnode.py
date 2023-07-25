@@ -59,6 +59,7 @@ class MCTS(object):
             - action_probs (:obj:`List`): The output probability of each action.
         """
         # root = Node()
+        # TODO(pu)
         root = mcts_alphazero.Node()
 
         self._expand_leaf_node(root, simulate_env, policy_forward_fn)

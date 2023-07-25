@@ -13,8 +13,8 @@ from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_c
     check_action_to_connect4
 
 
-@POLICY_REGISTRY.register('gomoku_bot_v0')
-class GomokuBotV0(Policy):
+@POLICY_REGISTRY.register('gomoku_bot_policy_v0')
+class GomokuBotPolicyV0(Policy):
     """
     Overview:
         Hard coded expert agent for tictactoe env.
@@ -40,6 +40,7 @@ class GomokuBotV0(Policy):
                 if board[i][j] == 0:
                     legal_actions.append(i * self.board_size + j)
         return legal_actions
+
     def rule_bot_v0(self, obs):
         """
         Overview:

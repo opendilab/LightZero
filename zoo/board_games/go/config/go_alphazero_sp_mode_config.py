@@ -4,8 +4,8 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# board_size = 6
-board_size = 9
+board_size = 6
+# board_size = 9
 
 if board_size in [9, 19]:
     komi = 7.5
@@ -72,6 +72,7 @@ go_alphazero_config = dict(
             num_res_blocks=1,
             num_channels=64,
         ),
+        # mcts_ctree=False,
         cuda=True,
         board_size=board_size,
         update_per_collect=update_per_collect,

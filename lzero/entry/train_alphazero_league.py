@@ -20,6 +20,7 @@ from lzero.policy.alphazero import AlphaZeroPolicy
 from lzero.worker import AlphaZeroEvaluator
 from lzero.worker import BattleAlphaZeroCollector
 from lzero.policy import visit_count_temperature
+from zoo.board_games.go.envs.katago_policy import KatagoPolicy
 
 
 def win_loss_draw(episode_info):
@@ -95,6 +96,11 @@ def train_alphazero_league(cfg, Env, seed=0, max_train_iter: Optional[int] = int
     Returns:
         - None
     """
+    if cfg.policy.cuda and torch.cuda.is_available():
+        cfg.policy.device = 'cuda'
+    else:
+        cfg.policy.device = 'cpu'
+
     # prepare config
     cfg = compile_config(
         cfg,
@@ -106,6 +112,15 @@ def train_alphazero_league(cfg, Env, seed=0, max_train_iter: Optional[int] = int
         NaiveReplayBuffer,
         save_cfg=True
     )
+
+    if cfg.env.use_katago_bot:
+        # for eval
+        cfg.env.katago_policy = KatagoPolicy(checkpoint_path=cfg.env.katago_checkpoint_path, board_size=cfg.env.board_size,
+                                      ignore_pass_if_have_other_legal_actions=cfg.env.ignore_pass_if_have_other_legal_actions, device=cfg.policy.device)
+        # for collect
+        cfg.policy.collect.katago_policy = KatagoPolicy(checkpoint_path=cfg.env.katago_checkpoint_path, board_size=cfg.env.board_size,
+                                      ignore_pass_if_have_other_legal_actions=cfg.env.ignore_pass_if_have_other_legal_actions, device=cfg.policy.device)
+
     collector_env_num, evaluator_env_num = cfg.env.collector_env_num, cfg.env.evaluator_env_num
     collector_env_cfg = copy.deepcopy(cfg.env)
     evaluator_env_cfg = copy.deepcopy(cfg.env)
@@ -154,7 +169,7 @@ def train_alphazero_league(cfg, Env, seed=0, max_train_iter: Optional[int] = int
     policies['historical'] = policy
 
     # create bot policy
-    cfg.policy.type = cfg.policy.league.player_category[0] + '_bot_v0'
+    cfg.policy.type = cfg.policy.league.player_category[0] + '_bot_policy_v0'
     bot_policy = create_policy(cfg.policy, enable_field=['learn', 'collect', 'eval'])
     policies['bot'] = bot_policy
 
@@ -191,18 +206,18 @@ def train_alphazero_league(cfg, Env, seed=0, max_train_iter: Optional[int] = int
     set_pkg_seed(seed, use_cuda=cfg.policy.cuda)
     league_iter = 0
     while True:
-        if evaluator.should_eval(main_learner.train_iter):
-            stop_flag, eval_episode_info = evaluator.eval(
-                main_learner.save_checkpoint, main_learner.train_iter, main_collector.envstep
-            )
-            win_loss_result = win_loss_draw(eval_episode_info)
-
-            # set eval bot rating as 100.
-            main_player.rating = league.metric_env.rate_1vsC(
-                main_player.rating, league.metric_env.create_rating(mu=100, sigma=1e-8), win_loss_result
-            )
-            if stop_flag:
-                break
+        # if evaluator.should_eval(main_learner.train_iter):
+        #     stop_flag, eval_episode_info = evaluator.eval(
+        #         main_learner.save_checkpoint, main_learner.train_iter, main_collector.envstep
+        #     )
+        #     win_loss_result = win_loss_draw(eval_episode_info)
+        #
+        #     # set eval bot rating as 100.
+        #     main_player.rating = league.metric_env.rate_1vsC(
+        #         main_player.rating, league.metric_env.create_rating(mu=100, sigma=1e-8), win_loss_result
+        #     )
+        #     if stop_flag:
+        #         break
 
         for player_id, player_ckpt_path in zip(league.active_players_ids, league.active_players_ckpts):
             tb_logger.add_scalar(

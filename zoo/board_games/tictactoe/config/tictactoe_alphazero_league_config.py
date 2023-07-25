@@ -47,6 +47,7 @@ tictactoe_alphazero_league_config = dict(
         prob_random_agent=0,
         prob_expert_agent=0,
         scale=True,
+        use_katago_bot=False,
     ),
     policy=dict(
         env_type='board_games',
@@ -93,7 +94,7 @@ tictactoe_alphazero_league_config = dict(
             ),
             use_pretrain=False,
             use_pretrain_init_historical=False,
-            # "use_bot_init_historica" means whether to use bot as an init historical player
+            # "use_bot_init_historical" means whether to use bot as an init historical player
             use_bot_init_historical=True,
             # "snapshot_the_player_in_iter_zero" means whether to snapshot the player in iter zero as historical_player.
             snapshot_the_player_in_iter_zero=snapshot_the_player_in_iter_zero,

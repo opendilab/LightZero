@@ -11,9 +11,12 @@ from ding.torch_utils import to_device
 from ding.utils import POLICY_REGISTRY
 from ding.utils.data import default_collate
 
-from lzero.mcts.ptree.ptree_az_cnode import MCTS
+from lzero.mcts.ptree.ptree_az import MCTS
 
-sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree_alphazero/build')
+sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
+# sys.path.append('/mnt/nfs/puyuan/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
+
+
 import mcts_alphazero
 
 from lzero.policy import configure_optimizers
@@ -156,6 +159,7 @@ class AlphaZeroPolicy(Policy):
 
     def _forward_learn(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, float]:
         inputs = default_collate(inputs)
+
         if self._cuda:
             inputs = to_device(inputs, self._device)
         self._learn_model.train()
@@ -310,10 +314,13 @@ class AlphaZeroPolicy(Policy):
         for env_id in ready_env_id:
             # print('[eval] start_player_index={}'.format(start_player_index[env_id]))
             # print('[eval] init_state=\n {}'.format(init_state[env_id]))
+
             envs[env_id].reset(
                 start_player_index=start_player_index[env_id],
                 init_state=init_state[env_id],
-                katago_policy_init=False,
+                # katago_policy_init=False,
+                # TODO(pu)
+                katago_policy_init=True,
             )
             try:
                 action, mcts_probs = self._eval_mcts.get_next_action(envs[env_id], self._policy_value_fn, 1.0, False)
@@ -359,6 +366,9 @@ class AlphaZeroPolicy(Policy):
         Overview:
             Generate the dict type transition (one timestep) data from policy learning.
         """
+        if 'katago_game_state' in obs:
+            del obs['katago_game_state']
+
         return {
             'obs': obs,
             'next_obs': timestep.obs,

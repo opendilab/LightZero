@@ -17,15 +17,15 @@ def legal_actions(board):
     return legal_actions
 
 
-@POLICY_REGISTRY.register('tictactoe_bot_v0')
-class TictactoeBotV0(Policy):
+@POLICY_REGISTRY.register('tictactoe_bot_policy_v0')
+class TictactoeBotPolicyV0(Policy):
     """
     Overview:
         Hard coded expert agent for tictactoe env.
     """
     config = dict(
         # (str) RL policy register name (refer to function "POLICY_REGISTRY").
-        type='tictactoe_bot_v0',
+        type='tictactoe_bot_policy_v0',
         cuda=False,
         on_policy=True,
         learn=dict(
