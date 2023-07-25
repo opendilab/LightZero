@@ -169,16 +169,16 @@ class MuZeroPolicy(Policy):
 
         # ****** Explore by eps greedy ******
         eps=dict(
-            eps_greedy_exploration_in_collect=False,
             # (bool) Whether to use eps greedy exploration in collecting data.
-            type='linear',
+            eps_greedy_exploration_in_collect=False,
             # 'linear', 'exp'
-            start=1.,
+            type='linear',
             # (float) The start value of eps.
-            end=0.05,
+            start=1.,
             # (float) The end value of eps.
-            decay=int(1e5),
+            end=0.05,
             # (int) The decay steps from start to end eps.
+            decay=int(1e5),
         ),
     )
 

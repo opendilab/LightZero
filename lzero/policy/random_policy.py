@@ -12,7 +12,7 @@ from lzero.policy import InverseScalarTransform, select_action, ez_network_outpu
 class LightZeroRandomPolicy(Policy):
     """
     Overview:
-        The policy class for EfficientZero.
+        The policy class for LightZero RandomPolicy.
     """
 
     def __init__(
@@ -83,7 +83,7 @@ class LightZeroRandomPolicy(Policy):
         temperature: float = 1,
         to_play: List = [-1],
         epsilon: float = 0.25,
-        ready_env_id=None
+        ready_env_id = None
     ):
         """
         Overview:
@@ -171,8 +171,11 @@ class LightZeroRandomPolicy(Policy):
                 action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                     distributions, temperature=self.collect_mcts_temperature, deterministic=False
                 )
-                # random action
+
+                # ****** sample a random action from the legal action set ********
+                # all items except action are formally obtained from MCTS 
                 action = int(np.random.choice(legal_actions[env_id], 1))
+                # ****************************************************************
 
                 # NOTE: The action is randomly selected from the legal action set, the distribution is the real visit count distribution from the MCTS seraech.
                 output[env_id] = {
