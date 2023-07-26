@@ -41,6 +41,7 @@ def generate_gif_filename(prefix="go", extension=".gif"):
     filename = f"{prefix}-{timestamp}{extension}"
     return filename
 
+
 def flatten_action_to_gtp_action(flatten_action, board_size):
     if flatten_action == board_size * board_size:
         return "pass"
@@ -57,6 +58,7 @@ def flatten_action_to_gtp_action(flatten_action, board_size):
 
     gtp_action = col_str + row_str
     return gtp_action
+
 
 @ENV_REGISTRY.register('go_lightzero')
 class GoEnv(BaseEnv):
@@ -166,10 +168,12 @@ class GoEnv(BaseEnv):
 
         # TODO(pu): katago_game_state init
         self.katago_game_state = GameState(self.board_size)
+
+
         # from katago_policy import Board
         # self.katago_board = Board(self.board_size)
 
-        self.len_of_legal_actions_for_current_player = self.board_size*self.board_size+1
+        self.len_of_legal_actions_for_current_player = self.board_size * self.board_size + 1
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
 
@@ -189,6 +193,12 @@ class GoEnv(BaseEnv):
             # Note, to_play in Position is different from to_play in GoEnv.
             self._raw_env._go = go_base.Position(board=copy.deepcopy(init_state), komi=self._komi,
                                                  to_play=1 if self.start_player_index == 0 else -1)
+
+            if katago_policy_init:
+                # TODO(pu)
+                # ****** update katago internal game state ******
+                self.reset_katago_game_state(copy.deepcopy(init_state))
+
         else:
             self._raw_env._go = go_base.Position(board=np.zeros((self.board_size, self.board_size), dtype="int32"),
                                                  komi=self._komi, to_play=1 if self.start_player_index == 0 else -1)
@@ -220,8 +230,37 @@ class GoEnv(BaseEnv):
         obs['to_play'] = self.current_player
         obs['katago_game_state'] = self.katago_game_state
 
-
         return obs
+
+    def reset_katago_game_state(self, init_state):
+        # TODO(pu)
+        # NOTE: Represent a board as a numpy array < init_state>, with 0 empty, 1 is black, -1 is white.
+        # ****** update katago internal game state ******
+        self.katago_game_state_board = np.zeros(shape=(self.katago_game_state.board.arrsize), dtype=np.int8)
+        # 将init_state转化为self.board的格式
+        for i in range(self.board_size):
+            for j in range(self.board_size):
+                # black, white, empty
+                # -1, 1, 0 -> 1, 2, 0
+                if init_state[i][j] == -1:
+                    position_num = 1
+                elif init_state[i][j] == 1:
+                    position_num = 2
+                elif init_state[i][j] == 0:
+                    position_num = 0
+                self.katago_game_state_board[self.katago_game_state.board.loc(i, j)] = position_num
+        # 设置棋盘边界为Board.WALL
+        for i in range(-1, self.board_size + 1):
+            self.katago_game_state_board[self.katago_game_state.board.loc(i, -1)] = 3  # Board.WALL
+            self.katago_game_state_board[self.katago_game_state.board.loc(i, self.board_size)] = 3  # Board.WALL
+            self.katago_game_state_board[self.katago_game_state.board.loc(-1, i)] = 3  # Board.WALL
+            self.katago_game_state_board[self.katago_game_state.board.loc(self.board_size, i)] = 3  # Board.WALL
+        # 设置最后一个元素
+        self.katago_game_state_board[-1] = 0  # Board.EMPTY
+        self.katago_game_state.board.board = self.katago_game_state_board
+        # print(self.katago_game_state.board.board[:-1].reshape(self.board_size+2,self.board_size+1))
+
+        # ****** update katago internal game state ******
 
     def _player_step(self, action):
         if self.current_player == 1:
@@ -233,7 +272,7 @@ class GoEnv(BaseEnv):
         zero_count = np.count_nonzero(self.board == 0)
         if zero_count == 1:
             # must give pass
-            action = self.board_size*self.board_size  # pass
+            action = self.board_size * self.board_size  # pass
 
         self.len_of_legal_actions_for_current_player = len(self.legal_actions)
 
@@ -245,15 +284,14 @@ class GoEnv(BaseEnv):
                 f"Now we randomly choice a action from self.legal_actions."
             )
             action = np.random.choice(self.legal_actions)
+            assert action in self.legal_actions, f'action: {action}, legal_actions: {self.legal_actions}'
             self._raw_env._go = self._raw_env._go.play_move(coords.from_flat(action))
 
         # ****** update katago internal game state ******
-        # self.update_katago_internal_game_state(katago_flatten_action, to_play=pla)
         pla = (1 if agent_id == 'black_0' else 2)
         gtp_action = flatten_action_to_gtp_action(action, self.board_size)
-        # loc = parse_coord(gtp_action, self.katago_board)
-        # self.katago_board.play(pla, loc)
         loc = parse_coord(gtp_action, self.katago_game_state.board)
+        # print(self.katago_game_state.board.board[:-1].reshape(self.board_size+2,self.board_size+1))
         self.katago_game_state.board.play(pla, loc)
         self.katago_game_state.moves.append((pla, loc))
         self.katago_game_state.boards.append(self.katago_game_state.board.copy())
@@ -309,7 +347,6 @@ class GoEnv(BaseEnv):
 
         for agent, reward in self.rewards.items():
             self._cumulative_rewards[agent] += reward
-
 
         self.dones[current_agent] = (
                 self._raw_env.terminations[current_agent]
@@ -645,10 +682,14 @@ class GoEnv(BaseEnv):
         # tmp_position = next_simulator_env._raw_env._go.play_move(coords.from_flat(action))
         tmp_position = raw_env._go.play_move(coords.from_flat(action))
         new_board = copy.deepcopy(tmp_position.board)
+        # TODO(pu)
+        # katago_game_state_copy = copy.deepcopy(self.katago_game_state)
         next_simulator_env = copy.deepcopy(self)
         next_simulator_env.reset(start_player_index, init_state=new_board, katago_policy_init=False)  # index
         # NOTE: when calling reset method, self.recent is cleared, so we need to restore it.
         next_simulator_env._raw_env._go.recent = tmp_position.recent
+        # TODO(pu)
+        # next_simulator_env.katago_game_state = katago_game_state_copy
 
         return next_simulator_env
 
@@ -850,6 +891,7 @@ class GoEnv(BaseEnv):
 
     def clone(self):
         return copy.deepcopy(self)
+
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
         self._seed = seed
         self._dynamic_seed = dynamic_seed
@@ -885,6 +927,7 @@ class GoEnv(BaseEnv):
     @current_player.setter
     def current_player(self, value):
         self._current_player = value
+
     @property
     def legal_actions(self):
         return to_list(self.legal_moves())

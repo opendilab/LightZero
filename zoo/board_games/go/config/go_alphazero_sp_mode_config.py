@@ -18,6 +18,7 @@ evaluator_env_num = 1
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(10e6)
+num_channels = 64
 
 if board_size == 19:
     num_simulations = 800
@@ -28,18 +29,17 @@ elif board_size == 6:
     # num_simulations = 80
     num_simulations = 50
 
-# board_size = 6
-# komi = 4
-# # board_size = 9
-# # komi = 7.5
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# num_simulations = 2
-# update_per_collect = 2
-# batch_size = 2
-# max_env_step = int(5e5)
-# prob_random_action_in_bot = 0.
+board_size = 6
+komi = 4
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 2
+update_per_collect = 2
+batch_size = 2
+max_env_step = int(5e4)
+prob_random_action_in_bot = 0.
+num_channels = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -70,9 +70,10 @@ go_alphazero_config = dict(
             observation_shape=(board_size, board_size, 17),
             action_space_size=int(board_size * board_size + 1),
             num_res_blocks=1,
-            num_channels=64,
+            num_channels=num_channels,
         ),
         # mcts_ctree=False,
+        mcts_ctree=True,
         cuda=True,
         board_size=board_size,
         update_per_collect=update_per_collect,

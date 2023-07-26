@@ -160,6 +160,11 @@ class AlphaZeroPolicy(Policy):
             self._learn_model = torch.compile(self._learn_model)
 
     def _forward_learn(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, float]:
+        for d in inputs:
+            if 'katago_game_state' in d:
+                del d['katago_game_state']
+                print('delete katago_game_state')
+
         inputs = default_collate(inputs)
 
         if self._cuda:
@@ -257,7 +262,8 @@ class AlphaZeroPolicy(Policy):
             envs[env_id].reset(
                 start_player_index=start_player_index[env_id],
                 init_state=init_state[env_id],
-                katago_policy_init=False,
+                # katago_policy_init=False,
+                katago_policy_init=True,
             )
             # action, mcts_probs = self._collect_mcts.get_next_action(
             #     envs[env_id],

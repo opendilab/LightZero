@@ -32,35 +32,39 @@ one_phase_step = int(5e3)
 sp_prob = 0.5  # 0, 0.5, 1
 use_bot_init_historical = False
 
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# update_per_collect = 2
-# batch_size = 2
-# max_env_step = int(2e5)
-# sp_prob = 0.
-# snapshot_the_player_in_iter_zero = True
-# one_phase_step = int(5)
-# num_simulations = 2
+# debug config
+board_size = 6
+komi = 4
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+update_per_collect = 2
+batch_size = 2
+max_env_step = int(2e5)
+sp_prob = 0.
+snapshot_the_player_in_iter_zero = True
+one_phase_step = int(5)
+num_simulations = 2
+num_channels = 2
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 go_alphazero_league_config = dict(
-    exp_name=f"data_az_ptree_league/go_b{board_size}-komi-{komi}_alphazero_ns{num_simulations}_upc{update_per_collect}_league-sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_seed0",
+    exp_name=f"data_az_ctree_league/go_b{board_size}-komi-{komi}_alphazero_ns{num_simulations}_upc{update_per_collect}_league-sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_seed0",
     env=dict(
         stop_value=2,
         env_name="Go",
         board_size=board_size,
-        komi=7.5,
+        komi=komi,
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',  # only used in AlphaZero
         scale=True,
         agent_vs_human=False,
         use_katago_bot=True,
-        # katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
-        katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        # katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
         ignore_pass_if_have_other_legal_actions=True,
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
         prob_random_action_in_bot=0,
@@ -81,16 +85,16 @@ go_alphazero_league_config = dict(
             observation_shape=(board_size, board_size, 17),
             action_space_size=int(board_size * board_size + 1),
             num_res_blocks=1,
-            num_channels=64,
+            num_channels=num_channels,
         ),
-        mcts_ctree=False,
-        # mcts_ctree=True,
+        # mcts_ctree=False,
+        mcts_ctree=True,
         cuda=True,
         env_type='board_games',
         board_size=board_size,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
+        optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         grad_clip_value=0.5,
@@ -110,7 +114,7 @@ go_alphazero_league_config = dict(
             log_freq_for_payoff_rank=50,
             player_category=['go'],
             # path to save policy of league player, user can specify this field
-            path_policy=f"data_az_ptree_league/go_alphazero_league_sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_ns{num_simulations}_policy_ckpt_seed0",
+            path_policy=f"data_az_ctree_league/go_alphazero_league_sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_ns{num_simulations}_policy_ckpt_seed0",
             active_players=dict(main_player=1, ),
             main_player=dict(
                 # An active player will be considered trained enough for snapshot after two phase steps.
