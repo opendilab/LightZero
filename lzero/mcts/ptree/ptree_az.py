@@ -167,12 +167,14 @@ class MCTS(object):
                 action_visits.append((action, 0))
 
         actions, visits = zip(*action_visits)
+        print('action_visits= {}'.format(visits))
         action_probs = nn.functional.softmax(1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0).numpy()
         if sample:
             action = np.random.choice(actions, p=action_probs)
         else:
             action = actions[np.argmax(action_probs)]
-        # print(action)
+        print('action= {}'.format(action))
+        print('action_probs= {}'.format(action_probs))
         return action, action_probs
 
     def _simulate(self, node: Node, simulate_env: Type[BaseEnv], policy_forward_fn: Callable) -> None:

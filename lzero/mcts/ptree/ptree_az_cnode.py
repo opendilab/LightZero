@@ -17,6 +17,7 @@ sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree/ctree_alphazero/b
 
 import mcts_alphazero
 
+
 class MCTS(object):
     """
     Overview:
@@ -59,10 +60,18 @@ class MCTS(object):
             - action_probs (:obj:`List`): The output probability of each action.
         """
         # root = Node()
+        
         # TODO(pu)
+        # import sys
+        # sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
+        # import mcts_alphazero
+        # root = mcts_alphazero.Node()
+        # root.update_recursive(1, 'self_play_mode')
+
         root = mcts_alphazero.Node()
 
         self._expand_leaf_node(root, simulate_env, policy_forward_fn)
+
         if sample:
             self._add_exploration_noise(root)
 
@@ -88,6 +97,9 @@ class MCTS(object):
                 action_visits.append((action, root.children[action].visit_count))
             else:
                 action_visits.append((action, 0))
+
+        # TODO(pu)
+        # root.end_game()
 
         actions, visits = zip(*action_visits)
         action_probs = nn.functional.softmax(1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0).numpy()
@@ -143,6 +155,8 @@ class MCTS(object):
                     leaf_value = -1
 
         # Update value and visit count of nodes in this traversal.
+        print('position0')
+
         if simulate_env.mcts_mode == 'play_with_bot_mode':
             node.update_recursive(leaf_value, simulate_env.mcts_mode)
         elif simulate_env.mcts_mode == 'self_play_mode':
@@ -154,7 +168,13 @@ class MCTS(object):
             # leaf_value is calculated from the perspective of player 1, leaf_value = value_func(s3),
             # but node.value should be the value of E[q(s2, action)], i.e. calculated from the perspective of player 2.
             # thus we add the negative when call update_recursive().
+            print('position1')
             node.update_recursive(-leaf_value, simulate_env.mcts_mode)
+            print('position2')
+        
+        # TODO(pu)
+        # node.end_game(node)
+
 
     def _select_child(self, node, simulate_env: Type[BaseEnv]):# -> Tuple[Union[int, float], Node]:
         """
@@ -197,7 +217,8 @@ class MCTS(object):
         # simulate_env._raw_env._go.board
         for action, prior_p in action_probs_dict.items():
             if action in simulate_env.legal_actions:
-                node.children[action] = mcts_alphazero.Node(parent=node, prior_p=prior_p)
+                # node.children[action] = mcts_alphazero.Node(parent=node, prior_p=prior_p)
+                node.add_child(action, mcts_alphazero.Node(parent=node, prior_p=prior_p))
         return leaf_value
 
     def _ucb_score(self, parent, child) -> float:
@@ -225,6 +246,7 @@ class MCTS(object):
             - node (:obj:`Class Node`): Current node.
         """
         actions = node.children.keys()
+        # TODO: check if this is correct.
         noise = np.random.gamma(self._root_dirichlet_alpha, 1, len(actions))
         frac = self._root_noise_weight
         for a, n in zip(actions, noise):

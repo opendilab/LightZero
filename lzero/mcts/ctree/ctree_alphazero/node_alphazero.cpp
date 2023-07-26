@@ -16,8 +16,9 @@ PYBIND11_MODULE(node_alphazero, m) {
         .def("is_leaf", &Node::is_leaf)
         .def("is_root", &Node::is_root)
         .def("parent", &Node::get_parent)
-        // .def("children", &Node::get_children)
+        .def("children", &Node::get_children)
         .def_readwrite("children", &Node::children)
+        .def("add_child", &Node::add_child)
         .def("visit_count", &Node::get_visit_count);
 }
 

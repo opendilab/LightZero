@@ -7,6 +7,7 @@
 #include <pybind11/stl.h>
 #include <functional>
 #include <iostream>
+#include <memory>
 
 namespace py = pybind11;
 
@@ -62,15 +63,14 @@ public:
 
     // 在MCTS类中定义_select_child和_expand_leaf_node函数
     std::pair<int, Node*> _select_child(Node* node, py::object simulate_env) {
-    
         int action = -1;
         Node* child = nullptr;
         double best_score = -9999999;
         for (const auto& kv : node->children) {
             int action_tmp = kv.first;
             Node* child_tmp = kv.second;
+            // Node* child_tmp = kv.second.get();
   
-            // py::list legal_actions_py = simulate_env.attr("legal_actions")().cast<py::list>();
             py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
 
             std::vector<int> legal_actions;
@@ -129,14 +129,13 @@ public:
         // }
 
         // std::cout << "position16 " << std::endl;
-
         for (const auto& kv : action_probs_dict) {
             // std::cout << "position17 " << std::endl;
-
             int action = kv.first;
             double prior_p = kv.second;
             if (std::find(legal_actions.begin(), legal_actions.end(), action) != legal_actions.end()) {
                 node->children[action] = new Node(node, prior_p);
+                // node->children[action] = std::make_unique<Node>(node, prior_p);
             }
         }
         // std::cout << "position18 " << std::endl;
@@ -145,40 +144,24 @@ public:
     }
 
     std::pair<int, std::vector<double>> get_next_action(py::object simulate_env, py::object policy_forward_fn, double temperature, bool sample) {
-        // std::cout << "position1 " << std::endl;
+        // printf("position1 \n");
         Node* root = new Node();
-        // std::cout << "position2 " << std::endl;
         _expand_leaf_node(root, simulate_env, policy_forward_fn);
-        // std::cout << "position3 " << std::endl;
-
         if (sample) {
-            // std::cout << "position4 " << std::endl;
             _add_exploration_noise(root);
-            // std::cout << "position5 " << std::endl;
-
         }
-        // std::cout << "position6 " << std::endl;
-
         for (int n = 0; n < num_simulations; ++n) {
-            // std::cout << "position7 " << std::endl;
             py::object simulate_env_copy = simulate_env.attr("clone")();
-            // std::cout << "position8 " << std::endl;
+            simulate_env_copy.attr("battle_mode") = simulate_env_copy.attr("mcts_mode");
             _simulate(root, simulate_env_copy, policy_forward_fn);
-            // std::cout << "position9 " << std::endl;
             simulate_env_copy = py::none();
-            // std::cout << "position10 " << std::endl;
         }
 
         std::vector<std::pair<int, int>> action_visits;
-            // std::cout << "position11 " << std::endl;
         for (int action = 0; action < simulate_env.attr("action_space").attr("n").cast<int>(); ++action) {
             if (root->children.count(action)) {
-                // std::cout << "position12 " << std::endl;
-
                 action_visits.push_back(std::make_pair(action, root->children[action]->visit_count));
             } else {
-                // std::cout << "position13 " << std::endl;
-
                 action_visits.push_back(std::make_pair(action, 0));
             }
         }
@@ -186,12 +169,16 @@ public:
         // 转换action_visits为两个分离的数组
         std::vector<int> actions;
         std::vector<int> visits;
-                // std::cout << "position14 " << std::endl;
-
         for (const auto& av : action_visits) {
             actions.push_back(av.first);
             visits.push_back(av.second);
         }
+
+        // std::cout << "Action visits: ";
+        // for(const auto& visit : visits) {
+        //     std::cout << visit << " ";
+        // }
+        // std::cout << std::endl;
 
         // 计算action_probs
         std::vector<double> visit_logs;
@@ -200,7 +187,6 @@ public:
         }
         std::vector<double> action_probs = softmax(visit_logs, temperature);
         // std::cout << "position15 " << std::endl;
-
         // 根据action_probs选择一个action
         int action;
         if (sample) {
@@ -209,13 +195,18 @@ public:
             action = actions[std::distance(action_probs.begin(), std::max_element(action_probs.begin(), action_probs.end()))];
         }
         // std::cout << "position16 " << std::endl;
-
+        // printf("Action: %d\n", action);
+        // std::cout << "Action probabilities: ";
+        // for(const auto& prob : action_probs) {
+        //     std::cout << prob << " ";
+        // }
+        // std::cout << std::endl;
+        
         return std::make_pair(action, action_probs);
     }
 
     void _simulate(Node* node, py::object simulate_env, py::object policy_forward_fn) {
         // std::cout << "position21 " << std::endl;
-    
         while (!node->is_leaf()) {
             int action;
             std::tie(action, node) = _select_child(node, simulate_env);
@@ -227,14 +218,12 @@ public:
 
         bool done;
         int winner;
-        // std::tie(done, winner) = simulate_env.attr("get_done_winner")();
         py::tuple result = simulate_env.attr("get_done_winner")();
         done = result[0].cast<bool>();
         winner = result[1].cast<int>();
 
         double leaf_value;
         // std::cout << "position22 " << std::endl;
-
         if (!done) {
             leaf_value = _expand_leaf_node(node, simulate_env, policy_forward_fn);
             // std::cout << "position23 " << std::endl;
@@ -261,8 +250,6 @@ public:
             }
         }
     // std::cout << "position25 " << std::endl;
-
-    // if (simulate_env.attr("mcts_mode") == "play_with_bot_mode") {
     if (simulate_env.attr("mcts_mode").cast<std::string>() == "play_with_bot_mode") {
         node->update_recursive(leaf_value, simulate_env.attr("mcts_mode").cast<std::string>());
     } else if (simulate_env.attr("mcts_mode").cast<std::string>() == "self_play_mode") {
@@ -274,14 +261,20 @@ private:
     static std::vector<double> softmax(const std::vector<double>& values, double temperature) {
         std::vector<double> exps;
         double sum = 0.0;
+        // Compute the maximum value
+        double max_value = *std::max_element(values.begin(), values.end());
+
+        // Subtract the maximum value before exponentiating, for numerical stability
         for (double v : values) {
-            double exp_v = std::exp(v / temperature);
+            double exp_v = std::exp((v - max_value) / temperature);
             exps.push_back(exp_v);
             sum += exp_v;
         }
+
         for (double& exp_v : exps) {
             exp_v /= sum;
         }
+
         return exps;
     }
 
@@ -296,19 +289,26 @@ private:
 
 PYBIND11_MODULE(mcts_alphazero, m) {
     py::class_<Node>(m, "Node")
-        // .def(py::init<Node*, float>())
         .def(py::init([](Node* parent, float prior_p){
         return new Node(parent ? parent : nullptr, prior_p);
         }), py::arg("parent")=nullptr, py::arg("prior_p")=1.0)
-        .def("value", &Node::get_value)
+        // .def("value", &Node::get_value)
+        .def_property_readonly("value", &Node::get_value)
+        // .def_property("value", &Node::get_value, &Node::set_value)
+
         .def("update", &Node::update)
         .def("update_recursive", &Node::update_recursive)
         .def("is_leaf", &Node::is_leaf)
         .def("is_root", &Node::is_root)
         .def("parent", &Node::get_parent)
+        .def_readwrite("prior_p", &Node::prior_p)
+
         // .def("children", &Node::get_children)
         .def_readwrite("children", &Node::children)
-        .def("visit_count", &Node::get_visit_count);
+        .def("add_child", &Node::add_child)
+        .def_readwrite("visit_count", &Node::visit_count)
+        .def("end_game", &Node::end_game, "A function to end the game");
+
 
     py::class_<MCTS>(m, "MCTS")
         .def(py::init<int, int, double, double, double, double>(),

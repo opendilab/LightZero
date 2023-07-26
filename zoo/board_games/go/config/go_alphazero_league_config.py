@@ -110,7 +110,7 @@ go_alphazero_league_config = dict(
             log_freq_for_payoff_rank=50,
             player_category=['go'],
             # path to save policy of league player, user can specify this field
-            path_policy=f"data_az_ptree_league/go_alphazero_league_sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_policy_ckpt_seed0",
+            path_policy=f"data_az_ptree_league/go_alphazero_league_sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_ns{num_simulations}_policy_ckpt_seed0",
             active_players=dict(main_player=1, ),
             main_player=dict(
                 # An active player will be considered trained enough for snapshot after two phase steps.

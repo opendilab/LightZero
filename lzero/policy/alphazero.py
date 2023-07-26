@@ -12,6 +12,8 @@ from ding.utils import POLICY_REGISTRY
 from ding.utils.data import default_collate
 
 from lzero.mcts.ptree.ptree_az import MCTS
+# from lzero.mcts.ptree.ptree_az_cnode import MCTS
+
 
 sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
 # sys.path.append('/mnt/nfs/puyuan/LightZero/lzero/mcts/ctree/ctree_alphazero/build')

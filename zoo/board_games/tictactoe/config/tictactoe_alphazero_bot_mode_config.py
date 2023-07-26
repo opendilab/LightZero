@@ -15,8 +15,8 @@ max_env_step = int(2e5)
 # ==============================================================
 
 tictactoe_alphazero_config = dict(
-    # exp_name=f'data_az_ctree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
-    exp_name=f'data_az_ptree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_az_ctree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
+    # exp_name=f'data_az_ptree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         stop_value=2,
         board_size=3,
@@ -38,7 +38,8 @@ tictactoe_alphazero_config = dict(
             fc_value_layers=[8],
             fc_policy_layers=[8],
         ),
-        mcts_ctree=False,
+        mcts_ctree=True,
+        # mcts_ctree=False,
         cuda=True,
         board_size=3,
         update_per_collect=update_per_collect,
@@ -65,7 +66,9 @@ tictactoe_alphazero_create_config = dict(
         type='tictactoe',
         import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
     ),
-    env_manager=dict(type='subprocess'),
+    # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
+
     policy=dict(
         type='alphazero',
         import_names=['lzero.policy.alphazero'],
