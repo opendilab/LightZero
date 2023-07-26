@@ -119,9 +119,9 @@ def train_muzero(
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
 
-    # Before training, the purpose of collecting random data:
-    # Exploration: Random data collection helps the agent explore the environment and avoid premature convergence to a suboptimal policy.
-    # Comparing Baselines: The performance of an agent when acting randomly can serve as a baseline for evaluating the effectiveness of RL algorithms.
+    # The purpose of collecting random data before training:
+    # Exploration: The collection of random data aids the agent in exploring the environment and prevents premature convergence to a suboptimal policy.
+    # Comparation: The agent's performance during random action-taking can be used as a reference point to evaluate the efficacy of reinforcement learning algorithms.
     if cfg.policy.random_collect_episode_num > 0:
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
 

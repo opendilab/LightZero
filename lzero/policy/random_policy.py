@@ -174,12 +174,12 @@ class LightZeroRandomPolicy(Policy):
 
                 # ****** sample a random action from the legal action set ********
                 # all items except action are formally obtained from MCTS 
-                action = int(np.random.choice(legal_actions[env_id], 1))
+                random_action = int(np.random.choice(legal_actions[env_id], 1))
                 # ****************************************************************
 
                 # NOTE: The action is randomly selected from the legal action set, the distribution is the real visit count distribution from the MCTS seraech.
                 output[env_id] = {
-                    'action': action,
+                    'action': random_action,
                     'distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
                     'value': value,

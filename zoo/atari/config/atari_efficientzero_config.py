@@ -57,8 +57,7 @@ atari_efficientzero_config = dict(
         random_collect_episode_num=0,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            # need to dynamically adjust the number of decay steps 
-            # according to the characteristics of the environment and the algorithm
+            # need to dynamically adjust the number of decay steps according to the characteristics of the environment and the algorithm
             type='linear',
             start=1.,
             end=0.05,
