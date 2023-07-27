@@ -169,6 +169,10 @@ class EfficientZeroPolicy(Policy):
         # (float) The noise weight at the root node of the search tree.
         root_noise_weight=0.25,
 
+        # ****** Explore by random collect ******
+        # (int) The number of episodes to collect data randomly before training.
+        random_collect_episode_num=0,
+
         # ****** Explore by eps greedy ******
         eps=dict(
             # (bool) Whether to use eps greedy exploration in collecting data.
