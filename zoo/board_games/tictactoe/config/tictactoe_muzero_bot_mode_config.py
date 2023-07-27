@@ -1,4 +1,5 @@
 from easydict import EasyDict
+import copy
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -17,7 +18,7 @@ reanalyze_ratio = 0.
 
 tictactoe_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed',
     env=dict(
         battle_mode='play_with_bot_mode',
         collector_env_num=collector_env_num,
@@ -87,4 +88,8 @@ create_config = tictactoe_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    for seed in [0,1,2,0]:
+        main_config_temp = copy.deepcopy(main_config)
+        main_config_temp.exp_name=f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}/{seed}'
+        train_muzero([main_config_temp, create_config], seed=seed, max_env_step=max_env_step)
+
