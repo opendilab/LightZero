@@ -18,15 +18,12 @@ class Node(object):
     Overview:
         The node base class for tree_search.
     """
-    # 把env作为节点的变量，或者单独分出去，这有没有什么说法
+
     def __init__(self, parent: "Node" = None, prior_p: float = 1.0) -> None:
         self._parent = parent
         self._children = {}
-        # 如何增加的？？？？？？？？？？？？？？
         self._visit_count = 0
-        # ???????????????????
         self._value_sum = 0
-        # ???????????????????
         self.prior_p = prior_p
 
     @property
@@ -49,10 +46,8 @@ class Node(object):
             - value (:obj:`Int`): The value of the node.
         """
         self._visit_count += 1
-        # value是怎么计算的？？？？？？？？？？？？？？？？？？？？？？？？？？？、
         self._value_sum += value
-    
-    # 和update分别负责哪些？？？？？
+
     def update_recursive(self, leaf_value: float, mcts_mode: str) -> None:
         """
         Overview:
@@ -60,7 +55,6 @@ class Node(object):
         Arguments:
             - leaf_value (:obj:`Int`): The value of the node.
         """
-        # 两种模式什么区别？？？？？？？？？？？
         if mcts_mode == 'self_play_mode':
             self.update(leaf_value)
             if self.is_root():
@@ -72,13 +66,12 @@ class Node(object):
                 return
             self._parent.update_recursive(leaf_value, mcts_mode)
 
-    def is_leaf(self) -> Dict:# 这里dict应该错了
+    def is_leaf(self) -> Dict:
         """
         Overview:
             Check if the current node is a leaf node or not.
         Returns:
-            - output (:obj:`Bool`): If self._children is empty, it means that the node has not 
-            been expanded yet, which indicates that the node is a leaf node.
+            - output (:obj:`Dict`): Dict type children node.
         """
         return self._children == {}
 
@@ -87,21 +80,18 @@ class Node(object):
         Overview:
             Check if the current node is a root node or not.
         Returns:
-            - output (:obj:`Bool`): Whether it is the parent node. If the node does not have a parent node,
-            then it is a root node.
+            - output (:obj:`Bool`): Whether it is the parent node.
         """
         return self._parent is None
 
-    # get the parent node of the current node
     @property
     def parent(self) -> None:
         return self._parent
 
-    # get the dict of children nodes 
     @property
     def children(self) -> None:
         return self._children
-    
+
     @property
     def visit_count(self) -> None:
         return self._visit_count
@@ -114,19 +104,16 @@ class MCTS(object):
     """
 
     def __init__(self, cfg: EasyDict) -> None:
-        # config 从哪传入的？用来干啥？？？？？
         self._cfg = cfg
 
         self._max_moves = self._cfg.get('max_moves', 512)  # for chess and shogi, 722 for Go.
         self._num_simulations = self._cfg.get('num_simulations', 800)
 
         # UCB formula
-        #这两个参数干啥的？
         self._pb_c_base = self._cfg.get('pb_c_base', 19652)  # 19652
         self._pb_c_init = self._cfg.get('pb_c_init', 1.25)  # 1.25
 
         # Root prior exploration noise.
-        #这两个参数干啥的？
         self._root_dirichlet_alpha = self._cfg.get(
             'root_dirichlet_alpha', 0.3
         )  # 0.3  # for chess, 0.03 for Go and 0.15 for shogi.
@@ -143,7 +130,6 @@ class MCTS(object):
         Overview:
             calculate the move probabilities based on visit counts at the root node.
         Arguments:
-            # 如果传入的东西本身就是一个抽象类那他的(:obj:）怎么写
             - simulate_env (:obj:`Class BaseGameEnv`): The class of simulate env.
             - policy_forward_fn (:obj:`Function`): The Callable to compute the action probs and state value.
             - temperature (:obj:`Int`): Temperature is a parameter that controls the "softness" of the probability distribution.
@@ -153,9 +139,7 @@ class MCTS(object):
             - action_probs (:obj:`List`): The output probability of each action.
         """
         root = Node()
-        # 具体怎么扩展的
         self._expand_leaf_node(root, simulate_env, policy_forward_fn)
-        # 干什么的
         if sample:
             self._add_exploration_noise(root)
 
@@ -166,11 +150,8 @@ class MCTS(object):
         # print('legal_action= {}',format(simulate_env.legal_actions))
 
         for n in range(self._num_simulations):
-            # 为什么要用深拷贝
             simulate_env_copy = copy.deepcopy(simulate_env)
-            # 看一下游戏环境里的这个battle_mode参数是什么作用
             simulate_env_copy.battle_mode = simulate_env_copy.mcts_mode
-            #介绍simulate函数的作用和逻辑
             self._simulate(root, simulate_env_copy, policy_forward_fn)
 
         # for debugging
@@ -179,18 +160,13 @@ class MCTS(object):
         # print('visit_count= {}'.format([(k, v.visit_count) for k,v in root.children.items()]))
 
         action_visits = []
-        # 搞清.children里的key和value分别是什么
-        # .children里的node是什么时候被添加和访问的
         for action in range(simulate_env.action_space.n):
             if action in root.children:
                 action_visits.append((action, root.children[action].visit_count))
             else:
                 action_visits.append((action, 0))
-        
-        # Unpack the tuples in action_visits list into two seperate tuples: actions and visits.
+
         actions, visits = zip(*action_visits)
-        # 同时用np和tensor是不是要统一一下
-        # temperature的公式，为所有动作分配概率
         action_probs = nn.functional.softmax(1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0).numpy()
         if sample:
             action = np.random.choice(actions, p=action_probs)
@@ -211,9 +187,7 @@ class MCTS(object):
         """
         while not node.is_leaf():
             # print(node.children.keys())
-            # 注意，仿真的时候选择子节点的策略和决策时为root点选动作的策略是不同的
             action, node = self._select_child(node, simulate_env)
-            # 什么情况下action会是none？
             if action is None:
                 break
             # print('legal_action={}'.format(simulate_env.legal_actions))
@@ -228,10 +202,8 @@ class MCTS(object):
         """
 
         if not done:
-            # 了解expandleaf node的逻辑是什么，为什么要传env和policy进去
             leaf_value = self._expand_leaf_node(node, simulate_env, policy_forward_fn)
         else:
-            # 进env里看一下这个mode参数是如何影响的
             if simulate_env.mcts_mode == 'self_play_mode':
                 if winner == -1:
                     leaf_value = 0
@@ -248,7 +220,6 @@ class MCTS(object):
                     leaf_value = -1
 
         # Update value and visit count of nodes in this traversal.
-        # 每次都搜索到一个叶子节点，获得叶子节点的价值并回溯，搞懂这个value的计算逻辑是什么
         if simulate_env.mcts_mode == 'play_with_bot_mode':
             node.update_recursive(leaf_value, simulate_env.mcts_mode)
         elif simulate_env.mcts_mode == 'self_play_mode':
@@ -299,7 +270,6 @@ class MCTS(object):
         Returns:
             - leaf_value (:obj:`Bool`): the leaf node's value.
         """
-        # policy forward可以得到节点的价值和概率分布，弄清它干了什么事
         action_probs_dict, leaf_value = policy_forward_fn(simulate_env)
         for action, prior_p in action_probs_dict.items():
             if action in simulate_env.legal_actions:

@@ -16,7 +16,7 @@ reanalyze_ratio = 0
 # ==============================================================
 
 cartpole_muzero_config = dict(
-    exp_name=f'data_mz_ctree/cartpole_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_stopvalue150',
+    exp_name=f'data_mz_ctree/cartpole_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -25,7 +25,6 @@ cartpole_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        stop_value=150
     ),
     policy=dict(
         model=dict(
