@@ -9,13 +9,16 @@ from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
+from ding.rl_utils import get_epsilon_greedy_fn
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
+from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
+from .utils import random_collect
 
 
 def train_muzero(
@@ -112,8 +115,16 @@ def train_muzero(
     # ==============================================================
     # Learner's before_run hook.
     learner.call_hook('before_run')
+    
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
+
+    # The purpose of collecting random data before training:
+    # Exploration: The collection of random data aids the agent in exploring the environment and prevents premature convergence to a suboptimal policy.
+    # Comparation: The agent's performance during random action-taking can be used as a reference point to evaluate the efficacy of reinforcement learning algorithms.
+    if cfg.policy.random_collect_episode_num > 0:
+        random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
+
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         collect_kwargs = {}
@@ -125,6 +136,17 @@ def train_muzero(
             policy_config.threshold_training_steps_for_final_temperature,
             trained_steps=learner.train_iter
         )
+
+        if policy_config.eps.eps_greedy_exploration_in_collect:
+            epsilon_greedy_fn = get_epsilon_greedy_fn(
+                start=policy_config.eps.start,
+                end=policy_config.eps.end,
+                decay=policy_config.eps.decay,
+                type_=policy_config.eps.type
+            )
+            collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
+        else:
+            collect_kwargs['epsilon'] = 0.0
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
