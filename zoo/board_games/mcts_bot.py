@@ -156,7 +156,7 @@ class TwoPlayersMCTSNode(MCTSNode):
     @property
     def value(self):
         """
-        Overview
+        Overview:
             This property represents the estimated value (Q-value) of the current node. 
             self._results[1] represents the number of wins for player 1. 
             self._results[-1] represents the number of wins for player 2. 

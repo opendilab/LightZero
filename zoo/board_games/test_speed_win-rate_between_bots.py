@@ -31,7 +31,7 @@ def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
     Overview:
         A tictactoe game between mcts_bot and rule_bot, where rule_bot take the first move.
     Arguments:
-        -num_simulations (:obj:`int`): The number of the simulations required to find the best move.
+        - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
     # List to record the time required for each decision round and the winner.
     mcts_bot_time_list = []
@@ -106,7 +106,7 @@ def test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
     Overview:
         A tictactoe game between alphabeta_bot and rule_bot, where alphabeta_bot take the first move.
     Arguments:
-        -num_simulations (:obj:`int`): The number of the simulations required to find the best move.
+        - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
     # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
@@ -184,7 +184,7 @@ def test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
     Overview:
         A tictactoe game between alphabeta_bot and mcts_bot, where mcts_bot take the first move.
     Arguments:
-        -num_simulations (:obj:`int`): The number of the simulations required to find the best move.
+        - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
     # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
@@ -264,7 +264,7 @@ def test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
     Overview:
         A tictactoe game between rule_bot and alphabeta_bot, where rule_bot take the first move.
     Arguments:
-        -num_simulations (:obj:`int`): The number of the simulations required to find the best move.
+        - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
     # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
@@ -342,7 +342,7 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
     Overview:
         A tictactoe game between mcts_bot and alphabeta_bot, where mcts_bot take the first move.
     Arguments:
-        -num_simulations (:obj:`int`): The number of the simulations required to find the best move.
+        - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
     # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
@@ -434,7 +434,7 @@ def test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
     Overview:
         A tictactoe game between mcts_bot and rule_bot, where rule_bot take the first move.
     Arguments:
-        -num_simulations (:obj:`int`): The number of the simulations required to find the best move.
+        - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
     # List to record the time required for each decision round and the winner.
     mcts_bot_time_list = []
