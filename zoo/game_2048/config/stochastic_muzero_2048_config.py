@@ -1,33 +1,45 @@
 from easydict import EasyDict
 
-env_name = 'game_2048'
-action_space_size = 4
-chance_space_size = 4
+
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 5  # TODO(pu):100
-update_per_collect = 3
-batch_size = 5
-max_env_step = int(1e6)
+env_name = 'game_2048'
+action_space_size = 4
+chance_space_size = 4
+
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 50
+update_per_collect = 200
+batch_size = 512
+max_env_step = int(1e8)
 reanalyze_ratio = 0.
+
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 5  # TODO(pu):100
+# update_per_collect = 3
+# batch_size = 5
+# max_env_step = int(1e6)
+# reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 game_2048_stochastic_muzero_config = dict(
-    exp_name=f'data_stochastic_mz_ctree/game_2048_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_sslw2_rew-morm-true_seed0',
+    exp_name=f'data_stochastic_mz_ctree/game_2048_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
         obs_shape=(16, 4, 4),
         obs_type='dict_observation',
-        reward_normalize=True,
+        raw_reward_type='raw',  # 'merged_tiles_plus_log_max_tile_num'
+        reward_normalize=False,
         reward_scale=100,
-        max_tile=int(2**16),  # 2**11=2048, 2**16=65536
+        max_tile=int(2 ** 16),  # 2**11=2048, 2**16=65536
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -54,9 +66,14 @@ game_2048_stochastic_muzero_config = dict(
         td_steps=10,
         discount_factor=0.999,
         manual_temperature_decay=True,
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,  # init lr for manually decay schedule
+        # optim_type='SGD',
+        # lr_piecewise_constant_decay=True,
+        # learning_rate=0.2,  # init lr for manually decay schedule
+
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
+        learning_rate=3e-3,
+
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         ssl_loss_weight=2,  # default is 0

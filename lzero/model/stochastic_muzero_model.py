@@ -19,32 +19,32 @@ from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_me
 class StochasticMuZeroModel(nn.Module):
 
     def __init__(
-        self,
-        observation_shape: SequenceType = (12, 96, 96),
-        action_space_size: int = 6,
-        chance_space_size: int = 2,
-        num_res_blocks: int = 1,
-        num_channels: int = 64,
-        reward_head_channels: int = 16,
-        value_head_channels: int = 16,
-        policy_head_channels: int = 16,
-        fc_reward_layers: SequenceType = [32],
-        fc_value_layers: SequenceType = [32],
-        fc_policy_layers: SequenceType = [32],
-        reward_support_size: int = 601,
-        value_support_size: int = 601,
-        proj_hid: int = 1024,
-        proj_out: int = 1024,
-        pred_hid: int = 512,
-        pred_out: int = 1024,
-        self_supervised_learning_loss: bool = False,
-        categorical_distribution: bool = True,
-        activation: nn.Module = nn.ReLU(inplace=True),
-        last_linear_layer_init_zero: bool = True,
-        state_norm: bool = False,
-        downsample: bool = False,
-        *args,
-        **kwargs
+            self,
+            observation_shape: SequenceType = (12, 96, 96),
+            action_space_size: int = 6,
+            chance_space_size: int = 2,
+            num_res_blocks: int = 1,
+            num_channels: int = 64,
+            reward_head_channels: int = 16,
+            value_head_channels: int = 16,
+            policy_head_channels: int = 16,
+            fc_reward_layers: SequenceType = [32],
+            fc_value_layers: SequenceType = [32],
+            fc_policy_layers: SequenceType = [32],
+            reward_support_size: int = 601,
+            value_support_size: int = 601,
+            proj_hid: int = 1024,
+            proj_out: int = 1024,
+            pred_hid: int = 512,
+            pred_out: int = 1024,
+            self_supervised_learning_loss: bool = False,
+            categorical_distribution: bool = True,
+            activation: nn.Module = nn.ReLU(inplace=True),
+            last_linear_layer_init_zero: bool = True,
+            state_norm: bool = False,
+            downsample: bool = False,
+            *args,
+            **kwargs
     ):
         """
         Overview:
@@ -90,7 +90,7 @@ class StochasticMuZeroModel(nn.Module):
         else:
             self.reward_support_size = 1
             self.value_support_size = 1
-            
+
         self.action_space_size = action_space_size
         self.chance_space_size = chance_space_size
 
@@ -125,7 +125,7 @@ class StochasticMuZeroModel(nn.Module):
             num_channels,
             downsample,
         )
-        
+
         self.encoder = Encoder_function(
             observation_shape, chance_space_size
         )
@@ -152,7 +152,7 @@ class StochasticMuZeroModel(nn.Module):
             flatten_output_size_for_policy_head,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
         )
-        
+
         self.afterstate_dynamics_network = AfterstateDynamicsNetwork(
             num_res_blocks,
             num_channels + 1,
@@ -232,7 +232,8 @@ class StochasticMuZeroModel(nn.Module):
             latent_state,
         )
 
-    def recurrent_inference(self, state: torch.Tensor, option: torch.Tensor, afterstate: bool = False) -> MZNetworkOutput:
+    def recurrent_inference(self, state: torch.Tensor, option: torch.Tensor,
+                            afterstate: bool = False) -> MZNetworkOutput:
         """
         Overview:
             Recurrent inference of MuZero model, which is the rollout step of the MuZero model.
@@ -290,7 +291,7 @@ class StochasticMuZeroModel(nn.Module):
         if self.state_norm:
             latent_state = renormalize(latent_state)
         return latent_state
-    
+
     def _encode_vqvae(self, observation: torch.Tensor):
         output = self.encoder(observation)
         return output
@@ -381,8 +382,9 @@ class StochasticMuZeroModel(nn.Module):
         if self.state_norm:
             next_latent_state = renormalize(next_latent_state)
         return next_latent_state, reward
-    
-    def _afterstate_dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+
+    def _afterstate_dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[
+        torch.Tensor, torch.Tensor]:
         """
         Overview:
             Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state``
@@ -433,9 +435,7 @@ class StochasticMuZeroModel(nn.Module):
         next_latent_state, reward = self.afterstate_dynamics_network(state_action_encoding)
         if self.state_norm:
             next_latent_state = renormalize(next_latent_state)
-        return next_latent_state, reward    
-    
-    
+        return next_latent_state, reward
 
     def project(self, latent_state: torch.Tensor, with_grad: bool = True) -> torch.Tensor:
         """
@@ -483,15 +483,15 @@ class StochasticMuZeroModel(nn.Module):
 class DynamicsNetwork(nn.Module):
 
     def __init__(
-        self,
-        num_res_blocks: int,
-        num_channels: int,
-        reward_head_channels: int,
-        fc_reward_layers: SequenceType,
-        output_support_size: int,
-        flatten_output_size_for_reward_head: int,
-        last_linear_layer_init_zero: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            self,
+            num_res_blocks: int,
+            num_channels: int,
+            reward_head_channels: int,
+            fc_reward_layers: SequenceType,
+            output_support_size: int,
+            flatten_output_size_for_reward_head: int,
+            last_linear_layer_init_zero: bool = True,
+            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
     ):
         """
         Overview:
@@ -580,18 +580,19 @@ class DynamicsNetwork(nn.Module):
     def get_reward_mean(self) -> float:
         return get_reward_mean(self)
 
+
 class AfterstateDynamicsNetwork(nn.Module):
 
     def __init__(
-        self,
-        num_res_blocks: int,
-        num_channels: int,
-        reward_head_channels: int,
-        fc_reward_layers: SequenceType,
-        output_support_size: int,
-        flatten_output_size_for_reward_head: int,
-        last_linear_layer_init_zero: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            self,
+            num_res_blocks: int,
+            num_channels: int,
+            reward_head_channels: int,
+            fc_reward_layers: SequenceType,
+            output_support_size: int,
+            flatten_output_size_for_reward_head: int,
+            last_linear_layer_init_zero: bool = True,
+            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
     ):
         """
         Overview:
@@ -671,14 +672,14 @@ class AfterstateDynamicsNetwork(nn.Module):
         # use the fully connected layer to predict reward
         reward = self.fc_reward_head(x)
 
-        return afterstate_latent_state, reward 
+        return afterstate_latent_state, reward
 
     def get_dynamic_mean(self) -> float:
         return get_dynamic_mean(self)
 
     def get_reward_mean(self) -> float:
         return get_reward_mean(self)
-    
+
 
 class AfterstatePredictionNetwork(nn.Module):
     def __init__(
@@ -757,7 +758,6 @@ class AfterstatePredictionNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
-
     def forward(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
@@ -785,11 +785,12 @@ class AfterstatePredictionNetwork(nn.Module):
         value = self.fc_value(value)
         policy = self.fc_policy(policy)
         return policy, value
-    
+
+
 class ImgNet(nn.Module):
     def __init__(self, observation_space_dimensions, table_vec_dim=4):
         super(ImgNet, self).__init__()
-        self.conv1 = nn.Conv2d(observation_space_dimensions[0]*2, 32, 3, padding=1)
+        self.conv1 = nn.Conv2d(observation_space_dimensions[0] * 2, 32, 3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, 3, padding=1)
         self.fc1 = nn.Linear(64 * observation_space_dimensions[1] * observation_space_dimensions[2], 128)
         self.fc2 = nn.Linear(128, 64)
@@ -813,41 +814,15 @@ class Encoder_function(nn.Module):
         super().__init__()
         self.action_space = action_dimension
         self.encoder = ImgNet(observation_space_dimensions, action_dimension)
-        # # # # add to sequence|first and recursive|,, whatever you need
-        # linear_in = nn.Linear(observation_space_dimensions, hidden_layer_dimensions)
-        # linear_mid = nn.Linear(hidden_layer_dimensions, hidden_layer_dimensions)
-        # linear_out = nn.Linear(hidden_layer_dimensions, state_dimension)
-        
-        # self.scale = nn.Tanh()
-        # layernom_init = nn.BatchNorm1d(observation_space_dimensions)
-        # layernorm_recur = nn.BatchNorm1d(hidden_layer_dimensions)
-        # # 0.1, 0.2 , 0.25 , 0.5 parameter (first two more recommended for rl)
-        # dropout = nn.Dropout(0.1)
-        # activation = nn.ELU()   # , nn.ELU() , nn.GELU, nn.ELU() , nn.ELU
-
-        # first_layer_sequence = [
-        #     linear_in,
-        #     activation
-        # ]
-
-        # recursive_layer_sequence = [
-        #     linear_mid,
-        #     activation
-        # ]
-
-        # sequence = first_layer_sequence + \
-        #     (recursive_layer_sequence*number_of_hidden_layer)
-
-        # self.encoder = nn.Sequential(*tuple(sequence+[nn.Linear(hidden_layer_dimensions, action_dimension)]))  
         self.onehot_argmax = StraightThroughEstimator()
+
     def forward(self, o_i):
-        #https://openreview.net/pdf?id=X6D9bAHhBQ1 [page:5 chance outcome]
+        # https://openreview.net/pdf?id=X6D9bAHhBQ1 [page:5 chance outcome]
         # c_e_t = torch.nn.Softmax(-1)(self.encoder(o_i))
         c_e_t = self.encoder(o_i)
-        #c_t= torch.zeros_like(c_e_t).scatter_(-1, torch.argmax(c_e_t, dim=-1,keepdim=True), 1.)
+        # c_t= torch.zeros_like(c_e_t).scatter_(-1, torch.argmax(c_e_t, dim=-1,keepdim=True), 1.)
         c_t = self.onehot_argmax(c_e_t)
-        return c_t,c_e_t
-
+        return c_t, c_e_t
 
 
 class StraightThroughEstimator(nn.Module):
@@ -857,13 +832,15 @@ class StraightThroughEstimator(nn.Module):
     def forward(self, x):
         x = Onehot_argmax.apply(x)
         return x
-#straight-through estimator is used during the backward to allow the gradients to flow only to the encoder during the backpropagation.
+
+
+# straight-through estimator is used during the backward to allow the gradients to flow only to the encoder during the backpropagation.
 class Onehot_argmax(torch.autograd.Function):
-    #more information at : https://pytorch.org/tutorials/beginner/examples_autograd/two_layer_net_custom_function.html
+    # more information at : https://pytorch.org/tutorials/beginner/examples_autograd/two_layer_net_custom_function.html
     @staticmethod
     def forward(ctx, input):
-        #since the codebook is constant ,we can just use a transformation. no need to create a codebook and matmul c_e_t and codebook for argmax
-        return torch.zeros_like(input).scatter_(-1, torch.argmax(input, dim=-1,keepdim=True), 1.)
+        # since the codebook is constant ,we can just use a transformation. no need to create a codebook and matmul c_e_t and codebook for argmax
+        return torch.zeros_like(input).scatter_(-1, torch.argmax(input, dim=-1, keepdim=True), 1.)
 
     @staticmethod
     def backward(ctx, grad_output):

@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import copy
 import itertools
 import logging
@@ -28,15 +26,16 @@ class Game2048Env(gym.Env):
         act_scale=True,
         channel_last=True,
         obs_type='raw_observation',  # options=['raw_observation', 'dict_observation', 'array']
-        reward_normalize=True,
-        reward_scale=100,
-        max_tile=int(2**16),  # 2**11=2048, 2**16=65536
+        reward_normalize=False,
+        reward_norm_scale=100,
+        reward_type='raw',  # 'merged_tiles_plus_log_max_tile_num'
+        max_tile=int(2 ** 16),  # 2**11=2048, 2**16=65536
         delay_reward_step=0,
         prob_random_agent=0.,
         max_episode_steps=int(1e6),
         is_collect=True,
-        ignore_legal_actions = True,
-        need_flatten = False,
+        ignore_legal_actions=True,
+        need_flatten=False,
     )
     metadata = {'render.modes': ['human', 'ansi', 'rgb_array']}
 
@@ -56,22 +55,23 @@ class Game2048Env(gym.Env):
         self._save_replay_count = 0
         self.channel_last = cfg.channel_last
         self.obs_type = cfg.obs_type
+        self.reward_type = cfg.reward_type
         self.reward_normalize = cfg.reward_normalize
-        self.reward_scale = cfg.reward_scale
+        self.reward_norm_scale = cfg.reward_norm_scale
+        assert self.reward_type in ['raw', 'merged_tiles_plus_log_max_tile_num']
+        assert self.reward_type=='raw' or (self.reward_type=='merged_tiles_plus_log_max_tile_num' and self.reward_normalize==False)
         self.max_tile = cfg.max_tile
         self.max_episode_steps = cfg.max_episode_steps
         self.is_collect = cfg.is_collect
         self.ignore_legal_actions = cfg.ignore_legal_actions
         self.need_flatten = cfg.need_flatten
         self.chance = 0
-
+        self.chance_space_size = 16  # 32 for 2 and 4, 16 for 2
+        self.max_tile_num = 0
         self.size = 4
         self.w = self.size
         self.h = self.size
         self.squares = self.size * self.size
-
-        self.max_value = 2
-
         self.episode_return = 0
         # Members for gym implementation:
         self._action_space = spaces.Discrete(4)
@@ -80,38 +80,13 @@ class Game2048Env(gym.Env):
         self.set_illegal_move_reward(0.)
         self.set_max_tile(max_tile=self.max_tile)
 
-        if self.reward_normalize:
-            self._reward_range = (0., self.max_tile)
-        else:
-            self._reward_range = (0., self.max_tile)
+        self._reward_range = (0., self.max_tile)
 
-        # TODO(pu): why
+        # for render
         self.grid_size = 70
 
         # Initialise the random seed of the gym environment.
         self.seed()
-
-    def seed(self, seed=None, seed1=None):
-        """Set the random seed for the gym environment."""
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
-
-    def set_illegal_move_reward(self, reward):
-        """Define the reward/penalty for performing an illegal move. Also need
-            to update the reward range for this."""
-        # Guess that the maximum reward is also 2**squares though you'll probably never get that.
-        # (assume that illegal move reward is the lowest value that can be returned
-        # TODO: check that this is correct
-        self.illegal_move_reward = reward
-        self.reward_range = (self.illegal_move_reward, float(2 ** self.squares))
-
-    def set_max_tile(self, max_tile: int = 2048):
-        """
-        Define the maximum tile that will end the game (e.g. 2048). None means no limit.
-           This does not affect the state returned.
-        """
-        assert max_tile is None or isinstance(max_tile, int)
-        self.max_tile = max_tile
 
     def reset(self):
         """Reset the game board-matrix and add 2 tiles."""
@@ -120,7 +95,6 @@ class Game2048Env(gym.Env):
         self.episode_return = 0
         self._final_eval_reward = 0.0
         self.should_done = False
-        self.max_value = 2
 
         logging.debug("Adding tiles")
         # TODO(pu): why add_tiles twice?
@@ -130,7 +104,7 @@ class Game2048Env(gym.Env):
         action_mask = np.zeros(4, 'int8')
         action_mask[self.legal_actions] = 1
 
-        observation = encoding_board(self.board)
+        observation = encode_board(self.board)
         observation = observation.astype(np.float32)
         assert observation.shape == (4, 4, 16)
 
@@ -145,7 +119,7 @@ class Game2048Env(gym.Env):
         if self.obs_type == 'dict_observation':
             observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1, 'chance': self.chance}
         elif self.obs_type == 'array':
-            observation = self.board 
+            observation = self.board
         else:
             observation = observation
         return observation
@@ -153,34 +127,39 @@ class Game2048Env(gym.Env):
     def step(self, action):
         """Perform one step of the game. This involves moving and adding a new tile."""
         self.episode_length += 1
-        info = {'illegal_move': False}
 
         if action not in self.legal_actions:
-            raise IllegalActionError(f"You input illegal action: {action}, the legal_actions are {self.legal_actions}. ")
-        
-        empty_num1 = len(self.get_empty_location())
-        reward_eval = float(self.move(action))
-        empty_num2 = len(self.get_empty_location())
-        reward_collect = float(empty_num2 - empty_num1)
-        #reward_collect = float(empty_num1 - empty_num2)
-        max_num = np.max(self.board)
-        if max_num > self.max_value:
-            reward_collect += np.log2(max_num) * 0.1
-            self.max_value = max_num
-        self.episode_return += reward_eval
-        assert reward_eval <= 2 ** (self.w * self.h)
+            raise IllegalActionError(
+                f"You input illegal action: {action}, the legal_actions are {self.legal_actions}. ")
+
+        if self.reward_type == 'merged_tiles_plus_log_max_tile_num':
+            empty_num1 = len(self.get_empty_location())
+        raw_reward = float(self.move(action))
+        if self.reward_type == 'merged_tiles_plus_log_max_tile_num':
+            empty_num2 = len(self.get_empty_location())
+            num_of_merged_tiles = float(empty_num2 - empty_num1)
+            reward_merged_tiles_plus_log_max_tile_num = num_of_merged_tiles
+            max_tile_num = self.highest()
+            if max_tile_num > self.max_tile_num:
+                reward_merged_tiles_plus_log_max_tile_num += np.log2(max_tile_num) * 0.1
+                self.max_tile_num = max_tile_num
+
+        self.episode_return += raw_reward
+        assert raw_reward <= 2 ** (self.w * self.h)
         self.add_random_2_4_tile()
         done = self.is_end()
-        reward_collect = float(reward_collect)
-        reward_eval = float(reward_eval)
+        if self.reward_type == 'merged_tiles_plus_log_max_tile_num':
+            reward_merged_tiles_plus_log_max_tile_num = float(reward_merged_tiles_plus_log_max_tile_num)
+        elif self.reward_type == 'raw':
+            raw_reward = float(raw_reward)
 
         if self.episode_length >= self.max_episode_steps:
             # print("episode_length: {}".format(self.episode_length))
             done = True
 
-        observation = encoding_board(self.board)
+        observation = encode_board(self.board)
         observation = observation.astype(np.float32)
-        
+
         assert observation.shape == (4, 4, 16)
 
         if not self.channel_last:
@@ -188,7 +167,7 @@ class Game2048Env(gym.Env):
             # (W, H, C) -> (C, W, H)
             # e.g. (4, 4, 16) -> (16, 4, 4)
             observation = np.transpose(observation, [2, 0, 1])
-            
+
         if self.need_flatten:
             observation = observation.reshape(-1)
         action_mask = np.zeros(4, 'int8')
@@ -197,114 +176,28 @@ class Game2048Env(gym.Env):
         if self.obs_type == 'dict_observation':
             observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1, 'chance': self.chance}
         elif self.obs_type == 'array':
-            observation = self.board 
+            observation = self.board
         else:
             observation = observation
 
         if self.reward_normalize:
-            reward_normalize = reward_collect
-            self._final_eval_reward += reward_normalize
-            reward = reward_collect
+            reward_normalize = raw_reward / self.reward_norm_scale
+            reward = reward_normalize
         else:
-            self._final_eval_reward += reward_eval
-            reward = reward_eval
-        reward = to_ndarray([reward]).astype(np.float32) 
+            reward = raw_reward
 
-        info = {"raw_reward": reward_eval, "max_tile": self.highest(), 'highest': self.highest()}
+        self._final_eval_reward += raw_reward
+
+        if self.reward_type == 'merged_tiles_plus_log_max_tile_num':
+            reward = to_ndarray([reward_merged_tiles_plus_log_max_tile_num]).astype(np.float32)
+        elif self.reward_type == 'raw':
+            reward = to_ndarray([reward]).astype(np.float32)
+        info = {"raw_reward": raw_reward, "max_tile": self.highest(), 'highest': self.highest()}
 
         if done:
             info['eval_episode_return'] = self._final_eval_reward
 
-        if self.reward_normalize:
-            return BaseEnvTimestep(observation, reward, done, info)
-        else:
-            return BaseEnvTimestep(observation, reward, done, info)
-
-    def render(self, mode='human'):
-        if mode == 'rgb_array':
-            black = (0, 0, 0)
-            grey = (128, 128, 128)
-            white = (255, 255, 255)
-            tile_colour_map = {
-                2: (255, 0, 0),
-                4: (224, 32, 0),
-                8: (192, 64, 0),
-                16: (160, 96, 0),
-                32: (128, 128, 0),
-                64: (96, 160, 0),
-                128: (64, 192, 0),
-                256: (32, 224, 0),
-                512: (0, 255, 0),
-                1024: (0, 224, 32),
-                2048: (0, 192, 64),
-                4096: (0, 160, 96),
-            }
-            grid_size = self.grid_size
-
-            # Render with Pillow
-            pil_board = Image.new("RGB", (grid_size * 4, grid_size * 4))
-            draw = ImageDraw.Draw(pil_board)
-            draw.rectangle([0, 0, 4 * grid_size, 4 * grid_size], grey)
-            fnt = ImageFont.truetype('Arial.ttf', 30)
-
-            for y in range(4):
-                for x in range(4):
-                    o = self.get(y, x)
-                    if o:
-                        draw.rectangle([x * grid_size, y * grid_size, (x + 1) * grid_size, (y + 1) * grid_size],
-                                       tile_colour_map[o])
-                        (text_x_size, text_y_size) = draw.textsize(str(o), font=fnt)
-                        draw.text((x * grid_size + (grid_size - text_x_size) // 2,
-                                   y * grid_size + (grid_size - text_y_size) // 2), str(o), font=fnt, fill=white)
-                        assert text_x_size < grid_size
-                        assert text_y_size < grid_size
-
-            return np.asarray(pil_board).swapaxes(0, 1)
-
-        outfile = StringIO() if mode == 'ansi' else sys.stdout
-        s = 'Current Return: {}, '.format(self.episode_return)
-        s += 'Highest Tile: {}\n'.format(self.highest())
-        npa = np.array(self.board)
-        grid = npa.reshape((self.size, self.size))
-        s += "{}\n".format(grid)
-        outfile.write(s)
-        return outfile
-
-    # Implementation of game logic for 2048
-    def add_random_2_4_tile(self):
-        """Add a tile with value 2 or 4 with different probabilities."""
-        possible_tiles = np.array([2, 4])
-        tile_probabilities = np.array([0.9, 0.1])
-        val = self.np_random.choice(possible_tiles, 1, p=tile_probabilities)[0]
-        empty_location = self.get_empty_location()
-        # assert empty_location.shape[0]
-        if empty_location.shape[0] == 0:
-            self.should_done = True  
-            return 
-        empty_idx = self.np_random.choice(empty_location.shape[0])
-        empty = empty_location[empty_idx]
-        logging.debug("Adding %s at %s", val, (empty[0], empty[1]))
-        val_chance_cum = 0
-        # if val == 4:
-        #     val_chance_cum = 16
-        self.chance = val_chance_cum + 4 * empty[0] + empty[1]
-        self.set(empty[0], empty[1], val)
-
-    def get(self, x, y):
-        """Get the value of one square."""
-        return self.board[x, y]
-
-    def set(self, x, y, val):
-        """Set the value of one square."""
-        self.board[x, y] = val
-
-    def get_empty_location(self):
-        """Return a 2d numpy array with the location of empty squares."""
-        return np.argwhere(self.board == 0)
-
-    def highest(self):
-        """Report the highest tile on the board."""
-        return np.max(self.board)
+        return BaseEnvTimestep(observation, reward, done, info)
 
     def move(self, direction, trial=False):
         """
@@ -364,6 +257,115 @@ class Game2048Env(gym.Env):
 
         return move_reward
 
+    def set_illegal_move_reward(self, reward):
+        """Define the reward/penalty for performing an illegal move. Also need
+            to update the reward range for this."""
+        # Guess that the maximum reward is also 2**squares though you'll probably never get that.
+        # (assume that illegal move reward is the lowest value that can be returned
+        # TODO: check that this is correct
+        self.illegal_move_reward = reward
+        self.reward_range = (self.illegal_move_reward, float(2 ** self.squares))
+
+    def set_max_tile(self, max_tile: int = 2048):
+        """
+        Define the maximum tile that will end the game (e.g. 2048). None means no limit.
+           This does not affect the state returned.
+        """
+        assert max_tile is None or isinstance(max_tile, int)
+        self.max_tile = max_tile
+
+    def render(self, mode='human'):
+        if mode == 'rgb_array':
+            black = (0, 0, 0)
+            grey = (128, 128, 128)
+            white = (255, 255, 255)
+            tile_colour_map = {
+                2: (255, 0, 0),
+                4: (224, 32, 0),
+                8: (192, 64, 0),
+                16: (160, 96, 0),
+                32: (128, 128, 0),
+                64: (96, 160, 0),
+                128: (64, 192, 0),
+                256: (32, 224, 0),
+                512: (0, 255, 0),
+                1024: (0, 224, 32),
+                2048: (0, 192, 64),
+                4096: (0, 160, 96),
+            }
+            grid_size = self.grid_size
+
+            # Render with Pillow
+            pil_board = Image.new("RGB", (grid_size * 4, grid_size * 4))
+            draw = ImageDraw.Draw(pil_board)
+            draw.rectangle([0, 0, 4 * grid_size, 4 * grid_size], grey)
+            fnt = ImageFont.truetype('Arial.ttf', 30)
+
+            for y in range(4):
+                for x in range(4):
+                    o = self.get(y, x)
+                    if o:
+                        draw.rectangle([x * grid_size, y * grid_size, (x + 1) * grid_size, (y + 1) * grid_size],
+                                       tile_colour_map[o])
+                        (text_x_size, text_y_size) = draw.textsize(str(o), font=fnt)
+                        draw.text((x * grid_size + (grid_size - text_x_size) // 2,
+                                   y * grid_size + (grid_size - text_y_size) // 2), str(o), font=fnt, fill=white)
+                        assert text_x_size < grid_size
+                        assert text_y_size < grid_size
+
+            return np.asarray(pil_board).swapaxes(0, 1)
+
+        outfile = StringIO() if mode == 'ansi' else sys.stdout
+        s = 'Current Return: {}, '.format(self.episode_return)
+        s += 'Highest Tile: {}\n'.format(self.highest())
+        npa = np.array(self.board)
+        grid = npa.reshape((self.size, self.size))
+        s += "{}\n".format(grid)
+        outfile.write(s)
+        return outfile
+
+    # Implementation of game logic for 2048
+    def add_random_2_4_tile(self):
+        """Add a tile with value 2 or 4 with different probabilities."""
+        possible_tiles = np.array([2, 4])
+        tile_probabilities = np.array([0.9, 0.1])
+        tile_val = self.np_random.choice(possible_tiles, 1, p=tile_probabilities)[0]
+        empty_location = self.get_empty_location()
+        # assert empty_location.shape[0]
+        if empty_location.shape[0] == 0:
+            self.should_done = True
+            return
+        empty_idx = self.np_random.choice(empty_location.shape[0])
+        empty = empty_location[empty_idx]
+        logging.debug("Adding %s at %s", tile_val, (empty[0], empty[1]))
+
+        if self.chance_space_size == 16:
+            self.chance = 4 * empty[0] + empty[1]
+        elif self.chance_space_size == 32:
+            if tile_val == 2:
+                self.chance = 4 * empty[0] + empty[1]
+            elif tile_val == 4:
+                self.chance = 16 + 4 * empty[0] + empty[1]
+
+        self.set(empty[0], empty[1], tile_val)
+
+    def get(self, x, y):
+        """Get the value of one square."""
+        return self.board[x, y]
+
+    def set(self, x, y, val):
+        """Set the value of one square."""
+        self.board[x, y] = val
+
+    def get_empty_location(self):
+        """Return a 2d numpy array with the location of empty squares."""
+        return np.argwhere(self.board == 0)
+
+    def highest(self):
+        """Report the highest tile on the board."""
+        return np.max(self.board)
+
+
     @property
     def legal_actions(self):
         """
@@ -375,7 +377,7 @@ class Game2048Env(gym.Env):
             - legal_actions (:obj:`list`): The legal actions.
         """
         if self.ignore_legal_actions:
-            return [0,1,2,3]
+            return [0, 1, 2, 3]
         legal_actions = []
         for direction in range(4):
             changed = False
@@ -479,6 +481,11 @@ class Game2048Env(gym.Env):
         """Set the whole board-matrix, useful for testing."""
         self.board = new_board
 
+    def seed(self, seed=None, seed1=None):
+        """Set the random seed for the gym environment."""
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
+
     def random_action(self) -> np.ndarray:
         random_action = self.action_space.sample()
         if isinstance(random_action, np.ndarray):
@@ -503,7 +510,6 @@ class Game2048Env(gym.Env):
     def create_collector_env_cfg(cfg: dict) -> List[dict]:
         collector_env_num = cfg.pop('collector_env_num')
         cfg = copy.deepcopy(cfg)
-        # cfg.reward_normalize = True
         # when collect data, sometimes we need to normalize the reward
         # reward_normalize is determined by the config.
         cfg.is_collect = True
@@ -532,28 +538,35 @@ def pairwise(iterable):
 class IllegalMove(Exception):
     pass
 
+
 class IllegalActionError(Exception):
     pass
 
-def encoding_board(flat, num_of_template_tiles=16):
+
+def encode_board(flat_board, num_of_template_tiles=16):
     """
     Overview:
-        Convert an [4, 4] raw board into [4, 4, num_of_template_tiles] one-hot encoding.
+        This function converts a [4, 4] raw game board into a [4, 4, num_of_template_tiles] one-hot encoded board.
     Arguments:
-        - board (:obj:`np.ndarray`): the raw board
-        - num_of_template_tiles (:obj:`int`): the number of template_tiles
+        - flat_board (:obj:`np.ndarray`): The raw game board, expected to be a 2D numpy array.
+        - num_of_template_tiles (:obj:`int`): The number of unique tiles to consider in the encoding,
+                                               default value is 16.
     Returns:
-        - one_hot_board (:obj:`np.ndarray`): the one-hot encoding board
+        - one_hot_board (:obj:`np.ndarray`): The one-hot encoded game board.
     """
-    # TODO(pu): the more elegant one-hot encoding implementation
-    # template_tiles is what each layer represents
-    # template_tiles = 2 ** (np.arange(num_of_template_tiles, dtype=int) + 1)
-    template_tiles = 2 ** (np.arange(num_of_template_tiles, dtype=int))
-    template_tiles[0] = 0
-    # layered is the flat board repeated num_of_template_tiles times
-    layered = np.repeat(flat[:, :, np.newaxis], num_of_template_tiles, axis=-1)
+    # Generate a sequence of powers of 2, corresponding to the unique tile values.
+    # In the game, tile values are powers of 2. So, each unique tile is represented by 2 raised to some power.
+    # The first tile is considered as 0 (empty tile).
+    tile_values = 2 ** np.arange(num_of_template_tiles, dtype=int)
+    tile_values[0] = 0  # The first tile represents an empty slot, so set its value to 0.
 
-    # Now set the values in the board to 1 or zero depending on whether they match template_tiles.
-    # template_tiles is broadcast across a number of axes
-    one_hot_board = np.where(layered == template_tiles, 1, 0)
+    # Create a 3D array from the 2D input board by repeating it along a new axis.
+    # This creates a 'layered' view of the board, where each layer corresponds to one unique tile value.
+    layered_board = np.repeat(flat_board[:, :, np.newaxis], num_of_template_tiles, axis=-1)
+
+    # Perform the one-hot encoding:
+    # For each layer of the 'layered_board', mark the positions where the tile value in the 'flat_board'
+    # matches the corresponding value in 'tile_values'. If a match is found, mark it as 1 (True), else 0 (False).
+    one_hot_board = (layered_board == tile_values).astype(int)
+
     return one_hot_board

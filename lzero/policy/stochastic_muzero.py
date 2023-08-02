@@ -85,12 +85,18 @@ class StochasticMuZeroPolicy(Policy):
         augmentation=['shift', 'intensity'],
 
         # ******* learn ******
+        # (bool) Whether to ignore the done flag in the training data. Typically, this value is set to False.
+        # However, for some environments with a fixed episode length, to ensure the accuracy of Q-value calculations,
+        # we should set it to True to avoid the influence of the done flag.
+        ignore_done=False,
         # (int) How many updates(iterations) to train after collector's one collection.
         # Bigger "update_per_collect" means bigger off-policy.
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
         update_per_collect=100,
+        # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
+        model_update_ratio=0.1,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
@@ -159,6 +165,24 @@ class StochasticMuZeroPolicy(Policy):
         root_dirichlet_alpha=0.3,
         # (float) The noise weight at the root node of the search tree.
         root_noise_weight=0.25,
+
+        # ****** Explore by random collect ******
+        # (int) The number of episodes to collect data randomly before training.
+        random_collect_episode_num=0,
+
+        # ****** Explore by eps greedy ******
+        eps=dict(
+            # (bool) Whether to use eps greedy exploration in collecting data.
+            eps_greedy_exploration_in_collect=False,
+            # 'linear', 'exp'
+            type='linear',
+            # (float) The start value of eps.
+            start=1.,
+            # (float) The end value of eps.
+            end=0.05,
+            # (int) The decay steps from start to end eps.
+            decay=int(1e5),
+        ),
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
@@ -335,7 +359,7 @@ class StochasticMuZeroPolicy(Policy):
         # the core recurrent_inference in MuZero policy.
         # ==============================================================
         for step_i in range(self._cfg.num_unroll_steps):
-            # unroll with the afterstate dynamic function: predict 'afterstate state', 
+            # unroll with the afterstate dynamic function: predict 'after_state',
             # given current ``state`` and ``action``.
             # 'afterstate reward' is not used, we kept it for the sake of uniformity between decision nodes and chance nodes.
             # And then predict afterstate policy_logits and afterstate value with the afterstate prediction function.
@@ -348,6 +372,7 @@ class StochasticMuZeroPolicy(Policy):
             former_frame = encoder_image_list[step_i]
             latter_frame = encoder_image_list[step_i + 1]
             concat_frame = torch.cat((former_frame, latter_frame), dim=1)
+
             chance_code, encode_output = self._learn_model._encode_vqvae(concat_frame)
             chance_code_long = torch.argmax(chance_code, dim=1).long().unsqueeze(-1)
             
@@ -519,6 +544,7 @@ class StochasticMuZeroPolicy(Policy):
             action_mask: list = None,
             temperature: float = 1,
             to_play: List = [-1],
+            epsilon: float = 0.25,
             ready_env_id=None
     ) -> Dict:
         """
