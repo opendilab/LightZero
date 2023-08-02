@@ -126,7 +126,7 @@ class StochasticMuZeroModel(nn.Module):
             downsample,
         )
 
-        self.encoder = Encoder_function(
+        self.encoder = ChanceEncoder(
             observation_shape, chance_space_size
         )
         self.dynamics_network = DynamicsNetwork(
@@ -292,7 +292,7 @@ class StochasticMuZeroModel(nn.Module):
             latent_state = renormalize(latent_state)
         return latent_state
 
-    def _encode_vqvae(self, observation: torch.Tensor):
+    def chance_encode(self, observation: torch.Tensor):
         output = self.encoder(observation)
         return output
 
@@ -787,9 +787,9 @@ class AfterstatePredictionNetwork(nn.Module):
         return policy, value
 
 
-class ImgNet(nn.Module):
+class ChanceEncoderBackbone(nn.Module):
     def __init__(self, observation_space_dimensions, table_vec_dim=4):
-        super(ImgNet, self).__init__()
+        super(ChanceEncoderBackbone, self).__init__()
         self.conv1 = nn.Conv2d(observation_space_dimensions[0] * 2, 32, 3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, 3, padding=1)
         self.fc1 = nn.Linear(64 * observation_space_dimensions[1] * observation_space_dimensions[2], 128)
@@ -799,7 +799,6 @@ class ImgNet(nn.Module):
     def forward(self, x):
         x = torch.relu(self.conv1(x))
         x = torch.relu(self.conv2(x))
-        # x = x.view(-1, 64 * 4 * 4)
         x = x.view(x.shape[0], -1)
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
@@ -807,41 +806,100 @@ class ImgNet(nn.Module):
         return x
 
 
-class Encoder_function(nn.Module):
-    def __init__(self,
-                 observation_space_dimensions,
-                 action_dimension):
+class ChanceEncoder(nn.Module):
+    def __init__(self, observation_space_dimensions, action_dimension):
         super().__init__()
+        # Specify the action space for the model
         self.action_space = action_dimension
-        self.encoder = ImgNet(observation_space_dimensions, action_dimension)
+        # Define the encoder, which transforms observations into a latent space
+        self.encoder = ChanceEncoderBackbone(observation_space_dimensions, action_dimension)
+        # Using the Straight Through Estimator method for backpropagation
         self.onehot_argmax = StraightThroughEstimator()
 
     def forward(self, o_i):
-        # https://openreview.net/pdf?id=X6D9bAHhBQ1 [page:5 chance outcome]
-        # c_e_t = torch.nn.Softmax(-1)(self.encoder(o_i))
-        c_e_t = self.encoder(o_i)
-        # c_t= torch.zeros_like(c_e_t).scatter_(-1, torch.argmax(c_e_t, dim=-1,keepdim=True), 1.)
-        c_t = self.onehot_argmax(c_e_t)
-        return c_t, c_e_t
+        """
+        Forward method for the ChanceEncoder. This method takes an observation
+        and applies the encoder to transform it to a latent space. Then applies the
+        StraightThroughEstimator to this encoding.
+
+        References:
+        Planning in Stochastic Environments with a Learned Model (ICLR 2022), page 5,
+        Chance Outcomes section.
+
+        Args:
+            o_i (Tensor): Observation tensor.
+
+        Returns:
+            chance_t (Tensor): Transformed tensor after applying one-hot argmax.
+            chance_encoding_t (Tensor): Encoding of the input observation tensor.
+        """
+        # Apply the encoder to the observation
+        chance_encoding_t = self.encoder(o_i)
+        # Apply one-hot argmax to the encoding
+        chance_t = self.onehot_argmax(chance_encoding_t)
+        return chance_t, chance_encoding_t
 
 
 class StraightThroughEstimator(nn.Module):
     def __init__(self):
-        super(StraightThroughEstimator, self).__init__()
+        super().__init__()
 
     def forward(self, x):
-        x = Onehot_argmax.apply(x)
+        """
+        Forward method for the StraightThroughEstimator. This applies the one-hot argmax
+        function to the input tensor.
+
+        Args:
+            x (Tensor): Input tensor.
+
+        Returns:
+            Tensor: Transformed tensor after applying one-hot argmax.
+        """
+        # Apply one-hot argmax to the input
+        x = OnehotArgmax.apply(x)
         return x
 
 
-# straight-through estimator is used during the backward to allow the gradients to flow only to the encoder during the backpropagation.
-class Onehot_argmax(torch.autograd.Function):
-    # more information at : https://pytorch.org/tutorials/beginner/examples_autograd/two_layer_net_custom_function.html
+class OnehotArgmax(torch.autograd.Function):
+    """
+    Custom PyTorch function for one-hot argmax. This function transforms the input tensor
+    into a one-hot tensor where the index with the maximum value in the original tensor is
+    set to 1 and all other indices are set to 0. It allows gradients to flow to the encoder
+    during backpropagation.
+
+    For more information, refer to:
+    https://pytorch.org/tutorials/beginner/examples_autograd/two_layer_net_custom_function.html
+    """
+
     @staticmethod
     def forward(ctx, input):
-        # since the codebook is constant ,we can just use a transformation. no need to create a codebook and matmul c_e_t and codebook for argmax
+        """
+        Forward method for the one-hot argmax function. This method transforms the input
+        tensor into a one-hot tensor.
+
+        Args:
+            ctx (context): A context object that can be used to stash information for
+            backward computation.
+            input (Tensor): Input tensor.
+
+        Returns:
+            Tensor: One-hot tensor.
+        """
+        # Transform the input tensor to a one-hot tensor
         return torch.zeros_like(input).scatter_(-1, torch.argmax(input, dim=-1, keepdim=True), 1.)
 
     @staticmethod
     def backward(ctx, grad_output):
+        """
+        Backward method for the one-hot argmax function. This method allows gradients
+        to flow to the encoder during backpropagation.
+
+        Args:
+            ctx (context): A context object that was stashed in the forward pass.
+            grad_output (Tensor): The gradient of the output tensor.
+
+        Returns:
+            Tensor: The gradient of the input tensor.
+        """
         return grad_output
+

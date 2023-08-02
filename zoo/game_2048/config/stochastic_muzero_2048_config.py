@@ -17,14 +17,14 @@ batch_size = 512
 max_env_step = int(1e8)
 reanalyze_ratio = 0.
 
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# num_simulations = 5  # TODO(pu):100
-# update_per_collect = 3
-# batch_size = 5
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0.
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 5
+update_per_collect = 3
+batch_size = 5
+max_env_step = int(1e6)
+reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -66,6 +66,7 @@ game_2048_stochastic_muzero_config = dict(
         td_steps=10,
         discount_factor=0.999,
         manual_temperature_decay=True,
+        threshold_training_steps_for_final_temperature=int(1e5),
         # optim_type='SGD',
         # lr_piecewise_constant_decay=True,
         # learning_rate=0.2,  # init lr for manually decay schedule

@@ -371,9 +371,9 @@ class StochasticMuZeroPolicy(Policy):
             # concat consecutive frames to calculate ground truth chance
             former_frame = encoder_image_list[step_i]
             latter_frame = encoder_image_list[step_i + 1]
-            concat_frame = torch.cat((former_frame, latter_frame), dim=1)
+            concat_frames = torch.cat((former_frame, latter_frame), dim=1)
 
-            chance_code, encode_output = self._learn_model._encode_vqvae(concat_frame)
+            chance_code, chance_encoding = self._learn_model.chance_encode(concat_frames)
             chance_code_long = torch.argmax(chance_code, dim=1).long().unsqueeze(-1)
             
             # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
@@ -420,7 +420,7 @@ class StochasticMuZeroPolicy(Policy):
             # ==============================================================
             policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
             afterstate_policy_loss += cross_entropy_loss(afterstate_policy_logits, chance_code)
-            commitment_loss += cross_entropy_loss(encode_output, chance_code)
+            commitment_loss += cross_entropy_loss(chance_encoding, chance_code)
 
             afterstate_value_loss += cross_entropy_loss(afterstate_value, target_value_categorical[:, step_i])
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
