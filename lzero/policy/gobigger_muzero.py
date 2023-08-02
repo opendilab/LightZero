@@ -75,8 +75,8 @@ class GoBiggerMuZeroPolicy(MuZeroPolicy):
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
         data_list = [
             mask_batch,
-            target_reward.astype('float64'),
-            target_value.astype('float64'), target_policy, weights
+            target_reward.astype('float32'),
+            target_value.astype('float32'), target_policy, weights
         ]
         [mask_batch, target_reward, target_value, target_policy,
          weights] = to_torch_float_tensor(data_list, self._cfg.device)
@@ -225,6 +225,7 @@ class GoBiggerMuZeroPolicy(MuZeroPolicy):
         if self._cfg.monitor_extra_statistics:
             predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
             predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
+
         return {
             'collect_mcts_temperature': self.collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
@@ -257,7 +258,7 @@ class GoBiggerMuZeroPolicy(MuZeroPolicy):
             temperature: float = 1,
             to_play: List = [-1],
             epsilon: float = 0.25,
-            ready_env_id=None
+            ready_env_id = None
     ) -> Dict:
         """
         Overview:
@@ -334,6 +335,7 @@ class GoBiggerMuZeroPolicy(MuZeroPolicy):
             for i in range(batch_size):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 if self._cfg.eps.eps_greedy_exploration_in_collect:
+                    # eps greedy collect
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                         distributions, temperature=self.collect_mcts_temperature, deterministic=True
                     )
@@ -341,9 +343,13 @@ class GoBiggerMuZeroPolicy(MuZeroPolicy):
                     if np.random.rand() < self.collect_epsilon:
                         action = np.random.choice(legal_actions[i])
                 else:
+                    # normal collect
+                    # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                    # the index within the legal action set, rather than the index in the entire action set.
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                         distributions, temperature=self.collect_mcts_temperature, deterministic=False
                     )
+                    # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                 output[i // agent_num]['action'].append(action)
                 output[i // agent_num]['distributions'].append(distributions)

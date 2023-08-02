@@ -17,7 +17,6 @@ reanalyze_ratio = 0.
 action_space_size = 27
 direction_num = 12
 eps_greedy_exploration_in_collect = True
-random_collect_episode_num = 0
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -49,7 +48,7 @@ atari_efficientzero_config = dict(
         gumbel_algo=False,
         env_type='not_board_games',
         game_segment_length=400,
-        random_collect_episode_num=random_collect_episode_num,
+        random_collect_episode_num=0,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
             type='linear',

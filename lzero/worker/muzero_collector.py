@@ -212,7 +212,7 @@ class MuZeroCollector(ISerialCollector):
     def pad_and_save_last_trajectory(self, i, last_game_segments, last_game_priorities, game_segments, done) -> None:
         """
         Overview:
-            put the last game block into the pool if the current game is finished
+            put the last game segment into the pool if the current game is finished
         Arguments:
             - last_game_segments (:obj:`list`): list of the last game segments
             - last_game_priorities (:obj:`list`): list of the last game priorities
@@ -220,7 +220,7 @@ class MuZeroCollector(ISerialCollector):
         Note:
             (last_game_segments[i].obs_segment[-4:][j] == game_segments[i].obs_segment[:4][j]).all() is True
         """
-        # pad over last block trajectory
+        # pad over last segment trajectory
         beg_index = self.policy_config.model.frame_stack_num
         end_index = beg_index + self.policy_config.num_unroll_steps
 
@@ -264,7 +264,7 @@ class MuZeroCollector(ISerialCollector):
 
         last_game_segments[i].game_segment_to_array()
 
-        # put the game block into the pool
+        # put the game segment into the pool
         self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
 
         # reset last game_segments
@@ -426,7 +426,8 @@ class MuZeroCollector(ISerialCollector):
                 # ==============================================================
                 # policy forward
                 # ==============================================================
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, random_collect_episode_num, epsilon)
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon)
+
                 if self._multi_agent:
                     actions_no_env_id = defaultdict(dict)
                     for k, v in policy_output.items():
@@ -531,7 +532,7 @@ class MuZeroCollector(ISerialCollector):
                         )
 
                     # NOTE: the position of code snippet is very important.
-                    # the obs['action_mask'] and obs['to_play'] is corresponding to next action
+                    # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
                     action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                     to_play_dict[env_id] = to_ndarray(obs['to_play'])
 
@@ -570,7 +571,7 @@ class MuZeroCollector(ISerialCollector):
                         observation_window_stack[env_id].append(to_ndarray(obs['observation']))
 
                     # ==============================================================
-                    # we will save a game block if it is the end of the game or the next game block is finished.
+                    # we will save a game segment if it is the end of the game or the next game segment is finished.
                     # ==============================================================
 
                     # if game block is full, we will save the last game block
@@ -650,10 +651,10 @@ class MuZeroCollector(ISerialCollector):
                     self._episode_info.append(info)
 
                     # ==============================================================
-                    # if it is the end of the game, we will save the game block
+                    # if it is the end of the game, we will save the game segment
                     # ==============================================================
 
-                    # NOTE: put the penultimate game block in one episode into the trajectory_pool
+                    # NOTE: put the penultimate game segment in one episode into the trajectory_pool
                     # pad over 2th last game_segment using the last game_segment
                     if self._multi_agent:
                         for agent_id in range(agent_num):

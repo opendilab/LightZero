@@ -96,7 +96,11 @@ class SampledEfficientZeroPolicy(Policy):
         # (list) The style of augmentation.
         augmentation=['shift', 'intensity'],
 
-        # ******* learn ******
+        # ****** learn ******
+        # (bool) Whether to ignore the done flag in the training data. Typically, this value is set to False.
+        # However, for some environments with a fixed episode length, to ensure the accuracy of Q-value calculations,
+        # we should set it to True to avoid the influence of the done flag.
+        ignore_done=False,
         # (int) How many updates(iterations) to train after collector's one collection.
         # Bigger "update_per_collect" means bigger off-policy.
         # collect data -> update policy-> collect data -> ...
@@ -762,10 +766,9 @@ class SampledEfficientZeroPolicy(Policy):
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
         self.collect_mcts_temperature = 1
-        self.collect_epsilon = 1
 
     def _forward_collect(
-        self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1, random_collect_episode_num: int = 0, epsilon: float = 0.25, ready_env_id=None
+        self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1, ready_env_id=None
     ):
         """
         Overview:
@@ -1035,7 +1038,6 @@ class SampledEfficientZeroPolicy(Policy):
         if self._cfg.model.continuous_action_space:
             return [
                 'collect_mcts_temperature',
-                'collect_epsilon',
                 'cur_lr',
                 'total_loss',
                 'weighted_total_loss',
@@ -1071,7 +1073,6 @@ class SampledEfficientZeroPolicy(Policy):
         else:
             return [
                 'collect_mcts_temperature',
-                'collect_epsilon',
                 'cur_lr',
                 'total_loss',
                 'weighted_total_loss',

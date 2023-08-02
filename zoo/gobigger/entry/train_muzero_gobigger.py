@@ -16,6 +16,8 @@ from ding.rl_utils import get_epsilon_greedy_fn
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.worker import GoBiggerMuZeroCollector, GoBiggerMuZeroEvaluator
+from lzero.entry.utils import random_collect
+from lzero.policy.gobigger_random_policy import GoBiggerLightZeroRandomPolicy
 
 
 def train_muzero_gobigger(
@@ -125,17 +127,14 @@ def train_muzero_gobigger(
     # ==============================================================
     # Learner's before_run hook.
     learner.call_hook('before_run')
+    if cfg.policy.update_per_collect is not None:
+        update_per_collect = cfg.policy.update_per_collect
+
+    # The purpose of collecting random data before training:
+    # Exploration: The collection of random data aids the agent in exploring the environment and prevents premature convergence to a suboptimal policy.
+    # Comparation: The agent's performance during random action-taking can be used as a reference point to evaluate the efficacy of reinforcement learning algorithms.
     if cfg.policy.random_collect_episode_num > 0:
-        collect_kwargs = {}
-        collect_kwargs['temperature'] = 1
-        collect_kwargs['epsilon'] = 0.0
-        new_data = collector.collect(n_episode=cfg.policy.random_collect_episode_num, train_iter=0, policy_kwargs=collect_kwargs)
-        # save returned new_data collected by the collector
-        replay_buffer.push_game_segments(new_data)
-        # remove the oldest data if the replay buffer is full.
-        replay_buffer.remove_oldest_data_to_fit()
-        # reset the random_collect_episode_num to 0
-        cfg.policy.random_collect_episode_num = 0
+        random_collect(cfg.policy, policy, GoBiggerLightZeroRandomPolicy, collector, collector_env, replay_buffer)
 
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
