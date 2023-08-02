@@ -118,6 +118,7 @@ class MCTS(object):
             'root_dirichlet_alpha', 0.3
         )  # 0.3  # for chess, 0.03 for Go and 0.15 for shogi.
         self._root_noise_weight = self._cfg.get('root_noise_weight', 0.25)  # 0.25
+        self.mcts_search_cnt = 0
 
     def get_next_action(
             self,
@@ -167,14 +168,22 @@ class MCTS(object):
                 action_visits.append((action, 0))
 
         actions, visits = zip(*action_visits)
-        print('action_visits= {}'.format(visits))
-        action_probs = nn.functional.softmax(1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0).numpy()
+        # print('action_visits= {}'.format(visits))
+        # original code: visit_count 0 -> action_probs small positive number
+        # action_probs = nn.functional.softmax(np.log(torch.as_tensor(visits) + 1e-10) / temperature, dim=0).numpy()
+
+        visits_t = torch.as_tensor(visits, dtype=torch.float32)
+        visits_t /= temperature
+        action_probs = (visits_t / visits_t.sum()).numpy()
+
         if sample:
             action = np.random.choice(actions, p=action_probs)
         else:
             action = actions[np.argmax(action_probs)]
-        print('action= {}'.format(action))
-        print('action_probs= {}'.format(action_probs))
+        self.mcts_search_cnt += 1
+        # print(f'mcts_search_cnt: {self.mcts_search_cnt}')
+        # print('action= {}'.format(action))
+        # print('action_probs= {}'.format(action_probs))
         return action, action_probs
 
     def _simulate(self, node: Node, simulate_env: Type[BaseEnv], policy_forward_fn: Callable) -> None:
@@ -188,6 +197,7 @@ class MCTS(object):
             - policy_forward_fn (:obj:`Function`): The Callable to compute the action probs and state value.
         """
         while not node.is_leaf():
+            # print('here')
             # print(node.children.keys())
             action, node = self._select_child(node, simulate_env)
             if action is None:

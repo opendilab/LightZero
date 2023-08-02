@@ -381,12 +381,12 @@ if __name__ == '__main__':
     # test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot()
     # test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot()
     # test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=2000)
-    test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=2000)
+    # test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=2000)
 
     # ==============================================================
     # test win rate between mcts_bot and rule_bot_v0
     # ==============================================================
-    # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50)
+    test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50)
     # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=100)
     # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=500)
     # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=1000)

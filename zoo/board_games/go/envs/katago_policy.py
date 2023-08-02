@@ -477,6 +477,9 @@ class KatagoPolicy:
 
             # gtp_action = str_coord(katago_flatten_action, gs.board)
             lz_flatten_action = katago_flatten_to_lz_flatten(katago_flatten_action, gs.board)
+            # if lz_flatten_action == 5:
+            #     # legal_action [5, pass], 棋面除了位置5, 全是黑棋
+            #     print('debug')
             return lz_flatten_action
 
         elif command[0] == "name":

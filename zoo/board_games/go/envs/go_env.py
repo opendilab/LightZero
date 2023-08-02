@@ -19,7 +19,17 @@ from pettingzoo.utils.agent_selector import agent_selector
 from zoo.board_games.go.envs.katago_policy import str_coord, GameState, str_coord, KatagoPolicy, parse_coord
 import imageio
 import time
+import signal
+import time
 
+
+# def timeout_handler(signum, frame):
+#     raise TimeoutError("Execution time too long")
+#
+#
+# # 设置超时
+# signal.signal(signal.SIGALRM, timeout_handler)
+# signal.alarm(50)  # 设置50秒的闹钟
 
 def get_image(path):
     from os import path as os_path
@@ -158,7 +168,7 @@ class GoEnv(BaseEnv):
         #                               ignore_pass_if_have_other_legal_actions=self.ignore_pass_if_have_other_legal_actions, device=self.device)
 
     # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
-    def reset(self, start_player_index=0, init_state=None, katago_policy_init=True):
+    def reset(self, start_player_index=0, init_state=None, katago_policy_init=True, katago_game_state=None):
         if katago_policy_init:
             # 使用函数生成基于当前时间的 GIF 文件名
             gif_filename = generate_gif_filename(prefix=f"go_bs{self.board_size}", )
@@ -197,7 +207,8 @@ class GoEnv(BaseEnv):
             if katago_policy_init:
                 # TODO(pu)
                 # ****** update katago internal game state ******
-                self.reset_katago_game_state(copy.deepcopy(init_state))
+                # self.reset_katago_game_state_v0(copy.deepcopy(init_state))
+                self.reset_katago_game_state_v1(copy.deepcopy(katago_game_state))
 
         else:
             self._raw_env._go = go_base.Position(board=np.zeros((self.board_size, self.board_size), dtype="int32"),
@@ -229,11 +240,13 @@ class GoEnv(BaseEnv):
         obs['current_player_index'] = self.current_player_index
         obs['to_play'] = self.current_player
         obs['katago_game_state'] = self.katago_game_state
+        # self.step_num = 0
+        # obs['step_num'] = self.step_num
 
         return obs
 
-    def reset_katago_game_state(self, init_state):
-        # TODO(pu)
+    def reset_katago_game_state_v0(self, init_state):
+        # TODO(pu): have bug now
         # NOTE: Represent a board as a numpy array < init_state>, with 0 empty, 1 is black, -1 is white.
         # ****** update katago internal game state ******
         self.katago_game_state_board = np.zeros(shape=(self.katago_game_state.board.arrsize), dtype=np.int8)
@@ -241,10 +254,10 @@ class GoEnv(BaseEnv):
         for i in range(self.board_size):
             for j in range(self.board_size):
                 # black, white, empty
-                # -1, 1, 0 -> 1, 2, 0
-                if init_state[i][j] == -1:
+                # 1, -1, 0 -> 1, 2, 0
+                if init_state[i][j] == 1:
                     position_num = 1
-                elif init_state[i][j] == 1:
+                elif init_state[i][j] == -1:
                     position_num = 2
                 elif init_state[i][j] == 0:
                     position_num = 0
@@ -258,9 +271,20 @@ class GoEnv(BaseEnv):
         # 设置最后一个元素
         self.katago_game_state_board[-1] = 0  # Board.EMPTY
         self.katago_game_state.board.board = self.katago_game_state_board
+        self.katago_game_state.board.pla = self._current_player
+
         # print(self.katago_game_state.board.board[:-1].reshape(self.board_size+2,self.board_size+1))
 
         # ****** update katago internal game state ******
+
+    def reset_katago_game_state_v1(self, katago_game_state):
+        # ****** update katago internal game state ******
+        # TODO(pu)
+        self.katago_game_state = katago_game_state
+        # TODO(pu): clear the ko point
+        self.katago_game_state.board.simple_ko_point = None
+
+        # print(self.katago_game_state.board.board[:-1].reshape(self.board_size+2,self.board_size+1))
 
     def _player_step(self, action):
         if self.current_player == 1:
@@ -287,15 +311,30 @@ class GoEnv(BaseEnv):
             assert action in self.legal_actions, f'action: {action}, legal_actions: {self.legal_actions}'
             self._raw_env._go = self._raw_env._go.play_move(coords.from_flat(action))
 
-        # ****** update katago internal game state ******
-        pla = (1 if agent_id == 'black_0' else 2)
-        gtp_action = flatten_action_to_gtp_action(action, self.board_size)
-        loc = parse_coord(gtp_action, self.katago_game_state.board)
-        # print(self.katago_game_state.board.board[:-1].reshape(self.board_size+2,self.board_size+1))
-        self.katago_game_state.board.play(pla, loc)
-        self.katago_game_state.moves.append((pla, loc))
-        self.katago_game_state.boards.append(self.katago_game_state.board.copy())
-        # ****** update katago internal game state ******
+        try:
+            # ****** update katago internal game state ******
+            pla = (1 if agent_id == 'black_0' else 2)
+            gtp_action = flatten_action_to_gtp_action(action, self.board_size)
+            loc = parse_coord(gtp_action, self.katago_game_state.board)
+            # print(self.katago_game_state.board.board[:-1].reshape(self.board_size+2,self.board_size+1))
+            # 禁用闹钟
+            # signal.alarm(0)
+            # try:
+            #     # 执行你的代码
+            #     self.katago_game_state.board.play(pla, loc)
+            # except TimeoutError as e:
+            #     print("Timeout! The function is taking too long to complete. It might be stuck in an infinite loop.")
+            #     # 这里你可以打印出一些有助于调试的信息，例如pla和loc的值
+            #     print("pla: ", pla)
+            #     print("loc: ", loc)
+            self.katago_game_state.board.play(pla, loc)
+            self.katago_game_state.moves.append((pla, loc))
+            self.katago_game_state.boards.append(self.katago_game_state.board.copy())
+
+
+            # ****** update katago internal game state ******
+        except Exception as e:
+            print('update katago internal game state exception', e)
 
         obs = self.observe(agent_id)
 
@@ -414,7 +453,7 @@ class GoEnv(BaseEnv):
             # ==============================================================
             # ****** update katago internal game state ******
             # TODO(pu): how to avoid this?
-            katago_flatten_action = self.lz_flatten_to_katago_flatten(action, self.board_size)
+            # katago_flatten_action = self.lz_flatten_to_katago_flatten(action, self.board_size)
             # print('player 1:', str_coord(katago_flatten_action, self.katago_game_state.board))
             # self.update_katago_internal_game_state(katago_flatten_action, to_play=1)
 
@@ -443,10 +482,10 @@ class GoEnv(BaseEnv):
                 # bot_action = self.human_to_action()
                 bot_action = self.human_to_gtp_action()
             else:
-                s_time = time.time()
+                # s_time = time.time()
                 bot_action = self.get_katago_action(to_play=2)
-                e_time = time.time()
-                print(f'katago_action time: {e_time - s_time}')
+                # e_time = time.time()
+                # print(f'katago_action time: {e_time - s_time}')
                 if bot_action not in self.legal_actions:
                     logging.warning(
                         f"You input illegal *bot* action: {bot_action}, the legal_actions are {self.legal_actions}. "

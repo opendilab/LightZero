@@ -8,6 +8,7 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <numeric>
 
 namespace py = pybind11;
 
@@ -181,11 +182,16 @@ public:
         // std::cout << std::endl;
 
         // 计算action_probs
-        std::vector<double> visit_logs;
-        for (int v : visits) {
-            visit_logs.push_back(std::log(v + 1e-10));
-        }
-        std::vector<double> action_probs = softmax(visit_logs, temperature);
+//        std::vector<double> visit_logs;
+//        for (int v : visits) {
+//            visit_logs.push_back(std::log(v + 1e-10));
+//        }
+//        std::vector<double> action_probs = softmax(visit_logs, temperature);
+
+        // 将visits转换为std::vector<double>
+        std::vector<double> visits_d(visits.begin(), visits.end());
+        std::vector<double> action_probs = visit_count_to_action_distribution(visits_d, temperature);
+
         // std::cout << "position15 " << std::endl;
         // 根据action_probs选择一个action
         int action;
@@ -257,7 +263,40 @@ public:
     }
     }
 
+
+
+
+
 private:
+    static std::vector<double> visit_count_to_action_distribution(const std::vector<double>& visits, double temperature) {
+        // Check if temperature is 0
+        if (temperature == 0) {
+            throw std::invalid_argument("Temperature cannot be 0");
+        }
+
+        // Check if all visit counts are 0
+        if (std::all_of(visits.begin(), visits.end(), [](double v){ return v == 0; })) {
+            throw std::invalid_argument("All visit counts cannot be 0");
+        }
+
+        std::vector<double> normalized_visits(visits.size());
+
+        // Divide visit counts by temperature
+        for (size_t i = 0; i < visits.size(); i++) {
+            normalized_visits[i] = visits[i] / temperature;
+        }
+
+        // Calculate the sum of all normalized visit counts
+        double sum = std::accumulate(normalized_visits.begin(), normalized_visits.end(), 0.0);
+
+        // Normalize the visit counts
+        for (double& visit : normalized_visits) {
+            visit /= sum;
+        }
+
+        return normalized_visits;
+    }
+
     static std::vector<double> softmax(const std::vector<double>& values, double temperature) {
         std::vector<double> exps;
         double sum = 0.0;

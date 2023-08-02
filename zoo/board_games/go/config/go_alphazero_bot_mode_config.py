@@ -11,13 +11,6 @@ if board_size in [9, 19]:
 elif board_size == 6:
     komi = 4
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 1
-update_per_collect = 50
-batch_size = 256
-max_env_step = int(10e6)
-
 if board_size == 19:
     num_simulations = 800
 elif board_size == 9:
@@ -26,6 +19,14 @@ elif board_size == 9:
 elif board_size == 6:
     # num_simulations = 80
     num_simulations = 50
+
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 1
+update_per_collect = 50
+batch_size = 256
+max_env_step = int(10e6)
+num_channels = 64
 
 board_size = 6
 komi = 4

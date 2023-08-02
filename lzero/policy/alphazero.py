@@ -146,7 +146,9 @@ class AlphaZeroPolicy(Policy):
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
             # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
-            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
+            # lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
+            lr_lambda = lambda step: 1 if step < max_step * 0.33 else (0.1 if step < max_step * 0.66 else 0.01)  # noqa
+
             self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
 
         # Algorithm config
@@ -160,12 +162,22 @@ class AlphaZeroPolicy(Policy):
             self._learn_model = torch.compile(self._learn_model)
 
     def _forward_learn(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, float]:
-        for d in inputs:
-            if 'katago_game_state' in d:
-                del d['katago_game_state']
-                print('delete katago_game_state')
+        for input_dict in inputs:
+            # Check and remove 'katago_game_state' from 'obs' if it exists
+            if 'katago_game_state' in input_dict['obs']:
+                del input_dict['obs']['katago_game_state']
 
-        inputs = default_collate(inputs)
+            # Check and remove 'katago_game_state' from 'next_obs' if it exists
+            if 'katago_game_state' in input_dict['next_obs']:
+                del input_dict['next_obs']['katago_game_state']
+        try:
+            # list of dict -> dict of list
+            inputs = default_collate(inputs)
+        except Exception as e:
+            print(f"Exception occurred: {e}")
+            print(f"Type of inputs: {type(inputs)}")
+            print(f"Is default_collate callable? {callable(default_collate)}")
+            raise
 
         if self._cuda:
             inputs = to_device(inputs, self._device)
@@ -253,6 +265,7 @@ class AlphaZeroPolicy(Policy):
         self.collect_mcts_temperature = temperature
         ready_env_id = list(envs.keys())
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
+        katago_game_state = {env_id: obs[env_id]['katago_game_state'] for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
         output = {}
         self._policy_model = self._collect_model
@@ -264,6 +277,7 @@ class AlphaZeroPolicy(Policy):
                 init_state=init_state[env_id],
                 # katago_policy_init=False,
                 katago_policy_init=True,
+                katago_game_state=katago_game_state[env_id],
             )
             # action, mcts_probs = self._collect_mcts.get_next_action(
             #     envs[env_id],
@@ -316,6 +330,7 @@ class AlphaZeroPolicy(Policy):
         """
         ready_env_id = list(obs.keys())
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
+        katago_game_state = {env_id: obs[env_id]['katago_game_state'] for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
         output = {}
         self._policy_model = self._eval_model
@@ -326,9 +341,9 @@ class AlphaZeroPolicy(Policy):
             envs[env_id].reset(
                 start_player_index=start_player_index[env_id],
                 init_state=init_state[env_id],
-                # katago_policy_init=False,
+                katago_policy_init=False,
                 # TODO(pu)
-                katago_policy_init=True,
+                # katago_policy_init=True,
             )
             try:
                 action, mcts_probs = self._eval_mcts.get_next_action(envs[env_id], self._policy_value_fn, 1.0, False)
@@ -374,8 +389,11 @@ class AlphaZeroPolicy(Policy):
         Overview:
             Generate the dict type transition (one timestep) data from policy learning.
         """
-        if 'katago_game_state' in obs:
+        if 'katago_game_state' in obs.keys():
             del obs['katago_game_state']
+        # if 'katago_game_state' in timestep.obs.keys():
+        #     del timestep.obs['katago_game_state']
+        # Note: used in _foward_collect  in alphazero_collector now
 
         return {
             'obs': obs,

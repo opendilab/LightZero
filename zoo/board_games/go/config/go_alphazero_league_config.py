@@ -15,44 +15,51 @@ if board_size == 19:
     num_simulations = 800
 elif board_size == 9:
     num_simulations = 180
-    # num_simulations = 50
 elif board_size == 6:
-    # num_simulations = 80
-    num_simulations = 50
+    num_simulations = 80
 
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 1
-update_per_collect = 200
+# update_per_collect = 200
+update_per_collect = None
+model_update_ratio = 0.1
+
 batch_size = 256
 max_env_step = int(100e6)
 snapshot_the_player_in_iter_zero = True
 one_phase_step = int(5e3)
 # TODO(pu)
-sp_prob = 0.5  # 0, 0.5, 1
-use_bot_init_historical = False
+sp_prob = 0.2  # 0, 0.5, 1
+# use_bot_init_historical = False
+use_bot_init_historical = True
+# num_res_blocks = 5
+# num_channels = 64
+num_res_blocks = 10
+num_channels = 128
+
 
 # debug config
-board_size = 6
-komi = 4
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-update_per_collect = 2
-batch_size = 2
-max_env_step = int(2e5)
-sp_prob = 0.
-snapshot_the_player_in_iter_zero = True
-one_phase_step = int(5)
-num_simulations = 2
-num_channels = 2
+# board_size = 6
+# komi = 4
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# update_per_collect = 2
+# batch_size = 2
+# max_env_step = int(2e5)
+# sp_prob = 0.2
+# one_phase_step = int(5)
+# num_simulations = 5
+# num_channels = 2
+# num_res_blocks = 1
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 go_alphazero_league_config = dict(
-    exp_name=f"data_az_ctree_league/go_b{board_size}-komi-{komi}_alphazero_ns{num_simulations}_upc{update_per_collect}_league-sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_seed0",
+    exp_name=f"data_az_ctree_league/go_b{board_size}-komi-{komi}_alphazero_nb-{num_res_blocks}-nc-{num_channels}_ns{num_simulations}_upc{update_per_collect}-mur-{model_update_ratio}_league-sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_seed0",
     env=dict(
         stop_value=2,
         env_name="Go",
@@ -63,8 +70,8 @@ go_alphazero_league_config = dict(
         scale=True,
         agent_vs_human=False,
         use_katago_bot=True,
-        katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
-        # katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        # katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
         ignore_pass_if_have_other_legal_actions=True,
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
         prob_random_action_in_bot=0,
@@ -84,7 +91,7 @@ go_alphazero_league_config = dict(
         model=dict(
             observation_shape=(board_size, board_size, 17),
             action_space_size=int(board_size * board_size + 1),
-            num_res_blocks=1,
+            num_res_blocks=num_res_blocks,
             num_channels=num_channels,
         ),
         # mcts_ctree=False,
@@ -93,17 +100,24 @@ go_alphazero_league_config = dict(
         env_type='board_games',
         board_size=board_size,
         update_per_collect=update_per_collect,
+        model_update_ratio=model_update_ratio,
         batch_size=batch_size,
-        optim_type='Adam',
-        lr_piecewise_constant_decay=False,
-        learning_rate=0.003,
-        grad_clip_value=0.5,
+        # optim_type='Adam',
+        # lr_piecewise_constant_decay=False,
+        # learning_rate=0.003,
+
+        # OpenGo parameters
+        optim_type='SGD',
+        lr_piecewise_constant_decay=True,
+        learning_rate=0.02,  # 0.02, 0.002, 0.0002
+        threshold_training_steps_for_final_lr=int(1.5e6),
+
+        # i.e. temperature: 1 -> 0.5 -> 0.25
+        manual_temperature_decay=True,
+        threshold_training_steps_for_final_temperature=int(1.5e6),
+
         value_weight=1.0,
         entropy_weight=0.0,
-        # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
-        td_steps=500,
-        # NOTE：In board_games, we set discount_factor=1.
-        discount_factor=1,
         n_episode=n_episode,
         eval_freq=int(2e3),
         # eval_freq=int(100),  # debug

@@ -190,6 +190,7 @@ class AlphaZeroCollector(ISerialCollector):
                 self._obs_pool.update(obs_)
                 simulation_envs = {}
                 for env_id in ready_env_id:
+                    # TODO(pu)
                     # create the new simulation env instances from the current collect env using the same env_config.
                     simulation_envs[env_id] = self._env._env_fn[env_id]()
 
