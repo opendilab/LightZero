@@ -111,7 +111,7 @@ class TicTacToeEnv(BaseEnv):
         # Convert NumPy arrays to nested tuples to make them hashable.
         return _get_done_winner_func_lru(tuple(map(tuple, self.board)))
 
-    def reset(self, start_player_index=0, init_state=None, katago_policy_init=False):
+    def reset(self, start_player_index=0, init_state=None, katago_policy_init=False, katago_game_state=None):
         """
         Overview:
             Env reset and custom state start by init_state
@@ -261,11 +261,11 @@ class TicTacToeEnv(BaseEnv):
         done, winner = self.get_done_winner()
 
         reward = np.array(float(winner == self.current_player)).astype(np.float32)
-        info = {'next player to play': self.to_play}
+        info = {'next player to play': self.next_player}
         """
         NOTE: here exchange the player
         """
-        self.current_player = self.to_play
+        self.current_player = self.next_player
 
         if done:
             info['eval_episode_return'] = reward
@@ -291,11 +291,11 @@ class TicTacToeEnv(BaseEnv):
         Returns:
             - current_state (:obj:`array`):
                 the 0 dim means which positions is occupied by self.current_player,
-                the 1 dim indicates which positions are occupied by self.to_play,
+                the 1 dim indicates which positions are occupied by self.next_player,
                 the 2 dim indicates which player is the to_play player, 1 means player 1, 2 means player 2
         """
         board_curr_player = np.where(self.board == self.current_player, 1, 0)
-        board_opponent_player = np.where(self.board == self.to_play, 1, 0)
+        board_opponent_player = np.where(self.board == self.next_player, 1, 0)
         board_to_play = np.full((self.board_size, self.board_size), self.current_player)
         raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
         if self.scale:
@@ -430,8 +430,12 @@ class TicTacToeEnv(BaseEnv):
         """
         return 0 if self._current_player == 1 else 1
 
+    # @property
+    # def to_play(self):
+    #     return self.players[0] if self.current_player == self.players[1] else self.players[1]
+
     @property
-    def to_play(self):
+    def next_player(self):
         return self.players[0] if self.current_player == self.players[1] else self.players[1]
 
     @property

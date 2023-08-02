@@ -3,12 +3,20 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 5
-num_simulations = 25
-update_per_collect = 50
-batch_size = 256
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 5
+# num_simulations = 25
+# update_per_collect = 50
+# batch_size = 256
+# max_env_step = int(2e5)
+
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 5
+update_per_collect = 2
+batch_size = 2
 max_env_step = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -36,6 +44,7 @@ tictactoe_alphazero_config = dict(
             fc_value_layers=[8],
             fc_policy_layers=[8],
         ),
+        mcts_ctree=False,
         cuda=True,
         board_size=3,
         update_per_collect=update_per_collect,

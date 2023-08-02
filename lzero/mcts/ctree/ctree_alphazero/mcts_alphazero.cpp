@@ -43,24 +43,32 @@ public:
     }
 
     void _add_exploration_noise(Node* node) {
-        std::vector<int> actions;
-        for (const auto& kv : node->children) {
-            actions.push_back(kv.first);
-        }
-
-        std::default_random_engine generator;
-        std::gamma_distribution<double> distribution(root_dirichlet_alpha, 1.0);
-        
-        std::vector<double> noise;
-        for (size_t i = 0; i < actions.size(); ++i) {
-            noise.push_back(distribution(generator));
-        }
-        
-        double frac = root_noise_weight;
-        for (size_t i = 0; i < actions.size(); ++i) {
-            node->children[actions[i]]->prior_p = node->children[actions[i]]->prior_p * (1 - frac) + noise[i] * frac;
-        }
+    std::vector<int> actions;
+    for (const auto& kv : node->children) {
+        actions.push_back(kv.first);
     }
+
+    std::default_random_engine generator;
+    std::gamma_distribution<double> distribution(root_dirichlet_alpha, 1.0);
+
+    std::vector<double> noise;
+    double sum = 0;
+    for (size_t i = 0; i < actions.size(); ++i) {
+        double sample = distribution(generator);
+        noise.push_back(sample);
+        sum += sample;
+    }
+
+    // Normalize the samples to simulate a Dirichlet distribution
+    for (size_t i = 0; i < noise.size(); ++i) {
+        noise[i] /= sum;
+    }
+
+    double frac = root_noise_weight;
+    for (size_t i = 0; i < actions.size(); ++i) {
+        node->children[actions[i]]->prior_p = node->children[actions[i]]->prior_p * (1 - frac) + noise[i] * frac;
+    }
+}
 
     // 在MCTS类中定义_select_child和_expand_leaf_node函数
     std::pair<int, Node*> _select_child(Node* node, py::object simulate_env) {

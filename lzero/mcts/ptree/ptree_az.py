@@ -151,6 +151,7 @@ class MCTS(object):
         # print('legal_action= {}',format(simulate_env.legal_actions))
 
         for n in range(self._num_simulations):
+            # TODO(pu): 替换成reset(init_state)
             simulate_env_copy = copy.deepcopy(simulate_env)
             simulate_env_copy.battle_mode = simulate_env_copy.mcts_mode
             self._simulate(root, simulate_env_copy, policy_forward_fn)
@@ -313,8 +314,9 @@ class MCTS(object):
         Arguments:
             - node (:obj:`Class Node`): Current node.
         """
-        actions = node.children.keys()
-        noise = np.random.gamma(self._root_dirichlet_alpha, 1, len(actions))
+        actions = list(node.children.keys())
+        alpha = [self._root_dirichlet_alpha] * len(actions)
+        noise = np.random.dirichlet(alpha)
         frac = self._root_noise_weight
         for a, n in zip(actions, noise):
             node.children[a].prior_p = node.children[a].prior_p * (1 - frac) + n * frac

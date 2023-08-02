@@ -265,7 +265,11 @@ class AlphaZeroPolicy(Policy):
         self.collect_mcts_temperature = temperature
         ready_env_id = list(envs.keys())
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
-        katago_game_state = {env_id: obs[env_id]['katago_game_state'] for env_id in ready_env_id}
+        try:
+            katago_game_state = {env_id: obs[env_id]['katago_game_state'] for env_id in ready_env_id}
+        except Exception as e:
+            katago_game_state = {env_id: None for env_id in ready_env_id}
+
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
         output = {}
         self._policy_model = self._collect_model
@@ -330,7 +334,11 @@ class AlphaZeroPolicy(Policy):
         """
         ready_env_id = list(obs.keys())
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
-        katago_game_state = {env_id: obs[env_id]['katago_game_state'] for env_id in ready_env_id}
+        try:
+            katago_game_state = {env_id: obs[env_id]['katago_game_state'] for env_id in ready_env_id}
+        except Exception as e:
+            katago_game_state = {env_id: None for env_id in ready_env_id}
+
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
         output = {}
         self._policy_model = self._eval_model

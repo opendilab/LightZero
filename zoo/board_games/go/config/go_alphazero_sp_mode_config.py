@@ -32,18 +32,19 @@ elif board_size == 9:
 elif board_size == 6:
     num_simulations = 80
 
-# board_size = 6
-# komi = 4
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# num_simulations = 2
-# update_per_collect = 2
-# batch_size = 2
-# max_env_step = int(5e4)
-# prob_random_action_in_bot = 0.
-# num_channels = 2
-# num_res_blocks = 1
+# debug config
+board_size = 6
+komi = 4
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 2
+update_per_collect = 2
+batch_size = 2
+max_env_step = int(5e4)
+prob_random_action_in_bot = 0.
+num_channels = 2
+num_res_blocks = 1
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -56,8 +57,8 @@ go_alphazero_config = dict(
         board_size=board_size,
         komi=komi,
         use_katago_bot=True,
-        # katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
-        katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        # katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
         ignore_pass_if_have_other_legal_actions=True,
         battle_mode='self_play_mode',
         bot_action_type='v0',

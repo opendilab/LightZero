@@ -331,7 +331,6 @@ class GoEnv(BaseEnv):
             self.katago_game_state.moves.append((pla, loc))
             self.katago_game_state.boards.append(self.katago_game_state.board.copy())
 
-
             # ****** update katago internal game state ******
         except Exception as e:
             print('update katago internal game state exception', e)
@@ -339,6 +338,7 @@ class GoEnv(BaseEnv):
         obs = self.observe(agent_id)
 
         current_agent_plane, opponent_agent_plane = self._raw_env._encode_board_planes(agent_id)
+        # update the board history
         self.board_history = np.dstack((current_agent_plane, opponent_agent_plane, self.board_history[:, :, :-2]))
         # self.board_history[:,:,0], self.board_history[:,:,1]
 
@@ -349,7 +349,7 @@ class GoEnv(BaseEnv):
         """
         self.agent_selection = self._agent_selector.next()
         next_agent = self.agent_selection
-        self._current_player = self.to_play
+        self._current_player = self.next_player
 
         # obs['action_mask'] is the action mask for the last player
         action_mask = np.zeros(self.total_num_actions, 'int8')
@@ -522,7 +522,7 @@ class GoEnv(BaseEnv):
             return timestep
 
     def update_katago_internal_game_state(self, katago_flatten_action, to_play):
-        # Note: cannot use self.to_play, because self.to_play is updated after the self._player_step(action)
+        # Note: cannot use self.next_player, because self.next_player is updated after the self._player_step(action)
         # ****** update internal game state ******
         gtp_action = str_coord(katago_flatten_action, self.katago_game_state.board)
         if to_play == 1:
@@ -619,7 +619,6 @@ class GoEnv(BaseEnv):
             return False, None
 
     def observe(self, agent):
-        current_agent_plane, opponent_agent_plane = self._raw_env._encode_board_planes(agent)
         player_plane = self._raw_env._encode_player_plane(agent)
 
         observation = np.dstack((self.board_history, player_plane))
@@ -639,7 +638,7 @@ class GoEnv(BaseEnv):
         Arguments:
             - raw_obs (:obj:`array`):
                 the 0 dim means which positions is occupied by self.current_player,
-                the 1 dim indicates which positions are occupied by self.to_play,
+                the 1 dim indicates which positions are occupied by self.next_player,
                 the 2 dim indicates which player is the to_play player, 1 means player 1, 2 means player 2
         """
         if self.current_player == 1:
@@ -948,8 +947,16 @@ class GoEnv(BaseEnv):
         """
         return 0 if self._current_player == 1 else 1
 
+    # @property
+    # def to_play(self):
+    #     """
+    #     current_player_index = 0, current_player = 1, to_play = 2
+    #     current_player_index = 1, current_player = 2, to_play = 1
+    #     """
+    #     return self.players[0] if self.current_player == self.players[1] else self.players[1]
+
     @property
-    def to_play(self):
+    def next_player(self):
         """
         current_player_index = 0, current_player = 1, to_play = 2
         current_player_index = 1, current_player = 2, to_play = 1

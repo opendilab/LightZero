@@ -3,7 +3,6 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# board_size = 6
 board_size = 9
 
 if board_size in [9, 19]:
@@ -21,9 +20,8 @@ elif board_size == 6:
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 1
-# update_per_collect = 200
-update_per_collect = None
-model_update_ratio = 0.1
+update_per_collect = 200
+# model_update_ratio = 0.1
 
 batch_size = 256
 max_env_step = int(100e6)
@@ -33,11 +31,11 @@ one_phase_step = int(5e3)
 sp_prob = 0.2  # 0, 0.5, 1
 # use_bot_init_historical = False
 use_bot_init_historical = True
-# num_res_blocks = 5
-# num_channels = 64
-num_res_blocks = 10
-num_channels = 128
-
+num_res_blocks = 5
+num_channels = 64
+# num_res_blocks = 10
+# num_channels = 128
+num_simulations = 50
 
 # debug config
 # board_size = 6
@@ -59,7 +57,7 @@ num_channels = 128
 # ==============================================================
 
 go_alphazero_league_config = dict(
-    exp_name=f"data_az_ctree_league/go_b{board_size}-komi-{komi}_alphazero_nb-{num_res_blocks}-nc-{num_channels}_ns{num_simulations}_upc{update_per_collect}-mur-{model_update_ratio}_league-sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_seed0",
+    exp_name=f"data_az_ctree_league/go_b{board_size}-komi-{komi}_alphazero_nb-{num_res_blocks}-nc-{num_channels}_ns{num_simulations}_upc{update_per_collect}_league-sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_seed0",
     env=dict(
         stop_value=2,
         env_name="Go",
@@ -70,8 +68,8 @@ go_alphazero_league_config = dict(
         scale=True,
         agent_vs_human=False,
         use_katago_bot=True,
-        # katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
-        katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        # katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
         ignore_pass_if_have_other_legal_actions=True,
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
         prob_random_action_in_bot=0,
@@ -100,7 +98,6 @@ go_alphazero_league_config = dict(
         env_type='board_games',
         board_size=board_size,
         update_per_collect=update_per_collect,
-        model_update_ratio=model_update_ratio,
         batch_size=batch_size,
         # optim_type='Adam',
         # lr_piecewise_constant_decay=False,
