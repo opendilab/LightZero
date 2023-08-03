@@ -64,6 +64,7 @@ class GameSegment:
 
         self.action_mask_segment = []
         self.to_play_segment = []
+        self.chance_segment = []
 
         self.target_values = []
         self.target_rewards = []
@@ -128,7 +129,8 @@ class GameSegment:
             obs: np.ndarray,
             reward: np.ndarray,
             action_mask: np.ndarray = None,
-            to_play: int = -1
+            to_play: int = -1,
+            chance: np.ndarray=0,
     ) -> None:
         """
         Overview:
@@ -140,10 +142,11 @@ class GameSegment:
 
         self.action_mask_segment.append(action_mask)
         self.to_play_segment.append(to_play)
+        self.chance_segment.append(chance)
 
     def pad_over(
             self, next_segment_observations: List, next_segment_rewards: List, next_segment_root_values: List,
-            next_segment_child_visits: List, next_segment_improved_policy: List = None
+            next_segment_child_visits: List, next_chances: List = None,next_segment_improved_policy: List = None,
     ) -> None:
         """
         Overview:
@@ -184,6 +187,8 @@ class GameSegment:
         if self.config.gumbel_algo:
             for improved_policy in next_segment_improved_policy:
                 self.improved_policy_probs.append(improved_policy)
+        for chances in next_chances:
+            self.chance_segment.append(chances)
 
     def get_targets(self, timestep: int) -> Tuple:
         """
@@ -253,6 +258,7 @@ class GameSegment:
 
         self.action_mask_segment = np.array(self.action_mask_segment)
         self.to_play_segment = np.array(self.to_play_segment)
+        self.chance_segment = np.array(self.chance_segment)
 
     def reset(self, init_observations: np.ndarray) -> None:
         """
@@ -271,6 +277,7 @@ class GameSegment:
 
         self.action_mask_segment = []
         self.to_play_segment = []
+        self.chance_segment = []
 
         assert len(init_observations) == self.frame_stack_num
 

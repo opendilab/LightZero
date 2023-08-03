@@ -232,6 +232,7 @@ class MuZeroCollector(ISerialCollector):
         end_index = beg_index + self.unroll_plus_td_steps - 1
 
         pad_reward_lst = game_segments[i].reward_segment[beg_index:end_index]
+        chance_lst = game_segments[i].chance_segment[beg_index:end_index]
 
         beg_index = 0
         end_index = beg_index + self.unroll_plus_td_steps
@@ -245,7 +246,8 @@ class MuZeroCollector(ISerialCollector):
         if self.policy_config.gumbel_algo:
             last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst, next_segment_improved_policy = pad_improved_policy_prob)
         else:
-            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
+            #last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
+            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst, chance_lst)
         """
         Note:
             game_segment element shape:
@@ -315,6 +317,7 @@ class MuZeroCollector(ISerialCollector):
 
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
+        chance_dict = {i: to_ndarray(init_obs[i]['chance']) for i in range(env_nums)}
 
         game_segments = [
             GameSegment(
@@ -368,8 +371,10 @@ class MuZeroCollector(ISerialCollector):
 
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
                 to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
+                chance_dict = {env_id: chance_dict[env_id] for env_id in ready_env_id}
                 action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
+                chance = [chance_dict[env_id] for env_id in ready_env_id]
 
                 stack_obs = to_ndarray(stack_obs)
 
@@ -456,13 +461,14 @@ class MuZeroCollector(ISerialCollector):
                     # in ``game_segments[env_id].init``, we have append o_{t} in ``self.obs_segment``
                     game_segments[env_id].append(
                         actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                        to_play_dict[env_id]
+                        to_play_dict[env_id], chance_dict[env_id]
                     )
 
                     # NOTE: the position of code snippet is very important.
                     # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
                     action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                     to_play_dict[env_id] = to_ndarray(obs['to_play'])
+                    chance_dict[env_id] = to_ndarray(obs['chance'])
 
                     if self.policy_config.ignore_done:
                         dones[env_id] = False
@@ -586,6 +592,7 @@ class MuZeroCollector(ISerialCollector):
 
                         action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                         to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
+                        chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
                         game_segments[env_id] = GameSegment(
                             self._env.action_space,

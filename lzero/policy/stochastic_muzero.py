@@ -273,8 +273,12 @@ class StochasticMuZeroPolicy(Policy):
         self._target_model.train()
 
         current_batch, target_batch = data
-        obs_batch_orig, action_batch, mask_batch, indices, weights, make_time = current_batch
+        obs_batch_orig, action_batch, mask_batch, indices, weights, make_time, chance_batch = current_batch
         target_reward, target_value, target_policy = target_batch
+        
+        if self._cfg.explicit_chance_label:
+            chance_batch = torch.LongTensor(chance_batch).to(self._cfg.device)
+            chance_batch =torch.nn.functional.one_hot(chance_batch, self._cfg.model.chance_space_size)
 
         obs_batch, obs_target_batch = prepare_obs(obs_batch_orig, self._cfg)
         encoder_image_list = []
@@ -371,9 +375,10 @@ class StochasticMuZeroPolicy(Policy):
             # concat consecutive frames to calculate ground truth chance
             former_frame = encoder_image_list[step_i]
             latter_frame = encoder_image_list[step_i + 1]
-            concat_frames = torch.cat((former_frame, latter_frame), dim=1)
-
-            chance_code, chance_encoding = self._learn_model.chance_encode(concat_frames)
+            concat_frame = torch.cat((former_frame, latter_frame), dim=1)
+            chance_code, encode_output = self._learn_model._encode_vqvae(concat_frame)
+            if self._cfg.explicit_chance_label:
+                chance_code = chance_batch[:, step_i]
             chance_code_long = torch.argmax(chance_code, dim=1).long().unsqueeze(-1)
             
             # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
@@ -420,7 +425,8 @@ class StochasticMuZeroPolicy(Policy):
             # ==============================================================
             policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
             afterstate_policy_loss += cross_entropy_loss(afterstate_policy_logits, chance_code)
-            commitment_loss += cross_entropy_loss(chance_encoding, chance_code)
+            # commitment_loss += cross_entropy_loss(encode_output, chance_code)
+            commitment_loss += torch.nn.MSELoss()(encode_output, chance_code) * 0.01
 
             afterstate_value_loss += cross_entropy_loss(afterstate_value, target_value_categorical[:, step_i])
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
