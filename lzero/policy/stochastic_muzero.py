@@ -147,6 +147,8 @@ class StochasticMuZeroPolicy(Policy):
         # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
         # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
         fixed_temperature_value=0.25,
+        # (bool) Whether to use the true chance in MCTS.
+        use_ture_chance_label_in_chance_encoder=False,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
@@ -273,20 +275,23 @@ class StochasticMuZeroPolicy(Policy):
         self._target_model.train()
 
         current_batch, target_batch = data
-        obs_batch_orig, action_batch, mask_batch, indices, weights, make_time, chance_batch = current_batch
+        if self._cfg.use_ture_chance_label_in_chance_encoder:
+            obs_batch_orig, action_batch, mask_batch, indices, weights, make_time, chance_batch = current_batch
+        else:
+            obs_batch_orig, action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
         
-        if self._cfg.explicit_chance_label:
-            chance_batch = torch.LongTensor(chance_batch).to(self._cfg.device)
-            chance_batch =torch.nn.functional.one_hot(chance_batch, self._cfg.model.chance_space_size)
+        if self._cfg.use_ture_chance_label_in_chance_encoder:
+            chance_batch = torch.Tensor(chance_batch).to(self._cfg.device)
+            chance_one_hot_batch = torch.nn.functional.one_hot(chance_batch.long(), self._cfg.model.chance_space_size)
 
         obs_batch, obs_target_batch = prepare_obs(obs_batch_orig, self._cfg)
-        encoder_image_list = []
-        encoder_image_list.append(obs_batch)
+        obs_list_for_chance_encoder = []
+        obs_list_for_chance_encoder.append(obs_batch)
         for i in range(self._cfg.num_unroll_steps):
             beg_index = self._cfg.model.image_channel * i
             end_index = self._cfg.model.image_channel * (i + self._cfg.model.frame_stack_num)
-            encoder_image_list.append(obs_target_batch[:, beg_index:end_index, :, :])
+            obs_list_for_chance_encoder.append(obs_target_batch[:, beg_index:end_index, :, :])
 
         # do augmentations
         if self._cfg.use_augmentation:
@@ -372,19 +377,23 @@ class StochasticMuZeroPolicy(Policy):
             )
             after_state, afterstate_reward, afterstate_value, afterstate_policy_logits = mz_network_output_unpack(network_output)
             
-            # concat consecutive frames to calculate ground truth chance
-            former_frame = encoder_image_list[step_i]
-            latter_frame = encoder_image_list[step_i + 1]
+            # concat consecutive frames to predict chance
+            former_frame = obs_list_for_chance_encoder[step_i]
+            latter_frame = obs_list_for_chance_encoder[step_i + 1]
             concat_frame = torch.cat((former_frame, latter_frame), dim=1)
-            chance_code, encode_output = self._learn_model._encode_vqvae(concat_frame)
-            if self._cfg.explicit_chance_label:
-                chance_code = chance_batch[:, step_i]
-            chance_code_long = torch.argmax(chance_code, dim=1).long().unsqueeze(-1)
+            chance_encoding, chance_one_hot = self._learn_model.chance_encode(concat_frame)
+            if self._cfg.use_ture_chance_label_in_chance_encoder:
+                true_chance_code = chance_batch[:, step_i]
+                chance_code = true_chance_code
+                true_chance_one_hot = chance_one_hot_batch[:, step_i]
+            else:
+                chance_code = torch.argmax(chance_encoding, dim=1).long().unsqueeze(-1)
             
             # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
             # given current ``after_state`` and ``chance_long``.
             # And then predict policy_logits and value with the prediction function.
-            network_output = self._learn_model.recurrent_inference(after_state, chance_code_long, afterstate=True)
+            network_output = self._learn_model.recurrent_inference(after_state, chance_code, afterstate=True)
+
             latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
             # transform the scaled value or its categorical representation to its original value,
@@ -424,9 +433,15 @@ class StochasticMuZeroPolicy(Policy):
             # NOTE: the +=.
             # ==============================================================
             policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
-            afterstate_policy_loss += cross_entropy_loss(afterstate_policy_logits, chance_code)
-            # commitment_loss += cross_entropy_loss(encode_output, chance_code)
-            commitment_loss += torch.nn.MSELoss()(encode_output, chance_code) * 0.01
+
+            # TODO(pu):
+            if self._cfg.use_ture_chance_label_in_chance_encoder:
+                afterstate_policy_loss += cross_entropy_loss(afterstate_policy_logits, true_chance_one_hot.detach())
+                # The encoder is not used i the mcts, so we don't need to calculate the commitment loss.
+                commitment_loss += torch.nn.MSELoss()(chance_encoding, true_chance_one_hot.float().detach())
+            else:
+                afterstate_policy_loss += cross_entropy_loss(afterstate_policy_logits, chance_one_hot.detach())
+                commitment_loss += torch.nn.MSELoss()(chance_encoding, chance_one_hot.float().detach())
 
             afterstate_value_loss += cross_entropy_loss(afterstate_value, target_value_categorical[:, step_i])
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])

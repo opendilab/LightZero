@@ -111,7 +111,8 @@ class StochasticMuZeroGameBuffer(GameBuffer):
         game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
         batch_size = len(batch_index_list)
         obs_list, action_list, mask_list = [], [], []
-        chance_list = []
+        if self._cfg.use_ture_chance_label_in_chance_encoder:
+            chance_list = []
         # prepare the inputs of a batch
         for i in range(batch_size):
             game = game_segment_list[i]
@@ -119,8 +120,9 @@ class StochasticMuZeroGameBuffer(GameBuffer):
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
                                               self._cfg.num_unroll_steps].tolist()
-            chances_tmp = game.chance_segment[1 + pos_in_game_segment:1 + pos_in_game_segment +
-                                              self._cfg.num_unroll_steps].tolist()
+            if self._cfg.use_ture_chance_label_in_chance_encoder:
+                chances_tmp = game.chance_segment[1 + pos_in_game_segment:1 + pos_in_game_segment +
+                                                  self._cfg.num_unroll_steps].tolist()
             # add mask for invalid actions (out of trajectory)
             mask_tmp = [1. for i in range(len(actions_tmp))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps - len(mask_tmp))]
@@ -130,10 +132,11 @@ class StochasticMuZeroGameBuffer(GameBuffer):
                 np.random.randint(0, game.action_space_size)
                 for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
             ]
-            chances_tmp += [
-                np.random.randint(0, game.action_space_size)
-                for _ in range(self._cfg.num_unroll_steps - len(chances_tmp))
-            ]
+            if self._cfg.use_ture_chance_label_in_chance_encoder:
+                chances_tmp += [
+                    np.random.randint(0, game.action_space_size)
+                    for _ in range(self._cfg.num_unroll_steps - len(chances_tmp))
+                ]
             # obtain the input observations
             # pad if length of obs in game_segment is less than stack+num_unroll_steps
             # e.g. stack+num_unroll_steps  4+5
@@ -144,13 +147,18 @@ class StochasticMuZeroGameBuffer(GameBuffer):
             )
             action_list.append(actions_tmp)
             mask_list.append(mask_tmp)
-            chance_list.append(chances_tmp)
+            if self._cfg.use_ture_chance_label_in_chance_encoder:
+                chance_list.append(chances_tmp)
 
         # formalize the input observations
         obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
 
         # formalize the inputs of a batch
-        current_batch = [obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list, chance_list]
+        if self._cfg.use_ture_chance_label_in_chance_encoder:
+            current_batch = [obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list,
+                             chance_list]
+        else:
+            current_batch = [obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list]
         for i in range(len(current_batch)):
             current_batch[i] = np.asarray(current_batch[i])
 

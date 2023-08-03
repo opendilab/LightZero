@@ -788,13 +788,13 @@ class AfterstatePredictionNetwork(nn.Module):
 
 
 class ChanceEncoderBackbone(nn.Module):
-    def __init__(self, observation_space_dimensions, table_vec_dim=4):
+    def __init__(self, observation_space_dimensions, chance_encoding_dim=4):
         super(ChanceEncoderBackbone, self).__init__()
         self.conv1 = nn.Conv2d(observation_space_dimensions[0] * 2, 32, 3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, 3, padding=1)
         self.fc1 = nn.Linear(64 * observation_space_dimensions[1] * observation_space_dimensions[2], 128)
         self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, table_vec_dim)
+        self.fc3 = nn.Linear(64, chance_encoding_dim)
 
     def forward(self, x):
         x = torch.relu(self.conv1(x))
@@ -836,8 +836,8 @@ class ChanceEncoder(nn.Module):
         # Apply the encoder to the observation
         chance_encoding_t = self.encoder(o_i)
         # Apply one-hot argmax to the encoding
-        chance_t = self.onehot_argmax(chance_encoding_t)
-        return chance_t, chance_encoding_t
+        chance_onehot_t = self.onehot_argmax(chance_encoding_t)
+        return chance_encoding_t, chance_onehot_t
 
 
 class StraightThroughEstimator(nn.Module):
