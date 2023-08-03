@@ -18,12 +18,16 @@ class Node(object):
     Overview:
         The node base class for tree_search.
     """
-
     def __init__(self, parent: "Node" = None, prior_p: float = 1.0) -> None:
+        # The parent node.
         self._parent = parent
+        # A dictionary representing the children of the current node. The keys are the actions, and the values are the child nodes.
         self._children = {}
+        # The number of times this node has been visited.
         self._visit_count = 0
+        # The sum of the values of all child nodes of this node.
         self._value_sum = 0
+        # The prior probability of selecting this node.
         self.prior_p = prior_p
 
     @property
@@ -34,6 +38,7 @@ class Node(object):
         Returns:
             - output (:obj:`Int`): Current value, used to compute ucb score.
         """
+        # Computes the average value of the current node.
         if self._visit_count == 0:
             return 0
         return self._value_sum / self._visit_count
@@ -41,38 +46,55 @@ class Node(object):
     def update(self, value: float) -> None:
         """
         Overview:
-            Updata the current node information, such as visit_count and value_sum.
+            Update the current node information, such as visit_count and value_sum.
         Arguments:
-            - value (:obj:`Int`): The value of the node.
+            - value (:obj:`Float`): The value of the node.
         """
+        # Updates the number of times this node has been visited.
         self._visit_count += 1
+        # Updates the sum of the values of all child nodes of this node.
         self._value_sum += value
-
+    
     def update_recursive(self, leaf_value: float, mcts_mode: str) -> None:
         """
         Overview:
             Update node information recursively.
+            The same game state has opposite values in the eyes of two players playing against each other. 
+            The value of a node is evaluated from the perspective of the player corresponding to its parent node. 
+            In ``self_play_mode``, because the player corresponding to a node changes every step during the backpropagation process, the value needs to be negated once. 
+            In ``play_with_bot_mode``, since all nodes correspond to the same player, the value does not need to be negated.
+
         Arguments:
-            - leaf_value (:obj:`Int`): The value of the node.
+            - leaf_value (:obj:`Float`): The value of the node.
+            - mcts_mode (:obj:`str`): The mode of MCTS, can be 'self_play_mode' or 'play_with_bot_mode'.
         """
+        # Update the node information recursively based on the MCTS mode.
         if mcts_mode == 'self_play_mode':
+            # Update the current node's information.
             self.update(leaf_value)
+            # If the current node is the root node, return.
             if self.is_root():
                 return
+            # Update the parent node's information recursively.
             self._parent.update_recursive(-leaf_value, mcts_mode)
         if mcts_mode == 'play_with_bot_mode':
+            # Update the current node's information.
             self.update(leaf_value)
+            # If the current node is the root node, return.
             if self.is_root():
                 return
+            # Update the parent node's information recursively.
             self._parent.update_recursive(leaf_value, mcts_mode)
 
-    def is_leaf(self) -> Dict:
+    def is_leaf(self) -> bool:
         """
         Overview:
             Check if the current node is a leaf node or not.
         Returns:
-            - output (:obj:`Dict`): Dict type children node.
+            - output (:obj:`Bool`): If self._children is empty, it means that the node has not 
+            been expanded yet, which indicates that the node is a leaf node.
         """
+        # Returns True if the node is a leaf node (i.e., has no children), and False otherwise.
         return self._children == {}
 
     def is_root(self) -> bool:
@@ -80,33 +102,58 @@ class Node(object):
         Overview:
             Check if the current node is a root node or not.
         Returns:
-            - output (:obj:`Bool`): Whether it is the parent node.
+            - output (:obj:`Bool`): If the node does not have a parent node,
+            then it is a root node.
         """
         return self._parent is None
 
     @property
     def parent(self) -> None:
+        """
+        Overview:
+            Get the parent node of the current node.
+        Returns:
+            - output (:obj:`Node`): The parent node of the current node.
+        """
         return self._parent
 
     @property
     def children(self) -> None:
+        """
+        Overview:
+            Get the dictionary of children nodes of the current node.
+        Returns:
+            - output (:obj:`dict`): A dictionary representing the children of the current node. 
+        """
         return self._children
-
+    
     @property
     def visit_count(self) -> None:
+        """
+        Overview:
+            Get the number of times the current node has been visited.
+        Returns:
+            - output (:obj:`Int`): The number of times the current node has been visited.
+        """
         return self._visit_count
 
 
 class MCTS(object):
     """
     Overview:
-        MCTS search process.
+        Initializes the MCTS search process.
+    Arguments:
+        - cfg (:obj:`EasyDict`): A dictionary containing the configuration parameters for
+        the MCTS search process.
     """
 
     def __init__(self, cfg: EasyDict) -> None:
+        # Stores the configuration parameters for the MCTS search process.
         self._cfg = cfg
 
+        # The maximum number of moves allowed in a game.
         self._max_moves = self._cfg.get('max_moves', 512)  # for chess and shogi, 722 for Go.
+        # The number of simulations to run for each move.
         self._num_simulations = self._cfg.get('num_simulations', 800)
 
         # UCB formula
@@ -128,18 +175,23 @@ class MCTS(object):
     ) -> Tuple[int, List[float]]:
         """
         Overview:
-            calculate the move probabilities based on visit counts at the root node.
+            Get the next action to take based on the current state of the game.
         Arguments:
             - simulate_env (:obj:`Class BaseGameEnv`): The class of simulate env.
             - policy_forward_fn (:obj:`Function`): The Callable to compute the action probs and state value.
-            - temperature (:obj:`Int`): Temperature is a parameter that controls the "softness" of the probability distribution.
-            - sample (:obj:`Bool`): The value of the node.
+            - temperature (:obj:`Float`): The exploration temperature.
+            - sample (:obj:`Bool`): Whether to sample an action from the probabilities or choose the most probable action.
         Returns:
-            - action (:obj:`Bool`): Select the action with the most visits as the final action.
+            - action (:obj:`Int`): The selected action to take.
             - action_probs (:obj:`List`): The output probability of each action.
         """
+
+        # Create a new root node for the MCTS search.
         root = Node()
+        # Expand the root node by adding children to it.
         self._expand_leaf_node(root, simulate_env, policy_forward_fn)
+
+        # Add Dirichlet noise to the root node's prior probabilities to encourage exploration.
         if sample:
             self._add_exploration_noise(root)
 
@@ -149,9 +201,17 @@ class MCTS(object):
         # print('visit_count= {}'.format([(k, v.visit_count) for k,v in root.children.items()]))
         # print('legal_action= {}',format(simulate_env.legal_actions))
 
+        # Perform MCTS search for a fixed number of iterations.
         for n in range(self._num_simulations):
+            # Initialize the simulate environment and reset it to the root node.
             simulate_env_copy = copy.deepcopy(simulate_env)
+            # Set the battle mode adopted by the environment during the MCTS process.
+            # In ``self_play_mode``, when the environment calls the step function once, it will play one move based on the incoming action. 
+            # In ``play_with_bot_mode``, when the step function is called, it will play one move based on the incoming action, 
+            # and then it will play another move based on the action generated by the built-in bot in the environment, which means two moves in total. 
+            # Therefore, in the MCTS process, except for the terminal nodes, the player corresponding to each node is the same player as the root node.
             simulate_env_copy.battle_mode = simulate_env_copy.mcts_mode
+            # Run the simulation from the root to a leaf node and update the node values along the way.
             self._simulate(root, simulate_env_copy, policy_forward_fn)
 
         # for debugging
@@ -159,20 +219,25 @@ class MCTS(object):
         # print('value= {}'.format([(k, v.value) for k,v in root.children.items()]))
         # print('visit_count= {}'.format([(k, v.visit_count) for k,v in root.children.items()]))
 
+        # Get the visit count for each possible action at the root node.
         action_visits = []
         for action in range(simulate_env.action_space.n):
             if action in root.children:
                 action_visits.append((action, root.children[action].visit_count))
             else:
                 action_visits.append((action, 0))
-
+        
+        # Unpack the tuples in action_visits list into two seperate tuples: actions and visits.
         actions, visits = zip(*action_visits)
+        
+        # Calculate the action probabilities based on the visit counts and temperature.
         action_probs = nn.functional.softmax(1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0).numpy()
+        # Choose the next action to take based on the action probabilities.
         if sample:
             action = np.random.choice(actions, p=action_probs)
         else:
             action = actions[np.argmax(action_probs)]
-        # print(action)
+        # Return the selected action and the output probability of each action.
         return action, action_probs
 
     def _simulate(self, node: Node, simulate_env: Type[BaseEnv], policy_forward_fn: Callable) -> None:
@@ -187,8 +252,10 @@ class MCTS(object):
         """
         while not node.is_leaf():
             # print(node.children.keys())
+            # Traverse the tree until the leaf node.
             action, node = self._select_child(node, simulate_env)
             if action is None:
+                breakpoint()
                 break
             # print('legal_action={}'.format(simulate_env.legal_actions))
             # print('action={}'.format(action))
@@ -196,18 +263,25 @@ class MCTS(object):
             # print(node.is_leaf())
 
         done, winner = simulate_env.get_done_winner()
+
         """
         in ``self_play_mode``, the leaf_value is calculated from the perspective of player ``simulate_env.current_player``.
-        in ``play_with_bot_mode``, the leaf_value is calculated from the perspective of player 1.
+        in ``play_with_bot_mode``, the leaf_value is calculated from the perspective of player of player 1.
         """
 
         if not done:
+            # The leaf_value here is obtained from the neural network. 
+            # The perspective of this value is from the player corresponding to the game state input to the neural network. 
+            # For example, if the current_player of the current node is player 1, the value output by the network represents the goodness of the current game state from the perspective of player 1. 
             leaf_value = self._expand_leaf_node(node, simulate_env, policy_forward_fn)
         else:
             if simulate_env.mcts_mode == 'self_play_mode':
+                # In a tie game, the value corresponding to a terminal node is 0.
                 if winner == -1:
                     leaf_value = 0
                 else:
+                    # To maintain consistency with the perspective of the neural network, the value of a terminal node is also calculated from the perspective of the current_player of the terminal node, 
+                    # which is convenient for subsequent updates.
                     leaf_value = 1 if simulate_env.current_player == winner else -1
 
             if simulate_env.mcts_mode == 'play_with_bot_mode':
@@ -270,10 +344,15 @@ class MCTS(object):
         Returns:
             - leaf_value (:obj:`Bool`): the leaf node's value.
         """
+
+        # Call the policy_forward_fn function to compute the action probabilities and state value, and return a dictionary and the value of the leaf node.
         action_probs_dict, leaf_value = policy_forward_fn(simulate_env)
+        # Traverse the action probability dictionary.
         for action, prior_p in action_probs_dict.items():
+            # If the action is in the legal action list of the current environment, add the action as a child node of the current node.
             if action in simulate_env.legal_actions:
                 node.children[action] = Node(parent=node, prior_p=prior_p)
+        # Return the value of the leaf node.
         return leaf_value
 
     def _ucb_score(self, parent: Node, child: Node) -> float:
@@ -286,9 +365,12 @@ class MCTS(object):
         Returns:
             - score (:obj:`Bool`): The UCB score.
         """
+        # Compute the value of parameter pb_c using the formula of the UCB algorithm.
+        # 这边的pb_c的base和init怎么来的没看明白！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！
         pb_c = math.log((parent.visit_count + self._pb_c_base + 1) / self._pb_c_base) + self._pb_c_init
         pb_c *= math.sqrt(parent.visit_count) / (child.visit_count + 1)
 
+        # Compute the UCB score by combining the prior score and value score.
         prior_score = pb_c * child.prior_p
         value_score = child.value
         return prior_score + value_score
@@ -300,8 +382,12 @@ class MCTS(object):
         Arguments:
             - node (:obj:`Class Node`): Current node.
         """
+        # Get the keys of the children nodes.
         actions = node.children.keys()
+        # Generate exploration noise using the Gamma distribution.
         noise = np.random.gamma(self._root_dirichlet_alpha, 1, len(actions))
+        # Compute the weight of the exploration noise.
         frac = self._root_noise_weight
+        # Update the prior probability of each child node with the exploration noise.
         for a, n in zip(actions, noise):
             node.children[a].prior_p = node.children[a].prior_p * (1 - frac) + n * frac
