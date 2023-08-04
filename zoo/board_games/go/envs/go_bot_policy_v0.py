@@ -125,8 +125,8 @@ class GoBotPolicyV0(Policy):
         action = bot_action
         return action
 
-    def _forward_collect(self, envs: Dict, obs: Dict, temperature: float = 1) -> Dict[str, torch.Tensor]:
-        ready_env_id = list(envs.keys())
+    def _forward_collect(self, obs: Dict, temperature: float = 1) -> Dict[str, torch.Tensor]:
+        ready_env_id = list(obs.keys())
         output = {}
         for env_id in ready_env_id:
             action = self._katago_policy_bot(obs[env_id])

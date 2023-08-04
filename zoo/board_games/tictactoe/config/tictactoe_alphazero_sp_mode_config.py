@@ -10,6 +10,9 @@ from easydict import EasyDict
 # update_per_collect = 50
 # batch_size = 256
 # max_env_step = int(2e5)
+# mcts_ctree = False
+mcts_ctree = True
+
 
 collector_env_num = 1
 n_episode = 1
@@ -33,6 +36,14 @@ tictactoe_alphazero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         use_katago_bot=False,
+        env_name="TicTacToe",
+        mcts_mode='self_play_mode',  # only used in AlphaZero
+        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+        agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        scale=True,
+        mcts_ctree=mcts_ctree,
     ),
     policy=dict(
         model=dict(
@@ -44,7 +55,9 @@ tictactoe_alphazero_config = dict(
             fc_value_layers=[8],
             fc_policy_layers=[8],
         ),
-        mcts_ctree=False,
+        env_name='tictactoe',
+        mcts_ctree=mcts_ctree,
+        env_config_type='self_play',
         cuda=True,
         board_size=3,
         update_per_collect=update_per_collect,

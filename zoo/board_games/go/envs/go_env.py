@@ -1,5 +1,6 @@
 import copy
 import os
+import pickle
 import sys
 from typing import List
 
@@ -88,7 +89,7 @@ class GoEnv(BaseEnv):
     config = dict(
         env_name="Go",
         stop_value=1,
-        board_size=6,
+        board_size=9,
         komi=7.5,
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',  # only used in AlphaZero
@@ -102,8 +103,8 @@ class GoEnv(BaseEnv):
         channel_last=True,
         scale=True,
         ignore_pass_if_have_other_legal_actions=True,
-        device='cpu',
         katago_policy=None,
+        mcts_ctree=True,
     )
 
     @classmethod
@@ -138,7 +139,6 @@ class GoEnv(BaseEnv):
         self.total_num_actions = self.board_size * self.board_size + 1
 
         self._komi = cfg.komi
-        self.board_size = cfg.board_size
         self.agents = ['black_0', 'white_0']
         self.num_agents = len(self.agents)
         self.possible_agents = self.agents[:]
@@ -162,13 +162,19 @@ class GoEnv(BaseEnv):
         self.render_in_ui = cfg.render_in_ui
         self.katago_checkpoint_path = cfg.katago_checkpoint_path
         self.ignore_pass_if_have_other_legal_actions = cfg.ignore_pass_if_have_other_legal_actions
-        # self.device = cfg.device
         self.katago_policy = cfg.katago_policy
-        # self.katago_policy = KatagoPolicy(checkpoint_path=self.katago_checkpoint_path, board_size=self.board_size,
-        #                               ignore_pass_if_have_other_legal_actions=self.ignore_pass_if_have_other_legal_actions, device=self.device)
+
+        self.mcts_ctree = cfg.mcts_ctree
 
     # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
     def reset(self, start_player_index=0, init_state=None, katago_policy_init=True, katago_game_state=None):
+        if self.mcts_ctree and init_state is not None:
+            # Convert byte string to np.ndarray
+            init_state = np.frombuffer(init_state, dtype=np.int32)
+        if katago_game_state is not None and self.mcts_ctree:
+            # In the reset function, deserialize the string to an object
+            katago_game_state = pickle.loads(katago_game_state)
+
         if katago_policy_init:
             # 使用函数生成基于当前时间的 GIF 文件名
             gif_filename = generate_gif_filename(prefix=f"go_bs{self.board_size}", )
@@ -178,10 +184,6 @@ class GoEnv(BaseEnv):
 
         # TODO(pu): katago_game_state init
         self.katago_game_state = GameState(self.board_size)
-
-
-        # from katago_policy import Board
-        # self.katago_board = Board(self.board_size)
 
         self.len_of_legal_actions_for_current_player = self.board_size * self.board_size + 1
         self.start_player_index = start_player_index
@@ -199,10 +201,18 @@ class GoEnv(BaseEnv):
         self._raw_env.reset()
 
         if init_state is not None:
-            # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
-            # Note, to_play in Position is different from to_play in GoEnv.
-            self._raw_env._go = go_base.Position(board=copy.deepcopy(init_state), komi=self._komi,
-                                                 to_play=1 if self.start_player_index == 0 else -1)
+            if self.mcts_ctree:
+                init_state = np.array(copy.deepcopy(init_state), dtype="int32")
+                init_state = init_state.reshape((self.board_size, self.board_size))
+                # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
+                # Note, to_play in Position is different from to_play in GoEnv.
+                self._raw_env._go = go_base.Position(board=init_state, komi=self._komi,
+                                                     to_play=1 if self.start_player_index == 0 else -1)
+            else:
+                # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
+                # Note, to_play in Position is different from to_play in GoEnv.
+                self._raw_env._go = go_base.Position(board=copy.deepcopy(init_state), komi=self._komi,
+                                                     to_play=1 if self.start_player_index == 0 else -1)
 
             if katago_policy_init:
                 # TODO(pu)

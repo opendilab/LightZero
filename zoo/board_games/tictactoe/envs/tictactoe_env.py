@@ -46,6 +46,7 @@ class TicTacToeEnv(BaseEnv):
         channel_last=True,
         scale=True,
         stop_value=1,
+        mcts_ctree=True,
     )
 
     @classmethod
@@ -76,6 +77,8 @@ class TicTacToeEnv(BaseEnv):
         self.bot_action_type = cfg.bot_action_type
         if 'alpha_beta_pruning' in self.bot_action_type:
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
+
+        self.mcts_ctree = cfg.mcts_ctree
 
     def legal_actions_func(self):
         # Convert NumPy arrays to nested tuples to make them hashable.
@@ -119,6 +122,10 @@ class TicTacToeEnv(BaseEnv):
             start_player_index: players = [1,2], player_index = [0,1]
             init_state: custom start state.
         """
+        if self.mcts_ctree and init_state is not None:
+            # Convert byte string to np.ndarray
+            init_state = np.frombuffer(init_state, dtype=np.int32)
+
         if self.scale:
             self._observation_space = gym.spaces.Box(
                 low=0, high=1, shape=(self.board_size, self.board_size, 3), dtype=np.float32
@@ -133,6 +140,8 @@ class TicTacToeEnv(BaseEnv):
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
             self.board = np.array(copy.deepcopy(init_state), dtype="int32")
+            if self.mcts_ctree:
+                self.board = self.board.reshape((self.board_size, self.board_size))
         else:
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
         action_mask = np.zeros(self.total_num_actions, 'int8')

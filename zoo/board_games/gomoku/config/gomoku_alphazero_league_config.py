@@ -4,9 +4,9 @@ from easydict import EasyDict
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 board_size = 6  # default_size is 15
-# prob_random_action_in_bot = 0.5
 prob_random_action_in_bot = 0
-
+mcts_ctree = True
+# mcts_ctree = False
 
 collector_env_num = 32
 n_episode = 32
@@ -19,6 +19,7 @@ sp_prob = 0.5  # TODO(pu): 0, 0.5, 1
 snapshot_the_player_in_iter_zero = True
 one_phase_step = int(6e3)
 
+# board_size = 6
 # collector_env_num = 2
 # n_episode = 2
 # evaluator_env_num = 2
@@ -54,6 +55,8 @@ gomoku_alphazero_league_config = dict(
         manager=dict(shared_memory=False, ),
         prob_random_agent=0,
         prob_expert_agent=0,
+        katago_policy=None,
+        mcts_ctree=mcts_ctree,
     ),
     policy=dict(
         model=dict(
@@ -62,8 +65,9 @@ gomoku_alphazero_league_config = dict(
             num_res_blocks=1,
             num_channels=32,
         ),
-        # mcts_ctree=False,
-        env_type='board_games',
+        env_name="gomoku",
+        env_config_type='league',
+        mcts_ctree=mcts_ctree,
         cuda=True,
         board_size=board_size,
         update_per_collect=update_per_collect,

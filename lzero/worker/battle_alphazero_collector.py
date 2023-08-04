@@ -237,11 +237,6 @@ class BattleAlphaZeroCollector(ISerialCollector):
                 obs_ = {env_id: obs[env_id] for env_id in ready_env_id}
                 # Policy forward.
                 self._obs_pool.update(obs_)
-                simulation_envs = {}
-                for env_id in ready_env_id:
-                    # create the new simulation env instances from the current collect env using the same env_config.
-                    simulation_envs[env_id] = self._env._env_fn[env_id]()
-
                 # ==============================================================
                 # policy forward
                 # ==============================================================
@@ -249,35 +244,32 @@ class BattleAlphaZeroCollector(ISerialCollector):
 
                 obs_player_1 = {}
                 obs_player_2 = {}
-                simulation_envs_player_1 = {}
-                simulation_envs_player_2 = {}
                 ready_env_id_player_1 = []
                 ready_env_id_player_2 = []
                 for k, v in obs_.items():
                     if v['to_play'] == 1:
                         obs_player_1[k] = v
-                        simulation_envs_player_1[k] = simulation_envs[k]
                         ready_env_id_player_1.append(k)
                     elif v['to_play'] == 2:
                         obs_player_2[k] = v
-                        simulation_envs_player_2[k] = simulation_envs[k]
                         ready_env_id_player_2.append(k)
 
                 if len(ready_env_id_player_1) > 0:
                     if isinstance(self._policy[0], dict):
-                        policy_output_player_1 = self._policy[0]['policy'].forward(simulation_envs_player_1, obs_player_1,
-                                                                         temperature)
+                        policy_output_player_1 = self._policy[0]['policy'].forward(
+                            obs_player_1,
+                            temperature)
                     else:
-                        policy_output_player_1 = self._policy[0].forward(simulation_envs_player_1, obs_player_1,
+                        policy_output_player_1 = self._policy[0].forward(obs_player_1,
                                                                          temperature)
                 else:
                     policy_output_player_1 = {}
                 if len(ready_env_id_player_2) > 0:
                     if isinstance(self._policy[1], dict):
-                        policy_output_player_2 = self._policy[1]['policy'].forward(simulation_envs_player_2, obs_player_2,
-                                                                         temperature)
+                        policy_output_player_2 = self._policy[1]['policy'].forward(obs_player_2,
+                                                                                   temperature)
                     else:
-                        policy_output_player_2 = self._policy[1].forward(simulation_envs_player_2, obs_player_2,
+                        policy_output_player_2 = self._policy[1].forward(obs_player_2,
                                                                          temperature)
                 else:
                     policy_output_player_2 = {}

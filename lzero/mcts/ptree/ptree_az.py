@@ -103,7 +103,7 @@ class MCTS(object):
         MCTS search process.
     """
 
-    def __init__(self, cfg: EasyDict) -> None:
+    def __init__(self, cfg: EasyDict, simulate_env: Type[BaseEnv]) -> None:
         self._cfg = cfg
 
         self._max_moves = self._cfg.get('max_moves', 512)  # for chess and shogi, 722 for Go.
@@ -119,10 +119,11 @@ class MCTS(object):
         )  # 0.3  # for chess, 0.03 for Go and 0.15 for shogi.
         self._root_noise_weight = self._cfg.get('root_noise_weight', 0.25)  # 0.25
         self.mcts_search_cnt = 0
+        self.simulate_env = simulate_env
 
     def get_next_action(
             self,
-            simulate_env: Type[BaseEnv],
+            state_config_for_env_reset: Dict[str, Any],
             policy_forward_fn: Callable,
             temperature: float = 1.0,
             sample: bool = True
@@ -131,7 +132,7 @@ class MCTS(object):
         Overview:
             calculate the move probabilities based on visit counts at the root node.
         Arguments:
-            - simulate_env (:obj:`Class BaseGameEnv`): The class of simulate env.
+            - state_config_for_env_reset (:obj:`Dict`): The config of state when reset the env.
             - policy_forward_fn (:obj:`Function`): The Callable to compute the action probs and state value.
             - temperature (:obj:`Int`): Temperature is a parameter that controls the "softness" of the probability distribution.
             - sample (:obj:`Bool`): The value of the node.
@@ -140,21 +141,26 @@ class MCTS(object):
             - action_probs (:obj:`List`): The output probability of each action.
         """
         root = Node()
-        self._expand_leaf_node(root, simulate_env, policy_forward_fn)
+        self.simulate_env.reset(
+                start_player_index=state_config_for_env_reset.start_player_index,
+                init_state=state_config_for_env_reset.init_state,
+                katago_policy_init=True,
+                katago_game_state=state_config_for_env_reset.katago_game_state,
+            )
+        self._expand_leaf_node(root, self.simulate_env, policy_forward_fn)
+
         if sample:
             self._add_exploration_noise(root)
 
-        # for debugging
-        # print(simulate_env.board)
-        # print('value= {}'.format([(k, v.value) for k,v in root.children.items()]))
-        # print('visit_count= {}'.format([(k, v.visit_count) for k,v in root.children.items()]))
-        # print('legal_action= {}',format(simulate_env.legal_actions))
-
         for n in range(self._num_simulations):
-            # TODO(pu): 替换成reset(init_state)
-            simulate_env_copy = copy.deepcopy(simulate_env)
-            simulate_env_copy.battle_mode = simulate_env_copy.mcts_mode
-            self._simulate(root, simulate_env_copy, policy_forward_fn)
+            self.simulate_env.reset(
+                start_player_index=state_config_for_env_reset.start_player_index,
+                init_state=state_config_for_env_reset.init_state,
+                katago_policy_init=True,
+                katago_game_state=state_config_for_env_reset.katago_game_state,
+            )
+            self.simulate_env.battle_mode = self.simulate_env.mcts_mode
+            self._simulate(root, self.simulate_env, policy_forward_fn)
 
         # for debugging
         # print('after simulation')
@@ -162,7 +168,7 @@ class MCTS(object):
         # print('visit_count= {}'.format([(k, v.visit_count) for k,v in root.children.items()]))
 
         action_visits = []
-        for action in range(simulate_env.action_space.n):
+        for action in range(self.simulate_env.action_space.n):
             if action in root.children:
                 action_visits.append((action, root.children[action].visit_count))
             else:
@@ -216,6 +222,7 @@ class MCTS(object):
 
         if not done:
             leaf_value = self._expand_leaf_node(node, simulate_env, policy_forward_fn)
+
         else:
             if simulate_env.mcts_mode == 'self_play_mode':
                 if winner == -1:
@@ -273,6 +280,8 @@ class MCTS(object):
         return action, child
 
     def _expand_leaf_node(self, node: Node, simulate_env: Type[BaseEnv], policy_forward_fn: Callable) -> float:
+    # def _expand_leaf_node(self, node: Node, state_config_for_env_reset, policy_forward_fn: Callable) -> float:
+
         """
         Overview:
             expand the node with the policy_forward_fn.

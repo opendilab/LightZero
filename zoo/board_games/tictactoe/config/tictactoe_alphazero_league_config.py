@@ -3,6 +3,8 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+mcts_ctree = True
+# mcts_ctree = False
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 5
@@ -48,9 +50,9 @@ tictactoe_alphazero_league_config = dict(
         prob_expert_agent=0,
         scale=True,
         use_katago_bot=False,
+        mcts_ctree=mcts_ctree,
     ),
     policy=dict(
-        env_type='board_games',
         model=dict(
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),
@@ -58,6 +60,9 @@ tictactoe_alphazero_league_config = dict(
             num_res_blocks=1,
             num_channels=16,
         ),
+        env_name="gomoku",
+        env_config_type='league',
+        mcts_ctree=mcts_ctree,
         cuda=True,
         board_size=3,
         update_per_collect=update_per_collect,

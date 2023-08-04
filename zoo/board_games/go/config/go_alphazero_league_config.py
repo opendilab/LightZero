@@ -3,6 +3,8 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+mcts_ctree = True
+# mcts_ctree = False
 board_size = 9
 
 if board_size in [9, 19]:
@@ -21,7 +23,6 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 1
 update_per_collect = 200
-# model_update_ratio = 0.1
 
 batch_size = 256
 max_env_step = int(100e6)
@@ -29,7 +30,6 @@ snapshot_the_player_in_iter_zero = True
 one_phase_step = int(5e3)
 # TODO(pu)
 sp_prob = 0.2  # 0, 0.5, 1
-# use_bot_init_historical = False
 use_bot_init_historical = True
 num_res_blocks = 5
 num_channels = 64
@@ -37,26 +37,27 @@ num_channels = 64
 # num_channels = 128
 num_simulations = 50
 
+
 # debug config
-# board_size = 6
-# komi = 4
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# update_per_collect = 2
-# batch_size = 2
-# max_env_step = int(2e5)
-# sp_prob = 0.2
-# one_phase_step = int(5)
-# num_simulations = 5
-# num_channels = 2
-# num_res_blocks = 1
+board_size = 6
+komi = 4
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+update_per_collect = 2
+batch_size = 2
+max_env_step = int(2e5)
+sp_prob = 0.2
+one_phase_step = int(5)
+num_simulations = 5
+num_channels = 2
+num_res_blocks = 1
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-go_alphazero_league_config = dict(
+go_alphazero_config = dict(
     exp_name=f"data_az_ctree_league/go_b{board_size}-komi-{komi}_alphazero_nb-{num_res_blocks}-nc-{num_channels}_ns{num_simulations}_upc{update_per_collect}_league-sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_seed0",
     env=dict(
         stop_value=2,
@@ -84,6 +85,8 @@ go_alphazero_league_config = dict(
         manager=dict(shared_memory=False, ),
         prob_random_agent=0,
         prob_expert_agent=0,
+        katago_policy=None,
+        mcts_ctree=mcts_ctree,
     ),
     policy=dict(
         model=dict(
@@ -92,8 +95,9 @@ go_alphazero_league_config = dict(
             num_res_blocks=num_res_blocks,
             num_channels=num_channels,
         ),
-        # mcts_ctree=False,
-        mcts_ctree=True,
+        env_name="go",
+        env_config_type='league',
+        mcts_ctree=mcts_ctree,
         cuda=True,
         env_type='board_games',
         board_size=board_size,
@@ -102,22 +106,18 @@ go_alphazero_league_config = dict(
         # optim_type='Adam',
         # lr_piecewise_constant_decay=False,
         # learning_rate=0.003,
-
         # OpenGo parameters
         optim_type='SGD',
         lr_piecewise_constant_decay=True,
         learning_rate=0.02,  # 0.02, 0.002, 0.0002
         threshold_training_steps_for_final_lr=int(1.5e6),
-
         # i.e. temperature: 1 -> 0.5 -> 0.25
         manual_temperature_decay=True,
         threshold_training_steps_for_final_temperature=int(1.5e6),
-
         value_weight=1.0,
         entropy_weight=0.0,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        # eval_freq=int(100),  # debug
         mcts=dict(num_simulations=num_simulations),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -131,7 +131,7 @@ go_alphazero_league_config = dict(
                 # An active player will be considered trained enough for snapshot after two phase steps.
                 one_phase_step=one_phase_step,
                 # A namedtuple of probabilities of selecting different opponent branch.
-                # branch_probs=dict(pfsp=0.2, sp=0.8),
+                # e.g. branch_probs=dict(pfsp=0.2, sp=0.8),
                 branch_probs=dict(pfsp=1 - sp_prob, sp=sp_prob),
                 # If win rates between this player and all the opponents are greater than this value, this player can
                 # be regarded as strong enough to these opponents. If also already trained for one phase step,
@@ -160,8 +160,8 @@ go_alphazero_league_config = dict(
     ),
 )
 
-go_alphazero_league_config = EasyDict(go_alphazero_league_config)
-main_config = go_alphazero_league_config
+go_alphazero_config = EasyDict(go_alphazero_config)
+main_config = go_alphazero_config
 
 go_alphazero_league_create_config = dict(
     env=dict(

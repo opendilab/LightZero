@@ -27,6 +27,9 @@ update_per_collect = 50
 batch_size = 256
 max_env_step = int(10e6)
 num_channels = 64
+prob_random_action_in_bot = 0.
+mcts_ctree = False
+
 
 board_size = 6
 komi = 4
@@ -37,7 +40,6 @@ num_simulations = 2
 update_per_collect = 2
 batch_size = 2
 max_env_step = int(5e5)
-prob_random_action_in_bot = 0.
 num_channels = 2
 
 # ==============================================================
@@ -60,6 +62,18 @@ go_alphazero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        stop_value=1,
+        mcts_mode='self_play_mode',  # only used in AlphaZero
+        save_gif_replay=False,
+        save_gif_path='./',
+        render_in_ui=False,
+        agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        scale=True,
+        ignore_pass_if_have_other_legal_actions=True,
+        katago_policy=None,
+        mcts_ctree=mcts_ctree,
     ),
     policy=dict(
         torch_compile=False,
@@ -70,8 +84,9 @@ go_alphazero_config = dict(
             num_res_blocks=1,
             num_channels=num_channels,
         ),
-        # mcts_ctree=False,
-        mcts_ctree=True,
+        env_config_type='play_with_bot',
+        env_name="go",
+        mcts_ctree=mcts_ctree,
         cuda=True,
         board_size=board_size,
         update_per_collect=update_per_collect,

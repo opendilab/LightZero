@@ -111,7 +111,13 @@ class GomokuEnv(BaseEnv):
         if self.bot_action_type == 'alpha_beta_pruning':
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 
-    def reset(self, start_player_index=0, init_state=None, katago_policy_init=False):
+        self.mcts_ctree = cfg.mcts_ctree
+
+    def reset(self, start_player_index=0, init_state=None, katago_policy_init=False, katago_game_state=None):
+        if self.mcts_ctree and init_state is not None:
+            # Convert byte string to np.ndarray
+            init_state = np.frombuffer(init_state, dtype=np.int32)
+
         self._observation_space = gym.spaces.Box(
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.int32
         )
@@ -121,6 +127,8 @@ class GomokuEnv(BaseEnv):
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
             self.board = np.array(copy.deepcopy(init_state), dtype="int32")
+            if self.mcts_ctree:
+                self.board = self.board.reshape((self.board_size, self.board_size))
         else:
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
         action_mask = np.zeros(self.total_num_actions, 'int8')

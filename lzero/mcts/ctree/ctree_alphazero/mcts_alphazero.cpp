@@ -20,15 +20,17 @@ class MCTS {
     double pb_c_init;
     double root_dirichlet_alpha;
     double root_noise_weight;
+    py::object simulate_env;
 
 public:
     MCTS(int max_moves=512, int num_simulations=800,
          double pb_c_base=19652, double pb_c_init=1.25, 
-         double root_dirichlet_alpha=0.3, double root_noise_weight=0.25)
+         double root_dirichlet_alpha=0.3, double root_noise_weight=0.25, py::object simulate_env=py::none())  // 新增的构造函数参数
         : max_moves(max_moves), num_simulations(num_simulations),
           pb_c_base(pb_c_base), pb_c_init(pb_c_init),
           root_dirichlet_alpha(root_dirichlet_alpha),
-          root_noise_weight(root_noise_weight) {}
+          root_noise_weight(root_noise_weight),
+          simulate_env(simulate_env) {}  // 新增的初始化列表项
 
     // 包括get_next_action，_simulate，_select_child，_expand_leaf_node，_ucb_score，_add_exploration_noise
     
@@ -152,18 +154,59 @@ public:
         return leaf_value;
     }
 
-    std::pair<int, std::vector<double>> get_next_action(py::object simulate_env, py::object policy_forward_fn, double temperature, bool sample) {
+//    std::pair<int, std::vector<double>> get_next_action(py::object reset_fn, py::object policy_forward_fn, double temperature, bool sample) {
+//                Node* root = new Node();
+//        reset_fn();
+//        _expand_leaf_node(root, simulate_env, policy_forward_fn);
+//        if (sample) {
+//            _add_exploration_noise(root);
+//        }
+//        for (int n = 0; n < num_simulations; ++n) {
+//            reset_fn();
+//            simulate_env.attr("battle_mode") = simulate_env.attr("mcts_mode");
+////            simulate_env_copy.attr("battle_mode") = simulate_env_copy.attr("mcts_mode");
+//            _simulate(root, simulate_env, policy_forward_fn);
+////            simulate_env = py::none();
+//        }
+    std::pair<int, std::vector<double>> get_next_action(py::object state_config_for_env_reset, py::object policy_forward_fn, double temperature, bool sample) {
         // printf("position1 \n");
         Node* root = new Node();
+
+        py::object init_state = state_config_for_env_reset["init_state"];
+        if (!init_state.is_none()) {
+            init_state = py::bytes(init_state.attr("tobytes")());
+        }
+//        if (!katago_game_state.is_none()) {
+//            katago_game_state = py::bytes(katago_game_state.attr("tobytes")());
+//        }
+        // 将katago_game_state对象序列化为字符串
+        py::object katago_game_state = state_config_for_env_reset["katago_game_state"];
+        if (!katago_game_state.is_none()) {
+        // TODO(pu): polish efficiency
+            katago_game_state = py::module::import("pickle").attr("dumps")(katago_game_state);
+        }
+        simulate_env.attr("reset")(
+            state_config_for_env_reset["start_player_index"].cast<int>(),
+            init_state,
+            state_config_for_env_reset["katago_policy_init"].cast<bool>(),
+            katago_game_state
+        );
+
         _expand_leaf_node(root, simulate_env, policy_forward_fn);
         if (sample) {
             _add_exploration_noise(root);
         }
         for (int n = 0; n < num_simulations; ++n) {
-            py::object simulate_env_copy = simulate_env.attr("clone")();
-            simulate_env_copy.attr("battle_mode") = simulate_env_copy.attr("mcts_mode");
-            _simulate(root, simulate_env_copy, policy_forward_fn);
-            simulate_env_copy = py::none();
+            simulate_env.attr("reset")(
+            state_config_for_env_reset["start_player_index"].cast<int>(),
+            init_state,
+            state_config_for_env_reset["katago_policy_init"].cast<bool>(),
+            katago_game_state
+        );
+            simulate_env.attr("battle_mode") = simulate_env.attr("mcts_mode");
+//            simulate_env_copy.attr("battle_mode") = simulate_env_copy.attr("mcts_mode");
+            _simulate(root, simulate_env, policy_forward_fn);
+//            simulate_env = py::none();
         }
 
         std::vector<std::pair<int, int>> action_visits;
@@ -358,10 +401,10 @@ PYBIND11_MODULE(mcts_alphazero, m) {
 
 
     py::class_<MCTS>(m, "MCTS")
-        .def(py::init<int, int, double, double, double, double>(),
+        .def(py::init<int, int, double, double, double, double, py::object>(),
              py::arg("max_moves")=512, py::arg("num_simulations")=800,
              py::arg("pb_c_base")=19652, py::arg("pb_c_init")=1.25,
-             py::arg("root_dirichlet_alpha")=0.3, py::arg("root_noise_weight")=0.25)
+             py::arg("root_dirichlet_alpha")=0.3, py::arg("root_noise_weight")=0.25, py::arg("simulate_env"))  // 新增的参数
         .def("_ucb_score", &MCTS::_ucb_score)
         .def("_add_exploration_noise", &MCTS::_add_exploration_noise)
         .def("_select_child", &MCTS::_select_child)

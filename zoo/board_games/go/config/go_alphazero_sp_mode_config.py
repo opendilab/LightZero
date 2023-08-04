@@ -1,15 +1,20 @@
 from easydict import EasyDict
 
-
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 board_size = 9
-
 if board_size in [9, 19]:
     komi = 7.5
 elif board_size == 6:
     komi = 4
+
+if board_size == 19:
+    num_simulations = 800
+elif board_size == 9:
+    num_simulations = 180
+elif board_size == 6:
+    num_simulations = 80
 
 collector_env_num = 8
 n_episode = 8
@@ -23,14 +28,8 @@ max_env_step = int(100e6)
 # num_channels = 64
 num_res_blocks = 10
 num_channels = 128
-
-
-if board_size == 19:
-    num_simulations = 800
-elif board_size == 9:
-    num_simulations = 180
-elif board_size == 6:
-    num_simulations = 80
+mcts_ctree = True
+# mcts_ctree = False
 
 # debug config
 board_size = 6
@@ -68,9 +67,19 @@ go_alphazero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        stop_value=2,
+        mcts_mode='self_play_mode',  # only used in AlphaZero
+        save_gif_replay=False,
+        save_gif_path='./',
+        render_in_ui=False,
+        agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        scale=True,
+        katago_policy=None,
+        mcts_ctree=mcts_ctree,
     ),
     policy=dict(
-        env_type='board_games',
         torch_compile=False,
         tensor_float_32=False,
         model=dict(
@@ -79,8 +88,9 @@ go_alphazero_config = dict(
             num_res_blocks=num_res_blocks,
             num_channels=num_channels,
         ),
-        # mcts_ctree=False,
-        mcts_ctree=True,
+        env_config_type='self_play',
+        env_name="go",
+        mcts_ctree=mcts_ctree,
         cuda=True,
         board_size=board_size,
         update_per_collect=update_per_collect,
