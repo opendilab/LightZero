@@ -1,8 +1,14 @@
 from easydict import EasyDict
+import sys
+sys.path.append('/mnt/nfs/puyuan/LightZero/zoo/game_2048')
+
+# export PYTHONPATH='/mnt/nfs/puyuan/LightZero/zoo/game_2048':$PYTHONPATH
 
 env_name = 'game_2048'
 action_space_size = 4
-use_ture_chance_label_in_chance_encoder = True
+# use_ture_chance_label_in_chance_encoder = True
+use_ture_chance_label_in_chance_encoder = False
+
 chance_space_size = 32
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -10,10 +16,12 @@ chance_space_size = 32
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-num_simulations = 100  # TODO(pu): 50
+# num_simulations = 100  # TODO(pu): 50
+num_simulations = 50  # TODO(pu): 50
+
 update_per_collect = 200
 batch_size = 512
-max_env_step = int(1e8)
+max_env_step = int(1e9)
 reanalyze_ratio = 0.
 
 # collector_env_num = 1
@@ -29,7 +37,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 game_2048_stochastic_muzero_config = dict(
-    exp_name=f'data_stochastic_mz_ctree/game_2048_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_chance-{use_ture_chance_label_in_chance_encoder}-{chance_space_size}_seed0',
+    exp_name=f'data_stochastic_mz_ctree/game_2048_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_chance-{use_ture_chance_label_in_chance_encoder}-{chance_space_size}_seed0_1e9',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -53,7 +61,7 @@ game_2048_stochastic_muzero_config = dict(
             # NOTE: whether to use the self_supervised_learning_loss. default is False
             self_supervised_learning_loss=True,  # default is False
             discrete_action_encoding_type='one_hot',
-            norm_type='BN', 
+            norm_type='BN',
         ),
         use_ture_chance_label_in_chance_encoder=use_ture_chance_label_in_chance_encoder,
         mcts_ctree=True,
@@ -63,7 +71,7 @@ game_2048_stochastic_muzero_config = dict(
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        td_steps=6,
+        td_steps=10,
         discount_factor=0.999,
         manual_temperature_decay=True,
         # optim_type='SGD',
@@ -72,9 +80,11 @@ game_2048_stochastic_muzero_config = dict(
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
+        # learning_rate=0.0003,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=2,  # default is 0
+        # ssl_loss_weight=2,  # default is 0
+        ssl_loss_weight=0,  # default is 0
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(2e7),  # the size/capacity of replay_buffer, in the terms of transitions.

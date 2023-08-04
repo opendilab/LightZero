@@ -209,7 +209,7 @@ class StochasticMuZeroPolicy(Policy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Ininitialize the learn model, optimizer and MCTS utils.
         """
-        assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
+        assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW_official', 'AdamW_nanoGPT'], self._cfg.optim_type
         # NOTE: in board_gmaes, for fixed lr 0.003, 'Adam' is better than 'SGD'.
         if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
@@ -222,7 +222,11 @@ class StochasticMuZeroPolicy(Policy):
             self._optimizer = optim.Adam(
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
-        elif self._cfg.optim_type == 'AdamW':
+        elif self._cfg.optim_type == 'AdamW_official':
+            self._optimizer = optim.AdamW(
+                self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
+            )
+        elif self._cfg.optim_type == 'AdamW_nanoGPT':
             self._optimizer = configure_optimizers(
                 model=self._model,
                 weight_decay=self._cfg.weight_decay,
