@@ -52,7 +52,7 @@ class Connect4Env(BaseEnv):
         self.agents = ["player_0", "player_1"]
         self.possible_agents = self.agents[:]
 
-        # 这个变量有啥必要？？？？？？？？？？？？？？？？？？、
+        # 这个变量的功能是否和battle_mode重复了###########################################
         self.mcts_mode = 'play_with_bot_mode'
 
         self.action_spaces = {i: spaces.Discrete(7) for i in self.agents}
@@ -113,7 +113,7 @@ class Connect4Env(BaseEnv):
             timestep = self._player_step(action)
             if timestep.done:
                 # The eval_episode_return is calculated from Player 1's perspective。
-                # 意义不明这边，维护环境的reward有啥用啊,MCTS的时候不是会再算一遍reward嘛
+                # 不是很明白episode_reward在train的时候是怎么被调用的#########################
                 timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs['to_play'] == "player_0" else timestep.reward
             return timestep
         elif self.battle_mode == 'play_with_bot_mode':
@@ -220,7 +220,7 @@ class Connect4Env(BaseEnv):
 
         obs = self.observe(next_agent)
 
-        # 想想这里是否还需要维护self.reward这些变量
+        # 需要想想这里是否还需要维护self.reward这些变量
         return BaseEnvTimestep(obs, reward, done, info)
 
     def reset(self, seed=None, options=None):
