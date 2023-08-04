@@ -20,7 +20,6 @@ class MultiAgentSampledEfficientZeroGameBuffer(MultiAgentMuZeroGameBuffer):
         The specific game buffer for Multi Agent EfficientZero policy.
     """
 
-
     def _prepare_reward_value_context(
             self, batch_index_list: List[str], game_segment_list: List[Any], pos_in_game_segment_list: List[Any],
             total_transitions: int

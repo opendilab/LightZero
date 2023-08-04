@@ -27,33 +27,6 @@ class MultiAgentMuZeroCollector(MuZeroCollector):
         envstep
     """
 
-    # TO be compatible with ISerialCollector
-    config = dict()
-
-    def __init__(
-            self,
-            collect_print_freq: int = 100,
-            env: BaseEnvManager = None,
-            policy: namedtuple = None,
-            tb_logger: 'SummaryWriter' = None,  # noqa
-            exp_name: Optional[str] = 'default_experiment',
-            instance_name: Optional[str] = 'collector',
-            policy_config: 'policy_config' = None,  # noqa
-    ) -> None:
-        """
-        Overview:
-            Init the collector according to input arguments.
-        Arguments:
-            - collect_print_freq (:obj:`int`): collect_print_frequency in terms of training_steps.
-            - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
-            - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
-            - tb_logger (:obj:`SummaryWriter`): tensorboard handle
-            - instance_name (:obj:`Optional[str]`): Name of this instance.
-            - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
-            - policy_config: Config of game.
-        """
-        super().__init__(collect_print_freq, env, policy, tb_logger, exp_name, instance_name, policy_config)
-
     def _compute_priorities(self, i, agent_id, pred_values_lst, search_values_lst):
         """
         Overview:
