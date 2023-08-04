@@ -59,6 +59,13 @@ class LightZeroRandomPolicy(Policy):
                 return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
             else:
                 raise NotImplementedError("need to implement pipeline: {}".format(self._cfg.type))
+        elif self._cfg.model.model_type == 'structure':
+            if 'efficientzero' in self._cfg.type: # efficientzero or multi_agent_efficientzero
+                return 'EfficientZeroModelStructure', ['lzero.model.efficientzero_model_structure']
+            elif 'muzero' in self._cfg.type:  # muzero or multi_agent_muzero
+                return 'MuZeroModelStructure', ['lzero.model.muzero_model_structure']
+            else:
+                raise NotImplementedError("need to implement pipeline: {}".format(self._cfg.type))
 
     def _init_collect(self) -> None:
         """

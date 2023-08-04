@@ -15,9 +15,9 @@ import copy
 from ding.rl_utils import get_epsilon_greedy_fn
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
-from lzero.worker import GoBiggerMuZeroCollector, GoBiggerMuZeroEvaluator
+from lzero.worker import GoBiggerMuZeroEvaluator
 from lzero.entry.utils import random_collect
-from lzero.policy.gobigger_random_policy import GoBiggerLightZeroRandomPolicy
+from lzero.policy.multi_agent_random_policy import MultiAgentLightZeroRandomPolicy
 
 
 def train_muzero_gobigger(
@@ -46,13 +46,21 @@ def train_muzero_gobigger(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['gobigger_efficientzero', 'gobigger_muzero', 'gobigger_sampled_efficientzero']
-    if create_cfg.policy.type == 'gobigger_efficientzero':
-        from lzero.mcts import GoBiggerEfficientZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'gobigger_muzero':
-        from lzero.mcts import GoBiggerMuZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'gobigger_sampled_efficientzero':
-        from lzero.mcts import GoBiggerSampledEfficientZeroGameBuffer as GameBuffer
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'multi_agent_efficientzero', 'multi_agent_muzero'], \
+        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'multi_agent_efficientzero', 'multi_agent_muzero'"
+
+    if create_cfg.policy.type == 'muzero':
+        from lzero.mcts import MuZeroGameBuffer as GameBuffer
+    elif create_cfg.policy.type == 'efficientzero':
+        from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
+    elif create_cfg.policy.type == 'sampled_efficientzero':
+        from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
+    elif create_cfg.policy.type == 'gumbel_muzero':
+        from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
+    elif create_cfg.policy.type == 'multi_agent_efficientzero':
+        from lzero.mcts import MultiAgentSampledEfficientZeroGameBuffer as GameBuffer
+    elif create_cfg.policy.type == 'multi_agent_muzero':
+        from lzero.mcts import MultiAgentMuZeroGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
@@ -92,7 +100,13 @@ def train_muzero_gobigger(
     batch_size = policy_config.batch_size
     # specific game buffer for MCTS+RL algorithms
     replay_buffer = GameBuffer(policy_config)
-    collector = GoBiggerMuZeroCollector(
+    if policy_config.multi_agent:
+        from lzero.worker import MultiAgentMuZeroCollector as Collector
+        from lzero.worker import MuZeroEvaluator as Evaluator
+    else:
+        from lzero.worker import MuZeroCollector as Collector
+        from lzero.worker import MuZeroEvaluator as Evaluator
+    collector = Collector(
         env=collector_env,
         policy=policy.collect_mode,
         tb_logger=tb_logger,
@@ -127,6 +141,7 @@ def train_muzero_gobigger(
     # ==============================================================
     # Learner's before_run hook.
     learner.call_hook('before_run')
+
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
 
@@ -134,7 +149,7 @@ def train_muzero_gobigger(
     # Exploration: The collection of random data aids the agent in exploring the environment and prevents premature convergence to a suboptimal policy.
     # Comparation: The agent's performance during random action-taking can be used as a reference point to evaluate the efficacy of reinforcement learning algorithms.
     if cfg.policy.random_collect_episode_num > 0:
-        random_collect(cfg.policy, policy, GoBiggerLightZeroRandomPolicy, collector, collector_env, replay_buffer)
+        random_collect(cfg.policy, policy, MultiAgentLightZeroRandomPolicy, collector, collector_env, replay_buffer)
 
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
@@ -147,6 +162,7 @@ def train_muzero_gobigger(
             policy_config.threshold_training_steps_for_final_temperature,
             trained_steps=learner.train_iter
         )
+
         if policy_config.eps.eps_greedy_exploration_in_collect:
             epsilon_greedy_fn = get_epsilon_greedy_fn(
                 start=policy_config.eps.start,
@@ -160,20 +176,24 @@ def train_muzero_gobigger(
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
-            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+            stop, reward = evaluator.eval(None, learner.train_iter, collector.envstep) # save_ckpt_fn = None 
             stop, reward = vsbot_evaluator.eval_vsbot(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
                 break
 
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+        if cfg.policy.update_per_collect is None:
+            # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
+            collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
+            update_per_collect = int(collected_transitions_num * cfg.policy.model_update_ratio)
         # save returned new_data collected by the collector
         replay_buffer.push_game_segments(new_data)
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
         # Learn policy from collected data.
-        for i in range(cfg.policy.update_per_collect):
+        for i in range(update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
             if replay_buffer.get_num_of_transitions() > batch_size:
                 train_data = replay_buffer.sample(batch_size, policy)

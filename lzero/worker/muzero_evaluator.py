@@ -191,7 +191,7 @@ class MuZeroEvaluator(ISerialEvaluator):
         return True
     
     def _add_info(self, last_timestep, info):
-        pass
+        return info
 
     def eval(
             self,
@@ -356,7 +356,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                     if self._multi_agent:
                         for agent_id in range(agent_num):
                             game_segments[env_id][agent_id].append(
-                                actions[env_id][agent_id], to_ndarray(obs['observation'][agent_id]), reward[agent_id],
+                                actions[env_id][agent_id], to_ndarray(obs['observation'][agent_id]), reward[agent_id] if isinstance(reward, list) else reward,
                                 action_mask_dict[env_id][agent_id], to_play_dict[env_id]
                             )
                     else:

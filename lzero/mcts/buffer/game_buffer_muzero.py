@@ -48,6 +48,8 @@ class MuZeroGameBuffer(GameBuffer):
         self.game_pos_priorities = []
         self.game_segment_game_pos_look_up = []
 
+        self.tmp_obs = None # a tmp value which records obs when value obs list [current_index + 4(td_step)] > 50(game_segment)
+
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
     ) -> List[Any]:
@@ -198,7 +200,6 @@ class MuZeroGameBuffer(GameBuffer):
             - reward_value_context (:obj:`list`): value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens,
               td_steps_list, action_mask_segment, to_play_segment
         """
-        zero_obs = game_segment_list[0].zero_obs()
         value_obs_list = []
         # the value is valid or not (out of game_segment)
         value_mask = []
@@ -238,11 +239,12 @@ class MuZeroGameBuffer(GameBuffer):
                     end_index = beg_index + self._cfg.model.frame_stack_num
                     # the stacked obs in time t
                     obs = game_obs[beg_index:end_index]
+                    self.tmp_obs = obs  # will be masked
                 else:
                     value_mask.append(0)
-                    obs = zero_obs
+                    obs = self.tmp_obs  # will be masked
 
-                value_obs_list.append(obs)
+                value_obs_list.append(obs.tolist())
 
         reward_value_context = [
             value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list,

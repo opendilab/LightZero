@@ -292,9 +292,6 @@ class MuZeroCollector(ISerialCollector):
                 raise RuntimeError("Please specify collect n_episode")
             else:
                 n_episode = self._default_n_episode
-            random_collect_episode_num = 0
-        else:
-            random_collect_episode_num = n_episode
         assert n_episode >= self._env_num, "Please make sure n_episode >= env_num{}/{}".format(n_episode, self._env_num)
         if policy_kwargs is None:
             policy_kwargs = {}
@@ -325,6 +322,7 @@ class MuZeroCollector(ISerialCollector):
 
         if self._multi_agent:
             agent_num = len(init_obs[0]['action_mask'])
+            assert agent_num == self.policy_config.model.agent_num, "Please make sure agent_num == env.agent_num"
             game_segments = [
                 [
                     GameSegment(
@@ -522,7 +520,8 @@ class MuZeroCollector(ISerialCollector):
                     if self._multi_agent:
                         for agent_id in range(agent_num):
                             game_segments[env_id][agent_id].append(
-                                actions[env_id][agent_id], to_ndarray(obs['observation'][agent_id]), reward[agent_id],
+                                actions[env_id][agent_id], 
+                                to_ndarray(obs['observation'][agent_id]), reward[agent_id] if isinstance(reward, list) else reward,
                                 action_mask_dict[env_id][agent_id], to_play_dict[env_id]
                             )
                     else:
@@ -658,7 +657,7 @@ class MuZeroCollector(ISerialCollector):
                     # pad over 2th last game_segment using the last game_segment
                     if self._multi_agent:
                         for agent_id in range(agent_num):
-                            if last_game_segments[env_id] is not None:
+                            if last_game_segments[env_id][agent_id] is not None:
                                 self.pad_and_save_last_trajectory(
                                     env_id, agent_id, last_game_segments, last_game_priorities, game_segments, dones
                                 )

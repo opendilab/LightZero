@@ -44,6 +44,8 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         self.base_idx = 0
         self.clear_time = 0
 
+        self.tmp_obs = None # for value obs list [46 + 4(td_step)] not < 50(game_segment)
+
     def sample(self, batch_size: int, policy: Any) -> List[Any]:
         """
         Overview:
@@ -100,7 +102,6 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
             - reward_value_context (:obj:`list`): value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens,
               td_steps_list, action_mask_segment, to_play_segment
         """
-        zero_obs = game_segment_list[0].zero_obs()
         value_obs_list = []
         # the value is valid or not (out of trajectory)
         value_mask = []
@@ -148,11 +149,12 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                     end_index = beg_index + self._cfg.model.frame_stack_num
                     # the stacked obs in time t
                     obs = game_obs[beg_index:end_index]
+                    self.tmp_obs = obs  # will be masked
                 else:
                     value_mask.append(0)
-                    obs = zero_obs
+                    obs = self.tmp_obs  # will be masked
 
-                value_obs_list.append(obs)
+                value_obs_list.append(obs.tolist())
 
         reward_value_context = [
             value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list,

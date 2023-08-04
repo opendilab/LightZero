@@ -15,9 +15,6 @@ from tensorboardX import SummaryWriter
 
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
-from lzero.policy.random_policy import LightZeroRandomPolicy
-from lzero.worker import MuZeroCollector as Collector
-from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 
 
@@ -47,8 +44,8 @@ def train_muzero(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'], \
-        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'"
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'multi_agent_efficientzero', 'multi_agent_muzero'], \
+        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'multi_agent_efficientzero', 'multi_agent_muzero'"
 
     if create_cfg.policy.type == 'muzero':
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
@@ -58,6 +55,10 @@ def train_muzero(
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'gumbel_muzero':
         from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
+    elif create_cfg.policy.type == 'multi_agent_muzero':
+        from lzero.mcts import MultiAgentMuZeroGameBuffer as GameBuffer
+    elif create_cfg.policy.type == 'multi_agent_efficientzero':
+        from lzero.mcts import MultiAgentSampledEfficientZeroGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
@@ -92,6 +93,14 @@ def train_muzero(
     batch_size = policy_config.batch_size
     # specific game buffer for MCTS+RL algorithms
     replay_buffer = GameBuffer(policy_config)
+
+    if policy_config.multi_agent:
+        from lzero.worker import MultiAgentMuZeroCollector as Collector
+        from lzero.worker import MuZeroEvaluator as Evaluator
+    else:
+        from lzero.worker import MuZeroCollector as Collector
+        from lzero.worker import MuZeroEvaluator as Evaluator
+
     collector = Collector(
         env=collector_env,
         policy=policy.collect_mode,
@@ -123,7 +132,11 @@ def train_muzero(
     # Exploration: The collection of random data aids the agent in exploring the environment and prevents premature convergence to a suboptimal policy.
     # Comparation: The agent's performance during random action-taking can be used as a reference point to evaluate the efficacy of reinforcement learning algorithms.
     if cfg.policy.random_collect_episode_num > 0:
-        random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
+        if policy_config.multi_agent:
+            from lzero.policy.multi_agent_random_policy import MultiAgentLightZeroRandomPolicy as RandomPolicy
+        else:
+            from lzero.policy.random_policy import LightZeroRandomPolicy as RandomPolicy
+        random_collect(cfg.policy, policy, RandomPolicy, collector, collector_env, replay_buffer)
 
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)

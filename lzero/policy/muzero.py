@@ -16,6 +16,9 @@ from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
     configure_optimizers
+from collections import defaultdict
+from ding.torch_utils import to_device
+from ding.utils.data import default_collate
 
 
 @POLICY_REGISTRY.register('muzero')
@@ -202,6 +205,8 @@ class MuZeroPolicy(Policy):
             return 'MuZeroModel', ['lzero.model.muzero_model']
         elif self._cfg.model.model_type == "mlp":
             return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
+        elif self._cfg.model.model_type == "structure":
+            return 'MuZeroModelStructure', ['lzero.model.muzero_model_structure']
 
     def _init_learn(self) -> None:
         """
@@ -299,7 +304,7 @@ class MuZeroPolicy(Policy):
         target_reward = target_reward.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
 
-        assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
+        assert self._cfg.batch_size == target_reward.size(0)
 
         # ``scalar_transform`` to transform the original value to the scaled value,
         # i.e. h(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -376,6 +381,15 @@ class MuZeroPolicy(Policy):
                         beg_index = self._cfg.model.observation_shape * step_i
                         end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
                         network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
+                    elif self._cfg.model.model_type == 'structure':
+                        beg_index = step_i
+                        end_index = step_i + self._cfg.model.frame_stack_num
+                        obs_target_batch_tmp = obs_target_batch[:, beg_index:end_index].tolist()
+                        obs_target_batch_tmp = sum(obs_target_batch_tmp, [])
+                        obs_target_batch_tmp = to_tensor(obs_target_batch_tmp)
+                        obs_target_batch_tmp = to_device(obs_target_batch_tmp, self._cfg.device)
+                        obs_target_batch_tmp = default_collate(obs_target_batch_tmp)
+                        network_output = self._learn_model.initial_inference(obs_target_batch_tmp)
 
                     latent_state = to_tensor(latent_state)
                     representation_state = to_tensor(network_output.latent_state)

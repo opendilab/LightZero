@@ -5,34 +5,19 @@ import torch
 from ding.policy.base_policy import Policy
 from ding.utils import POLICY_REGISTRY
 
-from lzero.mcts import EfficientZeroMCTSCtree as MCTSCtree
-from lzero.mcts import EfficientZeroMCTSPtree as MCTSPtree
-from lzero.policy import InverseScalarTransform, select_action, ez_network_output_unpack
+from lzero.policy import InverseScalarTransform, select_action, ez_network_output_unpack, mz_network_output_unpack
 from .random_policy import LightZeroRandomPolicy
 from collections import defaultdict
 from ding.torch_utils import to_device, to_tensor
+from ding.utils.data import default_collate
 
 
-@POLICY_REGISTRY.register('gobigger_lightzero_random_policy')
-class GoBiggerLightZeroRandomPolicy(LightZeroRandomPolicy):
+@POLICY_REGISTRY.register('multi_agent_lightzero_random_policy')
+class MultiAgentLightZeroRandomPolicy(LightZeroRandomPolicy):
     """
     Overview:
-        The policy class for GoBiggerRandom.
+        The policy class for Multi Agent LightZero Random Policy.
     """
-
-    def default_model(self) -> Tuple[str, List[str]]:
-        """
-        Overview:
-            Return this algorithm default model setting.
-        Returns:
-            - model_info (:obj:`Tuple[str, List[str]]`): model name and model import_names.
-                - model_type (:obj:`str`): The model type used in this algorithm, which is registered in ModelRegistry.
-                - import_names (:obj:`List[str]`): The model class path list used in this algorithm.
-        .. note::
-            The user can define and use customized network model but must obey the same interface definition indicated \
-            by import_names path. For EfficientZero, ``lzero.model.efficientzero_model.EfficientZeroModel``
-        """
-        return 'GoBiggerEfficientZeroModel', ['lzero.model.gobigger.gobigger_efficientzero_model']
 
     def _forward_collect(
         self,
@@ -41,7 +26,7 @@ class GoBiggerLightZeroRandomPolicy(LightZeroRandomPolicy):
         temperature: float = 1,
         to_play: List = [-1],
         epsilon: float = 0.25,
-        ready_env_id=None
+        ready_env_id = None
     ):
         """
         Overview:
@@ -68,28 +53,36 @@ class GoBiggerLightZeroRandomPolicy(LightZeroRandomPolicy):
         """
         self._collect_model.eval()
         self.collect_mcts_temperature = temperature
+        self.collect_epsilon = epsilon
 
         active_collect_env_num = len(data)
         data = to_tensor(data)
         data = sum(sum(data, []), [])
         batch_size = len(data)
         data = to_device(data, self._cfg.device)
+        data = default_collate(data)
         agent_num = batch_size // active_collect_env_num
         to_play = np.array(to_play).reshape(-1).tolist()
 
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
-            latent_state_roots, value_prefix_roots, reward_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
-                network_output
-            )
+            if 'efficientzero' in self._cfg.type: # efficientzero or multi_agent_efficientzero
+                latent_state_roots, value_prefix_roots, reward_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
+                    network_output
+                )
+            elif 'muzero' in self._cfg.type: # muzero or multi_agent_muzero
+                latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
+            else:
+                raise NotImplementedError("need to implement pipeline: {}".format(self._cfg.type))
 
-            # if not in training, obtain the scalars of the value/reward
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
-            reward_hidden_state_roots = (
-                reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()
-            )
+            if 'efficientzero' in self._cfg.type:
+                reward_hidden_state_roots = (
+                    reward_hidden_state_roots[0].detach().cpu().numpy(),
+                    reward_hidden_state_roots[1].detach().cpu().numpy()
+                )
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             action_mask = sum(action_mask, [])
@@ -101,14 +94,20 @@ class GoBiggerLightZeroRandomPolicy(LightZeroRandomPolicy):
             ]
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
-                roots = MCTSCtree.roots(batch_size, legal_actions)
+                roots = self.MCTSCtree.roots(batch_size, legal_actions)
             else:
                 # python mcts_tree
-                roots = MCTSPtree.roots(batch_size, legal_actions)
-            roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_roots, policy_logits, to_play)
-            self._mcts_collect.search(
-                roots, self._collect_model, latent_state_roots, reward_hidden_state_roots, to_play
-            )
+                roots = self.MCTSPtree.roots(batch_size, legal_actions)
+            if 'efficientzero' in self._cfg.type: # efficientzero or multi_agent_efficientzero
+                roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_roots, policy_logits, to_play)
+                self._mcts_collect.search(
+                    roots, self._collect_model, latent_state_roots, reward_hidden_state_roots, to_play
+                )
+            elif 'muzero' in self._cfg.type: # muzero or multi_agent_muzero
+                roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
+                self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
+            else:
+                raise NotImplementedError("need to implement pipeline: {}".format(self._cfg.type))
 
             roots_visit_count_distributions = roots.get_distributions(
             )  # shape: ``{list: batch_size} ->{list: action_space_size}``
@@ -124,10 +123,13 @@ class GoBiggerLightZeroRandomPolicy(LightZeroRandomPolicy):
                 action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                     distributions, temperature=self.collect_mcts_temperature, deterministic=False
                 )
-                action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                # ************* random action *************
-                action = int(np.random.choice(legal_actions[i], 1))
-                output[i // agent_num]['action'].append(action)
+
+                # ****** sample a random action from the legal action set ********
+                # all items except action are formally obtained from MCTS 
+                random_action = int(np.random.choice(legal_actions[i], 1))
+                # ****************************************************************
+
+                output[i // agent_num]['action'].append(random_action)
                 output[i // agent_num]['distributions'].append(distributions)
                 output[i // agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
                 output[i // agent_num]['value'].append(value)

@@ -15,12 +15,12 @@ from lzero.mcts.utils import prepare_observation
 from collections import defaultdict
 
 
-@SERIAL_COLLECTOR_REGISTRY.register('gobigger_episode_muzero')
-class GoBiggerMuZeroCollector(MuZeroCollector):
+@SERIAL_COLLECTOR_REGISTRY.register('multi_agent_episode_muzero')
+class MultiAgentMuZeroCollector(MuZeroCollector):
     """
     Overview:
-        The Collector for GoBigger MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
-        For GoBigger, add agent_num dim in game_segment.
+        The Collector for Multi Agent MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
+        For Multi Agent, add agent_num dim in game_segment.
     Interfaces:
         __init__, reset, reset_env, reset_policy, collect, close
     Property:

@@ -1,6 +1,6 @@
 from easydict import EasyDict
 
-env_name = 'GoBigger'
+env_name = 'gobigger'
 multi_agent = True
 
 # ==============================================================
@@ -21,7 +21,7 @@ eps_greedy_exploration_in_collect = True
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-atari_muzero_config = dict(
+gobigger_muzero_config = dict(
     exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
     env=dict(
         env_name=env_name, # default is 'GoBigger T2P2'
@@ -34,11 +34,12 @@ atari_muzero_config = dict(
         multi_agent=multi_agent,
         ignore_done=True,
         model=dict(
-            model_type='structured',
+            model_type='structure',
+            env_name=env_name,
+            agent_num=4, # default is t2p2
             latent_state_dim=176,
             frame_stack_num=1,
             action_space_size=action_space_size,
-            downsample=True,
             self_supervised_learning_loss=False,  # default is False
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
@@ -76,26 +77,26 @@ atari_muzero_config = dict(
         hook=dict(log_show_after_iter=10, ),
     ), ),
 )
-atari_muzero_config = EasyDict(atari_muzero_config)
-main_config = atari_muzero_config
+gobigger_muzero_config = EasyDict(gobigger_muzero_config)
+main_config = gobigger_muzero_config
 
-atari_muzero_create_config = dict(
+gobigger_muzero_create_config = dict(
     env=dict(
         type='gobigger_lightzero',
         import_names=['zoo.gobigger.env.gobigger_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='gobigger_muzero',
-        import_names=['lzero.policy.gobigger_muzero'],
+        type='multi_agent_muzero',
+        import_names=['lzero.policy.multi_agent_muzero'],
     ),
     collector=dict(
-        type='gobigger_episode_muzero',
-        import_names=['lzero.worker.gobigger_muzero_collector'],
+        type='multi_agent_episode_muzero',
+        import_names=['lzero.worker.multi_agent_muzero_collector'],
     )
 )
-atari_muzero_create_config = EasyDict(atari_muzero_create_config)
-create_config = atari_muzero_create_config
+gobigger_muzero_create_config = EasyDict(gobigger_muzero_create_config)
+create_config = gobigger_muzero_create_config
 
 if __name__ == "__main__":
     from zoo.gobigger.entry import train_muzero_gobigger
