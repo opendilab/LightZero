@@ -434,18 +434,19 @@ class TicTacToeEnv(BaseEnv):
     @property
     def current_player_index(self):
         """
-        current_player_index = 0, current_player = 1
-        current_player_index = 1, current_player = 2
+        Overview:
+            current_player_index = 0, current_player = 1
+            current_player_index = 1, current_player = 2
         """
         return 0 if self._current_player == 1 else 1
-
-    # @property
-    # def to_play(self):
-    #     return self.players[0] if self.current_player == self.players[1] else self.players[1]
 
     @property
     def next_player(self):
         return self.players[0] if self.current_player == self.players[1] else self.players[1]
+
+    # @property
+    # def to_play(self):
+    #     return self.players[0] if self.current_player == self.players[1] else self.players[1]
 
     @property
     def current_player_to_compute_bot_action(self):

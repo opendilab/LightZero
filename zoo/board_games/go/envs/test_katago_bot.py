@@ -8,13 +8,13 @@ from zoo.board_games.go.envs.go_env import GoEnv, flatten_action_to_gtp_action
 from zoo.board_games.go.envs.katago_policy import str_coord, KatagoPolicy, GameState
 
 cfg = EasyDict(
-    # board_size=19,
-    board_size=9,
+    board_size=19,
+    # board_size=9,
     # board_size=6,
-    # save_gif_replay=True,
-    # render_in_ui=True,
-    save_gif_replay=False,
-    render_in_ui=False,
+    save_gif_replay=True,
+    render_in_ui=True,
+    # save_gif_replay=False,
+    # render_in_ui=False,
     katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
     ignore_pass_if_have_other_legal_actions=True,
     save_gif_path='./',
@@ -29,6 +29,7 @@ cfg = EasyDict(
     check_action_to_connect4_in_bot_v0=False,
     stop_value=1,
     katago_device='cpu',
+    mcts_ctree=True,
 )
 
 cfg.katago_policy = KatagoPolicy(checkpoint_path=cfg.katago_checkpoint_path, board_size=cfg.board_size,

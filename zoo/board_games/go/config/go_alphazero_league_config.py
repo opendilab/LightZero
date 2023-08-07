@@ -25,7 +25,7 @@ evaluator_env_num = 1
 update_per_collect = 200
 
 batch_size = 256
-max_env_step = int(100e6)
+max_env_step = int(1000e6)
 snapshot_the_player_in_iter_zero = True
 one_phase_step = int(5e3)
 # TODO(pu)
@@ -35,30 +35,31 @@ num_res_blocks = 5
 num_channels = 64
 # num_res_blocks = 10
 # num_channels = 128
-num_simulations = 50
+# num_simulations = 50
+num_simulations = 200
 
 
 # debug config
-board_size = 6
-komi = 4
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-update_per_collect = 2
-batch_size = 2
-max_env_step = int(2e5)
-sp_prob = 0.2
-one_phase_step = int(5)
-num_simulations = 5
-num_channels = 2
-num_res_blocks = 1
+# board_size = 6
+# komi = 4
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# update_per_collect = 2
+# batch_size = 2
+# max_env_step = int(2e5)
+# sp_prob = 0.2
+# one_phase_step = int(5)
+# num_simulations = 5
+# num_channels = 2
+# num_res_blocks = 1
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 go_alphazero_config = dict(
-    exp_name=f"data_az_ctree_league/go_b{board_size}-komi-{komi}_alphazero_nb-{num_res_blocks}-nc-{num_channels}_ns{num_simulations}_upc{update_per_collect}_league-sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_seed0",
+    exp_name=f"data_az_ctree_league/go_b{board_size}-komi-{komi}_alphazero_nb-{num_res_blocks}-nc-{num_channels}_ns{num_simulations}_upc{update_per_collect}_league-sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_fromiter100k_seed0",
     env=dict(
         stop_value=2,
         env_name="Go",
@@ -69,8 +70,8 @@ go_alphazero_config = dict(
         scale=True,
         agent_vs_human=False,
         use_katago_bot=True,
-        katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
-        # katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        # katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
         ignore_pass_if_have_other_legal_actions=True,
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
         prob_random_action_in_bot=0,
@@ -119,13 +120,15 @@ go_alphazero_config = dict(
         n_episode=n_episode,
         eval_freq=int(2e3),
         mcts=dict(num_simulations=num_simulations),
+        # replay_buffer_size=int(1e7),
+        replay_buffer_size=int(6e5),  # 300GB
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         league=dict(
             log_freq_for_payoff_rank=50,
             player_category=['go'],
             # path to save policy of league player, user can specify this field
-            path_policy=f"data_az_ctree_league/go_alphazero_league_sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_ns{num_simulations}_policy_ckpt_seed0",
+            path_policy=f"data_az_ctree_league/go_alphazero_league_sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_ns{num_simulations}_policy_ckpt_fromiter100k_seed0",
             active_players=dict(main_player=1, ),
             main_player=dict(
                 # An active player will be considered trained enough for snapshot after two phase steps.
@@ -138,8 +141,17 @@ go_alphazero_config = dict(
                 # this player can be regarded as trained enough for snapshot.
                 strong_win_rate=0.7,
             ),
-            use_pretrain=False,
-            use_pretrain_init_historical=False,
+            # use_pretrain=False,
+            # use_pretrain_init_historical=False,
+            # "use_pretrain" means whether to use pretrain model to initialize active player.
+            use_pretrain=True,
+            # "use_pretrain_init_historical" means whether to use pretrain model to initialize historical player.
+            # "pretrain_checkpoint_path" is the pretrain checkpoint path used in "use_pretrain" and
+            # "use_pretrain_init_historical". If both are False, "pretrain_checkpoint_path" can be omitted as well.
+            # Otherwise, "pretrain_checkpoint_path" should list paths of all player categories.
+            use_pretrain_init_historical=True,
+            pretrain_checkpoint_path=dict(go='/mnt/nfs/puyuan/LightZero/data_az_ctree_league/go_b9-komi-7.5_alphazero_nb-5-nc-64_ns50_upc200_league-sp-0.2_bot-init-True_phase-step-5000_seed0_230804_115041/ckpt_main_player_go_0_learner/iteration_100000.pth.tar', ),
+
             # "use_bot_init_historical" means whether to use bot as an init historical player
             use_bot_init_historical=use_bot_init_historical,
             # "snapshot_the_player_in_iter_zero" means whether to snapshot the player in iter zero as historical_player.

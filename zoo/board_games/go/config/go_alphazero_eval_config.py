@@ -1,5 +1,5 @@
-# from zoo.board_games.go.config.go_alphazero_bot_mode_config import main_config, create_config
-from zoo.board_games.go.config.go_alphazero_sp_mode_config import main_config, create_config
+from zoo.board_games.go.config.go_alphazero_bot_mode_config import main_config, create_config
+# from zoo.board_games.go.config.go_alphazero_sp_mode_config import main_config, create_config
 
 from lzero.entry import eval_alphazero
 import numpy as np
@@ -13,16 +13,20 @@ if __name__ == '__main__':
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
     """
     # model_path = './ckpt/ckpt_best.pth.tar'
-    model_path = '/Users/puyuan/code/LightZero/tb_go_b9_sp/ckpt_best.pth.tar'
+    model_path = '/Users/puyuan/code/LightZero/tb_go_b9_bot/go_b9-komi-7.5_alphazero_bot-mode_rand0_nb-5-nc-64_ns200_upc200_rbs1e6_seed0/ckpt_best.pth.tar'
     # model_path = None
     main_config.env.use_katago_bot = True
     seeds = [0]
     num_episodes_each_seed = 1
     # If True, you can play with the agent.
     main_config.env.agent_vs_human = False
+
     # main_config.env.agent_vs_human = True
     main_config.env.save_gif_replay = True
     main_config.env.render_in_ui = True
+    # main_config.env.render_in_ui = False
+    main_config.env.save_gif_path = '/Users/puyuan/code/LightZero/tb_go_b9_bot/'
+
 
     # main_config.env.save_gif_replay = False
     # main_config.env.render_in_ui = False

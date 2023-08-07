@@ -16,34 +16,34 @@ public:
             delete pair.second;
         }
     }
-
-    void remove_from_parent() {
-    if (parent != nullptr) {
-        parent->children.erase(std::find_if(parent->children.begin(), parent->children.end(),
-            [this](const std::pair<int, Node*>& pair) { return pair.second == this; }));
-    }
-    }
-    
-    void end_game(Node* root) {
-        // 假设你在游戏结束时不再需要树中的所有节点
-        delete_subtree(root);
-    }
-
-    void delete_subtree(Node* node) {
-        printf("position-ds-1 \n");
-
-        for (auto& pair : node->children) {
-            delete_subtree(pair.second);
-        }
-        printf("position-ds-2 \n");
-
-        node->remove_from_parent();
-        printf("position-ds-3 \n");
-
-        delete node;
-        printf("position-ds-4 \n");
-
-    }
+//
+//    void remove_from_parent() {
+//    if (parent != nullptr) {
+//        parent->children.erase(std::find_if(parent->children.begin(), parent->children.end(),
+//            [this](const std::pair<int, Node*>& pair) { return pair.second == this; }));
+//    }
+//    }
+//
+//    void end_game(Node* root) {
+//        // 假设你在游戏结束时不再需要树中的所有节点
+//        delete_subtree(root);
+//    }
+//
+//    void delete_subtree(Node* node) {
+//        printf("position-ds-1 \n");
+//
+//        for (auto& pair : node->children) {
+//            delete_subtree(pair.second);
+//        }
+//        printf("position-ds-2 \n");
+//
+//        node->remove_from_parent();
+//        printf("position-ds-3 \n");
+//
+//        delete node;
+//        printf("position-ds-4 \n");
+//
+//    }
 
 
     // node->remove_from_parent();

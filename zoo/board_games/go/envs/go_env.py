@@ -5,6 +5,7 @@ import sys
 from typing import List
 
 import gym
+import imageio
 import numpy as np
 import pygame
 from ding.envs import BaseEnv, BaseEnvTimestep
@@ -17,20 +18,8 @@ from pettingzoo.classic.go import coords, go_base
 from pettingzoo.classic.go.go import raw_env
 from pettingzoo.utils.agent_selector import agent_selector
 
-from zoo.board_games.go.envs.katago_policy import str_coord, GameState, str_coord, KatagoPolicy, parse_coord
-import imageio
-import time
-import signal
-import time
+from zoo.board_games.go.envs.katago_policy import GameState, str_coord, parse_coord
 
-
-# def timeout_handler(signum, frame):
-#     raise TimeoutError("Execution time too long")
-#
-#
-# # 设置超时
-# signal.signal(signal.SIGALRM, timeout_handler)
-# signal.alarm(50)  # 设置50秒的闹钟
 
 def get_image(path):
     from os import path as os_path
@@ -168,22 +157,23 @@ class GoEnv(BaseEnv):
 
     # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
     def reset(self, start_player_index=0, init_state=None, katago_policy_init=True, katago_game_state=None):
+        # TODO(pu): katago_game_state init
+        self.katago_game_state = GameState(self.board_size)
+
         if self.mcts_ctree and init_state is not None:
             # Convert byte string to np.ndarray
             init_state = np.frombuffer(init_state, dtype=np.int32)
         if katago_game_state is not None and self.mcts_ctree:
             # In the reset function, deserialize the string to an object
-            katago_game_state = pickle.loads(katago_game_state)
+            self.katago_game_state = pickle.loads(katago_game_state)
 
-        if katago_policy_init:
+        if self.save_gif_replay:
             # 使用函数生成基于当前时间的 GIF 文件名
             gif_filename = generate_gif_filename(prefix=f"go_bs{self.board_size}", )
             # print(gif_filename)
             self.save_gif_path = self.cfg.save_gif_path + gif_filename
             self.frames = []
 
-        # TODO(pu): katago_game_state init
-        self.katago_game_state = GameState(self.board_size)
 
         self.len_of_legal_actions_for_current_player = self.board_size * self.board_size + 1
         self.start_player_index = start_player_index
@@ -255,10 +245,19 @@ class GoEnv(BaseEnv):
 
         return obs
 
-    def reset_katago_game_state_v0(self, init_state):
-        # TODO(pu): have bug now
-        # NOTE: Represent a board as a numpy array < init_state>, with 0 empty, 1 is black, -1 is white.
+    def reset_katago_game_state_v1(self, katago_game_state):
         # ****** update katago internal game state ******
+        # TODO(pu)
+        self.katago_game_state = katago_game_state
+        # TODO(pu): clear the ko point
+        self.katago_game_state.board.simple_ko_point = None
+
+        # print(self.katago_game_state.board.board[:-1].reshape(self.board_size+2,self.board_size+1))
+
+    def reset_katago_game_state_v0(self, init_state):
+        # ****** update katago internal game state ******
+        # TODO(pu): have bug now, 这个实现只是更新了board.board，board类里面的其他变量没有更新，因此是逻辑不对的
+        # NOTE: Represent a board as a numpy array < init_state>, with 0 empty, 1 is black, -1 is white.
         self.katago_game_state_board = np.zeros(shape=(self.katago_game_state.board.arrsize), dtype=np.int8)
         # 将init_state转化为self.board的格式
         for i in range(self.board_size):
@@ -285,18 +284,15 @@ class GoEnv(BaseEnv):
 
         # print(self.katago_game_state.board.board[:-1].reshape(self.board_size+2,self.board_size+1))
 
-        # ****** update katago internal game state ******
 
-    def reset_katago_game_state_v1(self, katago_game_state):
-        # ****** update katago internal game state ******
-        # TODO(pu)
-        self.katago_game_state = katago_game_state
-        # TODO(pu): clear the ko point
-        self.katago_game_state.board.simple_ko_point = None
+    def _player_step(self, action, mode='eval_mode'):
+        if mode in ['eval_mode', 'self_play_mode']:
+            # TODO(pu): render
+            if self.save_gif_replay and not self.render_in_ui:
+                self.render_and_capture_frame(mode='only_save_gif')
+            if self.save_gif_replay and self.render_in_ui:
+                self.render_and_capture_frame(mode='save_gif_and_render_in_ui')
 
-        # print(self.katago_game_state.board.board[:-1].reshape(self.board_size+2,self.board_size+1))
-
-    def _player_step(self, action):
         if self.current_player == 1:
             agent_id = 'black_0'
         elif self.current_player == 2:
@@ -327,8 +323,8 @@ class GoEnv(BaseEnv):
             gtp_action = flatten_action_to_gtp_action(action, self.board_size)
             loc = parse_coord(gtp_action, self.katago_game_state.board)
             # print(self.katago_game_state.board.board[:-1].reshape(self.board_size+2,self.board_size+1))
-            # 禁用闹钟
-            # signal.alarm(0)
+
+            # signal.alarm(0) # 禁用闹钟
             # try:
             #     # 执行你的代码
             #     self.katago_game_state.board.play(pla, loc)
@@ -343,7 +339,7 @@ class GoEnv(BaseEnv):
 
             # ****** update katago internal game state ******
         except Exception as e:
-            print('update katago internal game state exception', e)
+            print('update katago internal game state exception: ', e)
 
         obs = self.observe(agent_id)
 
@@ -408,19 +404,15 @@ class GoEnv(BaseEnv):
         return BaseEnvTimestep(obs, self.rewards[current_agent], self.dones[current_agent], self.infos[current_agent])
 
     def step(self, action):
-        if self.save_gif_replay and not self.render_in_ui:
-            self.render_and_capture_frame(mode='only_save_gif')
-        if self.save_gif_replay and self.render_in_ui:
-            self.render_and_capture_frame(mode='render_in_ui')
-
         if self.battle_mode == 'self_play_mode':
             if np.random.rand() < self.prob_random_agent:
                 action = self.random_action()
-            timestep = self._player_step(action)
+            timestep = self._player_step(action, mode='self_play_mode')
             if timestep.done:
                 # The eval_episode_return is calculated from Player 1's perspective.
                 timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs[
                                                                                'to_play'] == 1 else timestep.reward
+                # TODO(pu): render
                 if self.save_gif_replay and len(self.frames) > 0:
                     # Save the frames as a GIF file
                     self.save_gif(self.save_gif_path)
@@ -430,20 +422,21 @@ class GoEnv(BaseEnv):
             # player 1 battle with expert player 2
 
             # player 1's turn
-            timestep_player1 = self._player_step(action)
+            timestep_player1 = self._player_step(action, mode='play_with_bot_mode')
             # print('player 1 (efficientzero player): ' + self.action_to_string(action))  # Note: visualize
             if timestep_player1.done:
                 # in play_with_bot_mode, we set to_play as None/-1, because we don't consider the alternation between players
                 timestep_player1.obs['to_play'] = -1
 
-                if self.save_gif_replay:
-                    # Save the frames as a GIF file
-                    self.save_gif(self.save_gif_path)
+                # TODO(pu): render
+                # if self.save_gif_replay:
+                #     # Save the frames as a GIF file
+                #     self.save_gif(self.save_gif_path)
 
             # player 2's turn
             bot_action = self.bot_action()
             # print('player 2 (expert player): ' + self.action_to_string(bot_action))  # Note: visualize
-            timestep_player2 = self._player_step(bot_action)
+            timestep_player2 = self._player_step(bot_action, mode='play_with_bot_mode')
             # self.render()  # Note: visualize
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
@@ -457,7 +450,6 @@ class GoEnv(BaseEnv):
 
         elif self.battle_mode == 'eval_mode':
             # player 1 battle with bot player 2
-
             # ==============================================================
             # player 1's turn
             # ==============================================================
@@ -467,7 +459,7 @@ class GoEnv(BaseEnv):
             # print('player 1:', str_coord(katago_flatten_action, self.katago_game_state.board))
             # self.update_katago_internal_game_state(katago_flatten_action, to_play=1)
 
-            timestep_player1 = self._player_step(action)
+            timestep_player1 = self._player_step(action, mode='eval_mode')
             # print(self.board)
             # self.show_katago_board()
 
@@ -483,7 +475,7 @@ class GoEnv(BaseEnv):
 
             if self.agent_vs_human:
                 print('player 1 (alphazero): ' + self.action_to_string(action))  # Note: visualize
-                self.render()
+                print(self.board)
 
             # ==============================================================
             # player 2's turn
@@ -508,7 +500,7 @@ class GoEnv(BaseEnv):
                 print('player 2 (katago):', str_coord(katago_flatten_action, self.katago_game_state.board))
                 # self.update_katago_internal_game_state(katago_flatten_action, to_play=2)
 
-            timestep_player2 = self._player_step(bot_action)
+            timestep_player2 = self._player_step(bot_action, mode='eval_mode')
             # print(self.board)
             # self.show_katago_board()
 
@@ -519,7 +511,7 @@ class GoEnv(BaseEnv):
 
             if self.agent_vs_human:
                 print('player 2 (human): ' + self.action_to_string(bot_action))  # Note: visualize
-                self.render()
+                print(self.board)
 
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
@@ -830,7 +822,7 @@ class GoEnv(BaseEnv):
         self.render(mode=mode)
         self.capture_frame()
 
-    def render(self, mode='render_in_ui'):
+    def render(self, mode='only_save_gif'):
         if not hasattr(self, "frames"):
             self.frames = []
 
@@ -845,11 +837,11 @@ class GoEnv(BaseEnv):
         if self.screen is None:
             if mode in ['only_save_gif', "rgb_array"]:
                 self.screen = pygame.Surface((screen_width, screen_height))
-            elif mode == "render_in_ui":
+            elif mode == "save_gif_and_render_in_ui":
                 pygame.init()
                 pygame.display.init()
                 self.screen = pygame.display.set_mode((screen_width, screen_height))
-        if mode in ["render_in_ui"]:
+        if mode in ["save_gif_and_render_in_ui"]:
             pygame.event.get()
 
         size = self.board_size

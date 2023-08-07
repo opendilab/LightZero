@@ -396,8 +396,8 @@ PYBIND11_MODULE(mcts_alphazero, m) {
         // .def("children", &Node::get_children)
         .def_readwrite("children", &Node::children)
         .def("add_child", &Node::add_child)
-        .def_readwrite("visit_count", &Node::visit_count)
-        .def("end_game", &Node::end_game, "A function to end the game");
+        .def_readwrite("visit_count", &Node::visit_count);
+//        .def("end_game", &Node::end_game, "A function to end the game");
 
 
     py::class_<MCTS>(m, "MCTS")
