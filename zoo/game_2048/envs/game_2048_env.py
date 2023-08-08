@@ -14,7 +14,8 @@ from easydict import EasyDict
 from gym import spaces
 from gym.utils import seeding
 from six import StringIO
-
+import matplotlib.pyplot as plt
+import imageio
 
 @ENV_REGISTRY.register('game_2048')
 class Game2048Env(gym.Env):
@@ -37,7 +38,7 @@ class Game2048Env(gym.Env):
         ignore_legal_actions=True,
         need_flatten=False,
     )
-    metadata = {'render.modes': ['human', 'ansi', 'rgb_array']}
+    metadata = {'render.modes': ['human', 'rgb_array_render']}
 
     @classmethod
     def default_config(cls: type) -> EasyDict:
@@ -59,8 +60,13 @@ class Game2048Env(gym.Env):
         self.reward_normalize = cfg.reward_normalize
         self.reward_norm_scale = cfg.reward_norm_scale
         assert self.reward_type in ['raw', 'merged_tiles_plus_log_max_tile_num']
-        assert self.reward_type=='raw' or (self.reward_type=='merged_tiles_plus_log_max_tile_num' and self.reward_normalize==False)
+        assert self.reward_type == 'raw' or (
+                    self.reward_type == 'merged_tiles_plus_log_max_tile_num' and self.reward_normalize == False)
         self.max_tile = cfg.max_tile
+        # Define the maximum tile that will end the game (e.g. 2048). None means no limit.
+        # This does not affect the state returned.
+        assert self.max_tile is None or isinstance(self.max_tile, int)
+
         self.max_episode_steps = cfg.max_episode_steps
         self.is_collect = cfg.is_collect
         self.ignore_legal_actions = cfg.ignore_legal_actions
@@ -76,17 +82,14 @@ class Game2048Env(gym.Env):
         # Members for gym implementation:
         self._action_space = spaces.Discrete(4)
         self._observation_space = spaces.Box(0, 1, (self.w, self.h, self.squares), dtype=int)
-
-        self.set_illegal_move_reward(0.)
-        self.set_max_tile(max_tile=self.max_tile)
-
         self._reward_range = (0., self.max_tile)
+        self.set_illegal_move_reward(0.)
 
         # for render
         self.grid_size = 70
-
         # Initialise the random seed of the gym environment.
         self.seed()
+        self.frames = []
 
     def reset(self):
         """Reset the game board-matrix and add 2 tiles."""
@@ -192,7 +195,7 @@ class Game2048Env(gym.Env):
             reward = to_ndarray([reward_merged_tiles_plus_log_max_tile_num]).astype(np.float32)
         elif self.reward_type == 'raw':
             reward = to_ndarray([reward]).astype(np.float32)
-        info = {"raw_reward": raw_reward, "max_tile": self.highest(), 'highest': self.highest()}
+        info = {"raw_reward": raw_reward, "current_max_tile_num": self.highest()}
 
         if done:
             info['eval_episode_return'] = self._final_eval_reward
@@ -233,25 +236,28 @@ class Game2048Env(gym.Env):
         if dir_mod_two == 0:
             # Up or down, split into columns
             for y in range(self.h):
-                old = [self.get(x, y) for x in rx]
+                old = [self.board[x, y] for x in rx]
                 (new, ms) = self.shift(old, shift_direction)
                 move_reward += ms
                 if old != new:
                     changed = True
                     if not trial:
                         for x in rx:
-                            self.set(x, y, new[x])
+                            self.board[x, y] = new[x]
+
         else:
             # Left or right, split into rows
             for x in range(self.w):
-                old = [self.get(x, y) for y in ry]
+                old = [self.board[x, y] for y in ry]
                 (new, ms) = self.shift(old, shift_direction)
                 move_reward += ms
                 if old != new:
                     changed = True
                     if not trial:
                         for y in ry:
-                            self.set(x, y, new[y])
+                            self.board[x, y] = new[y]
+
+        # TODO(pu): different transition dynamics
         # if not changed:
         #     raise IllegalMove
 
@@ -266,33 +272,9 @@ class Game2048Env(gym.Env):
         self.illegal_move_reward = reward
         self.reward_range = (self.illegal_move_reward, float(2 ** self.squares))
 
-    def set_max_tile(self, max_tile: int = 2048):
-        """
-        Define the maximum tile that will end the game (e.g. 2048). None means no limit.
-           This does not affect the state returned.
-        """
-        assert max_tile is None or isinstance(max_tile, int)
-        self.max_tile = max_tile
-
     def render(self, mode='human'):
-        if mode == 'rgb_array':
-            black = (0, 0, 0)
+        if mode == 'rgb_array_render':
             grey = (128, 128, 128)
-            white = (255, 255, 255)
-            tile_colour_map = {
-                2: (255, 0, 0),
-                4: (224, 32, 0),
-                8: (192, 64, 0),
-                16: (160, 96, 0),
-                32: (128, 128, 0),
-                64: (96, 160, 0),
-                128: (64, 192, 0),
-                256: (32, 224, 0),
-                512: (0, 255, 0),
-                1024: (0, 224, 32),
-                2048: (0, 192, 64),
-                4096: (0, 160, 96),
-            }
             grid_size = self.grid_size
 
             # Render with Pillow
@@ -303,26 +285,59 @@ class Game2048Env(gym.Env):
 
             for y in range(4):
                 for x in range(4):
-                    o = self.get(y, x)
+                    o = self.board[y, x]
                     if o:
-                        draw.rectangle([x * grid_size, y * grid_size, (x + 1) * grid_size, (y + 1) * grid_size],
-                                       tile_colour_map[o])
-                        (text_x_size, text_y_size) = draw.textsize(str(o), font=fnt)
-                        draw.text((x * grid_size + (grid_size - text_x_size) // 2,
-                                   y * grid_size + (grid_size - text_y_size) // 2), str(o), font=fnt, fill=white)
-                        assert text_x_size < grid_size
-                        assert text_y_size < grid_size
+                        self.draw_tile(draw, x, y, o, fnt)
 
-            return np.asarray(pil_board).swapaxes(0, 1)
+            # Instead of returning the image, we display it using pyplot
+            plt.imshow(np.asarray(pil_board))
+            plt.draw()
+            # plt.pause(0.001)
+            # Append the frame to frames for gif
+            self.frames.append(np.asarray(pil_board))
+        elif mode == 'human':
+            s = 'Current Return: {}, '.format(self.episode_return)
+            s += 'Current Highest Tile number: {}\n'.format(self.highest())
+            npa = np.array(self.board)
+            grid = npa.reshape((self.size, self.size))
+            s += "{}\n".format(grid)
+            sys.stdout.write(s)
+            return sys.stdout
 
-        outfile = StringIO() if mode == 'ansi' else sys.stdout
-        s = 'Current Return: {}, '.format(self.episode_return)
-        s += 'Highest Tile: {}\n'.format(self.highest())
-        npa = np.array(self.board)
-        grid = npa.reshape((self.size, self.size))
-        s += "{}\n".format(grid)
-        outfile.write(s)
-        return outfile
+    def draw_tile(self, draw, x, y, o, fnt):
+        grid_size = self.grid_size
+        white = (255, 255, 255)
+        tile_colour_map = {
+            0: (204, 192, 179),
+            2: (238, 228, 218),
+            4: (237, 224, 200),
+            8: (242, 177, 121),
+            16: (245, 149, 99),
+            32: (246, 124, 95),
+            64: (246, 94, 59),
+            128: (237, 207, 114),
+            256: (237, 204, 97),
+            512: (237, 200, 80),
+            1024: (237, 197, 63),
+            2048: (237, 194, 46),
+            4096: (237, 194, 46),
+            8192: (237, 194, 46),
+            16384:(237, 194, 46),
+        }
+        if o:
+            draw.rectangle([x * grid_size, y * grid_size, (x + 1) * grid_size, (y + 1) * grid_size],
+                           tile_colour_map[o])
+            bbox = draw.textbbox((x, y), str(o), font=fnt)
+            text_x_size, text_y_size = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            draw.text((x * grid_size + (grid_size - text_x_size) // 2,
+                       y * grid_size + (grid_size - text_y_size) // 2), str(o), font=fnt, fill=white)
+            assert text_x_size < grid_size
+            assert text_y_size < grid_size
+
+    def save_render_gif(self, gif_name_suffix: str = ''):
+        # At the end of the episode, save the frames as a gif
+        imageio.mimsave(f'game_2048_{gif_name_suffix}.gif', self.frames)
+        self.frames = []
 
     # Implementation of game logic for 2048
     def add_random_2_4_tile(self):
@@ -331,7 +346,6 @@ class Game2048Env(gym.Env):
         tile_probabilities = np.array([0.9, 0.1])
         tile_val = self.np_random.choice(possible_tiles, 1, p=tile_probabilities)[0]
         empty_location = self.get_empty_location()
-        # assert empty_location.shape[0]
         if empty_location.shape[0] == 0:
             self.should_done = True
             return
@@ -339,6 +353,7 @@ class Game2048Env(gym.Env):
         empty = empty_location[empty_idx]
         logging.debug("Adding %s at %s", tile_val, (empty[0], empty[1]))
 
+        # set the chance outcome
         if self.chance_space_size == 16:
             self.chance = 4 * empty[0] + empty[1]
         elif self.chance_space_size == 32:
@@ -347,15 +362,7 @@ class Game2048Env(gym.Env):
             elif tile_val == 4:
                 self.chance = 16 + 4 * empty[0] + empty[1]
 
-        self.set(empty[0], empty[1], tile_val)
-
-    def get(self, x, y):
-        """Get the value of one square."""
-        return self.board[x, y]
-
-    def set(self, x, y, val):
-        """Set the value of one square."""
-        self.board[x, y] = val
+        self.board[empty[0], empty[1]] = tile_val
 
     def get_empty_location(self):
         """Return a 2d numpy array with the location of empty squares."""
@@ -364,7 +371,6 @@ class Game2048Env(gym.Env):
     def highest(self):
         """Report the highest tile on the board."""
         return np.max(self.board)
-
 
     @property
     def legal_actions(self):
@@ -394,7 +400,7 @@ class Game2048Env(gym.Env):
             if dir_mod_two == 0:
                 # Up or down, split into columns
                 for y in range(self.h):
-                    old = [self.get(x, y) for x in rx]
+                    old = [self.board[x, y] for x in rx]
                     (new, move_reward_tmp) = self.shift(old, shift_direction)
                     move_reward += move_reward_tmp
                     if old != new:
@@ -402,7 +408,7 @@ class Game2048Env(gym.Env):
             else:
                 # Left or right, split into rows
                 for x in range(self.w):
-                    old = [self.get(x, y) for y in ry]
+                    old = [self.board[x, y] for y in ry]
                     (new, move_reward_tmp) = self.shift(old, shift_direction)
                     move_reward += move_reward_tmp
                     if old != new:
@@ -414,8 +420,11 @@ class Game2048Env(gym.Env):
         return legal_actions
 
     def combine(self, shifted_row):
-        """Combine same tiles when moving to one side. This function always
-           shifts towards the left. Also count the reward of combined tiles."""
+        """
+        Overview:
+            Combine same tiles when moving to one side. This function always
+            shifts towards the left. Also count the reward of combined tiles.
+        """
         move_reward = 0
         combined_row = [0] * self.size
         skip = False
@@ -528,21 +537,6 @@ class Game2048Env(gym.Env):
         return "LightZero 2048 Env."
 
 
-def pairwise(iterable):
-    """s -> (s0,s1), (s1,s2), (s2, s3), ..."""
-    a, b = itertools.tee(iterable)
-    next(b, None)
-    return zip(a, b)
-
-
-class IllegalMove(Exception):
-    pass
-
-
-class IllegalActionError(Exception):
-    pass
-
-
 def encode_board(flat_board, num_of_template_tiles=16):
     """
     Overview:
@@ -570,3 +564,18 @@ def encode_board(flat_board, num_of_template_tiles=16):
     one_hot_board = (layered_board == tile_values).astype(int)
 
     return one_hot_board
+
+
+def pairwise(iterable):
+    """s -> (s0,s1), (s1,s2), (s2, s3), ..."""
+    a, b = itertools.tee(iterable)
+    next(b, None)
+    return zip(a, b)
+
+
+class IllegalMove(Exception):
+    pass
+
+
+class IllegalActionError(Exception):
+    pass

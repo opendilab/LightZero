@@ -48,8 +48,8 @@ class StochasticMuZeroModel(nn.Module):
     ):
         """
         Overview:
-            The definition of the neural network model used in MuZero.
-            MuZero model which consists of a representation network, a dynamics network and a prediction network.
+            The definition of the neural network model used in Stochastic MuZero.
+            Stochastic MuZero model which consists of a representation network, a dynamics network and a prediction network.
             The networks are build on convolution residual blocks and fully connected layers.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96] for Atari.
@@ -70,7 +70,7 @@ class StochasticMuZeroModel(nn.Module):
             - pred_hid (:obj:`int`): The size of prediction hidden layer.
             - pred_out (:obj:`int`): The size of prediction output layer.
             - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \
-                in MuZero model, default set it to False.
+                in Stochastic MuZero model, default set it to False.
             - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical \
                 distribution for value and reward.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
@@ -203,7 +203,7 @@ class StochasticMuZeroModel(nn.Module):
     def initial_inference(self, obs: torch.Tensor) -> MZNetworkOutput:
         """
         Overview:
-            Initial inference of MuZero model, which is the first step of the MuZero model.
+            Initial inference of Stochastic MuZero model, which is the first step of the Stochastic MuZero model.
             To perform the initial inference, we first use the representation network to obtain the ``latent_state``.
             Then we use the prediction network to predict ``value`` and ``policy_logits`` of the ``latent_state``.
         Arguments:
@@ -236,7 +236,7 @@ class StochasticMuZeroModel(nn.Module):
                             afterstate: bool = False) -> MZNetworkOutput:
         """
         Overview:
-            Recurrent inference of MuZero model, which is the rollout step of the MuZero model.
+            Recurrent inference of Stochastic MuZero model, which is the rollout step of the Stochastic MuZero model.
             To perform the recurrent inference, we first use the dynamics network to predict ``next_latent_state``,
             ``reward``, by the given current ``latent_state`` and ``action``.
             We then use the prediction network to predict the ``value`` and ``policy_logits`` of the current
@@ -441,7 +441,7 @@ class StochasticMuZeroModel(nn.Module):
         """
         Overview:
             Project the latent state to a lower dimension to calculate the self-supervised loss, which is involved in
-            MuZero algorithm in EfficientZero.
+            in EfficientZero.
             For more details, please refer to paper ``Exploring Simple Siamese Representation Learning``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
@@ -495,7 +495,7 @@ class DynamicsNetwork(nn.Module):
     ):
         """
         Overview:
-            The definition of dynamics network in MuZero algorithm, which is used to predict next latent state and
+            The definition of dynamics network in Stochastic MuZero algorithm, which is used to predict next latent state and
             reward given current latent state and action.
         Arguments:
             - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
@@ -596,8 +596,7 @@ class AfterstateDynamicsNetwork(nn.Module):
     ):
         """
         Overview:
-            The definition of dynamics network in MuZero algorithm, which is used to predict next latent state and
-            reward given current latent state and action.
+            The definition of afterstate dynamics network in Stochastic MuZero algorithm, which is used to predict next afterstate given current latent state and action.
         Arguments:
             - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
             - num_channels (:obj:`int`): The channels of input, including obs and action encoding.
@@ -650,21 +649,21 @@ class AfterstateDynamicsNetwork(nn.Module):
                     height, width).
             - reward (:obj:`torch.Tensor`): The predicted reward, with shape (batch_size, output_support_size).
          """
-        # take the state encoding (latent_state),  state_action_encoding[:, -1, :, :] is action encoding
-        latent_state = state_action_encoding[:, :-1, :, :]
+        # take the state encoding (afterstate),  state_action_encoding[:, -1, :, :] is action encoding
+        afterstate = state_action_encoding[:, :-1, :, :]
         x = self.conv(state_action_encoding)
         x = self.bn(x)
 
         # the residual link: add state encoding to the state_action encoding
-        x += latent_state
+        x += afterstate
         x = self.activation(x)
 
         for block in self.resblocks:
             x = block(x)
-        afterstate_latent_state = x
+        afterstate = x
         # reward = None 
 
-        x = self.conv1x1_reward(afterstate_latent_state)
+        x = self.conv1x1_reward(afterstate)
         x = self.bn_reward(x)
         x = self.activation(x)
         x = x.view(-1, self.flatten_output_size_for_reward_head)
@@ -672,7 +671,7 @@ class AfterstateDynamicsNetwork(nn.Module):
         # use the fully connected layer to predict reward
         reward = self.fc_reward_head(x)
 
-        return afterstate_latent_state, reward
+        return afterstate, reward
 
     def get_dynamic_mean(self) -> float:
         return get_dynamic_mean(self)
@@ -699,8 +698,8 @@ class AfterstatePredictionNetwork(nn.Module):
     ) -> None:
         """
         Overview:
-            The definition of policy and value prediction network, which is used to predict value and policy by the
-            given latent state.
+            The definition of afterstate policy and value prediction network, which is used to predict value and policy by the
+            given afterstate.
         Arguments:
             - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
             - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
@@ -758,33 +757,33 @@ class AfterstatePredictionNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
-    def forward(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, afterstate: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
             Forward computation of the prediction network.
         Arguments:
-            - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, latent_state_dim).
+            - afterstate (:obj:`torch.Tensor`): input tensor with shape (B, afterstate_dim).
         Returns:
-            - policy (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).
-            - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
+            - afterstate_policy_logits (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).
+            - afterstate_value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
         """
         for res_block in self.resblocks:
-            latent_state = res_block(latent_state)
+            afterstate = res_block(afterstate)
 
-        value = self.conv1x1_value(latent_state)
+        value = self.conv1x1_value(afterstate)
         value = self.bn_value(value)
         value = self.activation(value)
 
-        policy = self.conv1x1_policy(latent_state)
+        policy = self.conv1x1_policy(afterstate)
         policy = self.bn_policy(policy)
         policy = self.activation(policy)
 
         value = value.reshape(-1, self.flatten_output_size_for_value_head)
         policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
 
-        value = self.fc_value(value)
-        policy = self.fc_policy(policy)
-        return policy, value
+        afterstate_value = self.fc_value(value)
+        afterstate_policy_logits = self.fc_policy(policy)
+        return afterstate_policy_logits, afterstate_value
 
 
 class ChanceEncoderBackbone(nn.Module):

@@ -372,14 +372,14 @@ class StochasticMuZeroPolicy(Policy):
         # the core recurrent_inference in MuZero policy.
         # ==============================================================
         for step_i in range(self._cfg.num_unroll_steps):
-            # unroll with the afterstate dynamic function: predict 'after_state',
+            # unroll with the afterstate dynamic function: predict 'afterstate',
             # given current ``state`` and ``action``.
             # 'afterstate reward' is not used, we kept it for the sake of uniformity between decision nodes and chance nodes.
-            # And then predict afterstate policy_logits and afterstate value with the afterstate prediction function.
+            # And then predict afterstate_policy_logits and afterstate_value with the afterstate prediction function.
             network_output = self._learn_model.recurrent_inference(
                 latent_state, action_batch[:, step_i], afterstate=False
             )
-            after_state, afterstate_reward, afterstate_value, afterstate_policy_logits = mz_network_output_unpack(network_output)
+            afterstate, afterstate_reward, afterstate_value, afterstate_policy_logits = mz_network_output_unpack(network_output)
             
             # concat consecutive frames to predict chance
             former_frame = obs_list_for_chance_encoder[step_i]
@@ -394,9 +394,9 @@ class StochasticMuZeroPolicy(Policy):
                 chance_code = torch.argmax(chance_encoding, dim=1).long().unsqueeze(-1)
             
             # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
-            # given current ``after_state`` and ``chance_long``.
+            # given current ``afterstate`` and ``chance_code``.
             # And then predict policy_logits and value with the prediction function.
-            network_output = self._learn_model.recurrent_inference(after_state, chance_code, afterstate=True)
+            network_output = self._learn_model.recurrent_inference(afterstate, chance_code, afterstate=True)
 
             latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
@@ -762,8 +762,8 @@ class StochasticMuZeroPolicy(Policy):
             'value_loss',
             'consistency_loss',
             'afterstate_policy_loss',
-            'commitment_loss',
             'afterstate_value_loss',
+            'commitment_loss',
             'value_priority',
             'target_reward',
             'target_value',

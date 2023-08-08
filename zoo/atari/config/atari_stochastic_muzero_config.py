@@ -25,7 +25,7 @@ update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
-chance_space_size = 2
+chance_space_size = 4
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -61,9 +61,9 @@ atari_stochastic_muzero_config = dict(
         use_augmentation=True,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,
+        optim_type='Adam',
+        lr_piecewise_constant_decay=False,
+        learning_rate=3e-3,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         ssl_loss_weight=2,  # default is 0

@@ -1,26 +1,33 @@
-import numpy as np
-from zoo.game_2048.envs.game_2048_env import Game2048Env, IllegalMove
-import pytest
-from easydict import EasyDict
-
-from typing import Tuple, Union
-from rich import print
 from functools import lru_cache
-import time
+from typing import Tuple, Union
+
 import numpy as np
+from easydict import EasyDict
+from rich import print
+
+from zoo.game_2048.envs.game_2048_env import Game2048Env
 
 
+# Define rule-based search function
 def rule_based_search(grid: np.array, fast_search: bool = True) -> int:
+    """
+    Overview:
+        Use Expectimax search algorithm to find the best action.
+        Adapted from https://github.com/xwjdsh/2048-ai/blob/master/ai/ai.go.
+    """
+    # please refer to https://codemyroad.wordpress.com/2014/05/14/2048-ai-the-intelligent-bot/
     model1 = np.array([[16, 15, 14, 13], [9, 10, 11, 12], [8, 7, 6, 5], [1, 2, 2, 4]])
     model2 = np.array([[16, 15, 12, 4], [14, 13, 11, 3], [10, 9, 8, 2], [7, 6, 5, 1]])
     model3 = np.array([[16, 15, 14, 4], [13, 12, 11, 3], [10, 9, 8, 2], [7, 6, 5, 1]])
 
+    # Use lru_cache decorator for caching, speeding up subsequent look-ups
     @lru_cache(maxsize=512)
     def get_model_score(value, i, j):
         result = np.zeros(3 * 8)
         for k, m in enumerate([model1, model2, model3]):
             start = k * 8
             result[start] += m[i, j] * value
+            # Scores of other 7 directions of the model
             result[start + 1] += m[i, 3 - j] * value
             result[start + 2] += m[j, i] * value
             result[start + 3] += m[3 - j, i] * value
@@ -31,26 +38,18 @@ def rule_based_search(grid: np.array, fast_search: bool = True) -> int:
         return result
 
     def get_score(grid: np.array) -> float:
+        # Calculate the score of the current layout
         result = np.zeros(3 * 8)
         for i in range(4):
             for j in range(4):
                 if grid[i, j] != 0:
                     result += get_model_score(grid[i, j], i, j)
-                    # for k, m in enumerate([model1, model2, model3]):
-                    #     start = k * 8
-                    #     value = grid[i, j]  # whether use log2 here
-                    #     result[start] += m[i, j] * value
-                    #     result[start + 1] += m[i, 3 - j] * value
-                    #     result[start + 2] += m[j, i] * value
-                    #     result[start + 3] += m[3 - j, i] * value
-                    #     result[start + 4] += m[3 - i, 3 - j] * value
-                    #     result[start + 5] += m[3 - i, j] * value
-                    #     result[start + 6] += m[j, 3 - i] * value
-                    #     result[start + 7] += m[3 - j, 3 - i] * value
 
         return result.max()
 
     def expectation_search(grid: np.array, depth: int, chance_node: bool) -> Tuple[float, Union[int, None]]:
+        # Use Expectimax search algorithm to find the best action
+        # please refer to https://courses.cs.washington.edu/courses/cse473/11au/slides/cse473au11-adversarial-search.pdf
         if depth == 0:
             return get_score(grid), None
         if chance_node:
@@ -83,7 +82,7 @@ def rule_based_search(grid: np.array, fast_search: bool = True) -> int:
                         best_action = dire
             return best_score, best_action
 
-    # depth selection
+    #  Select search depth based on the current maximum tile value
     grid_max = grid.max()
     if grid_max >= 2048:
         depth = 6
@@ -91,11 +90,12 @@ def rule_based_search(grid: np.array, fast_search: bool = True) -> int:
         depth = 5
     else:
         depth = 4
-    # rule_based_search
+    # Call the expectation search algorithm and return the best action
     _, best_action = expectation_search(grid, depth, False)
     return best_action
 
 
+# Define move function, implement move operation in 2048 game
 def move(grid: np.array, action: int, game_score: int = 0) -> Tuple[np.array, bool, int]:
     # execute action in 2048 game
     # 0, 1, 2, 3 mean top, right, bottom, left
@@ -139,9 +139,8 @@ def move(grid: np.array, action: int, game_score: int = 0) -> Tuple[np.array, bo
     return grid, move_flag, game_score
 
 
+# # Define generate function, randomly generate 2 or 4 in an empty location
 def generate(grid: np.array) -> np.array:
-    # random generate a new number in empty location
-    # 2 or 4
     number = np.random.choice([2, 4], p=[0.9, 0.1])
     # get empty location
     empty = np.where(grid == 0)
@@ -152,9 +151,9 @@ def generate(grid: np.array) -> np.array:
     # return new grid
     return grid
 
-
+# Define game configuration
 config = EasyDict(dict(
-    env_name="game_2048_env_2048",
+    env_name="game_2048",
     save_replay_gif=False,
     replay_path_gif=None,
     replay_path=None,
@@ -162,8 +161,7 @@ config = EasyDict(dict(
     channel_last=True,
     obs_type='array',
     raw_reward_type='raw',  # 'merged_tiles_plus_log_max_tile_num'
-    # reward_type='merged_tiles_plus_log_max_tile_num',
-    # reward_normalize=True,
+    reward_type='raw',  # 'merged_tiles_plus_log_max_tile_num'
     reward_normalize=False,
     reward_norm_scale=100,
     max_tile=int(2 ** 16),
@@ -182,20 +180,27 @@ if __name__ == "__main__":
     game_2048_env.render()
     step = 0
     while True:
-        # action = env.human_to_action()
         print('=' * 20)
         grid = obs.astype(np.int64)
+        # action = game_2048_env.human_to_action()
         action = game_2048_env.random_action()
-        action = rule_based_search(grid)
+        # action = rule_based_search(grid)
         if action == 1:
             action = 2
         elif action == 2:
             action = 1
-        obs, reward, done, info = game_2048_env.step(action)
+        try:
+            obs, reward, done, info = game_2048_env.step(action)
+        except Exception as e:
+            print(f'Exception: {e}')
+            print('total_step_number: {}'.format(step))
+            game_2048_env.save_render_gif(gif_name_suffix='bot')
+            break
         step += 1
         print(f"step: {step}, action: {action}, reward: {reward}, raw_reward: {info['raw_reward']}")
-        game_2048_env.render()
-
+        game_2048_env.render(mode='human')
+        game_2048_env.render(mode='rgb_array_render')
         if done:
             print('total_step_number: {}'.format(step))
+            game_2048_env.save_render_gif(gif_name_suffix='bot')
             break
