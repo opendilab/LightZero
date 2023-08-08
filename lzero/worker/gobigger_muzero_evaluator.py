@@ -18,41 +18,6 @@ from collections import namedtuple, deque
 
 
 class GoBiggerMuZeroEvaluator(MuZeroEvaluator):
-    """
-    Overview:
-        The Evaluator for GoBigger MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
-    Interfaces:
-        __init__, reset, reset_policy, reset_env, close, should_eval, eval
-    Property:
-        env, policy
-    """
-    def __init__(
-            self,
-            eval_freq: int = 1000,
-            n_evaluator_episode: int = 3,
-            stop_value: int = 1e6,
-            env: BaseEnvManager = None,
-            policy: namedtuple = None,
-            tb_logger: 'SummaryWriter' = None,  # noqa
-            exp_name: Optional[str] = 'default_experiment',
-            instance_name: Optional[str] = 'evaluator',
-            policy_config: 'policy_config' = None,  # noqa
-    ) -> None:
-        """
-        Overview:
-            Init method. Load config and use ``self._cfg`` setting to build common serial evaluator components,
-            e.g. logger helper, timer.
-        Arguments:
-            - eval_freq (:obj:`int`): evaluation frequency in terms of training steps.
-            - n_evaluator_episode (:obj:`int`): the number of episodes to eval in total.
-            - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
-            - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
-            - tb_logger (:obj:`SummaryWriter`): tensorboard handle
-            - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
-            - instance_name (:obj:`Optional[str]`): Name of this instance.
-            - policy_config: Config of game.
-        """
-        super().__init__(eval_freq, n_evaluator_episode, stop_value, env, policy, tb_logger, exp_name, instance_name, policy_config)
     
     def _add_info(self, last_timestep, info):
         # add eat info
@@ -92,7 +57,9 @@ class GoBiggerMuZeroEvaluator(MuZeroEvaluator):
         self._policy.reset()
 
         # specifically for vs bot
-        self._bot_policy = GoBiggerBot(env_nums, agent_id=[2, 3])  #TODO only support t2p2
+        agent_num = self.policy_config['model']['agent_num']
+        team_num = self.policy_config['model']['team_num']
+        self._bot_policy = GoBiggerBot(env_nums, agent_id=[i for i in range(agent_num//team_num, agent_num)])  #TODO only support t2p2
         self._bot_policy.reset()
 
         # initializations
@@ -112,7 +79,6 @@ class GoBiggerMuZeroEvaluator(MuZeroEvaluator):
             init_obs = self._env.ready_obs
 
         # specifically for vs bot
-        agent_num = len(init_obs[0]['action_mask']) // 2  #TODO only support t2p2
         for i in range(env_nums):
             for k, v in init_obs[i].items():
                 if k != 'raw_obs':

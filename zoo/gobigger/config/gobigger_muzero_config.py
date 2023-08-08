@@ -17,6 +17,9 @@ reanalyze_ratio = 0.
 action_space_size = 27
 direction_num = 12
 eps_greedy_exploration_in_collect = True
+player_num_per_team = 2
+team_num = 2  
+agent_num = player_num_per_team*team_num  # default is GoBigger T2P2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -24,7 +27,9 @@ eps_greedy_exploration_in_collect = True
 gobigger_muzero_config = dict(
     exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
     env=dict(
-        env_name=env_name, # default is 'GoBigger T2P2'
+        env_name=env_name,
+        player_num_per_team=player_num_per_team,
+        team_num=team_num,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -36,7 +41,8 @@ gobigger_muzero_config = dict(
         model=dict(
             model_type='structure',
             env_name=env_name,
-            agent_num=4, # default is t2p2
+            agent_num=agent_num,
+            team_num=team_num,
             latent_state_dim=176,
             frame_stack_num=1,
             action_space_size=action_space_size,
