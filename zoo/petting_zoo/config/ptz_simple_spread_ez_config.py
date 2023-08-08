@@ -46,7 +46,7 @@ main_config = dict(
         model=dict(
             model_type='structure',
             env_name=env_name,
-            latent_state_dim=18,
+            latent_state_dim=256,
             frame_stack_num=1,
             action_space='discrete',
             action_space_size=action_space_size,
@@ -55,6 +55,8 @@ main_config = dict(
             global_obs_shape=2 + 2 + n_landmark * 2 + (n_agent - 1) * 2 + (n_agent - 1) * 2 + n_agent * (2 + 2) +
             n_landmark * 2 + n_agent * (n_agent - 1) * 2,
             discrete_action_encoding_type='one_hot',
+            global_cooperation=True, # TODO: doesn't work now
+            hidden_size_list=[256, 256],
             norm_type='BN',
         ),
         cuda=True,
