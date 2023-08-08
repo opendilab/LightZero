@@ -1,5 +1,10 @@
 """
-The Node and MCTS class for AlphaZero.
+Overview:
+    The introduction of neural networks in MCTS has brought about some changes. 
+    During the expansion of nodes, it is no longer necessary to explore every single child node, but instead, 
+    the child nodes are directly selected based on the prior probabilities provided by the neural network. 
+    This reduces the breadth of the search. When estimating the value of leaf nodes, there is no need for a rollout; 
+    instead, the value output by the neural network is used, which saves the depth of the search.
 """
 
 import copy
@@ -254,9 +259,9 @@ class MCTS(object):
             # print(node.children.keys())
             # Traverse the tree until the leaf node.
             action, node = self._select_child(node, simulate_env)
-            if action is None:
-                breakpoint()
-                break
+            # if action is None:
+            #     breakpoint()
+            #     break
             # print('legal_action={}'.format(simulate_env.legal_actions))
             # print('action={}'.format(action))
             simulate_env.step(action)
@@ -282,7 +287,8 @@ class MCTS(object):
                 else:
                     # To maintain consistency with the perspective of the neural network, the value of a terminal node is also calculated from the perspective of the current_player of the terminal node, 
                     # which is convenient for subsequent updates.
-                    leaf_value = 1 if simulate_env.current_player == winner else -1
+                    # leaf_value = 1 if simulate_env.current_player == winner else -1
+                    leaf_value = -1
 
             if simulate_env.mcts_mode == 'play_with_bot_mode':
                 # in ``play_with_bot_mode``, the leaf_value should be transformed to the perspective of player 1.
@@ -322,14 +328,19 @@ class MCTS(object):
         best_score = -9999999
         for action_tmp, child_tmp in node.children.items():
             # print(a, simulate_env.legal_actions)
-            if action_tmp in simulate_env.legal_actions:
-                score = self._ucb_score(node, child_tmp)
-                if score > best_score:
-                    best_score = score
-                    action = action_tmp
-                    child = child_tmp
-        if child is None:
-            child = node  # child==None, node is leaf node in play_with_bot_mode.
+            # if action_tmp in simulate_env.legal_actions:
+            #     score = self._ucb_score(node, child_tmp)
+            #     if score > best_score:
+            #         best_score = score
+            #         action = action_tmp
+            #         child = child_tmp
+            score = self._ucb_score(node, child_tmp)
+            if score > best_score:
+                best_score = score
+                action = action_tmp
+                child = child_tmp
+        # if child is None:
+        #     child = node  # child==None, node is leaf node in play_with_bot_mode.
 
         return action, child
 
@@ -359,6 +370,13 @@ class MCTS(object):
         """
         Overview:
             Compute UCB score. The score for a node is based on its value, plus an exploration bonus based on the prior.
+            UCB = Q(s,a) + P(s,a) \cdot \frac{N(\text{parent})}{1+N(\text{child})} \cdot \left(c_1 + \log\left(\frac{N(\text{parent})+c_2+1}{c_2}\right)\right)
+            - Q(s,a): value of a child node.
+            - P(s,a): The prior of a child node.
+            - N(parent): The number of the visiting of the parent node.
+            - N(child): The number of the visiting of the child node.
+            - c_1: a parameter given by self._pb_c_init to control the influence of the prior P(s,a) relative to the value Q(s,a).
+            - c_2: a parameter given by self._pb_c_base to control the influence of the prior P(s,a) relative to the value Q(s,a).
         Arguments:
             - parent (:obj:`Class Node`): Current node.
             - child (:obj:`Class Node`): Current node's child.
@@ -366,7 +384,6 @@ class MCTS(object):
             - score (:obj:`Bool`): The UCB score.
         """
         # Compute the value of parameter pb_c using the formula of the UCB algorithm.
-        # 这边的pb_c的base和init怎么来的没看明白！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！
         pb_c = math.log((parent.visit_count + self._pb_c_base + 1) / self._pb_c_base) + self._pb_c_init
         pb_c *= math.sqrt(parent.visit_count) / (child.visit_count + 1)
 
