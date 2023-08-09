@@ -151,11 +151,13 @@ def generate(grid: np.array) -> np.array:
     # return new grid
     return grid
 
+
 # Define game configuration
 config = EasyDict(dict(
     env_name="game_2048",
-    save_replay_gif=False,
-    replay_path_gif=None,
+    save_replay=False,
+    replay_format='mp4',
+    replay_name_suffix='ns100_s1',
     replay_path=None,
     act_scale=True,
     channel_last=True,
@@ -194,13 +196,11 @@ if __name__ == "__main__":
         except Exception as e:
             print(f'Exception: {e}')
             print('total_step_number: {}'.format(step))
-            game_2048_env.save_render_gif(gif_name_suffix='bot')
+            game_2048_env.save_render_gif(replay_name_suffix='bot')
             break
         step += 1
         print(f"step: {step}, action: {action}, reward: {reward}, raw_reward: {info['raw_reward']}")
         game_2048_env.render(mode='human')
-        game_2048_env.render(mode='rgb_array_render')
         if done:
             print('total_step_number: {}'.format(step))
-            game_2048_env.save_render_gif(gif_name_suffix='bot')
             break

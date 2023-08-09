@@ -21,9 +21,11 @@ if __name__ == "__main__":
     create_config.env_manager.type = 'base'  # Visualization requires the 'type' to be set as base
     main_config.env.evaluator_env_num = 1   # Visualization requires the 'env_num' to be set as 1
     main_config.env.n_evaluator_episode = total_test_episodes
-    main_config.env.save_replay_gif = True  # Whether to save the gif replay, if save the video render_mode_human must to be True
-    main_config.env.replay_path_gif = './'
-    main_config.env.eval_max_episode_steps = int(1e6)  # Adjust according to different environments
+    main_config.env.save_replay = True  # Whether to save the replay, if save the video render_mode_human must to be True
+    main_config.env.replay_format = 'mp4'
+    main_config.env.replay_name_suffix = 'ns100_s1'
+    main_config.env.replay_path = None
+    main_config.env.max_episode_steps = int(1e9)  # Adjust according to different environments
 
     for seed in seeds:
         returns_mean, returns = eval_muzero(

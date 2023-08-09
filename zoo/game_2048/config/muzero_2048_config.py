@@ -11,7 +11,9 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 200
+# update_per_collect = 200
+update_per_collect = 50
+
 batch_size = 512
 # max_env_step = int(5e6)
 max_env_step = int(1e6)
@@ -30,7 +32,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_mz_ctree/game_2048_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_adamw-wd1e-6_seed0',
+    exp_name=f'data_mz_ctree/game_2048_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_adam-wd0_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -68,11 +70,13 @@ atari_muzero_config = dict(
         # lr_piecewise_constant_decay=True,
         # learning_rate=0.2,  # init lr for manually decay schedule
 
-        optim_type='AdamW_nanoGPT',
+        # optim_type='AdamW_nanoGPT',
+        # optim_type='AdamW_official',
+        optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=3e-3,
         # (float) Weight decay for training policy network.
-        weight_decay=1e-6,
+        weight_decay=0,
 
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

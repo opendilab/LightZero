@@ -5,6 +5,9 @@ import sys
 from typing import List
 
 import gym
+import imageio
+import matplotlib.font_manager as fm
+import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from ding.envs import BaseEnvTimestep
@@ -13,18 +16,17 @@ from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
 from gym import spaces
 from gym.utils import seeding
-from six import StringIO
-import matplotlib.pyplot as plt
-import imageio
+
 
 @ENV_REGISTRY.register('game_2048')
 class Game2048Env(gym.Env):
     config = dict(
         env_name="game_2048",
-        save_replay_gif=False,
-        replay_path_gif=None,
-        render_real_time=False,
+        save_replay=False,
+        replay_format='gif',
+        replay_name_suffix='eval',
         replay_path=None,
+        render_real_time=False,
         act_scale=True,
         channel_last=True,
         obs_type='raw_observation',  # options=['raw_observation', 'dict_observation', 'array']
@@ -51,11 +53,12 @@ class Game2048Env(gym.Env):
         self._cfg = cfg
         self._init_flag = False
         self._env_name = cfg.env_name
-        self.replay_path_gif = cfg.replay_path_gif
-        self.save_replay_gif = cfg.save_replay_gif
+        self.replay_format = cfg.replay_format
+        self.replay_name_suffix = cfg.replay_name_suffix
+        self.replay_path = cfg.replay_path
+        self.save_replay = cfg.save_replay
         self.render_real_time = cfg.render_real_time
 
-        
         self._save_replay_count = 0
         self.channel_last = cfg.channel_last
         self.obs_type = cfg.obs_type
@@ -64,7 +67,7 @@ class Game2048Env(gym.Env):
         self.reward_norm_scale = cfg.reward_norm_scale
         assert self.reward_type in ['raw', 'merged_tiles_plus_log_max_tile_num']
         assert self.reward_type == 'raw' or (
-                    self.reward_type == 'merged_tiles_plus_log_max_tile_num' and self.reward_normalize == False)
+                self.reward_type == 'merged_tiles_plus_log_max_tile_num' and self.reward_normalize == False)
         self.max_tile = cfg.max_tile
         # Define the maximum tile that will end the game (e.g. 2048). None means no limit.
         # This does not affect the state returned.
@@ -128,6 +131,8 @@ class Game2048Env(gym.Env):
             observation = self.board
         else:
             observation = observation
+        if self.save_replay:
+            self.render(mode='rgb_array_render')
         return observation
 
     def step(self, action):
@@ -135,8 +140,11 @@ class Game2048Env(gym.Env):
         self.episode_length += 1
 
         if action not in self.legal_actions:
-            raise IllegalActionError(
-                f"You input illegal action: {action}, the legal_actions are {self.legal_actions}. ")
+            logging.warning(
+                f"You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
+                f"Now we randomly choice a action from self.legal_actions."
+            )
+            action = np.random.choice(self.legal_actions)
 
         if self.reward_type == 'merged_tiles_plus_log_max_tile_num':
             empty_num1 = len(self.get_empty_location())
@@ -200,10 +208,13 @@ class Game2048Env(gym.Env):
             reward = to_ndarray([reward]).astype(np.float32)
         info = {"raw_reward": raw_reward, "current_max_tile_num": self.highest()}
 
+        if self.save_replay:
+            self.render(mode='rgb_array_render')
+
         if done:
             info['eval_episode_return'] = self._final_eval_reward
-            if self.save_replay_gif:
-                self.save_render_gif(gif_name_suffix='eval', replay_path_gif=self.replay_path_gif)
+            if self.save_replay:
+                self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path, format=self.replay_format)
 
         return BaseEnvTimestep(observation, reward, done, info)
 
@@ -269,8 +280,9 @@ class Game2048Env(gym.Env):
         return move_reward
 
     def set_illegal_move_reward(self, reward):
-        """Define the reward/penalty for performing an illegal move. Also need
-            to update the reward range for this."""
+        """
+        Define the reward/penalty for performing an illegal move. Also need to update the reward range for this.
+        """
         # Guess that the maximum reward is also 2**squares though you'll probably never get that.
         # (assume that illegal move reward is the lowest value that can be returned
         # TODO: check that this is correct
@@ -286,7 +298,8 @@ class Game2048Env(gym.Env):
             pil_board = Image.new("RGB", (grid_size * 4, grid_size * 4))
             draw = ImageDraw.Draw(pil_board)
             draw.rectangle([0, 0, 4 * grid_size, 4 * grid_size], grey)
-            fnt = ImageFont.truetype('Arial.ttf', 30)
+            fnt_path = fm.findfont(fm.FontProperties(family='DejaVu Sans'))
+            fnt = ImageFont.truetype(fnt_path, 30)
 
             for y in range(4):
                 for x in range(4):
@@ -337,15 +350,24 @@ class Game2048Env(gym.Env):
             text_x_size, text_y_size = bbox[2] - bbox[0], bbox[3] - bbox[1]
             draw.text((x * grid_size + (grid_size - text_x_size) // 2,
                        y * grid_size + (grid_size - text_y_size) // 2), str(o), font=fnt, fill=white)
-            assert text_x_size < grid_size
-            assert text_y_size < grid_size
+            # assert text_x_size < grid_size
+            # assert text_y_size < grid_size
 
-    def save_render_gif(self, gif_name_suffix: str = '', replay_path_gif = None):
-        # At the end of the episode, save the frames as a gif
-        if replay_path_gif is None:
-            imageio.mimsave(f'game_2048_{gif_name_suffix}.gif', self.frames)
+    def save_render_output(self, replay_name_suffix: str = '', replay_path=None, format='gif'):
+        # At the end of the episode, save the frames
+        if replay_path is None:
+            filename = f'game_2048_{replay_name_suffix}.{format}'
         else:
-            imageio.mimsave(replay_path_gif, self.frames)
+            filename = f'{replay_path}.{format}'
+
+        if format == 'gif':
+            imageio.mimsave(filename, self.frames, 'GIF')
+        elif format == 'mp4':
+            imageio.mimsave(filename, self.frames, 'MP4')
+        else:
+            raise ValueError("Unsupported format: {}".format(format))
+
+        logging.info("Saved output to {}".format(filename))
         self.frames = []
 
     # Implementation of game logic for 2048
