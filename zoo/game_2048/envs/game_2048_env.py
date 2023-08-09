@@ -40,6 +40,9 @@ class Game2048Env(gym.Env):
         is_collect=True,
         ignore_legal_actions=True,
         need_flatten=False,
+        num_of_possible_chance_tile=2,
+        possible_tiles=np.array([2, 4]),
+        tile_probabilities=np.array([0.9, 0.1]),
     )
     metadata = {'render.modes': ['human', 'rgb_array_render']}
 
@@ -96,6 +99,14 @@ class Game2048Env(gym.Env):
         # Initialise the random seed of the gym environment.
         self.seed()
         self.frames = []
+        self.num_of_possible_chance_tile = cfg.num_of_possible_chance_tile
+        self.possible_tiles = cfg.possible_tiles
+        self.tile_probabilities = cfg.tile_probabilities
+        if self.num_of_possible_chance_tile > 2:
+            self.possible_tiles = np.array([2**(i+1) for i in range(self.num_of_possible_chance_tile)])
+            self.tile_probabilities = np.array([1/self.num_of_possible_chance_tile for _ in range(self.num_of_possible_chance_tile)])
+            assert self.possible_tiles.shape[0] == self.tile_probabilities.shape[0]
+            assert np.sum(self.tile_probabilities) == 1
 
     def reset(self):
         """Reset the game board-matrix and add 2 tiles."""
@@ -107,8 +118,12 @@ class Game2048Env(gym.Env):
 
         logging.debug("Adding tiles")
         # TODO(pu): why add_tiles twice?
-        self.add_random_2_4_tile()
-        self.add_random_2_4_tile()
+        if self.num_of_possible_chance_tile > 2:
+            self.add_random_tile(self.possible_tiles, self.tile_probabilities)
+            self.add_random_tile(self.possible_tiles, self.tile_probabilities)
+        elif self.num_of_possible_chance_tile == 2:
+            self.add_random_2_4_tile()
+            self.add_random_2_4_tile()
 
         action_mask = np.zeros(4, 'int8')
         action_mask[self.legal_actions] = 1
@@ -160,7 +175,10 @@ class Game2048Env(gym.Env):
 
         self.episode_return += raw_reward
         assert raw_reward <= 2 ** (self.w * self.h)
-        self.add_random_2_4_tile()
+        if self.num_of_possible_chance_tile > 2:
+            self.add_random_tile(self.possible_tiles, self.tile_probabilities)
+        elif self.num_of_possible_chance_tile == 2:
+            self.add_random_2_4_tile()
         done = self.is_end()
         if self.reward_type == 'merged_tiles_plus_log_max_tile_num':
             reward_merged_tiles_plus_log_max_tile_num = float(reward_merged_tiles_plus_log_max_tile_num)
@@ -363,7 +381,8 @@ class Game2048Env(gym.Env):
         if format == 'gif':
             imageio.mimsave(filename, self.frames, 'GIF')
         elif format == 'mp4':
-            imageio.mimsave(filename, self.frames, 'MP4')
+            imageio.mimsave(filename, self.frames, fps=30, codec='mpeg4')
+
         else:
             raise ValueError("Unsupported format: {}".format(format))
 
@@ -395,6 +414,28 @@ class Game2048Env(gym.Env):
 
         self.board[empty[0], empty[1]] = tile_val
 
+    def add_random_tile(self, possible_tiles: np.array = np.array([2, 4]), tile_probabilities: np.array = np.array([0.9, 0.1])):
+        """Add a tile with a value from possible_tiles array according to given probabilities."""
+        if len(possible_tiles) != len(tile_probabilities):
+            raise ValueError("Length of possible_tiles and tile_probabilities must be the same")
+        if np.sum(tile_probabilities) != 1:
+            raise ValueError("Sum of tile_probabilities must be 1")
+
+        tile_val = self.np_random.choice(possible_tiles, 1, p=tile_probabilities)[0]
+        tile_idx = np.where(possible_tiles == tile_val)[0][0]  # get the index of the tile value
+        empty_location = self.get_empty_location()
+        if empty_location.shape[0] == 0:
+            self.should_done = True
+            return
+        empty_idx = self.np_random.choice(empty_location.shape[0])
+        empty = empty_location[empty_idx]
+        logging.debug("Adding %s at %s", tile_val, (empty[0], empty[1]))
+
+        # set the chance outcome
+        self.chance_space_size = len(possible_tiles) * 16  # assuming a 4x4 board
+        self.chance = tile_idx * 16 + 4 * empty[0] + empty[1]
+
+        self.board[empty[0], empty[1]] = tile_val
     def get_empty_location(self):
         """Return a 2d numpy array with the location of empty squares."""
         return np.argwhere(self.board == 0)

@@ -11,13 +11,15 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-# update_per_collect = 200
-update_per_collect = 50
+update_per_collect = 200
+# update_per_collect = 50
 
 batch_size = 512
-# max_env_step = int(5e6)
-max_env_step = int(1e6)
+max_env_step = int(5e6)
+# max_env_step = int(1e6)
 reanalyze_ratio = 0.
+num_of_possible_chance_tile = 10
+chance_space_size = 16 * num_of_possible_chance_tile
 
 # collector_env_num = 1
 # n_episode = 1
@@ -32,7 +34,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_mz_ctree/game_2048_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_adam-wd0_seed0',
+    exp_name=f'data_mz_ctree/game_2048_nct-{num_of_possible_chance_tile}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_adam-wd0_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -42,6 +44,7 @@ atari_muzero_config = dict(
         reward_normalize=False,
         reward_norm_scale=100,
         max_tile=int(2 ** 16),  # 2**11=2048, 2**16=65536
+        num_of_possible_chance_tile=num_of_possible_chance_tile,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -76,7 +79,7 @@ atari_muzero_config = dict(
         lr_piecewise_constant_decay=False,
         learning_rate=3e-3,
         # (float) Weight decay for training policy network.
-        weight_decay=0,
+        weight_decay=1e-4,
 
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
