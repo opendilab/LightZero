@@ -51,7 +51,7 @@ class Node(object):
     def update(self, value: float) -> None:
         """
         Overview:
-            Update the current node information, such as visit_count and value_sum.
+            Update the current node information, such as ``_visit_count`` and ``_value_sum``.
         Arguments:
             - value (:obj:`Float`): The value of the node.
         """
@@ -81,6 +81,7 @@ class Node(object):
             if self.is_root():
                 return
             # Update the parent node's information recursively.
+            # When propagating the value back to the parent node, the value needs to be negated once because the perspective of evaluation has changed.
             self._parent.update_recursive(-leaf_value, mcts_mode)
         if mcts_mode == 'play_with_bot_mode':
             # Update the current node's information.
@@ -89,6 +90,7 @@ class Node(object):
             if self.is_root():
                 return
             # Update the parent node's information recursively.
+            # In ``play_with_bot_mode``, since the nodes' values are always evaluated from the perspective of the agent player, there is no need to negate the value during value propagation.
             self._parent.update_recursive(leaf_value, mcts_mode)
 
     def is_leaf(self) -> bool:
@@ -169,7 +171,7 @@ class MCTS(object):
         self._root_dirichlet_alpha = self._cfg.get(
             'root_dirichlet_alpha', 0.3
         )  # 0.3  # for chess, 0.03 for Go and 0.15 for shogi.
-        self._root_noise_weight = self._cfg.get('root_noise_weight', 0.25)  # 0.25
+        self._root_noise_weight = self._cfg.get('root_noise_weight', 0.25)  
 
     def get_next_action(
             self,
@@ -256,22 +258,15 @@ class MCTS(object):
             - policy_forward_fn (:obj:`Function`): The Callable to compute the action probs and state value.
         """
         while not node.is_leaf():
-            # print(node.children.keys())
             # Traverse the tree until the leaf node.
             action, node = self._select_child(node, simulate_env)
-            # if action is None:
-            #     breakpoint()
-            #     break
-            # print('legal_action={}'.format(simulate_env.legal_actions))
-            # print('action={}'.format(action))
             simulate_env.step(action)
-            # print(node.is_leaf())
 
         done, winner = simulate_env.get_done_winner()
 
         """
         in ``self_play_mode``, the leaf_value is calculated from the perspective of player ``simulate_env.current_player``.
-        in ``play_with_bot_mode``, the leaf_value is calculated from the perspective of player of player 1.
+        in ``play_with_bot_mode``, the leaf_value is calculated from the perspective of player 1.
         """
 
         if not done:
@@ -326,21 +321,14 @@ class MCTS(object):
         action = None
         child = None
         best_score = -9999999
+        # Iterate over each child of the current node.
         for action_tmp, child_tmp in node.children.items():
-            # print(a, simulate_env.legal_actions)
-            # if action_tmp in simulate_env.legal_actions:
-            #     score = self._ucb_score(node, child_tmp)
-            #     if score > best_score:
-            #         best_score = score
-            #         action = action_tmp
-            #         child = child_tmp
             score = self._ucb_score(node, child_tmp)
+            # Check if the score of the current child is higher than the best score so far.
             if score > best_score:
                 best_score = score
                 action = action_tmp
                 child = child_tmp
-        # if child is None:
-        #     child = node  # child==None, node is leaf node in play_with_bot_mode.
 
         return action, child
 
@@ -370,6 +358,7 @@ class MCTS(object):
         """
         Overview:
             Compute UCB score. The score for a node is based on its value, plus an exploration bonus based on the prior.
+            For more details, please refer to this paper: https://link.springer.com/article/10.1007/s10472-011-9258-6
             UCB = Q(s,a) + P(s,a) \cdot \frac{N(\text{parent})}{1+N(\text{child})} \cdot \left(c_1 + \log\left(\frac{N(\text{parent})+c_2+1}{c_2}\right)\right)
             - Q(s,a): value of a child node.
             - P(s,a): The prior of a child node.
@@ -399,10 +388,12 @@ class MCTS(object):
         Arguments:
             - node (:obj:`Class Node`): Current node.
         """
-        # Get the keys of the children nodes.
-        actions = node.children.keys()
-        # Generate exploration noise using the Gamma distribution.
-        noise = np.random.gamma(self._root_dirichlet_alpha, 1, len(actions))
+        # Get a list of actions corresponding to the child nodes.
+        actions = list(node.children.keys())
+        # Create a list of alpha values for Dirichlet noise.
+        alpha = [self._root_dirichlet_alpha] * len(actions)
+        # Generate Dirichlet noise using the alpha values.
+        noise = np.random.dirichlet(alpha)
         # Compute the weight of the exploration noise.
         frac = self._root_noise_weight
         # Update the prior probability of each child node with the exploration noise.
