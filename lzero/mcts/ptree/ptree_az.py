@@ -1,6 +1,9 @@
 """
 Overview:
-    The introduction of neural networks in MCTS has brought about some changes. 
+    This code implements the Monte Carlo Tree Search (MCTS) algorithm with the integration of neural networks. 
+    The Node class represents a node in the Monte Carlo tree and implements the basic functionalities expected in a node. 
+    The MCTS class implements the specific search functionality and provides the optimal action through the ``get_next_action`` method. 
+    Compared to traditional MCTS, the introduction of value networks and policy networks brings several advantages.
     During the expansion of nodes, it is no longer necessary to explore every single child node, but instead, 
     the child nodes are directly selected based on the prior probabilities provided by the neural network. 
     This reduces the breadth of the search. When estimating the value of leaf nodes, there is no need for a rollout; 
@@ -21,9 +24,19 @@ from ding.envs import BaseEnv
 class Node(object):
     """
     Overview:
-        The node base class for tree_search.
+        A class for a node in a Monte Carlo Tree. The properties of this class store basic information about the node, 
+        such as its parent node, child nodes, and the number of times the node has been visited. 
+        The methods of this class implement basic functionalities that a node should have, such as propagating the value back, 
+        checking if the node is the root node, and determining if it is a leaf node.
     """
     def __init__(self, parent: "Node" = None, prior_p: float = 1.0) -> None:
+        """
+        Overview:
+            Initialize a Node object.
+        Arguments:
+            - parent (:obj:`Node`): The parent node of the current node.
+            - prior_p (:obj:`Float`): The prior probability of selecting this node.
+        """
         # The parent node.
         self._parent = parent
         # A dictionary representing the children of the current node. The keys are the actions, and the values are the child nodes.
@@ -148,13 +161,18 @@ class Node(object):
 class MCTS(object):
     """
     Overview:
-        Initializes the MCTS search process.
-    Arguments:
-        - cfg (:obj:`EasyDict`): A dictionary containing the configuration parameters for
-        the MCTS search process.
+        A class for Monte Carlo Tree Search (MCTS). The methods in this class implement the steps involved in MCTS, such as selection and expansion. 
+        Based on this, the ``_simulate`` method is used to traverse from the root node to a leaf node. 
+        Finally, by repeatedly calling ``_simulate`` through ``get_next_action``, the optimal action is obtained.
     """
 
     def __init__(self, cfg: EasyDict) -> None:
+        """
+        Overview:
+            Initializes the MCTS process.
+        Arguments:
+            - cfg (:obj:`EasyDict`): A dictionary containing the configuration parameters for the MCTS process.
+        """
         # Stores the configuration parameters for the MCTS search process.
         self._cfg = cfg
 
@@ -282,7 +300,6 @@ class MCTS(object):
                 else:
                     # To maintain consistency with the perspective of the neural network, the value of a terminal node is also calculated from the perspective of the current_player of the terminal node, 
                     # which is convenient for subsequent updates.
-                    # leaf_value = 1 if simulate_env.current_player == winner else -1
                     leaf_value = -1
 
             if simulate_env.mcts_mode == 'play_with_bot_mode':
@@ -358,7 +375,7 @@ class MCTS(object):
         """
         Overview:
             Compute UCB score. The score for a node is based on its value, plus an exploration bonus based on the prior.
-            For more details, please refer to this paper: https://link.springer.com/article/10.1007/s10472-011-9258-6
+            For more details, please refer to this paper: http://gauss.ececs.uc.edu/Workshops/isaim2010/papers/rosin.pdf
             UCB = Q(s,a) + P(s,a) \cdot \frac{N(\text{parent})}{1+N(\text{child})} \cdot \left(c_1 + \log\left(\frac{N(\text{parent})+c_2+1}{c_2}\right)\right)
             - Q(s,a): value of a child node.
             - P(s,a): The prior of a child node.
