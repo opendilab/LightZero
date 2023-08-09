@@ -23,6 +23,7 @@ class Game2048Env(gym.Env):
         env_name="game_2048",
         save_replay_gif=False,
         replay_path_gif=None,
+        render_real_time=False,
         replay_path=None,
         act_scale=True,
         channel_last=True,
@@ -50,9 +51,11 @@ class Game2048Env(gym.Env):
         self._cfg = cfg
         self._init_flag = False
         self._env_name = cfg.env_name
-        self._replay_path = cfg.get('replay_path', None)
-        self._replay_path_gif = cfg.get('replay_path_gif', None)
-        self._save_replay_gif = cfg.get('save_replay_gif', False)
+        self.replay_path_gif = cfg.replay_path_gif
+        self.save_replay_gif = cfg.save_replay_gif
+        self.render_real_time = cfg.render_real_time
+
+        
         self._save_replay_count = 0
         self.channel_last = cfg.channel_last
         self.obs_type = cfg.obs_type
@@ -199,6 +202,8 @@ class Game2048Env(gym.Env):
 
         if done:
             info['eval_episode_return'] = self._final_eval_reward
+            if self.save_replay_gif:
+                self.save_render_gif(gif_name_suffix='eval', replay_path_gif=self.replay_path_gif)
 
         return BaseEnvTimestep(observation, reward, done, info)
 
@@ -290,9 +295,10 @@ class Game2048Env(gym.Env):
                         self.draw_tile(draw, x, y, o, fnt)
 
             # Instead of returning the image, we display it using pyplot
-            plt.imshow(np.asarray(pil_board))
-            plt.draw()
-            # plt.pause(0.001)
+            if self.render_real_time:
+                plt.imshow(np.asarray(pil_board))
+                plt.draw()
+                # plt.pause(0.001)
             # Append the frame to frames for gif
             self.frames.append(np.asarray(pil_board))
         elif mode == 'human':
@@ -322,7 +328,7 @@ class Game2048Env(gym.Env):
             2048: (237, 194, 46),
             4096: (237, 194, 46),
             8192: (237, 194, 46),
-            16384:(237, 194, 46),
+            16384: (237, 194, 46),
         }
         if o:
             draw.rectangle([x * grid_size, y * grid_size, (x + 1) * grid_size, (y + 1) * grid_size],
@@ -334,9 +340,12 @@ class Game2048Env(gym.Env):
             assert text_x_size < grid_size
             assert text_y_size < grid_size
 
-    def save_render_gif(self, gif_name_suffix: str = ''):
+    def save_render_gif(self, gif_name_suffix: str = '', replay_path_gif = None):
         # At the end of the episode, save the frames as a gif
-        imageio.mimsave(f'game_2048_{gif_name_suffix}.gif', self.frames)
+        if replay_path_gif is None:
+            imageio.mimsave(f'game_2048_{gif_name_suffix}.gif', self.frames)
+        else:
+            imageio.mimsave(replay_path_gif, self.frames)
         self.frames = []
 
     # Implementation of game logic for 2048
