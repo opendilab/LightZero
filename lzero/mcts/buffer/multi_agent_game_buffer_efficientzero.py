@@ -14,7 +14,7 @@ from ding.utils.data import default_collate
 
 
 @BUFFER_REGISTRY.register('multi_agent_game_buffer_efficientzero')
-class MultiAgentSampledEfficientZeroGameBuffer(MultiAgentMuZeroGameBuffer):
+class MultiAgentEfficientZeroGameBuffer(MultiAgentMuZeroGameBuffer):
     """
     Overview:
         The specific game buffer for Multi Agent EfficientZero policy.

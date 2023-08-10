@@ -58,7 +58,7 @@ def train_muzero(
     elif create_cfg.policy.type == 'multi_agent_muzero':
         from lzero.mcts import MultiAgentMuZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'multi_agent_efficientzero':
-        from lzero.mcts import MultiAgentSampledEfficientZeroGameBuffer as GameBuffer
+        from lzero.mcts import MultiAgentEfficientZeroGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'

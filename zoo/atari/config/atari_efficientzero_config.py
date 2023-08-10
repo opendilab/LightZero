@@ -52,7 +52,6 @@ atari_efficientzero_config = dict(
             norm_type='BN',
         ),
         cuda=True,
-        ignore_done=True,
         env_type='not_board_games',
         game_segment_length=400,
         random_collect_episode_num=0,
