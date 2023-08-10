@@ -1,12 +1,12 @@
 from easydict import EasyDict
 
-env_name = 'MiniGrid-Empty-8x8-v0'
-max_env_step = int(1e6)
-threshold_training_steps_for_final_temperature = int(5e4)
-
-# env_name = 'MiniGrid-FourRooms-v0'
-# max_env_step = int(2e6)
+# env_name = 'MiniGrid-Empty-8x8-v0'
+# max_env_step = int(1e6)
 # threshold_training_steps_for_final_temperature = int(5e4)
+
+env_name = 'MiniGrid-FourRooms-v0'
+max_env_step = int(10e6)
+threshold_training_steps_for_final_temperature = int(5e5)
 
 # env_name = 'MiniGrid-DoorKey-8x8-v0'
 # max_env_step = int(5e6)
@@ -19,21 +19,21 @@ threshold_training_steps_for_final_temperature = int(5e4)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-seed = 0
+seed = 1
 
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 50
-# update_per_collect = 200
-# batch_size = 256
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 50
+update_per_collect = 200
+batch_size = 256
 
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 3
-update_per_collect = 2
-batch_size = 4
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 3
+# update_per_collect = 2
+# batch_size = 4
 
 reanalyze_ratio = 0
 random_collect_episode_num = 0
@@ -43,12 +43,12 @@ eval_sample_action = False
 
 policy_entropy_loss_weight = 0.
 # policy_entropy_loss_weight = 0.005
-# eps_greedy_exploration_in_collect = False
-eps_greedy_exploration_in_collect = True
+eps_greedy_exploration_in_collect = False
+# eps_greedy_exploration_in_collect = True
 
 # input_type = 'latent_state'  # 'obs' or 'latent_state'
-# input_type = 'obs'  # 'obs' or 'latent_state'
-input_type = 'obs_latent_state'  # 'obs' or 'latent_state'
+input_type = 'obs'  # 'obs' or 'latent_state'
+# input_type = 'obs_latent_state'  # 'obs' or 'latent_state'
 target_model_for_intrinsic_reward_update_type = 'assign'  # 'assign' or 'momentum'
 
 # ==============================================================
@@ -56,7 +56,8 @@ target_model_for_intrinsic_reward_update_type = 'assign'  # 'assign' or 'momentu
 # ==============================================================
 
 minigrid_muzero_config = dict(
-    exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_pelw{policy_entropy_loss_weight}_temp-final-steps-{threshold_training_steps_for_final_temperature}_collect-eps-{eps_greedy_exploration_in_collect}_rnd-rew-{input_type}-{target_model_for_intrinsic_reward_update_type}_seed{seed}',
+      exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_pelw{policy_entropy_loss_weight}_temp-final-steps-5e5_collect-eps-{eps_greedy_exploration_in_collect}-decay-linear-5e5_rnd-rew-{input_type}_seed{seed}',
+    # exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_pelw{policy_entropy_loss_weight}_temp-final-steps-{threshold_training_steps_for_final_temperature}_collect-eps-{eps_greedy_exploration_in_collect}_rnd-rew-{input_type}-{target_model_for_intrinsic_reward_update_type}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -115,10 +116,9 @@ minigrid_muzero_config = dict(
             type='linear',
             start=1.,
             end=0.05,
-            decay=int(2e5),
+            decay=int(5e5),
         ),
         ignore_done=False,
-
         random_collect_episode_num=random_collect_episode_num,
         td_steps=td_steps,
         manual_temperature_decay=True,
@@ -136,7 +136,8 @@ minigrid_muzero_config = dict(
         game_segment_length=300,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
+        # optim_type='AdamW',
+        optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         ssl_loss_weight=2,  # NOTE: default is 0.

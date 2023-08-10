@@ -3,11 +3,11 @@ from easydict import EasyDict
 # env_name = 'MiniGrid-Empty-8x8-v0'
 # max_env_step = int(1e6)
 
-# env_name = 'MiniGrid-FourRooms-v0'
-# max_env_step = int(2e6)
+env_name = 'MiniGrid-FourRooms-v0'
+max_env_step = int(10e6)
 
-env_name = 'MiniGrid-DoorKey-8x8-v0'
-max_env_step = int(5e6)
+# env_name = 'MiniGrid-DoorKey-8x8-v0'
+# max_env_step = int(5e6)
 
 # typical MiniGrid env id: {'MiniGrid-Empty-8x8-v0', 'MiniGrid-FourRooms-v0', 'MiniGrid-DoorKey-8x8-v0','MiniGrid-DoorKey-16x16-v0'},
 # please refer to https://github.com/Farama-Foundation/MiniGrid for details.
@@ -15,11 +15,13 @@ max_env_step = int(5e6)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-seed = 0
+seed = 1
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
+# num_simulations = 100
+
 update_per_collect = 200
 batch_size = 256
 
@@ -36,10 +38,14 @@ init_temperature_value_for_decay = 1.0
 td_steps = 5
 eval_sample_action = False
 
-policy_entropy_loss_weight = 0.
+# policy_entropy_loss_weight = 0.
+policy_entropy_loss_weight = 0.05
 # policy_entropy_loss_weight = 0.005
+
 # threshold_training_steps_for_final_temperature = int(5e4)
-threshold_training_steps_for_final_temperature = int(5e5)
+# threshold_training_steps_for_final_temperature = int(5e5)
+threshold_training_steps_for_final_temperature = int(1e9)
+
 eps_greedy_exploration_in_collect = False
 # eps_greedy_exploration_in_collect = True
 
@@ -49,8 +55,11 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 minigrid_muzero_config = dict(
+    # exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_'
+    #          f'pelw{policy_entropy_loss_weight}_temp-final-steps-{threshold_training_steps_for_final_temperature}_collect-eps-{eps_greedy_exploration_in_collect}-decay-linear-5e5_seed{seed}',
     exp_name=f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_'
-             f'eval-sample-{eval_sample_action}_pelw{policy_entropy_loss_weight}_temp-final-steps-{threshold_training_steps_for_final_temperature}_collect-eps-{eps_greedy_exploration_in_collect}-decay-linear-2e5-env_seed{seed}',
+             f'pelw{policy_entropy_loss_weight}_temp-final-steps-1e9_collect-eps-{eps_greedy_exploration_in_collect}-decay-linear-5e5_seed{seed}',
+    
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -79,7 +88,7 @@ minigrid_muzero_config = dict(
             type='linear',
             start=1.,
             end=0.05,
-            decay=int(2e5),
+            decay=int(5e5),
         ),
         random_collect_episode_num=random_collect_episode_num,
         td_steps=td_steps,
@@ -97,7 +106,8 @@ minigrid_muzero_config = dict(
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
+        # optim_type='AdamW',
+        optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         ssl_loss_weight=2,  # NOTE: default is 0.

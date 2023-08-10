@@ -90,16 +90,6 @@ class EfficientZeroPolicy(Policy):
         augmentation=['shift', 'intensity'],
 
         # ******* learn ******
-        eps=dict(
-            eps_greedy_exploration_in_collect=False,
-            type='exp',
-            start=1.,
-            end=0.05,
-            decay=int(2e5),
-
-        ),
-        # (int) Number of training episodes (randomly collected) in replay buffer when training starts.
-        random_collect_episode_num=0,
         # (bool) Whether to ignore the done flag in the training data. Typically, this value is set to False.
         # However, for some environments with a fixed episode length, to ensure the accuracy of Q-value calculations,
         # we should set it to True to avoid the influence of the done flag.

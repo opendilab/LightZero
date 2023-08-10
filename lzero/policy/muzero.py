@@ -92,16 +92,6 @@ class MuZeroPolicy(Policy):
         augmentation=['shift', 'intensity'],
 
         # ******* learn ******
-        eps=dict(
-            eps_greedy_exploration_in_collect=False,
-            type='exp',
-            start=1.,
-            end=0.05,
-            decay=int(2e5),
-
-        ),
-        # (int) Number of training episodes (randomly collected) in replay buffer when training starts.
-        random_collect_episode_num=0,
         # (bool) Whether to use sampling action in eval phase.
         eval_sample_action=False,
         # (bool) Whether to ignore the done flag in the training data. Typically, this value is set to False.
