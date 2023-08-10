@@ -1,33 +1,24 @@
-import copy
 import os
 from itertools import product
-from typing import Union, List, Optional
+from typing import Union
 
 import gym
 import numpy as np
-from easydict import EasyDict
-
-from ding.envs import BaseEnv, BaseEnvTimestep
+from ding.envs import BaseEnvTimestep
 from ding.envs.common import save_frames_as_gif
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
-from .mujoco_wrappers import wrap_mujoco
+from dizoo.mujoco.envs.mujoco_disc_env import MujocoDiscEnv
 
 
 @ENV_REGISTRY.register('mujoco_disc_lightzero')
-class MujocoDiscEnv(BaseEnv):
+class MujocoDiscEnvLZ(MujocoDiscEnv):
     """
     Overview:
-        The modified Mujoco environment with manually discretized action space. For each dimension, equally dividing the
-        original continuous action into ``each_dim_disc_size`` bins and using their Cartesian product to obtain
-        handcrafted discrete actions.
+        The modified Mujoco environment with manually discretized action space for LightZero's algorithms.
+        For each dimension, equally dividing the original continuous action into ``each_dim_disc_size`` bins and
+        using their Cartesian product to obtain handcrafted discrete actions.
     """
-
-    @classmethod
-    def default_config(cls: type) -> EasyDict:
-        cfg = EasyDict(copy.deepcopy(cls.config))
-        cfg.cfg_type = cls.__name__ + 'Dict'
-        return cfg
 
     config = dict(
         action_clip=False,
@@ -41,7 +32,10 @@ class MujocoDiscEnv(BaseEnv):
     )
 
     def __init__(self, cfg: dict) -> None:
+        super().__init__(cfg)
         self._cfg = cfg
+        # We use env_name to indicate the env_id in LightZero.
+        self._cfg.env_id = self._cfg.env_name
         self._action_clip = cfg.action_clip
         self._delay_reward_step = cfg.delay_reward_step
         self._init_flag = False
@@ -52,7 +46,7 @@ class MujocoDiscEnv(BaseEnv):
     def reset(self) -> np.ndarray:
         if not self._init_flag:
             self._env = self._make_env()
-            self._env.observation_space.dtype = np.float32  # To unify the format of envs in DI-engine
+            self._env.observation_space.dtype = np.float32
             self._observation_space = self._env.observation_space
             self._raw_action_space = self._env.action_space
             self._reward_space = gym.spaces.Box(
@@ -90,16 +84,6 @@ class MujocoDiscEnv(BaseEnv):
 
         return obs
 
-    def close(self) -> None:
-        if self._init_flag:
-            self._env.close()
-        self._init_flag = False
-
-    def seed(self, seed: int, dynamic_seed: bool = True) -> None:
-        self._seed = seed
-        self._dynamic_seed = dynamic_seed
-        np.random.seed(self._seed)
-
     def step(self, action: Union[np.ndarray, list]) -> BaseEnvTimestep:
         # disc_to_cont: transform discrete action index to original continuous action
         action = [-1 + 2 / self.n * k for k in self.disc_to_cont[int(action)]]
@@ -130,48 +114,5 @@ class MujocoDiscEnv(BaseEnv):
 
         return BaseEnvTimestep(obs, rew, done, info)
 
-    def _make_env(self):
-        return wrap_mujoco(
-            self._cfg.env_name,
-            norm_obs=self._cfg.get('norm_obs', None),
-            norm_reward=self._cfg.get('norm_reward', None),
-            delay_reward_step=self._delay_reward_step
-        )
-
-    def enable_save_replay(self, replay_path: Optional[str] = None) -> None:
-        if replay_path is None:
-            replay_path = './video'
-        self._replay_path = replay_path
-        self._save_replay = True
-        self._save_replay_count = 0
-
-    def random_action(self) -> np.ndarray:
-        return self.action_space.sample()
-
     def __repr__(self) -> str:
-        return "DI-engine modified Mujoco Env({}) with manually discretized action space".format(self._cfg.env_name)
-
-    @staticmethod
-    def create_collector_env_cfg(cfg: dict) -> List[dict]:
-        collector_cfg = copy.deepcopy(cfg)
-        collector_env_num = collector_cfg.pop('collector_env_num', 1)
-        return [collector_cfg for _ in range(collector_env_num)]
-
-    @staticmethod
-    def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
-        evaluator_cfg = copy.deepcopy(cfg)
-        evaluator_env_num = evaluator_cfg.pop('evaluator_env_num', 1)
-        evaluator_cfg.norm_reward.use_norm = False
-        return [evaluator_cfg for _ in range(evaluator_env_num)]
-
-    @property
-    def observation_space(self) -> gym.spaces.Space:
-        return self._observation_space
-
-    @property
-    def action_space(self) -> gym.spaces.Space:
-        return self._action_space
-
-    @property
-    def reward_space(self) -> gym.spaces.Space:
-        return self._reward_space
+        return "LightZero modified Mujoco Env({}) with manually discretized action space".format(self._cfg.env_name)

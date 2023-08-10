@@ -221,7 +221,7 @@ class MuZeroCollector(ISerialCollector):
         Note:
             (last_game_segments[i].obs_segment[-4:][j] == game_segments[i].obs_segment[:4][j]).all() is True
         """
-        # pad over last block trajectory
+        # pad over last segment trajectory
         beg_index = self.policy_config.model.frame_stack_num
         end_index = beg_index + self.policy_config.num_unroll_steps
 
@@ -496,7 +496,7 @@ class MuZeroCollector(ISerialCollector):
 
                     # if the game segment is full, we will save the last game segment
                     if game_segments[env_id].is_full():
-                        # pad over last block trajectory
+                        # pad over last segment trajectory
                         if last_game_segments[env_id] is not None:
                             # TODO(pu): return the one game segment
                             self.pad_and_save_last_trajectory(
@@ -552,7 +552,7 @@ class MuZeroCollector(ISerialCollector):
                             env_id, last_game_segments, last_game_priorities, game_segments, dones
                         )
 
-                    # store current block trajectory
+                    # store current segment trajectory
                     priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
 
                     # NOTE: put the last game segment in one episode into the trajectory_pool
@@ -632,6 +632,7 @@ class MuZeroCollector(ISerialCollector):
                         'unroll_plus_td_steps': self.unroll_plus_td_steps
                     } for i in range(len(self.game_segment_pool))
                 ]
+                self.game_segment_pool.clear()
                 # for i in range(len(self.game_segment_pool)):
                 #     print(self.game_segment_pool[i][0].obs_segment.__len__())
                 #     print(self.game_segment_pool[i][0].reward_segment)

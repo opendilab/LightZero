@@ -74,9 +74,9 @@ class MuZeroPolicy(Policy):
         collector_env_num=8,
         # (int) The number of environments used in evaluating policy.
         evaluator_env_num=3,
-        # (str) The type of environment. Options is ['not_board_games', 'board_games'].
+        # (str) The type of environment. Options are ['not_board_games', 'board_games'].
         env_type='not_board_games',
-        # (str) The type of battle mode. Options is ['play_with_bot_mode', 'self_play_mode'].
+        # (str) The type of battle mode. Options are ['play_with_bot_mode', 'self_play_mode'].
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,
@@ -100,12 +100,14 @@ class MuZeroPolicy(Policy):
             decay=int(2e5),
 
         ),
-        ignore_done=False,
-
         # (int) Number of training episodes (randomly collected) in replay buffer when training starts.
         random_collect_episode_num=0,
         # (bool) Whether to use sampling action in eval phase.
         eval_sample_action=False,
+        # (bool) Whether to ignore the done flag in the training data. Typically, this value is set to False.
+        # However, for some environments with a fixed episode length, to ensure the accuracy of Q-value calculations,
+        # we should set it to True to avoid the influence of the done flag.
+        ignore_done=False,
         # (int) How many updates(iterations) to train after collector's one collection.
         # Bigger "update_per_collect" means bigger off-policy.
         # collect data -> update policy-> collect data -> ...
@@ -181,6 +183,24 @@ class MuZeroPolicy(Policy):
         root_dirichlet_alpha=0.3,
         # (float) The noise weight at the root node of the search tree.
         root_noise_weight=0.25,
+
+        # ****** Explore by random collect ******
+        # (int) The number of episodes to collect data randomly before training.
+        random_collect_episode_num=0,
+
+        # ****** Explore by eps greedy ******
+        eps=dict(
+            # (bool) Whether to use eps greedy exploration in collecting data.
+            eps_greedy_exploration_in_collect=False,
+            # 'linear', 'exp'
+            type='linear',
+            # (float) The start value of eps.
+            start=1.,
+            # (float) The end value of eps.
+            end=0.05,
+            # (int) The decay steps from start to end eps.
+            decay=int(1e5),
+        ),
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
@@ -449,6 +469,7 @@ class MuZeroPolicy(Policy):
 
         return {
             'collect_mcts_temperature': self.collect_mcts_temperature,
+            'collect_epsilon': self.collect_epsilon,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
             'total_loss': loss.mean().item(),
@@ -481,7 +502,7 @@ class MuZeroPolicy(Policy):
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
         self.collect_mcts_temperature = 1
-        self.collect_epsilon = 0
+        self.collect_epsilon = 0.0
 
     def _forward_collect(
             self,
@@ -567,14 +588,14 @@ class MuZeroPolicy(Policy):
                     if np.random.rand() < self.collect_epsilon:
                         action = np.random.choice(legal_actions[i])
                 else:
+                    # normal collect
+                    # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                    # the index within the legal action set, rather than the index in the entire action set.
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                         distributions, temperature=self.collect_mcts_temperature, deterministic=False
                     )
-
-                    # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
-                    # entire action set.
+                    # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-
                 output[env_id] = {
                     'action': action,
                     'distributions': distributions,
