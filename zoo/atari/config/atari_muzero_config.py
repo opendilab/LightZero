@@ -25,6 +25,8 @@ update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
+
+eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -49,11 +51,21 @@ atari_muzero_config = dict(
             downsample=True,
             self_supervised_learning_loss=True,  # default is False
             discrete_action_encoding_type='one_hot',
-            norm_type='BN', 
+            norm_type='BN',
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=400,
+        random_collect_episode_num=0,
+        eps=dict(
+            eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
+            # need to dynamically adjust the number of decay steps 
+            # according to the characteristics of the environment and the algorithm
+            type='linear',
+            start=1.,
+            end=0.05,
+            decay=int(1e5),
+        ),
         use_augmentation=True,
         update_per_collect=update_per_collect,
         model_update_ratio=0.1,

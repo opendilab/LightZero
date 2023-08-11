@@ -156,8 +156,8 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 </p>
 <p align="center">
   <img src="assets/benchmark/main/bipedalwalker_main.png" alt="bipedalwalker_main" width="30%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/hopper_main.pdf" alt="hopper_main" width="30%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/walker2d_main.pdf" alt="walker2d_main" width="30%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/hopper_main.png" alt="hopper_main" width="31.5%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/walker2d_main.png" alt="walker2d_main" width="31.5%" height="auto" style="margin: 0 1%;">
 </p>
 
 - [Gumbel MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/gumbel_muzero.py) 和 [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) 在不同模拟次数下，在四个环境（[PongNoFrameskip-v4](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py), [MsPacmanNoFrameskip-v4]((https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py)), [Gomoku](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py) 和 [LunarLanderContinuous-v2](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/lunarlander/envs/lunarlander_env.py)）上的基线结果：

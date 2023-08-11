@@ -197,8 +197,8 @@ and two MuJoCo continuous action space games: [Hopper-v3](https://github.com/ope
 </p>
 <p align="center">
   <img src="assets/benchmark/main/bipedalwalker_main.png" alt="bipedalwalker_main" width="30%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/hopper_main.pdf" alt="hopper_main" width="30%" height="auto" style="margin: 0 1%;">
-  <img src="assets/benchmark/main/walker2d_main.pdf" alt="walker2d_main" width="30%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/hopper_main.png" alt="hopper_main" width="31.5%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/walker2d_main.png" alt="walker2d_main" width="31.5%" height="auto" style="margin: 0 1%;">
 </p>
 
 - Below are the benchmark results of [GumbelMuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/gumbel_muzero.py) and [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) (under different simulation cost) on four environments: [PongNoFrameskip-v4](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py), [MsPacmanNoFrameskip-v4]((https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py)), [Gomoku](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py), and [LunarLanderContinuous-v2](https://github.com/opendilab/LightZero/blob/main/zoo/box2d/lunarlander/envs/lunarlander_env.py).
