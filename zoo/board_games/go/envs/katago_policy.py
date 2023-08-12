@@ -350,7 +350,7 @@ rules = {
     "scoringRule": "SCORING_AREA",
     "taxRule": "TAX_NONE",
     # TODO(pu):
-    "multiStoneSuicideLegal": False,
+    "multiStoneSuicideLegal": False,  # 之前测试的设置
     # "multiStoneSuicideLegal": True,
     "hasButton": False,
     "encorePhase": 0,
@@ -387,7 +387,9 @@ class KatagoPolicy:
         checkpoint_file = args["checkpoint"]
         use_swa = args["use_swa"]
         # Hardcoded max board size
-        self.pos_len = 19
+        # self.pos_len = 19
+        self.pos_len = board_size
+
 
         # Model ----------------------------------------------------------------
         logging.root.handlers = []
@@ -414,7 +416,7 @@ class KatagoPolicy:
         self.features = Features(model_config, self.pos_len)
         self.model = model
 
-    def katago_command(self, game_state, command, to_play=None):
+    def katago_command(self, game_state, command, to_play=None, step_num: int = 0):
         """
         command = ['play', 'b', 'a4']
         command = ['play', 'w', 'a4']
@@ -456,27 +458,33 @@ class KatagoPolicy:
 
         elif command[0] == "get_katago_action":
             # NOTE: here bot action may be illegal action in go_lightzero
+            # board_size=9: katago_flatten_action - 11 = lz_flatten_action
+            # board_size=19: katago_flatten_action - 21 = lz_flatten_action
             outputs = self.get_outputs(gs, rules)
             if to_play == 1:
                 moves_and_probs0 = outputs["moves_and_probs0"]
                 moves_and_probs = sorted(moves_and_probs0, key=lambda moveandprob: moveandprob[1], reverse=True)
                 katago_flatten_action = moves_and_probs[0][0]
-                if self.ignore_pass_if_have_other_legal_actions and len(moves_and_probs) > 1:
-                    if katago_flatten_action == Board.PASS_LOC:  # 0
-                        katago_flatten_action = moves_and_probs[1][0]
-                        # TODO
-                        # print('ignore_pass_if_have_other_legal_actions now!')
+                if step_num >= 100:
+                    if self.ignore_pass_if_have_other_legal_actions and len(moves_and_probs) > 1:
+                        if katago_flatten_action == Board.PASS_LOC:  # 0
+                            katago_flatten_action = moves_and_probs[1][0]
+                            # TODO
+                            # print('ignore_pass_if_have_other_legal_actions now!')
             elif to_play == 2:
                 moves_and_probs1 = outputs["moves_and_probs1"]
                 moves_and_probs = sorted(moves_and_probs1, key=lambda moveandprob: moveandprob[1], reverse=True)
                 katago_flatten_action = moves_and_probs[0][0]  # moves_and_probs[0]: (katago_flatten_action, prior)
-                if self.ignore_pass_if_have_other_legal_actions and len(moves_and_probs) > 1:
-                    if katago_flatten_action == Board.PASS_LOC:  # 0
-                        katago_flatten_action = moves_and_probs[1][0]
-                        # print('ignore_pass_if_have_other_legal_actions now!')
+                if step_num >= 100:
+                    if self.ignore_pass_if_have_other_legal_actions and len(moves_and_probs) > 1:
+                        if katago_flatten_action == Board.PASS_LOC:  # 0
+                            katago_flatten_action = moves_and_probs[1][0]
+                            # print('ignore_pass_if_have_other_legal_actions now!')
 
             # gtp_action = str_coord(katago_flatten_action, gs.board)
             lz_flatten_action = katago_flatten_to_lz_flatten(katago_flatten_action, gs.board)
+            if lz_flatten_action == 2:
+                print('debug')
             # if lz_flatten_action == 5:
             #     # legal_action [5, pass], 棋面除了位置5, 全是黑棋
             #     print('debug')

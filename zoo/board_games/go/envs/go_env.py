@@ -174,7 +174,6 @@ class GoEnv(BaseEnv):
             self.save_gif_path = self.cfg.save_gif_path + gif_filename
             self.frames = []
 
-
         self.len_of_legal_actions_for_current_player = self.board_size * self.board_size + 1
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
@@ -240,8 +239,8 @@ class GoEnv(BaseEnv):
         obs['current_player_index'] = self.current_player_index
         obs['to_play'] = self.current_player
         obs['katago_game_state'] = self.katago_game_state
-        # self.step_num = 0
-        # obs['step_num'] = self.step_num
+        self.step_num = 0
+        obs['step_num'] = self.step_num
 
         return obs
 
@@ -284,7 +283,6 @@ class GoEnv(BaseEnv):
 
         # print(self.katago_game_state.board.board[:-1].reshape(self.board_size+2,self.board_size+1))
 
-
     def _player_step(self, action, mode='eval_mode'):
         if mode in ['eval_mode', 'self_play_mode']:
             # TODO(pu): render
@@ -305,6 +303,7 @@ class GoEnv(BaseEnv):
             action = self.board_size * self.board_size  # pass
 
         self.len_of_legal_actions_for_current_player = len(self.legal_actions)
+
 
         if action in self.legal_actions:
             self._raw_env._go = self._raw_env._go.play_move(coords.from_flat(action))
@@ -399,6 +398,9 @@ class GoEnv(BaseEnv):
         )
         if self.dones[current_agent]:
             self.infos[current_agent]['eval_episode_return'] = self._cumulative_rewards[current_agent]
+
+        self.step_num += 1
+        obs['step_num'] = self.step_num
 
         # The returned reward and done is calculated from current_agent's perspective.
         return BaseEnvTimestep(obs, self.rewards[current_agent], self.dones[current_agent], self.infos[current_agent])
@@ -536,10 +538,10 @@ class GoEnv(BaseEnv):
     # ==============================================================
     # katago related
     # ==============================================================
-    def get_katago_action(self, to_play):
+    def get_katago_action(self, to_play, step_num: int = 0):
         command = ['get_katago_action']
         # self.current_player is the player who will play
-        flatten_action = self.katago_policy.katago_command(self.katago_game_state, command, to_play=to_play)
+        flatten_action = self.katago_policy.katago_command(self.katago_game_state, command, to_play=to_play,  step_num=self.step_num)
         return flatten_action
 
     def show_katago_board(self):
@@ -647,8 +649,6 @@ class GoEnv(BaseEnv):
             agent_id = 'black_0'
         elif self.current_player == 2:
             agent_id = 'white_0'
-        # obs = self._go.observe(agent_id)
-        # obs = self._raw_env.observe(agent_id)
         obs = self.observe(agent_id)
 
         obs['observation'] = obs['observation'].astype(int)
