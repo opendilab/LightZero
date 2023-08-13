@@ -1,7 +1,7 @@
 import numpy as np
 from easydict import EasyDict
 
-from get_episode_gtp_actions import read_episode_gtp_actions_from_txt
+from read_episode_gtp_actions import read_episode_gtp_actions_from_txt
 from zoo.board_games.go.envs.go_env import GoEnv
 from zoo.board_games.go.envs.katago_policy import KatagoPolicy
 
@@ -43,6 +43,8 @@ def get_katago_statistics_for_dataset():
         - katago_statistics_step (:obj:`dict`): The katago statistics for each step.
 
     Note:
+        katago policy ckpt is download form https://media.katagotraining.org/uploaded/networks/zips/kata1/kata1-b18c384nbt-s6582191360-d3422816034.zip
+        we should unzip it to ./code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034.
         - katago_statistics_step.keys() (:obj:`list`): The keys of katago_statistics_step.
             - dict_keys(['policy0', 'policy1', 'moves_and_probs0', 'moves_and_probs1', 'value', 'td_value', 'td_value2', 'td_value3', 'scoremean', 'td_score', 'scorestdev', 'lead', 'vtime', 'estv', 'ests', 'ownership', 'ownership_by_loc', 'scoring', 'scoring_by_loc', 'futurepos', 'futurepos0_by_loc', 'futurepos1_by_loc', 'seki', 'seki_by_loc', 'seki2', 'seki_by_loc2', 'scorebelief', 'genmove_result'])
         - katago_statistics_step['moves_and_probs0'] (:obj:`list`): The moves and probs for player 0.
