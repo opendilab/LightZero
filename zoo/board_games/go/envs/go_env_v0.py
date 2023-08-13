@@ -239,8 +239,8 @@ class GoEnv(BaseEnv):
         obs['current_player_index'] = self.current_player_index
         obs['to_play'] = self.current_player
         obs['katago_game_state'] = self.katago_game_state
-        # self.step_num = 0
-        # obs['step_num'] = self.step_num
+        self.step_num = 0
+        obs['step_num'] = self.step_num
 
         return obs
 
@@ -374,6 +374,9 @@ class GoEnv(BaseEnv):
         )
         if self.dones[current_agent]:
             self.infos[current_agent]['eval_episode_return'] = self._cumulative_rewards[current_agent]
+
+        self.step_num += 1
+        obs['step_num'] = self.step_num
 
         # The returned reward and done is calculated from current_agent's perspective.
         return BaseEnvTimestep(obs, self.rewards[current_agent], self.dones[current_agent], self.infos[current_agent])
@@ -522,7 +525,7 @@ class GoEnv(BaseEnv):
     def get_katago_action(self, to_play):
         command = ['get_katago_action']
         # self.current_player is the player who will play
-        flatten_action = self.katago_policy.katago_command(self.katago_game_state, command, to_play=to_play)
+        flatten_action = self.katago_policy.katago_command(self.katago_game_state, command, to_play=to_play,  step_num=self.step_num)
         return flatten_action
 
     def show_katago_board(self):
@@ -772,7 +775,7 @@ class GoEnv(BaseEnv):
                     )
                 )
 
-                flatten_action = self.gtp_action_to_flatten_action(gtp_action, board_size=self.board_size)
+                flatten_action = self.gtp_action_to_lz_flatten_action(gtp_action, board_size=self.board_size)
                 if flatten_action in self.legal_actions:
                     break
                 else:
@@ -784,7 +787,7 @@ class GoEnv(BaseEnv):
                 print("Wrong input, try again")
         return flatten_action
 
-    def gtp_action_to_flatten_action(self, gtp_action, board_size):
+    def gtp_action_to_lz_flatten_action(self, gtp_action, board_size):
         if gtp_action.lower() == "pass":
             return board_size * board_size
 

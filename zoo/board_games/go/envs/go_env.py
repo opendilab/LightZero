@@ -19,45 +19,7 @@ from pettingzoo.classic.go.go import raw_env
 from pettingzoo.utils.agent_selector import agent_selector
 
 from zoo.board_games.go.envs.katago_policy import GameState, str_coord, parse_coord
-
-
-def get_image(path):
-    from os import path as os_path
-
-    import pygame
-    cwd = os_path.dirname(__file__)
-    image = pygame.image.load(cwd + '/' + path)
-    sfc = pygame.Surface(image.get_size(), flags=pygame.SRCALPHA)
-    sfc.blit(image, (0, 0))
-    return sfc
-
-
-from datetime import datetime
-
-
-def generate_gif_filename(prefix="go", extension=".gif"):
-    current_time = datetime.now()
-    timestamp = current_time.strftime("%Y%m%d-%H%M%S")
-    filename = f"{prefix}-{timestamp}{extension}"
-    return filename
-
-
-def flatten_action_to_gtp_action(flatten_action, board_size):
-    if flatten_action == board_size * board_size:
-        return "pass"
-
-    row = board_size - 1 - (flatten_action // board_size)
-    col = flatten_action % board_size
-
-    # 跳过字母 'I'
-    if col >= ord('I') - ord('A'):
-        col += 1
-
-    col_str = chr(col + ord('A'))
-    row_str = str(row + 1)
-
-    gtp_action = col_str + row_str
-    return gtp_action
+from zoo.board_games.go.envs.utils import generate_gif_filename, flatten_action_to_gtp_action, get_image
 
 
 @ENV_REGISTRY.register('go_lightzero')
@@ -65,10 +27,9 @@ class GoEnv(BaseEnv):
     """
     Overview:
         Go environment.
-        board: X black, O white, . empty
-        Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
-
-        self._raw_env._go.to_play: 1 black, -1 white
+        - Board render: X black, O white, . empty
+        - Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
+        - self._raw_env._go.to_play: 1 black, -1 white
     Interface:
         reset, step, seed, close, render, close, seed
     Property:
@@ -98,12 +59,30 @@ class GoEnv(BaseEnv):
 
     @classmethod
     def default_config(cls: type) -> EasyDict:
+        """
+        Overview:
+            Return a dictionary of default configurations.
+        Arguments:
+            - cls (:obj:`type`): Class type
+        Returns:
+            - cfg (:obj:`EasyDict`): A dictionary of default configurations.
+        """
         cfg = EasyDict(copy.deepcopy(cls.config))
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
     def __init__(self, cfg=None):
-
+        """
+         Overview:
+             Initialize the Go environment.
+         Arguments:
+             - cfg (:obj:`EasyDict`): Configuration dict. Defaults to None.
+         Properties:
+             - action_space: The action space of the environment.
+             - observation_space: The observation space of the environment.
+             - reward_range: The range of reward values the environment can return.
+             - spec: Environment specifications.
+         """
         # board_size: a int, representing the board size (board has a board_size x board_size shape)
         # komi: a float, representing points given to the second player.
         self.cfg = cfg
@@ -157,6 +136,17 @@ class GoEnv(BaseEnv):
 
     # Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
     def reset(self, start_player_index=0, init_state=None, katago_policy_init=True, katago_game_state=None):
+        """
+         Overview:
+             Reset the environment.
+         Arguments:
+             - start_player_index (:obj:`int`): Specify which player to start the game. Defaults to 0.
+             - init_state (:obj:`ndarray`): Initial state of the board. Defaults to None.
+             - katago_policy_init (:obj:`bool`): Whether to initialize katago policy. Defaults to True.
+             - katago_game_state: The game state of katago. Defaults to None.
+         Returns:
+             - obs (:obj:`dict`): The initial observation after resetting.
+         """
         # TODO(pu): katago_game_state init
         self.katago_game_state = GameState(self.board_size)
 
@@ -406,6 +396,14 @@ class GoEnv(BaseEnv):
         return BaseEnvTimestep(obs, self.rewards[current_agent], self.dones[current_agent], self.infos[current_agent])
 
     def step(self, action):
+        """
+        Overview:
+            Step function to interact with environment.
+        Arguments:
+            - action (:obj:`int`): The action to take.
+        Returns:
+            - timestep (:obj:`BaseEnvTimestep`): The timestep containing observation, reward, done and info.
+        """
         if self.battle_mode == 'self_play_mode':
             if np.random.rand() < self.prob_random_agent:
                 action = self.random_action()
@@ -538,7 +536,7 @@ class GoEnv(BaseEnv):
     # ==============================================================
     # katago related
     # ==============================================================
-    def get_katago_action(self, to_play, step_num: int = 0):
+    def get_katago_action(self, to_play):
         command = ['get_katago_action']
         # self.current_player is the player who will play
         flatten_action = self.katago_policy.katago_command(self.katago_game_state, command, to_play=to_play,  step_num=self.step_num)
@@ -789,7 +787,7 @@ class GoEnv(BaseEnv):
                     )
                 )
 
-                flatten_action = self.gtp_action_to_flatten_action(gtp_action, board_size=self.board_size)
+                flatten_action = self.gtp_action_to_lz_flatten_action(gtp_action, board_size=self.board_size)
                 if flatten_action in self.legal_actions:
                     break
                 else:
@@ -801,7 +799,7 @@ class GoEnv(BaseEnv):
                 print("Wrong input, try again")
         return flatten_action
 
-    def gtp_action_to_flatten_action(self, gtp_action, board_size):
+    def gtp_action_to_lz_flatten_action(self, gtp_action, board_size):
         if gtp_action.lower() == "pass":
             return board_size * board_size
 
@@ -819,10 +817,22 @@ class GoEnv(BaseEnv):
     # ==============================================================
 
     def render_and_capture_frame(self, mode='only_save_gif'):
+        """
+        Overview:
+            Render a frame and capture it.
+        Arguments:
+            - mode (:obj:`str`): The render mode. Defaults to 'only_save_gif'.
+        """
         self.render(mode=mode)
         self.capture_frame()
 
     def render(self, mode='only_save_gif'):
+        """
+         Overview:
+             Render the current environment's state.
+         Arguments:
+             - mode (:obj:`str`): The render mode. Defaults to 'only_save_gif'.
+         """
         if not hasattr(self, "frames"):
             self.frames = []
 

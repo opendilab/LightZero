@@ -8,8 +8,8 @@ from zoo.board_games.go.envs.go_env_v0 import GoEnv, flatten_action_to_gtp_actio
 from zoo.board_games.go.envs.katago_policy import str_coord, KatagoPolicy, GameState
 
 cfg = EasyDict(
-    # board_size=19,
-    board_size=9,
+    board_size=19,
+    # board_size=9,
     # board_size=6,
     save_gif_replay=True,
     # render_in_ui=True,

@@ -349,9 +349,7 @@ rules = {
     "koRule": "KO_POSITIONAL",
     "scoringRule": "SCORING_AREA",
     "taxRule": "TAX_NONE",
-    # TODO(pu):
-    "multiStoneSuicideLegal": False,  # 之前测试的设置
-    # "multiStoneSuicideLegal": True,
+    "multiStoneSuicideLegal": False,
     "hasButton": False,
     "encorePhase": 0,
     "passWouldEndPhase": False,
@@ -364,7 +362,7 @@ input_feature_command_lookup = dict()
 
 class KatagoPolicy:
 
-    def __init__(self, checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+    def __init__(self, checkpoint_path="./code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
                  board_size=9, ignore_pass_if_have_other_legal_actions=False, device='cpu'):
         self.device = device
 
@@ -375,13 +373,12 @@ class KatagoPolicy:
         self.ignore_pass_if_have_other_legal_actions = ignore_pass_if_have_other_legal_actions
 
     def load_katago_policy(self,
-                          checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+                          checkpoint_path="./code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
                           board_size=9):
         args = {}
         args["use_swa"] = False
-        # TODO(pu)
         # download form https://media.katagotraining.org/uploaded/networks/zips/kata1/kata1-b18c384nbt-s6582191360-d3422816034.zip
-        # unzip to /Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034
+        # unzip to ./code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034
         args['checkpoint'] = checkpoint_path
 
         checkpoint_file = args["checkpoint"]
@@ -465,7 +462,7 @@ class KatagoPolicy:
                 moves_and_probs0 = outputs["moves_and_probs0"]
                 moves_and_probs = sorted(moves_and_probs0, key=lambda moveandprob: moveandprob[1], reverse=True)
                 katago_flatten_action = moves_and_probs[0][0]
-                if step_num >= 100:
+                if step_num <= 100:
                     if self.ignore_pass_if_have_other_legal_actions and len(moves_and_probs) > 1:
                         if katago_flatten_action == Board.PASS_LOC:  # 0
                             katago_flatten_action = moves_and_probs[1][0]
@@ -475,7 +472,7 @@ class KatagoPolicy:
                 moves_and_probs1 = outputs["moves_and_probs1"]
                 moves_and_probs = sorted(moves_and_probs1, key=lambda moveandprob: moveandprob[1], reverse=True)
                 katago_flatten_action = moves_and_probs[0][0]  # moves_and_probs[0]: (katago_flatten_action, prior)
-                if step_num >= 100:
+                if step_num <= 100:
                     if self.ignore_pass_if_have_other_legal_actions and len(moves_and_probs) > 1:
                         if katago_flatten_action == Board.PASS_LOC:  # 0
                             katago_flatten_action = moves_and_probs[1][0]
@@ -483,8 +480,8 @@ class KatagoPolicy:
 
             # gtp_action = str_coord(katago_flatten_action, gs.board)
             lz_flatten_action = katago_flatten_to_lz_flatten(katago_flatten_action, gs.board)
-            if lz_flatten_action == 2:
-                print('debug')
+            # if lz_flatten_action == 2:
+            #     print('debug')
             # if lz_flatten_action == 5:
             #     # legal_action [5, pass], 棋面除了位置5, 全是黑棋
             #     print('debug')
@@ -665,6 +662,10 @@ class KatagoPolicy:
         else:
             print('?%s ???\n\n' % (cmdid,), end='')
         sys.stdout.flush()
+
+    def get_katago_statistics(self, game_state):
+        outputs = self.get_outputs(game_state, rules)
+        return outputs
 
     def get_outputs(self, gs, rules):
         with torch.no_grad():
