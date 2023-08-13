@@ -82,7 +82,8 @@ create_config = tictactoe_alphazero_create_config
 
 if __name__ == '__main__':
     from lzero.entry import train_alphazero
-    from ding.utils import DDPContext, to_ddp_config
+    from ding.utils import DDPContext
+    from lzero.config.utils import to_ddp_config
     with DDPContext():
         main_config = to_ddp_config(main_config)
         train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
