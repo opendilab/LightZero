@@ -60,36 +60,37 @@ class MuZeroGameBuffer(GameBuffer):
         Returns:
             - train_data (:obj:`List`): List of train data, including current_batch and target_batch.
         """
-        policy._target_model.to(self._cfg.device)
-        policy._target_model.eval()
+        with self._lock:
+            policy._target_model.to(self._cfg.device)
+            policy._target_model.eval()
 
-        # obtain the current_batch and prepare target context
-        reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(
-            batch_size, self._cfg.reanalyze_ratio
-        )
-        # target reward, target value
-        batch_rewards, batch_target_values = self._compute_target_reward_value(
-            reward_value_context, policy._target_model
-        )
-        # target policy
-        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
-        batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
-            policy_non_re_context, self._cfg.model.action_space_size
-        )
+            # obtain the current_batch and prepare target context
+            reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(
+                batch_size, self._cfg.reanalyze_ratio
+            )
+            # target reward, target value
+            batch_rewards, batch_target_values = self._compute_target_reward_value(
+                reward_value_context, policy._target_model
+            )
+            # target policy
+            batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
+            batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
+                policy_non_re_context, self._cfg.model.action_space_size
+            )
 
-        # fusion of batch_target_policies_re and batch_target_policies_non_re to batch_target_policies
-        if 0 < self._cfg.reanalyze_ratio < 1:
-            batch_target_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
-        elif self._cfg.reanalyze_ratio == 1:
-            batch_target_policies = batch_target_policies_re
-        elif self._cfg.reanalyze_ratio == 0:
-            batch_target_policies = batch_target_policies_non_re
+            # fusion of batch_target_policies_re and batch_target_policies_non_re to batch_target_policies
+            if 0 < self._cfg.reanalyze_ratio < 1:
+                batch_target_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
+            elif self._cfg.reanalyze_ratio == 1:
+                batch_target_policies = batch_target_policies_re
+            elif self._cfg.reanalyze_ratio == 0:
+                batch_target_policies = batch_target_policies_non_re
 
-        target_batch = [batch_rewards, batch_target_values, batch_target_policies]
+            target_batch = [batch_rewards, batch_target_values, batch_target_policies]
 
-        # a batch contains the current_batch and the target_batch
-        train_data = [current_batch, target_batch]
-        return train_data
+            # a batch contains the current_batch and the target_batch
+            train_data = [current_batch, target_batch]
+            return train_data
 
     def _make_batch(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
         """
@@ -689,10 +690,11 @@ class MuZeroGameBuffer(GameBuffer):
             train_data = [current_batch, target_batch]
             current_batch = [obs_list, action_list, improved_policy_list(only in Gumbel MuZero), mask_list, batch_index_list, weights, make_time_list]
         """
-        indices = train_data[0][-3]
-        metas = {'make_time': train_data[0][-1], 'batch_priorities': batch_priorities}
-        # only update the priorities for data still in replay buffer
-        for i in range(len(indices)):
-            if metas['make_time'][i] > self.clear_time:
-                idx, prio = indices[i], metas['batch_priorities'][i]
-                self.game_pos_priorities[idx] = prio
+        with self._lock:
+            indices = train_data[0][-3]
+            metas = {'make_time': train_data[0][-1], 'batch_priorities': batch_priorities}
+            # only update the priorities for data still in replay buffer
+            for i in range(len(indices)):
+                if metas['make_time'][i] > self.clear_time:
+                    idx, prio = indices[i], metas['batch_priorities'][i]
+                    self.game_pos_priorities[idx] = prio

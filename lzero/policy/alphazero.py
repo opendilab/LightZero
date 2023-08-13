@@ -35,6 +35,8 @@ class AlphaZeroPolicy(Policy):
             # (int) The number of channels of hidden states in AlphaZero model.
             num_channels=32,
         ),
+        # (bool) Whether to use multi-gpu training.
+        multi_gpu=False,
         # (bool) Whether to use cuda for network.
         cuda=False,
         # (int) How many updates(iterations) to train after collector's one collection.
@@ -184,6 +186,8 @@ class AlphaZeroPolicy(Policy):
             list(self._model.parameters()),
             max_norm=self._cfg.grad_clip_value,
         )
+        if self._cfg.multi_gpu:
+            self.sync_gradients(self._learn_model)
         self._optimizer.step()
         if self._cfg.lr_piecewise_constant_decay is True:
             self.lr_scheduler.step()

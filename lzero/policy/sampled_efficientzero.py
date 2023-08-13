@@ -67,6 +67,8 @@ class SampledEfficientZeroPolicy(Policy):
             norm_type='BN', 
         ),
         # ****** common ******
+        # (bool) Whether to use multi-gpu training.
+        multi_gpu=False,
         # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
         sampled_algo=True,
         # (bool) Whether to enable the gumbel-based algorithm (e.g. Gumbel Muzero)
@@ -491,6 +493,8 @@ class SampledEfficientZeroPolicy(Policy):
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
             self._learn_model.parameters(), self._cfg.grad_clip_value
         )
+        if self._cfg.multi_gpu:
+            self.sync_gradients(self._learn_model)
         self._optimizer.step()
         if self._cfg.cos_lr_scheduler or self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()

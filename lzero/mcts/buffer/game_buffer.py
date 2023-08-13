@@ -7,6 +7,7 @@ import numpy as np
 from ding.torch_utils.data_helper import to_list
 from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
+from ding.utils import LockContext, LockContextType, build_logger, get_rank
 
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy, GumeblMuZeroPolicy
@@ -66,6 +67,8 @@ class GameBuffer(ABC, object):
         self.num_of_collected_episodes = 0
         self.base_idx = 0
         self.clear_time = 0
+        # Lock to guarantee thread safe
+        self._lock = LockContext(type_=LockContextType.THREAD_LOCK)
 
     @abstractmethod
     def sample(
@@ -111,41 +114,42 @@ class GameBuffer(ABC, object):
             - batch_size (:obj:`int`): batch size
             - beta: float the parameter in PER for calculating the priority
         """
-        assert self._beta > 0
-        num_of_transitions = self.get_num_of_transitions()
-        if self._cfg.use_priority is False:
-            self.game_pos_priorities = np.ones_like(self.game_pos_priorities)
+        with self._lock:
+            assert self._beta > 0
+            num_of_transitions = self.get_num_of_transitions()
+            if self._cfg.use_priority is False:
+                self.game_pos_priorities = np.ones_like(self.game_pos_priorities)
 
-        # +1e-6 for numerical stability
-        probs = self.game_pos_priorities ** self._alpha + 1e-6
-        probs /= probs.sum()
+            # +1e-6 for numerical stability
+            probs = self.game_pos_priorities ** self._alpha + 1e-6
+            probs /= probs.sum()
 
-        # sample according to transition index
-        # TODO(pu): replace=True
-        batch_index_list = np.random.choice(num_of_transitions, batch_size, p=probs, replace=False)
+            # sample according to transition index
+            # TODO(pu): replace=True
+            batch_index_list = np.random.choice(num_of_transitions, batch_size, p=probs, replace=False)
 
-        if self._cfg.reanalyze_outdated is True:
-            # NOTE: used in reanalyze part
-            batch_index_list.sort()
+            if self._cfg.reanalyze_outdated is True:
+                # NOTE: used in reanalyze part
+                batch_index_list.sort()
 
-        weights_list = (num_of_transitions * probs[batch_index_list]) ** (-self._beta)
-        weights_list /= weights_list.max()
+            weights_list = (num_of_transitions * probs[batch_index_list]) ** (-self._beta)
+            weights_list /= weights_list.max()
 
-        game_segment_list = []
-        pos_in_game_segment_list = []
+            game_segment_list = []
+            pos_in_game_segment_list = []
 
-        for idx in batch_index_list:
-            game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
-            game_segment_idx -= self.base_idx
-            game_segment = self.game_segment_buffer[game_segment_idx]
+            for idx in batch_index_list:
+                game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
+                game_segment_idx -= self.base_idx
+                game_segment = self.game_segment_buffer[game_segment_idx]
 
-            game_segment_list.append(game_segment)
-            pos_in_game_segment_list.append(pos_in_game_segment)
+                game_segment_list.append(game_segment)
+                pos_in_game_segment_list.append(pos_in_game_segment)
 
-        make_time = [time.time() for _ in range(len(batch_index_list))]
+            make_time = [time.time() for _ in range(len(batch_index_list))]
 
-        orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
-        return orig_data
+            orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
+            return orig_data
 
     def _preprocess_to_play_and_action_mask(
         self, game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
@@ -309,9 +313,10 @@ class GameBuffer(ABC, object):
                 - data (:obj:`Any`): The data (game segments) which will be pushed into buffer.
                 - meta (:obj:`dict`): Meta information, e.g. priority, count, staleness.
         """
-        data, meta = data_and_meta
-        for (data_game, meta_game) in zip(data, meta):
-            self._push_game_segment(data_game, meta_game)
+        with self._lock:
+            data, meta = data_and_meta
+            for (data_game, meta_game) in zip(data, meta):
+                self._push_game_segment(data_game, meta_game)
 
     def _push_game_segment(self, data: Any, meta: Optional[dict] = None) -> None:
         """
@@ -358,19 +363,20 @@ class GameBuffer(ABC, object):
         Overview:
             remove some oldest data if the replay buffer is full.
         """
-        assert self.replay_buffer_size > self._cfg.batch_size, "replay buffer size should be larger than batch size"
-        nums_of_game_segments = self.get_num_of_game_segments()
-        total_transition = self.get_num_of_transitions()
-        if total_transition > self.replay_buffer_size:
-            index = 0
-            for i in range(nums_of_game_segments):
-                total_transition -= len(self.game_segment_buffer[i])
-                if total_transition <= self.replay_buffer_size * self.keep_ratio:
-                    # find the max game_segment index to keep in the buffer
-                    index = i
-                    break
-            if total_transition >= self._cfg.batch_size:
-                self._remove(index + 1)
+        with self._lock:
+            assert self.replay_buffer_size > self._cfg.batch_size, "replay buffer size should be larger than batch size"
+            nums_of_game_segments = self.get_num_of_game_segments()
+            total_transition = self.get_num_of_transitions()
+            if total_transition > self.replay_buffer_size:
+                index = 0
+                for i in range(nums_of_game_segments):
+                    total_transition -= len(self.game_segment_buffer[i])
+                    if total_transition <= self.replay_buffer_size * self.keep_ratio:
+                        # find the max game_segment index to keep in the buffer
+                        index = i
+                        break
+                if total_transition >= self._cfg.batch_size:
+                    self._remove(index + 1)
 
     def _remove(self, excess_game_segment_index: List[int]) -> None:
         """
