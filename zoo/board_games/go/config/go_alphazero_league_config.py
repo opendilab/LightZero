@@ -59,7 +59,7 @@ num_simulations = 200
 # ==============================================================
 
 go_alphazero_config = dict(
-    exp_name=f"data_az_ctree_league/go_b{board_size}-komi-{komi}_alphazero_nb-{num_res_blocks}-nc-{num_channels}_ns{num_simulations}_upc{update_per_collect}_league-sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_fromiter100k_seed0",
+    exp_name=f"data_az_ctree_league/go_b{board_size}-komi-{komi}_alphazero_nb-{num_res_blocks}-nc-{num_channels}_ns{num_simulations}_upc{update_per_collect}_league-sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_fromiter130k_seed0",
     env=dict(
         stop_value=2,
         env_name="Go",
@@ -128,7 +128,7 @@ go_alphazero_config = dict(
             log_freq_for_payoff_rank=50,
             player_category=['go'],
             # path to save policy of league player, user can specify this field
-            path_policy=f"data_az_ctree_league/go_alphazero_league_sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_ns{num_simulations}_policy_ckpt_fromiter100k_seed0",
+            path_policy=f"data_az_ctree_league/go_alphazero_league_sp-{sp_prob}_bot-init-{use_bot_init_historical}_phase-step-{one_phase_step}_ns{num_simulations}_policy_ckpt_fromiter130k_seed0",
             active_players=dict(main_player=1, ),
             main_player=dict(
                 # An active player will be considered trained enough for snapshot after two phase steps.
@@ -150,8 +150,8 @@ go_alphazero_config = dict(
             # "use_pretrain_init_historical". If both are False, "pretrain_checkpoint_path" can be omitted as well.
             # Otherwise, "pretrain_checkpoint_path" should list paths of all player categories.
             use_pretrain_init_historical=True,
-            pretrain_checkpoint_path=dict(go='/mnt/nfs/puyuan/LightZero/data_az_ctree_league/go_b9-komi-7.5_alphazero_nb-5-nc-64_ns50_upc200_league-sp-0.2_bot-init-True_phase-step-5000_seed0_230804_115041/ckpt_main_player_go_0_learner/iteration_100000.pth.tar', ),
-
+            # pretrain_checkpoint_path=dict(go='/mnt/nfs/puyuan/LightZero/data_az_ctree_league/go_b9-komi-7.5_alphazero_nb-5-nc-64_ns50_upc200_league-sp-0.2_bot-init-True_phase-step-5000_seed0_230804_115041/ckpt_main_player_go_0_learner/iteration_100000.pth.tar', ),
+            pretrain_checkpoint_path=dict(go='/mnt/nfs/puyuan/LightZero/data_az_ctree_league/go_b9-komi-7.5_alphazero_nb-5-nc-64_ns200_upc200_league-sp-0.2_bot-init-True_phase-step-5000_fromiter100k_seed0_230808_074642/ckpt_main_player_go_0_learner/iteration_30000.pth.tar', ),
             # "use_bot_init_historical" means whether to use bot as an init historical player
             use_bot_init_historical=use_bot_init_historical,
             # "snapshot_the_player_in_iter_zero" means whether to snapshot the player in iter zero as historical_player.

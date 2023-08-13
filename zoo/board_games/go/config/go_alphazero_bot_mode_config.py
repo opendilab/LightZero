@@ -55,13 +55,13 @@ num_simulations = 200
 # ==============================================================
 go_alphazero_config = dict(
     exp_name=
-    f'data_az_ctree/go_b{board_size}-komi-{komi}_alphazero_bot-mode_rand{prob_random_action_in_bot}_nb-{num_res_blocks}-nc-{num_channels}_ns{num_simulations}_upc{update_per_collect}_rbs1e6_seed0',
+    f'data_az_ctree/go_b{board_size}-komi-{komi}_alphazero_bot-mode_rand{prob_random_action_in_bot}_nb-{num_res_blocks}-nc-{num_channels}_ns{num_simulations}_upc{update_per_collect}_rbs1e6_fromiter40k_seed0',
     env=dict(
         board_size=board_size,
         komi=komi,
         use_katago_bot=True,
-        katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
-        # katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        # katago_checkpoint_path="/Users/puyuan/code/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
+        katago_checkpoint_path="/mnt/nfs/puyuan/KataGo/kata1-b18c384nbt-s6582191360-d3422816034/model.ckpt",
         battle_mode='play_with_bot_mode',
         bot_action_type='v0',
         prob_random_action_in_bot=prob_random_action_in_bot,
@@ -84,6 +84,7 @@ go_alphazero_config = dict(
         mcts_ctree=mcts_ctree,
     ),
     policy=dict(
+        model_path='/mnt/nfs/puyuan/LightZero/data_az_ctree/go_b9-komi-7.5_alphazero_bot-mode_rand0_nb-5-nc-64_ns200_upc200_rbs1e6_seed0/ckpt/iteration_40000.pth.tar',
         torch_compile=False,
         tensor_float_32=False,
         model=dict(

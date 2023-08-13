@@ -2,13 +2,14 @@ import logging
 
 import pytest
 from easydict import EasyDict
+import numpy as np
 
 from zoo.board_games.go.envs.go_env import GoEnv, flatten_action_to_gtp_action
 from zoo.board_games.go.envs.katago_policy import str_coord, KatagoPolicy, GameState
 
 cfg = EasyDict(
-    # board_size=19,
-    board_size=9,
+    board_size=19,
+    # board_size=9,
     # board_size=6,
     save_gif_replay=True,
     # render_in_ui=True,
@@ -64,16 +65,12 @@ class TestKataGoBot:
                 bot_action = env.get_katago_action(to_play=1)
 
                 if bot_action not in env.legal_actions:
-                    # logging.warning(
-                    #     f"You input illegal *bot* action: {bot_action}, the legal_actions are {env.legal_actions}. "
-                    #     f"Now we randomly choice a action from self.legal_actions."
-                    # )
-                    # bot_action = np.random.choice(env.legal_actions)
                     logging.warning(
                         f"You input illegal *bot* action: {bot_action}, the legal_actions are {env.legal_actions}. "
-                        f"Now we choice the first action from self.legal_actions."
+                        f"Now we randomly choice a action from self.legal_actions."
                     )
-                    bot_action = env.legal_actions[0]
+                    bot_action = np.random.choice(env.legal_actions)
+
 
                 katago_flatten_action = env.lz_flatten_to_katago_flatten(bot_action, env.board_size)
                 print('player 1:', str_coord(katago_flatten_action, env.katago_game_state.board))
@@ -108,16 +105,12 @@ class TestKataGoBot:
                 # bot_action = env.human_to_gtp_action()
                 bot_action = env.get_katago_action(to_play=2)
                 if bot_action not in env.legal_actions:
-                    # logging.warning(
-                    #     f"You input illegal *bot* action: {bot_action}, the legal_actions are {env.legal_actions}. "
-                    #     f"Now we randomly choice a action from self.legal_actions."
-                    # )
-                    # bot_action = np.random.choice(env.legal_actions)
                     logging.warning(
                         f"You input illegal *bot* action: {bot_action}, the legal_actions are {env.legal_actions}. "
-                        f"Now we choice the first action from self.legal_actions."
+                        f"Now we randomly choice a action from self.legal_actions."
                     )
-                    bot_action = env.legal_actions[0]
+                    bot_action = np.random.choice(env.legal_actions)
+
 
                 # ****** update katago internal game state ******
                 # TODO(pu): how to avoid this?

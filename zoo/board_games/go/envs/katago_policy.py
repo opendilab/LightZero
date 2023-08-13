@@ -1,6 +1,7 @@
 """Adapted from https://github.com/lightvector/KataGo/blob/master/python/play.py"""
 
 import colorsys
+import copy
 import logging
 import math
 # !/usr/bin/python3
@@ -103,8 +104,8 @@ def katago_flatten_to_lz_flatten(loc, board):
         return board.size * board.size
     x = board.loc_x(loc)  # left_to_right 0,1,2,...,board.size-1
     y = board.loc_y(loc)  # upper_to_bottom 0,1,2,...,board.size-1
-    if y * board.size + x < 0:
-        print('debug')
+    # if y * board.size + x < 0:
+    #     print('debug')
     return y * board.size + x
     # 11 -> (0,0) -> 0
     # 21 -> (0,1) -> 9
@@ -459,32 +460,34 @@ class KatagoPolicy:
             # board_size=19: katago_flatten_action - 21 = lz_flatten_action
             outputs = self.get_outputs(gs, rules)
             if to_play == 1:
-                moves_and_probs0 = outputs["moves_and_probs0"]
-                moves_and_probs = sorted(moves_and_probs0, key=lambda moveandprob: moveandprob[1], reverse=True)
-                katago_flatten_action = moves_and_probs[0][0]
+                moves_and_probs_black = outputs["moves_and_probs0"]
+                moves_and_probs_black_sorted = sorted(moves_and_probs_black, key=lambda moveandprob: moveandprob[1], reverse=True)
+                katago_flatten_action = moves_and_probs_black_sorted[0][0]
                 if step_num <= 100:
-                    if self.ignore_pass_if_have_other_legal_actions and len(moves_and_probs) > 1:
+                    # TODO(pu)
+                    if self.ignore_pass_if_have_other_legal_actions and len(moves_and_probs_black_sorted) > 1:
                         if katago_flatten_action == Board.PASS_LOC:  # 0
-                            katago_flatten_action = moves_and_probs[1][0]
-                            # TODO
+                            katago_flatten_action = moves_and_probs_black_sorted[1][0]
                             # print('ignore_pass_if_have_other_legal_actions now!')
             elif to_play == 2:
-                moves_and_probs1 = outputs["moves_and_probs1"]
-                moves_and_probs = sorted(moves_and_probs1, key=lambda moveandprob: moveandprob[1], reverse=True)
-                katago_flatten_action = moves_and_probs[0][0]  # moves_and_probs[0]: (katago_flatten_action, prior)
+                moves_and_probs_white = outputs["moves_and_probs1"]
+                moves_and_probs_white_sorted = sorted(moves_and_probs_white, key=lambda moveandprob: moveandprob[1], reverse=True)
+
+                # only for debug
+                # from zoo.board_games.go.envs.utils import flatten_action_to_gtp_action
+                # moves_and_probs_white_sorted_deepcopy = copy.deepcopy(moves_and_probs_white_sorted)
+                # for i in range(len(moves_and_probs_white_sorted_deepcopy)):
+                #     moves_and_probs_white_sorted_deepcopy[i] = (flatten_action_to_gtp_action(katago_flatten_to_lz_flatten(moves_and_probs_white_sorted_deepcopy[i][0], gs.board), 19), moves_and_probs_white_sorted_deepcopy[i][1])
+
+                katago_flatten_action = moves_and_probs_white_sorted[0][0]  # moves_and_probs[0]: (katago_flatten_action, prior)
                 if step_num <= 100:
-                    if self.ignore_pass_if_have_other_legal_actions and len(moves_and_probs) > 1:
+                    if self.ignore_pass_if_have_other_legal_actions and len(moves_and_probs_white_sorted) > 1:
                         if katago_flatten_action == Board.PASS_LOC:  # 0
-                            katago_flatten_action = moves_and_probs[1][0]
+                            katago_flatten_action = moves_and_probs_white_sorted[1][0]
                             # print('ignore_pass_if_have_other_legal_actions now!')
 
             # gtp_action = str_coord(katago_flatten_action, gs.board)
             lz_flatten_action = katago_flatten_to_lz_flatten(katago_flatten_action, gs.board)
-            # if lz_flatten_action == 2:
-            #     print('debug')
-            # if lz_flatten_action == 5:
-            #     # legal_action [5, pass], 棋面除了位置5, 全是黑棋
-            #     print('debug')
             return lz_flatten_action
 
         elif command[0] == "name":

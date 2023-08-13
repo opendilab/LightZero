@@ -197,7 +197,7 @@ class GoEnv(BaseEnv):
                 # TODO(pu)
                 # ****** update katago internal game state ******
                 # self.reset_katago_game_state_v0(copy.deepcopy(init_state))
-                self.reset_katago_game_state_v1(copy.deepcopy(katago_game_state))
+                self.reset_katago_game_state_v1(copy.deepcopy(self.katago_game_state))
 
         else:
             self._raw_env._go = go_base.Position(board=np.zeros((self.board_size, self.board_size), dtype="int32"),
