@@ -17,6 +17,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
 from collections import defaultdict
 from ding.utils.data import default_collate
 from .muzero import MuZeroPolicy
+from ding.torch_utils import to_device, to_tensor
 
 
 @POLICY_REGISTRY.register('multi_agent_muzero')
@@ -65,6 +66,7 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
         data = sum(sum(data, []), [])
         batch_size = len(data)
         data = default_collate(data)
+        data = to_device(data, self._device)
         agent_num = self._cfg['model']['agent_num']
         to_play = np.array(to_play).reshape(-1).tolist()
 
@@ -161,6 +163,7 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
         data = sum(sum(data, []), [])
         batch_size = len(data)
         data = default_collate(data)
+        data = to_device(data, self._device)
         agent_num = self._cfg['model']['agent_num']
         to_play = np.array(to_play).reshape(-1).tolist()
 
