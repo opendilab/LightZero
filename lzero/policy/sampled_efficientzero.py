@@ -518,7 +518,7 @@ class SampledEfficientZeroPolicy(Policy):
                 'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
                 'value_prefix_loss': value_prefix_loss.mean().item(),
                 'value_loss': value_loss.mean().item(),
-                'consistency_loss': consistency_loss.mean() / self._cfg.num_unroll_steps,
+                'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
 
                 # ==============================================================
                 # priority related
@@ -548,7 +548,7 @@ class SampledEfficientZeroPolicy(Policy):
                 'target_sampled_actions_max': target_sampled_actions[:, :, 0].max().item(),
                 'target_sampled_actions_min': target_sampled_actions[:, :, 0].min().item(),
                 'target_sampled_actions_mean': target_sampled_actions[:, :, 0].mean().item(),
-                'total_grad_norm_before_clip': total_grad_norm_before_clip
+                'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
             })
         else:
             return_data.update({
@@ -559,7 +559,7 @@ class SampledEfficientZeroPolicy(Policy):
                 'target_sampled_actions_max': target_sampled_actions[:, :].float().max().item(),
                 'target_sampled_actions_min': target_sampled_actions[:, :].float().min().item(),
                 'target_sampled_actions_mean': target_sampled_actions[:, :].float().mean().item(),
-                'total_grad_norm_before_clip': total_grad_norm_before_clip
+                'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
             })
         
         return return_data

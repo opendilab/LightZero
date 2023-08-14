@@ -3,8 +3,9 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+gpu_num = 2
 collector_env_num = 8
-n_episode = 8
+n_episode = int(8*gpu_num)
 evaluator_env_num = 5
 num_simulations = 25
 update_per_collect = 50
@@ -14,7 +15,7 @@ max_env_step = int(2e5)
 # end of the most frequently changed config specified by the user
 # ==============================================================
 tictactoe_alphazero_config = dict(
-    exp_name='data_az_ptree/tictactoe_sp-mode_alphazero_seed0',
+    exp_name=f'data_az_ptree/tictactoe_alphazero_sp-mode_ns{num_simulations}_upc{update_per_collect}_ddp_{gpu_num}gpu_seed0',
     env=dict(
         board_size=3,
         battle_mode='self_play_mode',
@@ -34,8 +35,8 @@ tictactoe_alphazero_config = dict(
             fc_value_layers=[8],
             fc_policy_layers=[8],
         ),
-        multi_gpu=True,
         cuda=True,
+        multi_gpu=True,
         board_size=3,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
@@ -87,4 +88,8 @@ if __name__ == '__main__':
         main_config = to_ddp_config(main_config)
         train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
 
-
+    """
+    Overview:
+        You should run this script with <nproc_per_node> gpus.
+        python -m torch.distributed.launch --nproc_per_node=2 ./LightZero/zoo/board_games/tictactoe/config/tictactoe_alphazero_sp_mode_multigpu_ddp_config.py
+    """

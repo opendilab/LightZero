@@ -180,8 +180,9 @@ class MuZeroCollector(ISerialCollector):
             return
         self._end_flag = True
         self._env.close()
-        self._tb_logger.flush()
-        self._tb_logger.close()
+        if self._tb_logger:
+            self._tb_logger.flush()
+            self._tb_logger.close()
 
     def __del__(self) -> None:
         """
@@ -306,6 +307,7 @@ class MuZeroCollector(ISerialCollector):
         epsilon = policy_kwargs['epsilon']
 
         collected_episode = 0
+        collected_step = 0
         env_nums = self._env_num
 
         # initializations
@@ -529,10 +531,9 @@ class MuZeroCollector(ISerialCollector):
                         game_segments[env_id].reset(observation_window_stack[env_id])
 
                     self._env_info[env_id]['step'] += 1
-                    self._total_envstep_count += 1
+                    collected_step += 1
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
-
                 if timestep.done:
                     self._total_episode_count += 1
                     reward = timestep.info['eval_episode_return']
@@ -645,6 +646,17 @@ class MuZeroCollector(ISerialCollector):
                 # for i in range(len(return_data[0])):
                 #     print(return_data[0][i].reward_segment)
                 break
+
+        collected_duration = sum([d['time'] for d in self._episode_info])
+        # reduce data when enables DDP
+        if self._world_size > 1:
+            collected_step = allreduce_data(collected_step, 'sum')
+            collected_episode = allreduce_data(collected_episode, 'sum')
+            collected_duration = allreduce_data(collected_duration, 'sum')
+        self._total_envstep_count += collected_step
+        self._total_episode_count += collected_episode
+        self._total_duration += collected_duration
+
         # log
         self._output_log(train_iter)
         return return_data
@@ -657,6 +669,8 @@ class MuZeroCollector(ISerialCollector):
         Arguments:
             - train_iter (:obj:`int`): the number of training iteration.
         """
+        if self._rank != 0:
+            return
         if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
             self._last_train_iter = train_iter
             episode_count = len(self._episode_info)

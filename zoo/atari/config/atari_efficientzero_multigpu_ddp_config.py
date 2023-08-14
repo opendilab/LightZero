@@ -18,22 +18,30 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 collector_env_num = 8
-n_episode = 8
+n_episode = int(8*2)
 evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
-
 eps_greedy_exploration_in_collect = False
+
+# debug config
+# collector_env_num = 2
+# n_episode = int(2*2)
+# evaluator_env_num = 1
+# num_simulations = 2
+# update_per_collect = 2
+# batch_size = 4
+# max_env_step = int(1e6)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/{env_name[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_ez_ctree/{env_name[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ddp_2gpu_seed0',
     env=dict(
         env_name=env_name,
         obs_shape=(4, 96, 96),
@@ -51,8 +59,8 @@ atari_efficientzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
         ),
-        multi_gpu=True,
         cuda=True,
+        multi_gpu=True,
         env_type='not_board_games',
         game_segment_length=400,
         random_collect_episode_num=0,
@@ -109,6 +117,7 @@ if __name__ == "__main__":
         train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
 
     """
-    export RANK=0
-    export WORLD_SIZE=8
+    Overview:
+        You should run this script with <nproc_per_node> gpus.
+        python -m torch.distributed.launch --nproc_per_node=2 ./LightZero/zoo/atari/config/atari_efficientzero_multigpu_ddp_config.py
     """

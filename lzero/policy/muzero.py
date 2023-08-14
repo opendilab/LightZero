@@ -454,7 +454,7 @@ class MuZeroPolicy(Policy):
             'policy_loss': policy_loss.mean().item(),
             'reward_loss': reward_loss.mean().item(),
             'value_loss': value_loss.mean().item(),
-            'consistency_loss': consistency_loss.mean() / self._cfg.num_unroll_steps,
+            'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
 
             # ==============================================================
             # priority related
@@ -467,7 +467,7 @@ class MuZeroPolicy(Policy):
             'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
             'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
             'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
-            'total_grad_norm_before_clip': total_grad_norm_before_clip
+            'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
         }
 
     def _init_collect(self) -> None:

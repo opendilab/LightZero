@@ -17,8 +17,9 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+gpu_num = 2
 collector_env_num = 8
-n_episode = 8
+n_episode = int(8*gpu_num)
 evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 1000
@@ -33,7 +34,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ddp_{gpu_num}gpu_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,

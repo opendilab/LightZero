@@ -12,6 +12,7 @@ def get_world_size() -> int:
     # return int(os.environ.get('SLURM_NTASKS', 1))
     return error_wrapper(dist.get_world_size, 1)()
 
+
 def to_ddp_config(cfg: EasyDict) -> EasyDict:
     w = get_world_size()
     cfg.policy.batch_size = int(np.ceil(cfg.policy.batch_size / w))

@@ -152,7 +152,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             self.reset_env(_env)
         if _policy is not None:
             self.reset_policy(_policy)
-        self._max_eval_reward = float("-inf")
+        self._max_episode_return = float("-inf")
         self._last_eval_iter = 0
         self._end_flag = False
 
@@ -166,8 +166,9 @@ class MuZeroEvaluator(ISerialEvaluator):
             return
         self._end_flag = True
         self._env.close()
-        self._tb_logger.flush()
-        self._tb_logger.close()
+        if self._tb_logger:
+            self._tb_logger.flush()
+            self._tb_logger.close()
 
     def __del__(self):
         """
@@ -209,9 +210,10 @@ class MuZeroEvaluator(ISerialEvaluator):
             - n_episode (:obj:`int`): Number of evaluation episodes.
         Returns:
             - stop_flag (:obj:`bool`): Whether this training program can be ended.
-            - eval_reward (:obj:`float`): Current eval_reward.
+            - episode_info (:obj:`Dict[str, List]`): Current evaluation episode information.
         """
         # evaluator only work on rank0
+        episode_info = None
         stop_flag = False
         if get_rank() == 0:
             if n_episode is None:
@@ -430,24 +432,23 @@ class MuZeroEvaluator(ISerialEvaluator):
                     continue
                 self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
                 self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, envstep)
-            eval_reward = np.mean(episode_return)
-            if eval_reward > self._max_eval_reward:
+            episode_return = np.mean(episode_return)
+            if episode_return > self._max_episode_return:
                 if save_ckpt_fn:
                     save_ckpt_fn('ckpt_best.pth.tar')
-                self._max_eval_reward = eval_reward
-            stop_flag = eval_reward >= self._stop_value and train_iter > 0
+                self._max_episode_return = episode_return
+            stop_flag = episode_return >= self._stop_value and train_iter > 0
             if stop_flag:
                 self._logger.info(
                     "[LightZero serial pipeline] " +
-                    "Current eval_reward: {} is greater than stop_value: {}".format(eval_reward, self._stop_value) +
+                    "Current episode_return: {} is greater than stop_value: {}".format(episode_return, self._stop_value) +
                     ", so your MCTS/RL agent is converged, you can refer to 'log/evaluator/evaluator_logger.txt' for details."
                 )
 
+        if get_world_size() > 1:
+            objects = [stop_flag, episode_info]
+            broadcast_object_list(objects, src=0)
+            stop_flag, episode_info = objects
 
-            if get_world_size() > 1:
-                objects = [stop_flag, episode_info]
-                broadcast_object_list(objects, src=0)
-                stop_flag, episode_info = objects
-
-            episode_info = to_item(episode_info)
-            return stop_flag, episode_info
+        episode_info = to_item(episode_info)
+        return stop_flag, episode_info

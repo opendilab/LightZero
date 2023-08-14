@@ -501,7 +501,7 @@ class EfficientZeroPolicy(Policy):
             'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
             'value_prefix_loss': value_prefix_loss.mean().item(),
             'value_loss': value_loss.mean().item(),
-            'consistency_loss': consistency_loss.mean() / self._cfg.num_unroll_steps,
+            'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
 
             # ==============================================================
             # priority related
@@ -514,7 +514,7 @@ class EfficientZeroPolicy(Policy):
             'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
             'predicted_value_prefixs': predicted_value_prefixs.detach().cpu().numpy().mean().item(),
             'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
-            'total_grad_norm_before_clip': total_grad_norm_before_clip
+            'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
         }
 
     def _init_collect(self) -> None:

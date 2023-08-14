@@ -114,42 +114,41 @@ class GameBuffer(ABC, object):
             - batch_size (:obj:`int`): batch size
             - beta: float the parameter in PER for calculating the priority
         """
-        with self._lock:
-            assert self._beta > 0
-            num_of_transitions = self.get_num_of_transitions()
-            if self._cfg.use_priority is False:
-                self.game_pos_priorities = np.ones_like(self.game_pos_priorities)
+        assert self._beta > 0
+        num_of_transitions = self.get_num_of_transitions()
+        if self._cfg.use_priority is False:
+            self.game_pos_priorities = np.ones_like(self.game_pos_priorities)
 
-            # +1e-6 for numerical stability
-            probs = self.game_pos_priorities ** self._alpha + 1e-6
-            probs /= probs.sum()
+        # +1e-6 for numerical stability
+        probs = self.game_pos_priorities ** self._alpha + 1e-6
+        probs /= probs.sum()
 
-            # sample according to transition index
-            # TODO(pu): replace=True
-            batch_index_list = np.random.choice(num_of_transitions, batch_size, p=probs, replace=False)
+        # sample according to transition index
+        # TODO(pu): replace=True
+        batch_index_list = np.random.choice(num_of_transitions, batch_size, p=probs, replace=False)
 
-            if self._cfg.reanalyze_outdated is True:
-                # NOTE: used in reanalyze part
-                batch_index_list.sort()
+        if self._cfg.reanalyze_outdated is True:
+            # NOTE: used in reanalyze part
+            batch_index_list.sort()
 
-            weights_list = (num_of_transitions * probs[batch_index_list]) ** (-self._beta)
-            weights_list /= weights_list.max()
+        weights_list = (num_of_transitions * probs[batch_index_list]) ** (-self._beta)
+        weights_list /= weights_list.max()
 
-            game_segment_list = []
-            pos_in_game_segment_list = []
+        game_segment_list = []
+        pos_in_game_segment_list = []
 
-            for idx in batch_index_list:
-                game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
-                game_segment_idx -= self.base_idx
-                game_segment = self.game_segment_buffer[game_segment_idx]
+        for idx in batch_index_list:
+            game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
+            game_segment_idx -= self.base_idx
+            game_segment = self.game_segment_buffer[game_segment_idx]
 
-                game_segment_list.append(game_segment)
-                pos_in_game_segment_list.append(pos_in_game_segment)
+            game_segment_list.append(game_segment)
+            pos_in_game_segment_list.append(pos_in_game_segment)
 
-            make_time = [time.time() for _ in range(len(batch_index_list))]
+        make_time = [time.time() for _ in range(len(batch_index_list))]
 
-            orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
-            return orig_data
+        orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
+        return orig_data
 
     def _preprocess_to_play_and_action_mask(
         self, game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
