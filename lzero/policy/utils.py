@@ -155,6 +155,7 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
             # ``obs_target_batch`` is only used for calculate consistency loss, which take the all obs other than
             # timestep t1, and is only performed in the last 8 timesteps in the second dim in ``obs_batch_ori``.
             obs_target_batch = obs_batch_ori[:, cfg.model.image_channel:, :, :]
+        return obs_batch, obs_target_batch
     elif cfg.model.model_type == 'mlp':
         # for 1-dimensional vector obs
         """
@@ -178,6 +179,7 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
             # ``obs_target_batch`` is only used for calculate consistency loss, which take the all obs other than
             # timestep t1, and is only performed in the last 8 timesteps in the second dim in ``obs_batch_ori``.
             obs_target_batch = obs_batch_ori[:, cfg.model.observation_shape:]
+        return obs_batch, obs_target_batch
     elif cfg.model.model_type == 'structure':
         # dict obs_shape = 1
         batch_size = obs_batch_ori.shape[0]
@@ -216,7 +218,7 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
                         obs_target_batch_new[k][k1] = v1.reshape(batch_size, -1)
             else:  # espaecially for ptz obs, {'k1':[], 'k2':[]}
                 obs_target_batch_new[k] = v.reshape(batch_size, -1)
-    return obs_batch_new, obs_target_batch_new
+        return obs_batch_new, obs_target_batch_new
 
 
 def negative_cosine_similarity(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:

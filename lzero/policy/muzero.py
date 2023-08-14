@@ -187,6 +187,9 @@ class MuZeroPolicy(Policy):
             # (int) The decay steps from start to end eps.
             decay=int(1e5),
         ),
+
+        # (bool) Whether it is a multi-agent environment.
+        multi_agent=False,
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
