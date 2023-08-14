@@ -274,10 +274,10 @@ class PettingZooEnv(BaseEnv):
         # action_mask: All actions are of use(either 1 for discrete or 5 for continuous). Thus all 1.
         # action_mask = np.ones((self._num_agents, *self._action_dim)).astype(np.float32)
         action_mask = [[1 for _ in range(*self._action_dim)] for _ in range(self._num_agents)]
-        to_play =  [-1 for _ in self._agents]  # Moot, for alignment with other environments
+        to_play =  [-1 for _ in range(self._num_agents)]  # Moot, for alignment with other environments
 
         ret_transform = []
-        for i in range(len(self.agents)):
+        for i in range(self._num_agents):
             tmp = {}
             for k,v in ret.items():
                 tmp[k] = v[i]

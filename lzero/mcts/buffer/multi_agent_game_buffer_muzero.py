@@ -152,10 +152,9 @@ class MultiAgentMuZeroGameBuffer(MuZeroGameBuffer):
 
                 # m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
                 m_obs = value_obs_list[beg_index:end_index]
-                m_obs = to_tensor(m_obs)
                 m_obs = sum(m_obs, [])
-                m_obs = to_device(m_obs, self._cfg.device)
                 m_obs = default_collate(m_obs)
+                m_obs = to_device(m_obs, self._cfg.device)
 
                 # calculate the target value
                 m_output = model.initial_inference(m_obs)

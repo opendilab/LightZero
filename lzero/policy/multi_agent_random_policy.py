@@ -59,7 +59,6 @@ class MultiAgentLightZeroRandomPolicy(LightZeroRandomPolicy):
         data = to_tensor(data)
         data = sum(sum(data, []), [])
         batch_size = len(data)
-        data = to_device(data, self._cfg.device)
         data = default_collate(data)
         agent_num = batch_size // active_collect_env_num
         to_play = np.array(to_play).reshape(-1).tolist()

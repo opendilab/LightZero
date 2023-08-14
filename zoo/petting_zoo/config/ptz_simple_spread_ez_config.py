@@ -6,6 +6,7 @@ multi_agent = True
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+seed = 0
 n_agent = 3
 n_landmark = n_agent
 collector_env_num = 8
@@ -16,7 +17,6 @@ num_simulations = 50
 update_per_collect = 1000
 reanalyze_ratio = 0.
 action_space_size = 5
-seed = 0
 eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user

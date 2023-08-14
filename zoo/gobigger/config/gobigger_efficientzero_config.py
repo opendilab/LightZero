@@ -17,7 +17,7 @@ reanalyze_ratio = 0.
 action_space_size = 27
 direction_num = 12
 eps_greedy_exploration_in_collect = True
-player_num_per_team = 3
+player_num_per_team = 2
 team_num = 2  
 agent_num = player_num_per_team*team_num  # default is GoBigger T2P2
 # ==============================================================

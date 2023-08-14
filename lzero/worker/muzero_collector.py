@@ -415,11 +415,15 @@ class MuZeroCollector(ISerialCollector):
                 action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
 
-                stack_obs = to_ndarray(stack_obs)
-
-                if self.policy_config.model.model_type and self.policy_config.model.model_type in ['conv', 'mlp']:
-                    stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
-                    stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
+                if self.policy_config.model.model_type:
+                    if self.policy_config.model.model_type in ['conv', 'mlp']:
+                        stack_obs = to_ndarray(stack_obs)
+                        stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
+                        stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
+                    elif self.policy_config.model.model_type == 'structure':
+                        stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
+                else:
+                    raise ValueError('model_type must be one of [conv, mlp, structure]')
 
                 # ==============================================================
                 # policy forward

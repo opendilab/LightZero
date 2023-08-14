@@ -46,7 +46,7 @@ gobigger_muzero_config = dict(
             latent_state_dim=176,
             frame_stack_num=1,
             action_space_size=action_space_size,
-            self_supervised_learning_loss=False,  # default is False
+            self_supervised_learning_loss=True,  # default is False
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
         ),

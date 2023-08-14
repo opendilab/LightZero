@@ -46,16 +46,18 @@ main_config = dict(
         model=dict(
             model_type='structure',
             env_name=env_name,
-            latent_state_dim=18,
+            latent_state_dim=256,
             frame_stack_num=1,
             action_space='discrete',
             action_space_size=action_space_size,
             agent_num=n_agent,
-            self_supervised_learning_loss=False,  # default is False
+            self_supervised_learning_loss=True,  # default is False
             agent_obs_shape=2 + 2 + n_landmark * 2 + (n_agent - 1) * 2 + (n_agent - 1) * 2,
             global_obs_shape=2 + 2 + n_landmark * 2 + (n_agent - 1) * 2 + (n_agent - 1) * 2 + n_agent * (2 + 2) +
             n_landmark * 2 + n_agent * (n_agent - 1) * 2,
             discrete_action_encoding_type='one_hot',
+            global_cooperation=True, # TODO: doesn't work now
+            hidden_size_list=[256, 256],
             norm_type='BN',
         ),
         cuda=True,
@@ -97,7 +99,7 @@ create_config = dict(
         import_names=['zoo.petting_zoo.envs.petting_zoo_simple_spread_env'],
         type='petting_zoo',
     ),
-    env_manager=dict(type='base'),
+    env_manager=dict(type='subprocess'),
     policy=dict(
         type='multi_agent_muzero',
         import_names=['lzero.policy.multi_agent_muzero'],

@@ -3,10 +3,7 @@ from typing import List, Dict, Any, Tuple, Union
 import numpy as np
 import torch
 from .efficientzero import EfficientZeroPolicy
-from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
-from torch.distributions import Categorical
-from torch.nn import L1Loss
 
 from lzero.mcts import EfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts import EfficientZeroMCTSPtree as MCTSPtree
@@ -14,7 +11,6 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
     DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, negative_cosine_similarity, prepare_obs, \
     configure_optimizers
 from collections import defaultdict
-from ding.torch_utils import to_device, to_tensor
 from ding.utils.data import default_collate
 
 
@@ -62,12 +58,10 @@ class MultiAgentEfficientZeroPolicy(EfficientZeroPolicy):
         self.collect_epsilon = epsilon
 
         active_collect_env_num = len(data)
-        data = to_tensor(data)
         data = sum(sum(data, []), [])
         batch_size = len(data)
-        data = to_device(data, self._cfg.device)
         data = default_collate(data)
-        agent_num = batch_size // active_collect_env_num
+        agent_num = self._cfg['model']['agent_num']
         to_play = np.array(to_play).reshape(-1).tolist()
 
         with torch.no_grad():
@@ -164,12 +158,10 @@ class MultiAgentEfficientZeroPolicy(EfficientZeroPolicy):
          """
         self._eval_model.eval()
         active_eval_env_num = len(data)
-        data = to_tensor(data)
         data = sum(sum(data, []), [])
         batch_size = len(data)
-        data = to_device(data, self._cfg.device)
         data = default_collate(data)
-        agent_num = batch_size // active_eval_env_num
+        agent_num = self._cfg['model']['agent_num']
         to_play = np.array(to_play).reshape(-1).tolist()
 
         with torch.no_grad():

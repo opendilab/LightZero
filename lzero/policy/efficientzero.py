@@ -403,14 +403,30 @@ class EfficientZeroPolicy(Policy):
                     end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
                     network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
                 elif self._cfg.model.model_type == 'structure':
-                    beg_index = step_i
-                    end_index = step_i + self._cfg.model.frame_stack_num
-                    obs_target_batch_tmp = obs_target_batch[:, beg_index:end_index].tolist()
-                    obs_target_batch_tmp = sum(obs_target_batch_tmp, [])
-                    obs_target_batch_tmp = to_tensor(obs_target_batch_tmp)
-                    obs_target_batch_tmp = to_device(obs_target_batch_tmp, self._cfg.device)
-                    obs_target_batch_tmp = default_collate(obs_target_batch_tmp)
-                    network_output = self._learn_model.initial_inference(obs_target_batch_tmp)
+                    obs_target_batch_new = {}
+                    for k, v in obs_target_batch.items():
+                        if k == 'action_mask': 
+                            obs_target_batch_new[k] = v
+                            continue
+                        if isinstance(v, dict):
+                            obs_target_batch_new[k] = {}
+                            for k1, v1 in v.items():
+                                if len(v1.shape) == 1:
+                                    observation_shape = v1.shape[0]//self._cfg.num_unroll_steps
+                                    beg_index = observation_shape * step_i
+                                    end_index = observation_shape * (step_i + self._cfg.model.frame_stack_num)
+                                    obs_target_batch_new[k][k1] = v1[beg_index:end_index]
+                                else:
+                                    observation_shape = v1.shape[1]//self._cfg.num_unroll_steps
+                                    beg_index = observation_shape * step_i
+                                    end_index = observation_shape * (step_i + self._cfg.model.frame_stack_num)
+                                    obs_target_batch_new[k][k1] = v1[:, beg_index:end_index]
+                        else:
+                            observation_shape = v.shape[1]//self._cfg.num_unroll_steps
+                            beg_index = observation_shape * step_i
+                            end_index = observation_shape * (step_i + self._cfg.model.frame_stack_num)
+                            obs_target_batch_new[k] = v[:, beg_index:end_index]
+                    network_output = self._learn_model.initial_inference(obs_target_batch_new)
 
                 latent_state = to_tensor(latent_state)
                 representation_state = to_tensor(network_output.latent_state)

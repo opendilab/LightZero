@@ -99,7 +99,7 @@ def prepare_observation(observation_list, model_type='conv'):
         # print(observation_array.shape)
 
     elif model_type == 'structure':
-        return  observation_list
+        return observation_list
 
     return observation_array
 
