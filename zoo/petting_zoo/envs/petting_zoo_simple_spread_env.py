@@ -284,6 +284,13 @@ class PettingZooEnv(BaseEnv):
             tmp['action_mask'] = [1 for _ in range(*self._action_dim)]
             ret_transform.append(tmp)
         
+        concat_state_0 = np.concatenate((ret_transform[0]['agent_state'], ret_transform[1]['agent_state'], ret_transform[2]['agent_state']), axis=0)
+        concat_state_1 = np.concatenate((ret_transform[1]['agent_state'], ret_transform[0]['agent_state'], ret_transform[2]['agent_state']), axis=0)
+        concat_state_2 = np.concatenate((ret_transform[2]['agent_state'], ret_transform[0]['agent_state'], ret_transform[1]['agent_state']), axis=0)
+        
+        ret_transform[0]['agent_state'] = concat_state_0
+        ret_transform[1]['agent_state'] = concat_state_1
+        ret_transform[2]['agent_state'] = concat_state_2
         return {'observation': ret_transform, 'action_mask': action_mask, 'to_play': to_play}
 
     def _process_action(self, action: 'torch.Tensor') -> Dict[str, np.ndarray]:  # noqa

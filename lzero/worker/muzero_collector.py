@@ -196,13 +196,13 @@ class MuZeroCollector(ISerialCollector):
             - pred_values_lst: The list of value being predicted.
             - search_values_lst: The list of value obtained through search.
         """
-        if self.policy_config.use_priority and not self.policy_config.use_max_priority_for_new_data:
+        if self.policy_config.use_priority:
             pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.policy_config.device).float().view(-1)
             search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.policy_config.device
                                                                                 ).float().view(-1)
             priorities = L1Loss(reduction='none'
                                 )(pred_values,
-                                  search_values).detach().cpu().numpy() + self.policy_config.prioritized_replay_eps
+                                  search_values).detach().cpu().numpy() + 1e-6  # avoid zero priority
         else:
             # priorities is None -> use the max priority for all newly collected data
             priorities = None
@@ -555,7 +555,7 @@ class MuZeroCollector(ISerialCollector):
                     eps_steps_lst[env_id] += 1
                     total_transitions += 1
 
-                    if self.policy_config.use_priority and not self.policy_config.use_max_priority_for_new_data:
+                    if self.policy_config.use_priority:
                         if self._multi_agent:
                             for agent_id in range(agent_num):
                                 pred_values_lst[env_id][agent_id].append(pred_value_dict[env_id][agent_id])

@@ -51,7 +51,7 @@ main_config = dict(
             action_space='discrete',
             action_space_size=action_space_size,
             agent_num=n_agent,
-            agent_obs_shape=2 + 2 + n_landmark * 2 + (n_agent - 1) * 2 + (n_agent - 1) * 2,
+            agent_obs_shape=(2 + 2 + n_landmark * 2 + (n_agent - 1) * 2 + (n_agent - 1) * 2)*3,
             global_obs_shape=2 + 2 + n_landmark * 2 + (n_agent - 1) * 2 + (n_agent - 1) * 2 + n_agent * (2 + 2) +
             n_landmark * 2 + n_agent * (n_agent - 1) * 2,
             discrete_action_encoding_type='one_hot',

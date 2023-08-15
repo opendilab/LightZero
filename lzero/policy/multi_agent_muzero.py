@@ -68,6 +68,7 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
         data = default_collate(data)
         data = to_device(data, self._device)
         agent_num = self._cfg['model']['agent_num']
+        action_mask = sum(action_mask, [])
         to_play = np.array(to_play).reshape(-1).tolist()
 
         with torch.no_grad():
@@ -81,7 +82,6 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
                 latent_state_roots = latent_state_roots.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
-            action_mask = sum(action_mask, [])
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
             # the only difference between collect and eval is the dirichlet noise
             noises = [
@@ -165,6 +165,7 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
         data = default_collate(data)
         data = to_device(data, self._device)
         agent_num = self._cfg['model']['agent_num']
+        action_mask = sum(action_mask, [])
         to_play = np.array(to_play).reshape(-1).tolist()
 
         with torch.no_grad():
@@ -178,7 +179,6 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
                 latent_state_roots = latent_state_roots.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
-            action_mask = sum(action_mask, [])
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree

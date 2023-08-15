@@ -153,8 +153,6 @@ class GumeblMuZeroPolicy(Policy):
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
         use_priority=True,
-        # (bool) Whether to use the maximum priority for new collecting data.
-        use_max_priority_for_new_data=True,
         # (float) The degree of prioritization to use. A value of 0 means no prioritization,
         # while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,
