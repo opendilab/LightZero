@@ -9,15 +9,16 @@ from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
+from ding.rl_utils import get_epsilon_greedy_fn
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
-import copy
-from ding.rl_utils import get_epsilon_greedy_fn
+
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.worker import GoBiggerMuZeroEvaluator
 from lzero.entry.utils import random_collect
-from lzero.policy.multi_agent_random_policy import MultiAgentLightZeroRandomPolicy
+import copy
+
 
 
 def train_muzero_gobigger(
@@ -51,16 +52,12 @@ def train_muzero_gobigger(
 
     if create_cfg.policy.type == 'muzero':
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'efficientzero':
+    elif create_cfg.policy.type == 'efficientzero' or create_cfg.policy.type == 'multi_agent_efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'gumbel_muzero':
+    elif create_cfg.policy.type == 'gumbel_muzero' or create_cfg.policy.type == 'multi_agent_muzero':
         from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'multi_agent_efficientzero':
-        from lzero.mcts import MultiAgentEfficientZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'multi_agent_muzero':
-        from lzero.mcts import MultiAgentMuZeroGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
@@ -70,6 +67,7 @@ def train_muzero_gobigger(
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
+
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
@@ -100,6 +98,7 @@ def train_muzero_gobigger(
     batch_size = policy_config.batch_size
     # specific game buffer for MCTS+RL algorithms
     replay_buffer = GameBuffer(policy_config)
+
     if policy_config.multi_agent:
         from lzero.worker import MultiAgentMuZeroCollector as Collector
         from lzero.worker import MuZeroEvaluator as Evaluator
@@ -149,7 +148,11 @@ def train_muzero_gobigger(
     # Exploration: The collection of random data aids the agent in exploring the environment and prevents premature convergence to a suboptimal policy.
     # Comparation: The agent's performance during random action-taking can be used as a reference point to evaluate the efficacy of reinforcement learning algorithms.
     if cfg.policy.random_collect_episode_num > 0:
-        random_collect(cfg.policy, policy, MultiAgentLightZeroRandomPolicy, collector, collector_env, replay_buffer)
+        if policy_config.multi_agent:
+            from lzero.policy.multi_agent_random_policy import MultiAgentLightZeroRandomPolicy as RandomPolicy
+        else:
+            from lzero.policy.random_policy import LightZeroRandomPolicy as RandomPolicy
+        random_collect(cfg.policy, policy, RandomPolicy, collector, collector_env, replay_buffer)
 
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)

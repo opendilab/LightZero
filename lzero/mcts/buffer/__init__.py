@@ -2,5 +2,3 @@ from .game_buffer_muzero import MuZeroGameBuffer
 from .game_buffer_efficientzero import EfficientZeroGameBuffer
 from .game_buffer_sampled_efficientzero import SampledEfficientZeroGameBuffer
 from .game_buffer_gumbel_muzero import GumbelMuZeroGameBuffer
-from .multi_agent_game_buffer_muzero import MultiAgentMuZeroGameBuffer
-from .multi_agent_game_buffer_efficientzero import MultiAgentEfficientZeroGameBuffer

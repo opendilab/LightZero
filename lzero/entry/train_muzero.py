@@ -49,16 +49,12 @@ def train_muzero(
 
     if create_cfg.policy.type == 'muzero':
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'efficientzero':
+    elif create_cfg.policy.type == 'efficientzero' or create_cfg.policy.type == 'multi_agent_efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'gumbel_muzero':
+    elif create_cfg.policy.type == 'gumbel_muzero' or create_cfg.policy.type == 'multi_agent_muzero':
         from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'multi_agent_muzero':
-        from lzero.mcts import MultiAgentMuZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'multi_agent_efficientzero':
-        from lzero.mcts import MultiAgentEfficientZeroGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
@@ -124,7 +120,7 @@ def train_muzero(
     # ==============================================================
     # Learner's before_run hook.
     learner.call_hook('before_run')
-    
+
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
 
