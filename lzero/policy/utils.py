@@ -218,6 +218,8 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
                         obs_target_batch_new[k][k1] = v1.reshape(batch_size, -1)
             else:  # espaecially for ptz obs, {'k1':[], 'k2':[]}
                 obs_target_batch_new[k] = v.reshape(batch_size, -1)
+        obs_batch_new = to_device(obs_batch_new, device=cfg.device)
+        obs_target_batch_new = to_device(obs_target_batch_new, device=cfg.device)
         return obs_batch_new, obs_target_batch_new
 
 
