@@ -13,6 +13,7 @@ update_per_collect = 100
 batch_size = 256
 max_env_step = int(1e5)
 reanalyze_ratio = 0.
+eps_greedy_exploration_in_collect=False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -56,6 +57,7 @@ cartpole_sampled_efficientzero_config = dict(
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
+        random_collect_episode_num=0,
     ),
 )
 
