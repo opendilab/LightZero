@@ -50,13 +50,13 @@ def train_muzero_gobigger(
     assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'multi_agent_efficientzero', 'multi_agent_muzero'], \
         "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'multi_agent_efficientzero', 'multi_agent_muzero'"
 
-    if create_cfg.policy.type == 'muzero':
+    if create_cfg.policy.type == 'muzero' or create_cfg.policy.type == 'multi_agent_muzero':
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'efficientzero' or create_cfg.policy.type == 'multi_agent_efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'gumbel_muzero' or create_cfg.policy.type == 'multi_agent_muzero':
+    elif create_cfg.policy.type == 'gumbel_muzero':
         from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
