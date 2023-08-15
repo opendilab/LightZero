@@ -88,9 +88,9 @@ class TestConnect4Env:
             # reward is in the perspective of player1
             env.render()
             if done:
-                if reward != 0 and info['next player to play'] == "player_1":
+                if reward != 0 and env.current_player == 2:
                     print('player 1 (human player) win')
-                elif reward != 0 and info['next player to play'] == "player_0":
+                elif reward != 0 and env.current_player == 1:
                     print('player 2 (computer player) win')
                 else:
                     print('draw')
