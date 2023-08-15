@@ -1,19 +1,17 @@
 import numpy as np
-import torch.distributed as dist
-from ding.utils.default_helper import error_wrapper
+from ding.utils import get_world_size
 from easydict import EasyDict
 
 
-def get_world_size() -> int:
+def lz_to_ddp_config(cfg: EasyDict) -> EasyDict:
     r"""
     Overview:
-        Get the world_size(total process number in data parallel training)
+        Convert the LightZero-style config to ddp config
+    Arguments:
+        - cfg (:obj:`EasyDict`): The config to be converted
+    Returns:
+        - cfg (:obj:`EasyDict`): The converted config
     """
-    # return int(os.environ.get('SLURM_NTASKS', 1))
-    return error_wrapper(dist.get_world_size, 1)()
-
-
-def to_ddp_config(cfg: EasyDict) -> EasyDict:
     w = get_world_size()
     cfg.policy.batch_size = int(np.ceil(cfg.policy.batch_size / w))
     cfg.policy.n_episode = int(np.ceil(cfg.policy.n_episode) / w)

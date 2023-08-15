@@ -17,8 +17,9 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+gpu_num = 2
 collector_env_num = 8
-n_episode = int(8*2)
+n_episode = int(8*gpu_num)
 evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 1000
@@ -27,7 +28,7 @@ max_env_step = int(1e6)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = False
 
-# debug config
+# the following is debug config
 # collector_env_num = 2
 # n_episode = int(2*2)
 # evaluator_env_num = 1
@@ -41,7 +42,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/{env_name[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ddp_2gpu_seed0',
+    f'data_ez_ctree/{env_name[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ddp_{gpu_num}gpu_seed0',
     env=dict(
         env_name=env_name,
         obs_shape=(4, 96, 96),
@@ -59,8 +60,8 @@ atari_efficientzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
         ),
-        cuda=True,
         multi_gpu=True,
+        cuda=True,
         env_type='not_board_games',
         game_segment_length=400,
         random_collect_episode_num=0,
@@ -109,15 +110,21 @@ atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
 create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero
-    from ding.utils import DDPContext
-    from lzero.config.utils import to_ddp_config
-    with DDPContext():
-        main_config = to_ddp_config(main_config)
-        train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
-
     """
     Overview:
-        You should run this script with <nproc_per_node> gpus.
+        This script should be executed with <nproc_per_node> GPUs.
+        Run the following command to launch the script:
         python -m torch.distributed.launch --nproc_per_node=2 ./LightZero/zoo/atari/config/atari_efficientzero_multigpu_ddp_config.py
     """
+    from ding.utils import DDPContext
+    from lzero.entry import train_muzero
+    from lzero.config.utils import lz_to_ddp_config
+
+    seed_list = [0, 1, 2]  # list of seeds you want to use for training
+    for seed in seed_list:
+        with DDPContext():
+            # Each iteration uses a different seed for training
+            # Change exp_name according to current seed
+            main_config.exp_name = f'data_ez_ctree/{env_name[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ddp_{gpu_num}gpu_seed{seed}'
+            main_config = lz_to_ddp_config(main_config)
+            train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)

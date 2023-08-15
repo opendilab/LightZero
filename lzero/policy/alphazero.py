@@ -182,12 +182,12 @@ class AlphaZeroPolicy(Policy):
         self._optimizer.zero_grad()
         total_loss.backward()
 
+        if self._cfg.multi_gpu:
+            self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
             list(self._model.parameters()),
             max_norm=self._cfg.grad_clip_value,
         )
-        if self._cfg.multi_gpu:
-            self.sync_gradients(self._learn_model)
         self._optimizer.step()
         if self._cfg.lr_piecewise_constant_decay is True:
             self.lr_scheduler.step()

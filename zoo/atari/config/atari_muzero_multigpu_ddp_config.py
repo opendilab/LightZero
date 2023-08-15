@@ -26,7 +26,6 @@ update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
-
 eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -106,9 +105,15 @@ atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero
+    """
+    Overview:
+        This script should be executed with <nproc_per_node> GPUs.
+        Run the following command to launch the script:
+        python -m torch.distributed.launch --nproc_per_node=2 ./LightZero/zoo/atari/config/atari_muzero_multigpu_ddp_config.py
+    """
     from ding.utils import DDPContext
-    from lzero.config.utils import to_ddp_config
+    from lzero.entry import train_muzero
+    from lzero.config.utils import lz_to_ddp_config
     with DDPContext():
-        main_config = to_ddp_config(main_config)
+        main_config = lz_to_ddp_config(main_config)
         train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

@@ -414,11 +414,11 @@ class GumeblMuZeroPolicy(Policy):
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
+        if self._cfg.multi_gpu:
+            self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
             self._learn_model.parameters(), self._cfg.grad_clip_value
         )
-        if self._cfg.multi_gpu:
-            self.sync_gradients(self._learn_model)
         self._optimizer.step()
         if self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()

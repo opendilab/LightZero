@@ -82,15 +82,15 @@ tictactoe_alphazero_create_config = EasyDict(tictactoe_alphazero_create_config)
 create_config = tictactoe_alphazero_create_config
 
 if __name__ == '__main__':
-    from lzero.entry import train_alphazero
-    from ding.utils import DDPContext
-    from lzero.config.utils import to_ddp_config
-    with DDPContext():
-        main_config = to_ddp_config(main_config)
-        train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
-
     """
     Overview:
-        You should run this script with <nproc_per_node> gpus.
+        This script should be executed with <nproc_per_node> GPUs.
+        Run the following command to launch the script:
         python -m torch.distributed.launch --nproc_per_node=2 ./LightZero/zoo/board_games/tictactoe/config/tictactoe_alphazero_bot_mode_multigpu_ddp_config.py
     """
+    from ding.utils import DDPContext
+    from lzero.entry import train_alphazero
+    from lzero.config.utils import lz_to_ddp_config
+    with DDPContext():
+        main_config = lz_to_ddp_config(main_config)
+        train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
