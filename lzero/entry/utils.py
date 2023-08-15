@@ -1,8 +1,6 @@
 import os
-from typing import Optional, Callable
 
 import psutil
-from easydict import EasyDict
 from pympler.asizeof import asizeof
 from tensorboardX import SummaryWriter
 from typing import Optional, Callable
@@ -40,6 +38,7 @@ def random_collect(
 
     # restore the policy
     collector.reset_policy(policy.collect_mode)
+
 
 def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:
     """
