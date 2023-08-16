@@ -6,17 +6,29 @@ from easydict import EasyDict
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 5
-num_simulations = 25
+num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
+mcts_ctree = False
+
+# debug config
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 5
+# update_per_collect = 5
+# batch_size = 2
+# max_env_step = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 tictactoe_alphazero_config = dict(
-    exp_name=f'data_az_ptree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_az_ctree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
+    # exp_name=f'data_az_ptree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
+        stop_value=2,
         board_size=3,
         battle_mode='play_with_bot_mode',
         channel_last=False,  # NOTE
@@ -24,6 +36,15 @@ tictactoe_alphazero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        use_katago_bot=False,
+        env_name="TicTacToe",
+        mcts_mode='self_play_mode',  # only used in AlphaZero
+        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+        agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        scale=True,
+        mcts_ctree=mcts_ctree,
     ),
     policy=dict(
         model=dict(
@@ -35,6 +56,9 @@ tictactoe_alphazero_config = dict(
             fc_value_layers=[8],
             fc_policy_layers=[8],
         ),
+        env_name='tictactoe',
+        mcts_ctree=mcts_ctree,
+        env_config_type='play_with_bot',
         cuda=True,
         board_size=3,
         update_per_collect=update_per_collect,
@@ -61,7 +85,9 @@ tictactoe_alphazero_create_config = dict(
         type='tictactoe',
         import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
     ),
-    env_manager=dict(type='subprocess'),
+    # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
+
     policy=dict(
         type='alphazero',
         import_names=['lzero.policy.alphazero'],

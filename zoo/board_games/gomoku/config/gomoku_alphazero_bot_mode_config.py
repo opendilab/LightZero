@@ -8,10 +8,12 @@ collector_env_num = 32
 n_episode = 32
 evaluator_env_num = 5
 num_simulations = 50
-update_per_collect = 50
+update_per_collect = 100
 batch_size = 256
 max_env_step = int(5e5)
 prob_random_action_in_bot = 0.5
+mcts_ctree = False
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -19,15 +21,24 @@ gomoku_alphazero_config = dict(
     exp_name=
     f'data_az_ptree/gomoku_alphazero_bot-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
+        stop_value=2,
         board_size=board_size,
         battle_mode='play_with_bot_mode',
         bot_action_type='v0',
         prob_random_action_in_bot=prob_random_action_in_bot,
         channel_last=False,  # NOTE
+        use_katago_bot=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        env_name="Gomoku",
+        prob_random_agent=0,
+        mcts_mode='self_play_mode',  # only used in AlphaZero
+        scale=True,
+        agent_vs_human=False,
+        check_action_to_connect4_in_bot_v0=False,
+        mcts_ctree=mcts_ctree,
     ),
     policy=dict(
         torch_compile=False,
@@ -38,6 +49,9 @@ gomoku_alphazero_config = dict(
             num_res_blocks=1,
             num_channels=32,
         ),
+        mcts_ctree=mcts_ctree,
+        env_config_type='play_with_bot',
+        env_name="gomoku",
         cuda=True,
         board_size=board_size,
         update_per_collect=update_per_collect,

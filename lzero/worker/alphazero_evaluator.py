@@ -18,6 +18,15 @@ class AlphaZeroEvaluator(ISerialEvaluator):
     Property:
         env, policy
     """
+    config = dict(
+        # Evaluate every "eval_freq" training iterations.
+        eval_freq=1000,
+        render=dict(
+            # tensorboard video render is disabled by default
+            render_freq=-1,
+            mode='train_iter',
+        )
+    )
 
     def __init__(
             self,
@@ -190,15 +199,12 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         with self._timer:
             while not eval_monitor.is_finished():
                 obs = self._env.ready_obs
-                simulation_envs = {}
-                for env_id in list(obs.keys()):
-                    # create the new simulation env instances from the current evaluate env using the same env_config.
-                    simulation_envs[env_id] = self._env._env_fn[env_id]()
 
                 # ==============================================================
                 # policy forward
                 # ==============================================================
-                policy_output = self._policy.forward(simulation_envs, obs)
+                policy_output = self._policy.forward(obs)
+
                 actions = {env_id: output['action'] for env_id, output in policy_output.items()}
                 # ==============================================================
                 # Interact with env.

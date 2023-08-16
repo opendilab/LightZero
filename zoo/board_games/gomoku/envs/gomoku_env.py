@@ -111,7 +111,13 @@ class GomokuEnv(BaseEnv):
         if self.bot_action_type == 'alpha_beta_pruning':
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 
-    def reset(self, start_player_index=0, init_state=None):
+        self.mcts_ctree = cfg.mcts_ctree
+
+    def reset(self, start_player_index=0, init_state=None, katago_policy_init=False, katago_game_state=None):
+        if self.mcts_ctree and init_state is not None:
+            # Convert byte string to np.ndarray
+            init_state = np.frombuffer(init_state, dtype=np.int32)
+
         self._observation_space = gym.spaces.Box(
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.int32
         )
@@ -121,6 +127,8 @@ class GomokuEnv(BaseEnv):
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
             self.board = np.array(copy.deepcopy(init_state), dtype="int32")
+            if self.mcts_ctree:
+                self.board = self.board.reshape((self.board_size, self.board_size))
         else:
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
         action_mask = np.zeros(self.total_num_actions, 'int8')
@@ -201,9 +209,8 @@ class GomokuEnv(BaseEnv):
             # player 1's turn
             timestep_player1 = self._player_step(action)
             if self.agent_vs_human:
-                print('player 1 (agent): ' + self.action_to_string(action))  # Note: visualize
-                self.render()
-
+                # print(self.board)
+                self.render()  # Note: visualize
             if timestep_player1.done:
                 # in eval_mode, we set to_play as None/-1, because we don't consider the alternation between players
                 timestep_player1.obs['to_play'] = -1
@@ -212,14 +219,14 @@ class GomokuEnv(BaseEnv):
             # player 2's turn
             if self.agent_vs_human:
                 bot_action = self.human_to_action()
+                # print(self.board)
             else:
                 bot_action = self.bot_action()
                 # bot_action = self.random_action()
 
             timestep_player2 = self._player_step(bot_action)
             if self.agent_vs_human:
-                print('player 2 (human): ' + self.action_to_string(bot_action))  # Note: visualize
-                self.render()
+                self.render()  # Note: visualize
 
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
@@ -486,8 +493,8 @@ class GomokuEnv(BaseEnv):
             if abs(sum(diag)) >= min_to_connect:
                 # if diagonal has three same pieces and two empty position, or four same pieces and one opponent piece.
                 # e.g., case1: .xxx. , case2: oxxxx
-                # find the index in the diag vector
 
+                # find the index in the diag vector
                 zero_position_index = np.where(diag == 0)[0]
                 if zero_position_index.shape[0] == 0:
                     logging.debug('there is no empty position in this searched five positions, continue to search...')

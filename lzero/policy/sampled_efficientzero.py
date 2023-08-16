@@ -115,7 +115,7 @@ class SampledEfficientZeroPolicy(Policy):
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
         optim_type='SGD',
         learning_rate=0.2,  # init lr for manually decay schedule
-        # optim_type='Adam',
+        # optim_type='AdamW',
         # lr_piecewise_constant_decay=False,
         # learning_rate=0.003,  # lr for Adam optimizer
         # (float) Weight uniform initialization range in the last output layer

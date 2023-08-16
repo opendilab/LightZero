@@ -1,4 +1,5 @@
 from .train_alphazero import train_alphazero
+from .train_alphazero_league import train_alphazero_league
 from .eval_alphazero import eval_alphazero
 from .train_muzero import train_muzero
 from .eval_muzero import eval_muzero

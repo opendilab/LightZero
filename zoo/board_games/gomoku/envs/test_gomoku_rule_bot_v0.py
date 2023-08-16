@@ -11,8 +11,10 @@ cfg = EasyDict(
     scale=True,
     agent_vs_human=False,
     bot_action_type='v0',  # {'v0', 'v1', 'alpha_beta_pruning'}
-    prob_random_action_in_bot=0.5,
+    # prob_random_action_in_bot=0.5,
+    prob_random_action_in_bot=0.,
     check_action_to_connect4_in_bot_v0=False,
+    # check_action_to_connect4_in_bot_v0=True,
 )
 
 
@@ -27,9 +29,9 @@ class TestExpertActionV0:
             # print('init board state: ', obs)
             env.render()
             while True:
-                action = env.bot_action()
+                # action = env.bot_action()
                 # action = env.random_action()
-                # action = env.human_to_action()
+                action = env.human_to_action()
                 print('action index of player 1 is:', action)
                 print('player 1: ' + env.action_to_string(action))
                 obs, reward, done, info = env.step(action)
@@ -61,10 +63,18 @@ class TestExpertActionV0:
 
     def test_v0_vs_v1(self):
         """
+        check_action_to_connect4_in_bot_v0=True
         board_size=6, test_100_episodes:
         =================================================
-        v0 vs v1: 0 bot_v0 win, 16 bot_v1 win, 84 draw
+        v0 vs v1: 0 bot_v0 win, 9 bot_v1 win, 91 draw
         v1 vs v0: 1 bot_v0 win, 35 bot_v1 win, 64 draw
+        =================================================
+
+        check_action_to_connect4_in_bot_v0=False
+        board_size=6, test_100_episodes:
+        =================================================
+        v0 vs v1: 1 bot_v0 win, 9 bot_v1 win, 90 draw
+        v1 vs v0: 3 bot_v0 win, 25 bot_v1 win, 72 draw
         v0 vs v0: 100 draw
         v1 vs v1: 100 draw
         v0 vs random: 93 bot_v0 win, 35 random win, 7 draw
@@ -82,7 +92,7 @@ class TestExpertActionV0:
         =================================================
         """
         env = GomokuEnv(cfg)
-        test_episodes = 10
+        test_episodes = 100
         for i in range(test_episodes):
             obs = env.reset()
             # print('init board state: ', obs)
@@ -124,5 +134,5 @@ class TestExpertActionV0:
 
 
 test = TestExpertActionV0()
-# test.test_v0_vs_v1()
-test.test_naive()
+test.test_v0_vs_v1()
+# test.test_naive()
