@@ -67,6 +67,8 @@ class SampledEfficientZeroPolicy(Policy):
             norm_type='BN', 
         ),
         # ****** common ******
+        # (bool) Whether to use multi-gpu training.
+        multi_gpu=False,
         # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
         sampled_algo=True,
         # (bool) Whether to enable the gumbel-based algorithm (e.g. Gumbel Muzero)
@@ -506,6 +508,8 @@ class SampledEfficientZeroPolicy(Policy):
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
+        if self._cfg.multi_gpu:
+            self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
             self._learn_model.parameters(), self._cfg.grad_clip_value
         )
@@ -532,7 +536,7 @@ class SampledEfficientZeroPolicy(Policy):
                 'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
                 'value_prefix_loss': value_prefix_loss.mean().item(),
                 'value_loss': value_loss.mean().item(),
-                'consistency_loss': consistency_loss.mean() / self._cfg.num_unroll_steps,
+                'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
 
                 # ==============================================================
                 # priority related
@@ -562,7 +566,7 @@ class SampledEfficientZeroPolicy(Policy):
                 'target_sampled_actions_max': target_sampled_actions[:, :, 0].max().item(),
                 'target_sampled_actions_min': target_sampled_actions[:, :, 0].min().item(),
                 'target_sampled_actions_mean': target_sampled_actions[:, :, 0].mean().item(),
-                'total_grad_norm_before_clip': total_grad_norm_before_clip
+                'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
             })
         else:
             return_data.update({
@@ -573,7 +577,7 @@ class SampledEfficientZeroPolicy(Policy):
                 'target_sampled_actions_max': target_sampled_actions[:, :].float().max().item(),
                 'target_sampled_actions_min': target_sampled_actions[:, :].float().min().item(),
                 'target_sampled_actions_mean': target_sampled_actions[:, :].float().mean().item(),
-                'total_grad_norm_before_clip': total_grad_norm_before_clip
+                'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
             })
         
         return return_data
