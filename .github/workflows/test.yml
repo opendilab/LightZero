@@ -50,8 +50,8 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y tree cloc wget curl make graphviz
+          yum update
+          yum install -y tree cloc wget curl make graphviz
           dot -V
       - name: Set up system dependences on MacOS
         if: ${{ env.OS_NAME == 'MacOS' }}

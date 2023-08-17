@@ -51,7 +51,8 @@ jobs:
 
   wheel_build:
     name: Try build the wheels
-    runs-on: ${{ matrix.os }}
+    #runs-on: ${{ matrix.os }}
+    runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
@@ -122,7 +123,8 @@ jobs:
   # the publishing can only be processed on linux system
   fake_publish:
     name: Fake Publish
-    runs-on: ubuntu-20.04
+    #runs-on: ubuntu-20.04
+    runs-on: self-hosted
     needs:
       - wheel_build
       - source_build
