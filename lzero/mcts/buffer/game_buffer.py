@@ -67,8 +67,6 @@ class GameBuffer(ABC, object):
         self.num_of_collected_episodes = 0
         self.base_idx = 0
         self.clear_time = 0
-        # Lock to guarantee thread safe
-        self._lock = LockContext(type_=LockContextType.THREAD_LOCK)
 
     @abstractmethod
     def sample(
@@ -312,10 +310,9 @@ class GameBuffer(ABC, object):
                 - data (:obj:`Any`): The data (game segments) which will be pushed into buffer.
                 - meta (:obj:`dict`): Meta information, e.g. priority, count, staleness.
         """
-        with self._lock:
-            data, meta = data_and_meta
-            for (data_game, meta_game) in zip(data, meta):
-                self._push_game_segment(data_game, meta_game)
+        data, meta = data_and_meta
+        for (data_game, meta_game) in zip(data, meta):
+            self._push_game_segment(data_game, meta_game)
 
     def _push_game_segment(self, data: Any, meta: Optional[dict] = None) -> None:
         """
@@ -362,20 +359,19 @@ class GameBuffer(ABC, object):
         Overview:
             remove some oldest data if the replay buffer is full.
         """
-        with self._lock:
-            assert self.replay_buffer_size > self._cfg.batch_size, "replay buffer size should be larger than batch size"
-            nums_of_game_segments = self.get_num_of_game_segments()
-            total_transition = self.get_num_of_transitions()
-            if total_transition > self.replay_buffer_size:
-                index = 0
-                for i in range(nums_of_game_segments):
-                    total_transition -= len(self.game_segment_buffer[i])
-                    if total_transition <= self.replay_buffer_size * self.keep_ratio:
-                        # find the max game_segment index to keep in the buffer
-                        index = i
-                        break
-                if total_transition >= self._cfg.batch_size:
-                    self._remove(index + 1)
+        assert self.replay_buffer_size > self._cfg.batch_size, "replay buffer size should be larger than batch size"
+        nums_of_game_segments = self.get_num_of_game_segments()
+        total_transition = self.get_num_of_transitions()
+        if total_transition > self.replay_buffer_size:
+            index = 0
+            for i in range(nums_of_game_segments):
+                total_transition -= len(self.game_segment_buffer[i])
+                if total_transition <= self.replay_buffer_size * self.keep_ratio:
+                    # find the max game_segment index to keep in the buffer
+                    index = i
+                    break
+            if total_transition >= self._cfg.batch_size:
+                self._remove(index + 1)
 
     def _remove(self, excess_game_segment_index: List[int]) -> None:
         """

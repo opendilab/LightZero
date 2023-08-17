@@ -54,36 +54,35 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         Returns:
             - train_data (:obj:`List`): List of train data
         """
-        with self._lock:
-            policy._target_model.to(self._cfg.device)
-            policy._target_model.eval()
+        policy._target_model.to(self._cfg.device)
+        policy._target_model.eval()
 
-            # obtain the current_batch and prepare target context
-            reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(
-                batch_size, self._cfg.reanalyze_ratio
-            )
+        # obtain the current_batch and prepare target context
+        reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(
+            batch_size, self._cfg.reanalyze_ratio
+        )
 
-            # target value_prefixs, target value
-            batch_value_prefixs, batch_target_values = self._compute_target_reward_value(
-                reward_value_context, policy._target_model
-            )
-            # target policy
-            batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
-            batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
-                policy_non_re_context, self._cfg.model.action_space_size
-            )
+        # target value_prefixs, target value
+        batch_value_prefixs, batch_target_values = self._compute_target_reward_value(
+            reward_value_context, policy._target_model
+        )
+        # target policy
+        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
+        batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
+            policy_non_re_context, self._cfg.model.action_space_size
+        )
 
-            if 0 < self._cfg.reanalyze_ratio < 1:
-                batch_target_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
-            elif self._cfg.reanalyze_ratio == 1:
-                batch_target_policies = batch_target_policies_re
-            elif self._cfg.reanalyze_ratio == 0:
-                batch_target_policies = batch_target_policies_non_re
+        if 0 < self._cfg.reanalyze_ratio < 1:
+            batch_target_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
+        elif self._cfg.reanalyze_ratio == 1:
+            batch_target_policies = batch_target_policies_re
+        elif self._cfg.reanalyze_ratio == 0:
+            batch_target_policies = batch_target_policies_non_re
 
-            target_batch = [batch_value_prefixs, batch_target_values, batch_target_policies]
-            # a batch contains the current_batch and the target_batch
-            train_data = [current_batch, target_batch]
-            return train_data
+        target_batch = [batch_value_prefixs, batch_target_values, batch_target_policies]
+        # a batch contains the current_batch and the target_batch
+        train_data = [current_batch, target_batch]
+        return train_data
 
     def _prepare_reward_value_context(
             self, batch_index_list: List[str], game_segment_list: List[Any], pos_in_game_segment_list: List[Any],
