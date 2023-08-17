@@ -23,9 +23,9 @@ jobs:
           - 'ubuntu-20.04'
           - 'macos-12'
         python-version:
-          - '3.7'
-          - '3.8'
-          - '3.9'
+          - '3.7.17'
+          - '3.8.17'
+          - '3.9.17'
 
     steps:
       - name: Get system version for Linux
