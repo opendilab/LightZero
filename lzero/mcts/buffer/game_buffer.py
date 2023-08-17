@@ -7,7 +7,6 @@ import numpy as np
 from ding.torch_utils.data_helper import to_list
 from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
-from ding.utils import LockContext, LockContextType, build_logger, get_rank
 
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy, GumeblMuZeroPolicy
