@@ -7,7 +7,8 @@ on:
 jobs:
   update-badges:
     name: Update Badges
-    runs-on: ubuntu-latest
+    #runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
       matrix:
         python-version:
