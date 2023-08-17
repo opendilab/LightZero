@@ -15,7 +15,7 @@ jobs:
         os:
           - 'ubuntu-20.04'
         python-version:
-          - '3.8'
+          - '3.8.17'
 
     steps:
       - name: Checkout code
@@ -60,9 +60,9 @@ jobs:
           - 'ubuntu-20.04'
           - 'macos-12'
         python:
-          - '3.7'
-          - '3.8'
-          - '3.9'
+          - '3.7.17'
+          - '3.8.17'
+          - '3.9.17'
         #          - '3.10'
         #          - '3.11'
         architecture:
@@ -84,7 +84,7 @@ jobs:
             architecture: x86
           - os: macos-12
             architecture: AMD64
-          - python: '3.7'
+          - python: '3.7.17'
             architecture: arm64
 
     steps:
@@ -132,7 +132,7 @@ jobs:
       fail-fast: false
       matrix:
         python:
-          - '3.8'
+          - '3.8.17'
 
     steps:
       - name: Download packed files to artifacts
