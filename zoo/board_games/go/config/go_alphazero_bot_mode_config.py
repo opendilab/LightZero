@@ -94,7 +94,7 @@ go_alphazero_config = dict(
             num_channels=num_channels,
         ),
         env_type='board_games',
-        env_config_type='play_with_bot',
+        simulate_env_config_type='play_with_bot',
         env_name="go",
         mcts_ctree=mcts_ctree,
         cuda=True,

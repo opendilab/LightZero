@@ -61,7 +61,7 @@ tictactoe_alphazero_league_config = dict(
             num_channels=16,
         ),
         env_name="gomoku",
-        env_config_type='league',
+        simulate_env_config_type='league',
         mcts_ctree=mcts_ctree,
         cuda=True,
         board_size=3,

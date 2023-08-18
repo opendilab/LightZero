@@ -4,22 +4,32 @@ from easydict import EasyDict
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 board_size = 6  # default_size is 15
+num_simulations = 50
+
+# board_size = 9  # default_size is 15
+# num_simulations = 100
+
 collector_env_num = 32
 n_episode = 32
 evaluator_env_num = 5
-num_simulations = 50
-update_per_collect = 100
+update_per_collect = 200
+
 batch_size = 256
-max_env_step = int(5e5)
+# max_env_step = int(5e5)
+max_env_step = int(10e6)
+
 prob_random_action_in_bot = 0.5
-mcts_ctree = False
+# mcts_ctree = False
+mcts_ctree = True
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 gomoku_alphazero_config = dict(
     exp_name=
-    f'data_az_ptree/gomoku_alphazero_bot-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
+    # f'data_az_ptree/gomoku_alphazero_bot-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
+    f'data_az_ctree/gomoku_bs{board_size}_alphazero_bot-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
+
     env=dict(
         stop_value=2,
         board_size=board_size,
@@ -46,12 +56,12 @@ gomoku_alphazero_config = dict(
         model=dict(
             observation_shape=(3, board_size, board_size),
             action_space_size=int(1 * board_size * board_size),
-            num_res_blocks=1,
-            num_channels=32,
+            num_res_blocks=5,
+            num_channels=64,
         ),
         mcts_ctree=mcts_ctree,
-        env_config_type='play_with_bot',
-        env_name="gomoku",
+        simulate_env_config_type='play_with_bot',
+        simulate_env_name="gomoku",
         cuda=True,
         board_size=board_size,
         update_per_collect=update_per_collect,
@@ -59,7 +69,6 @@ gomoku_alphazero_config = dict(
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        grad_clip_value=0.5,
         value_weight=1.0,
         entropy_weight=0.0,
         n_episode=n_episode,
@@ -107,4 +116,5 @@ if __name__ == '__main__':
         torch.backends.cudnn.allow_tf32 = True
 
     from lzero.entry import train_alphazero
+
     train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)

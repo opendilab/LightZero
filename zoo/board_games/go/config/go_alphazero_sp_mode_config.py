@@ -88,7 +88,7 @@ go_alphazero_config = dict(
             num_res_blocks=num_res_blocks,
             num_channels=num_channels,
         ),
-        env_config_type='self_play',
+        simulate_env_config_type='self_play',
         env_name="go",
         mcts_ctree=mcts_ctree,
         cuda=True,

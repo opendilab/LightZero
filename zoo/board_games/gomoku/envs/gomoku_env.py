@@ -53,6 +53,7 @@ class GomokuEnv(BaseEnv):
         prob_random_action_in_bot=0.,
         check_action_to_connect4_in_bot_v0=False,
         stop_value=1,
+        mcts_ctree=False,
     )
 
     @classmethod

@@ -10,10 +10,10 @@ evaluator_env_num = 5
 num_simulations = 50
 update_per_collect = 100
 batch_size = 256
-max_env_step = int(5e5)
+max_env_step = int(10e6)
 prob_random_action_in_bot = 0.5
 mcts_ctree = False
-num_of_sampled_actions = 8
+num_of_sampled_actions = 20
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -51,9 +51,9 @@ gomoku_sampled_alphazero_config = dict(
             num_of_sampled_actions=num_of_sampled_actions,
         ),
         sampled_algo=True,
-        env_name="gomoku",
+        simulate_env_name="gomoku",
         mcts_ctree=mcts_ctree,
-        env_config_type='self_play',
+        simulate_env_config_type='self_play',
         cuda=True,
         board_size=board_size,
         update_per_collect=update_per_collect,

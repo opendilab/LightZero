@@ -58,7 +58,7 @@ tictactoe_alphazero_config = dict(
         ),
         env_name='tictactoe',
         mcts_ctree=mcts_ctree,
-        env_config_type='play_with_bot',
+        simulate_env_config_type='play_with_bot',
         cuda=True,
         board_size=3,
         update_per_collect=update_per_collect,
