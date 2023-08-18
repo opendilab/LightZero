@@ -7,14 +7,15 @@ on:
 jobs:
   source_build:
     name: Try package the source
-    runs-on: ${{ matrix.os }}
+    #runs-on: ${{ matrix.os }}
+    runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
         os:
           - 'ubuntu-20.04'
         python-version:
-          - '3.8'
+          - '3.8.17'
 
     steps:
       - name: Checkout code
@@ -50,7 +51,8 @@ jobs:
 
   wheel_build:
     name: Try build the wheels
-    runs-on: ${{ matrix.os }}
+    #runs-on: ${{ matrix.os }}
+    runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
@@ -58,9 +60,9 @@ jobs:
           - 'ubuntu-20.04'
           - 'macos-12'
         python:
-          - '3.7'
-          - '3.8'
-          - '3.9'
+          - '3.7.17'
+          - '3.8.17'
+          - '3.9.17'
         #          - '3.10'
         #          - '3.11'
         architecture:
@@ -82,7 +84,7 @@ jobs:
             architecture: x86
           - os: macos-12
             architecture: AMD64
-          - python: '3.7'
+          - python: '3.7.17'
             architecture: arm64
 
     steps:
@@ -121,7 +123,8 @@ jobs:
   # the publishing can only be processed on linux system
   fake_publish:
     name: Fake Publish
-    runs-on: ubuntu-20.04
+    #runs-on: ubuntu-20.04
+    runs-on: self-hosted
     needs:
       - wheel_build
       - source_build
@@ -129,7 +132,7 @@ jobs:
       fail-fast: false
       matrix:
         python:
-          - '3.8'
+          - '3.8.17'
 
     steps:
       - name: Download packed files to artifacts

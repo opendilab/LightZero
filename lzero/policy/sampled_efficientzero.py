@@ -67,6 +67,8 @@ class SampledEfficientZeroPolicy(Policy):
             norm_type='BN', 
         ),
         # ****** common ******
+        # (bool) Whether to use multi-gpu training.
+        multi_gpu=False,
         # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
         sampled_algo=True,
         # (bool) Whether to enable the gumbel-based algorithm (e.g. Gumbel Muzero)
@@ -181,6 +183,24 @@ class SampledEfficientZeroPolicy(Policy):
         root_dirichlet_alpha=0.3,
         # (float) The noise weight at the root node of the search tree.
         root_noise_weight=0.25,
+
+        # ****** Explore by random collect ******
+        # (int) The number of episodes to collect data randomly before training.
+        random_collect_episode_num=0,
+
+        # ****** Explore by eps greedy ******
+        eps=dict(
+            # (bool) Whether to use eps greedy exploration in collecting data.
+            eps_greedy_exploration_in_collect=False,
+            # 'linear', 'exp'
+            type='linear',
+            # (float) The start value of eps.
+            start=1.,
+            # (float) The end value of eps.
+            end=0.05,
+            # (int) The decay steps from start to end eps.
+            decay=int(1e5),
+        ),
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
@@ -486,6 +506,8 @@ class SampledEfficientZeroPolicy(Policy):
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
+        if self._cfg.multi_gpu:
+            self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
             self._learn_model.parameters(), self._cfg.grad_clip_value
         )
@@ -512,7 +534,7 @@ class SampledEfficientZeroPolicy(Policy):
                 'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
                 'value_prefix_loss': value_prefix_loss.mean().item(),
                 'value_loss': value_loss.mean().item(),
-                'consistency_loss': consistency_loss.mean() / self._cfg.num_unroll_steps,
+                'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
 
                 # ==============================================================
                 # priority related
@@ -542,7 +564,7 @@ class SampledEfficientZeroPolicy(Policy):
                 'target_sampled_actions_max': target_sampled_actions[:, :, 0].max().item(),
                 'target_sampled_actions_min': target_sampled_actions[:, :, 0].min().item(),
                 'target_sampled_actions_mean': target_sampled_actions[:, :, 0].mean().item(),
-                'total_grad_norm_before_clip': total_grad_norm_before_clip
+                'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
             })
         else:
             return_data.update({
@@ -553,7 +575,7 @@ class SampledEfficientZeroPolicy(Policy):
                 'target_sampled_actions_max': target_sampled_actions[:, :].float().max().item(),
                 'target_sampled_actions_min': target_sampled_actions[:, :].float().min().item(),
                 'target_sampled_actions_mean': target_sampled_actions[:, :].float().mean().item(),
-                'total_grad_norm_before_clip': total_grad_norm_before_clip
+                'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
             })
         
         return return_data
@@ -766,7 +788,7 @@ class SampledEfficientZeroPolicy(Policy):
         self.collect_mcts_temperature = 1
 
     def _forward_collect(
-        self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1, ready_env_id=None
+        self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1, epsilon: float = 0.25, ready_env_id=None
     ):
         """
         Overview:
