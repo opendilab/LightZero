@@ -117,8 +117,6 @@ class GameSegment:
         assert timestep_obs == timestep_reward, "timestep_obs: {}, timestep_reward: {}".format(
             timestep_obs, timestep_reward
         )
-        # TODO:
-        timestep = timestep_obs
         timestep = timestep_reward
         stacked_obs = self.obs_segment[timestep:timestep + self.frame_stack_num]
         if self.config.transform2string:
@@ -132,7 +130,7 @@ class GameSegment:
             reward: np.ndarray,
             action_mask: np.ndarray = None,
             to_play: int = -1,
-            chance: np.ndarray = 0,
+            chance: int = 0,
     ) -> None:
         """
         Overview:

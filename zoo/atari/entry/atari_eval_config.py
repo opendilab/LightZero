@@ -23,7 +23,7 @@ if __name__ == "__main__":
     main_config.env.n_evaluator_episode = total_test_episodes
     main_config.env.render_mode_human = True # Whether to enable real-time rendering
     main_config.env.save_video = True # Whether to save the video, if save the video render_mode_human must to be True
-    main_config.env.save_path = './'
+    main_config.env.save_path = '../config/'
     main_config.env.eval_max_episode_steps=int(1e3) # Adjust according to different environments
 
     for seed in seeds:

@@ -73,6 +73,7 @@ tictactoe_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         transform2string=False,
         lstm_horizon_len=5,
+        use_ture_chance_label_in_chance_encoder=False,
     ),
 )
 tictactoe_muzero_config = EasyDict(tictactoe_muzero_config)
@@ -88,10 +89,6 @@ tictactoe_muzero_create_config = dict(
         type='muzero',
         import_names=['lzero.policy.muzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 tictactoe_muzero_create_config = EasyDict(tictactoe_muzero_create_config)
 create_config = tictactoe_muzero_create_config

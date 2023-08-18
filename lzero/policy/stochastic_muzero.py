@@ -100,9 +100,9 @@ class StochasticMuZeroPolicy(Policy):
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
-        optim_type='SGD',
+        optim_type='Adam',
         # (float) Learning rate for training policy network. Ininitial lr for manually decay schedule.
-        learning_rate=0.2,
+        learning_rate=int(3e-3),
         # (int) Frequency of target network update.
         target_update_freq=100,
         # (float) Weight decay for training policy network.
@@ -137,7 +137,7 @@ class StochasticMuZeroPolicy(Policy):
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=True,
+        lr_piecewise_constant_decay=False,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e4),
         # (bool) Whether to use manually decayed temperature.
@@ -209,7 +209,7 @@ class StochasticMuZeroPolicy(Policy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Ininitialize the learn model, optimizer and MCTS utils.
         """
-        assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW_official', 'AdamW_nanoGPT'], self._cfg.optim_type
+        assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW', 'AdamW_nanoGPT'], self._cfg.optim_type
         # NOTE: in board_gmaes, for fixed lr 0.003, 'Adam' is better than 'SGD'.
         if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
@@ -222,7 +222,7 @@ class StochasticMuZeroPolicy(Policy):
             self._optimizer = optim.Adam(
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
-        elif self._cfg.optim_type == 'AdamW_official':
+        elif self._cfg.optim_type == 'AdamW':
             self._optimizer = optim.AdamW(
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )

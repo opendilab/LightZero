@@ -84,10 +84,6 @@ atari_gumbel_muzero_create_config = dict(
         type='gumbel_muzero',
         import_names=['lzero.policy.gumbel_muzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 atari_gumbel_muzero_create_config = EasyDict(atari_gumbel_muzero_create_config)
 create_config = atari_gumbel_muzero_create_config

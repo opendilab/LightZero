@@ -72,10 +72,6 @@ cartpole_sampled_efficientzero_create_config = dict(
         type='sampled_efficientzero',
         import_names=['lzero.policy.sampled_efficientzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 cartpole_sampled_efficientzero_create_config = EasyDict(cartpole_sampled_efficientzero_create_config)
 create_config = cartpole_sampled_efficientzero_create_config

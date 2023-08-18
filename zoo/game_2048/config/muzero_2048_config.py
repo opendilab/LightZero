@@ -6,21 +6,18 @@ from easydict import EasyDict
 # ==============================================================
 env_name = 'game_2048'
 action_space_size = 4
-
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 200
-# update_per_collect = 50
-
 batch_size = 512
 max_env_step = int(5e6)
-# max_env_step = int(1e6)
 reanalyze_ratio = 0.
-num_of_possible_chance_tile = 10
+num_of_possible_chance_tile = 2
 chance_space_size = 16 * num_of_possible_chance_tile
 
+# debug config
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
@@ -61,7 +58,6 @@ atari_muzero_config = dict(
         mcts_ctree=True,
         gumbel_algo=False,
         cuda=True,
-        env_type='not_board_games',
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
@@ -69,18 +65,11 @@ atari_muzero_config = dict(
         discount_factor=0.999,
         manual_temperature_decay=True,
         threshold_training_steps_for_final_temperature=int(1e5),
-        # optim_type='SGD',
-        # lr_piecewise_constant_decay=True,
-        # learning_rate=0.2,  # init lr for manually decay schedule
-
-        # optim_type='AdamW_nanoGPT',
-        # optim_type='AdamW_official',
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=3e-3,
         # (float) Weight decay for training policy network.
         weight_decay=1e-4,
-
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         ssl_loss_weight=0,  # default is 0
@@ -104,10 +93,6 @@ atari_muzero_create_config = dict(
         type='muzero',
         import_names=['lzero.policy.muzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config

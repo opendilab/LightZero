@@ -72,10 +72,6 @@ cartpole_stochastic_muzero_create_config = dict(
         type='stochastic_muzero',
         import_names=['lzero.policy.stochastic_muzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 cartpole_stochastic_muzero_create_config = EasyDict(cartpole_stochastic_muzero_create_config)
 create_config = cartpole_stochastic_muzero_create_config

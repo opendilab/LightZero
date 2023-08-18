@@ -5,12 +5,12 @@ import numpy as np
 import torch
 from easydict import EasyDict
 
-from lzero.policy import InverseScalarTransform, to_detach_cpu_numpy
+from lzero.policy import InverseScalarTransform
 from lzero.mcts.ctree.ctree_stochastic_muzero import stochastic_mz_tree
 
 
 # ==============================================================
-# MuZero
+# Stochastic MuZero
 # ==============================================================
 
 

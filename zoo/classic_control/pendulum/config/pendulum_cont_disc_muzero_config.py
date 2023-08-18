@@ -72,10 +72,6 @@ pendulum_disc_muzero_create_config = dict(
         type='muzero',
         import_names=['lzero.policy.muzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 pendulum_disc_muzero_create_config = EasyDict(pendulum_disc_muzero_create_config)
 create_config = pendulum_disc_muzero_create_config

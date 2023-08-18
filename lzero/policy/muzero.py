@@ -223,7 +223,7 @@ class MuZeroPolicy(Policy):
             self._optimizer = optim.Adam(
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
-        elif self._cfg.optim_type == 'AdamW_official':
+        elif self._cfg.optim_type == 'AdamW':
             self._optimizer = optim.AdamW(
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )

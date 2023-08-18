@@ -77,10 +77,6 @@ bipedalwalker_cont_disc_efficientzero_create_config = dict(
         type='efficientzero',
         import_names=['lzero.policy.efficientzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 bipedalwalker_cont_disc_efficientzero_create_config = EasyDict(bipedalwalker_cont_disc_efficientzero_create_config)
 create_config = bipedalwalker_cont_disc_efficientzero_create_config

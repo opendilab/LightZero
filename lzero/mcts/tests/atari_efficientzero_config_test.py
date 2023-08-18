@@ -82,6 +82,7 @@ atari_efficientzero_config = dict(
         discount_factor=0.997,
         transform2string=False,
         lstm_horizon_len=5,
+        use_ture_chance_label_in_chance_encoder=False,
     ),
 )
 atari_efficientzero_config = EasyDict(atari_efficientzero_config)
@@ -97,10 +98,6 @@ atari_efficientzero_create_config = dict(
         type='efficientzero',
         import_names=['lzero.policy.efficientzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
 create_config = atari_efficientzero_create_config

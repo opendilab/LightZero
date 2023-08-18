@@ -87,10 +87,6 @@ atari_stochastic_muzero_create_config = dict(
         type='stochastic_muzero',
         import_names=['lzero.policy.stochastic_muzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 atari_stochastic_muzero_create_config = EasyDict(atari_stochastic_muzero_create_config)
 create_config = atari_stochastic_muzero_create_config
