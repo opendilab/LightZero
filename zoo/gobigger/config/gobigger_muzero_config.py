@@ -97,8 +97,8 @@ gobigger_muzero_create_config = dict(
         import_names=['lzero.policy.multi_agent_muzero'],
     ),
     collector=dict(
-        type='multi_agent_episode_muzero',
-        import_names=['lzero.worker.multi_agent_muzero_collector'],
+        type='episode_muzero',
+        import_names=['lzero.worker.muzero_collector'],
     )
 )
 gobigger_muzero_create_config = EasyDict(gobigger_muzero_create_config)

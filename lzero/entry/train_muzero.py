@@ -13,6 +13,8 @@ from ding.rl_utils import get_epsilon_greedy_fn
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
+from lzero.worker import MuZeroCollector as Collector
+from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from .utils import random_collect
@@ -89,13 +91,6 @@ def train_muzero(
     batch_size = policy_config.batch_size
     # specific game buffer for MCTS+RL algorithms
     replay_buffer = GameBuffer(policy_config)
-
-    if policy_config.multi_agent:
-        from lzero.worker import MultiAgentMuZeroCollector as Collector
-        from lzero.worker import MuZeroEvaluator as Evaluator
-    else:
-        from lzero.worker import MuZeroCollector as Collector
-        from lzero.worker import MuZeroEvaluator as Evaluator
 
     collector = Collector(
         env=collector_env,

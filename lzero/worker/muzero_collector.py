@@ -272,6 +272,89 @@ class MuZeroCollector(ISerialCollector):
         last_game_priorities[i] = None
 
         return None
+    
+    def _compute_priorities_for_agent(self, i, agent_id, pred_values_lst, search_values_lst):
+        """
+        Overview:
+            obtain the priorities at index i.
+        Arguments:
+            - i: index.
+            - pred_values_lst: The list of value being predicted.
+            - search_values_lst: The list of value obtained through search.
+        """
+        if self.policy_config.use_priority:
+            pred_values = torch.from_numpy(np.array(pred_values_lst[i][agent_id])).to(self.policy_config.device
+                                                                                      ).float().view(-1)
+            search_values = torch.from_numpy(np.array(search_values_lst[i][agent_id])).to(self.policy_config.device
+                                                                                          ).float().view(-1)
+            priorities = L1Loss(reduction='none'
+                                )(pred_values,
+                                  search_values).detach().cpu().numpy() + 1e-6  # avoid zero priority
+        else:
+            # priorities is None -> use the max priority for all newly collected data
+            priorities = None
+
+        return priorities
+
+    def pad_and_save_last_trajectory_for_agent(
+            self, i, agent_id, last_game_segments, last_game_priorities, game_segments, done
+    ) -> None:
+        """
+        Overview:
+            put the last game block into the pool if the current game is finished
+        Arguments:
+            - last_game_segments (:obj:`list`): list of the last game segments
+            - last_game_priorities (:obj:`list`): list of the last game priorities
+            - game_segments (:obj:`list`): list of the current game segments
+        Note:
+            (last_game_segments[i].obs_segment[-4:][j] == game_segments[i].obs_segment[:4][j]).all() is True
+        """
+        # pad over last block trajectory
+        beg_index = self.policy_config.model.frame_stack_num
+        end_index = beg_index + self.policy_config.num_unroll_steps
+
+        # the start <frame_stack_num> obs is init zero obs, so we take the [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
+        # e.g. the start 4 obs is init zero obs, the num_unroll_steps is 5, so we take the [4:9] obs as the pad obs
+        pad_obs_lst = game_segments[i][agent_id].obs_segment[beg_index:end_index]
+        pad_child_visits_lst = game_segments[i][agent_id].child_visit_segment[:self.policy_config.num_unroll_steps]
+        # EfficientZero original repo bug:
+        # pad_child_visits_lst = game_segments[i].child_visit_segment[beg_index:end_index]
+
+        beg_index = 0
+        # self.unroll_plus_td_steps = self.policy_config.num_unroll_steps + self.policy_config.td_steps
+        end_index = beg_index + self.unroll_plus_td_steps - 1
+
+        pad_reward_lst = game_segments[i][agent_id].reward_segment[beg_index:end_index]
+
+        beg_index = 0
+        end_index = beg_index + self.unroll_plus_td_steps
+
+        pad_root_values_lst = game_segments[i][agent_id].root_value_segment[beg_index:end_index]
+
+        # pad over and save
+        last_game_segments[i][agent_id].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
+        """
+        Note:
+            game_segment element shape:
+            obs: game_segment_length + stack + num_unroll_steps, 20+4 +5
+            rew: game_segment_length + stack + num_unroll_steps + td_steps -1  20 +5+3-1
+            action: game_segment_length -> 20
+            root_values:  game_segment_length + num_unroll_steps + td_steps -> 20 +5+3
+            child_visits: game_segment_length + num_unroll_steps -> 20 +5
+            to_play: game_segment_length -> 20
+            action_mask: game_segment_length -> 20
+        """
+
+        last_game_segments[i][agent_id].game_segment_to_array()
+
+        # put the game block into the pool
+        self.game_segment_pool.append((last_game_segments[i][agent_id], last_game_priorities[i][agent_id], done[i]))
+
+        # reset last game_segments
+        last_game_segments[i][agent_id] = None
+        last_game_priorities[i][agent_id] = None
+
+        return None
 
     def collect(self,
                 n_episode: Optional[int] = None,
@@ -584,12 +667,12 @@ class MuZeroCollector(ISerialCollector):
                                 # pad over last block trajectory
                                 if last_game_segments[env_id][agent_id] is not None:
                                     # TODO(pu): return the one game block
-                                    self.pad_and_save_last_trajectory(
+                                    self.pad_and_save_last_trajectory_for_agent(
                                         env_id, agent_id, last_game_segments, last_game_priorities, game_segments, dones
                                     )
 
                                 # calculate priority
-                                priorities = self._compute_priorities(env_id, agent_id, pred_values_lst, search_values_lst)
+                                priorities = self._compute_priorities_for_agent(env_id, agent_id, pred_values_lst, search_values_lst)
                                 # pred_values_lst[env_id] = []
                                 # search_values_lst[env_id] = []
                                 search_values_lst = [[[] for _ in range(agent_num)] for _ in range(env_nums)]
@@ -662,12 +745,12 @@ class MuZeroCollector(ISerialCollector):
                     if self._multi_agent:
                         for agent_id in range(agent_num):
                             if last_game_segments[env_id][agent_id] is not None:
-                                self.pad_and_save_last_trajectory(
+                                self.pad_and_save_last_trajectory_for_agent(
                                     env_id, agent_id, last_game_segments, last_game_priorities, game_segments, dones
                                 )
 
                             # store current block trajectory
-                            priorities = self._compute_priorities(env_id, agent_id, pred_values_lst, search_values_lst)
+                            priorities = self._compute_priorities_for_agent(env_id, agent_id, pred_values_lst, search_values_lst)
 
                             # NOTE: put the last game block in one episode into the trajectory_pool
                             game_segments[env_id][agent_id].game_segment_to_array()

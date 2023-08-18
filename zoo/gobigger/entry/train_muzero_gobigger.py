@@ -15,10 +15,11 @@ from tensorboardX import SummaryWriter
 
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
+from lzero.worker import MuZeroCollector as Collector
+from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import GoBiggerMuZeroEvaluator
 from lzero.entry.utils import random_collect
 import copy
-
 
 
 def train_muzero_gobigger(
@@ -99,12 +100,6 @@ def train_muzero_gobigger(
     # specific game buffer for MCTS+RL algorithms
     replay_buffer = GameBuffer(policy_config)
 
-    if policy_config.multi_agent:
-        from lzero.worker import MultiAgentMuZeroCollector as Collector
-        from lzero.worker import MuZeroEvaluator as Evaluator
-    else:
-        from lzero.worker import MuZeroCollector as Collector
-        from lzero.worker import MuZeroEvaluator as Evaluator
     collector = Collector(
         env=collector_env,
         policy=policy.collect_mode,
