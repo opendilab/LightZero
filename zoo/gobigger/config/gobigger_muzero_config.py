@@ -40,7 +40,6 @@ gobigger_muzero_config = dict(
         ignore_done=True,
         model=dict(
             model_type='structure',
-            env_name=env_name,
             agent_num=agent_num,
             team_num=team_num,
             latent_state_dim=176,

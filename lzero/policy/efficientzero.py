@@ -210,8 +210,6 @@ class EfficientZeroPolicy(Policy):
             return 'EfficientZeroModel', ['lzero.model.efficientzero_model']
         elif self._cfg.model.model_type == "mlp":
             return 'EfficientZeroModelMLP', ['lzero.model.efficientzero_model_mlp']
-        elif self._cfg.model.model_type == "structure":
-            return 'EfficientZeroModelStructure', ['lzero.model.efficientzero_model_structure']
 
     def _init_learn(self) -> None:
         """

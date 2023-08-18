@@ -202,24 +202,26 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
                         obs_batch_new[k][k1] = v1.reshape(batch_size, -1)
             else:  # espaecially for ptz obs, {'k1':[], 'k2':[]}
                 obs_batch_new[k] = v.reshape(batch_size, -1)
+        obs_batch_new = to_device(obs_batch_new, device=cfg.device)
 
         # obs_target_batch
-        obs_target_batch = obs_target_batch.tolist()
-        obs_target_batch = sum(obs_target_batch, [])
-        obs_target_batch = default_collate(obs_target_batch)
-        obs_target_batch_new = {}
-        for k, v in obs_target_batch.items():
-            if isinstance(v, dict):   # espaecially for gobigger obs, { {'k':{'k1':[], 'k2':[]},}
-                obs_target_batch_new[k] = {}
-                for k1, v1 in v.items():
-                    if len(v1.shape) == 1:
-                        obs_target_batch_new[k][k1] = v1
-                    else:
-                        obs_target_batch_new[k][k1] = v1.reshape(batch_size, -1)
-            else:  # espaecially for ptz obs, {'k1':[], 'k2':[]}
-                obs_target_batch_new[k] = v.reshape(batch_size, -1)
-        obs_batch_new = to_device(obs_batch_new, device=cfg.device)
-        obs_target_batch_new = to_device(obs_target_batch_new, device=cfg.device)
+        obs_target_batch_new = None
+        if cfg.model.self_supervised_learning_loss:
+            obs_target_batch = obs_target_batch.tolist()
+            obs_target_batch = sum(obs_target_batch, [])
+            obs_target_batch = default_collate(obs_target_batch)
+            obs_target_batch_new = {}
+            for k, v in obs_target_batch.items():
+                if isinstance(v, dict):   # espaecially for gobigger obs, { {'k':{'k1':[], 'k2':[]},}
+                    obs_target_batch_new[k] = {}
+                    for k1, v1 in v.items():
+                        if len(v1.shape) == 1:
+                            obs_target_batch_new[k][k1] = v1
+                        else:
+                            obs_target_batch_new[k][k1] = v1.reshape(batch_size, -1)
+                else:  # espaecially for ptz obs, {'k1':[], 'k2':[]}
+                    obs_target_batch_new[k] = v.reshape(batch_size, -1)
+            obs_target_batch_new = to_device(obs_target_batch_new, device=cfg.device)
         return obs_batch_new, obs_target_batch_new
 
 

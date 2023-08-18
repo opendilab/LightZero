@@ -18,12 +18,9 @@ from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.entry.utils import random_collect
+from zoo.petting_zoo.model import PettingZooEncoder
 
-import copy
-from lzero.worker import GoBiggerMuZeroEvaluator
-from zoo.gobigger.model import GoBiggerEncoder
-
-def train_muzero_gobigger(
+def train_muzero(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -33,7 +30,7 @@ def train_muzero_gobigger(
 ) -> 'Policy':  # noqa
     """
     Overview:
-        The train entry for GoBigger MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
+        The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
             ``Tuple[dict, dict]`` type means [user_config, create_cfg].
@@ -75,17 +72,11 @@ def train_muzero_gobigger(
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
-    env_cfg = copy.deepcopy(evaluator_env_cfg[0])
-    env_cfg.contain_raw_obs = True
-    vsbot_evaluator_env_cfg = [env_cfg for _ in range(len(evaluator_env_cfg))]
-    vsbot_evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in vsbot_evaluator_env_cfg])
-
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
-    vsbot_evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
 
-    model = Encoder(**cfg.policy.model, state_encoder=GoBiggerEncoder())
+    model = Encoder(**cfg.policy.model, state_encoder=PettingZooEncoder())
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
@@ -93,7 +84,7 @@ def train_muzero_gobigger(
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
-    tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
+    tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
     # ==============================================================
@@ -111,7 +102,7 @@ def train_muzero_gobigger(
         exp_name=cfg.exp_name,
         policy_config=policy_config
     )
-    evaluator = GoBiggerMuZeroEvaluator(
+    evaluator = Evaluator(
         eval_freq=cfg.policy.eval_freq,
         n_evaluator_episode=cfg.env.n_evaluator_episode,
         stop_value=cfg.env.stop_value,
@@ -120,18 +111,6 @@ def train_muzero_gobigger(
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
         policy_config=policy_config
-    )
-
-    vsbot_evaluator = GoBiggerMuZeroEvaluator(
-        eval_freq=cfg.policy.eval_freq,
-        n_evaluator_episode=cfg.env.n_evaluator_episode,
-        stop_value=cfg.env.stop_value,
-        env=vsbot_evaluator_env,
-        policy=policy.eval_mode,
-        tb_logger=tb_logger,
-        exp_name=cfg.exp_name,
-        policy_config=policy_config,
-        instance_name='vsbot_evaluator'
     )
 
     # ==============================================================
@@ -178,8 +157,7 @@ def train_muzero_gobigger(
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
-            stop, reward = evaluator.eval(None, learner.train_iter, collector.envstep) # save_ckpt_fn = None 
-            stop, reward = vsbot_evaluator.eval_vsbot(learner.save_checkpoint, learner.train_iter, collector.envstep)
+            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
                 break
 

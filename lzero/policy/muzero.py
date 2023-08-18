@@ -208,8 +208,6 @@ class MuZeroPolicy(Policy):
             return 'MuZeroModel', ['lzero.model.muzero_model']
         elif self._cfg.model.model_type == "mlp":
             return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
-        elif self._cfg.model.model_type == "structure":
-            return 'MuZeroModelStructure', ['lzero.model.muzero_model_structure']
 
     def _init_learn(self) -> None:
         """

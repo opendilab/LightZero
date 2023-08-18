@@ -45,7 +45,6 @@ main_config = dict(
         ignore_done=False,
         model=dict(
             model_type='structure',
-            env_name=env_name,
             latent_state_dim=256,
             frame_stack_num=1,
             action_space='discrete',
@@ -78,6 +77,7 @@ main_config = dict(
         optim_type='SGD',
         lr_piecewise_constant_decay=True,
         learning_rate=0.2,
+        ssl_loss_weight=0,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
@@ -112,5 +112,5 @@ ptz_simple_spread_efficientzero_config = main_config
 ptz_simple_spread_efficientzero_create_config = create_config
 
 if __name__ == '__main__':
-    from lzero.entry import train_muzero
+    from zoo.petting_zoo.entry import train_muzero
     train_muzero([main_config, create_config], seed=seed)

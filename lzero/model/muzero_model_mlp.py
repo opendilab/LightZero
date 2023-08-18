@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 from ding.torch_utils import MLP
 from ding.utils import MODEL_REGISTRY, SequenceType
+from ding.utils.default_helper import get_shape0
+
 
 from .common import MZNetworkOutput, RepresentationNetworkMLP, PredictionNetworkMLP
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
@@ -34,6 +36,7 @@ class MuZeroModelMLP(nn.Module):
         discrete_action_encoding_type: str = 'one_hot',
         norm_type: Optional[str] = 'BN',
         res_connection_in_dynamics: bool = False,
+        state_encoder=None,
         *args,
         **kwargs
     ):
@@ -101,9 +104,12 @@ class MuZeroModelMLP(nn.Module):
         self.state_norm = state_norm
         self.res_connection_in_dynamics = res_connection_in_dynamics
 
-        self.representation_network = RepresentationNetworkMLP(
-            observation_shape=observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
-        )
+        if state_encoder == None:
+            self.representation_network = RepresentationNetworkMLP(
+                observation_shape=observation_shape, hidden_channels=latent_state_dim, norm_type=norm_type
+            )
+        else:
+            self.representation_network = state_encoder
 
         self.dynamics_network = DynamicsNetwork(
             action_encoding_dim=self.action_encoding_dim,
@@ -166,7 +172,7 @@ class MuZeroModelMLP(nn.Module):
             - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
             - latent_state (:obj:`torch.Tensor`): :math:`(B, H)`, where B is batch_size, H is the dimension of latent state.
         """
-        batch_size = obs.size(0)
+        batch_size = get_shape0(obs)
         latent_state = self._representation(obs)
         policy_logits, value = self._prediction(latent_state)
         return MZNetworkOutput(
