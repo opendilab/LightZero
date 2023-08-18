@@ -8,6 +8,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from ding.model import ReparameterizationHead
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 
@@ -34,6 +35,16 @@ class AlphaZeroModel(nn.Module):
         fc_value_layers: SequenceType = [32],
         fc_policy_layers: SequenceType = [32],
         value_support_size: int = 601,
+        # ==============================================================
+        # specific sampled related config
+        # ==============================================================
+        continuous_action_space: bool = False,
+        num_of_sampled_actions: int = 6,
+        sigma_type='conditioned',
+        fixed_sigma_value: float = 0.3,
+        bound_type: str = None,
+        norm_type: str = 'BN',
+        discrete_action_encoding_type: str = 'one_hot',
     ):
         """
         Overview:
@@ -70,7 +81,26 @@ class AlphaZeroModel(nn.Module):
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.representation_network = representation_network
 
+        self.continuous_action_space = continuous_action_space
         self.action_space_size = action_space_size
+        # The dim of action space. For discrete action space, it's 1.
+        # For continuous action space, it is the dim of action.
+        self.action_space_dim = action_space_size if self.continuous_action_space else 1
+        assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
+        self.discrete_action_encoding_type = discrete_action_encoding_type
+        if self.continuous_action_space:
+            self.action_encoding_dim = action_space_size
+        else:
+            if self.discrete_action_encoding_type == 'one_hot':
+                self.action_encoding_dim = action_space_size
+            elif self.discrete_action_encoding_type == 'not_one_hot':
+                self.action_encoding_dim = 1
+        self.sigma_type = sigma_type
+        self.fixed_sigma_value = fixed_sigma_value
+        self.bound_type = bound_type
+        self.norm_type = norm_type
+        self.num_of_sampled_actions = num_of_sampled_actions
+
         # TODO use more adaptive way to get the flatten output size
         flatten_output_size_for_value_head = (
             (
@@ -88,6 +118,7 @@ class AlphaZeroModel(nn.Module):
 
         self.prediction_network = PredictionNetwork(
             action_space_size,
+            self.continuous_action_space,
             num_res_blocks,
             num_channels,
             value_head_channels,
@@ -99,6 +130,10 @@ class AlphaZeroModel(nn.Module):
             flatten_output_size_for_policy_head,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             activation=activation,
+            sigma_type=self.sigma_type,
+            fixed_sigma_value=self.fixed_sigma_value,
+            bound_type=self.bound_type,
+            norm_type=self.norm_type,
         )
 
         if self.representation_network is None:
@@ -131,7 +166,7 @@ class AlphaZeroModel(nn.Module):
         logit, value = self.prediction_network(encoded_state)
         return logit, value
 
-    def compute_prob_value(self, state_batch: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def compute_policy_value(self, state_batch: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
             The computation graph of AlphaZero model to calculate action selection probability and value.
@@ -178,6 +213,7 @@ class PredictionNetwork(nn.Module):
     def __init__(
             self,
             action_space_size: int,
+            continuous_action_space,
             num_res_blocks: int,
             num_channels: int,
             value_head_channels: int,
@@ -189,6 +225,13 @@ class PredictionNetwork(nn.Module):
             flatten_output_size_for_policy_head: int,
             last_linear_layer_init_zero: bool = True,
             activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            # ==============================================================
+            # specific sampled related config
+            # ==============================================================
+            sigma_type='conditioned',
+            fixed_sigma_value: float = 0.3,
+            bound_type: str = None,
+            norm_type: str = 'BN',
     ) -> None:
         """
         Overview:
@@ -213,6 +256,15 @@ class PredictionNetwork(nn.Module):
                 operation to speedup, e.g. ReLU(inplace=True).
         """
         super().__init__()
+        self.continuous_action_space = continuous_action_space
+        self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
+        self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
+        self.norm_type = norm_type
+        self.sigma_type = sigma_type
+        self.fixed_sigma_value = fixed_sigma_value
+        self.bound_type = bound_type
+        self.activation = activation
+
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
@@ -226,7 +278,7 @@ class PredictionNetwork(nn.Module):
         self.norm_policy = nn.BatchNorm2d(policy_head_channels)
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
-        self.fc_value = MLP(
+        self.fc_value_head = MLP(
             in_channels=self.flatten_output_size_for_value_head,
             hidden_channels=fc_value_layers[0],
             out_channels=output_support_size,
@@ -237,17 +289,30 @@ class PredictionNetwork(nn.Module):
             output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
-        self.fc_policy = MLP(
-            in_channels=self.flatten_output_size_for_policy_head,
-            hidden_channels=fc_policy_layers[0],
-            out_channels=action_space_size,
-            layer_num=len(fc_policy_layers) + 1,
-            activation=activation,
-            norm_type='LN',
-            output_activation=False,
-            output_norm=False,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
+        # sampled related core code
+        if self.continuous_action_space:
+            self.fc_policy_head = ReparameterizationHead(
+                input_size=self.flatten_output_size_for_policy_head,
+                output_size=action_space_size,
+                layer_num=len(fc_policy_layers) + 1,
+                sigma_type=self.sigma_type,
+                fixed_sigma_value=self.fixed_sigma_value,
+                activation=nn.ReLU(),
+                norm_type=None,
+                bound_type=self.bound_type
+            )
+        else:
+            self.fc_policy_head = MLP(
+                in_channels=self.flatten_output_size_for_policy_head,
+                hidden_channels=fc_policy_layers[0],
+                out_channels=action_space_size,
+                layer_num=len(fc_policy_layers) + 1,
+                activation=activation,
+                norm_type='LN',
+                output_activation=False,
+                output_norm=False,
+                last_linear_layer_init_zero=last_linear_layer_init_zero
+            )
 
         self.activation = activation
 
@@ -279,6 +344,12 @@ class PredictionNetwork(nn.Module):
         value = value.reshape(-1, self.flatten_output_size_for_value_head)
         policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
 
-        value = self.fc_value(value)
-        logit = self.fc_policy(policy)
-        return logit, value
+        value = self.fc_value_head(value)
+
+        # sampled related core code
+        policy = self.fc_policy_head(policy)
+
+        if self.continuous_action_space:
+            policy = torch.cat([policy['mu'], policy['sigma']], dim=-1)
+
+        return policy, value

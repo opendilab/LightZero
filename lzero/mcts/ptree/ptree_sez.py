@@ -123,8 +123,7 @@ class Node:
 
             for action_index in range(self.num_of_sampled_actions):
                 self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
-                    # prob[action_index], # NOTE: this is a bug
-                    prob[sampled_actions[action_index]],  #
+                    prob[sampled_actions[action_index]],
                     action_space_size=self.action_space_size,
                     num_of_sampled_actions=self.num_of_sampled_actions,
                     continuous_action_space=self.continuous_action_space
@@ -777,17 +776,27 @@ def batch_backpropagate(
 class Action:
     """Class that represent an action of a game."""
 
-    def __init__(self, value: float) -> None:
+    def __init__(self, value: Union[int, np.ndarray]) -> None:
         self.value = value
 
-    def __hash__(self) -> hash:
-        return hash(self.value.tostring())
+    def __hash__(self) -> int:
+        if isinstance(self.value, np.ndarray):
+            if self.value.ndim == 0:
+                return hash(self.value.item())
+            else:
+                return hash(tuple(self.value.flatten()))
+        else:
+            return hash(self.value)
 
     def __eq__(self, other: "Action") -> bool:
-        return (self.value == other.value).all()
+        if isinstance(self.value, np.ndarray) and isinstance(other.value, np.ndarray):
+            return np.array_equal(self.value, other.value)
+        else:
+            return self.value == other.value
 
     def __gt__(self, other: "Action") -> bool:
-        return self.value[0] > other.value[0]
+        return self.value > other.value
 
     def __repr__(self) -> str:
         return str(self.value)
+

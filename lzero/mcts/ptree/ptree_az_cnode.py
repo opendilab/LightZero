@@ -43,7 +43,7 @@ class MCTS(object):
     def get_next_action(
             self,
             simulate_env: Type[BaseEnv],
-            policy_forward_fn: Callable,
+            policy_value_func: Callable,
             temperature: float = 1.0,
             sample: bool = True
     ) -> Tuple[int, List[float]]:
@@ -52,7 +52,7 @@ class MCTS(object):
             calculate the move probabilities based on visit counts at the root node.
         Arguments:
             - simulate_env (:obj:`Class BaseGameEnv`): The class of simulate env.
-            - policy_forward_fn (:obj:`Function`): The Callable to compute the action probs and state value.
+            - policy_value_func (:obj:`Function`): The Callable to compute the action probs and state value.
             - temperature (:obj:`Int`): Temperature is a parameter that controls the "softness" of the probability distribution.
             - sample (:obj:`Bool`): The value of the node.
         Returns:
@@ -70,7 +70,7 @@ class MCTS(object):
 
         root = mcts_alphazero.Node()
 
-        self._expand_leaf_node(root, simulate_env, policy_forward_fn)
+        self._expand_leaf_node(root, simulate_env, policy_value_func)
 
         if sample:
             self._add_exploration_noise(root)
@@ -84,7 +84,7 @@ class MCTS(object):
         for n in range(self._num_simulations):
             simulate_env_copy = copy.deepcopy(simulate_env)
             simulate_env_copy.battle_mode = simulate_env_copy.mcts_mode
-            self._simulate(root, simulate_env_copy, policy_forward_fn)
+            self._simulate(root, simulate_env_copy, policy_value_func)
 
         # for debugging
         # print('after simulation')
@@ -110,7 +110,7 @@ class MCTS(object):
         # print(action)
         return action, action_probs
 
-    def _simulate(self, node, simulate_env: Type[BaseEnv], policy_forward_fn: Callable) -> None:
+    def _simulate(self, node, simulate_env: Type[BaseEnv], policy_value_func: Callable) -> None:
         """
         Overview:
             Run a single playout from the root to the leaf, getting a value at the leaf and propagating it back through its parents.
@@ -118,7 +118,7 @@ class MCTS(object):
         Arguments:
             - node (:obj:`Class Node`): Current node when performing mcts search.
             - simulate_env (:obj:`Class BaseGameEnv`): The class of simulate env.
-            - policy_forward_fn (:obj:`Function`): The Callable to compute the action probs and state value.
+            - policy_value_func (:obj:`Function`): The Callable to compute the action probs and state value.
         """
         while not node.is_leaf():
             # print(node.children.keys())
@@ -137,7 +137,7 @@ class MCTS(object):
         """
 
         if not done:
-            leaf_value = self._expand_leaf_node(node, simulate_env, policy_forward_fn)
+            leaf_value = self._expand_leaf_node(node, simulate_env, policy_value_func)
         else:
             if simulate_env.mcts_mode == 'self_play_mode':
                 if winner == -1:
@@ -202,18 +202,18 @@ class MCTS(object):
 
         return action, child
 
-    def _expand_leaf_node(self, node, simulate_env: Type[BaseEnv], policy_forward_fn: Callable) -> float:
+    def _expand_leaf_node(self, node, simulate_env: Type[BaseEnv], policy_value_func: Callable) -> float:
         """
         Overview:
-            expand the node with the policy_forward_fn.
+            expand the node with the policy_value_func.
         Arguments:
             - node (:obj:`Class Node`): current node when performing mcts search.
             - simulate_env (:obj:`Class BaseGameEnv`): the class of simulate env.
-            - policy_forward_fn (:obj:`Function`): the Callable to compute the action probs and state value.
+            - policy_value_func (:obj:`Function`): the Callable to compute the action probs and state value.
         Returns:
             - leaf_value (:obj:`Bool`): the leaf node's value.
         """
-        action_probs_dict, leaf_value = policy_forward_fn(simulate_env)
+        action_probs_dict, leaf_value = policy_value_func(simulate_env)
         # simulate_env._raw_env._go.board
         for action, prior_p in action_probs_dict.items():
             if action in simulate_env.legal_actions:

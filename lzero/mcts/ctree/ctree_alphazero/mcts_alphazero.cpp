@@ -105,13 +105,13 @@ public:
         return std::make_pair(action, child);
     }
 
-    double _expand_leaf_node(Node* node, py::object simulate_env, py::object policy_forward_fn) {
+    double _expand_leaf_node(Node* node, py::object simulate_env, py::object policy_value_func) {
         // std::cout << "position11 " << std::endl;
     
         std::map<int, double> action_probs_dict;
         double leaf_value;
         // std::cout << "position12 " << std::endl;
-        py::tuple result = policy_forward_fn(simulate_env);
+        py::tuple result = policy_value_func(simulate_env);
         // std::cout << "position13 " << std::endl;
 
         action_probs_dict = result[0].cast<std::map<int, double>>();
@@ -154,10 +154,10 @@ public:
         return leaf_value;
     }
 
-//    std::pair<int, std::vector<double>> get_next_action(py::object reset_fn, py::object policy_forward_fn, double temperature, bool sample) {
+//    std::pair<int, std::vector<double>> get_next_action(py::object reset_fn, py::object policy_value_func, double temperature, bool sample) {
 //                Node* root = new Node();
 //        reset_fn();
-//        _expand_leaf_node(root, simulate_env, policy_forward_fn);
+//        _expand_leaf_node(root, simulate_env, policy_value_func);
 //        if (sample) {
 //            _add_exploration_noise(root);
 //        }
@@ -165,10 +165,10 @@ public:
 //            reset_fn();
 //            simulate_env.attr("battle_mode") = simulate_env.attr("mcts_mode");
 ////            simulate_env_copy.attr("battle_mode") = simulate_env_copy.attr("mcts_mode");
-//            _simulate(root, simulate_env, policy_forward_fn);
+//            _simulate(root, simulate_env, policy_value_func);
 ////            simulate_env = py::none();
 //        }
-    std::pair<int, std::vector<double>> get_next_action(py::object state_config_for_env_reset, py::object policy_forward_fn, double temperature, bool sample) {
+    std::pair<int, std::vector<double>> get_next_action(py::object state_config_for_env_reset, py::object policy_value_func, double temperature, bool sample) {
         // printf("position1 \n");
         Node* root = new Node();
 
@@ -192,7 +192,7 @@ public:
             katago_game_state
         );
 
-        _expand_leaf_node(root, simulate_env, policy_forward_fn);
+        _expand_leaf_node(root, simulate_env, policy_value_func);
         if (sample) {
             _add_exploration_noise(root);
         }
@@ -205,7 +205,7 @@ public:
         );
             simulate_env.attr("battle_mode") = simulate_env.attr("mcts_mode");
 //            simulate_env_copy.attr("battle_mode") = simulate_env_copy.attr("mcts_mode");
-            _simulate(root, simulate_env, policy_forward_fn);
+            _simulate(root, simulate_env, policy_value_func);
 //            simulate_env = py::none();
         }
 
@@ -262,7 +262,7 @@ public:
         return std::make_pair(action, action_probs);
     }
 
-    void _simulate(Node* node, py::object simulate_env, py::object policy_forward_fn) {
+    void _simulate(Node* node, py::object simulate_env, py::object policy_value_func) {
         // std::cout << "position21 " << std::endl;
         while (!node->is_leaf()) {
             int action;
@@ -282,7 +282,7 @@ public:
         double leaf_value;
         // std::cout << "position22 " << std::endl;
         if (!done) {
-            leaf_value = _expand_leaf_node(node, simulate_env, policy_forward_fn);
+            leaf_value = _expand_leaf_node(node, simulate_env, policy_value_func);
             // std::cout << "position23 " << std::endl;
         } 
         else {
@@ -410,7 +410,7 @@ PYBIND11_MODULE(mcts_alphazero, m) {
         .def("_select_child", &MCTS::_select_child)
         .def("_expand_leaf_node", &MCTS::_expand_leaf_node)
         // .def("get_next_action", &MCTS::get_next_action,
-        //      py::arg("simulate_env"), py::arg("policy_forward_fn"),
+        //      py::arg("simulate_env"), py::arg("policy_value_func"),
         //      py::arg("temperature")=1.0, py::arg("sample")=true)
         .def("get_next_action", &MCTS::get_next_action)
         .def("_simulate", &MCTS::_simulate);
@@ -418,6 +418,7 @@ PYBIND11_MODULE(mcts_alphazero, m) {
 
 
 // 构建与编译命令
+// 在lzero/mcts/ctree/ctree_alphazero路径下，依次执行以下命令：
 // mkdir build
 // cd buld
 // cmake ..

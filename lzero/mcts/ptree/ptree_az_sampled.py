@@ -18,6 +18,8 @@ import torch
 from ding.envs import BaseEnv
 from easydict import EasyDict
 
+from lzero.mcts.ptree.ptree_sez import Action
+
 
 class Node(object):
     """
@@ -177,6 +179,14 @@ class MCTS(object):
         # Stores the configuration parameters for the MCTS search process.
         self._cfg = cfg
 
+        # ==============================================================
+        # sampled related core code
+        # ==============================================================
+        self.legal_actions = self._cfg.legal_actions
+        self.action_space_size = self._cfg.action_space_size
+        self.num_of_sampled_actions = self._cfg.num_of_sampled_actions
+        self.continuous_action_space = self._cfg.continuous_action_space
+
         # The maximum number of moves allowed in a game.
         self._max_moves = self._cfg.get('max_moves', 512)  # for chess and shogi, 722 for Go.
         # The number of simulations to run for each move.
@@ -213,19 +223,19 @@ class MCTS(object):
             - action (:obj:`Int`): The selected action to take.
             - action_probs (:obj:`List`): The output probability of each action.
         """
-
         # Create a new root node for the MCTS search.
-        root = Node()
+        self.root = Node()
         self.simulate_env.reset(
             start_player_index=state_config_for_env_reset.start_player_index,
             init_state=state_config_for_env_reset.init_state,
             katago_policy_init=True,
             katago_game_state=state_config_for_env_reset.katago_game_state,
         )
-        self._expand_leaf_node(root, self.simulate_env, policy_value_func)
+        # self.simulate_env_root = copy.deepcopy(self.simulate_env)
+        self._expand_leaf_node(self.root, self.simulate_env, policy_value_func)
 
         if sample:
-            self._add_exploration_noise(root)
+            self._add_exploration_noise(self.root)
 
         for n in range(self._num_simulations):
             self.simulate_env.reset(
@@ -235,26 +245,24 @@ class MCTS(object):
                 katago_game_state=state_config_for_env_reset.katago_game_state,
             )
             self.simulate_env.battle_mode = self.simulate_env.mcts_mode
-            self._simulate(root, self.simulate_env, policy_value_func)
+            self._simulate(self.root, self.simulate_env, policy_value_func)
 
-        # for debugging
-        # print('after simulation')
-        # print('value= {}'.format([(k, v.value) for k,v in root.children.items()]))
-        # print('visit_count= {}'.format([(k, v.visit_count) for k,v in root.children.items()]))
-
+        # sampled related code
         # Get the visit count for each possible action at the root node.
         action_visits = []
         for action in range(self.simulate_env.action_space.n):
-            if action in root.children:
-                action_visits.append((action, root.children[action].visit_count))
+            # Create an Action object for the current action
+            current_action_object = Action(action)
+
+            # Use the Action object to look up the child node in the dictionary
+            if current_action_object in self.root.children:
+                action_visits.append((action, self.root.children[current_action_object].visit_count))
             else:
                 action_visits.append((action, 0))
 
         # Unpack the tuples in action_visits list into two separate tuples: actions and visits.
         actions, visits = zip(*action_visits)
         # print('action_visits= {}'.format(visits))
-        # original code: visit_count 0 -> action_probs small positive number
-        # action_probs = nn.functional.softmax(np.log(torch.as_tensor(visits) + 1e-10) / temperature, dim=0).numpy()
 
         visits_t = torch.as_tensor(visits, dtype=torch.float32)
         visits_t /= temperature
@@ -265,6 +273,8 @@ class MCTS(object):
         else:
             action = actions[np.argmax(action_probs)]
         self.mcts_search_cnt += 1
+
+        # print(f'self.simulate_env_root: {self.simulate_env_root.legal_actions}')
         # print(f'mcts_search_cnt: {self.mcts_search_cnt}')
         # print('action= {}'.format(action))
         # print('action_probs= {}'.format(action_probs))
@@ -282,11 +292,19 @@ class MCTS(object):
             - policy_value_func (:obj:`Function`): The Callable to compute the action probs and state value.
         """
         while not node.is_leaf():
-            # print('here')
+            # only for debug
+            # print('=='*20)
+            # print('node.legal_actions: ', node.legal_actions)
             # print(node.children.keys())
+            # print('simulate_env.board: ', simulate_env.board)
+            # print('simulate_env.legal_actions:', simulate_env.legal_actions)
+
             # Traverse the tree until the leaf node.
             action, node = self._select_child(node, simulate_env)
-            simulate_env.step(action)
+            if action is None:
+                break
+            # sampled related code
+            simulate_env.step(action.value)
 
         done, winner = simulate_env.get_done_winner()
         """
@@ -346,25 +364,30 @@ class MCTS(object):
             - child (:obj:`Node`): the child node reached by executing the action with the highest ucb score.
         """
         action = None
-        child = None
+        child_node = None
         best_score = -9999999
         # print(simulate_env._raw_env._go.board, simulate_env.legal_actions)
         # Iterate over each child of the current node.
-        for action_tmp, child_tmp in node.children.items():
-            score = self._ucb_score(node, child_tmp)
-            # Check if the score of the current child is higher than the best score so far.
-            if score > best_score:
-                best_score = score
-                action = action_tmp
-                child = child_tmp
-        if child is None:
-            child = node  # child==None, node is leaf node in play_with_bot_mode.
+        for action_tmp, child_node_tmp in node.children.items():
+            # print(a, simulate_env.legal_actions)
+            # print('node.legal_actions: ', node.legal_actions)
+            if action_tmp.value in simulate_env.legal_actions:
+                score = self._ucb_score(node, child_node_tmp)
+                # Check if the score of the current child is higher than the best score so far.
+                if score > best_score:
+                    best_score = score
+                    action = action_tmp
+                    child_node = child_node_tmp
+            else:
+                print(f'error: {action_tmp} not in {simulate_env.legal_actions}')
+        if child_node is None:
+            child_node = node  # child==None, node is leaf node in play_with_bot_mode.
+        if action is None:
+            print('error: action is None')
 
-        return action, child
+        return action, child_node
 
     def _expand_leaf_node(self, node: Node, simulate_env: Type[BaseEnv], policy_value_func: Callable) -> float:
-        # def _expand_leaf_node(self, node: Node, state_config_for_env_reset, policy_value_func: Callable) -> float:
-
         """
         Overview:
             expand the node with the policy_value_func.
@@ -375,18 +398,47 @@ class MCTS(object):
         Returns:
             - leaf_value (:obj:`Bool`): the leaf node's value.
         """
-        # Call the policy_value_func function to compute the action probabilities and state value, and return a
-        # dictionary and the value of the leaf node.
-        action_probs_dict, leaf_value = policy_value_func(simulate_env)
-        # simulate_env._raw_env._go.board
-        # Traverse the action probability dictionary.
-        for action, prior_p in action_probs_dict.items():
-            # If the action is in the legal action list of the current environment, add the action as a child node of
-            # the current node.
-            if action in simulate_env.legal_actions:
-                node.children[action] = Node(parent=node, prior_p=prior_p)
-        # Return the value of the leaf node.
-        return leaf_value
+        # ==============================================================
+        # sampled related core code
+        # ==============================================================
+        if self.continuous_action_space:
+            pass
+        else:
+            # discrete action space
+
+            # Call the policy_value_func function to compute the action probabilities and state value, and return a
+            # dictionary and the value of the leaf node.
+            legal_action_probs_dict, leaf_value = policy_value_func(simulate_env)
+
+            node.legal_actions = []
+
+            # Extract actions and their corresponding probabilities from the dictionary
+            actions = list(legal_action_probs_dict.keys())
+            probabilities = list(legal_action_probs_dict.values())
+
+            # Normalize the probabilities so they sum to 1
+            probabilities = np.array(probabilities)
+            probabilities /= probabilities.sum()
+
+            # self.num_of_sampled_actions = len(actions)
+
+            # If there are fewer legal actions than the desired number of samples,
+            # adjust the number of samples to the number of legal actions
+            num_samples = min(len(actions), self.num_of_sampled_actions)
+            # Use numpy to randomly sample actions according to the given probabilities, without replacement
+            sampled_actions = np.random.choice(actions, size=num_samples, p=probabilities, replace=False)
+            sampled_actions = sampled_actions.tolist()  # Convert numpy array to list
+
+            for action_index in range(num_samples):
+                node.children[Action(sampled_actions[action_index])] = \
+                    Node(
+                        parent=node,
+                        prior_p=legal_action_probs_dict[sampled_actions[action_index]],
+                    )
+                node.legal_actions.append(Action(sampled_actions[action_index]))
+
+            # Return the value of the leaf node.
+            return leaf_value
 
     def _ucb_score(self, parent: Node, child: Node) -> float:
         """
@@ -410,9 +462,32 @@ class MCTS(object):
         pb_c = math.log((parent.visit_count + self._pb_c_base + 1) / self._pb_c_base) + self._pb_c_init
         pb_c *= math.sqrt(parent.visit_count) / (child.visit_count + 1)
 
+        # ==============================================================
+        # sampled related core code
+        # ==============================================================
+        # TODO(pu)
+        node_prior = "density"
+        # node_prior = "uniform"
+        if node_prior == "uniform":
+            # Uniform prior for continuous action space
+            prior_score = pb_c * (1 / len(parent.children))
+        elif node_prior == "density":
+            # TODO(pu): empirical distribution
+            if self.continuous_action_space:
+                # prior is log_prob
+                prior_score = pb_c * (
+                        torch.exp(child.prior_p) / (
+                        sum([torch.exp(node.prior_p) for node in parent.children.values()]) + 1e-6)
+                )
+            else:
+                # prior is prob
+                prior_score = pb_c * (child.prior_p / (sum([node.prior_p for node in parent.children.values()]) + 1e-6))
+        else:
+            raise ValueError("{} is unknown prior option, choose uniform or density")
+
         # Compute the UCB score by combining the prior score and value score.
-        prior_score = pb_c * child.prior_p
         value_score = child.value
+        # prior_score = pb_c * child.prior_p
         return prior_score + value_score
 
     def _add_exploration_noise(self, node: Node) -> None:
@@ -433,3 +508,19 @@ class MCTS(object):
         # Update the prior probability of each child node with the exploration noise.
         for a, n in zip(actions, noise):
             node.children[a].prior_p = node.children[a].prior_p * (1 - frac) + n * frac
+
+    # ==============================================================
+    # sampled related core code
+    # ==============================================================
+    def get_sampled_actions(self) -> List[List[Union[int, float]]]:
+        """
+        Overview:
+            Get the sampled_actions of each root.
+        Outputs:
+            - python_sampled_actions: a vector of sampled_actions for each root, e.g. the size of original action space is 6, the K=3,
+            python_sampled_actions = [[1,3,0], [2,4,0], [5,4,1]].
+        """
+        sampled_actions = self.root.legal_actions
+        sampled_actions = np.array([action.value for action in sampled_actions])
+
+        return sampled_actions

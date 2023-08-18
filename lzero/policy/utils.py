@@ -13,6 +13,30 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
+def pad_root_sampled_actions(inputs, num_of_sampled_actions):
+    """
+    Overview:
+        Pad root_sampled_actions to make sure that the length of root_sampled_actions is equal to num_of_sampled_actions.
+    Arguments:
+        - inputs (:obj:`List[dict]`): The input data.
+        - num_of_sampled_actions (:obj:`int`): The number of sampled actions.
+    Returns:
+        - inputs (:obj:`List[dict]`): The input data after padding.
+    Example:
+        >>> inputs = [{'root_sampled_actions': torch.tensor([1, 2])}, {'root_sampled_actions': torch.tensor([3, 4, 5])}]
+        >>> num_of_sampled_actions = 5
+        >>> result = pad_root_sampled_actions(inputs, num_of_sampled_actions)
+        >>> print(result)  # Prints [{'root_sampled_actions': [1, 2, 2, 2, 2]}, {'root_sampled_actions': [3, 4, 5, 5, 5]}]
+    """
+    for input_dict in inputs:
+        root_sampled_actions = input_dict['root_sampled_actions']
+        if len(root_sampled_actions) < num_of_sampled_actions:
+            # Use the last element to pad root_sampled_actions
+            padding = root_sampled_actions[-1].repeat(num_of_sampled_actions - len(root_sampled_actions))
+            input_dict['root_sampled_actions'] = torch.cat((root_sampled_actions, padding))
+    return inputs
+
+
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -26,11 +50,11 @@ class LayerNorm(nn.Module):
 
 
 def configure_optimizers(
-    model: nn.Module,
-    weight_decay: float = 0,
-    learning_rate: float = 3e-3,
-    betas: tuple = (0.9, 0.999),
-    device_type: str = "cuda"
+        model: nn.Module,
+        weight_decay: float = 0,
+        learning_rate: float = 3e-3,
+        betas: tuple = (0.9, 0.999),
+        device_type: str = "cuda"
 ):
     """
     Overview:
@@ -90,7 +114,7 @@ def configure_optimizers(
     param_dict = {pn: p for pn, p in model.named_parameters()}
     inter_params = decay & no_decay
     union_params = decay | no_decay
-    assert len(inter_params) == 0, "parameters %s made it into both decay/no_decay sets!" % (str(inter_params), )
+    assert len(inter_params) == 0, "parameters %s made it into both decay/no_decay sets!" % (str(inter_params),)
     assert len(
         param_dict.keys() - union_params) == 0, "parameters %s were not separated into either decay/no_decay set!" \
                                                 % (str(param_dict.keys() - union_params),)
@@ -302,7 +326,8 @@ def concat_output(output_lst: List, data_type: str = 'muzero') -> Tuple:
         )
 
 
-def to_torch_float_tensor(data_list: Union[np.ndarray, List[np.ndarray]], device: torch.device) -> Union[torch.Tensor, List[torch.Tensor]]:
+def to_torch_float_tensor(data_list: Union[np.ndarray, List[np.ndarray]], device: torch.device) -> Union[
+    torch.Tensor, List[torch.Tensor]]:
     """
     Overview:
         convert the data or data list to torch float tensor
@@ -322,7 +347,8 @@ def to_torch_float_tensor(data_list: Union[np.ndarray, List[np.ndarray]], device
     else:
         raise TypeError("The type of input must be np.ndarray or List[np.ndarray]")
 
-def to_detach_cpu_numpy(data_list: Union[torch.Tensor, List[torch.Tensor]]) -> Union[np.ndarray,List[np.ndarray]]:
+
+def to_detach_cpu_numpy(data_list: Union[torch.Tensor, List[torch.Tensor]]) -> Union[np.ndarray, List[np.ndarray]]:
     """
     Overview:
         convert the data or data list to detach cpu numpy.
@@ -340,6 +366,7 @@ def to_detach_cpu_numpy(data_list: Union[torch.Tensor, List[torch.Tensor]]) -> U
         return output_data_list
     else:
         raise TypeError("The type of input must be torch.Tensor or List[torch.Tensor]")
+
 
 def ez_network_output_unpack(network_output: Dict) -> Tuple:
     """
