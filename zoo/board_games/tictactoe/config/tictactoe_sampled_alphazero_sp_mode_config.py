@@ -58,7 +58,7 @@ tictactoe_sampled_alphazero_config = dict(
             num_of_sampled_actions=num_of_sampled_actions,
         ),
         sampled_algo=True,
-        env_name='tictactoe',
+        simulate_env_name='tictactoe',
         mcts_ctree=mcts_ctree,
         simulate_env_config_type='self_play',
         cuda=True,

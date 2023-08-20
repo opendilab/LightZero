@@ -3,23 +3,24 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-board_size = 6  # default_size is 15
-num_simulations = 50
+board_size = 6
+num_simulations = 100
+update_per_collect = 50
 
-# board_size = 9  # default_size is 15
-# num_simulations = 100
+# board_size = 9
+# num_simulations = 200
+# update_per_collect = 100
 
 collector_env_num = 32
 n_episode = 32
 evaluator_env_num = 5
-update_per_collect = 200
 batch_size = 256
 max_env_step = int(10e6)
 prob_random_action_in_bot = 0.5
 mcts_ctree = False
-num_of_sampled_actions = 20
+num_of_sampled_actions = 36
 
-# board_size = 9  # default_size is 15
+# board_size = 6
 # collector_env_num = 2
 # n_episode = 2
 # evaluator_env_num = 2
@@ -29,13 +30,13 @@ num_of_sampled_actions = 20
 # max_env_step = int(5e5)
 # prob_random_action_in_bot = 0.5
 # mcts_ctree = False
-# num_of_sampled_actions = 2
+# num_of_sampled_actions = 5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 gomoku_sampled_alphazero_config = dict(
     exp_name=
-    f'data_az_ptree/gomoku_bs{board_size}_sampled_alphazero_bot-mode_rand{prob_random_action_in_bot}_na{num_of_sampled_actions}_ns{num_simulations}_upc{update_per_collect}_seed0',
+    f'data_saz_ptree/gomoku_bs{board_size}_sampled_alphazero_bot-mode_rand{prob_random_action_in_bot}_na{num_of_sampled_actions}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         stop_value=2,
         board_size=board_size,
@@ -64,12 +65,12 @@ gomoku_sampled_alphazero_config = dict(
             action_space_size=int(1 * board_size * board_size),
             num_res_blocks=1,
             num_channels=64,
-            num_of_sampled_actions=num_of_sampled_actions,
         ),
         sampled_algo=True,
         mcts_ctree=mcts_ctree,
         simulate_env_config_type='sampled_play_with_bot',
         simulate_env_name="gomoku",
+        policy_loss_type='KL',
         cuda=True,
         board_size=board_size,
         update_per_collect=update_per_collect,
@@ -81,7 +82,7 @@ gomoku_sampled_alphazero_config = dict(
         entropy_weight=0.0,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        mcts=dict(num_simulations=num_simulations),
+        mcts=dict(num_simulations=num_simulations, num_of_sampled_actions=num_of_sampled_actions),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

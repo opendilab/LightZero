@@ -185,6 +185,7 @@ class MCTS(object):
         self.legal_actions = self._cfg.legal_actions
         self.action_space_size = self._cfg.action_space_size
         self.num_of_sampled_actions = self._cfg.num_of_sampled_actions
+        print(f'num_of_sampled_actions: {self.num_of_sampled_actions}')
         self.continuous_action_space = self._cfg.continuous_action_space
 
         # The maximum number of moves allowed in a game.
@@ -487,7 +488,8 @@ class MCTS(object):
 
         # Compute the UCB score by combining the prior score and value score.
         value_score = child.value
-        # prior_score = pb_c * child.prior_p
+        prior_score = pb_c * child.prior_p
+
         return prior_score + value_score
 
     def _add_exploration_noise(self, node: Node) -> None:

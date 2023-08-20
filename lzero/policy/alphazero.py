@@ -193,24 +193,29 @@ class AlphaZeroPolicy(Policy):
         self._learn_model.train()
 
         state_batch = inputs['obs']['observation']
-        mcts_probs = inputs['probs']
+        mcts_visit_count_probs = inputs['probs']
         reward = inputs['reward']
 
         state_batch = state_batch.to(device=self._device, dtype=torch.float)
-        mcts_probs = mcts_probs.to(device=self._device, dtype=torch.float)
+        mcts_visit_count_probs = mcts_visit_count_probs.to(device=self._device, dtype=torch.float)
         reward = reward.to(device=self._device, dtype=torch.float)
 
         action_probs, values = self._learn_model.compute_policy_value(state_batch)
-        log_probs = torch.log(action_probs)
+        policy_log_probs = torch.log(action_probs)
 
         # calculate policy entropy, for monitoring only
-        entropy = torch.mean(-torch.sum(action_probs * log_probs, 1))
+        entropy = torch.mean(-torch.sum(action_probs * policy_log_probs, 1))
         entropy_loss = -entropy
 
-        # ============
+        # ==============================================================
         # policy loss
-        # ============
-        policy_loss = -torch.mean(torch.sum(mcts_probs * log_probs, 1))
+        # ==============================================================
+        # mcts_visit_count_probs = mcts_visit_count_probs / (mcts_visit_count_probs.sum(dim=1, keepdim=True) + 1e-6)
+        # policy_loss = torch.nn.functional.kl_div(
+        #     policy_log_probs, mcts_visit_count_probs, reduction='batchmean'
+        # )
+        # orig cross_entropy_loss implementation
+        policy_loss = -torch.mean(torch.sum(mcts_visit_count_probs * policy_log_probs, 1))
 
         # ============
         # value loss
@@ -296,7 +301,7 @@ class AlphaZeroPolicy(Policy):
                 katago_policy_init=True,
                 katago_game_state=katago_game_state[env_id]))
 
-            action, mcts_probs = self._collect_mcts.get_next_action(
+            action, mcts_visit_count_probs = self._collect_mcts.get_next_action(
                 state_config_for_env_reset,
                 self._policy_value_fn,
                 self.collect_mcts_temperature,
@@ -305,7 +310,7 @@ class AlphaZeroPolicy(Policy):
             # sample=False,
             output[env_id] = {
                 'action': action,
-                'probs': mcts_probs,
+                'probs': mcts_visit_count_probs,
             }
 
         return output
@@ -364,17 +369,17 @@ class AlphaZeroPolicy(Policy):
                 katago_game_state=katago_game_state[env_id]))
 
             try:
-                action, mcts_probs = self._eval_mcts.get_next_action(state_config_for_env_reset, self._policy_value_fn, 1.0, False)
+                action, mcts_visit_count_probs = self._eval_mcts.get_next_action(state_config_for_env_reset, self._policy_value_fn, 1.0, False)
             except Exception as e:
                 print(f"Exception occurred: {e}")
                 print(f"Is self._policy_value_fn callable? {callable(self._policy_value_fn)}")
                 raise  # re-raise the exception
             # print("="*20)
-            # print(action, mcts_probs)
+            # print(action, mcts_visit_count_probs)
             # print("="*20)
             output[env_id] = {
                 'action': action,
-                'probs': mcts_probs,
+                'probs': mcts_visit_count_probs,
             }
         return output
 

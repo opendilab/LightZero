@@ -20,7 +20,8 @@ sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree/ctree_alphazero/b
 import mcts_alphazero
 
 from lzero.policy import configure_optimizers
-from lzero.policy.utils import pad_root_sampled_actions
+from lzero.policy.utils import pad_and_get_lengths, compute_entropy
+
 
 @POLICY_REGISTRY.register('sampled_alphazero')
 class SampledAlphaZeroPolicy(Policy):
@@ -37,7 +38,7 @@ class SampledAlphaZeroPolicy(Policy):
         # this variable is used in ``collector``.
         sampled_algo=False,
         normalize_prob_of_sampled_actions=False,
-        policy_loss_type='KL',  # options={'cross_entropy', 'KL'}
+        policy_loss_type='cross_entropy',  # options={'cross_entropy', 'KL'}
         # (bool) Whether to use torch.compile method to speed up our model, which required torch>=2.0.
         torch_compile=False,
         # (bool) Whether to use TF32 for our model.
@@ -184,36 +185,43 @@ class SampledAlphaZeroPolicy(Policy):
         # list of dict -> dict of list
         # inputs_deepcopy = copy.deepcopy(inputs)
         # only for env with variable legal actions
-        inputs = pad_root_sampled_actions(inputs, self._cfg.model.num_of_sampled_actions)
+        inputs = pad_and_get_lengths(inputs, self._cfg.mcts.num_of_sampled_actions)
         inputs = default_collate(inputs)
+        valid_action_length = inputs['action_length']
 
         if self._cuda:
             inputs = to_device(inputs, self._device)
         self._learn_model.train()
 
         state_batch = inputs['obs']['observation']
-        mcts_probs = inputs['probs']
+        mcts_visit_count_probs = inputs['probs']
         reward = inputs['reward']
         root_sampled_actions = inputs['root_sampled_actions']
 
         if len(root_sampled_actions.shape) == 1:
             print(f"root_sampled_actions.shape: {root_sampled_actions.shape}")
         state_batch = state_batch.to(device=self._device, dtype=torch.float)
-        mcts_probs = mcts_probs.to(device=self._device, dtype=torch.float)
+        mcts_visit_count_probs = mcts_visit_count_probs.to(device=self._device, dtype=torch.float)
         reward = reward.to(device=self._device, dtype=torch.float)
 
-        action_probs, values = self._learn_model.compute_policy_value(state_batch)
-        log_probs = torch.log(action_probs)
+        policy_probs, values = self._learn_model.compute_policy_value(state_batch)
+        policy_log_probs = torch.log(policy_probs)
 
         # calculate policy entropy, for monitoring only
-        entropy = torch.mean(-torch.sum(action_probs * log_probs, 1))
+        entropy = compute_entropy(policy_probs)
         entropy_loss = -entropy
 
         # ==============================================================
         # policy loss
         # ==============================================================
-        policy_loss = -torch.mean(torch.sum(mcts_probs * log_probs, 1))
-        # policy_loss = self._calculate_policy_loss_disc(action_probs, mcts_probs, root_sampled_actions)
+        # mcts_visit_count_probs = mcts_visit_count_probs / (mcts_visit_count_probs.sum(dim=1, keepdim=True) + 1e-6)
+        # policy_loss = torch.nn.functional.kl_div(
+        #     policy_log_probs, mcts_visit_count_probs, reduction='batchmean'
+        # )
+        # orig implementation
+        # policy_loss = -torch.mean(torch.sum(mcts_visit_count_probs * policy_log_probs, 1))
+
+        policy_loss = self._calculate_policy_loss_disc(policy_probs, mcts_visit_count_probs, root_sampled_actions, valid_action_length)
 
         # ==============================================================
         # value loss
@@ -247,37 +255,64 @@ class SampledAlphaZeroPolicy(Policy):
 
     def _calculate_policy_loss_disc(
             self, policy_probs: torch.Tensor, target_policy: torch.Tensor,
-            target_sampled_actions: torch.Tensor
-    ) -> Tuple[torch.Tensor]:
-
-        # Create a tensor of shape [batch_size, num_actions] filled with zeros
-        sampled_policy_probs = torch.zeros_like(policy_probs)
-        sampled_target_policy = torch.zeros_like(target_policy)
+            target_sampled_actions: torch.Tensor, valid_action_lengths: torch.Tensor
+    ) -> torch.Tensor:
 
         # For each batch and each sampled action, get the corresponding probability
         # from policy_probs and target_policy, and put it into sampled_policy_probs and
         # sampled_target_policy at the same position.
-        for i in range(target_sampled_actions.shape[0]):
-            try:
-                for j in range(target_sampled_actions.shape[1]):
-                    action = target_sampled_actions[i, j]
-                    sampled_policy_probs[i, action] = policy_probs[i, action]
-                    sampled_target_policy[i, action] = target_policy[i, action]
-            except Exception as e:
-                print(f"Exception occurred: {e}")
-                print(f"target_sampled_actions.shape: {target_sampled_actions.shape}")
-                print(f"i: {i}, j: {j}")
-                raise
+        sampled_policy_probs = policy_probs.gather(1, target_sampled_actions)
+        sampled_target_policy = target_policy.gather(1, target_sampled_actions)
 
-        # Calculate the KL divergence between sampled_policy_probs and sampled_target_policy
-        # The KL divergence between 2 probability distributions P and Q is defined as:
-        # KL(P || Q) = sum(P(i) * log(P(i) / Q(i)))
-        # We use the PyTorch function kl_div to calculate it.
-        kl_loss = torch.nn.functional.kl_div(
-            sampled_policy_probs.log(), sampled_target_policy, reduction='batchmean'
-        )
+        # Create a mask for valid actions
+        max_length = target_sampled_actions.size(1)
+        mask = torch.arange(max_length).expand(len(valid_action_lengths), max_length) < valid_action_lengths.unsqueeze(
+            1)
+        mask = mask.to(device=self._device)
 
-        return kl_loss
+        # Apply the mask to sampled_policy_probs and sampled_target_policy
+        sampled_policy_probs = sampled_policy_probs * mask.float()
+        sampled_target_policy = sampled_target_policy * mask.float()
+
+        # Normalize sampled_policy_probs and sampled_target_policy
+        sampled_policy_probs = sampled_policy_probs / (sampled_policy_probs.sum(dim=1, keepdim=True) + 1e-6)
+        sampled_target_policy = sampled_target_policy / (sampled_target_policy.sum(dim=1, keepdim=True) + 1e-6)
+
+        # after normalization, the sum of each row should be 1, but the prob corresponding to valid action becomes a small non-zero value
+        # Use torch.where to prevent gradients for invalid actions
+        sampled_policy_probs = torch.where(mask, sampled_policy_probs, torch.zeros_like(sampled_policy_probs))
+        sampled_target_policy = torch.where(mask, sampled_target_policy, torch.zeros_like(sampled_target_policy))
+
+        if self._cfg.policy_loss_type == 'KL':
+            # Calculate the KL divergence between sampled_policy_probs and sampled_target_policy
+            # The KL divergence between 2 probability distributions P and Q is defined as:
+            # KL(P || Q) = sum(P(i) * log(P(i) / Q(i)))
+            # We use the PyTorch function kl_div to calculate it.
+            loss = torch.nn.functional.kl_div(
+                sampled_policy_probs.log(), sampled_target_policy, reduction='none'
+            )
+
+            # Apply the mask to the loss
+            loss = loss * mask.float()
+            # Calculate the mean loss over the batch
+            loss = loss.sum() / mask.sum()
+
+        elif self._cfg.policy_loss_type == 'cross_entropy':
+            # Calculate the cross entropy loss between sampled_policy_probs and sampled_target_policy
+            # The cross entropy between 2 probability distributions P and Q is defined as:
+            # H(P, Q) = -sum(P(i) * log(Q(i)))
+            # We use the PyTorch function cross_entropy to calculate it.
+            loss = torch.nn.functional.cross_entropy(
+                sampled_policy_probs, torch.argmax(sampled_target_policy, dim=1), reduction='none'
+            )
+            # Calculate the mean loss over the batch
+            loss = loss.mean()
+
+        else:
+            raise ValueError(f"Invalid policy_loss_type: {self._cfg.policy_loss_type}")
+
+
+        return loss
 
     def _init_collect(self) -> None:
         """
@@ -335,7 +370,7 @@ class SampledAlphaZeroPolicy(Policy):
                                                        katago_policy_init=True,
                                                        katago_game_state=katago_game_state[env_id]))
 
-            action, mcts_probs = self._collect_mcts.get_next_action(
+            action, mcts_visit_count_probs = self._collect_mcts.get_next_action(
                 state_config_for_env_reset,
                 self._policy_value_func,
                 self.collect_mcts_temperature,
@@ -346,7 +381,7 @@ class SampledAlphaZeroPolicy(Policy):
             #     print('debug')
             output[env_id] = {
                 'action': action,
-                'probs': mcts_probs,
+                'probs': mcts_visit_count_probs,
                 'root_sampled_actions': self._collect_mcts.get_sampled_actions(),
             }
 
@@ -408,18 +443,18 @@ class SampledAlphaZeroPolicy(Policy):
                                                        katago_game_state=katago_game_state[env_id]))
 
             # try:
-            action, mcts_probs = self._eval_mcts.get_next_action(state_config_for_env_reset, self._policy_value_func,
+            action, mcts_visit_count_probs = self._eval_mcts.get_next_action(state_config_for_env_reset, self._policy_value_func,
                                                                  1.0, False)
             # except Exception as e:
             #     print(f"Exception occurred: {e}")
             #     print(f"Is self._policy_value_func callable? {callable(self._policy_value_func)}")
             #     raise  # re-raise the exception
             # print("="*20)
-            # print(action, mcts_probs)
+            # print(action, mcts_visit_count_probs)
             # print("="*20)
             output[env_id] = {
                 'action': action,
-                'probs': mcts_probs,
+                'probs': mcts_visit_count_probs,
             }
         return output
 
@@ -437,6 +472,10 @@ class SampledAlphaZeroPolicy(Policy):
             elif self._cfg.simulate_env_config_type == 'league':
                 from zoo.board_games.tictactoe.config.tictactoe_alphazero_league_config import \
                     tictactoe_alphazero_config
+            elif self._cfg.simulate_env_config_type == 'sampled_play_with_bot':
+                from zoo.board_games.tictactoe.config.tictactoe_sampled_alphazero_bot_mode_config import \
+                    tictactoe_sampled_alphazero_config as tictactoe_alphazero_config
+
             self.simulate_env = TicTacToeEnv(tictactoe_alphazero_config.env)
 
         elif self._cfg.simulate_env_name == 'gomoku':
@@ -459,6 +498,10 @@ class SampledAlphaZeroPolicy(Policy):
                 from zoo.board_games.go.config.go_alphazero_sp_mode_config import go_alphazero_config
             elif self._cfg.simulate_env_config_type == 'league':
                 from zoo.board_games.go.config.go_alphazero_league_config import go_alphazero_config
+            elif self._cfg.simulate_env_config_type == 'sampled_play_with_bot':
+                from zoo.board_games.go.config.go_sampled_alphazero_bot_mode_config import \
+                    go_sampled_alphazero_config as go_alphazero_config
+
             self.simulate_env = GoEnv(go_alphazero_config.env)
 
     @torch.no_grad()

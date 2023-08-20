@@ -11,6 +11,8 @@ update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
 mcts_ctree = False
+# mcts_ctree = True
+
 
 # debug config
 # collector_env_num = 1
@@ -85,9 +87,7 @@ tictactoe_alphazero_create_config = dict(
         type='tictactoe',
         import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
     ),
-    # env_manager=dict(type='subprocess'),
-    env_manager=dict(type='base'),
-
+    env_manager=dict(type='subprocess'),
     policy=dict(
         type='alphazero',
         import_names=['lzero.policy.alphazero'],

@@ -182,9 +182,11 @@ class AlphaZeroModel(nn.Module):
             - value (:obj:`torch.Tensor`): :math:`(B, 1)`, where B is batch size.
         """
         logit, value = self.forward(state_batch)
-        # construct categorical distribution to calculate probability
-        dist = torch.distributions.Categorical(logits=logit)
-        prob = dist.probs
+        # # construct categorical distribution to calculate probability
+        # dist = torch.distributions.Categorical(logits=logit)
+        # prob = dist.probs
+        # Use softmax to compute the probabilities
+        prob = torch.nn.functional.softmax(logit, dim=-1)
         return prob, value
 
     def compute_logp_value(self, state_batch: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
