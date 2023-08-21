@@ -258,6 +258,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
             if self._multi_agent:
                 agent_num = len(init_obs[0]['action_mask'])
+                assert agent_num == self.policy_config.model.agent_num, "Please make sure agent_num == env.agent_num"
                 game_segments = [
                     [
                         GameSegment(

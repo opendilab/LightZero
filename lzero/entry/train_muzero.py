@@ -13,10 +13,11 @@ from ding.rl_utils import get_epsilon_greedy_fn
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
-from lzero.worker import MuZeroCollector as Collector
-from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
+from lzero.policy.random_policy import LightZeroRandomPolicy
+from lzero.worker import MuZeroCollector as Collector
+from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 
 
@@ -91,7 +92,6 @@ def train_muzero(
     batch_size = policy_config.batch_size
     # specific game buffer for MCTS+RL algorithms
     replay_buffer = GameBuffer(policy_config)
-
     collector = Collector(
         env=collector_env,
         policy=policy.collect_mode,
@@ -115,7 +115,7 @@ def train_muzero(
     # ==============================================================
     # Learner's before_run hook.
     learner.call_hook('before_run')
-
+    
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
 
