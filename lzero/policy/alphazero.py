@@ -50,6 +50,8 @@ class AlphaZeroPolicy(Policy):
         ),
         # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
         mcts_ctree=True,
+        # (bool) Whether to use multi-gpu training.
+        multi_gpu=False,
         # (bool) Whether to use cuda for network.
         cuda=False,
         # (int) How many updates(iterations) to train after collector's one collection.
@@ -226,6 +228,8 @@ class AlphaZeroPolicy(Policy):
         self._optimizer.zero_grad()
         total_loss.backward()
 
+        if self._cfg.multi_gpu:
+            self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
             list(self._model.parameters()),
             max_norm=self._cfg.grad_clip_value,

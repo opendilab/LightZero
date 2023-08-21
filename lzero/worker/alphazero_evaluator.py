@@ -4,7 +4,9 @@ from typing import Optional, Callable, Tuple
 import numpy as np
 from ding.envs import BaseEnv
 from ding.envs import BaseEnvManager
+from ding.torch_utils import to_item
 from ding.utils import build_logger, EasyTimer, SERIAL_EVALUATOR_REGISTRY
+from ding.utils import get_world_size, get_rank, broadcast_object_list
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
 
 
@@ -59,15 +61,22 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         self._instance_name = instance_name
         self._end_flag = False
         self._env_config = env_config
-        if tb_logger is not None:
-            self._logger, _ = build_logger(
-                path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name, need_tb=False
-            )
-            self._tb_logger = tb_logger
+
+        # Logger (Monitor will be initialized in policy setter)
+        # Only rank == 0 learner needs monitor and tb_logger, others only need text_logger to display terminal output.
+        if get_rank() == 0:
+            if tb_logger is not None:
+                self._logger, _ = build_logger(
+                    './{}/log/{}'.format(self._exp_name, self._instance_name), self._instance_name, need_tb=False
+                )
+                self._tb_logger = tb_logger
+            else:
+                self._logger, self._tb_logger = build_logger(
+                    './{}/log/{}'.format(self._exp_name, self._instance_name), self._instance_name
+                )
         else:
-            self._logger, self._tb_logger = build_logger(
-                path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name
-            )
+            self._logger, self._tb_logger = None, None  # for close elegantly
+
         self.reset(policy, env)
 
         self._timer = EasyTimer()
@@ -187,14 +196,16 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             - stop_flag (:obj:`bool`): Whether this training program can be ended.
             - return_info (:obj:`dict`): Current evaluation return information.
         """
+        # evaluator only work on rank0
         stop_flag, return_info = False, []
-        if n_episode is None:
-            n_episode = self._default_n_episode
-        assert n_episode is not None, "please indicate eval n_episode"
-        envstep_count = 0
-        eval_monitor = VectorEvalMonitor(self._env.env_num, n_episode)
-        self._env.reset()
-        self._policy.reset()
+        if get_rank() == 0:
+            if n_episode is None:
+                n_episode = self._default_n_episode
+            assert n_episode is not None, "please indicate eval n_episode"
+            envstep_count = 0
+            eval_monitor = VectorEvalMonitor(self._env.env_num, n_episode)
+            self._env.reset()
+            self._policy.reset()
 
         with self._timer:
             while not eval_monitor.is_finished():
@@ -227,49 +238,56 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                             "[EVALUATOR]env {} finish episode, final reward: {}, current episode: {}".format(
                                 env_id, eval_monitor.get_latest_reward(env_id), eval_monitor.get_current_episode()
                             )
-                        )
-                    envstep_count += 1
-        duration = self._timer.value
-        episode_return = eval_monitor.get_episode_return()
-        info = {
-            'train_iter': train_iter,
-            'ckpt_name': 'iteration_{}.pth.tar'.format(train_iter),
-            'episode_count': n_episode,
-            'envstep_count': envstep_count,
-            'avg_envstep_per_episode': envstep_count / n_episode,
-            'evaluate_time': duration,
-            'avg_envstep_per_sec': envstep_count / duration,
-            'avg_time_per_episode': n_episode / duration,
-            'reward_mean': np.mean(episode_return),
-            'reward_std': np.std(episode_return),
-            'reward_max': np.max(episode_return),
-            'reward_min': np.min(episode_return),
-            # 'each_reward': episode_return,
-        }
-        episode_info = eval_monitor.get_episode_info()
-        if episode_info is not None:
-            info.update(episode_info)
-        self._logger.info(self._logger.get_tabulate_vars_hor(info))
-        # self._logger.info(self._logger.get_tabulate_vars(info))
-        for k, v in info.items():
-            if k in ['train_iter', 'ckpt_name', 'each_reward']:
-                continue
-            if not np.isscalar(v):
-                continue
-            self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
-            self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, envstep)
+                        envstep_count += 1
+            duration = self._timer.value
+            episode_return = eval_monitor.get_episode_return()
+            info = {
+                'train_iter': train_iter,
+                'ckpt_name': 'iteration_{}.pth.tar'.format(train_iter),
+                'episode_count': n_episode,
+                'envstep_count': envstep_count,
+                'avg_envstep_per_episode': envstep_count / n_episode,
+                'evaluate_time': duration,
+                'avg_envstep_per_sec': envstep_count / duration,
+                'avg_time_per_episode': n_episode / duration,
+                'reward_mean': np.mean(episode_return),
+                'reward_std': np.std(episode_return),
+                'reward_max': np.max(episode_return),
+                'reward_min': np.min(episode_return),
+                # 'each_reward': episode_return,
+            }
+            episode_info = eval_monitor.get_episode_info()
+            if episode_info is not None:
+                info.update(episode_info)
+            self._logger.info(self._logger.get_tabulate_vars_hor(info))
+            # self._logger.info(self._logger.get_tabulate_vars(info))
+            for k, v in info.items():
+                if k in ['train_iter', 'ckpt_name', 'each_reward']:
+                    continue
+                if not np.isscalar(v):
+                    continue
+                self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
+                self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, envstep)
 
-        eval_reward = np.mean(episode_return)
-        if eval_reward > self._max_eval_reward:
-            if save_ckpt_fn:
-                save_ckpt_fn('ckpt_best.pth.tar')
-            self._max_eval_reward = eval_reward
-        stop_flag = eval_reward >= self._stop_value and train_iter > 0
-        if stop_flag:
-            self._logger.info(
-                "[LightZero serial pipeline] " +
-                "Current eval_reward: {} is greater than stop_value: {}".format(eval_reward, self._stop_value) +
-                ", so your AlphaZero agent is converged, you can refer to " +
-                "'log/evaluator/evaluator_logger.txt' for details."
-            )
-        return stop_flag, return_info
+            eval_reward = np.mean(episode_return)
+            if eval_reward > self._max_eval_reward:
+                if save_ckpt_fn:
+                    save_ckpt_fn('ckpt_best.pth.tar')
+                self._max_eval_reward = eval_reward
+            stop_flag = eval_reward >= self._stop_value and train_iter > 0
+            if stop_flag:
+                self._logger.info(
+                    "[LightZero serial pipeline] " +
+                    "Current eval_reward: {} is greater than stop_value: {}".format(eval_reward, self._stop_value) +
+                    ", so your AlphaZero agent is converged, you can refer to " +
+                    "'log/evaluator/evaluator_logger.txt' for details."
+                )
+            # return stop_flag, return_info
+
+            if get_world_size() > 1:
+                objects = [stop_flag, episode_info]
+                broadcast_object_list(objects, src=0)
+                stop_flag, episode_info = objects
+
+            episode_info = to_item(episode_info)
+            return stop_flag, episode_info

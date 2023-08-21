@@ -4,7 +4,8 @@ from typing import Optional, Any, List, Dict
 import numpy as np
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
-from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
+from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, one_time_warning, get_rank, get_world_size, \
+    broadcast_object_list, allreduce_data
 from ding.worker.collector.base_serial_collector import ISerialCollector, CachePool, TrajBuffer, INF, \
     to_tensor_transitions
 
@@ -53,15 +54,26 @@ class AlphaZeroCollector(ISerialCollector):
         self._end_flag = False
         self._env_config = env_config
 
-        if tb_logger is not None:
+        self._rank = get_rank()
+        self._world_size = get_world_size()
+        if self._rank == 0:
+            if tb_logger is not None:
+                self._logger, _ = build_logger(
+                    path='./{}/log/{}'.format(self._exp_name, self._instance_name),
+                    name=self._instance_name,
+                    need_tb=False
+                )
+                self._tb_logger = tb_logger
+            else:
+                self._logger, self._tb_logger = build_logger(
+                    path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name
+                )
+        else:
             self._logger, _ = build_logger(
                 path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name, need_tb=False
             )
-            self._tb_logger = tb_logger
-        else:
-            self._logger, self._tb_logger = build_logger(
-                path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name
-            )
+            self._tb_logger = None
+
         self.reset(policy, env)
 
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
@@ -150,6 +162,20 @@ class AlphaZeroCollector(ISerialCollector):
         self._policy_output_pool.reset(env_id)
         self._env_info[env_id] = {'time': 0., 'step': 0}
 
+    def close(self) -> None:
+        """
+        Overview:
+            Close the collector. If end_flag is False, close the environment, flush the tb_logger\
+                and close the tb_logger.
+        """
+        if self._end_flag:
+            return
+        self._end_flag = True
+        self._env.close()
+        if self._tb_logger:
+            self._tb_logger.flush()
+            self._tb_logger.close()
+
     def collect(self,
                 n_episode: Optional[int] = None,
                 train_iter: int = 0,
@@ -174,6 +200,7 @@ class AlphaZeroCollector(ISerialCollector):
             policy_kwargs = {}
         temperature = policy_kwargs['temperature']
         collected_episode = 0
+        collected_step = 0
         return_data = []
         ready_env_id = set()
         remain_episode = n_episode
@@ -222,7 +249,8 @@ class AlphaZeroCollector(ISerialCollector):
                     transition['collect_iter'] = train_iter
                     self._traj_buffer[env_id].append(transition)
                     self._env_info[env_id]['step'] += 1
-                    self._total_envstep_count += 1
+                    collected_step += 1
+
                     # prepare data
                     if timestep.done:
                         transitions = to_tensor_transitions(self._traj_buffer[env_id])
@@ -250,6 +278,17 @@ class AlphaZeroCollector(ISerialCollector):
 
             if collected_episode >= n_episode:
                 break
+
+        collected_duration = sum([d['time'] for d in self._episode_info])
+        # reduce data when enables DDP
+        if self._world_size > 1:
+            collected_step = allreduce_data(collected_step, 'sum')
+            collected_episode = allreduce_data(collected_episode, 'sum')
+            collected_duration = allreduce_data(collected_duration, 'sum')
+        self._total_envstep_count += collected_step
+        self._total_episode_count += collected_episode
+        self._total_duration += collected_duration
+
         # log
         self._output_log(train_iter)
         return return_data
@@ -274,8 +313,9 @@ class AlphaZeroCollector(ISerialCollector):
             return
         self._end_flag = True
         self._env.close()
-        self._tb_logger.flush()
-        self._tb_logger.close()
+        if self._tb_logger:
+            self._tb_logger.flush()
+            self._tb_logger.close()
 
     def __del__(self) -> None:
         """
@@ -293,6 +333,8 @@ class AlphaZeroCollector(ISerialCollector):
         Arguments:
             - train_iter (:obj:`int`): the number of training iteration.
         """
+        if self._rank != 0:
+            return
         if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
             self._last_train_iter = train_iter
             episode_count = len(self._episode_info)

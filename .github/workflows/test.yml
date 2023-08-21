@@ -13,7 +13,8 @@ on:
 jobs:
   unittest:
     name: Code test
-    runs-on: ${{ matrix.os }}
+    #runs-on: ${{ matrix.os }}
+    runs-on: self-hosted
     if: "!contains(github.event.head_commit.message, 'ci skip')"
     strategy:
       fail-fast: false
@@ -22,9 +23,9 @@ jobs:
           - 'ubuntu-20.04'
           - 'macos-12'
         python-version:
-          - '3.7'
-          - '3.8'
-          - '3.9'
+          - '3.7.17'
+          - '3.8.17'
+          - '3.9.17'
 
     steps:
       - name: Get system version for Linux
@@ -49,8 +50,8 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y tree cloc wget curl make graphviz
+          yum update
+          yum install -y tree cloc wget curl make graphviz
           dot -V
       - name: Set up system dependences on MacOS
         if: ${{ env.OS_NAME == 'MacOS' }}
