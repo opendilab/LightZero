@@ -19,6 +19,7 @@ connect4_alphazero_config = dict(
     env=dict(
         # board_size=3,
         battle_mode='self_play_mode',
+        mcts_mode='self_play_mode',
         channel_last=False,  # NOTE
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

@@ -16,6 +16,7 @@ from easydict import EasyDict
 
 # from pettingzoo.utils.agent_selector import agent_selector
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
+from zoo.board_games.mcts_bot import MCTSBot
 
 @ENV_REGISTRY.register('connect4')
 class Connect4Env(BaseEnv):
@@ -23,7 +24,7 @@ class Connect4Env(BaseEnv):
         env_name="Connect4",
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',  # only used in AlphaZero
-        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+        bot_action_type='rule',
         agent_vs_human=False,
         prob_random_agent=0,
         prob_expert_agent=0,
@@ -44,6 +45,7 @@ class Connect4Env(BaseEnv):
         self.channel_last = cfg.channel_last
         self.scale = cfg.scale
         self.battle_mode = cfg.battle_mode
+        self.mcts_mode = cfg.mcts_mode
         # The mode of interaction between the agent and the environment.
         assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
         self.prob_random_agent = cfg.prob_random_agent
@@ -54,17 +56,15 @@ class Connect4Env(BaseEnv):
         self.agent_vs_human = cfg.agent_vs_human
         self.bot_action_type = cfg.bot_action_type
         if 'alpha_beta_pruning' in self.bot_action_type:
-            self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
-        
+            self.alpha_beta_bot = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
+        if 'mcts' in self.bot_action_type:
+            self.mcts_bot = MCTSBot(self, cfg, 'mcts_player')
         self._env = self
 
         self.board = [0] * (6 * 7)
 
         self.players = [1, 2]
         # self.possible_agents = self.agents[:]
-
-        # 这个变量的功能是否和battle_mode重复了###########################################
-        self.mcts_mode = 'play_with_bot_mode'
 
         # self.action_spaces = {i: spaces.Discrete(7) for i in self.players}
         # self.observation_spaces = {
@@ -158,6 +158,7 @@ class Connect4Env(BaseEnv):
                 if np.random.rand() < self.prob_expert_agent:
                     action = self.bot_action()
 
+            # print(f'self playing now, the action is {action}')
             timestep = self._player_step(action)
             if timestep.done:
                 # The eval_episode_return is calculated from Player 1's perspective。
@@ -168,6 +169,7 @@ class Connect4Env(BaseEnv):
             # player 1 battle with expert player 2
 
             # player 1's turn
+            print(f'playing with bot now, the action from algorithm is {action}')
             timestep_player1 = self._player_step(action)
             # self.env.render()
             if timestep_player1.done:
@@ -179,6 +181,7 @@ class Connect4Env(BaseEnv):
             # player 2's turn
             bot_action = self.bot_action()
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
+            print(f'playing with bot now, the action from bot is {action}')
             timestep_player2 = self._player_step(bot_action)
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
@@ -194,6 +197,7 @@ class Connect4Env(BaseEnv):
             # player 1 battle with expert player 2
 
             # player 1's turn
+            print(f'evaluating now, the battle mode is {self.battle_mode}, the action is {action()}')
             timestep_player1 = self._player_step(action)
             # self.env.render()
             if timestep_player1.done:
@@ -206,6 +210,7 @@ class Connect4Env(BaseEnv):
             if self.agent_vs_human:
                 bot_action = self.human_to_action()
             else:
+                print(f'evaluating now, the battle mode is {self.battle_mode}, here comes the bot action{self.bot_action()}')
                 bot_action = self.bot_action()
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
             timestep_player2 = self._player_step(bot_action)
@@ -229,7 +234,7 @@ class Connect4Env(BaseEnv):
                     break
         else:
             logging.warning(
-                f"You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
+                f"hhhYou input illegal action: {action}, the legal_actions are {self.legal_actions}. "
                 f"Now we randomly choice a action from self.legal_actions."
             )
             action = self.random_action()
@@ -299,6 +304,17 @@ class Connect4Env(BaseEnv):
         obs = self.observe()
         return obs
 
+    def reset_v2(self, start_player_index=0, init_state=None):
+        """
+        Overview:
+            only used in alpha-beta pruning bot.
+        """
+        self.start_player_index = start_player_index
+        self._current_player = self.players[self.start_player_index]
+        if init_state is not None:
+            self.board = np.array(init_state, dtype="int32")
+        else:
+            self.board = [0] * (6 * 7)
 
     def render(self):
         print(np.array(self.board).reshape(6, 7))
@@ -361,6 +377,29 @@ class Connect4Env(BaseEnv):
 
         return False, -1
     
+    def get_done_reward(self):
+        """
+        Overview:
+             Check if the game is over and what is the reward in the perspective of player 1.
+             Return 'done' and 'reward'.
+        Returns:
+            - outputs (:obj:`Tuple`): Tuple containing 'done' and 'reward',
+                - if player 1 win,     'done' = True, 'reward' = 1
+                - if player 2 win,     'done' = True, 'reward' = -1
+                - if draw,             'done' = True, 'reward' = 0
+                - if game is not over, 'done' = False,'reward' = None
+        """
+        done, winner = self.get_done_winner()
+        if winner == 1:
+            reward = 1
+        elif winner == 2:
+            reward = -1
+        elif winner == -1 and done:
+            reward = 0
+        elif winner == -1 and not done:
+            # episode is not done
+            reward = None
+        return done, reward
 
 
     def random_action(self):
@@ -368,7 +407,25 @@ class Connect4Env(BaseEnv):
         return np.random.choice(action_list)
     
     def bot_action(self):
-        # TODO
+        if self.bot_action_type == 'rule':
+            return self.rule_bot()
+        elif self.bot_action_type == 'alpha_beta_pruning':
+            return self.alpha_beta_bot.get_best_action(self.board, player_index=self.current_player_index)
+        elif self.bot_action_type == 'mcts':
+            pass
+        
+    def rule_bot(self):
+        action_list = self.legal_actions
+        for i in range(7//2,-1,-1):
+            if i in action_list: return i
+        for i in range(4,7):
+            if i in action_list: return i
+
+    # def alpha_beta_bot(self):
+    #     action = self.alpha_beta_bot.get_best_action(self.board, player_index=self.current_player_index)
+    #     return action
+
+    def mcts_bot(self):
         pass
 
     def action_to_string(self, action):
@@ -426,3 +483,53 @@ class Connect4Env(BaseEnv):
     @property
     def reward_space(self) -> spaces.Space:
         return self._reward_space
+    
+    def simulate_action(self, action):
+        """
+        Overview:
+            execute action and get next_simulator_env. used in AlphaZero.
+        Arguments:
+            - action: an integer from the action space.
+        Returns:
+            - next_simulator_env: next simulator env after execute action.
+        """
+        if action not in self.legal_actions:
+            raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
+        new_board = copy.deepcopy(self.board)
+        piece = self.players.index(self._current_player) + 1
+        for i in list(filter(lambda x: x % 7 == action, list(range(41, -1, -1)))):
+            if new_board[i] == 0:
+                new_board[i] = piece
+                break
+        if self.start_player_index == 0:
+            start_player_index = 1  # self.players = [1, 2], start_player = 2, start_player_index = 1
+        else:
+            start_player_index = 0  # self.players = [1, 2], start_player = 1, start_player_index = 0
+        next_simulator_env = copy.deepcopy(self)
+        next_simulator_env.reset(start_player_index, init_state=new_board)
+        return next_simulator_env
+
+    def simulate_action_v2(self, board, start_player_index, action):
+        """
+        Overview:
+            execute action from board and get new_board, new_legal_actions. used in alphabeta_pruning_bot.
+        Arguments:
+            - board (:obj:`np.array`): current board
+            - start_player_index (:obj:`int`): start player index
+            - action (:obj:`int`): action
+        Returns:
+            - new_board (:obj:`np.array`): new board
+            - new_legal_actions (:obj:`list`): new legal actions
+        """
+        self.reset(start_player_index, init_state=board)
+        if action not in self.legal_actions:
+            raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
+        piece = self.players.index(self._current_player) + 1
+        for i in list(filter(lambda x: x % 7 == action, list(range(41, -1, -1)))):
+            if self.board[i] == 0:
+                self.board[i] = piece
+                break
+        new_legal_actions = copy.deepcopy(self.legal_actions)
+        new_board = copy.deepcopy(self.board)
+
+        return new_board, new_legal_actions
