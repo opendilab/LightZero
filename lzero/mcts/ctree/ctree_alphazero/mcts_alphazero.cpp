@@ -420,6 +420,6 @@ PYBIND11_MODULE(mcts_alphazero, m) {
 // 构建与编译命令
 // 在lzero/mcts/ctree/ctree_alphazero路径下，依次执行以下命令：
 // mkdir build
-// cd buld
+// cd build
 // cmake ..
 // make

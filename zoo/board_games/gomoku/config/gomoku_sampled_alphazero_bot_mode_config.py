@@ -6,10 +6,14 @@ from easydict import EasyDict
 board_size = 6
 num_simulations = 100
 update_per_collect = 50
+num_of_sampled_actions = 36
+# num_of_sampled_actions = 20
+
 
 # board_size = 9
 # num_simulations = 200
 # update_per_collect = 100
+# num_of_sampled_actions = 20
 
 collector_env_num = 32
 n_episode = 32
@@ -18,7 +22,6 @@ batch_size = 256
 max_env_step = int(10e6)
 prob_random_action_in_bot = 0.5
 mcts_ctree = False
-num_of_sampled_actions = 36
 
 # board_size = 6
 # collector_env_num = 2
