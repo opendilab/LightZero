@@ -59,7 +59,7 @@ class BipedalWalkerDiscEnv(BaseEnv):
             - info_dict (:obj:`Dict[str, Any]`): Including observation, action_mask, and to_play label.
         """
         if not self._init_flag:
-            self._env = gym.make('BipedalWalker-v3')
+            self._env = gym.make('BipedalWalker-v3', hardcore=True)
             self._observation_space = self._env.observation_space
             self._action_space = self._env.action_space
             self._reward_space = gym.spaces.Box(
