@@ -238,6 +238,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                             "[EVALUATOR]env {} finish episode, final reward: {}, current episode: {}".format(
                                 env_id, eval_monitor.get_latest_reward(env_id), eval_monitor.get_current_episode()
                             )
+                        )
                         envstep_count += 1
             duration = self._timer.value
             episode_return = eval_monitor.get_episode_return()
