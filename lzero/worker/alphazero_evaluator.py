@@ -207,38 +207,38 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             self._env.reset()
             self._policy.reset()
 
-        with self._timer:
-            while not eval_monitor.is_finished():
-                obs = self._env.ready_obs
+            with self._timer:
+                while not eval_monitor.is_finished():
+                    obs = self._env.ready_obs
 
-                # ==============================================================
-                # policy forward
-                # ==============================================================
-                policy_output = self._policy.forward(obs)
+                    # ==============================================================
+                    # policy forward
+                    # ==============================================================
+                    policy_output = self._policy.forward(obs)
 
-                actions = {env_id: output['action'] for env_id, output in policy_output.items()}
-                # ==============================================================
-                # Interact with env.
-                # ==============================================================
-                timesteps = self._env.step(actions)
-                for env_id, t in timesteps.items():
-                    if t.info.get('abnormal', False):
-                        # If there is an abnormal timestep, reset all the related variables(including this env).
-                        self._policy.reset([env_id])
-                        continue
-                    if t.done:
-                        # Env reset is done by env_manager automatically.
-                        self._policy.reset([env_id])
-                        reward = t.info['eval_episode_return']
-                        if 'episode_info' in t.info:
-                            eval_monitor.update_info(env_id, t.info['episode_info'])
-                        eval_monitor.update_reward(env_id, reward)
-                        return_info.append(t.info)
-                        self._logger.info(
-                            "[EVALUATOR]env {} finish episode, final reward: {}, current episode: {}".format(
-                                env_id, eval_monitor.get_latest_reward(env_id), eval_monitor.get_current_episode()
+                    actions = {env_id: output['action'] for env_id, output in policy_output.items()}
+                    # ==============================================================
+                    # Interact with env.
+                    # ==============================================================
+                    timesteps = self._env.step(actions)
+                    for env_id, t in timesteps.items():
+                        if t.info.get('abnormal', False):
+                            # If there is an abnormal timestep, reset all the related variables(including this env).
+                            self._policy.reset([env_id])
+                            continue
+                        if t.done:
+                            # Env reset is done by env_manager automatically.
+                            self._policy.reset([env_id])
+                            reward = t.info['eval_episode_return']
+                            if 'episode_info' in t.info:
+                                eval_monitor.update_info(env_id, t.info['episode_info'])
+                            eval_monitor.update_reward(env_id, reward)
+                            return_info.append(t.info)
+                            self._logger.info(
+                                "[EVALUATOR]env {} finish episode, final reward: {}, current episode: {}".format(
+                                    env_id, eval_monitor.get_latest_reward(env_id), eval_monitor.get_current_episode()
+                                )
                             )
-                        )
                         envstep_count += 1
             duration = self._timer.value
             episode_return = eval_monitor.get_episode_return()
