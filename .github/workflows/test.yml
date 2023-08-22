@@ -19,13 +19,12 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - 'ubuntu2004'
+          - 'self-hosted-ubuntu'
           - 'macos-12'
         python-version:
           - '3.8'
           - '3.9'
           - '3.10'
-
     steps:
       - name: Get system version for Linux
         if: ${{ runner.os == 'Linux' }}
@@ -58,15 +57,13 @@ jobs:
       - name: Install PyPI dependencies
         shell: bash
         run: |
-          
           python -m pip install --upgrade pip
           pip install --upgrade flake8 setuptools wheel twine
           pip install -r requirements.txt
           pip install -r requirements-build.txt
           pip install -r requirements-test.txt
           pip uninstall DI-engine -y
-          pip install git+http://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env]
-          
+          pip install git+http://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env] 
       - name: Run unittest on MacOS or Linux
         if: ${{ env.OS_NAME == 'MacOS' || env.OS_NAME == 'Linux'}}
         env:
@@ -75,9 +72,6 @@ jobs:
         shell: bash
         run: |
             make clean build unittest
-
-            
-            
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
