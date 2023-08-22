@@ -143,6 +143,10 @@ cd LightZero
 pip3 install -e .
 ```
 
+Kindly note that LightZero currently supports compilation only on `Linux` and `macOS` platforms.
+We are actively working towards extending this support to the `Windows` platform. 
+Your patience during this transition is greatly appreciated.
+
 [comment]: <> (- [AlphaGo Zero]&#40;https://www.nature.com/articles/nature24270&#41; )
 
 ## Quick Start

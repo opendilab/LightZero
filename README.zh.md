@@ -132,6 +132,8 @@ cd LightZero
 pip3 install -e .
 ```
 
+请注意，LightZero 目前仅支持在 `Linux` 和 `macOS` 平台上进行编译。
+我们正在积极将该支持扩展到 `Windows` 平台。 
 
 ## 快速开始
 使用如下代码在 [CartPole](https://gymnasium.farama.org/environments/classic_control/cart_pole/) 环境上快速训练一个 MuZero 智能体:
