@@ -8,7 +8,7 @@ from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
-from ding.utils import set_pkg_seed
+from ding.utils import set_pkg_seed, get_rank
 from ding.rl_utils import get_epsilon_greedy_fn
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
@@ -84,7 +84,7 @@ def train_muzero(
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
-    tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
+    tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
     # ==============================================================
