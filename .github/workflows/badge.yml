@@ -2,7 +2,7 @@ name: Badge Creation
 
 on:
   push:
-    branches: [ main, 'badge/*', 'doc/*', 'dev/*' ]
+    branches: [ main, 'badge/*', 'doc/*', 'dev/*', 'dev-*' ]
 
 jobs:
   update-badges:
