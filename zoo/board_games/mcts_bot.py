@@ -25,21 +25,27 @@ class MCTSNode(ABC):
 
     def __init__(self, env, parent=None):
         """
+        Overview:
+            This is an abstract base class that outlines the fundamental methods for a Monte Carlo Tree Node.
+            Each specific method must be implemented in the subclasses for specific use-cases.
+            For more details, you can refer to: https://github.com/int8/monte-carlo-tree-search.
         Arguments:
-            - env (:obj:`BaseEnv`): The game environment of the current node. 
-                The properties of this object contain information about the current game environment. 
-                For instance, in a game of tictactoe: 
-                    - env.board: A (3,3) array representing the game board, e.g., 
-                        [[0,2,0], 
-                        [1,1,0], 
-                        [2,0,0]] 
-                        Here, 0 denotes an unplayed position, 1 represents a position occupied by player 1, and 2 indicates a position taken by player 2.
-                    - env.players: A list [1,2] representing the two players, player 1 and player 2 respectively.
-                    - env._current_player: Denotes the player who is to make a move in the current turn, which is alterating in each turn not only in the reset phase.
-                The methods of this object implement functionalities such as game state transitions and retrieving game results.
-            - parent (:obj:`MCTSNode`):  The parent node of the current node. The parent node is primarily used for backpropagation during the Monte Carlo Tree Search. 
-                For the root node, this parent returns None as it does not have a parent node.
-        """    
+            - env (:obj:`BaseEnv`): This represents the game environment of the current node. The properties of this environment object
+                encapsulate the state information of the game and retrieving game results. For instance, in a game of tictactoe:
+                - env.board: A (3,3) array representing the game board, e.g.,
+                    [[0,2,0],
+                    [1,1,0],
+                    [2,0,0]]
+                    Here, 0 denotes an unplayed position, 1 represents a position occupied by player 1, and 2 indicates a position taken by player 2.
+                - env.players: A list [1,2] representing the two players, player 1 and player 2 respectively.
+                - env.start_player_index: An integer (0 or 1) that is reset every episode to determine the starting player.
+                - env._current_player: Denotes the player who is to make a move in the current turn, which is alterating in each turn not only in the reset phase.
+                - Class Env, such as
+                    zoo.board_games.tictactoe.envs.tictactoe_env.TicTacToeEnv,
+                    zoo.board_games.gomoku.envs.gomoku_env.GomokuEnv
+                - parent (:obj:`MCTSNode`): This parent node of the current node. The parent node is primarily used for backpropagation
+                during the Monte Carlo Tree Search. For the root node, this parent returns None as it does not have a parent node.
+        """
         self.env = env
         self.parent = parent
         self.children = []
@@ -237,13 +243,21 @@ class TwoPlayersMCTSNode(MCTSNode):
         # print('simulation begin')
         current_rollout_env = self.env
         # print(current_rollout_env.board)
+        step = 0
+        last_action = None
+        last_legal_actions = None
         while not current_rollout_env.get_done_reward()[0]:
-            possible_actions = current_rollout_env.legal_actions
-            action = self.rollout_policy(possible_actions)
-            current_rollout_env = current_rollout_env.simulate_action(action)
-            # print('\n')
+            step += 1
+            legal_actions = current_rollout_env.legal_actions
+            action = self.rollout_policy(legal_actions, last_legal_actions, last_action)
+            # print('step={}'.format(step))
             # print(current_rollout_env.board)
-        # print('simulation end \n')
+            # print('legal_actions={}'.format(legal_actions))
+            # print('action={}'.format(action))
+            current_rollout_env = current_rollout_env.simulate_action(action)
+            last_action = action
+            last_legal_actions = legal_actions
+        # print('simulation end')
         return current_rollout_env.get_done_reward()[1]
 
     def backpropagate(self, result):
@@ -294,6 +308,7 @@ class MCTS(object):
         # The search cost is determined by either the maximum number of simulations or the longest simulation time.
         # If no simulations number is provided, run simulations for the specified time.
         if simulations_number is None:
+            # If no simulations number is provided, run simulations for the specified time
             assert (total_simulation_seconds is not None)
             end_time = time.time() + total_simulation_seconds
             while True:
@@ -307,6 +322,7 @@ class MCTS(object):
                     break
         # If simulations number is provided, run the specified number of simulations.
         else:
+            # If simulations number is provided, run the specified number of simulations
             for i in range(0, simulations_number):
                 # print('****simlulation-{}****'.format(i))
                 # Get the leaf node.

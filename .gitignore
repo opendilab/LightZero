@@ -1444,4 +1444,8 @@ events.*
 !/lzero/mcts/**/lib/*.h
 **/tb/*
 **/mcts/ctree/tests_cpp/*
+build/
+
 **/*tmp*
+
+/lzero/mcts/**/pybind11/*

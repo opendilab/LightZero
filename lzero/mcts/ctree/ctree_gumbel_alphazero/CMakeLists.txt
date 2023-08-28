@@ -1,0 +1,24 @@
+# cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.4...3.18)
+
+# cmake_policy(SET CMP0048 NEW)
+project(mcts_gumbel_alphazero VERSION 1.0)
+
+# 找到 Python
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+
+add_subdirectory(pybind11)
+# 在此处添加两个cpp文件
+pybind11_add_module(mcts_gumbel_alphazero mcts_gumbel_alphazero.cpp node_gumbel_alphazero.cpp)
+
+# 将Python头文件路径添加到你的库的包含路径中
+target_include_directories(mcts_gumbel_alphazero PRIVATE ${Python3_INCLUDE_DIRS})
+
+# 链接你的库和 pybind11::module
+target_link_libraries(mcts_gumbel_alphazero PRIVATE pybind11::module)
+
+# 设置你的库的Python版本
+set_target_properties(mcts_gumbel_alphazero PROPERTIES PYTHON_STANDARD ${Python3_VERSION})
+
+
+# CMakeLists.txt

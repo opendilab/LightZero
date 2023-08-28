@@ -15,6 +15,8 @@ from distutils.core import setup
 
 import numpy as np
 from setuptools import find_packages, Extension
+from pybind11.setup_helpers import Pybind11Extension
+
 # from setuptools.command.build_ext import build_ext
 from Cython.Build import cythonize  # this line should be after 'from setuptools import find_packages'
 
@@ -83,6 +85,22 @@ def find_cython_extensions(path=None):
 
 _LINETRACE = not not os.environ.get('LINETRACE', None)
 
+cython_ext_modules = cythonize(
+    find_cython_extensions(),
+    language_level=3,
+    compiler_directives=dict(
+        linetrace=_LINETRACE,
+    ),
+)
+
+pybind11_ext_modules = [
+    Pybind11Extension(
+        'mcts_alphazero',
+        ['lzero/mcts/ctree/ctree_alphazero/mcts_alphazero.cpp'],
+        include_dirs=['lzero/mcts/ctree/ctree_alphazero/pybind11/include'],
+    ),
+]
+
 setup(
     name='LightZero',
     version='0.0.1',
@@ -108,13 +126,16 @@ setup(
     install_requires=requirements,
     tests_require=group_requirements['test'],
     extras_require=group_requirements,
-    ext_modules=cythonize(
-        find_cython_extensions(),
-        language_level=3,
-        compiler_directives=dict(
-            linetrace=_LINETRACE,
-        ),
-    ),
+    # ext_modules=cythonize(
+    #     find_cython_extensions(),
+    #     language_level=3,
+    #     compiler_directives=dict(
+    #         linetrace=_LINETRACE,
+    #     ),
+    # ),
+    # ext_modules=cython_ext_modules + pybind11_ext_modules,
+    ext_modules=cython_ext_modules,
+
     # cmdclass={"build_ext": custom_build_ext},
     classifiers=[
         'Development Status :: 5 - Production/Stable',

@@ -45,7 +45,7 @@ pendulum_sampled_efficientzero_config = dict(
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
+        optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.

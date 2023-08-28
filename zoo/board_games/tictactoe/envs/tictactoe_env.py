@@ -46,6 +46,7 @@ class TicTacToeEnv(BaseEnv):
         channel_last=True,
         scale=True,
         stop_value=1,
+        mcts_ctree=True,
     )
 
     @classmethod
@@ -61,7 +62,7 @@ class TicTacToeEnv(BaseEnv):
         self.battle_mode = cfg.battle_mode
         # The mode of interaction between the agent and the environment.
         assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
-        # The mode of MCTS is only used in AlphaZero.
+        # The mode of MCTS, which is only used in AlphaZero.
         self.mcts_mode = 'self_play_mode'
         self.board_size = 3
         self.players = [1, 2]
@@ -76,6 +77,12 @@ class TicTacToeEnv(BaseEnv):
         self.bot_action_type = cfg.bot_action_type
         if 'alpha_beta_pruning' in self.bot_action_type:
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
+
+        self.mcts_ctree = cfg.mcts_ctree
+
+    def legal_actions_func(self):
+        # Convert NumPy arrays to nested tuples to make them hashable.
+        return _legal_actions_func_lru(tuple(map(tuple, self.board)))
 
     @property
     def legal_actions(self):
@@ -94,10 +101,20 @@ class TicTacToeEnv(BaseEnv):
         return _legal_actions_func_lru(tuple(map(tuple, self.board)))
 
     def get_done_winner(self):
+        """
+        Overview:
+             Check if the game is over and who the winner is. Return 'done' and 'winner'.
+        Returns:
+            - outputs (:obj:`Tuple`): Tuple containing 'done' and 'winner',
+                - if player 1 win,     'done' = True, 'winner' = 1
+                - if player 2 win,     'done' = True, 'winner' = 2
+                - if draw,             'done' = True, 'winner' = -1
+                - if game is not over, 'done' = False, 'winner' = -1
+        """
         # Convert NumPy arrays to nested tuples to make them hashable.
         return _get_done_winner_func_lru(tuple(map(tuple, self.board)))
 
-    def reset(self, start_player_index=0, init_state=None):
+    def reset(self, start_player_index=0, init_state=None, katago_policy_init=False, katago_game_state=None):
         """
         Overview:
             Env reset and custom state start by init_state
@@ -105,6 +122,10 @@ class TicTacToeEnv(BaseEnv):
             start_player_index: players = [1,2], player_index = [0,1]
             init_state: custom start state.
         """
+        if self.mcts_ctree and init_state is not None:
+            # Convert byte string to np.ndarray
+            init_state = np.frombuffer(init_state, dtype=np.int32)
+
         if self.scale:
             self._observation_space = gym.spaces.Box(
                 low=0, high=1, shape=(self.board_size, self.board_size, 3), dtype=np.float32
@@ -119,6 +140,8 @@ class TicTacToeEnv(BaseEnv):
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
             self.board = np.array(copy.deepcopy(init_state), dtype="int32")
+            if self.mcts_ctree:
+                self.board = self.board.reshape((self.board_size, self.board_size))
         else:
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
         action_mask = np.zeros(self.total_num_actions, 'int8')
@@ -205,6 +228,8 @@ class TicTacToeEnv(BaseEnv):
             timestep_player1 = self._player_step(action)
             # self.env.render()
             if timestep_player1.done:
+                if self.agent_vs_human:
+                    print(self.board)
                 # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
                 # And the to_play is used in MCTS.
                 timestep_player1.obs['to_play'] = -1
@@ -245,11 +270,11 @@ class TicTacToeEnv(BaseEnv):
         done, winner = self.get_done_winner()
 
         reward = np.array(float(winner == self.current_player)).astype(np.float32)
-        info = {'next player to play': self.to_play}
+        info = {'next player to play': self.next_player}
         """
         NOTE: here exchange the player
         """
-        self.current_player = self.to_play
+        self.current_player = self.next_player
 
         if done:
             info['eval_episode_return'] = reward
@@ -275,11 +300,11 @@ class TicTacToeEnv(BaseEnv):
         Returns:
             - current_state (:obj:`array`):
                 the 0 dim means which positions is occupied by self.current_player,
-                the 1 dim indicates which positions are occupied by self.to_play,
+                the 1 dim indicates which positions are occupied by self.next_player,
                 the 2 dim indicates which player is the to_play player, 1 means player 1, 2 means player 2
         """
         board_curr_player = np.where(self.board == self.current_player, 1, 0)
-        board_opponent_player = np.where(self.board == self.to_play, 1, 0)
+        board_opponent_player = np.where(self.board == self.next_player, 1, 0)
         board_to_play = np.full((self.board_size, self.board_size), self.current_player)
         raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
         if self.scale:
@@ -409,14 +434,19 @@ class TicTacToeEnv(BaseEnv):
     @property
     def current_player_index(self):
         """
-        current_player_index = 0, current_player = 1
-        current_player_index = 1, current_player = 2
+        Overview:
+            current_player_index = 0, current_player = 1
+            current_player_index = 1, current_player = 2
         """
         return 0 if self._current_player == 1 else 1
 
     @property
-    def to_play(self):
+    def next_player(self):
         return self.players[0] if self.current_player == self.players[1] else self.players[1]
+
+    # @property
+    # def to_play(self):
+    #     return self.players[0] if self.current_player == self.players[1] else self.players[1]
 
     @property
     def current_player_to_compute_bot_action(self):

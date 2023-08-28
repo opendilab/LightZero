@@ -8,7 +8,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-
 def renormalize(inputs: torch.Tensor, first_dim: int = 1) -> torch.Tensor:
     """
     Overview:

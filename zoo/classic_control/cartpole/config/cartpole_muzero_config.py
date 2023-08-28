@@ -25,6 +25,7 @@ cartpole_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        stop_valuee=int(1e6),
     ),
     policy=dict(
         model=dict(
@@ -42,7 +43,7 @@ cartpole_muzero_config = dict(
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
+        optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         ssl_loss_weight=2,  # NOTE: default is 0.

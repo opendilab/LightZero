@@ -68,6 +68,7 @@ atari_muzero_config = dict(
         ),
         use_augmentation=True,
         update_per_collect=update_per_collect,
+        model_update_ratio=0.1,
         batch_size=batch_size,
         optim_type='SGD',
         lr_piecewise_constant_decay=True,

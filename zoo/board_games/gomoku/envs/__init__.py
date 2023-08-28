@@ -1,0 +1,1 @@
+from zoo.board_games.gomoku.envs.gomoku_bot_policy_v0 import GomokuBotPolicyV0
