@@ -17,24 +17,25 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+gpu_num = 2
 collector_env_num = 8
-n_episode = 8
+n_episode = int(8*gpu_num)
 evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
-
 eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-atari_efficientzero_config = dict(
+atari_muzero_config = dict(
     exp_name=
-    f'data_ez_ctree/{env_name[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ddp_{gpu_num}gpu_seed0',
     env=dict(
+        stop_value=int(1e6),
         env_name=env_name,
         obs_shape=(4, 96, 96),
         collector_env_num=collector_env_num,
@@ -48,16 +49,19 @@ atari_efficientzero_config = dict(
             frame_stack_num=4,
             action_space_size=action_space_size,
             downsample=True,
+            self_supervised_learning_loss=True,  # default is False
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
         ),
         cuda=True,
+        multi_gpu=True,
         env_type='not_board_games',
         game_segment_length=400,
         random_collect_episode_num=0,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            # need to dynamically adjust the number of decay steps according to the characteristics of the environment and the algorithm
+            # need to dynamically adjust the number of decay steps 
+            # according to the characteristics of the environment and the algorithm
             type='linear',
             start=1.,
             end=0.05,
@@ -71,6 +75,7 @@ atari_efficientzero_config = dict(
         learning_rate=0.2,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
+        ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
@@ -78,27 +83,37 @@ atari_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
     ),
 )
-atari_efficientzero_config = EasyDict(atari_efficientzero_config)
-main_config = atari_efficientzero_config
+atari_muzero_config = EasyDict(atari_muzero_config)
+main_config = atari_muzero_config
 
-atari_efficientzero_create_config = dict(
+atari_muzero_create_config = dict(
     env=dict(
         type='atari_lightzero',
         import_names=['zoo.atari.envs.atari_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='efficientzero',
-        import_names=['lzero.policy.efficientzero'],
+        type='muzero',
+        import_names=['lzero.policy.muzero'],
     ),
     collector=dict(
         type='episode_muzero',
         import_names=['lzero.worker.muzero_collector'],
     )
 )
-atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
-create_config = atari_efficientzero_create_config
+atari_muzero_create_config = EasyDict(atari_muzero_create_config)
+create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
+    """
+    Overview:
+        This script should be executed with <nproc_per_node> GPUs.
+        Run the following command to launch the script:
+        python -m torch.distributed.launch --nproc_per_node=2 ./LightZero/zoo/atari/config/atari_muzero_multigpu_ddp_config.py
+    """
+    from ding.utils import DDPContext
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.config.utils import lz_to_ddp_config
+    with DDPContext():
+        main_config = lz_to_ddp_config(main_config)
+        train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
