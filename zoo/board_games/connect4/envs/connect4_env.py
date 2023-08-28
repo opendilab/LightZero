@@ -6,6 +6,7 @@ import os
 import sys
 import copy
 from ditk import logging
+from typing import List
 
 import numpy as np
 import pygame
@@ -24,13 +25,13 @@ class Connect4Env(BaseEnv):
         env_name="Connect4",
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',  # only used in AlphaZero
-        bot_action_type='rule',
+        bot_action_type='mcts',
         agent_vs_human=False,
         prob_random_agent=0,
         prob_expert_agent=0,
         channel_last=True,
         scale=False,
-        stop_value=1,
+        stop_value=2,
     )
 
     @classmethod
@@ -159,7 +160,8 @@ class Connect4Env(BaseEnv):
                     action = self.bot_action()
 
             # print(f'self playing now, the action is {action}')
-            timestep = self._player_step(action)
+            flag = "agent"
+            timestep = self._player_step(action, flag)
             if timestep.done:
                 # The eval_episode_return is calculated from Player 1's perspective。
                 # 不是很明白episode_reward在train的时候是怎么被调用的#########################
@@ -169,8 +171,9 @@ class Connect4Env(BaseEnv):
             # player 1 battle with expert player 2
 
             # player 1's turn
-            print(f'playing with bot now, the action from algorithm is {action}')
-            timestep_player1 = self._player_step(action)
+            # print(f'playing with bot now, the action from algorithm is {action}')
+            flag = "agent"
+            timestep_player1 = self._player_step(action, flag)
             # self.env.render()
             if timestep_player1.done:
                 # NOTE: in play_with_bot_mode, we must set to_play as -1, because we don't consider the alternation between players.
@@ -181,8 +184,9 @@ class Connect4Env(BaseEnv):
             # player 2's turn
             bot_action = self.bot_action()
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
-            print(f'playing with bot now, the action from bot is {action}')
-            timestep_player2 = self._player_step(bot_action)
+            # print(f'playing with bot now, the action from bot is {action}')
+            flag = "bot"
+            timestep_player2 = self._player_step(bot_action, flag)
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
@@ -197,8 +201,9 @@ class Connect4Env(BaseEnv):
             # player 1 battle with expert player 2
 
             # player 1's turn
-            print(f'evaluating now, the battle mode is {self.battle_mode}, the action is {action()}')
-            timestep_player1 = self._player_step(action)
+            # print(f'evaluating now, the battle mode is {self.battle_mode}, the action is {action}')
+            flag = "agent"
+            timestep_player1 = self._player_step(action, flag)
             # self.env.render()
             if timestep_player1.done:
                 # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
@@ -210,10 +215,11 @@ class Connect4Env(BaseEnv):
             if self.agent_vs_human:
                 bot_action = self.human_to_action()
             else:
-                print(f'evaluating now, the battle mode is {self.battle_mode}, here comes the bot action{self.bot_action()}')
+                # print(f'evaluating now, the battle mode is {self.battle_mode}, here comes the bot action{self.bot_action()}')
                 bot_action = self.bot_action()
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
-            timestep_player2 = self._player_step(bot_action)
+            flag = "bot"
+            timestep_player2 = self._player_step(bot_action, flag)
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
@@ -225,7 +231,7 @@ class Connect4Env(BaseEnv):
 
             return timestep
 
-    def _player_step(self, action):
+    def _player_step(self, action, flag):
         if action in self.legal_actions:
             piece = self.players.index(self._current_player) + 1
             for i in list(filter(lambda x: x % 7 == action, list(range(41, -1, -1)))):
@@ -234,7 +240,8 @@ class Connect4Env(BaseEnv):
                     break
         else:
             logging.warning(
-                f"hhhYou input illegal action: {action}, the legal_actions are {self.legal_actions}. "
+                f"You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
+                f"flag is {flag}."
                 f"Now we randomly choice a action from self.legal_actions."
             )
             action = self.random_action()
@@ -412,7 +419,7 @@ class Connect4Env(BaseEnv):
         elif self.bot_action_type == 'alpha_beta_pruning':
             return self.alpha_beta_bot.get_best_action(self.board, player_index=self.current_player_index)
         elif self.bot_action_type == 'mcts':
-            pass
+            return self.mcts_bot.get_actions(self.board, player_index=self.current_player_index)
         
     def rule_bot(self):
         action_list = self.legal_actions
@@ -533,3 +540,18 @@ class Connect4Env(BaseEnv):
         new_board = copy.deepcopy(self.board)
 
         return new_board, new_legal_actions
+    
+    @staticmethod
+    def create_collector_env_cfg(cfg: dict) -> List[dict]:
+        collector_env_num = cfg.pop('collector_env_num')
+        cfg = copy.deepcopy(cfg)
+        return [cfg for _ in range(collector_env_num)]
+
+    @staticmethod
+    def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
+        evaluator_env_num = cfg.pop('evaluator_env_num')
+        cfg = copy.deepcopy(cfg)
+        # In eval phase, we use ``eval_mode`` to make agent play with the built-in bot to
+        # evaluate the performance of the current agent.
+        cfg.battle_mode = 'eval_mode'
+        return [cfg for _ in range(evaluator_env_num)]
