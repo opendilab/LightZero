@@ -175,15 +175,13 @@ class MultiAgentEfficientZeroPolicy(EfficientZeroPolicy):
                 network_output
             )
 
-            if not self._eval_model.training:
-                # if not in training, obtain the scalars of the value/reward
-                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
-                latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                reward_hidden_state_roots = (
-                    reward_hidden_state_roots[0].detach().cpu().numpy(),
-                    reward_hidden_state_roots[1].detach().cpu().numpy()
-                )
-                policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
+            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
+            latent_state_roots = latent_state_roots.detach().cpu().numpy()
+            reward_hidden_state_roots = (
+                reward_hidden_state_roots[0].detach().cpu().numpy(),
+                reward_hidden_state_roots[1].detach().cpu().numpy()
+            )
+            policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
             if self._cfg.mcts_ctree:

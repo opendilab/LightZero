@@ -53,7 +53,7 @@ def eval_muzero(main_cfg, create_cfg, seed=0):
 
     model = Encoder(**cfg.policy.model, state_encoder=PettingZooEncoder())
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
-    policy.learn_mode.load_state_dict(torch.load(cfg.policy.load_path, map_location=cfg.policy.device))
+    policy.eval_mode.load_state_dict(torch.load(cfg.policy.load_path, map_location=cfg.policy.device))
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
