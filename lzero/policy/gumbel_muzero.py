@@ -60,6 +60,8 @@ class GumeblMuZeroPolicy(Policy):
             norm_type='BN', 
         ),
         # ****** common ******
+        # (bool) Whether to use multi-gpu training.
+        multi_gpu=False,
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
         # this variable is used in ``collector``.
         sampled_algo=False,
@@ -153,8 +155,6 @@ class GumeblMuZeroPolicy(Policy):
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
         use_priority=True,
-        # (bool) Whether to use the maximum priority for new collecting data.
-        use_max_priority_for_new_data=True,
         # (float) The degree of prioritization to use. A value of 0 means no prioritization,
         # while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,
@@ -412,6 +412,8 @@ class GumeblMuZeroPolicy(Policy):
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
+        if self._cfg.multi_gpu:
+            self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
             self._learn_model.parameters(), self._cfg.grad_clip_value
         )
@@ -436,8 +438,8 @@ class GumeblMuZeroPolicy(Policy):
             'policy_loss': policy_loss.mean().item(),
             'reward_loss': reward_loss.mean().item(),
             'value_loss': value_loss.mean().item(),
-            'consistency_loss': consistency_loss.mean() / self._cfg.num_unroll_steps,
-            'entropy_loss': entropy_loss.mean(),
+            'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
+            'entropy_loss': entropy_loss.mean().item(),
 
             # ==============================================================
             # priority related
@@ -450,7 +452,7 @@ class GumeblMuZeroPolicy(Policy):
             'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
             'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
             'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
-            'total_grad_norm_before_clip': total_grad_norm_before_clip
+            'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
         }
 
     def _init_collect(self) -> None:
