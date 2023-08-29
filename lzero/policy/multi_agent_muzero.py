@@ -76,11 +76,9 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
             network_output = self._collect_model.initial_inference(data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            if not self._learn_model.training:
-                # if not in training, obtain the scalars of the value/reward
-                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
-                latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                policy_logits = policy_logits.detach().cpu().numpy().tolist()
+            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
+            latent_state_roots = latent_state_roots.detach().cpu().numpy()
+            policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
             # the only difference between collect and eval is the dirichlet noise
