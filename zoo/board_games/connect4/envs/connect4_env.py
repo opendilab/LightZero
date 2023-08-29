@@ -1,5 +1,24 @@
 """
-Adapt the connect4 environment in PettingZoo (https://github.com/Farama-Foundation/PettingZoo) to the BaseEnv interface.
+Overview:
+    Adapt the connect4 environment in PettingZoo (https://github.com/Farama-Foundation/PettingZoo) to the BaseEnv interface.
+    Connect Four is a 2-player turn based game, where players must connect four of their tokens vertically, horizontally or diagonally. 
+    The players drop their respective token in a column of a standing grid, where each token will fall until it reaches the bottom of the column or reaches an existing token. 
+    Players cannot place a token in a full column, and the game ends when either a player has made a sequence of 4 tokens, or when all 7 columns have been filled.
+Observation Space:
+    The observation in the Connect4 environment is a dictionary with five elements, which contains key information about the current state. 
+    - `observation` (:obj:`array`): An array that represents information about the current state, with a shape of (3, 6, 7). 
+        The length of the first dimension is 3, which stores three two-dimensional game boards with shapes (6, 7).
+        These boards represent the positions occupied by the current player, the positions occupied by the opponent player, and the identity of the current player, respectively.
+    - `action_mask` (:obj:`array`): A mask for the actions, indicating which actions are executable. It is a one-dimensional array of length 7, corresponding to columns 1 to 7 of the game board. 
+        It has a value of 1 for the columns where a move can be made, and a value of 0 for other positions.
+    - `board` (:obj:`array`): A visual representation of the current game board, represented as a 6x7 array, in which the positions where player 1 and player 2 have placed their tokens are marked with values 1 and 2, respectively. 
+    - `current_player_index` (:obj:`int`): The index of the current player, with player 1 having an index of 0 and player 2 having an index of 1. 
+    - `to_play` (:obj:`int`): The player who needs to take an action in the current state, with a value of 1 or 2.
+Action Space:
+    A set of integers from 0 to 6 (inclusive), where the action represents which column a token should be dropped in.
+Reward Space:
+    For the ``self_play_mode``, a reward of 1 is returned at the time step when the game terminates, and a reward of 0 is returned at all other time steps.
+    For the ``play_with_bot_mode``, at the time step when the game terminates, if the bot wins, the reward is -1; if the agent wins, the reward is 1; and in all other cases, the reward is 0.
 """
 
 import os
@@ -289,12 +308,14 @@ class Connect4Env(BaseEnv):
         self._current_player = self.players[self.start_player_index]
 
         self._action_space = spaces.Discrete(7)
-        self._reward_space = spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        self._reward_space = spaces.Discrete(3)
         self._observation_space = spaces.Dict(
                 {
                     "observation": spaces.Box(low=0, high=1, shape=(3,6,7), dtype=np.int8),
                     "action_mask": spaces.Box(low=0, high=1, shape=(7,), dtype=np.int8),
-                    # "board": spaces.Box(low=0, high=2, shape=(6,7), dtype=np.int8),
+                    "board": spaces.Box(low=0, high=2, shape=(6,7), dtype=np.int8),
+                    "current_player_index": spaces.Discrete(2),
+                    "to_play": spaces.Discrete(2),
                 }
             )
 
