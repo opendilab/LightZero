@@ -10,6 +10,7 @@ Overview:
 """
 
 import time
+import copy
 from abc import ABC, abstractmethod
 from collections import defaultdict
 
@@ -352,7 +353,7 @@ class MCTSBot:
         A robot which can use MCTS to make decision, choose an action to take.
     """
  
-    def __init__(self, env, bot_name, num_simulation=10000):
+    def __init__(self, env, bot_name, num_simulation=50):
         """
         Overview:
             This function initializes a new instance of the MCTSBot class.
@@ -363,7 +364,7 @@ class MCTSBot:
         """
         self.name = bot_name
         self.num_simulation = num_simulation
-        self.simulator_env = env
+        self.simulator_env = copy.deepcopy(env)
 
     def get_actions(self, state, player_index, best_action_type = "UCB"):
         """

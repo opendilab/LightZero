@@ -78,7 +78,7 @@ class Connect4Env(BaseEnv):
         if 'alpha_beta_pruning' in self.bot_action_type:
             self.alpha_beta_bot = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
         if 'mcts' in self.bot_action_type:
-            self.mcts_bot = MCTSBot(self, cfg, 'mcts_player')
+            self.mcts_bot = MCTSBot(self, 'mcts_player')
         self._env = self
 
         self.board = [0] * (6 * 7)
@@ -303,6 +303,8 @@ class Connect4Env(BaseEnv):
         # reset environment
         if init_state is None:
             self.board = [0] * (6 * 7)
+        else:
+            self.board = init_state
         self.players = [1,2]
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
@@ -467,6 +469,33 @@ class Connect4Env(BaseEnv):
         """
         return f"Play column {action+1}"
 
+    def human_to_action(self):
+        """
+        Overview:
+            For multiplayer games, ask the user for a legal action
+            and return the corresponding action number.
+        Returns:
+            An integer from the action space.
+        """
+        print(np.array(self.board).reshape(6, 7))
+        while True:
+            try:
+                column = int(
+                    input(
+                        f"Enter the column to play for the player {self.current_player}: "
+                    )
+                )
+                action = column - 1
+                if action in self.legal_actions:
+                    break
+                else:
+                    print("Wrong input, try again")
+            except KeyboardInterrupt:
+                print("exit")
+                sys.exit(0)
+            except Exception as e:
+                print("Wrong input, try again")
+        return action
     # def set_game_result(self, result_val):
     #     for i, name in enumerate(self.agents):
     #         self.dones[name] = True
