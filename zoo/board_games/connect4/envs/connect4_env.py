@@ -75,10 +75,10 @@ class Connect4Env(BaseEnv):
             f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
         self.agent_vs_human = cfg.agent_vs_human
         self.bot_action_type = cfg.bot_action_type
-        if 'alpha_beta_pruning' in self.bot_action_type:
-            self.alpha_beta_bot = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
-        if 'mcts' in self.bot_action_type:
-            self.mcts_bot = MCTSBot(self, 'mcts_player')
+        # if 'alpha_beta_pruning' in self.bot_action_type:
+        #     self.alpha_beta_bot = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
+        if self.bot_action_type == 'mcts':
+            self.mcts_bot = MCTSBot(self, 'mcts_player', 200)
         self._env = self
 
         self.board = [0] * (6 * 7)
@@ -304,7 +304,9 @@ class Connect4Env(BaseEnv):
         if init_state is None:
             self.board = [0] * (6 * 7)
         else:
+            print("before:",self.board)
             self.board = init_state
+            print("after:",self.board)
         self.players = [1,2]
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
@@ -439,8 +441,8 @@ class Connect4Env(BaseEnv):
     def bot_action(self):
         if self.bot_action_type == 'rule':
             return self.rule_bot()
-        elif self.bot_action_type == 'alpha_beta_pruning':
-            return self.alpha_beta_bot.get_best_action(self.board, player_index=self.current_player_index)
+        # elif self.bot_action_type == 'alpha_beta_pruning':
+        #     return self.alpha_beta_bot.get_best_action(self.board, player_index=self.current_player_index)
         elif self.bot_action_type == 'mcts':
             return self.mcts_bot.get_actions(self.board, player_index=self.current_player_index)
         

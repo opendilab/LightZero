@@ -15,7 +15,7 @@ prob_random_action_in_bot = 0.5
 # end of the most frequently changed config specified by the user
 # ==============================================================
 connect4_alphazero_config = dict(
-    exp_name='data_az_ptree/connect4_sp-mode_alphazero_seed0',
+    exp_name='data_az_ptree/connect4_spmode',
     env=dict(
         # board_size=3,
         battle_mode='self_play_mode',

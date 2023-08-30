@@ -38,7 +38,7 @@ def test_mcts_bot_vs_rule_bot(num_simulations=50):
         state = env.board
         player = MCTSBot(env, 'a', num_simulations)  # player_index = 0, player = 1
         # Set player 1 to move first.
-        player_index = 0
+        player_index = 1
         while not env.get_done_reward()[0]:
             """
             Overview:
@@ -47,8 +47,8 @@ def test_mcts_bot_vs_rule_bot(num_simulations=50):
             # Set rule_bot to be player 1.
             if player_index == 0:
                 t1 = time.time()
-                action = env.bot_action()
-                # action = player.get_actions(state, player_index=player_index)
+                # action = env.bot_action()
+                action = player.get_actions(state, player_index=player_index)
                 t2 = time.time()
                 # print("The time difference is :", t2-t1)
                 mcts_bot_time_list.append(t2 - t1)
@@ -56,8 +56,8 @@ def test_mcts_bot_vs_rule_bot(num_simulations=50):
             # Set mcts_bot to be player 2.
             else:
                 t1 = time.time()
-                # action = env.bot_action()
-                action = player.get_actions(state, player_index=player_index)
+                action = env.bot_action()
+                # action = player.get_actions(state, player_index=player_index)
                 t2 = time.time()
                 # print("The time difference is :", t2-t1)
                 bot_action_time_list.append(t2 - t1)
@@ -145,19 +145,20 @@ def test_mcts_bot_vs_mcts_bot(num_simulations=50):
         winner.append(env.get_done_winner()[1])
 
     # Calculate the variance and mean of decision times.
-    mcts_bot_mu = np.mean(mcts_bot1_time_list)
-    mcts_bot_var = np.var(mcts_bot1_time_list)
+    mcts_bot1_mu = np.mean(mcts_bot1_time_list)
+    mcts_bot1_var = np.var(mcts_bot1_time_list)
 
-    bot_action_mu = np.mean(mcts_bot2_time_list)
-    bot_action_var = np.var(mcts_bot2_time_list)
+    mcts_bot2_mu = np.mean(mcts_bot2_time_list)
+    mcts_bot2_var = np.var(mcts_bot2_time_list)
 
     # Print the information of the games.
-    print('num_simulations={}\n'.format(num_simulations))
-    print('mcts_bot_time_list={}\n'.format(mcts_bot1_time_list))
-    print('mcts_bot_mu={}, mcts_bot_var={}\n'.format(mcts_bot_mu, mcts_bot_var))
+    print('num_simulations={}\n'.format(200))
+    print('mcts_bot1_time_list={}\n'.format(mcts_bot1_time_list))
+    print('mcts_bot1_mu={}, mcts_bot1_var={}\n'.format(mcts_bot1_mu, mcts_bot1_var))
 
-    print('bot_action_time_list={}\n'.format(mcts_bot2_time_list))
-    print('bot_action_mu={}, bot_action_var={}\n'.format(bot_action_mu, bot_action_var))
+    print('num_simulations={}\n'.format(1000))
+    print('mcts_bot2_time_list={}\n'.format(mcts_bot2_time_list))
+    print('mcts_bot2_mu={}, mcts_bot2_var={}\n'.format(mcts_bot2_mu, mcts_bot2_var))
 
     print(
         'winner={}, draw={}, player1={}, player2={}\n'.format(
@@ -166,5 +167,5 @@ def test_mcts_bot_vs_mcts_bot(num_simulations=50):
     )
 
 if __name__ == '__main__':
-    # test_mcts_bot_vs_rule_bot(200)
-    test_mcts_bot_vs_mcts_bot()
+    test_mcts_bot_vs_rule_bot(200)
+    # test_mcts_bot_vs_mcts_bot()
