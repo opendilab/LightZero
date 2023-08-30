@@ -6,14 +6,14 @@ Overview:
     Players cannot place a token in a full column, and the game ends when either a player has made a sequence of 4 tokens, or when all 7 columns have been filled.
 Observation Space:
     The observation in the Connect4 environment is a dictionary with five elements, which contains key information about the current state. 
-    - `observation` (:obj:`array`): An array that represents information about the current state, with a shape of (3, 6, 7). 
+    - observation (:obj:`array`): An array that represents information about the current state, with a shape of (3, 6, 7). 
         The length of the first dimension is 3, which stores three two-dimensional game boards with shapes (6, 7).
         These boards represent the positions occupied by the current player, the positions occupied by the opponent player, and the identity of the current player, respectively.
-    - `action_mask` (:obj:`array`): A mask for the actions, indicating which actions are executable. It is a one-dimensional array of length 7, corresponding to columns 1 to 7 of the game board. 
+    - action_mask (:obj:`array`): A mask for the actions, indicating which actions are executable. It is a one-dimensional array of length 7, corresponding to columns 1 to 7 of the game board. 
         It has a value of 1 for the columns where a move can be made, and a value of 0 for other positions.
-    - `board` (:obj:`array`): A visual representation of the current game board, represented as a 6x7 array, in which the positions where player 1 and player 2 have placed their tokens are marked with values 1 and 2, respectively. 
-    - `current_player_index` (:obj:`int`): The index of the current player, with player 1 having an index of 0 and player 2 having an index of 1. 
-    - `to_play` (:obj:`int`): The player who needs to take an action in the current state, with a value of 1 or 2.
+    - board (:obj:`array`): A visual representation of the current game board, represented as a 6x7 array, in which the positions where player 1 and player 2 have placed their tokens are marked with values 1 and 2, respectively. 
+    - current_player_index (:obj:`int`): The index of the current player, with player 1 having an index of 0 and player 2 having an index of 1. 
+    - to_play (:obj:`int`): The player who needs to take an action in the current state, with a value of 1 or 2.
 Action Space:
     A set of integers from 0 to 6 (inclusive), where the action represents which column a token should be dropped in.
 Reward Space:
