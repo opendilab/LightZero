@@ -9,7 +9,7 @@ evaluator_env_num = 5
 num_simulations = 50
 update_per_collect = 50
 batch_size = 256
-max_env_step = int(5e5)
+max_env_step = int(1e6)
 prob_random_action_in_bot = 0.5
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -82,4 +82,4 @@ create_config = connect4_alphazero_create_config
 
 if __name__ == '__main__':
     from lzero.entry import train_alphazero
-    train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_alphazero([main_config, create_config], seed=0, model_path='data_az_ptree/connect4_spmode_230830_161936/ckpt/iteration_25900.pth.tar', max_env_step=max_env_step)

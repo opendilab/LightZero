@@ -146,14 +146,14 @@ class Connect4Env(BaseEnv):
             if self.battle_mode == 'play_with_bot_mode' or self.battle_mode == 'eval_mode':
                 return {"observation": self.current_state()[1], 
                         "action_mask": action_mask,
-                        "board": copy.deepcopy(board_vals),
+                        "board": copy.deepcopy(self.board),
                         "current_player_index": self.players.index(self._current_player),
                         "to_play" : -1
                         }
             elif self.battle_mode == 'self_play_mode':
                 return {"observation": self.current_state()[1], 
                         "action_mask": action_mask,
-                        "board": copy.deepcopy(board_vals),
+                        "board": copy.deepcopy(self.board),
                         "current_player_index": self.players.index(self._current_player),
                         "to_play" : self._current_player
                         }
@@ -304,9 +304,9 @@ class Connect4Env(BaseEnv):
         if init_state is None:
             self.board = [0] * (6 * 7)
         else:
-            print("before:",self.board)
+            # print("before:",self.board)
             self.board = init_state
-            print("after:",self.board)
+            # print("after:",self.board)
         self.players = [1,2]
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
