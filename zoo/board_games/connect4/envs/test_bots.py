@@ -90,6 +90,7 @@ def test_mcts_bot_vs_rule_bot(num_simulations=50):
         )
     )
 
+
 def test_mcts_bot_vs_mcts_bot(num_simulations=50):
     """
     Overview:

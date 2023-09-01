@@ -36,7 +36,10 @@ from easydict import EasyDict
 
 # from pettingzoo.utils.agent_selector import agent_selector
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
+from zoo.board_games.connect4.envs.rule_bot import Connect4RuleBot
+
 from zoo.board_games.mcts_bot import MCTSBot
+
 
 @ENV_REGISTRY.register('connect4')
 class Connect4Env(BaseEnv):
@@ -58,7 +61,7 @@ class Connect4Env(BaseEnv):
         cfg = EasyDict(copy.deepcopy(cls.config))
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
-    
+
     def __init__(self, cfg=None) -> None:
 
         self.cfg = cfg
@@ -77,13 +80,18 @@ class Connect4Env(BaseEnv):
         self.bot_action_type = cfg.bot_action_type
         # if 'alpha_beta_pruning' in self.bot_action_type:
         #     self.alpha_beta_bot = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
+
+        self._current_player = 1
+        self.board = [0] * (6 * 7)
+        self.players = [1, 2]
+
         if self.bot_action_type == 'mcts':
             self.mcts_bot = MCTSBot(self, 'mcts_player', 200)
+        elif self.bot_action_type == 'rule':
+            self.rule_bot = Connect4RuleBot(self, self._current_player)
+
         self._env = self
 
-        self.board = [0] * (6 * 7)
-
-        self.players = [1, 2]
         # self.possible_agents = self.agents[:]
 
         # self.action_spaces = {i: spaces.Discrete(7) for i in self.players}
@@ -98,7 +106,7 @@ class Connect4Env(BaseEnv):
         #     )
         #     for i in self.players
         # }
-    
+
     def current_state(self):
         """
         Overview:
@@ -129,34 +137,34 @@ class Connect4Env(BaseEnv):
             return raw_obs, scale_obs
 
     def observe(self):
-            board_vals = np.array(self.board).reshape(6, 7)
-            # cur_player = self.players.index(self._current_player)
-            # opp_player = (cur_player + 1) % 2
+        board_vals = np.array(self.board).reshape(6, 7)
+        # cur_player = self.players.index(self._current_player)
+        # opp_player = (cur_player + 1) % 2
 
-            # cur_p_board = np.equal(board_vals, cur_player + 1)
-            # opp_p_board = np.equal(board_vals, opp_player + 1)
+        # cur_p_board = np.equal(board_vals, cur_player + 1)
+        # opp_p_board = np.equal(board_vals, opp_player + 1)
 
-            # observation = np.stack([cur_p_board, opp_p_board], axis=2).astype(np.int8)
-            legal_moves = self.legal_actions
+        # observation = np.stack([cur_p_board, opp_p_board], axis=2).astype(np.int8)
+        legal_moves = self.legal_actions
 
-            action_mask = np.zeros(7, "int8")
-            for i in legal_moves:
-                action_mask[i] = 1
+        action_mask = np.zeros(7, "int8")
+        for i in legal_moves:
+            action_mask[i] = 1
 
-            if self.battle_mode == 'play_with_bot_mode' or self.battle_mode == 'eval_mode':
-                return {"observation": self.current_state()[1], 
-                        "action_mask": action_mask,
-                        "board": copy.deepcopy(self.board),
-                        "current_player_index": self.players.index(self._current_player),
-                        "to_play" : -1
-                        }
-            elif self.battle_mode == 'self_play_mode':
-                return {"observation": self.current_state()[1], 
-                        "action_mask": action_mask,
-                        "board": copy.deepcopy(self.board),
-                        "current_player_index": self.players.index(self._current_player),
-                        "to_play" : self._current_player
-                        }
+        if self.battle_mode == 'play_with_bot_mode' or self.battle_mode == 'eval_mode':
+            return {"observation": self.current_state()[1], 
+                    "action_mask": action_mask,
+                    "board": copy.deepcopy(self.board),
+                    "current_player_index": self.players.index(self._current_player),
+                    "to_play": -1
+                    }
+        elif self.battle_mode == 'self_play_mode':
+            return {"observation": self.current_state()[1], 
+                    "action_mask": action_mask,
+                    "board": copy.deepcopy(self.board),
+                    "current_player_index": self.players.index(self._current_player),
+                    "to_play": self._current_player
+                    }
             
     # def observation_space(self, agent):
     #     return self.observation_spaces[agent]
@@ -184,7 +192,8 @@ class Connect4Env(BaseEnv):
             if timestep.done:
                 # The eval_episode_return is calculated from Player 1's perspective。
                 # 不是很明白episode_reward在train的时候是怎么被调用的#########################
-                timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs['to_play'] == 1 else timestep.reward
+                timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs[
+                                                                               'to_play'] == 1 else timestep.reward
             return timestep
         elif self.battle_mode == 'play_with_bot_mode':
             # player 1 battle with expert player 2
@@ -283,9 +292,9 @@ class Connect4Env(BaseEnv):
         #     # self.dones = {i: True for i in self.agents}
         #     reward = np.array(0).astype(np.float32)
         #     done = True
-        else: 
+        else:
             reward = np.array(0).astype(np.float32)
-            
+
         info = {}
 
         self._current_player = self.next_player
@@ -314,14 +323,14 @@ class Connect4Env(BaseEnv):
         self._action_space = spaces.Discrete(7)
         self._reward_space = spaces.Discrete(3)
         self._observation_space = spaces.Dict(
-                {
-                    "observation": spaces.Box(low=0, high=1, shape=(3,6,7), dtype=np.int8),
-                    "action_mask": spaces.Box(low=0, high=1, shape=(7,), dtype=np.int8),
-                    "board": spaces.Box(low=0, high=2, shape=(6,7), dtype=np.int8),
-                    "current_player_index": spaces.Discrete(2),
-                    "to_play": spaces.Discrete(2),
-                }
-            )
+            {
+                "observation": spaces.Box(low=0, high=1, shape=(3, 6, 7), dtype=np.int8),
+                "action_mask": spaces.Box(low=0, high=1, shape=(7,), dtype=np.int8),
+                "board": spaces.Box(low=0, high=2, shape=(6, 7), dtype=np.int8),
+                "current_player_index": spaces.Discrete(2),
+                "to_play": spaces.Discrete(2),
+            }
+        )
 
         # self.rewards = {i: 0 for i in self.agents}
         # self._cumulative_rewards = {name: 0 for name in self.agents}
@@ -353,10 +362,10 @@ class Connect4Env(BaseEnv):
 
     def close(self):
         pass
-    
+
     def get_done_winner(self):
         board = np.array(self.board).reshape(6, 7)
-        for piece in [1,2]:
+        for piece in [1, 2]:
             # Check horizontal locations for win
             column_count = 7
             row_count = 6
@@ -364,10 +373,10 @@ class Connect4Env(BaseEnv):
             for c in range(column_count - 3):
                 for r in range(row_count):
                     if (
-                        board[r][c] == piece
-                        and board[r][c + 1] == piece
-                        and board[r][c + 2] == piece
-                        and board[r][c + 3] == piece
+                            board[r][c] == piece
+                            and board[r][c + 1] == piece
+                            and board[r][c + 2] == piece
+                            and board[r][c + 3] == piece
                     ):
                         return True, piece
 
@@ -375,10 +384,10 @@ class Connect4Env(BaseEnv):
             for c in range(column_count):
                 for r in range(row_count - 3):
                     if (
-                        board[r][c] == piece
-                        and board[r + 1][c] == piece
-                        and board[r + 2][c] == piece
-                        and board[r + 3][c] == piece
+                            board[r][c] == piece
+                            and board[r + 1][c] == piece
+                            and board[r + 2][c] == piece
+                            and board[r + 3][c] == piece
                     ):
                         return True, piece
 
@@ -386,10 +395,10 @@ class Connect4Env(BaseEnv):
             for c in range(column_count - 3):
                 for r in range(row_count - 3):
                     if (
-                        board[r][c] == piece
-                        and board[r + 1][c + 1] == piece
-                        and board[r + 2][c + 2] == piece
-                        and board[r + 3][c + 3] == piece
+                            board[r][c] == piece
+                            and board[r + 1][c + 1] == piece
+                            and board[r + 2][c + 2] == piece
+                            and board[r + 3][c + 3] == piece
                     ):
                         return True, piece
 
@@ -397,18 +406,18 @@ class Connect4Env(BaseEnv):
             for c in range(column_count - 3):
                 for r in range(3, row_count):
                     if (
-                        board[r][c] == piece
-                        and board[r - 1][c + 1] == piece
-                        and board[r - 2][c + 2] == piece
-                        and board[r - 3][c + 3] == piece
+                            board[r][c] == piece
+                            and board[r - 1][c + 1] == piece
+                            and board[r - 2][c + 2] == piece
+                            and board[r - 3][c + 3] == piece
                     ):
                         return True, piece
-                    
+
         if all(x in [1, 2] for x in self.board):
             return True, -1
 
         return False, -1
-    
+
     def get_done_reward(self):
         """
         Overview:
@@ -433,32 +442,18 @@ class Connect4Env(BaseEnv):
             reward = None
         return done, reward
 
-
     def random_action(self):
         action_list = self.legal_actions
         return np.random.choice(action_list)
-    
+
     def bot_action(self):
         if self.bot_action_type == 'rule':
-            return self.rule_bot()
+            return self.rule_bot.get_rule_bot_action(self.board, self._current_player)
         # elif self.bot_action_type == 'alpha_beta_pruning':
         #     return self.alpha_beta_bot.get_best_action(self.board, player_index=self.current_player_index)
         elif self.bot_action_type == 'mcts':
             return self.mcts_bot.get_actions(self.board, player_index=self.current_player_index)
-        
-    def rule_bot(self):
-        action_list = self.legal_actions
-        for i in range(7//2,-1,-1):
-            if i in action_list: return i
-        for i in range(4,7):
-            if i in action_list: return i
 
-    # def alpha_beta_bot(self):
-    #     action = self.alpha_beta_bot.get_best_action(self.board, player_index=self.current_player_index)
-    #     return action
-
-    def mcts_bot(self):
-        pass
 
     def action_to_string(self, action):
         """
@@ -469,7 +464,7 @@ class Connect4Env(BaseEnv):
         Returns:
             - String representing the action.
         """
-        return f"Play column {action+1}"
+        return f"Play column {action + 1}"
 
     def human_to_action(self):
         """
@@ -498,6 +493,7 @@ class Connect4Env(BaseEnv):
             except Exception as e:
                 print("Wrong input, try again")
         return action
+
     # def set_game_result(self, result_val):
     #     for i, name in enumerate(self.agents):
     #         self.dones[name] = True
@@ -512,7 +508,7 @@ class Connect4Env(BaseEnv):
 
     def __repr__(self) -> str:
         return "LightZero Connect4 Env"
-    
+
     @property
     def current_player(self):
         return self._current_player
@@ -529,7 +525,6 @@ class Connect4Env(BaseEnv):
     @property
     def next_player(self):
         return self.players[0] if self._current_player == self.players[1] else self.players[1]
-    
 
     @property
     def observation_space(self) -> spaces.Space:
@@ -542,7 +537,7 @@ class Connect4Env(BaseEnv):
     @property
     def reward_space(self) -> spaces.Space:
         return self._reward_space
-    
+
     def simulate_action(self, action):
         """
         Overview:
@@ -592,7 +587,7 @@ class Connect4Env(BaseEnv):
         new_board = copy.deepcopy(self.board)
 
         return new_board, new_legal_actions
-    
+
     @staticmethod
     def create_collector_env_cfg(cfg: dict) -> List[dict]:
         collector_env_num = cfg.pop('collector_env_num')
