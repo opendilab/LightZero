@@ -49,7 +49,6 @@ class Connect4Env(BaseEnv):
         mcts_mode='self_play_mode',  # only used in AlphaZero
         # bot_action_type='mcts',
         bot_action_type='rule',
-        env_type='board_games',
         agent_vs_human=False,
         prob_random_agent=0,
         prob_expert_agent=0,
@@ -154,20 +153,20 @@ class Connect4Env(BaseEnv):
             action_mask[i] = 1
 
         if self.battle_mode == 'play_with_bot_mode' or self.battle_mode == 'eval_mode':
-            return {"observation": self.current_state()[1],
+            return {"observation": self.current_state()[1], 
                     "action_mask": action_mask,
-                    "board": copy.deepcopy(board_vals),
+                    "board": copy.deepcopy(self.board),
                     "current_player_index": self.players.index(self._current_player),
                     "to_play": -1
                     }
         elif self.battle_mode == 'self_play_mode':
-            return {"observation": self.current_state()[1],
+            return {"observation": self.current_state()[1], 
                     "action_mask": action_mask,
-                    "board": copy.deepcopy(board_vals),
+                    "board": copy.deepcopy(self.board),
                     "current_player_index": self.players.index(self._current_player),
                     "to_play": self._current_player
                     }
-
+            
     # def observation_space(self, agent):
     #     return self.observation_spaces[agent]
 
@@ -234,10 +233,11 @@ class Connect4Env(BaseEnv):
             # player 1 battle with expert player 2
 
             # player 1's turn
+            print('player 1 (agent player): ' + self.action_to_string(action))
             # print(f'evaluating now, the battle mode is {self.battle_mode}, the action is {action}')
             flag = "agent"
             timestep_player1 = self._player_step(action, flag)
-            # self.env.render()
+            self.render()
             if timestep_player1.done:
                 # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
                 # And the to_play is used in MCTS.
@@ -250,9 +250,10 @@ class Connect4Env(BaseEnv):
             else:
                 # print(f'evaluating now, the battle mode is {self.battle_mode}, here comes the bot action{self.bot_action()}')
                 bot_action = self.bot_action()
-            # print('player 2 (computer player): ' + self.action_to_string(bot_action))
+            print('player 2 (computer player): ' + self.action_to_string(bot_action))
             flag = "bot"
             timestep_player2 = self._player_step(bot_action, flag)
+            self.render()
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
@@ -318,9 +319,9 @@ class Connect4Env(BaseEnv):
         if init_state is None:
             self.board = [0] * (6 * 7)
         else:
-            print("before:", self.board)
-            self.board = init_state.reshape(-1)
-            print("after:", self.board)
+            # print("before:", self.board)
+            self.board = init_state
+            # print("after:", self.board)
         self.players = [1, 2]
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
@@ -453,6 +454,8 @@ class Connect4Env(BaseEnv):
 
     def bot_action(self):
         if self.bot_action_type == 'rule':
+            if np.random.rand() < self.prob_random_agent:
+                return self.random_action()
             return self.rule_bot.get_rule_bot_action(self.board, self._current_player)
         # elif self.bot_action_type == 'alpha_beta_pruning':
         #     return self.alpha_beta_bot.get_best_action(self.board, player_index=self.current_player_index)
@@ -478,7 +481,7 @@ class Connect4Env(BaseEnv):
         Returns:
             An integer from the action space.
         """
-        print(np.array(self.board).reshape(6, 7))
+        # print(np.array(self.board).reshape(6, 7))
         while True:
             try:
                 column = int(

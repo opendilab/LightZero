@@ -281,7 +281,6 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                     ", so your AlphaZero agent is converged, you can refer to " +
                     "'log/evaluator/evaluator_logger.txt' for details."
                 )
-            # return stop_flag, return_info
 
             if get_world_size() > 1:
                 objects = [stop_flag, episode_info]
