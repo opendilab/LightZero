@@ -140,6 +140,6 @@ class TestConnect4Env:
                 break
 
 test = TestConnect4Env()
-test.test_self_play_mode()
+# test.test_self_play_mode()
 # test.test_play_with_bot_mode()
-# test.test_eval_mode()
+test.test_eval_mode()

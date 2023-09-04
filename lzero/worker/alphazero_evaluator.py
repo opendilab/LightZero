@@ -234,6 +234,8 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                                 )
                             )
                         envstep_count += 1
+                        board =np.array(t.obs['board']).reshape(6,7)
+                        print(board)
             duration = self._timer.value
             episode_return = eval_monitor.get_episode_return()
             info = {
@@ -285,4 +287,5 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                 stop_flag, episode_info = objects
 
             episode_info = to_item(episode_info)
-            return stop_flag, episode_info
+            # return stop_flag, episode_info
+            return stop_flag, reward

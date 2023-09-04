@@ -15,11 +15,12 @@ prob_random_action_in_bot = 0.5
 # end of the most frequently changed config specified by the user
 # ==============================================================
 connect4_alphazero_config = dict(
-    exp_name='data_az_ptree/connect4_mctsbot',
+    exp_name='data_az_ptree/connect4_rulebot',
     env=dict(
         # board_size=3,
         battle_mode='play_with_bot_mode',
         mcts_mode='play_with_bot_mode',
+        bot_action_type='rule',
         channel_last=False,  # NOTE
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

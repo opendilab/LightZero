@@ -47,7 +47,7 @@ class Connect4Env(BaseEnv):
         env_name="Connect4",
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',  # only used in AlphaZero
-        bot_action_type='mcts',
+        bot_action_type='rule',
         agent_vs_human=False,
         prob_random_agent=0,
         prob_expert_agent=0,

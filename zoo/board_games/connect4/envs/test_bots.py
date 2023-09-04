@@ -16,7 +16,7 @@ cfg = EasyDict(
             bot_action_type='rule'
         )
 
-def test_mcts_bot_vs_rule_bot(num_simulations=50):
+def test_mcts_bot_vs_rule_bot(num_simulations=200):
     """
     Overview:
         A tictactoe game between mcts_bot and rule_bot, where rule_bot take the first move.
@@ -30,7 +30,7 @@ def test_mcts_bot_vs_rule_bot(num_simulations=50):
 
     # Repeat the game for 10 rounds.
     for i in range(10):
-        print('-' * 10 + str(i) + '-' * 10)
+        # print('-' * 10 + str(i) + '-' * 10)
         # Initialize the game, where there are two players: player 1 and player 2.
         env = Connect4Env(EasyDict(cfg))
         # Reset the environment, set the board to a clean board and the  start player to be player 1.
@@ -38,7 +38,7 @@ def test_mcts_bot_vs_rule_bot(num_simulations=50):
         state = env.board
         player = MCTSBot(env, 'a', num_simulations)  # player_index = 0, player = 1
         # Set player 1 to move first.
-        player_index = 1
+        player_index = 0
         while not env.get_done_reward()[0]:
             """
             Overview:
@@ -64,7 +64,7 @@ def test_mcts_bot_vs_rule_bot(num_simulations=50):
                 player_index = 0
             env.step(action)
             state = env.board
-            print(np.array(state).reshape(6, 7))
+            # print(np.array(state).reshape(6, 7))
 
         # Record the winner.
         winner.append(env.get_done_winner()[1])
@@ -78,10 +78,10 @@ def test_mcts_bot_vs_rule_bot(num_simulations=50):
 
     # Print the information of the games.
     print('num_simulations={}\n'.format(num_simulations))
-    print('mcts_bot_time_list={}\n'.format(mcts_bot_time_list))
+    # print('mcts_bot_time_list={}\n'.format(mcts_bot_time_list))
     print('mcts_bot_mu={}, mcts_bot_var={}\n'.format(mcts_bot_mu, mcts_bot_var))
 
-    print('bot_action_time_list={}\n'.format(bot_action_time_list))
+    # print('bot_action_time_list={}\n'.format(bot_action_time_list))
     print('bot_action_mu={}, bot_action_var={}\n'.format(bot_action_mu, bot_action_var))
 
     print(
@@ -168,5 +168,7 @@ def test_mcts_bot_vs_mcts_bot(num_simulations=50):
     )
 
 if __name__ == '__main__':
+    test_mcts_bot_vs_rule_bot(50)
     test_mcts_bot_vs_rule_bot(200)
+    test_mcts_bot_vs_rule_bot(1000)  
     # test_mcts_bot_vs_mcts_bot()
