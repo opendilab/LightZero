@@ -6,7 +6,7 @@ from typing import Optional, Callable, Tuple
 import numpy as np
 import torch
 from ding.envs import BaseEnvManager
-from ding.torch_utils import to_ndarray, to_item
+from ding.torch_utils import to_ndarray, to_item, to_tensor
 from ding.utils import build_logger, EasyTimer
 from ding.utils import get_world_size, get_rank, broadcast_object_list
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
@@ -238,7 +238,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                 time.sleep(retry_waiting_time)
                 self._logger.info('=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
                 self._logger.info(
-                    'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time, self._env._env_states)
+                    'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time,
+                                                                               self._env._env_states)
                 )
                 init_obs = self._env.ready_obs
 
@@ -322,7 +323,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # Interact with env.
                     # ==============================================================
                     timesteps = self._env.step(actions)
-
+                    timesteps = to_tensor(timesteps, dtype=torch.float32)
                     for env_id, t in timesteps.items():
                         obs, reward, done, info = t.obs, t.reward, t.done, t.info
 
@@ -344,8 +345,10 @@ class MuZeroEvaluator(ISerialEvaluator):
                             # Env reset is done by env_manager automatically.
                             self._policy.reset([env_id])
                             reward = t.info['eval_episode_return']
+                            saved_info = {'eval_episode_return': t.info['eval_episode_return']}
                             if 'episode_info' in t.info:
-                                eval_monitor.update_info(env_id, t.info['episode_info'])
+                                saved_info.update(t.info['episode_info'])
+                            eval_monitor.update_info(env_id, saved_info)
                             eval_monitor.update_reward(env_id, reward)
                             self._logger.info(
                                 "[EVALUATOR]env {} finish episode, final reward: {}, current episode: {}".format(
@@ -441,7 +444,8 @@ class MuZeroEvaluator(ISerialEvaluator):
             if stop_flag:
                 self._logger.info(
                     "[LightZero serial pipeline] " +
-                    "Current episode_return: {} is greater than stop_value: {}".format(episode_return, self._stop_value) +
+                    "Current episode_return: {} is greater than stop_value: {}".format(episode_return,
+                                                                                       self._stop_value) +
                     ", so your MCTS/RL agent is converged, you can refer to 'log/evaluator/evaluator_logger.txt' for details."
                 )
 

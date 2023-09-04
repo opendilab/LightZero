@@ -37,6 +37,7 @@ connect4_alphazero_config = dict(
             num_channels=32,
         ),
         cuda=True,
+        env_type='board_games',
         board_size=3,
         update_per_collect=update_per_collect,
         batch_size=batch_size,

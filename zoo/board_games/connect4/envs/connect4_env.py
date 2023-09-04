@@ -47,7 +47,9 @@ class Connect4Env(BaseEnv):
         env_name="Connect4",
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',  # only used in AlphaZero
-        bot_action_type='mcts',
+        # bot_action_type='mcts',
+        bot_action_type='rule',
+        env_type='board_games',
         agent_vs_human=False,
         prob_random_agent=0,
         prob_expert_agent=0,
@@ -174,7 +176,10 @@ class Connect4Env(BaseEnv):
 
     @property
     def legal_actions(self):
-        return [i for i in range(7) if self.board[i] == 0]
+        try:
+            return [i for i in range(7) if self.board[i] == 0]
+        except:
+            print('debug')
 
     # action in this case is a value from 0 to 6 indicating position to move on the flat representation of the connect4 board
     def step(self, action):
@@ -314,7 +319,7 @@ class Connect4Env(BaseEnv):
             self.board = [0] * (6 * 7)
         else:
             print("before:", self.board)
-            self.board = init_state
+            self.board = init_state.reshape(-1)
             print("after:", self.board)
         self.players = [1, 2]
         self.start_player_index = start_player_index
@@ -454,7 +459,6 @@ class Connect4Env(BaseEnv):
         elif self.bot_action_type == 'mcts':
             return self.mcts_bot.get_actions(self.board, player_index=self.current_player_index)
 
-
     def action_to_string(self, action):
         """
         Overview:
@@ -493,13 +497,6 @@ class Connect4Env(BaseEnv):
             except Exception as e:
                 print("Wrong input, try again")
         return action
-
-    # def set_game_result(self, result_val):
-    #     for i, name in enumerate(self.agents):
-    #         self.dones[name] = True
-    #         result_coef = 1 if i == 0 else -1
-    #         self.rewards[name] = result_val * result_coef
-    #         self.infos[name] = {'legal_moves': []}
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
         self._seed = seed

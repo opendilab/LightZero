@@ -91,8 +91,9 @@ def eval_muzero(
         # ==============================================================
         returns = []
         for i in range(num_episodes_each_seed):
-            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter)
-            returns.append(reward)
+            stop_flag, episode_info = evaluator.eval(learner.save_checkpoint, learner.train_iter)
+            returns.append(episode_info['eval_episode_return'])
+
         returns = np.array(returns)
 
         if print_seed_details:
