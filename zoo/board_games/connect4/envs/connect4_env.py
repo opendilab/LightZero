@@ -52,6 +52,7 @@ class Connect4Env(BaseEnv):
         agent_vs_human=False,
         prob_random_agent=0,
         prob_expert_agent=0,
+        prob_random_action_in_bot=0.,
         channel_last=True,
         scale=False,
         stop_value=2,
@@ -77,6 +78,7 @@ class Connect4Env(BaseEnv):
         assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (
                 self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
             f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
+        self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
         self.agent_vs_human = cfg.agent_vs_human
         self.bot_action_type = cfg.bot_action_type
         # if 'alpha_beta_pruning' in self.bot_action_type:
@@ -437,12 +439,15 @@ class Connect4Env(BaseEnv):
         return np.random.choice(action_list)
 
     def bot_action(self):
-        if self.bot_action_type == 'rule':
-            return self.rule_bot.get_rule_bot_action(self.board, self._current_player)
-        # elif self.bot_action_type == 'alpha_beta_pruning':
-        #     return self.alpha_beta_bot.get_best_action(self.board, player_index=self.current_player_index)
-        elif self.bot_action_type == 'mcts':
-            return self.mcts_bot.get_actions(self.board, player_index=self.current_player_index)
+        if np.random.rand() < self.prob_random_action_in_bot:
+            return self.random_action()
+        else:
+            if self.bot_action_type == 'rule':
+                return self.rule_bot.get_rule_bot_action(self.board, self._current_player)
+            # elif self.bot_action_type == 'alpha_beta_pruning':
+            #     return self.alpha_beta_bot.get_best_action(self.board, player_index=self.current_player_index)
+            elif self.bot_action_type == 'mcts':
+                return self.mcts_bot.get_actions(self.board, player_index=self.current_player_index)
 
     def action_to_string(self, action):
         """

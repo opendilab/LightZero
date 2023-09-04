@@ -358,12 +358,17 @@ class MCTS(object):
         best_score = -9999999
         # Iterate over each child of the current node.
         for action_tmp, child_tmp in node.children.items():
-            score = self._ucb_score(node, child_tmp)
-            # Check if the score of the current child is higher than the best score so far.
-            if score > best_score:
-                best_score = score
-                action = action_tmp
-                child = child_tmp
+            """
+            Check if the action is present in the list of legal actions for the current environment. 
+            This check is relevant only when the agent is training in "play_with_bot_mode" and the bot's actions involve strong randomness.
+            """
+            if action_tmp in simulate_env.legal_actions:
+                score = self._ucb_score(node, child_tmp)
+                # Check if the score of the current child is higher than the best score so far.
+                if score > best_score:
+                    best_score = score
+                    action = action_tmp
+                    child = child_tmp
 
         return action, child
 
