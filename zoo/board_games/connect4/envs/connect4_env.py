@@ -138,14 +138,6 @@ class Connect4Env(BaseEnv):
             return raw_obs, scale_obs
 
     def observe(self):
-        board_vals = np.array(self.board).reshape(6, 7)
-        # cur_player = self.players.index(self._current_player)
-        # opp_player = (cur_player + 1) % 2
-
-        # cur_p_board = np.equal(board_vals, cur_player + 1)
-        # opp_p_board = np.equal(board_vals, opp_player + 1)
-
-        # observation = np.stack([cur_p_board, opp_p_board], axis=2).astype(np.int8)
         legal_moves = self.legal_actions
 
         action_mask = np.zeros(7, "int8")
@@ -166,19 +158,10 @@ class Connect4Env(BaseEnv):
                     "current_player_index": self.players.index(self._current_player),
                     "to_play": self._current_player
                     }
-            
-    # def observation_space(self, agent):
-    #     return self.observation_spaces[agent]
-
-    # def action_space(self, agent):
-    #     return self.action_spaces[agent]
 
     @property
     def legal_actions(self):
-        try:
-            return [i for i in range(7) if self.board[i] == 0]
-        except:
-            print('debug')
+        return [i for i in range(7) if self.board[i] == 0]
 
     # action in this case is a value from 0 to 6 indicating position to move on the flat representation of the connect4 board
     def step(self, action):
@@ -370,7 +353,8 @@ class Connect4Env(BaseEnv):
         pass
 
     def get_done_winner(self):
-        board = np.array(self.board).reshape(6, 7)
+        # TODO
+        board = copy.deepcopy(np.array(self.board)).reshape(6, 7)
         for piece in [1, 2]:
             # Check horizontal locations for win
             column_count = 7
@@ -454,8 +438,6 @@ class Connect4Env(BaseEnv):
 
     def bot_action(self):
         if self.bot_action_type == 'rule':
-            if np.random.rand() < self.prob_random_agent:
-                return self.random_action()
             return self.rule_bot.get_rule_bot_action(self.board, self._current_player)
         # elif self.bot_action_type == 'alpha_beta_pruning':
         #     return self.alpha_beta_bot.get_best_action(self.board, player_index=self.current_player_index)

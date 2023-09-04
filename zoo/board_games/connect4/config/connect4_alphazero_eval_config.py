@@ -10,13 +10,12 @@ if __name__ == '__main__':
     """
     # model_path = 'data_az_ptree/connect4_rulebot/ckpt/iteration_60000.pth.tar'
     model_path = None
-    seeds = [0]
+    seeds = [0, 1, 2, 3, 4]
     num_episodes_each_seed = 1
     # If True, you can play with the agent.
     main_config.env.agent_vs_human = False
-    # main_config.policy.num_simulations = 1
+    main_config.policy.mcts.num_simulations = 50
     main_config.env.bot_action_type = 'rule'
-    main_config.env.prob_random_agent = 0
     create_config.env_manager.type = 'base'
     main_config.env.evaluator_env_num = 1
     main_config.env.n_evaluator_episode = 1

@@ -193,6 +193,7 @@ class MCTS(object):
             'root_dirichlet_alpha', 0.3
         )  # 0.3  # for chess, 0.03 for Go and 0.15 for shogi.
         self._root_noise_weight = self._cfg.get('root_noise_weight', 0.25)
+        self.simulate_cnt = 0
 
     def get_next_action(
             self,
@@ -258,8 +259,13 @@ class MCTS(object):
         # Unpack the tuples in action_visits list into two separate tuples: actions and visits.
         actions, visits = zip(*action_visits)
 
+        visits_t = torch.as_tensor(visits, dtype=torch.float32)
+        visits_t /= temperature
+        action_probs = (visits_t / visits_t.sum()).numpy()
+
         # Calculate the action probabilities based on the visit counts and temperature.
-        action_probs = nn.functional.softmax(1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0).numpy()
+        # action_probs = nn.functional.softmax(1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0).numpy()
+
         # Choose the next action to take based on the action probabilities.
         if sample:
             action = np.random.choice(actions, p=action_probs)
@@ -280,8 +286,15 @@ class MCTS(object):
         """
         while not node.is_leaf():
             # Traverse the tree until the leaf node.
-            action, node = self._select_child(node, simulate_env)
+
+            # only for debug
+            # self.simulate_cnt += 1
+            # print('simulate_cnt: {}'.format(self.simulate_cnt))
+            # print(f'node:{node}, list(node.children.keys()) is: {list(node.children.keys())}. simulate_env.legal_actions is: {simulate_env.legal_actions}')
+
+            action, child_node = self._select_child(node, simulate_env)
             simulate_env.step(action)
+            node = child_node
 
         done, winner = simulate_env.get_done_winner()
         """
@@ -339,6 +352,7 @@ class MCTS(object):
             - action (:obj:`Int`): choose the action with the highest ucb score.
             - child (:obj:`Node`): the child node reached by executing the action with the highest ucb score.
         """
+        # assert list(node.children.keys()) == simulate_env.legal_actions
         action = None
         child = None
         best_score = -9999999
@@ -367,12 +381,14 @@ class MCTS(object):
         # Call the policy_forward_fn function to compute the action probabilities and state value, and return a
         # dictionary and the value of the leaf node.
         action_probs_dict, leaf_value = policy_forward_fn(simulate_env)
+
         # Traverse the action probability dictionary.
         for action, prior_p in action_probs_dict.items():
             # If the action is in the legal action list of the current environment, add the action as a child node of
             # the current node.
             if action in simulate_env.legal_actions:
                 node.children[action] = Node(parent=node, prior_p=prior_p)
+
         # Return the value of the leaf node.
         return leaf_value
 
