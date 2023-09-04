@@ -169,7 +169,10 @@ class PettingZooEnv(BaseEnv):
 
     def step(self, action: dict) -> BaseEnvTimestep:
         self._step_count += 1
-        action = np.array(list(action.values()))
+        if isinstance(action, dict):
+            action = np.array(list(action.values()))
+        else:
+            action = np.array(action)
         action = self._process_action(action)
         if self._act_scale:
             for agent in self._agents:
