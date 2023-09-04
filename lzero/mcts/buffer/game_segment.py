@@ -247,7 +247,15 @@ class GameSegment:
         self.action_segment = np.array(self.action_segment)
         self.reward_segment = np.array(self.reward_segment)
 
-        self.child_visit_segment = np.array(self.child_visit_segment)
+        # Check if all elements in self.child_visit_segment have the same length
+        if all(len(x) == len(self.child_visit_segment[0]) for x in self.child_visit_segment):
+            self.child_visit_segment = np.array(self.child_visit_segment)
+        else:
+            # In the case of environments with a variable action space, such as board games,
+            # the elements in child_visit_segment may have different lengths.
+            # In such scenarios, it is necessary to use the object data type.
+            self.child_visit_segment = np.array(self.child_visit_segment, dtype=object)
+
         self.root_value_segment = np.array(self.root_value_segment)
         self.improved_policy_probs = np.array(self.improved_policy_probs)
 

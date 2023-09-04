@@ -11,6 +11,6 @@ pytest-benchmark~=3.4.0
 testtools>=2
 hbutils>=0.6.13
 setuptools<=59.5.0
-numpy>=1.21.6
+numpy>=1.24.4
 easydict>=1.7,<2
 swig >= 4.1.1
