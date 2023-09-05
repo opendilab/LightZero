@@ -9,7 +9,7 @@ action_space_size = 4
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-num_simulations = 50
+num_simulations = 100
 update_per_collect = 200
 batch_size = 512
 max_env_step = int(5e6)
@@ -31,7 +31,7 @@ chance_space_size = 16 * num_of_possible_chance_tile
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_mz_ctree/game_2048_nct-{num_of_possible_chance_tile}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_adam-wd0_seed0',
+    exp_name=f'data_mz_ctree/game_2048_npct-{num_of_possible_chance_tile}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_sslw2_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -72,7 +72,7 @@ atari_muzero_config = dict(
         weight_decay=1e-4,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=0,  # default is 0
+        ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.

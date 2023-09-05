@@ -6,8 +6,7 @@ from easydict import EasyDict
 # ==============================================================
 env_name = 'game_2048'
 action_space_size = 4
-use_ture_chance_label_in_chance_encoder = True
-# use_ture_chance_label_in_chance_encoder = False
+use_ture_chance_label_in_chance_encoder = True  # option: {True, False}
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
@@ -33,7 +32,7 @@ chance_space_size = 16 * num_of_possible_chance_tile
 # ==============================================================
 
 game_2048_stochastic_muzero_config = dict(
-    exp_name=f'data_stochastic_mz_ctree/game_2048_nct-{num_of_possible_chance_tile}_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_chance-{use_ture_chance_label_in_chance_encoder}-{chance_space_size}_seed0',
+    exp_name=f'data_stochastic_mz_ctree/game_2048_npct-{num_of_possible_chance_tile}_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_chance-{use_ture_chance_label_in_chance_encoder}_sslw2_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -76,10 +75,10 @@ game_2048_stochastic_muzero_config = dict(
         weight_decay=1e-4,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=0,  # default is 0
+        ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
         eval_freq=int(2e3),
-        replay_buffer_size=int(2e7),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

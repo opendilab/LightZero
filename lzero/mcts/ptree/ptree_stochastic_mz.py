@@ -599,8 +599,6 @@ def batch_backpropagate(
     """
     if leaf_idx_list is None:
         leaf_idx_list = list(range(results.num))
-    # for i in range(results.num):
-    # for i in leaf_idx_list:
     for leaf_order, i in enumerate(leaf_idx_list):
         # ****** expand the leaf node ******
         if to_play is None:

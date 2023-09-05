@@ -106,9 +106,9 @@ def move(grid: np.array, action: int, game_score: int = 0) -> Tuple[np.array, bo
     if action == 0:
         grid = np.rot90(grid)
     elif action == 1:
-        grid = np.rot90(grid, k=3)
-    elif action == 2:
         grid = np.rot90(grid, k=2)
+    elif action == 2:
+        grid = np.rot90(grid, k=3)
     # simple move
     for i in range(4):
         for j in range(3):
@@ -132,9 +132,9 @@ def move(grid: np.array, action: int, game_score: int = 0) -> Tuple[np.array, bo
     if action == 0:
         grid = np.rot90(grid, k=3)
     elif action == 1:
-        grid = np.rot90(grid)
-    elif action == 2:
         grid = np.rot90(grid, k=2)
+    elif action == 2:
+        grid = np.rot90(grid)
     move_flag = np.any(old_grid != grid)
     return grid, move_flag, game_score
 
@@ -157,13 +157,13 @@ config = EasyDict(dict(
     env_name="game_2048",
     save_replay=False,
     replay_format='mp4',
-    replay_name_suffix='ns100_s1',
+    replay_name_suffix='test',
     replay_path=None,
+    render_real_time=False,
     act_scale=True,
     channel_last=True,
-    obs_type='array',
-    raw_reward_type='raw',  # 'merged_tiles_plus_log_max_tile_num'
-    reward_type='raw',  # 'merged_tiles_plus_log_max_tile_num'
+    obs_type='array',  # options=['raw_observation', 'dict_observation', 'array']
+    reward_type='raw',  # options=['raw', 'merged_tiles_plus_log_max_tile_num']
     reward_normalize=False,
     reward_norm_scale=100,
     max_tile=int(2 ** 16),
@@ -173,6 +173,9 @@ config = EasyDict(dict(
     is_collect=False,
     ignore_legal_actions=True,
     need_flatten=False,
+    num_of_possible_chance_tile=2,
+    possible_tiles=np.array([2, 4]),
+    tile_probabilities=np.array([0.9, 0.1]),
 ))
 
 if __name__ == "__main__":
@@ -182,21 +185,16 @@ if __name__ == "__main__":
     game_2048_env.render()
     step = 0
     while True:
-        print('=' * 20)
+        print('=' * 40)
         grid = obs.astype(np.int64)
-        # action = game_2048_env.human_to_action()
-        action = game_2048_env.random_action()
-        # action = rule_based_search(grid)
-        if action == 1:
-            action = 2
-        elif action == 2:
-            action = 1
+        # action = game_2048_env.human_to_action()  # which obtain about 10000 score
+        # action = game_2048_env.random_action()  # which obtain about 1000 score
+        action = rule_based_search(grid)  # which obtain about 58536 score
         try:
             obs, reward, done, info = game_2048_env.step(action)
         except Exception as e:
             print(f'Exception: {e}')
             print('total_step_number: {}'.format(step))
-            game_2048_env.save_render_gif(replay_name_suffix='bot')
             break
         step += 1
         print(f"step: {step}, action: {action}, reward: {reward}, raw_reward: {info['raw_reward']}")

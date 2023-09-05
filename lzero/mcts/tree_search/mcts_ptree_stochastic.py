@@ -7,7 +7,7 @@ import torch
 
 from lzero.mcts.ptree import MinMaxStatsList
 from lzero.policy import InverseScalarTransform
-import lzero.mcts.ptree.ptree_stochastic_mz as tree_muzero
+import lzero.mcts.ptree.ptree_stochastic_mz as tree_stochastic_muzero
 
 if TYPE_CHECKING:
     import lzero.mcts.ptree.ptree_stochastic_mz as stochastic_mz_ptree
@@ -110,7 +110,7 @@ class StochasticMuZeroMCTSPtree(object):
                 latent_states = []
 
                 # prepare a result wrapper to transport results between python and c++ parts
-                results = tree_muzero.SearchResults(num=num)
+                results = tree_stochastic_muzero.SearchResults(num=num)
 
                 # latent_state_index_in_search_path: The first index of the latent state corresponding to the leaf node in latent_state_batch_in_search_path, that is, the search depth.
                 # latent_state_index_in_batch: The second index of the latent state corresponding to the leaf node in latent_state_batch_in_search_path, i.e. the index in the batch, whose maximum is ``batch_size``.
@@ -119,10 +119,10 @@ class StochasticMuZeroMCTSPtree(object):
                 MCTS stage 1: Selection
                     Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
                 """
-                # leaf_nodes, latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play = tree_muzero.batch_traverse(
+                # leaf_nodes, latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play = tree_stochastic_muzero.batch_traverse(
                 #     roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play)
                 # )
-                results, virtual_to_play = tree_muzero.batch_traverse(
+                results, virtual_to_play = tree_stochastic_muzero.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play)
                 )
                 leaf_nodes, latent_state_index_in_search_path, latent_state_index_in_batch, last_actions = results.nodes, results.latent_state_index_in_search_path, results.latent_state_index_in_batch, results.last_actions
@@ -137,12 +137,13 @@ class StochasticMuZeroMCTSPtree(object):
                 # only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
                 """
-                   MCTS stage 2: Expansion
-                       At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function.
-                       Then we calculate the policy_logits and value for the leaf node (next_latent_state) by the prediction function. (aka. evaluation)
-                   MCTS stage 3: Backup
-                       At the end of the simulation, the statistics along the trajectory are updated.
-                   """
+                MCTS stage 2: Expansion
+                   At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function.
+                   Then we calculate the policy_logits and value for the leaf node (next_latent_state) by the prediction function. (aka. evaluation)
+                MCTS stage 3: Backup
+                   At the end of the simulation, the statistics along the trajectory are updated.
+                """
+                
                 # network_output = model.recurrent_inference(latent_states, last_actions)
                 num = len(leaf_nodes)
                 latent_state_batch = [None] * num
@@ -211,7 +212,7 @@ class StochasticMuZeroMCTSPtree(object):
                     value_batch_chance = np.concatenate(value_batch_chance, axis=0)
                     reward_batch_chance = np.concatenate(reward_batch_chance, axis=0)
                     policy_logits_batch_chance = np.concatenate(policy_logits_batch_chance, axis=0)
-                    tree_muzero.batch_backpropagate(
+                    tree_stochastic_muzero.batch_backpropagate(
                         current_latent_state_index, discount_factor, reward_batch_chance, value_batch_chance,
                         policy_logits_batch_chance,
                         min_max_stats_lst, results, virtual_to_play, child_is_chance_batch, chance_nodes
@@ -220,7 +221,7 @@ class StochasticMuZeroMCTSPtree(object):
                     value_batch_decision = np.concatenate(value_batch_decision, axis=0)
                     reward_batch_decision = np.concatenate(reward_batch_decision, axis=0)
                     policy_logits_batch_decision = np.concatenate(policy_logits_batch_decision, axis=0)
-                    tree_muzero.batch_backpropagate(
+                    tree_stochastic_muzero.batch_backpropagate(
                         current_latent_state_index, discount_factor, reward_batch_decision, value_batch_decision,
                         policy_logits_batch_decision,
                         min_max_stats_lst, results, virtual_to_play, child_is_chance_batch, decision_nodes

@@ -1,5 +1,4 @@
 import copy
-import itertools
 import logging
 import sys
 from typing import List
@@ -32,7 +31,7 @@ class Game2048Env(gym.Env):
         obs_type='raw_observation',  # options=['raw_observation', 'dict_observation', 'array']
         reward_normalize=False,
         reward_norm_scale=100,
-        reward_type='raw',  # 'merged_tiles_plus_log_max_tile_num'
+        reward_type='raw',  # options=['raw', 'merged_tiles_plus_log_max_tile_num']
         max_tile=int(2 ** 16),  # 2**11=2048, 2**16=65536
         delay_reward_step=0,
         prob_random_agent=0.,
@@ -92,7 +91,6 @@ class Game2048Env(gym.Env):
         self._action_space = spaces.Discrete(4)
         self._observation_space = spaces.Box(0, 1, (self.w, self.h, self.squares), dtype=int)
         self._reward_range = (0., self.max_tile)
-        self.set_illegal_move_reward(0.)
 
         # for render
         self.grid_size = 70
@@ -103,35 +101,39 @@ class Game2048Env(gym.Env):
         self.possible_tiles = cfg.possible_tiles
         self.tile_probabilities = cfg.tile_probabilities
         if self.num_of_possible_chance_tile > 2:
-            self.possible_tiles = np.array([2**(i+1) for i in range(self.num_of_possible_chance_tile)])
-            self.tile_probabilities = np.array([1/self.num_of_possible_chance_tile for _ in range(self.num_of_possible_chance_tile)])
+            self.possible_tiles = np.array([2 ** (i + 1) for i in range(self.num_of_possible_chance_tile)])
+            self.tile_probabilities = np.array(
+                [1 / self.num_of_possible_chance_tile for _ in range(self.num_of_possible_chance_tile)])
             assert self.possible_tiles.shape[0] == self.tile_probabilities.shape[0]
             assert np.sum(self.tile_probabilities) == 1
 
-    def reset(self):
+    def reset(self, init_board=None, add_random_tile_flag=True):
         """Reset the game board-matrix and add 2 tiles."""
         self.episode_length = 0
-        self.board = np.zeros((self.h, self.w), np.int32)
+        self.add_random_tile_flag = add_random_tile_flag
+        if init_board is not None:
+            self.board = copy.deepcopy(init_board)
+        else:
+            self.board = np.zeros((self.h, self.w), np.int32)
+            # Add two tiles at the start of the game
+            for _ in range(2):
+                if self.num_of_possible_chance_tile > 2:
+                    self.add_random_tile(self.possible_tiles, self.tile_probabilities)
+                elif self.num_of_possible_chance_tile == 2:
+                    self.add_random_2_4_tile()
+
         self.episode_return = 0
         self._final_eval_reward = 0.0
         self.should_done = False
-
-        logging.debug("Adding tiles")
-        # TODO(pu): why add_tiles twice?
-        if self.num_of_possible_chance_tile > 2:
-            self.add_random_tile(self.possible_tiles, self.tile_probabilities)
-            self.add_random_tile(self.possible_tiles, self.tile_probabilities)
-        elif self.num_of_possible_chance_tile == 2:
-            self.add_random_2_4_tile()
-            self.add_random_2_4_tile()
-
+        # Create a mask for legal actions
         action_mask = np.zeros(4, 'int8')
         action_mask[self.legal_actions] = 1
 
-        observation = encode_board(self.board)
-        observation = observation.astype(np.float32)
+        # Encode the board, ensure correct datatype and shape
+        observation = encode_board(self.board).astype(np.float32)
         assert observation.shape == (4, 4, 16)
 
+        # Reshape or transpose the observation as per the requirement
         if not self.channel_last:
             # move channel dim to fist axis
             # (W, H, C) -> (C, W, H)
@@ -140,27 +142,48 @@ class Game2048Env(gym.Env):
         if self.need_flatten:
             observation = observation.reshape(-1)
 
+        # Based on the observation type, create the appropriate observation object
         if self.obs_type == 'dict_observation':
-            observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1, 'chance': self.chance}
+            observation = {
+                'observation': observation,
+                'action_mask': action_mask,
+                'to_play': -1,
+                'chance': self.chance
+            }
         elif self.obs_type == 'array':
             observation = self.board
-        else:
-            observation = observation
+
+        # Render the game if the replay is to be saved
         if self.save_replay:
             self.render(mode='rgb_array_render')
+
         return observation
 
     def step(self, action):
-        """Perform one step of the game. This involves moving and adding a new tile."""
+        """
+        Overview:
+            Perform one step of the game. This involves making a move, adding a new tile, and updating the game state.
+            New tile could be added randomly or from the tile probabilities.
+            The rewards are calculated based on the game configuration ('merged_tiles_plus_log_max_tile_num' or 'raw').
+            The observations are also returned based on the game configuration ('dict_observation', 'array', or 'raw').
+        Arguments:
+            - action (:obj:`int`): The action to be performed.
+        Returns:
+            - BaseEnvTimestep: Contains the new state observation, reward, and other game information.
+        """
+
+        # Increment the total episode length
         self.episode_length += 1
 
+        # Check if the action is legal, otherwise choose a random legal action
         if action not in self.legal_actions:
             logging.warning(
-                f"You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
-                f"Now we randomly choice a action from self.legal_actions."
+                f"Illegal action: {action}. Legal actions: {self.legal_actions}. "
+                "Choosing a random action from legal actions."
             )
             action = np.random.choice(self.legal_actions)
 
+        # Calculate the reward differently based on the reward type
         if self.reward_type == 'merged_tiles_plus_log_max_tile_num':
             empty_num1 = len(self.get_empty_location())
         raw_reward = float(self.move(action))
@@ -173,38 +196,40 @@ class Game2048Env(gym.Env):
                 reward_merged_tiles_plus_log_max_tile_num += np.log2(max_tile_num) * 0.1
                 self.max_tile_num = max_tile_num
 
+        # Update total reward and add new tile
         self.episode_return += raw_reward
         assert raw_reward <= 2 ** (self.w * self.h)
-        if self.num_of_possible_chance_tile > 2:
-            self.add_random_tile(self.possible_tiles, self.tile_probabilities)
-        elif self.num_of_possible_chance_tile == 2:
-            self.add_random_2_4_tile()
-        done = self.is_end()
+        if self.add_random_tile_flag:
+            if self.num_of_possible_chance_tile > 2:
+                self.add_random_tile(self.possible_tiles, self.tile_probabilities)
+            elif self.num_of_possible_chance_tile == 2:
+                self.add_random_2_4_tile()
+
+        # Check if the game has ended
+        done = self.is_done()
+
+        # Convert rewards to float
         if self.reward_type == 'merged_tiles_plus_log_max_tile_num':
             reward_merged_tiles_plus_log_max_tile_num = float(reward_merged_tiles_plus_log_max_tile_num)
         elif self.reward_type == 'raw':
             raw_reward = float(raw_reward)
 
+        # End the game if the maximum steps have been reached
         if self.episode_length >= self.max_episode_steps:
-            # print("episode_length: {}".format(self.episode_length))
             done = True
 
+        # Prepare the game state observation
         observation = encode_board(self.board)
         observation = observation.astype(np.float32)
-
         assert observation.shape == (4, 4, 16)
-
         if not self.channel_last:
-            # move channel dim to fist axis
-            # (W, H, C) -> (C, W, H)
-            # e.g. (4, 4, 16) -> (16, 4, 4)
             observation = np.transpose(observation, [2, 0, 1])
-
         if self.need_flatten:
             observation = observation.reshape(-1)
         action_mask = np.zeros(4, 'int8')
         action_mask[self.legal_actions] = 1
 
+        # Return the observation based on the observation type
         if self.obs_type == 'dict_observation':
             observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1, 'chance': self.chance}
         elif self.obs_type == 'array':
@@ -212,6 +237,7 @@ class Game2048Env(gym.Env):
         else:
             observation = observation
 
+        # Normalize the reward if necessary
         if self.reward_normalize:
             reward_normalize = raw_reward / self.reward_norm_scale
             reward = reward_normalize
@@ -220,92 +246,301 @@ class Game2048Env(gym.Env):
 
         self._final_eval_reward += raw_reward
 
+        # Convert the reward to ndarray
         if self.reward_type == 'merged_tiles_plus_log_max_tile_num':
             reward = to_ndarray([reward_merged_tiles_plus_log_max_tile_num]).astype(np.float32)
         elif self.reward_type == 'raw':
             reward = to_ndarray([reward]).astype(np.float32)
-        info = {"raw_reward": raw_reward, "current_max_tile_num": self.highest()}
 
+        # Prepare information to return
+        info = {"raw_reward": raw_reward, "current_max_tile_num": self.highest()}
         if self.save_replay:
             self.render(mode='rgb_array_render')
 
+        # If the game has ended, save additional information and the replay if necessary
         if done:
             info['eval_episode_return'] = self._final_eval_reward
             if self.save_replay:
-                self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path, format=self.replay_format)
+                self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
+                                        format=self.replay_format)
 
         return BaseEnvTimestep(observation, reward, done, info)
 
     def move(self, direction, trial=False):
         """
         Overview:
-            Perform one move of the game. Shift things to one side then,
-            combine. directions 0, 1, 2, 3 are up, right, down, left.
-            Returns the reward that [would have] got.
+            Perform one move in the game. The game board can be shifted in one of four directions: up (0), right (1), down (2), or left (3).
+            This method manages the shifting process and combines similar adjacent elements. It also returns the reward generated from the move.
         Arguments:
-            - direction (:obj:`int`): The direction to move.
-            - trial (:obj:`bool`): Whether this is a trial move.
+            - direction (:obj:`int`): The direction of the move.
+            - trial (:obj:`bool`): If true, this move is only simulated and does not change the actual game state.
         """
+        # TODO(pu): different transition dynamics
+        # Logging the direction of the move if not a trial
         if not trial:
-            if direction == 0:
-                logging.debug("Up")
-            elif direction == 1:
-                logging.debug("Right")
-            elif direction == 2:
-                logging.debug("Down")
-            elif direction == 3:
-                logging.debug("Left")
+            logging.debug(["Up", "Right", "Down", "Left"][int(direction)])
 
-        changed = False
         move_reward = 0
-        dir_div_two = int(direction / 2)
-        dir_mod_two = int(direction % 2)
-        # 0 for towards up or left, 1 for towards bottom or right
-        shift_direction = dir_mod_two ^ dir_div_two
+        # Calculate merge direction of the shift (0 for up/left, 1 for down/right) based on the input direction
+        merge_direction = 0 if direction in [0, 3] else 1
 
         # Construct a range for extracting row/column into a list
-        rx = list(range(self.w))
-        ry = list(range(self.h))
+        range_x = list(range(self.w))
+        range_y = list(range(self.h))
 
-        if dir_mod_two == 0:
-            # Up or down, split into columns
+        # If direction is up or down, process the board column by column
+        if direction in [0, 2]:
             for y in range(self.h):
-                old = [self.board[x, y] for x in rx]
-                (new, ms) = self.shift(old, shift_direction)
-                move_reward += ms
-                if old != new:
-                    changed = True
-                    if not trial:
-                        for x in rx:
-                            self.board[x, y] = new[x]
-
+                old_col = [self.board[x, y] for x in range_x]
+                new_col, reward = self.shift(old_col, merge_direction)
+                move_reward += reward
+                if old_col != new_col and not trial:  # Update the board if it's not a trial move
+                    for x in range_x:
+                        self.board[x, y] = new_col[x]
+        # If direction is left or right, process the board row by row
         else:
-            # Left or right, split into rows
             for x in range(self.w):
-                old = [self.board[x, y] for y in ry]
-                (new, ms) = self.shift(old, shift_direction)
-                move_reward += ms
-                if old != new:
-                    changed = True
-                    if not trial:
-                        for y in ry:
-                            self.board[x, y] = new[y]
-
-        # TODO(pu): different transition dynamics
-        # if not changed:
-        #     raise IllegalMove
+                old_row = [self.board[x, y] for y in range_y]
+                new_row, reward = self.shift(old_row, merge_direction)
+                move_reward += reward
+                if old_row != new_row and not trial:  # Update the board if it's not a trial move
+                    for y in range_y:
+                        self.board[x, y] = new_row[y]
 
         return move_reward
 
-    def set_illegal_move_reward(self, reward):
+    def shift(self, row, merge_direction):
         """
-        Define the reward/penalty for performing an illegal move. Also need to update the reward range for this.
+        Overview:
+            This method shifts the elements in a given row or column of the 2048 board in a specified direction.
+            It performs three main operations: removal of zeroes, combination of similar elements, and filling up the
+            remaining spaces with zeroes. The direction of shift can be either left (0) or right (1).
+        Arguments:
+            - row: A list of integers representing a row or a column in the 2048 board.
+            - merge_direction: An integer that dictates the direction of merge. It can be either 0 or 1.
+                - 0: The elements in the 'row' will be merged towards left/up.
+                - 1: The elements in the 'row' will be merged towards right/down.
+        Returns:
+            - combined_row: A list of integers of the same length as 'row' after shifting and merging.
+            - move_reward: The reward gained from combining similar elements in 'row'. It is the sum of all new
+                combinations.
+        Note:
+            This method assumes that the input 'row' is a list of integers and 'merge_direction' is either 0 or 1.
         """
-        # Guess that the maximum reward is also 2**squares though you'll probably never get that.
-        # (assume that illegal move reward is the lowest value that can be returned
-        # TODO: check that this is correct
-        self.illegal_move_reward = reward
-        self.reward_range = (self.illegal_move_reward, float(2 ** self.squares))
+
+        # Remove the zero elements from the row and store it in a new list.
+        non_zero_row = [i for i in row if i != 0]
+
+        # Determine the start, stop, and step values based on the direction of shift.
+        # If the direction is left (0), we start at the first element and move forwards.
+        # If the direction is right (1), we start at the last element and move backwards.
+        start, stop, step = (0, len(non_zero_row), 1) if merge_direction == 0 else (len(non_zero_row) - 1, -1, -1)
+
+        # Call the combine function to merge the adjacent, same elements in the row.
+        combined_row, move_reward = self.combine(non_zero_row, start, stop, step)
+
+        if merge_direction == 1:
+            # If direction is 'right'/'down', reverse the row
+            combined_row = combined_row[::-1]
+
+        # Fill up the remaining spaces in the row with 0, if any.
+        if merge_direction == 0:
+            combined_row += [0] * (len(row) - len(combined_row))
+        elif merge_direction == 1:
+            combined_row = [0] * (len(row) - len(combined_row)) + combined_row
+
+        return combined_row, move_reward
+
+    def combine(self, row, start, stop, step):
+        """
+        Overview:
+            Combine similar adjacent elements in the row, starting from the specified start index,
+            ending at the stop index, and moving in the direction indicated by the step. The function
+            also calculates the reward as the sum of all combined elements.
+        """
+
+        # Initialize the reward for this move as 0.
+        move_reward = 0
+
+        # Initialize the list to store the row after combining same elements.
+        combined_row = []
+
+        # Initialize a flag to indicate whether the next element should be skipped.
+        skip_next = False
+
+        # Iterate over the elements in the row based on the start, stop, and step values.
+        for i in range(start, stop, step):
+            # If the next element should be skipped, reset the flag and continue to the next iteration.
+            if skip_next:
+                skip_next = False
+                continue
+
+            # If the current element and the next element are the same, combine them.
+            if i + step != stop and row[i] == row[i + step]:
+                combined_row.append(row[i] * 2)
+                move_reward += row[i] * 2
+                # Set the flag to skip the next element in the next iteration.
+                skip_next = True
+            else:
+                # If the current element and the next element are not the same, just append the current element to the result.
+                combined_row.append(row[i])
+
+        return combined_row, move_reward
+
+    @property
+    def legal_actions(self):
+        """
+        Overview:
+            Return the legal actions for the current state. A move is considered legal if it changes the state of the board.
+        """
+
+        if self.ignore_legal_actions:
+            return [0, 1, 2, 3]
+
+        legal_actions = []
+
+        # For each direction, simulate a move. If the move changes the board, add the direction to the list of legal actions
+        for direction in range(4):
+            # Calculate merge direction of the shift (0 for up/left, 1 for down/right) based on the input direction
+            merge_direction = 0 if direction in [0, 3] else 1
+
+            range_x = list(range(self.w))
+            range_y = list(range(self.h))
+
+            if direction % 2 == 0:
+                for y in range(self.h):
+                    old_col = [self.board[x, y] for x in range_x]
+                    new_col, _ = self.shift(old_col, merge_direction)
+                    if old_col != new_col:
+                        legal_actions.append(direction)
+                        break  # As soon as we know the move is legal, we can stop checking
+            else:
+                for x in range(self.w):
+                    old_row = [self.board[x, y] for y in range_y]
+                    new_row, _ = self.shift(old_row, merge_direction)
+                    if old_row != new_row:
+                        legal_actions.append(direction)
+                        break  # As soon as we know the move is legal, we can stop checking
+
+        return legal_actions
+
+    # Implementation of game logic for 2048
+    def add_random_2_4_tile(self):
+        """Add a tile with value 2 or 4 with different probabilities."""
+        possible_tiles = np.array([2, 4])
+        tile_probabilities = np.array([0.9, 0.1])
+        tile_val = self.np_random.choice(possible_tiles, 1, p=tile_probabilities)[0]
+        empty_location = self.get_empty_location()
+        if empty_location.shape[0] == 0:
+            self.should_done = True
+            return
+        empty_idx = self.np_random.choice(empty_location.shape[0])
+        empty = empty_location[empty_idx]
+        logging.debug("Adding %s at %s", tile_val, (empty[0], empty[1]))
+
+        # set the chance outcome
+        if self.chance_space_size == 16:
+            self.chance = 4 * empty[0] + empty[1]
+        elif self.chance_space_size == 32:
+            if tile_val == 2:
+                self.chance = 4 * empty[0] + empty[1]
+            elif tile_val == 4:
+                self.chance = 16 + 4 * empty[0] + empty[1]
+
+        self.board[empty[0], empty[1]] = tile_val
+
+    def add_random_tile(self, possible_tiles: np.array = np.array([2, 4]),
+                        tile_probabilities: np.array = np.array([0.9, 0.1])):
+        """Add a tile with a value from possible_tiles array according to given probabilities."""
+        if len(possible_tiles) != len(tile_probabilities):
+            raise ValueError("Length of possible_tiles and tile_probabilities must be the same")
+        if np.sum(tile_probabilities) != 1:
+            raise ValueError("Sum of tile_probabilities must be 1")
+
+        tile_val = self.np_random.choice(possible_tiles, 1, p=tile_probabilities)[0]
+        tile_idx = np.where(possible_tiles == tile_val)[0][0]  # get the index of the tile value
+        empty_location = self.get_empty_location()
+        if empty_location.shape[0] == 0:
+            self.should_done = True
+            return
+        empty_idx = self.np_random.choice(empty_location.shape[0])
+        empty = empty_location[empty_idx]
+        logging.debug("Adding %s at %s", tile_val, (empty[0], empty[1]))
+
+        # set the chance outcome
+        self.chance_space_size = len(possible_tiles) * 16  # assuming a 4x4 board
+        self.chance = tile_idx * 16 + 4 * empty[0] + empty[1]
+
+        self.board[empty[0], empty[1]] = tile_val
+
+    def get_empty_location(self):
+        """Return a 2d numpy array with the location of empty squares."""
+        return np.argwhere(self.board == 0)
+
+    def highest(self):
+        """Report the highest tile on the board."""
+        return np.max(self.board)
+
+    def is_done(self):
+        """Has the game ended. Game ends if there is a tile equal to the limit
+           or there are no legal moves. If there are empty spaces then there
+           must be legal moves."""
+
+        if self.max_tile is not None and self.highest() == self.max_tile:
+            return True
+        elif len(self.legal_actions) == 0:
+            # the agent don't have legal_actions to move, so the episode is done
+            return True
+        elif self.should_done:
+            return True
+        else:
+            return False
+
+    def get_board(self):
+        """Get the whole board-matrix, useful for testing."""
+        return self.board
+
+    def set_board(self, new_board):
+        """Set the whole board-matrix, useful for testing."""
+        self.board = new_board
+
+    def seed(self, seed=None, seed1=None):
+        """Set the random seed for the gym environment."""
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
+
+    def random_action(self) -> np.ndarray:
+        random_action = self.action_space.sample()
+        if isinstance(random_action, np.ndarray):
+            pass
+        elif isinstance(random_action, int):
+            random_action = to_ndarray([random_action], dtype=np.int64)
+        return random_action
+
+    def human_to_action(self):
+        """
+        Overview:
+            For multiplayer games, ask the user for a legal action
+            and return the corresponding action number.
+        Returns:
+            An integer from the action space.
+        """
+        # print(self.board)
+        while True:
+            try:
+                action = int(
+                    input(
+                        f"Enter the action (0, 1, 2, or 3, ) to play: "
+                    )
+                )
+                if action in self.legal_actions:
+                    break
+                else:
+                    print("Wrong input, try again")
+            except KeyboardInterrupt:
+                print("exit")
+                sys.exit(0)
+        return action
 
     def render(self, mode='human'):
         if mode == 'rgb_array_render':
@@ -389,192 +624,6 @@ class Game2048Env(gym.Env):
         logging.info("Saved output to {}".format(filename))
         self.frames = []
 
-    # Implementation of game logic for 2048
-    def add_random_2_4_tile(self):
-        """Add a tile with value 2 or 4 with different probabilities."""
-        possible_tiles = np.array([2, 4])
-        tile_probabilities = np.array([0.9, 0.1])
-        tile_val = self.np_random.choice(possible_tiles, 1, p=tile_probabilities)[0]
-        empty_location = self.get_empty_location()
-        if empty_location.shape[0] == 0:
-            self.should_done = True
-            return
-        empty_idx = self.np_random.choice(empty_location.shape[0])
-        empty = empty_location[empty_idx]
-        logging.debug("Adding %s at %s", tile_val, (empty[0], empty[1]))
-
-        # set the chance outcome
-        if self.chance_space_size == 16:
-            self.chance = 4 * empty[0] + empty[1]
-        elif self.chance_space_size == 32:
-            if tile_val == 2:
-                self.chance = 4 * empty[0] + empty[1]
-            elif tile_val == 4:
-                self.chance = 16 + 4 * empty[0] + empty[1]
-
-        self.board[empty[0], empty[1]] = tile_val
-
-    def add_random_tile(self, possible_tiles: np.array = np.array([2, 4]), tile_probabilities: np.array = np.array([0.9, 0.1])):
-        """Add a tile with a value from possible_tiles array according to given probabilities."""
-        if len(possible_tiles) != len(tile_probabilities):
-            raise ValueError("Length of possible_tiles and tile_probabilities must be the same")
-        if np.sum(tile_probabilities) != 1:
-            raise ValueError("Sum of tile_probabilities must be 1")
-
-        tile_val = self.np_random.choice(possible_tiles, 1, p=tile_probabilities)[0]
-        tile_idx = np.where(possible_tiles == tile_val)[0][0]  # get the index of the tile value
-        empty_location = self.get_empty_location()
-        if empty_location.shape[0] == 0:
-            self.should_done = True
-            return
-        empty_idx = self.np_random.choice(empty_location.shape[0])
-        empty = empty_location[empty_idx]
-        logging.debug("Adding %s at %s", tile_val, (empty[0], empty[1]))
-
-        # set the chance outcome
-        self.chance_space_size = len(possible_tiles) * 16  # assuming a 4x4 board
-        self.chance = tile_idx * 16 + 4 * empty[0] + empty[1]
-
-        self.board[empty[0], empty[1]] = tile_val
-    def get_empty_location(self):
-        """Return a 2d numpy array with the location of empty squares."""
-        return np.argwhere(self.board == 0)
-
-    def highest(self):
-        """Report the highest tile on the board."""
-        return np.max(self.board)
-
-    @property
-    def legal_actions(self):
-        """
-        Overview:
-            Return the legal actions for the current state.
-        Arguments:
-            - None
-        Returns:
-            - legal_actions (:obj:`list`): The legal actions.
-        """
-        if self.ignore_legal_actions:
-            return [0, 1, 2, 3]
-        legal_actions = []
-        for direction in range(4):
-            changed = False
-            move_reward = 0
-            dir_div_two = int(direction / 2)
-            dir_mod_two = int(direction % 2)
-            # 0 for towards up or left, 1 for towards bottom or right
-            shift_direction = dir_mod_two ^ dir_div_two
-
-            # Construct a range for extracting row/column into a list
-            rx = list(range(self.w))
-            ry = list(range(self.h))
-
-            if dir_mod_two == 0:
-                # Up or down, split into columns
-                for y in range(self.h):
-                    old = [self.board[x, y] for x in rx]
-                    (new, move_reward_tmp) = self.shift(old, shift_direction)
-                    move_reward += move_reward_tmp
-                    if old != new:
-                        changed = True
-            else:
-                # Left or right, split into rows
-                for x in range(self.w):
-                    old = [self.board[x, y] for y in ry]
-                    (new, move_reward_tmp) = self.shift(old, shift_direction)
-                    move_reward += move_reward_tmp
-                    if old != new:
-                        changed = True
-
-            if changed:
-                legal_actions.append(direction)
-
-        return legal_actions
-
-    def combine(self, shifted_row):
-        """
-        Overview:
-            Combine same tiles when moving to one side. This function always
-            shifts towards the left. Also count the reward of combined tiles.
-        """
-        move_reward = 0
-        combined_row = [0] * self.size
-        skip = False
-        output_index = 0
-        for p in pairwise(shifted_row):
-            if skip:
-                skip = False
-                continue
-            combined_row[output_index] = p[0]
-            if p[0] == p[1]:
-                combined_row[output_index] += p[1]
-                move_reward += p[0] + p[1]
-                # Skip the next thing in the list.
-                skip = True
-            output_index += 1
-        if shifted_row and not skip:
-            combined_row[output_index] = shifted_row[-1]
-
-        return combined_row, move_reward
-
-    def shift(self, row, direction):
-        """Shift one row left (direction == 0) or right (direction == 1), combining if required."""
-        length = len(row)
-        assert length == self.size
-        # assert direction == 0 or direction == 1
-
-        # Shift all non-zero digits up
-        shifted_row = [i for i in row if i != 0]
-
-        # Reverse list to handle shifting to the right
-        if direction:
-            shifted_row.reverse()
-
-        (combined_row, move_reward) = self.combine(shifted_row)
-
-        # Reverse list to handle shifting to the right
-        if direction:
-            combined_row.reverse()
-
-        assert len(combined_row) == self.size
-        return combined_row, move_reward
-
-    def is_end(self):
-        """Has the game ended. Game ends if there is a tile equal to the limit
-           or there are no legal moves. If there are empty spaces then there
-           must be legal moves."""
-
-        if self.max_tile is not None and self.highest() == self.max_tile:
-            return True
-        elif len(self.legal_actions) == 0:
-            # the agent don't have legal_actions to move, so the episode is done
-            return True
-        elif self.should_done:
-            return True
-        else:
-            return False
-
-    def get_board(self):
-        """Get the whole board-matrix, useful for testing."""
-        return self.board
-
-    def set_board(self, new_board):
-        """Set the whole board-matrix, useful for testing."""
-        self.board = new_board
-
-    def seed(self, seed=None, seed1=None):
-        """Set the random seed for the gym environment."""
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
-
-    def random_action(self) -> np.ndarray:
-        random_action = self.action_space.sample()
-        if isinstance(random_action, np.ndarray):
-            pass
-        elif isinstance(random_action, int):
-            random_action = to_ndarray([random_action], dtype=np.int64)
-        return random_action
-
     @property
     def observation_space(self) -> gym.spaces.Space:
         return self._observation_space
@@ -591,7 +640,7 @@ class Game2048Env(gym.Env):
     def create_collector_env_cfg(cfg: dict) -> List[dict]:
         collector_env_num = cfg.pop('collector_env_num')
         cfg = copy.deepcopy(cfg)
-        # when collect data, sometimes we need to normalize the reward
+        # when in collect phase, sometimes we need to normalize the reward
         # reward_normalize is determined by the config.
         cfg.is_collect = True
         return [cfg for _ in range(collector_env_num)]
@@ -600,13 +649,13 @@ class Game2048Env(gym.Env):
     def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
         evaluator_env_num = cfg.pop('evaluator_env_num')
         cfg = copy.deepcopy(cfg)
-        # when evaluate, we don't need to normalize the reward.
+        # when in evaluate phase, we don't need to normalize the reward.
         cfg.reward_normalize = False
         cfg.is_collect = False
         return [cfg for _ in range(evaluator_env_num)]
 
     def __repr__(self) -> str:
-        return "LightZero 2048 Env."
+        return "LightZero game 2048 Env."
 
 
 def encode_board(flat_board, num_of_template_tiles=16):
@@ -636,18 +685,3 @@ def encode_board(flat_board, num_of_template_tiles=16):
     one_hot_board = (layered_board == tile_values).astype(int)
 
     return one_hot_board
-
-
-def pairwise(iterable):
-    """s -> (s0,s1), (s1,s2), (s2, s3), ..."""
-    a, b = itertools.tee(iterable)
-    next(b, None)
-    return zip(a, b)
-
-
-class IllegalMove(Exception):
-    pass
-
-
-class IllegalActionError(Exception):
-    pass
