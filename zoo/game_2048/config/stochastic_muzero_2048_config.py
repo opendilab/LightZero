@@ -39,7 +39,6 @@ game_2048_stochastic_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        model_path='/Users/puyuan/code/LightZero/zoo/game_2048/tb/game_2048_nct-2_stochastic_muzero_ns100_upc200_rr0.0_bs512_chance-True-32_sslw2_rbs1e6_seed0/ckpt/ckpt_best.pth.tar',
         model=dict(
             observation_shape=(16, 4, 4),
             action_space_size=action_space_size,
