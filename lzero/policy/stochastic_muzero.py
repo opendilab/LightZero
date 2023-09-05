@@ -16,6 +16,8 @@ from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
     configure_optimizers
+from lzero.policy.utils import calculate_topk_accuracy, plot_topk_accuracy, visualize_avg_softmax, \
+    plot_argmax_distribution
 
 
 @POLICY_REGISTRY.register('stochastic_muzero')
@@ -73,6 +75,8 @@ class StochasticMuZeroPolicy(Policy):
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,
+        # (bool) Whether to analyze the chance distribution.
+        analyze_chance_distribution=False,
         # (int) The transition number of one ``GameSegment``.
         game_segment_length=200,
 
@@ -444,9 +448,18 @@ class StochasticMuZeroPolicy(Policy):
             # ==============================================================
             policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
 
-            # TODO(pu):
             if self._cfg.use_ture_chance_label_in_chance_encoder:
                 afterstate_policy_loss += cross_entropy_loss(afterstate_policy_logits, true_chance_one_hot.detach())
+
+                if self._cfg.analyze_chance_distribution:
+                    # visualize the avg softmax of afterstate_policy_logits
+                    visualize_avg_softmax(afterstate_policy_logits)
+                    # plot the argmax distribution of true_chance_one_hot
+                    plot_argmax_distribution(true_chance_one_hot)
+                    topK_values = range(1, self._cfg.model.chance_space_size+1)  # top_K values from 1 to 32
+                    # calculate the topK accuracy of afterstate_policy_logits and plot the topK accuracy curve.
+                    plot_topk_accuracy(afterstate_policy_logits, true_chance_one_hot, topK_values)
+
                 # The chance encoder is not used in the mcts, so we don't need to calculate the commitment loss.
                 commitment_loss += torch.nn.MSELoss()(chance_encoding, true_chance_one_hot.float().detach())
             else:
