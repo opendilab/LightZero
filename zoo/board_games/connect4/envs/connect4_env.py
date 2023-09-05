@@ -200,7 +200,7 @@ class Connect4Env(BaseEnv):
 
             # player 1's turn
             # print(f'playing with bot now, the action from algorithm is {action}')
-            flag = "agent"
+            flag = "bot_agent"
             timestep_player1 = self._player_step(action, flag)
             # self.env.render()
             if timestep_player1.done:
@@ -213,7 +213,7 @@ class Connect4Env(BaseEnv):
             bot_action = self.bot_action()
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
             # print(f'playing with bot now, the action from bot is {action}')
-            flag = "bot"
+            flag = "bot_bot"
             timestep_player2 = self._player_step(bot_action, flag)
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
@@ -230,7 +230,7 @@ class Connect4Env(BaseEnv):
 
             # player 1's turn
             # print(f'evaluating now, the battle mode is {self.battle_mode}, the action is {action}')
-            flag = "agent"
+            flag = "eval_agent"
             timestep_player1 = self._player_step(action, flag)
             # self.env.render()
             if timestep_player1.done:
@@ -246,7 +246,7 @@ class Connect4Env(BaseEnv):
                 # print(f'evaluating now, the battle mode is {self.battle_mode}, here comes the bot action{self.bot_action()}')
                 bot_action = self.bot_action()
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
-            flag = "bot"
+            flag = "eval_bot"
             timestep_player2 = self._player_step(bot_action, flag)
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
@@ -267,12 +267,14 @@ class Connect4Env(BaseEnv):
                     self.board[i] = piece
                     break
         else:
+            print(np.array(self.board).reshape(6, 7))
             logging.warning(
                 f"You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
                 f"flag is {flag}."
                 f"Now we randomly choice a action from self.legal_actions."
             )
             action = self.random_action()
+            print("the random action is", action)
             piece = self.players.index(self._current_player) + 1
             for i in list(filter(lambda x: x % 7 == action, list(range(41, -1, -1)))):
                 if self.board[i] == 0:

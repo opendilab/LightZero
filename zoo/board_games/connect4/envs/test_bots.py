@@ -30,7 +30,7 @@ def test_mcts_bot_vs_rule_bot(num_simulations=200):
 
     # Repeat the game for 10 rounds.
     for i in range(10):
-        # print('-' * 10 + str(i) + '-' * 10)
+        print('-' * 10 + str(i) + '-' * 10)
         # Initialize the game, where there are two players: player 1 and player 2.
         env = Connect4Env(EasyDict(cfg))
         # Reset the environment, set the board to a clean board and the  start player to be player 1.
@@ -64,7 +64,7 @@ def test_mcts_bot_vs_rule_bot(num_simulations=200):
                 player_index = 0
             env.step(action)
             state = env.board
-            # print(np.array(state).reshape(6, 7))
+            print(np.array(state).reshape(6, 7))
 
         # Record the winner.
         winner.append(env.get_done_winner()[1])
@@ -168,7 +168,7 @@ def test_mcts_bot_vs_mcts_bot(num_simulations=50):
     )
 
 if __name__ == '__main__':
-    test_mcts_bot_vs_rule_bot(50)
-    test_mcts_bot_vs_rule_bot(200)
+    # test_mcts_bot_vs_rule_bot(50)
+    # test_mcts_bot_vs_rule_bot(200)
     test_mcts_bot_vs_rule_bot(1000)  
     # test_mcts_bot_vs_mcts_bot()
