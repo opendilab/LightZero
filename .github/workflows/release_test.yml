@@ -7,8 +7,7 @@ on:
 jobs:
   source_build:
     name: Try package the source
-    #runs-on: ${{ matrix.os }}
-    runs-on: self-hosted
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -51,8 +50,7 @@ jobs:
 
   wheel_build:
     name: Try build the wheels
-    #runs-on: ${{ matrix.os }}
-    runs-on: self-hosted
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -123,8 +121,7 @@ jobs:
   # the publishing can only be processed on linux system
   fake_publish:
     name: Fake Publish
-    #runs-on: ubuntu-20.04
-    runs-on: self-hosted
+    runs-on: ubuntu-20.04
     needs:
       - wheel_build
       - source_build

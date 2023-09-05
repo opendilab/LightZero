@@ -7,8 +7,7 @@ on:
 jobs:
   source_build:
     name: Build and publish the source package
-    #runs-on: ${{ matrix.os }}
-    runs-on: self-hosted
+    runs-on: ${{ matrix.os }}
     if: ${{ github.repository == 'opendilab/LightZero' }}
     strategy:
       matrix:
@@ -46,8 +45,7 @@ jobs:
 
   wheel_build:
     name: Build the wheels
-    #runs-on: ${{ matrix.os }}
-    runs-on: self-hosted
+    runs-on: ${{ matrix.os }}
     if: ${{ github.repository == 'opendilab/LightZero' }}
     strategy:
       fail-fast: false
@@ -114,8 +112,7 @@ jobs:
   # the publishing can only be processed on linux system
   wheel_publish:
     name: Publish the wheels to pypi
-    #runs-on: ubuntu-20.04
-    runs-on: self-hosted
+    runs-on: ubuntu-20.04
     needs:
       - source_build
       - wheel_build

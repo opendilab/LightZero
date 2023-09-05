@@ -1,4 +1,4 @@
 cython>=0.29
 build>=0.7.0
 auditwheel>=4
-numpy>=1.21.6
+numpy>=1.24.4

@@ -23,6 +23,7 @@ class BipedalWalkerEnv(BaseEnv):
 
     config = dict(
         env_name="BipedalWalker-v3",
+        env_type='normal',  # options={'normal', 'hardcore'}
         save_replay_gif=False,
         replay_path_gif=None,
         replay_path=None,
@@ -46,7 +47,11 @@ class BipedalWalkerEnv(BaseEnv):
 
     def reset(self) -> np.ndarray:
         if not self._init_flag:
-            self._env = gym.make('BipedalWalker-v3')
+            assert self._cfg.env_type in ['normal', 'hardcore'], "env_type must be in ['normal', 'hardcore']"
+            if self._cfg.env_type == 'normal':
+                self._env = gym.make('BipedalWalker-v3')
+            elif self._cfg.env_type == 'hardcore':
+                self._env = gym.make('BipedalWalker-v3', hardcore=True)
             self._observation_space = self._env.observation_space
             self._action_space = self._env.action_space
             self._reward_space = gym.spaces.Box(
