@@ -17,7 +17,6 @@ prob_random_action_in_bot = 0.5
 connect4_alphazero_config = dict(
     exp_name='data_az_ptree/connect4_rulebot',
     env=dict(
-        # board_size=3,
         battle_mode='play_with_bot_mode',
         mcts_mode='play_with_bot_mode',
         bot_action_type='rule',
@@ -38,6 +37,7 @@ connect4_alphazero_config = dict(
             num_channels=32,
         ),
         cuda=True,
+        env_type='board_games',
         board_size=3,
         update_per_collect=update_per_collect,
         batch_size=batch_size,

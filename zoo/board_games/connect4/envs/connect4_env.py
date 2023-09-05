@@ -47,10 +47,12 @@ class Connect4Env(BaseEnv):
         env_name="Connect4",
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',  # only used in AlphaZero
+        # bot_action_type='mcts',
         bot_action_type='rule',
         agent_vs_human=False,
         prob_random_agent=0,
         prob_expert_agent=0,
+        prob_random_action_in_bot=0.,
         channel_last=True,
         scale=False,
         stop_value=2,
@@ -76,6 +78,7 @@ class Connect4Env(BaseEnv):
         assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (
                 self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
             f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
+        self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
         self.agent_vs_human = cfg.agent_vs_human
         self.bot_action_type = cfg.bot_action_type
         # if 'alpha_beta_pruning' in self.bot_action_type:
@@ -137,14 +140,6 @@ class Connect4Env(BaseEnv):
             return raw_obs, scale_obs
 
     def observe(self):
-        board_vals = np.array(self.board).reshape(6, 7)
-        # cur_player = self.players.index(self._current_player)
-        # opp_player = (cur_player + 1) % 2
-
-        # cur_p_board = np.equal(board_vals, cur_player + 1)
-        # opp_p_board = np.equal(board_vals, opp_player + 1)
-
-        # observation = np.stack([cur_p_board, opp_p_board], axis=2).astype(np.int8)
         legal_moves = self.legal_actions
 
         action_mask = np.zeros(7, "int8")
@@ -165,12 +160,6 @@ class Connect4Env(BaseEnv):
                     "current_player_index": self.players.index(self._current_player),
                     "to_play": self._current_player
                     }
-            
-    # def observation_space(self, agent):
-    #     return self.observation_spaces[agent]
-
-    # def action_space(self, agent):
-    #     return self.action_spaces[agent]
 
     @property
     def legal_actions(self):
@@ -229,10 +218,11 @@ class Connect4Env(BaseEnv):
             # player 1 battle with expert player 2
 
             # player 1's turn
+            print('player 1 (agent player): ' + self.action_to_string(action))
             # print(f'evaluating now, the battle mode is {self.battle_mode}, the action is {action}')
             flag = "eval_agent"
             timestep_player1 = self._player_step(action, flag)
-            # self.env.render()
+            self.render()
             if timestep_player1.done:
                 # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
                 # And the to_play is used in MCTS.
@@ -248,6 +238,7 @@ class Connect4Env(BaseEnv):
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
             flag = "eval_bot"
             timestep_player2 = self._player_step(bot_action, flag)
+            self.render()
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
@@ -315,10 +306,10 @@ class Connect4Env(BaseEnv):
         if init_state is None:
             self.board = [0] * (6 * 7)
         else:
-            # print("before:",self.board)
+            # print("before:", self.board)
             self.board = init_state
-            # print("after:",self.board)
-        self.players = [1,2]
+            # print("after:", self.board)
+        self.players = [1, 2]
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
 
@@ -366,7 +357,8 @@ class Connect4Env(BaseEnv):
         pass
 
     def get_done_winner(self):
-        board = np.array(self.board).reshape(6, 7)
+        # TODO
+        board = copy.deepcopy(np.array(self.board)).reshape(6, 7)
         for piece in [1, 2]:
             # Check horizontal locations for win
             column_count = 7
@@ -449,13 +441,15 @@ class Connect4Env(BaseEnv):
         return np.random.choice(action_list)
 
     def bot_action(self):
-        if self.bot_action_type == 'rule':
-            return self.rule_bot.get_rule_bot_action(self.board, self._current_player)
-        # elif self.bot_action_type == 'alpha_beta_pruning':
-        #     return self.alpha_beta_bot.get_best_action(self.board, player_index=self.current_player_index)
-        elif self.bot_action_type == 'mcts':
-            return self.mcts_bot.get_actions(self.board, player_index=self.current_player_index)
-
+        if np.random.rand() < self.prob_random_action_in_bot:
+            return self.random_action()
+        else:
+            if self.bot_action_type == 'rule':
+                return self.rule_bot.get_rule_bot_action(self.board, self._current_player)
+            # elif self.bot_action_type == 'alpha_beta_pruning':
+            #     return self.alpha_beta_bot.get_best_action(self.board, player_index=self.current_player_index)
+            elif self.bot_action_type == 'mcts':
+                return self.mcts_bot.get_actions(self.board, player_index=self.current_player_index)
 
     def action_to_string(self, action):
         """
@@ -476,7 +470,7 @@ class Connect4Env(BaseEnv):
         Returns:
             An integer from the action space.
         """
-        print(np.array(self.board).reshape(6, 7))
+        # print(np.array(self.board).reshape(6, 7))
         while True:
             try:
                 column = int(
@@ -495,13 +489,6 @@ class Connect4Env(BaseEnv):
             except Exception as e:
                 print("Wrong input, try again")
         return action
-
-    # def set_game_result(self, result_val):
-    #     for i, name in enumerate(self.agents):
-    #         self.dones[name] = True
-    #         result_coef = 1 if i == 0 else -1
-    #         self.rewards[name] = result_val * result_coef
-    #         self.infos[name] = {'legal_moves': []}
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
         self._seed = seed

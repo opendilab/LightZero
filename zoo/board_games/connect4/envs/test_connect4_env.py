@@ -24,7 +24,8 @@ class TestConnect4Env:
         while True:
             """player 1"""
             # action = env.human_to_action()
-            action = env.bot_action()
+            # action = env.bot_action()
+            action = env.random_action()
 
             # test legal_actions
             # legal_actions = env.legal_actions
@@ -76,8 +77,8 @@ class TestConnect4Env:
         env.render()
         while True:
             """player 1"""
-            # action = env.human_to_action()
-            action = env.bot_action()
+            action = env.human_to_action()
+            # action = env.bot_action()
 
             # test legal_actions
             # legal_actions = env.legal_actions
@@ -109,7 +110,7 @@ class TestConnect4Env:
             prob_random_agent=0,
             prob_expert_agent=0,
             # bot_action_type='mcts'
-            bot_action_type = 'rule',
+            bot_action_type='rule',
 
         )
         env = Connect4Env(cfg)
@@ -140,6 +141,6 @@ class TestConnect4Env:
                 break
 
 test = TestConnect4Env()
-# test.test_self_play_mode()
+test.test_self_play_mode()
 # test.test_play_with_bot_mode()
-test.test_eval_mode()
+# test.test_eval_mode()

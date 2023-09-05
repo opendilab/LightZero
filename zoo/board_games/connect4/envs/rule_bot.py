@@ -19,7 +19,7 @@ class Connect4RuleBot():
             player: The player that the bot represents in the game.
         """
         self.env = env
-        self._current_player = player
+        self.current_player = player
         self.players = self.env.players
 
     def get_rule_bot_action(self, board, player):
@@ -34,8 +34,8 @@ class Connect4RuleBot():
               The next action of the bot.
           """
         self.legal_actions = self.env.legal_actions
-        self._current_player = player
-        self.next_player = self.players[0] if self._current_player == self.players[1] else self.players[1]
+        self.current_player = player
+        self.next_player = self.players[0] if self.current_player == self.players[1] else self.players[1]
         self.board = np.array(copy.deepcopy(board)).reshape(6, 7)
 
         # Check if there is a winning move
@@ -71,7 +71,7 @@ class Connect4RuleBot():
          Returns:
              True if the action is a winning move; False otherwise.
          """
-        piece = self._current_player
+        piece = self.current_player
         row = self.get_available_row(action)
         if row is None:
             return False
@@ -89,7 +89,7 @@ class Connect4RuleBot():
         Returns:
             True if the action can block the opponent's winning move; False otherwise.
         """
-        piece = 2 if self._current_player == 1 else 1
+        piece = 2 if self.current_player == 1 else 1
         row = self.get_available_row(action)
         if row is None:
             return False
@@ -107,7 +107,7 @@ class Connect4RuleBot():
         Returns:
             True if the action can form a sequence of 3 pieces of the bot; False otherwise.
         """
-        piece = self._current_player
+        piece = self.current_player
         row = self.get_available_row(action)
         if row is None:
             return False
@@ -125,7 +125,7 @@ class Connect4RuleBot():
         Returns:
             True if the action can form a sequence of 2 pieces of the bot; False otherwise.
         """
-        piece = self._current_player
+        piece = self.current_player
         row = self.get_available_row(action)
         if row is None:
             return False

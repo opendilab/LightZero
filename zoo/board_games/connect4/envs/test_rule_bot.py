@@ -51,6 +51,7 @@ class TestConnect4RuleBot():
         It tests the `is_blocking_move` method of the Connect4RuleBot class by asserting that the method returns True
         when a blocking move is necessary to prevent the opponent from winning.
         """
+        """
         # Create a chessboard with three consecutive pieces.
         board = np.zeros((6, 7))
         opponent = 2 if self.player == 1 else 1
@@ -59,6 +60,18 @@ class TestConnect4RuleBot():
         board[5][5] = opponent
         self.bot.board = board
         assert self.bot.is_blocking_move(2) is True  # Placing a piece in the second column is a move to prevent the opponent from winning.
+        """
+
+        # Create a chessboard with three consecutive pieces of opponents.
+        self.bot.current_player = 2
+        board = np.array([[1, 0, 0, 0, 0, 0, 0],
+                          [1, 0, 1, 0, 0, 0, 0],
+                          [2, 0, 2, 0, 0, 0, 0],
+                          [1, 1, 1, 0, 0, 0, 0],
+                          [1, 2, 2, 1, 0, 0, 2],
+                          [1, 2, 2, 2, 1, 0, 0]])
+        self.bot.board = board
+        assert self.bot.is_blocking_move(3) is True  # Placing a piece in the 4th column is a move to prevent the opponent from winning.
 
     def test_is_sequence_3_move(self):
         """

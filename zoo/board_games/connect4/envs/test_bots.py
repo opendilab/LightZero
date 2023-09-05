@@ -6,15 +6,16 @@ import time
 import numpy as np
 
 cfg = EasyDict(
-            battle_mode='self_play_mode',
-            mcts_mode='self_play_mode',
-            channel_last=True,
-            scale=True,
-            agent_vs_human=False,
-            prob_random_agent=0,
-            prob_expert_agent=0,
-            bot_action_type='rule'
-        )
+    battle_mode='self_play_mode',
+    mcts_mode='self_play_mode',
+    channel_last=True,
+    scale=True,
+    agent_vs_human=False,
+    prob_random_agent=0,
+    prob_expert_agent=0,
+    bot_action_type='rule'
+)
+
 
 def test_mcts_bot_vs_rule_bot(num_simulations=200):
     """
@@ -166,6 +167,7 @@ def test_mcts_bot_vs_mcts_bot(num_simulations=50):
             winner, winner.count(-1), winner.count(1), winner.count(2)
         )
     )
+
 
 if __name__ == '__main__':
     # test_mcts_bot_vs_rule_bot(50)

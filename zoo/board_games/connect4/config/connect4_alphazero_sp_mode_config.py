@@ -10,14 +10,12 @@ num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
-prob_random_action_in_bot = 0.5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 connect4_alphazero_config = dict(
     exp_name='data_az_ptree/connect4_spmode',
     env=dict(
-        # board_size=3,
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',
         channel_last=False,  # NOTE
@@ -37,6 +35,7 @@ connect4_alphazero_config = dict(
             num_channels=32,
         ),
         cuda=True,
+        env_type='board_games',
         board_size=3,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
