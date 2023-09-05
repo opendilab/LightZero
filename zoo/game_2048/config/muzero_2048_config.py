@@ -16,16 +16,6 @@ max_env_step = int(5e6)
 reanalyze_ratio = 0.
 num_of_possible_chance_tile = 2
 chance_space_size = 16 * num_of_possible_chance_tile
-
-# debug config
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# num_simulations = 5
-# update_per_collect = 3
-# batch_size = 5
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================

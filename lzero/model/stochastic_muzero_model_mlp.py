@@ -109,7 +109,7 @@ class StochasticMuZeroModelMLP(nn.Module):
         self.representation_network = RepresentationNetworkMLP(
             observation_shape=observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
         )
-
+        # TODO(pu): different input data type for chance_encoder
         self.chance_encoder = ChanceEncoder(observation_shape*2, chance_space_size)  # input is two concatenated frames
         self.dynamics_network = DynamicsNetwork(
             action_encoding_dim=self.action_encoding_dim,
