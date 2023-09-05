@@ -1,5 +1,5 @@
 """
-The Node, Roots class and related core functions for MuZero.
+The Node, Roots class and related core functions for Stochastic MuZero.
 """
 import math
 import random
@@ -14,7 +14,7 @@ from .minimax import MinMaxStats
 class Node:
     """
      Overview:
-         the node base class for MuZero.
+         the node base class for Stochastic MuZero.
      Arguments:
      """
 
@@ -40,7 +40,7 @@ class Node:
 
     def expand(
             self, to_play: int, latent_state_index_in_search_path: int, latent_state_index_in_batch: int, reward: float,
-            policy_logits: List[float], child_is_chance: bool = False
+            policy_logits: List[float], child_is_chance: bool = True
     ) -> None:
         """
         Overview:
@@ -55,14 +55,11 @@ class Node:
         self.to_play = to_play
         self.reward = reward
 
-        # assert (self.is_chance != child_is_chance), f"is_chance and child_is_chance should be different, current is {self.is_chance}-{child_is_chance}, "
-
         if self.is_chance is True:
             child_is_chance = False
             self.reward = 0.0
 
             if self.legal_actions is None:
-                # self.legal_actions = np.arange(len(policy_logits))
                 self.legal_actions = np.arange(self.chance_space_size)
             self.latent_state_index_in_search_path = latent_state_index_in_search_path
             self.latent_state_index_in_batch = latent_state_index_in_batch
@@ -72,7 +69,6 @@ class Node:
                 self.children[action] = Node(prior, is_chance=child_is_chance)
         else:
             child_is_chance = True
-            #self.legal_actions = np.arange(self.chance_space_size)
             self.legal_actions = np.arange(len(policy_logits))
             self.latent_state_index_in_search_path = latent_state_index_in_search_path
             self.latent_state_index_in_batch = latent_state_index_in_batch
@@ -217,11 +213,11 @@ class Roots:
         """
         for i in range(self.root_num):
             #  to_play: int, latent_state_index_in_search_path: int, latent_state_index_in_batch: int,
-            # TODO(pu): why latent_state_index_in_search_path=0, latent_state_index_in_batch=i?
             if to_play is None:
-                self.roots[i].expand(-1, 0, i, rewards[i], policies[i], child_is_chance=True)
+                # TODO(pu): why latent_state_index_in_search_path=0, latent_state_index_in_batch=i?
+                self.roots[i].expand(-1, 0, i, rewards[i], policies[i])
             else:
-                self.roots[i].expand(to_play[i], 0, i, rewards[i], policies[i], child_is_chance=True)
+                self.roots[i].expand(to_play[i], 0, i, rewards[i], policies[i])
 
             self.roots[i].add_exploration_noise(root_noise_weight, noises[i])
             self.roots[i].visit_count += 1
@@ -237,9 +233,9 @@ class Roots:
         """
         for i in range(self.root_num):
             if to_play is None:
-                self.roots[i].expand(-1, 0, i, rewards[i], policies[i], child_is_chance=True)
+                self.roots[i].expand(-1, 0, i, rewards[i], policies[i])
             else:
-                self.roots[i].expand(to_play[i], 0, i, rewards[i], policies[i], child_is_chance=True)
+                self.roots[i].expand(to_play[i], 0, i, rewards[i], policies[i])
 
             self.roots[i].visit_count += 1
 
@@ -516,7 +512,6 @@ def batch_traverse(
             results.nodes[i] = node
 
     # print(f'env {i} one simulation done!')
-    # return results.nodes, results.latent_state_index_in_search_path, results.latent_state_index_in_batch, results.last_actions, virtual_to_play
     return results, virtual_to_play
 
 
@@ -566,10 +561,7 @@ def backpropagate(
 
             # TODO(pu): to_play related
             # true_reward is in the perspective of current player of node
-            # bootstrap_value = (true_reward if node.to_play == to_play else - true_reward) + discount_factor * bootstrap_value
-            bootstrap_value = (
-                -true_reward if node.to_play == to_play else true_reward
-            ) + discount_factor * bootstrap_value
+            bootstrap_value = (-true_reward if node.to_play == to_play else true_reward) + discount_factor * bootstrap_value
 
 
 def batch_backpropagate(
@@ -589,7 +581,8 @@ def batch_backpropagate(
         Backpropagation along the search path to update the attributes.
     Arguments:
         - latent_state_index_in_search_path (:obj:`Class Int`): the index of latent state vector.
-        - discount_factor (:obj:`Class Float`): discount_factor factor used i calculating bootstrapped value, if env is board_games, we set discount_factor=1.
+        - discount_factor (:obj:`Class Float`): discount_factor factor used i calculating bootstrapped value,
+            if env is board_games, we set discount_factor=1.
         - value_prefixs (:obj:`Class List`): the value prefixs of nodes along the search path.
         - values (:obj:`Class List`):  the values to propagate along the search path.
         - policies (:obj:`Class List`): the policy logits of nodes along the search path.

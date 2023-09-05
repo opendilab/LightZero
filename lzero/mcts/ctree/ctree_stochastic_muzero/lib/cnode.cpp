@@ -580,7 +580,6 @@ namespace tree
 
         for (auto leaf_order = 0; leaf_order < leaf_idx_list.size(); ++leaf_order) {
             int i = leaf_idx_list[leaf_order];
-            // Your code here
         }
         for (int leaf_order = 0; leaf_order < leaf_idx_list.size(); ++leaf_order)
         {
@@ -589,12 +588,6 @@ namespace tree
             cbackpropagate(results.search_paths[i], min_max_stats_lst->stats_lst[i], to_play_batch[i], values[leaf_order], discount_factor);
         }
 
-
-        // for (int i = 0; i < results.num; ++i)
-        // {
-        //     results.nodes[i]->expand(to_play_batch[i], current_latent_state_index, i, value_prefixs[i], policies[i], is_chance_list[i]);
-        //     cbackpropagate(results.search_paths[i], min_max_stats_lst->stats_lst[i], to_play_batch[i], values[i], discount_factor);
-        // }
     }
 
     int cselect_child(CNode *root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount_factor, float mean_q, int players)

@@ -1,7 +1,3 @@
-"""
-Overview:
-    BTW, users can refer to the unittest of these model templates to learn how to use them.
-"""
 from typing import Optional, Tuple
 
 import math
@@ -126,7 +122,7 @@ class StochasticMuZeroModel(nn.Module):
             downsample,
         )
 
-        self.encoder = ChanceEncoder(
+        self.chance_encoder = ChanceEncoder(
             observation_shape, chance_space_size
         )
         self.dynamics_network = DynamicsNetwork(
@@ -293,7 +289,7 @@ class StochasticMuZeroModel(nn.Module):
         return latent_state
 
     def chance_encode(self, observation: torch.Tensor):
-        output = self.encoder(observation)
+        output = self.chance_encoder(observation)
         return output
 
     def _prediction(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -811,11 +807,11 @@ class ChanceEncoder(nn.Module):
         # Specify the action space for the model
         self.action_space = action_dimension
         # Define the encoder, which transforms observations into a latent space
-        self.encoder = ChanceEncoderBackbone(observation_space_dimensions, action_dimension)
+        self.chance_encoder = ChanceEncoderBackbone(observation_space_dimensions, action_dimension)
         # Using the Straight Through Estimator method for backpropagation
         self.onehot_argmax = StraightThroughEstimator()
 
-    def forward(self, o_i):
+    def forward(self, observations):
         """
         Forward method for the ChanceEncoder. This method takes an observation
         and applies the encoder to transform it to a latent space. Then applies the
@@ -826,17 +822,17 @@ class ChanceEncoder(nn.Module):
         Chance Outcomes section.
 
         Args:
-            o_i (Tensor): Observation tensor.
+            observations (Tensor): Observation tensor.
 
         Returns:
             chance_t (Tensor): Transformed tensor after applying one-hot argmax.
-            chance_encoding_t (Tensor): Encoding of the input observation tensor.
+            chance_encoding (Tensor): Encoding of the input observation tensor.
         """
         # Apply the encoder to the observation
-        chance_encoding_t = self.encoder(o_i)
+        chance_encoding = self.chance_encoder(observations)
         # Apply one-hot argmax to the encoding
-        chance_onehot_t = self.onehot_argmax(chance_encoding_t)
-        return chance_encoding_t, chance_onehot_t
+        chance_onehot = self.onehot_argmax(chance_encoding)
+        return chance_encoding, chance_onehot
 
 
 class StraightThroughEstimator(nn.Module):

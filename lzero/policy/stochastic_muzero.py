@@ -295,7 +295,10 @@ class StochasticMuZeroPolicy(Policy):
         for i in range(self._cfg.num_unroll_steps):
             beg_index = self._cfg.model.image_channel * i
             end_index = self._cfg.model.image_channel * (i + self._cfg.model.frame_stack_num)
-            obs_list_for_chance_encoder.append(obs_target_batch[:, beg_index:end_index, :, :])
+            if self._cfg.model.model_type == 'conv':
+                obs_list_for_chance_encoder.append(obs_target_batch[:, beg_index:end_index, :, :])
+            elif self._cfg.model.model_type == 'mlp':
+                obs_list_for_chance_encoder.append(obs_target_batch[:, beg_index*self._cfg.model.observation_shape:end_index*self._cfg.model.observation_shape])
 
         # do augmentations
         if self._cfg.use_augmentation:
@@ -380,7 +383,10 @@ class StochasticMuZeroPolicy(Policy):
                 latent_state, action_batch[:, step_i], afterstate=False
             )
             afterstate, afterstate_reward, afterstate_value, afterstate_policy_logits = mz_network_output_unpack(network_output)
-            
+
+            # ==============================================================
+            # encode the consecutive frames to predict chance
+            # ==============================================================
             # concat consecutive frames to predict chance
             former_frame = obs_list_for_chance_encoder[step_i]
             latter_frame = obs_list_for_chance_encoder[step_i + 1]
@@ -388,8 +394,8 @@ class StochasticMuZeroPolicy(Policy):
             chance_encoding, chance_one_hot = self._learn_model.chance_encode(concat_frame)
             if self._cfg.use_ture_chance_label_in_chance_encoder:
                 true_chance_code = chance_batch[:, step_i]
-                chance_code = true_chance_code
                 true_chance_one_hot = chance_one_hot_batch[:, step_i]
+                chance_code = true_chance_code
             else:
                 chance_code = torch.argmax(chance_encoding, dim=1).long().unsqueeze(-1)
             
@@ -441,11 +447,13 @@ class StochasticMuZeroPolicy(Policy):
             # TODO(pu):
             if self._cfg.use_ture_chance_label_in_chance_encoder:
                 afterstate_policy_loss += cross_entropy_loss(afterstate_policy_logits, true_chance_one_hot.detach())
-                # The encoder is not used i the mcts, so we don't need to calculate the commitment loss.
+                # The chance encoder is not used in the mcts, so we don't need to calculate the commitment loss.
                 commitment_loss += torch.nn.MSELoss()(chance_encoding, true_chance_one_hot.float().detach())
             else:
                 afterstate_policy_loss += cross_entropy_loss(afterstate_policy_logits, chance_one_hot.detach())
-                commitment_loss += torch.nn.MSELoss()(chance_encoding, chance_one_hot.float().detach())
+                # TODO(pu): whether to detach the chance_one_hot in the commitment loss.
+                # commitment_loss += torch.nn.MSELoss()(chance_encoding, chance_one_hot.float().detach())
+                commitment_loss += torch.nn.MSELoss()(chance_encoding, chance_one_hot.float())
 
             afterstate_value_loss += cross_entropy_loss(afterstate_value, target_value_categorical[:, step_i])
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
