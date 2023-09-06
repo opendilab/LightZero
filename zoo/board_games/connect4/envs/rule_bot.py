@@ -34,6 +34,7 @@ class Connect4RuleBot():
               The next action of the bot.
           """
         self.legal_actions = self.env.legal_actions
+        # print(f"legal actions are {self.legal_actions}")
         self.current_player = player
         self.next_player = self.players[0] if self.current_player == self.players[1] else self.players[1]
         self.board = np.array(copy.deepcopy(board)).reshape(6, 7)
@@ -47,6 +48,33 @@ class Connect4RuleBot():
         for action in self.legal_actions:
             if self.is_blocking_move(action):
                 return action
+            
+        # Remove the actions that may cause the opponent win
+        temp_list = self.legal_actions.copy()
+        for action in temp_list:
+            temp = [self.board.copy(), self.current_player]
+            # print("current board:", self.board)
+            # print("current player:", self.current_player)
+            piece = self.current_player
+            row = self.get_available_row(action)
+            # print(f"the row for {action} is {row}")
+            if row is None:
+                break
+            self.board[row][action] = piece
+            self.current_player = self.next_player
+            legal_actions = [i for i in range(7) if self.board[0][i] == 0]
+            # print(f'if we take action {action}, then the legal actions for opponent are {legal_actions}')
+            for a in legal_actions:
+                if self.is_winning_move(a):
+                    self.legal_actions.remove(action)
+                    print(f"if take action {action}, then opponent take{a} may win")
+                    print(f"so we should take action from {self.legal_actions}")
+                    break
+            self.board, self.current_player = temp
+        
+        # If all the actions are removed, then randomly select an 
+        if len(self.legal_actions) == 0:
+            return np.random.choice(self.env.legal_actions)
 
         # Check if there is a move to form a sequence of 3
         for action in self.legal_actions:

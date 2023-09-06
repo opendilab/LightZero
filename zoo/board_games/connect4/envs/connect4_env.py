@@ -29,17 +29,27 @@ from typing import List
 
 import numpy as np
 import pygame
+import imageio
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from gym import spaces
 from easydict import EasyDict
 
 # from pettingzoo.utils.agent_selector import agent_selector
-from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
 from zoo.board_games.connect4.envs.rule_bot import Connect4RuleBot
 
 from zoo.board_games.mcts_bot import MCTSBot
 
+def get_image(path):
+    from os import path as os_path
+
+    import pygame
+
+    cwd = os_path.dirname(__file__)
+    image = pygame.image.load(cwd + "/" + path)
+    sfc = pygame.Surface(image.get_size(), flags=pygame.SRCALPHA)
+    sfc.blit(image, (0, 0))
+    return sfc
 
 @ENV_REGISTRY.register('connect4')
 class Connect4Env(BaseEnv):
@@ -53,6 +63,8 @@ class Connect4Env(BaseEnv):
         prob_random_agent=0,
         prob_expert_agent=0,
         prob_random_action_in_bot=0.,
+        screen_scaling=9,
+        save_replay=False,
         channel_last=True,
         scale=False,
         stop_value=2,
@@ -69,8 +81,14 @@ class Connect4Env(BaseEnv):
         self.cfg = cfg
         self.channel_last = cfg.channel_last
         self.scale = cfg.scale
-        self.battle_mode = cfg.battle_mode
-        self.mcts_mode = cfg.mcts_mode
+        self.battle_mode = cfg.battle_mode # options = {'self_play_mode', 'play_with_bot_mode', 'eval_mode'}
+        self.mcts_mode = cfg.mcts_mode # options = {'self_play_mode', 'play_with_bot_mode', 'eval_mode'}
+        self.screen_scaling = cfg.screen_scaling
+        self.save_replay = cfg.save_replay
+        self.replay_name_suffix = "test"
+        self.replay_path = None
+        self.replay_format = 'gif'
+        self.frames = []
         # The mode of interaction between the agent and the environment.
         assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
         self.prob_random_agent = cfg.prob_random_agent
@@ -80,11 +98,11 @@ class Connect4Env(BaseEnv):
             f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
         self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
         self.agent_vs_human = cfg.agent_vs_human
-        self.bot_action_type = cfg.bot_action_type
-        # if 'alpha_beta_pruning' in self.bot_action_type:
-        #     self.alpha_beta_bot = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
+        self.bot_action_type = cfg.bot_action_type # options = {'rule, 'mcts'}
 
         self._current_player = 1
+
+        # The board state is saved as a one-dimensional array instead of a two-dimensional array for ease of computation in ``step`` function.
         self.board = [0] * (6 * 7)
         self.players = [1, 2]
 
@@ -94,21 +112,15 @@ class Connect4Env(BaseEnv):
             self.rule_bot = Connect4RuleBot(self, self._current_player)
 
         self._env = self
+        self.screen = None
 
-        # self.possible_agents = self.agents[:]
+        if self.render_mode == "human":
+            self.clock = pygame.time.Clock()
+        
+        # Render the game if the replay is to be saved
+        if self.save_replay:
+            self.render(mode='rgb_array_render')
 
-        # self.action_spaces = {i: spaces.Discrete(7) for i in self.players}
-        # self.observation_spaces = {
-        #     i: spaces.Dict(
-        #         {
-        #             "observation": spaces.Box(
-        #                 low=0, high=1, shape=(6, 7, 2), dtype=np.int8
-        #             ),
-        #             "action_mask": spaces.Box(low=0, high=1, shape=(7,), dtype=np.int8),
-        #         }
-        #     )
-        #     for i in self.players
-        # }
 
     def current_state(self):
         """
@@ -178,11 +190,18 @@ class Connect4Env(BaseEnv):
             # print(f'self playing now, the action is {action}')
             flag = "agent"
             timestep = self._player_step(action, flag)
+
+            if self.save_replay:
+                self.render(mode='rgb_array_render')
+
             if timestep.done:
                 # The eval_episode_return is calculated from Player 1's perspective。
-                # 不是很明白episode_reward在train的时候是怎么被调用的#########################
                 timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs[
                                                                                'to_play'] == 1 else timestep.reward
+                if self.save_replay:
+                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
+                                        format=self.replay_format)
+            
             return timestep
         elif self.battle_mode == 'play_with_bot_mode':
             # player 1 battle with expert player 2
@@ -191,11 +210,19 @@ class Connect4Env(BaseEnv):
             # print(f'playing with bot now, the action from algorithm is {action}')
             flag = "bot_agent"
             timestep_player1 = self._player_step(action, flag)
-            # self.env.render()
+
+            if self.save_replay:
+                self.render(mode='rgb_array_render')
+
             if timestep_player1.done:
                 # NOTE: in play_with_bot_mode, we must set to_play as -1, because we don't consider the alternation between players.
                 # And the to_play is used in MCTS.
                 timestep_player1.obs['to_play'] = -1
+
+                if self.save_replay:
+                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
+                                        format=self.replay_format)
+
                 return timestep_player1
 
             # player 2's turn
@@ -208,10 +235,18 @@ class Connect4Env(BaseEnv):
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
+            if self.save_replay:
+                self.render(mode='rgb_array_render')
+
             timestep = timestep_player2
             # NOTE: in play_with_bot_mode, we must set to_play as -1, because we don't consider the alternation between players.
             # And the to_play is used in MCTS.
             timestep.obs['to_play'] = -1
+
+            if timestep.done:
+                if self.save_replay:
+                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
+                                        format=self.replay_format)
 
             return timestep
         elif self.battle_mode == 'eval_mode':
@@ -222,11 +257,20 @@ class Connect4Env(BaseEnv):
             # print(f'evaluating now, the battle mode is {self.battle_mode}, the action is {action}')
             flag = "eval_agent"
             timestep_player1 = self._player_step(action, flag)
-            self.render()
+
+            if self.save_replay:
+                self.render(mode='rgb_array_render')
+
             if timestep_player1.done:
                 # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
                 # And the to_play is used in MCTS.
                 timestep_player1.obs['to_play'] = -1
+
+                if self.save_replay:
+                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
+                                        format=self.replay_format)
+
+
                 return timestep_player1
 
             # player 2's turn
@@ -238,7 +282,8 @@ class Connect4Env(BaseEnv):
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
             flag = "eval_bot"
             timestep_player2 = self._player_step(bot_action, flag)
-            self.render()
+            if self.save_replay:
+                self.render(mode='rgb_array_render')
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
@@ -248,6 +293,11 @@ class Connect4Env(BaseEnv):
             # And the to_play is used in MCTS.
             timestep.obs['to_play'] = -1
 
+            if timestep.done:
+                if self.save_replay:
+                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
+                                        format=self.replay_format)
+                    
             return timestep
 
     def _player_step(self, action, flag):
@@ -293,7 +343,6 @@ class Connect4Env(BaseEnv):
         self._current_player = self.next_player
 
         if done:
-            # 稀疏奖励，不需要累加，直接取最后一步的奖励
             info['eval_episode_return'] = reward
             # print('tictactoe one episode done: ', info)
 
@@ -325,16 +374,6 @@ class Connect4Env(BaseEnv):
             }
         )
 
-        # self.rewards = {i: 0 for i in self.agents}
-        # self._cumulative_rewards = {name: 0 for name in self.agents}
-        # self.dones = {i: False for i in self.agents}
-        # self.infos = {i: {} for i in self.agents}
-
-        # self._agent_selector = agent_selector(self.agents)
-
-        # for agent, reward in self.rewards.items():
-        #     self._cumulative_rewards[agent] += reward
-
         obs = self.observe()
         return obs
 
@@ -350,9 +389,100 @@ class Connect4Env(BaseEnv):
         else:
             self.board = [0] * (6 * 7)
 
-    def render(self):
-        print(np.array(self.board).reshape(6, 7))
+    # def render(self):
+    #     print(np.array(self.board).reshape(6, 7))
 
+    def render(self, mode='rgb_array_render'):
+        # if self.render_mode is None:
+        #     logging.warning(
+        #         "You are calling render method without specifying any render mode."
+        #     )
+        #     return
+
+        screen_width = 99 * self.screen_scaling
+        screen_height = 86 / 99 * screen_width
+
+        if self.screen is None:
+            pygame.init()
+
+            if mode == "human":
+                pygame.display.set_caption("Connect Four")
+                self.screen = pygame.display.set_mode((screen_width, screen_height))
+            elif mode == "rgb_array_render":
+                self.screen = pygame.Surface((screen_width, screen_height))
+
+        # Load and scale all of the necessary images
+        tile_size = (screen_width * (91 / 99)) / 7
+
+        red_chip = get_image(os.path.join("img", "C4RedPiece.png"))
+        red_chip = pygame.transform.scale(
+            red_chip, (int(tile_size * (9 / 13)), int(tile_size * (9 / 13)))
+        )
+
+        black_chip = get_image(os.path.join("img", "C4BlackPiece.png"))
+        black_chip = pygame.transform.scale(
+            black_chip, (int(tile_size * (9 / 13)), int(tile_size * (9 / 13)))
+        )
+
+        board_img = get_image(os.path.join("img", "Connect4Board.png"))
+        board_img = pygame.transform.scale(
+            board_img, ((int(screen_width)), int(screen_height))
+        )
+
+        self.screen.blit(board_img, (0, 0))
+
+        # Blit the necessary chips and their positions
+        for i in range(0, 42):
+            if self.board[i] == 1:
+                self.screen.blit(
+                    red_chip,
+                    (
+                        (i % 7) * (tile_size) + (tile_size * (6 / 13)),
+                        int(i / 7) * (tile_size) + (tile_size * (6 / 13)),
+                    ),
+                )
+            elif self.board[i] == 2:
+                self.screen.blit(
+                    black_chip,
+                    (
+                        (i % 7) * (tile_size) + (tile_size * (6 / 13)),
+                        int(i / 7) * (tile_size) + (tile_size * (6 / 13)),
+                    ),
+                )
+
+        if mode == "human":
+            pygame.display.update()
+            self.clock.tick(self.metadata["render_fps"])
+
+        observation = np.array(pygame.surfarray.pixels3d(self.screen))
+
+        self.frames.append(np.transpose(observation, axes=(1, 0, 2)))
+
+        return (
+            np.transpose(observation, axes=(1, 0, 2))
+            if mode == "rgb_array_render"
+            else None
+        )
+
+    def save_render_output(self, replay_name_suffix: str = '', replay_path=None, format='gif'):
+        # At the end of the episode, save the frames
+        if replay_path is None:
+            filename = f'game_connect4_{replay_name_suffix}.{format}'
+        else:
+            filename = f'{replay_path}.{format}'
+
+        if format == 'gif':
+            # frame_duration = 1  # 帧的显示时间间隔（秒）
+            # durations = [frame_duration] * len(self.frames)
+            imageio.mimsave(filename, self.frames, 'GIF', duration=1000)
+        elif format == 'mp4':
+            imageio.mimsave(filename, self.frames, fps=30, codec='mpeg4')
+
+        else:
+            raise ValueError("Unsupported format: {}".format(format))
+
+        logging.info("Saved output to {}".format(filename))
+        self.frames = []
     def close(self):
         pass
 

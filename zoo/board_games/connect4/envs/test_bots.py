@@ -13,7 +13,10 @@ cfg = EasyDict(
     agent_vs_human=False,
     prob_random_agent=0,
     prob_expert_agent=0,
-    bot_action_type='rule'
+    bot_action_type='rule',
+    screen_scaling=9,
+    save_replay=True,
+    prob_random_action_in_bot = 0
 )
 
 
@@ -30,14 +33,17 @@ def test_mcts_bot_vs_rule_bot(num_simulations=200):
     winner = []
 
     # Repeat the game for 10 rounds.
-    for i in range(10):
+    for i in range(1):
         print('-' * 10 + str(i) + '-' * 10)
         # Initialize the game, where there are two players: player 1 and player 2.
         env = Connect4Env(EasyDict(cfg))
         # Reset the environment, set the board to a clean board and the  start player to be player 1.
         env.reset()
         state = env.board
-        player = MCTSBot(env, 'a', num_simulations)  # player_index = 0, player = 1
+        cfg_temp = EasyDict(cfg.copy())
+        cfg_temp.save_replay = False
+        env_mcts = Connect4Env(EasyDict(cfg_temp))
+        player = MCTSBot(env_mcts, 'a', num_simulations)  # player_index = 0, player = 1
         # Set player 1 to move first.
         player_index = 0
         while not env.get_done_reward()[0]:
@@ -171,6 +177,6 @@ def test_mcts_bot_vs_mcts_bot(num_simulations=50):
 
 if __name__ == '__main__':
     # test_mcts_bot_vs_rule_bot(50)
-    # test_mcts_bot_vs_rule_bot(200)
-    test_mcts_bot_vs_rule_bot(1000)  
+    test_mcts_bot_vs_rule_bot(200)
+    # test_mcts_bot_vs_rule_bot(1000) 
     # test_mcts_bot_vs_mcts_bot()

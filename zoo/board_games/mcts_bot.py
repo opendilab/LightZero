@@ -364,7 +364,7 @@ class MCTSBot:
         """
         self.name = bot_name
         self.num_simulation = num_simulation
-        self.simulator_env = copy.deepcopy(env)
+        self.simulator_env = env
 
     def get_actions(self, state, player_index, best_action_type = "UCB"):
         """
