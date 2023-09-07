@@ -65,11 +65,12 @@ class Connect4RuleBot():
             legal_actions = [i for i in range(7) if self.board[0][i] == 0]
             # print(f'if we take action {action}, then the legal actions for opponent are {legal_actions}')
             for a in legal_actions:
-                if self.is_winning_move(a):
+                if self.is_winning_move(a) or self.is_winning_move_in_two_steps(a):
                     self.legal_actions.remove(action)
-                    print(f"if take action {action}, then opponent take{a} may win")
-                    print(f"so we should take action from {self.legal_actions}")
+                    # print(f"if take action {action}, then opponent take{a} may win")
+                    # print(f"so we should take action from {self.legal_actions}")
                     break
+                
             self.board, self.current_player = temp
         
         # If all the actions are removed, then randomly select an 
@@ -106,6 +107,40 @@ class Connect4RuleBot():
         temp_board = self.board.copy()
         temp_board[row][action] = piece
         return self.check_four_in_a_row(temp_board, piece)
+    
+    def is_winning_move_in_two_steps(self, action):
+        """
+         Checks if an action can lead to win in 2 steps.
+
+         Args:
+             action: The action to be checked.
+
+         Returns:
+             True if the action is a winning move; False otherwise.
+         """
+        piece = self.current_player
+        row = self.get_available_row(action)
+        if row is None:
+            return False
+        temp_board = self.board.copy()
+        temp_board[row][action] = piece
+
+        blocking_count = 0
+        temp = [self.board.copy(), self.current_player]
+        self.board = temp_board
+        self.current_player = 3 - self.current_player
+        legal_actions = [i for i in range(7) if self.board[0][i] == 0]
+        for action in legal_actions:
+            if self.is_winning_move(action):
+                self.board, self.current_player = temp
+                return False
+            if self.is_blocking_move(action):
+                blocking_count += 1
+        self.board, self.current_player = temp
+        if blocking_count >= 2:
+            return True
+        else: 
+            return False
 
     def is_blocking_move(self, action):
         """

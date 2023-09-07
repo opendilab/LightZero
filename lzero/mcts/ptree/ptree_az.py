@@ -260,8 +260,8 @@ class MCTS(object):
         actions, visits = zip(*action_visits)
 
         visits_t = torch.as_tensor(visits, dtype=torch.float32)
-        visits_t /= temperature
-        action_probs = (visits_t / visits_t.sum()).numpy()
+        visits_t = torch.pow(visits_t, 1/temperature)
+        action_probs= (visits_t / visits_t.sum()).numpy()
 
         # Calculate the action probabilities based on the visit counts and temperature.
         # action_probs = nn.functional.softmax(1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0).numpy()

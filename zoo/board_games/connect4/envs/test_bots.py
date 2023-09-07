@@ -33,12 +33,12 @@ def test_mcts_bot_vs_rule_bot(num_simulations=200):
     winner = []
 
     # Repeat the game for 10 rounds.
-    for i in range(1):
+    for i in range(5):
         print('-' * 10 + str(i) + '-' * 10)
         # Initialize the game, where there are two players: player 1 and player 2.
         env = Connect4Env(EasyDict(cfg))
         # Reset the environment, set the board to a clean board and the  start player to be player 1.
-        env.reset()
+        env.reset(replay_name_suffix=f'test{i}')
         state = env.board
         cfg_temp = EasyDict(cfg.copy())
         cfg_temp.save_replay = False

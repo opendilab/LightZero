@@ -4,6 +4,12 @@ Overview:
     Connect Four is a 2-player turn based game, where players must connect four of their tokens vertically, horizontally or diagonally. 
     The players drop their respective token in a column of a standing grid, where each token will fall until it reaches the bottom of the column or reaches an existing token. 
     Players cannot place a token in a full column, and the game ends when either a player has made a sequence of 4 tokens, or when all 7 columns have been filled.
+Mode:
+    - ``self_play_mode``: In ``self_play_mode``, two players take turns to play. This mode is used in AlphaZero for data generating.
+    - ``play_with_bot_mode``: In this mode, the environment has a bot inside, which take the role of player 2. So the player may play against the bot.
+Bot:
+    - MCTSBot: A bot which take action through a Monte Carlo Tree Search, which has a high performance.
+    - RuleBot: A bot which take action according to some simple settings, which has a moderate performance.
 Observation Space:
     The observation in the Connect4 environment is a dictionary with five elements, which contains key information about the current state. 
     - observation (:obj:`array`): An array that represents information about the current state, with a shape of (3, 6, 7). 
@@ -51,13 +57,13 @@ def get_image(path):
     sfc.blit(image, (0, 0))
     return sfc
 
+
 @ENV_REGISTRY.register('connect4')
 class Connect4Env(BaseEnv):
     config = dict(
         env_name="Connect4",
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',  # only used in AlphaZero
-        # bot_action_type='mcts',
         bot_action_type='rule',
         agent_vs_human=False,
         prob_random_agent=0,
@@ -78,104 +84,60 @@ class Connect4Env(BaseEnv):
 
     def __init__(self, cfg=None) -> None:
 
+        # Load the config.
         self.cfg = cfg
+
+        # Set the format of the observation.
         self.channel_last = cfg.channel_last
         self.scale = cfg.scale
-        self.battle_mode = cfg.battle_mode # options = {'self_play_mode', 'play_with_bot_mode', 'eval_mode'}
-        self.mcts_mode = cfg.mcts_mode # options = {'self_play_mode', 'play_with_bot_mode', 'eval_mode'}
+
+        # Set the parameters about replay render.
         self.screen_scaling = cfg.screen_scaling
         self.save_replay = cfg.save_replay
         self.replay_name_suffix = "test"
         self.replay_path = None
         self.replay_format = 'gif'
+        self.screen = None
         self.frames = []
-        # The mode of interaction between the agent and the environment.
+
+        # Set the mode of interaction between the agent and the environment.
+        # options = {'self_play_mode', 'play_with_bot_mode', 'eval_mode'}
+        self.battle_mode = cfg.battle_mode 
+        self.mcts_mode = cfg.mcts_mode 
         assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
+        # In ``eval_mode``, we can choose to play with the agent.
+        self.agent_vs_human = cfg.agent_vs_human
+
+        # Set some randomness for selecting action.
         self.prob_random_agent = cfg.prob_random_agent
         self.prob_expert_agent = cfg.prob_expert_agent
         assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (
                 self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
             f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
-        self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
-        self.agent_vs_human = cfg.agent_vs_human
-        self.bot_action_type = cfg.bot_action_type # options = {'rule, 'mcts'}
-
-        self._current_player = 1
-
+        
         # The board state is saved as a one-dimensional array instead of a two-dimensional array for ease of computation in ``step`` function.
         self.board = [0] * (6 * 7)
-        self.players = [1, 2]
 
+        self.players = [1, 2]
+        self._current_player = 1
+        self._env = self
+
+        # Set the bot type and add some randomness.
+        # options = {'rule, 'mcts'}
+        self.bot_action_type = cfg.bot_action_type
+        self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
         if self.bot_action_type == 'mcts':
-            self.mcts_bot = MCTSBot(self, 'mcts_player', 200)
+            cfg_temp = EasyDict(cfg.copy())
+            cfg_temp.save_replay = False
+            cfg_temp.bot_action_type = None
+            env_mcts = Connect4Env(EasyDict(cfg_temp))
+            self.mcts_bot = MCTSBot(env_mcts, 'mcts_player', 200)
         elif self.bot_action_type == 'rule':
             self.rule_bot = Connect4RuleBot(self, self._current_player)
 
-        self._env = self
-        self.screen = None
-
-        if self.render_mode == "human":
-            self.clock = pygame.time.Clock()
-        
-        # Render the game if the replay is to be saved
+        # Render the game if the replay is to be saved.
         if self.save_replay:
             self.render(mode='rgb_array_render')
-
-
-    def current_state(self):
-        """
-        Overview:
-            obtain the state from the view of current player.
-            self.board is nd-array, 0 indicates that no stones is placed here,
-            1 indicates that player 1's stone is placed here, 2 indicates player 2's stone is placed here
-        Returns:
-            - current_state (:obj:`array`):
-                the 0 dim means which positions is occupied by self.current_player,
-                the 1 dim indicates which positions are occupied by self.to_play,
-                the 2 dim indicates which player is the to_play player, 1 means player 1, 2 means player 2
-        """
-        board_vals = np.array(self.board).reshape(6, 7)
-        board_curr_player = np.where(board_vals == self.current_player, 1, 0)
-        board_opponent_player = np.where(board_vals == self.next_player, 1, 0)
-        board_to_play = np.full((6, 7), self.current_player)
-        raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
-        if self.scale:
-            scale_obs = copy.deepcopy(raw_obs / 2)
-        else:
-            scale_obs = copy.deepcopy(raw_obs)
-        if self.channel_last:
-            # move channel dim to last axis
-            # (C, W, H) -> (W, H, C)
-            return np.transpose(raw_obs, [1, 2, 0]), np.transpose(scale_obs, [1, 2, 0])
-        else:
-            # (C, W, H)
-            return raw_obs, scale_obs
-
-    def observe(self):
-        legal_moves = self.legal_actions
-
-        action_mask = np.zeros(7, "int8")
-        for i in legal_moves:
-            action_mask[i] = 1
-
-        if self.battle_mode == 'play_with_bot_mode' or self.battle_mode == 'eval_mode':
-            return {"observation": self.current_state()[1], 
-                    "action_mask": action_mask,
-                    "board": copy.deepcopy(self.board),
-                    "current_player_index": self.players.index(self._current_player),
-                    "to_play": -1
-                    }
-        elif self.battle_mode == 'self_play_mode':
-            return {"observation": self.current_state()[1], 
-                    "action_mask": action_mask,
-                    "board": copy.deepcopy(self.board),
-                    "current_player_index": self.players.index(self._current_player),
-                    "to_play": self._current_player
-                    }
-
-    @property
-    def legal_actions(self):
-        return [i for i in range(7) if self.board[i] == 0]
 
     # action in this case is a value from 0 to 6 indicating position to move on the flat representation of the connect4 board
     def step(self, action):
@@ -205,7 +167,6 @@ class Connect4Env(BaseEnv):
             return timestep
         elif self.battle_mode == 'play_with_bot_mode':
             # player 1 battle with expert player 2
-
             # player 1's turn
             # print(f'playing with bot now, the action from algorithm is {action}')
             flag = "bot_agent"
@@ -251,9 +212,8 @@ class Connect4Env(BaseEnv):
             return timestep
         elif self.battle_mode == 'eval_mode':
             # player 1 battle with expert player 2
-
             # player 1's turn
-            print('player 1 (agent player): ' + self.action_to_string(action))
+            # print('player 1 (agent player): ' + self.action_to_string(action))
             # print(f'evaluating now, the battle mode is {self.battle_mode}, the action is {action}')
             flag = "eval_agent"
             timestep_player1 = self._player_step(action, flag)
@@ -325,16 +285,7 @@ class Connect4Env(BaseEnv):
         done, winner = self.get_done_winner()
         # check if there is a winner
         if not winner == -1:
-            # self.rewards[self.agent_selection] += 1
-            # self.rewards[next_agent] -= 1
             reward = np.array(1).astype(np.float32)
-            # self.dones = {i: True for i in self.agents}
-        # check if there is a tie
-        # elif all(x in [1, 2] for x in self.board):
-        #     # once either play wins or there is a draw, game over, both players are done
-        #     # self.dones = {i: True for i in self.agents}
-        #     reward = np.array(0).astype(np.float32)
-        #     done = True
         else:
             reward = np.array(0).astype(np.float32)
 
@@ -344,20 +295,18 @@ class Connect4Env(BaseEnv):
 
         if done:
             info['eval_episode_return'] = reward
-            # print('tictactoe one episode done: ', info)
 
         obs = self.observe()
 
         return BaseEnvTimestep(obs, reward, done, info)
 
-    def reset(self, start_player_index=0, init_state=None):
-        # reset environment
+    def reset(self, start_player_index=0, init_state=None, replay_name_suffix=None):
+        if replay_name_suffix is not None:
+            self.replay_name_suffix = replay_name_suffix
         if init_state is None:
             self.board = [0] * (6 * 7)
         else:
-            # print("before:", self.board)
             self.board = init_state
-            # print("after:", self.board)
         self.players = [1, 2]
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
@@ -377,34 +326,66 @@ class Connect4Env(BaseEnv):
         obs = self.observe()
         return obs
 
-    def reset_v2(self, start_player_index=0, init_state=None):
+    def current_state(self):
         """
         Overview:
-            only used in alpha-beta pruning bot.
+            obtain the state from the view of current player.
+            self.board is nd-array, 0 indicates that no stones is placed here,
+            1 indicates that player 1's stone is placed here, 2 indicates player 2's stone is placed here
+        Returns:
+            - current_state (:obj:`array`):
+                the 0 dim means which positions is occupied by self.current_player,
+                the 1 dim indicates which positions are occupied by self.to_play,
+                the 2 dim indicates which player is the to_play player, 1 means player 1, 2 means player 2
         """
-        self.start_player_index = start_player_index
-        self._current_player = self.players[self.start_player_index]
-        if init_state is not None:
-            self.board = np.array(init_state, dtype="int32")
+        board_vals = np.array(self.board).reshape(6, 7)
+        board_curr_player = np.where(board_vals == self.current_player, 1, 0)
+        board_opponent_player = np.where(board_vals == self.next_player, 1, 0)
+        board_to_play = np.full((6, 7), self.current_player)
+        raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
+        if self.scale:
+            scale_obs = copy.deepcopy(raw_obs / 2)
         else:
-            self.board = [0] * (6 * 7)
+            scale_obs = copy.deepcopy(raw_obs)
+        if self.channel_last:
+            # move channel dim to last axis
+            # (C, W, H) -> (W, H, C)
+            return np.transpose(raw_obs, [1, 2, 0]), np.transpose(scale_obs, [1, 2, 0])
+        else:
+            # (C, W, H)
+            return raw_obs, scale_obs
 
-    # def render(self):
-    #     print(np.array(self.board).reshape(6, 7))
+    def observe(self):
+        legal_moves = self.legal_actions
+
+        action_mask = np.zeros(7, "int8")
+        for i in legal_moves:
+            action_mask[i] = 1
+
+        if self.battle_mode == 'play_with_bot_mode' or self.battle_mode == 'eval_mode':
+            return {"observation": self.current_state()[1], 
+                    "action_mask": action_mask,
+                    "board": copy.deepcopy(self.board),
+                    "current_player_index": self.players.index(self._current_player),
+                    "to_play": -1
+                    }
+        elif self.battle_mode == 'self_play_mode':
+            return {"observation": self.current_state()[1], 
+                    "action_mask": action_mask,
+                    "board": copy.deepcopy(self.board),
+                    "current_player_index": self.players.index(self._current_player),
+                    "to_play": self._current_player
+                    }
+
+    @property
+    def legal_actions(self):
+        return [i for i in range(7) if self.board[i] == 0]
 
     def render(self, mode='rgb_array_render'):
-        # if self.render_mode is None:
-        #     logging.warning(
-        #         "You are calling render method without specifying any render mode."
-        #     )
-        #     return
-
         screen_width = 99 * self.screen_scaling
         screen_height = 86 / 99 * screen_width
-
         if self.screen is None:
             pygame.init()
-
             if mode == "human":
                 pygame.display.set_caption("Connect Four")
                 self.screen = pygame.display.set_mode((screen_width, screen_height))
@@ -458,11 +439,7 @@ class Connect4Env(BaseEnv):
 
         self.frames.append(np.transpose(observation, axes=(1, 0, 2)))
 
-        return (
-            np.transpose(observation, axes=(1, 0, 2))
-            if mode == "rgb_array_render"
-            else None
-        )
+        return None
 
     def save_render_output(self, replay_name_suffix: str = '', replay_path=None, format='gif'):
         # At the end of the episode, save the frames
@@ -472,17 +449,15 @@ class Connect4Env(BaseEnv):
             filename = f'{replay_path}.{format}'
 
         if format == 'gif':
-            # frame_duration = 1  # 帧的显示时间间隔（秒）
-            # durations = [frame_duration] * len(self.frames)
             imageio.mimsave(filename, self.frames, 'GIF', duration=1000)
         elif format == 'mp4':
             imageio.mimsave(filename, self.frames, fps=30, codec='mpeg4')
 
         else:
             raise ValueError("Unsupported format: {}".format(format))
-
         logging.info("Saved output to {}".format(filename))
         self.frames = []
+
     def close(self):
         pass
 
@@ -681,31 +656,6 @@ class Connect4Env(BaseEnv):
         next_simulator_env = copy.deepcopy(self)
         next_simulator_env.reset(start_player_index, init_state=new_board)
         return next_simulator_env
-
-    def simulate_action_v2(self, board, start_player_index, action):
-        """
-        Overview:
-            execute action from board and get new_board, new_legal_actions. used in alphabeta_pruning_bot.
-        Arguments:
-            - board (:obj:`np.array`): current board
-            - start_player_index (:obj:`int`): start player index
-            - action (:obj:`int`): action
-        Returns:
-            - new_board (:obj:`np.array`): new board
-            - new_legal_actions (:obj:`list`): new legal actions
-        """
-        self.reset(start_player_index, init_state=board)
-        if action not in self.legal_actions:
-            raise ValueError("action {0} on board {1} is not legal".format(action, self.board))
-        piece = self.players.index(self._current_player) + 1
-        for i in list(filter(lambda x: x % 7 == action, list(range(41, -1, -1)))):
-            if self.board[i] == 0:
-                self.board[i] = piece
-                break
-        new_legal_actions = copy.deepcopy(self.legal_actions)
-        new_board = copy.deepcopy(self.board)
-
-        return new_board, new_legal_actions
 
     @staticmethod
     def create_collector_env_cfg(cfg: dict) -> List[dict]:
