@@ -9,7 +9,8 @@ Mode:
     - ``play_with_bot_mode``: In this mode, the environment has a bot inside, which take the role of player 2. So the player may play against the bot.
 Bot:
     - MCTSBot: A bot which take action through a Monte Carlo Tree Search, which has a high performance.
-    - RuleBot: A bot which take action according to some simple settings, which has a moderate performance.
+    - RuleBot: A bot which take action according to some simple settings, which has a moderate performance. Note: Currently the RuleBot can only exclude actions that would lead to losing the game within three moves. 
+        Note: Currently the RuleBot can only exclude actions that would lead to losing the game within three moves. One possible improvement is to further enhance the bot's long-term planning capabilities.
 Observation Space:
     The observation in the Connect4 environment is a dictionary with five elements, which contains key information about the current state. 
     - observation (:obj:`array`): An array that represents information about the current state, with a shape of (3, 6, 7). 
