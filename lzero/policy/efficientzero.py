@@ -86,6 +86,8 @@ class EfficientZeroPolicy(Policy):
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
         transform2string=False,
+        # (bool) Whether to use gray scale image.
+        gray_scale=False,
         # (bool) Whether to use data augmentation.
         use_augmentation=False,
         # (list) The style of augmentation.
@@ -204,6 +206,8 @@ class EfficientZeroPolicy(Policy):
             return 'EfficientZeroModel', ['lzero.model.efficientzero_model']
         elif self._cfg.model.model_type == "mlp":
             return 'EfficientZeroModelMLP', ['lzero.model.efficientzero_model_mlp']
+        else:
+            raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
     def _init_learn(self) -> None:
         """

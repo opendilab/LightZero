@@ -19,6 +19,71 @@ from gym.utils import seeding
 
 @ENV_REGISTRY.register('game_2048')
 class Game2048Env(gym.Env):
+    """
+    Overview:
+        The Game2048Env is a gym environment implementation of the 2048 game. The goal of the game is to slide numbered tiles
+        on a grid to combine them and create a tile with the number 2048 (or larger). The environment provides an interface to interact with
+        the game and receive observations, rewards, and game status information.
+
+    Interfaces:
+      - reset(init_board=None, add_random_tile_flag=True):
+          Resets the game board and starts a new episode. It returns the initial observation of the game.
+      - step(action):
+          Advances the game by one step based on the provided action. It returns the new observation, reward, game status,
+          and additional information.
+      - render(mode='human'):
+          Renders the current state of the game for visualization purposes.
+    MDP Definition:
+      - Observation Space:
+          The observation space is a 4x4 grid representing the game board. Each cell in the grid can contain a number from
+          0 to 2048. The observation can be in different formats based on the 'obs_type' parameter in the environment configuration.
+          - If 'obs_type' is set to 'encode_observation' (default):
+              The observation is a 3D numpy array of shape (4, 4, 16). Each cell in the array is represented as a one-hot vector
+              encoding the value of the tile in that cell. The one-hot vector has a length of 16, representing the possible tile
+              values from 0 to 2048. The first element in the one-hot vector corresponds to an empty cell (0 value).
+          - If 'obs_type' is set to 'dict_encoded_board':
+              The observation is a dictionary with the following keys:
+                  - 'observation': A 3D numpy array representing the game board as described above.
+                  - 'action_mask': A binary mask representing the legal actions that can be taken in the current state.
+                  - 'to_play': A placeholder value (-1) indicating the current player (not applicable in this game).
+                  - 'chance': A placeholder value representing the chance outcome (not applicable in this game).
+          - If 'obs_type' is set to 'raw_board':
+              The observation is the raw game board as a 2D numpy array of shape (4, 4).
+      - Action Space:
+          The action space is a discrete space with 4 possible actions:
+              - 0: Move Up
+              - 1: Move Right
+              - 2: Move Down
+              - 3: Move Left
+      - Reward:
+          The reward depends on the 'reward_type' parameter in the environment configuration.
+          - If 'reward_type' is set to 'raw':
+              The reward is a floating-point number representing the immediate reward obtained from the last action.
+          - If 'reward_type' is set to 'merged_tiles_plus_log_max_tile_num':
+              The reward is a floating-point number representing the number of merged tiles in the current step.
+              If the maximum tile number on the board after the step is greater than the previous maximum tile number,
+              the reward is further adjusted by adding the logarithm of the new maximum tile number multiplied by 0.1.
+              The reward is calculated as follows: reward = num_of_merged_tiles + (log2(new_max_tile_num) * 0.1)
+              If the new maximum tile number is the same as the previous maximum tile number, the reward does not
+              include the second term. Note: This reward type requires 'reward_normalize' to be set to False.
+      - Done:
+          The game ends when one of the following conditions is met:
+              - The maximum tile number (configured by 'max_tile') is reached.
+              - There are no legal moves left.
+              - The number of steps in the episode exceeds the maximum episode steps (configured by 'max_episode_steps').
+      - Additional Information:
+          The 'info' dictionary returned by the 'step' method contains additional information about the current state.
+          The following keys are included in the dictionary:
+              - 'raw_reward': The raw reward obtained from the last action.
+              - 'current_max_tile_num': The current maximum tile number on the board.
+      - Rendering:
+          The 'render' method can be used to visualize the current state of the game. It supports two rendering modes:
+              - 'human': Renders the game in a text-based format in the console.
+              - 'rgb_array_render': Renders the game as an RGB image.
+          Note: The rendering mode is set to 'human' by default.
+      """
+
+    # The default_config for game 2048 env.
     config = dict(
         env_name="game_2048",
         save_replay=False,
@@ -28,7 +93,7 @@ class Game2048Env(gym.Env):
         render_real_time=False,
         act_scale=True,
         channel_last=True,
-        obs_type='raw_observation',  # options=['raw_observation', 'dict_observation', 'array']
+        obs_type='dict_encoded_board',  # options=['raw_board', 'raw_encoded_board', 'dict_encoded_board']
         reward_normalize=False,
         reward_norm_scale=100,
         reward_type='raw',  # options=['raw', 'merged_tiles_plus_log_max_tile_num']
@@ -43,7 +108,6 @@ class Game2048Env(gym.Env):
         possible_tiles=np.array([2, 4]),
         tile_probabilities=np.array([0.9, 0.1]),
     )
-    metadata = {'render.modes': ['human', 'rgb_array_render']}
 
     @classmethod
     def default_config(cls: type) -> EasyDict:
@@ -69,7 +133,7 @@ class Game2048Env(gym.Env):
         self.reward_norm_scale = cfg.reward_norm_scale
         assert self.reward_type in ['raw', 'merged_tiles_plus_log_max_tile_num']
         assert self.reward_type == 'raw' or (
-                self.reward_type == 'merged_tiles_plus_log_max_tile_num' and self.reward_normalize == False)
+                self.reward_type == 'merged_tiles_plus_log_max_tile_num' and self.reward_normalize is False)
         self.max_tile = cfg.max_tile
         # Define the maximum tile that will end the game (e.g. 2048). None means no limit.
         # This does not affect the state returned.
@@ -143,15 +207,19 @@ class Game2048Env(gym.Env):
             observation = observation.reshape(-1)
 
         # Based on the observation type, create the appropriate observation object
-        if self.obs_type == 'dict_observation':
+        if self.obs_type == 'dict_encoded_board':
             observation = {
                 'observation': observation,
                 'action_mask': action_mask,
                 'to_play': -1,
                 'chance': self.chance
             }
-        elif self.obs_type == 'array':
+        elif self.obs_type == 'raw_board':
             observation = self.board
+        elif self.obs_type == 'raw_encoded_board':
+            observation = observation
+        else:
+            raise NotImplementedError
 
         # Render the game if the replay is to be saved
         if self.save_replay:
@@ -165,7 +233,7 @@ class Game2048Env(gym.Env):
             Perform one step of the game. This involves making a move, adding a new tile, and updating the game state.
             New tile could be added randomly or from the tile probabilities.
             The rewards are calculated based on the game configuration ('merged_tiles_plus_log_max_tile_num' or 'raw').
-            The observations are also returned based on the game configuration ('dict_observation', 'array', or 'raw').
+            The observations are also returned based on the game configuration ('raw_board', 'raw_encoded_board' or 'dict_encoded_board').
         Arguments:
             - action (:obj:`int`): The action to be performed.
         Returns:
@@ -230,12 +298,14 @@ class Game2048Env(gym.Env):
         action_mask[self.legal_actions] = 1
 
         # Return the observation based on the observation type
-        if self.obs_type == 'dict_observation':
+        if self.obs_type == 'dict_encoded_board':
             observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1, 'chance': self.chance}
-        elif self.obs_type == 'array':
+        elif self.obs_type == 'raw_board':
             observation = self.board
-        else:
+        elif self.obs_type == 'raw_encoded_board':
             observation = observation
+        else:
+            raise NotImplementedError
 
         # Normalize the reward if necessary
         if self.reward_normalize:

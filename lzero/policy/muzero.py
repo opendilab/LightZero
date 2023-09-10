@@ -14,8 +14,7 @@ from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
-    configure_optimizers
+    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs
 
 
 @POLICY_REGISTRY.register('muzero')
@@ -87,6 +86,8 @@ class MuZeroPolicy(Policy):
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
         transform2string=False,
+        # (bool) Whether to use gray scale image.
+        gray_scale=False,
         # (bool) Whether to use data augmentation.
         use_augmentation=False,
         # (list) The style of augmentation.
@@ -108,7 +109,7 @@ class MuZeroPolicy(Policy):
         model_update_ratio=0.1,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
-        # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
+        # (str) Optimizer for training policy network. ['SGD', 'Adam']
         optim_type='SGD',
         # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.2,
@@ -204,13 +205,15 @@ class MuZeroPolicy(Policy):
             return 'MuZeroModel', ['lzero.model.muzero_model']
         elif self._cfg.model.model_type == "mlp":
             return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
+        else:
+            raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
     def _init_learn(self) -> None:
         """
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
-        assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW_official', 'AdamW_nanoGPT'], self._cfg.optim_type
+        assert self._cfg.optim_type in ['SGD', 'Adam'], self._cfg.optim_type
         # NOTE: in board_gmaes, for fixed lr 0.003, 'Adam' is better than 'SGD'.
         if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
@@ -222,17 +225,6 @@ class MuZeroPolicy(Policy):
         elif self._cfg.optim_type == 'Adam':
             self._optimizer = optim.Adam(
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
-            )
-        elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = optim.AdamW(
-                self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
-            )
-        elif self._cfg.optim_type == 'AdamW_nanoGPT':
-            self._optimizer = configure_optimizers(
-                model=self._model,
-                weight_decay=self._cfg.weight_decay,
-                learning_rate=self._cfg.learning_rate,
-                device_type=self._cfg.device
             )
 
         if self._cfg.lr_piecewise_constant_decay:

@@ -1,4 +1,4 @@
-from typing import Any, Tuple
+from typing import Any, Tuple, List
 
 import numpy as np
 from ding.utils import BUFFER_REGISTRY
@@ -146,3 +146,26 @@ class StochasticMuZeroGameBuffer(MuZeroGameBuffer):
 
         context = reward_value_context, policy_re_context, policy_non_re_context, current_batch
         return context
+
+    def update_priority(self, train_data: List[np.ndarray], batch_priorities: Any) -> None:
+        """
+        Overview:
+            Update the priority of training data.
+        Arguments:
+            - train_data (:obj:`Optional[List[Optional[np.ndarray]]]`): training data to be updated priority.
+            - batch_priorities (:obj:`batch_priorities`): priorities to update to.
+        NOTE:
+            train_data = [current_batch, target_batch]
+            if self._cfg.use_ture_chance_label_in_chance_encoder:
+                obs_batch_orig, action_batch, mask_batch, indices, weights, make_time, chance_batch = current_batch
+            else:
+                obs_batch_orig, action_batch, mask_batch, indices, weights, make_time = current_batch
+
+        """
+        indices = train_data[0][3]
+        metas = {'make_time': train_data[0][5], 'batch_priorities': batch_priorities}
+        # only update the priorities for data still in replay buffer
+        for i in range(len(indices)):
+            if metas['make_time'][i] > self.clear_time:
+                idx, prio = indices[i], metas['batch_priorities'][i]
+                self.game_pos_priorities[idx] = prio

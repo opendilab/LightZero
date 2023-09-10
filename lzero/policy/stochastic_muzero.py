@@ -16,18 +16,17 @@ from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
     configure_optimizers
-from lzero.policy.utils import calculate_topk_accuracy, plot_topk_accuracy, visualize_avg_softmax, \
-    plot_argmax_distribution
+from lzero.policy.utils import plot_topk_accuracy, visualize_avg_softmax, plot_argmax_distribution
 
 
 @POLICY_REGISTRY.register('stochastic_muzero')
 class StochasticMuZeroPolicy(Policy):
     """
     Overview:
-        The policy class for Stochastic MuZero.
+        The policy class for Stochastic MuZero proposed in the paper https://openreview.net/pdf?id=X6D9bAHhBQ1.
     """
 
-    # The default_config for MuZero policy.
+    # The default_config for Stochastic MuZero policy.
     config = dict(
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.
@@ -83,6 +82,8 @@ class StochasticMuZeroPolicy(Policy):
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
         transform2string=False,
+        # (bool) Whether to use gray scale image.
+        gray_scale=False,
         # (bool) Whether to use data augmentation.
         use_augmentation=False,
         # (list) The style of augmentation.
@@ -103,7 +104,7 @@ class StochasticMuZeroPolicy(Policy):
         model_update_ratio=0.1,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
-        # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
+        # (str) Optimizer for training policy network. ['SGD', 'Adam']
         optim_type='Adam',
         # (float) Learning rate for training policy network. Ininitial lr for manually decay schedule.
         learning_rate=int(3e-3),
@@ -207,13 +208,15 @@ class StochasticMuZeroPolicy(Policy):
             return 'StochasticMuZeroModel', ['lzero.model.stochastic_muzero_model']
         elif self._cfg.model.model_type == "mlp":
             return 'StochasticMuZeroModelMLP', ['lzero.model.stochastic_muzero_model_mlp']
+        else:
+            raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
     def _init_learn(self) -> None:
         """
         Overview:
             Learn mode init method. Called by ``self.__init__``. Ininitialize the learn model, optimizer and MCTS utils.
         """
-        assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW', 'AdamW_nanoGPT'], self._cfg.optim_type
+        assert self._cfg.optim_type in ['SGD', 'Adam'], self._cfg.optim_type
         # NOTE: in board_gmaes, for fixed lr 0.003, 'Adam' is better than 'SGD'.
         if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
@@ -225,17 +228,6 @@ class StochasticMuZeroPolicy(Policy):
         elif self._cfg.optim_type == 'Adam':
             self._optimizer = optim.Adam(
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
-            )
-        elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = optim.AdamW(
-                self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
-            )
-        elif self._cfg.optim_type == 'AdamW_nanoGPT':
-            self._optimizer = configure_optimizers(
-                model=self._model,
-                weight_decay=self._cfg.weight_decay,
-                learning_rate=self._cfg.learning_rate,
-                device_type=self._cfg.device
             )
 
         if self._cfg.lr_piecewise_constant_decay:
@@ -315,8 +307,8 @@ class StochasticMuZeroPolicy(Policy):
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
         data_list = [
             mask_batch,
-            target_reward.astype('float64'),
-            target_value.astype('float64'), target_policy, weights
+            target_reward.astype('float32'),
+            target_value.astype('float32'), target_policy, weights
         ]
         [mask_batch, target_reward, target_value, target_policy,
          weights] = to_torch_float_tensor(data_list, self._cfg.device)
@@ -464,6 +456,16 @@ class StochasticMuZeroPolicy(Policy):
                 commitment_loss += torch.nn.MSELoss()(chance_encoding, true_chance_one_hot.float().detach())
             else:
                 afterstate_policy_loss += cross_entropy_loss(afterstate_policy_logits, chance_one_hot.detach())
+
+                if self._cfg.analyze_chance_distribution:
+                    # visualize the avg softmax of afterstate_policy_logits
+                    visualize_avg_softmax(afterstate_policy_logits)
+                    # plot the argmax distribution of true_chance_one_hot
+                    plot_argmax_distribution(true_chance_one_hot)
+                    topK_values = range(1, self._cfg.model.chance_space_size+1)  # top_K values from 1 to 32
+                    # calculate the topK accuracy of afterstate_policy_logits and plot the topK accuracy curve.
+                    plot_topk_accuracy(afterstate_policy_logits, true_chance_one_hot, topK_values)
+
                 # TODO(pu): whether to detach the chance_one_hot in the commitment loss.
                 # commitment_loss += torch.nn.MSELoss()(chance_encoding, chance_one_hot.float().detach())
                 commitment_loss += torch.nn.MSELoss()(chance_encoding, chance_one_hot.float())

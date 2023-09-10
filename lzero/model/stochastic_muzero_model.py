@@ -44,13 +44,15 @@ class StochasticMuZeroModel(nn.Module):
     ):
         """
         Overview:
-            The definition of the neural network model used in Stochastic MuZero.
-            Stochastic MuZero model which consists of a representation network, a dynamics network and a prediction network.
-            The networks are build on convolution residual blocks and fully connected layers.
+            The definition of the neural network model used in Stochastic MuZero,
+            which is proposed in the paper https://openreview.net/pdf?id=X6D9bAHhBQ1.
+            Stochastic MuZero model consists of a representation network, a dynamics network and a prediction network.
+            The networks are built on convolution residual blocks and fully connected layers.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96] for Atari.
             - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
-            - chance_space_size: (:obj:`int`): Chance space size, the action space for decision node, usually an integer number for discrete action space.
+            - chance_space_size: (:obj:`int`): Chance space size, the action space for decision node, usually an integer
+                number for discrete action space.
             - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
             - num_channels (:obj:`int`): The channels of hidden states.
             - reward_head_channels (:obj:`int`): The channels of reward head.
@@ -801,13 +803,33 @@ class ChanceEncoderBackbone(nn.Module):
         return x
 
 
+class ChanceEncoderBackboneMLP(nn.Module):
+    def __init__(self, input_dimensions, chance_encoding_dim=4):
+        super(ChanceEncoderBackboneMLP, self).__init__()
+        self.fc1 = nn.Linear(input_dimensions, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, chance_encoding_dim)
+
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
+
+
 class ChanceEncoder(nn.Module):
-    def __init__(self, observation_space_dimensions, action_dimension):
+    def __init__(self, input_dimensions, action_dimension, encoder_backbone_type='conv'):
         super().__init__()
         # Specify the action space for the model
         self.action_space = action_dimension
-        # Define the encoder, which transforms observations into a latent space
-        self.chance_encoder = ChanceEncoderBackbone(observation_space_dimensions, action_dimension)
+        if encoder_backbone_type == 'conv':
+            # Define the encoder, which transforms observations into a latent space
+            self.chance_encoder = ChanceEncoderBackbone(input_dimensions, action_dimension)
+        elif encoder_backbone_type == 'mlp':
+            self.chance_encoder = ChanceEncoderBackboneMLP(input_dimensions, action_dimension)
+        else:
+            raise ValueError('Encoder backbone type not supported')
+
         # Using the Straight Through Estimator method for backpropagation
         self.onehot_argmax = StraightThroughEstimator()
 
@@ -821,11 +843,11 @@ class ChanceEncoder(nn.Module):
         Planning in Stochastic Environments with a Learned Model (ICLR 2022), page 5,
         Chance Outcomes section.
 
-        Args:
+        Arguments:
             observations (Tensor): Observation tensor.
 
         Returns:
-            chance_t (Tensor): Transformed tensor after applying one-hot argmax.
+            chance (Tensor): Transformed tensor after applying one-hot argmax.
             chance_encoding (Tensor): Encoding of the input observation tensor.
         """
         # Apply the encoder to the observation
@@ -844,7 +866,7 @@ class StraightThroughEstimator(nn.Module):
         Forward method for the StraightThroughEstimator. This applies the one-hot argmax
         function to the input tensor.
 
-        Args:
+        Arguments:
             x (Tensor): Input tensor.
 
         Returns:
@@ -872,7 +894,7 @@ class OnehotArgmax(torch.autograd.Function):
         Forward method for the one-hot argmax function. This method transforms the input
         tensor into a one-hot tensor.
 
-        Args:
+        Arguments:
             ctx (context): A context object that can be used to stash information for
             backward computation.
             input (Tensor): Input tensor.
@@ -889,7 +911,7 @@ class OnehotArgmax(torch.autograd.Function):
         Backward method for the one-hot argmax function. This method allows gradients
         to flow to the encoder during backpropagation.
 
-        Args:
+        Arguments:
             ctx (context): A context object that was stashed in the forward pass.
             grad_output (Tensor): The gradient of the output tensor.
 
@@ -897,4 +919,3 @@ class OnehotArgmax(torch.autograd.Function):
             Tensor: The gradient of the input tensor.
         """
         return grad_output
-

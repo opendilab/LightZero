@@ -1,6 +1,8 @@
 # According to the model you want to evaluate, import the corresponding config.
-from lzero.entry import eval_muzero
 import numpy as np
+
+from lzero.entry import eval_muzero
+from zoo.game_2048.config.stochastic_muzero_2048_config import main_config, create_config
 
 if __name__ == "__main__":
     """ 
@@ -8,10 +10,8 @@ if __name__ == "__main__":
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
     """
-    # Take the config of sampled efficientzero as an example
-    from stochastic_muzero_2048_config import main_config, create_config
 
-    model_path = "/Users/puyuan/code/LightZero/data_stochastic_mz_ctree/game_2048_stochastic_muzero_ns100_upc200_rr0.0_bs512_chance-True-32_seed0/ckpt/ckpt_best.pth.tar"
+    model_path = "./ckpt/ckpt_best.pth.tar"
 
     returns_mean_seeds = []
     returns_seeds = []

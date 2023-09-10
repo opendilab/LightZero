@@ -87,6 +87,8 @@ class GumeblMuZeroPolicy(Policy):
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
         transform2string=False,
+        # (bool) Whether to use gray scale image.
+        gray_scale=False,
         # (bool) Whether to use data augmentation.
         use_augmentation=False,
         # (list) The style of augmentation.
@@ -185,6 +187,8 @@ class GumeblMuZeroPolicy(Policy):
             return 'MuZeroModel', ['lzero.model.muzero_model']
         elif self._cfg.model.model_type == "mlp":
             return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
+        else:
+            raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
     def _init_learn(self) -> None:
         """
