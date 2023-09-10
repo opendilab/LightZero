@@ -466,16 +466,12 @@ class StochasticMuZeroPolicy(Policy):
                     # calculate the topK accuracy of afterstate_policy_logits and plot the topK accuracy curve.
                     plot_topk_accuracy(afterstate_policy_logits, true_chance_one_hot, topK_values)
 
-                # TODO(pu): whether to detach the chance_one_hot in the commitment loss.
-                # commitment_loss += torch.nn.MSELoss()(chance_encoding, chance_one_hot.float().detach())
+                # TODO(pu): whether to detach the chance_encoding in the commitment loss.
                 commitment_loss += torch.nn.MSELoss()(chance_encoding, chance_one_hot.float())
 
             afterstate_value_loss += cross_entropy_loss(afterstate_value, target_value_categorical[:, step_i])
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_i])
-
-            # Follow MuZero, set half gradient
-            # latent_state.register_hook(lambda grad: grad * 0.5)
 
             if self._cfg.monitor_extra_statistics:
                 original_rewards = self.inverse_scalar_transform_handle(reward)
