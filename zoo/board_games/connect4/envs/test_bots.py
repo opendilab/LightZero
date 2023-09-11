@@ -15,8 +15,9 @@ cfg = EasyDict(
     prob_expert_agent=0,
     bot_action_type='rule',
     screen_scaling=9,
-    save_replay=True,
-    prob_random_action_in_bot = 0
+    # save_replay=True,
+    save_replay=False,
+    prob_random_action_in_bot=0,
 )
 
 
@@ -175,8 +176,78 @@ def test_mcts_bot_vs_mcts_bot(num_simulations=50):
     )
 
 
+def test_rule_bot_vs_rule_bot():
+    """
+    Overview:
+        A tictactoe game between rule_bot and rule_bot.
+    """
+    # List to record the time required for each decision round and the winner.
+    bot_action_1_time_list = []
+    bot_action_2_time_list = []
+    winner = []
+
+    # Repeat the game for 10 rounds.
+    for i in range(5):
+        print('=' * 20 + str(i) + '=' * 20)
+        # Initialize the game, where there are two players: player 1 and player 2.
+        env = Connect4Env(EasyDict(cfg))
+        # Reset the environment, set the board to a clean board and the  start player to be player 1.
+        env.reset(replay_name_suffix=f'test{i}')
+        cfg_temp = EasyDict(cfg.copy())
+        cfg_temp.save_replay = False
+        # Set player 1 to move first.
+        player_index = 0
+        while not env.get_done_reward()[0]:
+            """
+            Overview:
+                The two players take turns to make moves, and the time required for each decision is recorded.
+            """
+            # Set rule_bot to be player 1.
+            if player_index == 0:
+                t1 = time.time()
+                action = env.bot_action()
+                t2 = time.time()
+                # print("The time difference is :", t2-t1)
+                bot_action_1_time_list.append(t2 - t1)
+                player_index = 1
+            # Set bot_action_1 to be player 2.
+            else:
+                t1 = time.time()
+                action = env.bot_action()
+                # action = player.get_actions(state, player_index=player_index)
+                t2 = time.time()
+                # print("The time difference is :", t2-t1)
+                bot_action_2_time_list.append(t2 - t1)
+                player_index = 0
+            env.step(action)
+            state = env.board
+            print(np.array(state).reshape(6, 7))
+
+        # Record the winner.
+        winner.append(env.get_done_winner()[1])
+
+    # Calculate the variance and mean of decision times.
+    bot_action_1_mu = np.mean(bot_action_1_time_list)
+    bot_action_1_var = np.var(bot_action_1_time_list)
+
+    bot_action_mu = np.mean(bot_action_2_time_list)
+    bot_action_var = np.var(bot_action_2_time_list)
+
+    # Print the information of the games.
+    print('bot_action_1_mu={}, bot_action_1_var={}\n'.format(bot_action_1_mu, bot_action_1_var))
+
+    print('bot_action_2_mu={}, bot_action_2_var={}\n'.format(bot_action_mu, bot_action_var))
+
+    print(
+        'winner={}, draw={}, player1={}, player2={}\n'.format(
+            winner, winner.count(-1), winner.count(1), winner.count(2)
+        )
+    )
+
+
 if __name__ == '__main__':
     # test_mcts_bot_vs_rule_bot(50)
-    test_mcts_bot_vs_rule_bot(200)
-    # test_mcts_bot_vs_rule_bot(1000) 
+    # test_mcts_bot_vs_rule_bot(200)
+    test_rule_bot_vs_rule_bot()
+    # test_mcts_bot_vs_rule_bot(1000)
     # test_mcts_bot_vs_mcts_bot()
