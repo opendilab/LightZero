@@ -2,6 +2,7 @@
 import numpy as np
 
 from lzero.entry import eval_muzero
+from zoo.game_2048.config.muzero_2048_config import main_config, create_config
 from zoo.game_2048.config.stochastic_muzero_2048_config import main_config, create_config
 
 if __name__ == "__main__":
@@ -22,8 +23,10 @@ if __name__ == "__main__":
     main_config.env.evaluator_env_num = 1   # Visualization requires the 'env_num' to be set as 1
     main_config.env.n_evaluator_episode = total_test_episodes
     main_config.env.save_replay = True  # Whether to save the replay, if save the video render_mode_human must to be True
-    main_config.env.replay_format = 'mp4'
-    main_config.env.replay_name_suffix = 'ns100_s1'
+    main_config.env.replay_format = 'gif'
+    main_config.env.replay_name_suffix = 'muzero_ns100_s0'
+    # main_config.env.replay_name_suffix = 'stochastic_muzero_ns100_s0'
+
     main_config.env.replay_path = None
     main_config.env.max_episode_steps = int(1e9)  # Adjust according to different environments
 

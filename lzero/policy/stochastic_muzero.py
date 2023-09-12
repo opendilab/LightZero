@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import torch.optim as optim
 from ding.model import model_wrap
-from ding.policy.base_policy import Policy
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
@@ -14,13 +13,14 @@ from lzero.mcts import StochasticMuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import StochasticMuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
-    configure_optimizers
+    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
+    prepare_obs
+from lzero.policy.muzero import MuZeroPolicy
 from lzero.policy.utils import plot_topk_accuracy, visualize_avg_softmax, plot_argmax_distribution
 
 
 @POLICY_REGISTRY.register('stochastic_muzero')
-class StochasticMuZeroPolicy(Policy):
+class StochasticMuZeroPolicy(MuZeroPolicy):
     """
     Overview:
         The policy class for Stochastic MuZero proposed in the paper https://openreview.net/pdf?id=X6D9bAHhBQ1.
@@ -58,8 +58,9 @@ class StochasticMuZeroPolicy(Policy):
         ),
         # ****** common ******
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
-        # this variable is used in ``collector``.
         sampled_algo=False,
+        # (bool) Whether to enable the gumbel-based algorithm (e.g. Gumbel Muzero).
+        gumbel_algo=False,
         # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
         mcts_ctree=True,
         # (bool) Whether to use cuda for network.
@@ -181,7 +182,7 @@ class StochasticMuZeroPolicy(Policy):
         eps=dict(
             # (bool) Whether to use eps greedy exploration in collecting data.
             eps_greedy_exploration_in_collect=False,
-            # 'linear', 'exp'
+            # (str) The type of decaying epsilon. Options are 'linear', 'exp'.
             type='linear',
             # (float) The start value of eps.
             start=1.,
@@ -202,7 +203,7 @@ class StochasticMuZeroPolicy(Policy):
                 - import_names (:obj:`List[str]`): The model class path list used in this algorithm.
         .. note::
             The user can define and use customized network model but must obey the same interface definition indicated \
-            by import_names path. For MuZero, ``lzero.model.muzero_model.MuZeroModel``
+            by import_names path. For MuZero, ``lzero.model.muzero_model.MuZeroModel``.
         """
         if self._cfg.model.model_type == "conv":
             return 'StochasticMuZeroModel', ['lzero.model.stochastic_muzero_model']
@@ -214,10 +215,10 @@ class StochasticMuZeroPolicy(Policy):
     def _init_learn(self) -> None:
         """
         Overview:
-            Learn mode init method. Called by ``self.__init__``. Ininitialize the learn model, optimizer and MCTS utils.
+            Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
         assert self._cfg.optim_type in ['SGD', 'Adam'], self._cfg.optim_type
-        # NOTE: in board_gmaes, for fixed lr 0.003, 'Adam' is better than 'SGD'.
+        # NOTE: in board_games, for fixed lr 0.003, 'Adam' is better than 'SGD'.
         if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
                 self._model.parameters(),
@@ -261,11 +262,11 @@ class StochasticMuZeroPolicy(Policy):
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         Overview:
-            The forward function for learning policy in learn mode, which is the core of the learning process.
-            The data is sampled from replay buffer.
+            The forward function for learning policy in learn mode, which is the core of the learning process. \
+            The data is sampled from replay buffer. \
             The loss is calculated by the loss function and the loss is backpropagated to update the model.
         Arguments:
-            - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
+            - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors. \
                 The first tensor is the current_batch, the second tensor is the target_batch.
         Returns:
             - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
@@ -286,15 +287,11 @@ class StochasticMuZeroPolicy(Policy):
             chance_one_hot_batch = torch.nn.functional.one_hot(chance_batch.long(), self._cfg.model.chance_space_size)
 
         obs_batch, obs_target_batch = prepare_obs(obs_batch_orig, self._cfg)
-        obs_list_for_chance_encoder = []
-        obs_list_for_chance_encoder.append(obs_batch)
-        for i in range(self._cfg.num_unroll_steps):
-            beg_index = self._cfg.model.image_channel * i
-            end_index = self._cfg.model.image_channel * (i + self._cfg.model.frame_stack_num)
-            if self._cfg.model.model_type == 'conv':
-                obs_list_for_chance_encoder.append(obs_target_batch[:, beg_index:end_index, :, :])
-            elif self._cfg.model.model_type == 'mlp':
-                obs_list_for_chance_encoder.append(obs_target_batch[:, beg_index*self._cfg.model.observation_shape:end_index*self._cfg.model.observation_shape])
+        obs_list_for_chance_encoder = [obs_batch]
+
+        for step_k in range(self._cfg.num_unroll_steps):
+            beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
+            obs_list_for_chance_encoder.append(obs_target_batch[:, beg_index:end_index])
 
         # do augmentations
         if self._cfg.use_augmentation:
@@ -365,18 +362,16 @@ class StochasticMuZeroPolicy(Policy):
         afterstate_value_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         commitment_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
 
-        gradient_scale = 1 / self._cfg.num_unroll_steps
-
         # ==============================================================
         # the core recurrent_inference in MuZero policy.
         # ==============================================================
-        for step_i in range(self._cfg.num_unroll_steps):
+        for step_k in range(self._cfg.num_unroll_steps):
             # unroll with the afterstate dynamic function: predict 'afterstate',
             # given current ``state`` and ``action``.
             # 'afterstate reward' is not used, we kept it for the sake of uniformity between decision nodes and chance nodes.
             # And then predict afterstate_policy_logits and afterstate_value with the afterstate prediction function.
             network_output = self._learn_model.recurrent_inference(
-                latent_state, action_batch[:, step_i], afterstate=False
+                latent_state, action_batch[:, step_k], afterstate=False
             )
             afterstate, afterstate_reward, afterstate_value, afterstate_policy_logits = mz_network_output_unpack(network_output)
 
@@ -384,13 +379,12 @@ class StochasticMuZeroPolicy(Policy):
             # encode the consecutive frames to predict chance
             # ==============================================================
             # concat consecutive frames to predict chance
-            former_frame = obs_list_for_chance_encoder[step_i]
-            latter_frame = obs_list_for_chance_encoder[step_i + 1]
-            concat_frame = torch.cat((former_frame, latter_frame), dim=1)
+            concat_frame = torch.cat((obs_list_for_chance_encoder[step_k],
+                                      obs_list_for_chance_encoder[step_k + 1]), dim=1)
             chance_encoding, chance_one_hot = self._learn_model.chance_encode(concat_frame)
             if self._cfg.use_ture_chance_label_in_chance_encoder:
-                true_chance_code = chance_batch[:, step_i]
-                true_chance_one_hot = chance_one_hot_batch[:, step_i]
+                true_chance_code = chance_batch[:, step_k]
+                true_chance_one_hot = chance_one_hot_batch[:, step_k]
                 chance_code = true_chance_code
             else:
                 chance_code = torch.argmax(chance_encoding, dim=1).long().unsqueeze(-1)
@@ -412,16 +406,8 @@ class StochasticMuZeroPolicy(Policy):
                 # ==============================================================
                 if self._cfg.ssl_loss_weight > 0:
                     # obtain the oracle hidden states from representation function.
-                    if self._cfg.model.model_type == 'conv':
-                        beg_index = self._cfg.model.image_channel * step_i
-                        end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
-                        network_output = self._learn_model.initial_inference(
-                            obs_target_batch[:, beg_index:end_index, :, :]
-                        )
-                    elif self._cfg.model.model_type == 'mlp':
-                        beg_index = self._cfg.model.observation_shape * step_i
-                        end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
-                        network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
+                    beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
+                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
 
                     latent_state = to_tensor(latent_state)
                     representation_state = to_tensor(network_output.latent_state)
@@ -429,7 +415,7 @@ class StochasticMuZeroPolicy(Policy):
                     # NOTE: no grad for the representation_state branch
                     dynamic_proj = self._learn_model.project(latent_state, with_grad=True)
                     observation_proj = self._learn_model.project(representation_state, with_grad=False)
-                    temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
+                    temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_k]
                     consistency_loss += temp_loss
 
             # NOTE: the target policy, target_value_categorical, target_reward_categorical is calculated in
@@ -438,7 +424,7 @@ class StochasticMuZeroPolicy(Policy):
             # calculate policy loss for the next ``num_unroll_steps`` unroll steps.
             # NOTE: the +=.
             # ==============================================================
-            policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
+            policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_k + 1])
 
             if self._cfg.use_ture_chance_label_in_chance_encoder:
                 afterstate_policy_loss += cross_entropy_loss(afterstate_policy_logits, true_chance_one_hot.detach())
@@ -466,12 +452,11 @@ class StochasticMuZeroPolicy(Policy):
                     # calculate the topK accuracy of afterstate_policy_logits and plot the topK accuracy curve.
                     plot_topk_accuracy(afterstate_policy_logits, true_chance_one_hot, topK_values)
 
-                # TODO(pu): whether to detach the chance_encoding in the commitment loss.
                 commitment_loss += torch.nn.MSELoss()(chance_encoding, chance_one_hot.float())
 
-            afterstate_value_loss += cross_entropy_loss(afterstate_value, target_value_categorical[:, step_i])
-            value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
-            reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_i])
+            afterstate_value_loss += cross_entropy_loss(afterstate_value, target_value_categorical[:, step_k])
+            value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
+            reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
 
             if self._cfg.monitor_extra_statistics:
                 original_rewards = self.inverse_scalar_transform_handle(reward)
@@ -544,7 +529,7 @@ class StochasticMuZeroPolicy(Policy):
             )
 
         return {
-            'collect_mcts_temperature': self.collect_mcts_temperature,
+            'collect_mcts_temperature': self._collect_mcts_temperature,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
             'weighted_total_loss': loss_info[0],
             'total_loss': loss_info[1],
@@ -561,6 +546,7 @@ class StochasticMuZeroPolicy(Policy):
             # ==============================================================
             'value_priority_orig': value_priority,
             'value_priority': td_data[0].flatten().mean().item(),
+            
             'target_reward': td_data[1].flatten().mean().item(),
             'target_value': td_data[2].flatten().mean().item(),
             'transformed_target_reward': td_data[3].flatten().mean().item(),
@@ -573,14 +559,14 @@ class StochasticMuZeroPolicy(Policy):
     def _init_collect(self) -> None:
         """
         Overview:
-            Collect mode init method. Called by ``self.__init__``. Ininitialize the collect model and MCTS utils.
+            Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
-        self.collect_mcts_temperature = 1
+        self._collect_mcts_temperature = 1
 
     def _forward_collect(
             self,
@@ -593,7 +579,7 @@ class StochasticMuZeroPolicy(Policy):
     ) -> Dict:
         """
         Overview:
-            The forward function for collecting data in collect mode. Use model to execute MCTS search.
+            The forward function for collecting data in collect mode. Use model to execute MCTS search. \
             Choosing the action through sampling during the collect mode.
         Arguments:
             - data (:obj:`torch.Tensor`): The input data, i.e. the observation.
@@ -603,9 +589,9 @@ class StochasticMuZeroPolicy(Policy):
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
         Shape:
             - data (:obj:`torch.Tensor`):
-                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
+                - For Atari, its shape is :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
                     S is the number of stacked frames, H is the height of the image, W is the width of the image.
-                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
+                - For lunarlander, its shape is :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
             - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
             - temperature: :math:`(1, )`.
             - to_play: :math:`(N, 1)`, where N is the number of collect_env.
@@ -615,7 +601,7 @@ class StochasticMuZeroPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._collect_model.eval()
-        self.collect_mcts_temperature = temperature
+        self._collect_mcts_temperature = temperature
         active_collect_env_num = data.shape[0]
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
@@ -644,8 +630,8 @@ class StochasticMuZeroPolicy(Policy):
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
             self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             data_id = [i for i in range(active_collect_env_num)]
@@ -659,7 +645,7 @@ class StochasticMuZeroPolicy(Policy):
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
                 action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=self.collect_mcts_temperature, deterministic=False
+                    distributions, temperature=self._collect_mcts_temperature, deterministic=False
                 )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
@@ -678,7 +664,7 @@ class StochasticMuZeroPolicy(Policy):
     def _init_eval(self) -> None:
         """
         Overview:
-            Evaluate mode init method. Called by ``self.__init__``. Ininitialize the eval model and MCTS utils.
+            Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
         if self._cfg.mcts_ctree:
@@ -689,7 +675,7 @@ class StochasticMuZeroPolicy(Policy):
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1, ready_env_id=None) -> Dict:
         """
         Overview:
-            The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
+            The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search. \
             Choosing the action with the highest value (argmax) rather than sampling during the eval mode.
         Arguments:
             - data (:obj:`torch.Tensor`): The input data, i.e. the observation.
@@ -731,8 +717,8 @@ class StochasticMuZeroPolicy(Policy):
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
             self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             data_id = [i for i in range(active_eval_env_num)]
@@ -768,7 +754,7 @@ class StochasticMuZeroPolicy(Policy):
     def _monitor_vars_learn(self) -> List[str]:
         """
         Overview:
-            Register the variables to be monitored in learn mode. The registered variables will be logged in
+            Register the variables to be monitored in learn mode. The registered variables will be logged in \
             tensorboard according to the return value ``_forward_learn``.
         """
         return [

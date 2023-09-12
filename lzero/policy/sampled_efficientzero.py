@@ -400,8 +400,6 @@ class SampledEfficientZeroPolicy(Policy):
         value_prefix_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
 
-        gradient_scale = 1 / self._cfg.num_unroll_steps
-
         # ==============================================================
         # the core recurrent_inference in SampledEfficientZero policy.
         # ==============================================================
@@ -506,6 +504,8 @@ class SampledEfficientZeroPolicy(Policy):
             self._cfg.policy_entropy_loss_weight * policy_entropy_loss
         )
         weighted_total_loss = (weights * loss).mean()
+
+        gradient_scale = 1 / self._cfg.num_unroll_steps
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
@@ -529,7 +529,7 @@ class SampledEfficientZeroPolicy(Policy):
 
         return_data = {
                 'cur_lr': self._optimizer.param_groups[0]['lr'],
-                'collect_mcts_temperature': self.collect_mcts_temperature,
+                'collect_mcts_temperature': self._collect_mcts_temperature,
                 'weighted_total_loss': weighted_total_loss.item(),
                 'total_loss': loss.mean().item(),
                 'policy_loss': policy_loss.mean().item(),
@@ -788,7 +788,7 @@ class SampledEfficientZeroPolicy(Policy):
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
-        self.collect_mcts_temperature = 1
+        self._collect_mcts_temperature = 1
 
     def _forward_collect(
         self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1, epsilon: float = 0.25, ready_env_id=None
@@ -817,7 +817,7 @@ class SampledEfficientZeroPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._collect_model.eval()
-        self.collect_mcts_temperature = temperature
+        self._collect_mcts_temperature = temperature
         active_collect_env_num = data.shape[0]
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
@@ -869,8 +869,8 @@ class SampledEfficientZeroPolicy(Policy):
                 roots, self._collect_model, latent_state_roots, reward_hidden_state_roots, to_play
             )
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
             roots_sampled_actions = roots.get_sampled_actions()  # {list: 1}->{list:6}
 
@@ -889,7 +889,7 @@ class SampledEfficientZeroPolicy(Policy):
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
                 action, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=self.collect_mcts_temperature, deterministic=False
+                    distributions, temperature=self._collect_mcts_temperature, deterministic=False
                 )
                 try:
                     action = roots_sampled_actions[i][action].value
@@ -995,8 +995,8 @@ class SampledEfficientZeroPolicy(Policy):
             roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
             self._mcts_eval.search(roots, self._eval_model, latent_state_roots, reward_hidden_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
             # ==============================================================
             # sampled related core code

@@ -579,103 +579,8 @@ class DynamicsNetwork(nn.Module):
         return get_reward_mean(self)
 
 
-class AfterstateDynamicsNetwork(nn.Module):
-
-    def __init__(
-            self,
-            num_res_blocks: int,
-            num_channels: int,
-            reward_head_channels: int,
-            fc_reward_layers: SequenceType,
-            output_support_size: int,
-            flatten_output_size_for_reward_head: int,
-            last_linear_layer_init_zero: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-    ):
-        """
-        Overview:
-            The definition of afterstate dynamics network in Stochastic MuZero algorithm, which is used to predict next afterstate given current latent state and action.
-        Arguments:
-            - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
-            - num_channels (:obj:`int`): The channels of input, including obs and action encoding.
-            - reward_head_channels (:obj:`int`): The channels of reward head.
-            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
-            - output_support_size (:obj:`int`): The size of categorical reward output.
-            - flatten_output_size_for_reward_head (:obj:`int`): The flatten size of output for reward head, i.e., \
-                the input size of reward head.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
-                reward mlp, default set it to True.
-            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
-                operation to speedup, e.g. ReLU(inplace=True).
-        """
-        super().__init__()
-        self.num_channels = num_channels
-        self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
-        self.conv = nn.Conv2d(num_channels, num_channels - 1, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn = nn.BatchNorm2d(num_channels - 1)
-        self.resblocks = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=num_channels - 1, activation=activation, norm_type='BN', res_type='basic', bias=False
-                ) for _ in range(num_res_blocks)
-            ]
-        )
-        self.conv1x1_reward = nn.Conv2d(num_channels - 1, reward_head_channels, 1)
-        self.bn_reward = nn.BatchNorm2d(reward_head_channels)
-        self.fc_reward_head = MLP(
-            self.flatten_output_size_for_reward_head,
-            hidden_channels=fc_reward_layers[0],
-            layer_num=len(fc_reward_layers) + 1,
-            out_channels=output_support_size,
-            activation=activation,
-            norm_type='BN',
-            output_activation=False,
-            output_norm=False,
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-        self.activation = activation
-
-    def forward(self, state_action_encoding: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-         Overview:
-            Forward computation of the dynamics network. Predict next latent state given current latent state and action.
-         Arguments:
-             - state_action_encoding (:obj:`torch.Tensor`): The state-action encoding, which is the concatenation of \
-                    latent state and action encoding, with shape (batch_size, num_channels, height, width).
-         Returns:
-             - next_latent_state (:obj:`torch.Tensor`): The next latent state, with shape (batch_size, num_channels, \
-                    height, width).
-            - reward (:obj:`torch.Tensor`): The predicted reward, with shape (batch_size, output_support_size).
-         """
-        # take the state encoding (afterstate),  state_action_encoding[:, -1, :, :] is action encoding
-        afterstate = state_action_encoding[:, :-1, :, :]
-        x = self.conv(state_action_encoding)
-        x = self.bn(x)
-
-        # the residual link: add state encoding to the state_action encoding
-        x += afterstate
-        x = self.activation(x)
-
-        for block in self.resblocks:
-            x = block(x)
-        afterstate = x
-        # reward = None 
-
-        x = self.conv1x1_reward(afterstate)
-        x = self.bn_reward(x)
-        x = self.activation(x)
-        x = x.view(-1, self.flatten_output_size_for_reward_head)
-
-        # use the fully connected layer to predict reward
-        reward = self.fc_reward_head(x)
-
-        return afterstate, reward
-
-    def get_dynamic_mean(self) -> float:
-        return get_dynamic_mean(self)
-
-    def get_reward_mean(self) -> float:
-        return get_reward_mean(self)
+# TODO(pu): customize different afterstate dynamics network
+AfterstateDynamicsNetwork = DynamicsNetwork
 
 
 class AfterstatePredictionNetwork(nn.Module):
@@ -758,7 +663,7 @@ class AfterstatePredictionNetwork(nn.Module):
     def forward(self, afterstate: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
-            Forward computation of the prediction network.
+            Forward computation of the afterstate prediction network.
         Arguments:
             - afterstate (:obj:`torch.Tensor`): input tensor with shape (B, afterstate_dim).
         Returns:
@@ -785,11 +690,20 @@ class AfterstatePredictionNetwork(nn.Module):
 
 
 class ChanceEncoderBackbone(nn.Module):
-    def __init__(self, observation_space_dimensions, chance_encoding_dim=4):
+    """
+    Overview:
+        The definition of chance encoder backbone network, \
+        which is used to encode the (image) observation into a latent space.
+    Arguments:
+        - input_dimensions (:obj:`tuple`): The dimension of observation space.
+        - chance_encoding_dim (:obj:`int`): The dimension of chance encoding.
+    """
+
+    def __init__(self, input_dimensions, chance_encoding_dim=4):
         super(ChanceEncoderBackbone, self).__init__()
-        self.conv1 = nn.Conv2d(observation_space_dimensions[0] * 2, 32, 3, padding=1)
+        self.conv1 = nn.Conv2d(input_dimensions[0] * 2, 32, 3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, 3, padding=1)
-        self.fc1 = nn.Linear(64 * observation_space_dimensions[1] * observation_space_dimensions[2], 128)
+        self.fc1 = nn.Linear(64 * input_dimensions[1] * input_dimensions[2], 128)
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, chance_encoding_dim)
 
@@ -804,6 +718,15 @@ class ChanceEncoderBackbone(nn.Module):
 
 
 class ChanceEncoderBackboneMLP(nn.Module):
+    """
+    Overview:
+        The definition of chance encoder backbone network, \
+        which is used to encode the (vector) observation into a latent space.
+    Arguments:
+        - input_dimensions (:obj:`tuple`): The dimension of observation space.
+        - chance_encoding_dim (:obj:`int`): The dimension of chance encoding.
+    """
+
     def __init__(self, input_dimensions, chance_encoding_dim=4):
         super(ChanceEncoderBackboneMLP, self).__init__()
         self.fc1 = nn.Linear(input_dimensions, 128)
@@ -818,15 +741,16 @@ class ChanceEncoderBackboneMLP(nn.Module):
 
 
 class ChanceEncoder(nn.Module):
+
     def __init__(self, input_dimensions, action_dimension, encoder_backbone_type='conv'):
         super().__init__()
         # Specify the action space for the model
         self.action_space = action_dimension
         if encoder_backbone_type == 'conv':
             # Define the encoder, which transforms observations into a latent space
-            self.chance_encoder = ChanceEncoderBackbone(input_dimensions, action_dimension)
+            self.encoder = ChanceEncoderBackbone(input_dimensions, action_dimension)
         elif encoder_backbone_type == 'mlp':
-            self.chance_encoder = ChanceEncoderBackboneMLP(input_dimensions, action_dimension)
+            self.encoder = ChanceEncoderBackboneMLP(input_dimensions, action_dimension)
         else:
             raise ValueError('Encoder backbone type not supported')
 
@@ -835,23 +759,21 @@ class ChanceEncoder(nn.Module):
 
     def forward(self, observations):
         """
-        Forward method for the ChanceEncoder. This method takes an observation
-        and applies the encoder to transform it to a latent space. Then applies the
-        StraightThroughEstimator to this encoding.
+        Overview:
+            Forward method for the ChanceEncoder. This method takes an observation \
+            and applies the encoder to transform it to a latent space. Then applies the \
+            StraightThroughEstimator to this encoding. \
 
-        References:
-        Planning in Stochastic Environments with a Learned Model (ICLR 2022), page 5,
-        Chance Outcomes section.
-
+            References: Planning in Stochastic Environments with a Learned Model (ICLR 2022), page 5,
+            Chance Outcomes section.
         Arguments:
-            observations (Tensor): Observation tensor.
-
+            - observations (:obj:`torch.Tensor`): Observation tensor.
         Returns:
-            chance (Tensor): Transformed tensor after applying one-hot argmax.
-            chance_encoding (Tensor): Encoding of the input observation tensor.
+            - chance (:obj:`torch.Tensor`): Transformed tensor after applying one-hot argmax.
+            - chance_encoding (:obj:`torch.Tensor`): Encoding of the input observation tensor.
         """
         # Apply the encoder to the observation
-        chance_encoding = self.chance_encoder(observations)
+        chance_encoding = self.encoder(observations)
         # Apply one-hot argmax to the encoding
         chance_onehot = self.onehot_argmax(chance_encoding)
         return chance_encoding, chance_onehot
@@ -863,14 +785,13 @@ class StraightThroughEstimator(nn.Module):
 
     def forward(self, x):
         """
-        Forward method for the StraightThroughEstimator. This applies the one-hot argmax
-        function to the input tensor.
-
+        Overview:
+            Forward method for the StraightThroughEstimator. This applies the one-hot argmax \
+            function to the input tensor.
         Arguments:
-            x (Tensor): Input tensor.
-
+            - x (:obj:`torch.Tensor`): Input tensor.
         Returns:
-            Tensor: Transformed tensor after applying one-hot argmax.
+            - (:obj:`torch.Tensor`): Transformed tensor after applying one-hot argmax.
         """
         # Apply one-hot argmax to the input
         x = OnehotArgmax.apply(x)
@@ -879,28 +800,28 @@ class StraightThroughEstimator(nn.Module):
 
 class OnehotArgmax(torch.autograd.Function):
     """
-    Custom PyTorch function for one-hot argmax. This function transforms the input tensor
-    into a one-hot tensor where the index with the maximum value in the original tensor is
-    set to 1 and all other indices are set to 0. It allows gradients to flow to the encoder
-    during backpropagation.
+    Overview:
+        Custom PyTorch function for one-hot argmax. This function transforms the input tensor \
+        into a one-hot tensor where the index with the maximum value in the original tensor is \
+        set to 1 and all other indices are set to 0. It allows gradients to flow to the encoder \
+        during backpropagation.
 
-    For more information, refer to:
-    https://pytorch.org/tutorials/beginner/examples_autograd/two_layer_net_custom_function.html
+        For more information, refer to: \
+        https://pytorch.org/tutorials/beginner/examples_autograd/two_layer_net_custom_function.html
     """
 
     @staticmethod
     def forward(ctx, input):
         """
-        Forward method for the one-hot argmax function. This method transforms the input
-        tensor into a one-hot tensor.
-
+        Overview:
+            Forward method for the one-hot argmax function. This method transforms the input \
+            tensor into a one-hot tensor.
         Arguments:
-            ctx (context): A context object that can be used to stash information for
+            - ctx (:obj:`context`): A context object that can be used to stash information for
             backward computation.
-            input (Tensor): Input tensor.
-
+            - input (:obj:`torch.Tensor`): Input tensor.
         Returns:
-            Tensor: One-hot tensor.
+            - (:obj:`torch.Tensor`): One-hot tensor.
         """
         # Transform the input tensor to a one-hot tensor
         return torch.zeros_like(input).scatter_(-1, torch.argmax(input, dim=-1, keepdim=True), 1.)
@@ -908,14 +829,13 @@ class OnehotArgmax(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         """
-        Backward method for the one-hot argmax function. This method allows gradients
-        to flow to the encoder during backpropagation.
-
+        Overview:
+            Backward method for the one-hot argmax function. This method allows gradients \
+            to flow to the encoder during backpropagation.
         Arguments:
-            ctx (context): A context object that was stashed in the forward pass.
-            grad_output (Tensor): The gradient of the output tensor.
-
+            - ctx (:obj:`context`):  A context object that was stashed in the forward pass.
+            - grad_output (:obj:`torch.Tensor`): The gradient of the output tensor.
         Returns:
-            Tensor: The gradient of the input tensor.
+            - (:obj:`torch.Tensor`): The gradient of the input tensor.
         """
         return grad_output

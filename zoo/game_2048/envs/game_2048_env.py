@@ -85,27 +85,49 @@ class Game2048Env(gym.Env):
 
     # The default_config for game 2048 env.
     config = dict(
+        # (str) The name of the environment registered in the environment registry.
         env_name="game_2048",
+        # (bool) Whether to save the replay of the game.
         save_replay=False,
+        # (str) The format in which to save the replay. 'gif' is a popular choice.
         replay_format='gif',
+        # (str) A suffix for the replay file name to distinguish it from other files.
         replay_name_suffix='eval',
+        # (str or None) The directory in which to save the replay file. If None, the file is saved in the current directory.
         replay_path=None,
+        # (bool) Whether to render the game in real time. Useful for debugging, but can slow down training.
         render_real_time=False,
+        # (bool) Whether to scale the actions. If True, actions are divided by the action space size.
         act_scale=True,
+        # (bool) Whether to use the 'channel last' format for the observation space. If False, 'channel first' format is used.
         channel_last=True,
-        obs_type='dict_encoded_board',  # options=['raw_board', 'raw_encoded_board', 'dict_encoded_board']
+        # (str) The type of observation to use. Options are 'raw_board', 'raw_encoded_board', and 'dict_encoded_board'.
+        obs_type='dict_encoded_board',
+        # (bool) Whether to normalize rewards. If True, rewards are divided by the maximum possible reward.
         reward_normalize=False,
+        # (float) The factor to scale rewards by when reward normalization is used.
         reward_norm_scale=100,
-        reward_type='raw',  # options=['raw', 'merged_tiles_plus_log_max_tile_num']
-        max_tile=int(2 ** 16),  # 2**11=2048, 2**16=65536
+        # (str) The type of reward to use. 'raw' means the raw game score. 'merged_tiles_plus_log_max_tile_num' is an alternative.
+        reward_type='raw',
+        # (int) The maximum tile number in the game. A game is won when this tile appears. 2**11=2048, 2**16=65536
+        max_tile=int(2 ** 16),
+        # (int) The number of steps to delay rewards by. If > 0, the agent only receives a reward every this many steps.
         delay_reward_step=0,
+        # (float) The probability that a random agent is used instead of the learning agent.
         prob_random_agent=0.,
+        # (int) The maximum number of steps in an episode.
         max_episode_steps=int(1e6),
+        # (bool) Whether to collect data during the game.
         is_collect=True,
+        # (bool) Whether to ignore legal actions. If True, the agent can take any action, even if it's not legal.
         ignore_legal_actions=True,
+        # (bool) Whether to flatten the observation space. If True, the observation space is a 1D array instead of a 2D grid.
         need_flatten=False,
+        # (int) The number of possible tiles that can appear after each move.
         num_of_possible_chance_tile=2,
+        # (numpy array) The possible tiles that can appear after each move.
         possible_tiles=np.array([2, 4]),
+        # (numpy array) The probabilities corresponding to each possible tile.
         tile_probabilities=np.array([0.9, 0.1]),
     )
 
@@ -600,7 +622,7 @@ class Game2048Env(gym.Env):
             try:
                 action = int(
                     input(
-                        f"Enter the action (0, 1, 2, or 3, ) to play: "
+                        f"Enter the action (0(Up), 1(Right), 2(Down), or 3(Left)) to play: "
                     )
                 )
                 if action in self.legal_actions:
@@ -673,11 +695,9 @@ class Game2048Env(gym.Env):
             text_x_size, text_y_size = bbox[2] - bbox[0], bbox[3] - bbox[1]
             draw.text((x * grid_size + (grid_size - text_x_size) // 2,
                        y * grid_size + (grid_size - text_y_size) // 2), str(o), font=fnt, fill=white)
-            # assert text_x_size < grid_size
-            # assert text_y_size < grid_size
 
     def save_render_output(self, replay_name_suffix: str = '', replay_path=None, format='gif'):
-        # At the end of the episode, save the frames
+        # At the end of the episode, save the frames to a gif or mp4 file
         if replay_path is None:
             filename = f'game_2048_{replay_name_suffix}.{format}'
         else:

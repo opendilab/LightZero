@@ -15,8 +15,8 @@ reanalyze_ratio = 0
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-cartpole_stochastic_muzero_config = dict(
-    exp_name=f'data_stochastic_mz_ctree/cartpole_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+cartpole_muzero_config = dict(
+    exp_name=f'data_mz_ctree/cartpole_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -30,15 +30,13 @@ cartpole_stochastic_muzero_config = dict(
         model=dict(
             observation_shape=4,
             action_space_size=2,
-            chance_space_size=2,
-            model_type='mlp',
+            model_type='mlp', 
             lstm_hidden_size=128,
             latent_state_dim=128,
             self_supervised_learning_loss=True,  # NOTE: default is False.
             discrete_action_encoding_type='one_hot',
             norm_type='BN', 
         ),
-        mcts_ctree=True,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
@@ -52,29 +50,25 @@ cartpole_stochastic_muzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e2),
-        replay_buffer_size=int(1e6),
+        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
 )
 
-cartpole_stochastic_muzero_config = EasyDict(cartpole_stochastic_muzero_config)
-main_config = cartpole_stochastic_muzero_config
+cartpole_muzero_config = EasyDict(cartpole_muzero_config)
+main_config = cartpole_muzero_config
 
-cartpole_stochastic_muzero_create_config = dict(
+cartpole_muzero_create_config = dict(
     env=dict(
         type='cartpole_lightzero',
         import_names=['zoo.classic_control.cartpole.envs.cartpole_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='stochastic_muzero',
-        import_names=['lzero.policy.stochastic_muzero'],
+        type='muzero',
+        import_names=['lzero.policy.muzero'],
     ),
 )
-cartpole_stochastic_muzero_create_config = EasyDict(cartpole_stochastic_muzero_create_config)
-create_config = cartpole_stochastic_muzero_create_config
-
-if __name__ == "__main__":
-    from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+cartpole_muzero_create_config = EasyDict(cartpole_muzero_create_config)
+create_config = cartpole_muzero_create_config

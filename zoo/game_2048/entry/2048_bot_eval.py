@@ -9,8 +9,8 @@ from zoo.game_2048.envs.game_2048_env import Game2048Env
 config = EasyDict(dict(
     env_name="game_2048",
     save_replay=False,
-    replay_format='mp4',
-    replay_name_suffix='test',
+    replay_format='gif',
+    replay_name_suffix='bot',
     replay_path=None,
     render_real_time=False,
     act_scale=True,
@@ -42,13 +42,8 @@ if __name__ == "__main__":
         grid = obs.astype(np.int64)
         # action = game_2048_env.human_to_action()  # which obtain about 10000 score
         # action = game_2048_env.random_action()  # which obtain about 1000 score
-        action = expectimax_search(grid)  # which obtain about 58536 score
-        try:
-            obs, reward, done, info = game_2048_env.step(action)
-        except Exception as e:
-            print(f'Exception: {e}')
-            print('total_step_number: {}'.format(step))
-            break
+        action = expectimax_search(grid)  # which obtain about 300000~70000 score
+        obs, reward, done, info = game_2048_env.step(action)
         step += 1
         print(f"step: {step}, action: {action}, reward: {reward}, raw_reward: {info['raw_reward']}")
         game_2048_env.render(mode='human')

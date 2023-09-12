@@ -14,7 +14,8 @@ from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs
+    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
+    prepare_obs
 
 
 @POLICY_REGISTRY.register('muzero')
@@ -214,7 +215,7 @@ class MuZeroPolicy(Policy):
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
         assert self._cfg.optim_type in ['SGD', 'Adam'], self._cfg.optim_type
-        # NOTE: in board_gmaes, for fixed lr 0.003, 'Adam' is better than 'SGD'.
+        # NOTE: in board_games, for fixed lr 0.003, 'Adam' is better than 'SGD'.
         if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
                 self._model.parameters(),
@@ -342,16 +343,14 @@ class MuZeroPolicy(Policy):
         reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
 
-        gradient_scale = 1 / self._cfg.num_unroll_steps
-
         # ==============================================================
         # the core recurrent_inference in MuZero policy.
         # ==============================================================
-        for step_i in range(self._cfg.num_unroll_steps):
+        for step_k in range(self._cfg.num_unroll_steps):
             # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
             # given current ``latent_state`` and ``action``.
             # And then predict policy_logits and value with the prediction function.
-            network_output = self._learn_model.recurrent_inference(latent_state, action_batch[:, step_i])
+            network_output = self._learn_model.recurrent_inference(latent_state, action_batch[:, step_k])
             latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
             # transform the scaled value or its categorical representation to its original value,
@@ -363,17 +362,9 @@ class MuZeroPolicy(Policy):
                 # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
                 # ==============================================================
                 if self._cfg.ssl_loss_weight > 0:
-                    # obtain the oracle hidden states from representation function.
-                    if self._cfg.model.model_type == 'conv':
-                        beg_index = self._cfg.model.image_channel * step_i
-                        end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
-                        network_output = self._learn_model.initial_inference(
-                            obs_target_batch[:, beg_index:end_index, :, :]
-                        )
-                    elif self._cfg.model.model_type == 'mlp':
-                        beg_index = self._cfg.model.observation_shape * step_i
-                        end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
-                        network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
+                    # obtain the oracle latent states from representation function.
+                    beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
+                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
 
                     latent_state = to_tensor(latent_state)
                     representation_state = to_tensor(network_output.latent_state)
@@ -381,7 +372,7 @@ class MuZeroPolicy(Policy):
                     # NOTE: no grad for the representation_state branch
                     dynamic_proj = self._learn_model.project(latent_state, with_grad=True)
                     observation_proj = self._learn_model.project(representation_state, with_grad=False)
-                    temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
+                    temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_k]
                     consistency_loss += temp_loss
 
             # NOTE: the target policy, target_value_categorical, target_reward_categorical is calculated in
@@ -390,10 +381,10 @@ class MuZeroPolicy(Policy):
             # calculate policy loss for the next ``num_unroll_steps`` unroll steps.
             # NOTE: the +=.
             # ==============================================================
-            policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
+            policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_k + 1])
 
-            value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
-            reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_i])
+            value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
+            reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
 
             # Follow MuZero, set half gradient
             # latent_state.register_hook(lambda grad: grad * 0.5)
@@ -414,8 +405,8 @@ class MuZeroPolicy(Policy):
         # ==============================================================
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
+                self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
         )
         weighted_total_loss = (weights * loss).mean()
 
@@ -442,7 +433,7 @@ class MuZeroPolicy(Policy):
             predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
 
         return {
-            'collect_mcts_temperature': self.collect_mcts_temperature,
+            'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
@@ -466,6 +457,30 @@ class MuZeroPolicy(Policy):
             'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
         }
 
+    def _get_target_obs_index_in_step_k(self, step):
+        """
+        Overview:
+            Get the begin index and end index of the target obs in step k.
+        Arguments:
+            - step (:obj:`int`): The current step k.
+        Returns:
+            - beg_index (:obj:`int`): The begin index of the target obs in step k.
+            - end_index (:obj:`int`): The end index of the target obs in step k.
+        Examples:
+            >>> self._cfg.model.model_type = 'conv'
+            >>> self._cfg.model.image_channel = 3
+            >>> self._cfg.model.frame_stack_num = 4
+            >>> self._get_target_obs_index_in_step_k(0)
+            >>> (0, 12)
+        """
+        if self._cfg.model.model_type == 'conv':
+            beg_index = self._cfg.model.image_channel * step
+            end_index = self._cfg.model.image_channel * (step + self._cfg.model.frame_stack_num)
+        elif self._cfg.model.model_type == 'mlp':
+            beg_index = self._cfg.model.observation_shape * step
+            end_index = self._cfg.model.observation_shape * (step + self._cfg.model.frame_stack_num)
+        return beg_index, end_index
+
     def _init_collect(self) -> None:
         """
         Overview:
@@ -476,7 +491,7 @@ class MuZeroPolicy(Policy):
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
-        self.collect_mcts_temperature = 1
+        self._collect_mcts_temperature = 1
         self.collect_epsilon = 0.0
 
     def _forward_collect(
@@ -486,7 +501,7 @@ class MuZeroPolicy(Policy):
             temperature: float = 1,
             to_play: List = [-1],
             epsilon: float = 0.25,
-            ready_env_id = None
+            ready_env_id=None
     ) -> Dict:
         """
         Overview:
@@ -512,7 +527,7 @@ class MuZeroPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._collect_model.eval()
-        self.collect_mcts_temperature = temperature
+        self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
         with torch.no_grad():
@@ -540,8 +555,8 @@ class MuZeroPolicy(Policy):
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
             self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             data_id = [i for i in range(active_collect_env_num)]
@@ -555,7 +570,7 @@ class MuZeroPolicy(Policy):
                 if self._cfg.eps.eps_greedy_exploration_in_collect:
                     # eps greedy collect
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self.collect_mcts_temperature, deterministic=True
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=True
                     )
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                     if np.random.rand() < self.collect_epsilon:
@@ -565,7 +580,7 @@ class MuZeroPolicy(Policy):
                     # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                     # the index within the legal action set, rather than the index in the entire action set.
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self.collect_mcts_temperature, deterministic=False
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=False
                     )
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
@@ -636,8 +651,8 @@ class MuZeroPolicy(Policy):
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
             self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             data_id = [i for i in range(active_eval_env_num)]

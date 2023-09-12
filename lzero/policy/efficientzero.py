@@ -493,7 +493,7 @@ class EfficientZeroPolicy(Policy):
             predicted_value_prefixs = predicted_value_prefixs.reshape(-1).unsqueeze(-1)
 
         return {
-            'collect_mcts_temperature': self.collect_mcts_temperature,
+            'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
@@ -529,7 +529,7 @@ class EfficientZeroPolicy(Policy):
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
-        self.collect_mcts_temperature = 1
+        self._collect_mcts_temperature = 1
         self.collect_epsilon = 0.0
 
     def _forward_collect(
@@ -565,7 +565,7 @@ class EfficientZeroPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._collect_model.eval()
-        self.collect_mcts_temperature = temperature
+        self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
         with torch.no_grad():
@@ -600,8 +600,7 @@ class EfficientZeroPolicy(Policy):
                 roots, self._collect_model, latent_state_roots, reward_hidden_state_roots, to_play
             )
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             data_id = [i for i in range(active_collect_env_num)]
@@ -614,7 +613,7 @@ class EfficientZeroPolicy(Policy):
                 if self._cfg.eps.eps_greedy_exploration_in_collect:
                     # eps-greedy collect
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self.collect_mcts_temperature, deterministic=True
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=True
                     )
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                     if np.random.rand() < self.collect_epsilon:
@@ -624,7 +623,7 @@ class EfficientZeroPolicy(Policy):
                     # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                     # the index within the legal action set, rather than the index in the entire action set.
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self.collect_mcts_temperature, deterministic=False
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=False
                     )
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
@@ -701,8 +700,8 @@ class EfficientZeroPolicy(Policy):
             roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
             self._mcts_eval.search(roots, self._eval_model, latent_state_roots, reward_hidden_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
             data_id = [i for i in range(active_eval_env_num)]
             output = {i: None for i in data_id}

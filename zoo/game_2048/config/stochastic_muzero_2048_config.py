@@ -28,10 +28,6 @@ game_2048_stochastic_muzero_config = dict(
         env_name=env_name,
         obs_shape=(16, 4, 4),
         obs_type='dict_encoded_board',
-        raw_reward_type='raw',  # 'merged_tiles_plus_log_max_tile_num'
-        reward_normalize=False,
-        reward_scale=100,
-        max_tile=int(2**16),  # 2**11=2048, 2**16=65536
         num_of_possible_chance_tile=num_of_possible_chance_tile,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -45,13 +41,12 @@ game_2048_stochastic_muzero_config = dict(
             chance_space_size=chance_space_size,
             image_channel=16,
             # NOTE: whether to use the self_supervised_learning_loss. default is False
-            self_supervised_learning_loss=True,  # default is False
+            self_supervised_learning_loss=True,
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
         ),
         use_ture_chance_label_in_chance_encoder=use_ture_chance_label_in_chance_encoder,
         mcts_ctree=True,
-        gumbel_algo=False,
         cuda=True,
         game_segment_length=200,
         update_per_collect=update_per_collect,
@@ -68,7 +63,7 @@ game_2048_stochastic_muzero_config = dict(
         ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
         eval_freq=int(2e3),
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

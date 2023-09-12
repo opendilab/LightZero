@@ -196,7 +196,7 @@ class GumeblMuZeroPolicy(Policy):
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
         assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
-        # NOTE: in board_gmaes, for fixed lr 0.003, 'Adam' is better than 'SGD'.
+        # NOTE: in board_games, for fixed lr 0.003, 'Adam' is better than 'SGD'.
         if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
                 self._model.parameters(),
@@ -335,8 +335,6 @@ class GumeblMuZeroPolicy(Policy):
         reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
 
-        gradient_scale = 1 / self._cfg.num_unroll_steps
-
         # ==============================================================
         # the core recurrent_inference in Gumbel MuZero policy.
         # ==============================================================
@@ -435,7 +433,7 @@ class GumeblMuZeroPolicy(Policy):
             predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
 
         return {
-            'collect_mcts_temperature': self.collect_mcts_temperature,
+            'collect_mcts_temperature': self._collect_mcts_temperature,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
             'total_loss': loss.mean().item(),
@@ -469,7 +467,7 @@ class GumeblMuZeroPolicy(Policy):
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
-        self.collect_mcts_temperature = 1
+        self._collect_mcts_temperature = 1
 
     def _forward_collect(
             self,
@@ -504,7 +502,7 @@ class GumeblMuZeroPolicy(Policy):
                 ``pred_value``, ``policy_logits``.
         """
         self._collect_model.eval()
-        self.collect_mcts_temperature = temperature
+        self._collect_mcts_temperature = temperature
         active_collect_env_num = data.shape[0]
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
@@ -531,8 +529,8 @@ class GumeblMuZeroPolicy(Policy):
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, list(pred_values), policy_logits, to_play)
             self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
             roots_completed_values = roots.get_children_values(self._cfg.discount_factor, self._cfg.model.action_space_size)
 
@@ -555,7 +553,7 @@ class GumeblMuZeroPolicy(Policy):
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
                 action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=self.collect_mcts_temperature, deterministic=False
+                    distributions, temperature=self._collect_mcts_temperature, deterministic=False
                 )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
@@ -577,7 +575,7 @@ class GumeblMuZeroPolicy(Policy):
     def _init_eval(self) -> None:
         """
         Overview:
-            Evaluate mode init method. Called by ``self.__init__``. Ininitialize the eval model and MCTS utils.
+            Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
         if self._cfg.mcts_ctree:
@@ -630,8 +628,8 @@ class GumeblMuZeroPolicy(Policy):
             roots.prepare_no_noise(reward_roots, list(pred_values), policy_logits, to_play)
             self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             # ==============================================================

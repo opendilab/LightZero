@@ -41,10 +41,10 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
     ):
         """
         Overview:
-            The definition of the network model of Stochastic, which is a generalization version for 1D vector obs.
-            The networks are mainly built on fully connected layers.
-            The representation network is an MLP network which maps the raw observation to a latent state.
-            The dynamics network is an MLP network which predicts the next latent state, and reward given the current latent state and action.
+            The definition of the network model of Stochastic, which is a generalization version for 1D vector obs.  \
+            The networks are mainly built on fully connected layers. \
+            The representation network is an MLP network which maps the raw observation to a latent state. \
+            The dynamics network is an MLP network which predicts the next latent state, and reward given the current latent state and action. \
             The prediction network is an MLP network which predicts the value and policy given the current latent state.
         Arguments:
             - observation_shape (:obj:`int`): Observation space shape, e.g. 8 for Lunarlander.
@@ -110,8 +110,8 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
             observation_shape=observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
         )
         # TODO(pu): different input data type for chance_encoder
-        self.chance_encoder = ChanceEncoder(observation_shape * 2, chance_space_size,
-                                            encoder_backbone_type='mlp')  # input is two concatenated frames
+        # here, the input is two concatenated frames
+        self.chance_encoder = ChanceEncoder(observation_shape * 2, chance_space_size, encoder_backbone_type='mlp')
         self.dynamics_network = DynamicsNetwork(
             action_encoding_dim=self.action_encoding_dim,
             num_channels=self.latent_state_dim + self.action_encoding_dim,
@@ -172,7 +172,7 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
     def _dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
-            Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state``
+            Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state`` \
             ``reward`` and ``next_reward_hidden_state``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
@@ -229,7 +229,7 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
         torch.Tensor, torch.Tensor]:
         """
         Overview:
-            Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state``
+            Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state`` \
             ``reward`` and ``next_reward_hidden_state``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
@@ -285,8 +285,8 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
     def project(self, latent_state: torch.Tensor, with_grad=True) -> torch.Tensor:
         """
         Overview:
-            Project the latent state to a lower dimension to calculate the self-supervised loss, which is proposed in EfficientZero.
-            For more details, please refer to the paper ``Exploring Simple Siamese Representation Learning``.
+            Project the latent state to a lower dimension to calculate the self-supervised loss, which is \
+            proposed in EfficientZero. For more details, please refer to the paper ``Exploring Simple Siamese Representation Learning``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
             - with_grad (:obj:`bool`): Whether to calculate gradient for the projection result.
@@ -310,54 +310,7 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
             return proj.detach()
 
 
-class AfterstateDynamicsNetwork(DynamicsNetwork):
-
-    def __init__(
-            self,
-            action_encoding_dim: int = 2,
-            num_channels: int = 64,
-            common_layer_num: int = 2,
-            fc_reward_layers: SequenceType = [32],
-            output_support_size: int = 601,
-            last_linear_layer_init_zero: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            norm_type: Optional[str] = 'BN',
-            res_connection_in_dynamics: bool = False,
-    ):
-        """
-        Overview:
-            The definition of dynamics network in Stochastic algorithm, which is used to predict next latent state
-            reward by the given current latent state and action.
-            The networks are mainly built on fully connected layers.
-        Arguments:
-            - action_encoding_dim (:obj:`int`): The dimension of action encoding.
-            - num_channels (:obj:`int`): The num of channels in latent states.
-            - common_layer_num (:obj:`int`): The number of common layers in dynamics network.
-            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
-            - output_support_size (:obj:`int`): The size of categorical reward output.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.
-            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
-                operation to speedup, e.g. ReLU(inplace=True).
-            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
-            - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection in dynamics network.
-        """
-        super(AfterstateDynamicsNetwork, self).__init__(action_encoding_dim, num_channels, common_layer_num,
-                                                        fc_reward_layers, output_support_size,
-                                                        last_linear_layer_init_zero
-                                                        , activation, norm_type, res_connection_in_dynamics)
-
-    def forward(self, state_action_encoding: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Overview:
-            Forward computation of the dynamics network. Predict the next latent state given current latent state and action.
-        Arguments:
-            - state_action_encoding (:obj:`torch.Tensor`): The state-action encoding, which is the concatenation of \
-                    latent state and action encoding, with shape (batch_size, num_channels, height, width).
-        Returns:
-            - next_latent_state (:obj:`torch.Tensor`): The next latent state, with shape (batch_size, latent_state_dim).
-            - reward (:obj:`torch.Tensor`): The predicted reward for input state.
-        """
-        return super(AfterstateDynamicsNetwork, self).forward(state_action_encoding)
+AfterstateDynamicsNetwork = DynamicsNetwork
 
 
 class AfterstatePredictionNetworkMLP(PredictionNetworkMLP):
@@ -376,7 +329,7 @@ class AfterstatePredictionNetworkMLP(PredictionNetworkMLP):
     ):
         """
         Overview:
-            The definition of policy and value prediction network with Multi-Layer Perceptron (MLP),
+            The definition of policy and value prediction network with Multi-Layer Perceptron (MLP), \
             which is used to predict value and policy by the given latent state.
         Arguments:
             - chance_space_size: (:obj:`int`): Chance space size, usually an integer number. For discrete action \
@@ -395,15 +348,3 @@ class AfterstatePredictionNetworkMLP(PredictionNetworkMLP):
                                                              fc_value_layers, fc_policy_layers, output_support_size,
                                                              last_linear_layer_init_zero
                                                              , activation, norm_type)
-
-    def forward(self, latent_state: torch.Tensor):
-        """
-        Overview:
-            Forward computation of the prediction network.
-        Arguments:
-            - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, latent_state_dim).
-        Returns:
-            - policy (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).
-            - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
-        """
-        return super(AfterstatePredictionNetworkMLP, self).forward(latent_state)
