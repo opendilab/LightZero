@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import torch.optim as optim
 from ding.model import model_wrap
-from ding.policy.base_policy import Policy
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss, KLDivLoss
@@ -14,15 +13,17 @@ from lzero.mcts import GumbelMuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
+    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
+    prepare_obs, \
     configure_optimizers
+from lzero.policy.muzero import MuZeroPolicy
 
 
 @POLICY_REGISTRY.register('gumbel_muzero')
-class GumeblMuZeroPolicy(Policy):
+class GumeblMuZeroPolicy(MuZeroPolicy):
     """
     Overview:
-        The policy class for Gumbel Muzero. Paper link: https://openreview.net/forum?id=bERaNdoegnO
+        The policy class for Gumbel MuZero proposed in the paper https://openreview.net/forum?id=bERaNdoegnO.
     """
 
     # The default_config for Gumbel MuZero policy.
@@ -169,6 +170,24 @@ class GumeblMuZeroPolicy(Policy):
         root_dirichlet_alpha=0.3,
         # (float) The noise weight at the root node of the search tree.
         root_noise_weight=0.25,
+
+        # ****** Explore by random collect ******
+        # (int) The number of episodes to collect data randomly before training.
+        random_collect_episode_num=0,
+
+        # ****** Explore by eps greedy ******
+        eps=dict(
+            # (bool) Whether to use eps greedy exploration in collecting data.
+            eps_greedy_exploration_in_collect=False,
+            # (str) The type of decaying epsilon. Options are 'linear', 'exp'.
+            type='linear',
+            # (float) The start value of eps.
+            start=1.,
+            # (float) The end value of eps.
+            end=0.05,
+            # (int) The decay steps from start to end eps.
+            decay=int(1e5),
+        ),
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
@@ -338,11 +357,11 @@ class GumeblMuZeroPolicy(Policy):
         # ==============================================================
         # the core recurrent_inference in Gumbel MuZero policy.
         # ==============================================================
-        for step_i in range(self._cfg.num_unroll_steps):
+        for step_k in range(self._cfg.num_unroll_steps):
             # unroll with the dynamics function: predict the next ``hidden_state``, ``reward``,
             # given current ``hidden_state`` and ``action``.
             # And then predict policy_logits and value with the prediction function.
-            network_output = self._learn_model.recurrent_inference(hidden_state, action_batch[:, step_i])
+            network_output = self._learn_model.recurrent_inference(hidden_state, action_batch[:, step_k])
             hidden_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
             # transform the scaled value or its categorical representation to its original value,
@@ -354,17 +373,9 @@ class GumeblMuZeroPolicy(Policy):
                 # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
                 # ==============================================================
                 if self._cfg.ssl_loss_weight > 0:
-                    # obtain the oracle hidden states from representation function.
-                    if self._cfg.model.model_type == 'conv':
-                        beg_index = self._cfg.model.image_channel * step_i
-                        end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
-                        network_output = self._learn_model.initial_inference(
-                            obs_target_batch[:, beg_index:end_index, :, :]
-                        )
-                    elif self._cfg.model.model_type == 'mlp':
-                        beg_index = self._cfg.model.observation_shape * step_i
-                        end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
-                        network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
+                    # obtain the oracle latent states from representation function.
+                    beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
+                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
 
                     hidden_state = to_tensor(hidden_state)
                     representation_state = to_tensor(network_output.latent_state)
@@ -372,7 +383,7 @@ class GumeblMuZeroPolicy(Policy):
                     # NOTE: no grad for the representation_state branch
                     dynamic_proj = self._learn_model.project(hidden_state, with_grad=True)
                     observation_proj = self._learn_model.project(representation_state, with_grad=False)
-                    temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
+                    temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_k]
                     consistency_loss += temp_loss
 
             # NOTE: the target policy, target_value_categorical, target_reward_categorical is calculated in
@@ -381,9 +392,9 @@ class GumeblMuZeroPolicy(Policy):
             # calculate policy loss for the next ``num_unroll_steps`` unroll steps.
             # NOTE: the +=.
             # ==============================================================
-            policy_loss += self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)),torch.from_numpy(improved_policy_batch[:, step_i + 1]).to(self._cfg.device).detach().float()).mean(dim=-1) * mask_batch[:,step_i+1]
-            value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
-            reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_i])
+            policy_loss += self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)),torch.from_numpy(improved_policy_batch[:, step_k + 1]).to(self._cfg.device).detach().float()).mean(dim=-1) * mask_batch[:,step_k+1]
+            value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
+            reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
             entropy_loss += -torch.sum(torch.softmax(policy_logits, dim=1) * torch.log(torch.softmax(policy_logits, dim=1)), dim=-1)
 
             # Follow MuZero, set half gradient

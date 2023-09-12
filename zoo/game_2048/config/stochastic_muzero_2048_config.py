@@ -6,7 +6,7 @@ from easydict import EasyDict
 # ==============================================================
 env_name = 'game_2048'
 action_space_size = 4
-use_ture_chance_label_in_chance_encoder = True  # option: {True, False}
+use_ture_chance_label_in_chance_encoder = True
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3

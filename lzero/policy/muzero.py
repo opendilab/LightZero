@@ -179,7 +179,7 @@ class MuZeroPolicy(Policy):
         eps=dict(
             # (bool) Whether to use eps greedy exploration in collecting data.
             eps_greedy_exploration_in_collect=False,
-            # 'linear', 'exp'
+            # (str) The type of decaying epsilon. Options are 'linear', 'exp'.
             type='linear',
             # (float) The start value of eps.
             start=1.,
@@ -457,30 +457,6 @@ class MuZeroPolicy(Policy):
             'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
         }
 
-    def _get_target_obs_index_in_step_k(self, step):
-        """
-        Overview:
-            Get the begin index and end index of the target obs in step k.
-        Arguments:
-            - step (:obj:`int`): The current step k.
-        Returns:
-            - beg_index (:obj:`int`): The begin index of the target obs in step k.
-            - end_index (:obj:`int`): The end index of the target obs in step k.
-        Examples:
-            >>> self._cfg.model.model_type = 'conv'
-            >>> self._cfg.model.image_channel = 3
-            >>> self._cfg.model.frame_stack_num = 4
-            >>> self._get_target_obs_index_in_step_k(0)
-            >>> (0, 12)
-        """
-        if self._cfg.model.model_type == 'conv':
-            beg_index = self._cfg.model.image_channel * step
-            end_index = self._cfg.model.image_channel * (step + self._cfg.model.frame_stack_num)
-        elif self._cfg.model.model_type == 'mlp':
-            beg_index = self._cfg.model.observation_shape * step
-            end_index = self._cfg.model.observation_shape * (step + self._cfg.model.frame_stack_num)
-        return beg_index, end_index
-
     def _init_collect(self) -> None:
         """
         Overview:
@@ -605,6 +581,30 @@ class MuZeroPolicy(Policy):
             self._mcts_eval = MCTSCtree(self._cfg)
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
+
+    def _get_target_obs_index_in_step_k(self, step):
+        """
+        Overview:
+            Get the begin index and end index of the target obs in step k.
+        Arguments:
+            - step (:obj:`int`): The current step k.
+        Returns:
+            - beg_index (:obj:`int`): The begin index of the target obs in step k.
+            - end_index (:obj:`int`): The end index of the target obs in step k.
+        Examples:
+            >>> self._cfg.model.model_type = 'conv'
+            >>> self._cfg.model.image_channel = 3
+            >>> self._cfg.model.frame_stack_num = 4
+            >>> self._get_target_obs_index_in_step_k(0)
+            >>> (0, 12)
+        """
+        if self._cfg.model.model_type == 'conv':
+            beg_index = self._cfg.model.image_channel * step
+            end_index = self._cfg.model.image_channel * (step + self._cfg.model.frame_stack_num)
+        elif self._cfg.model.model_type == 'mlp':
+            beg_index = self._cfg.model.observation_shape * step
+            end_index = self._cfg.model.observation_shape * (step + self._cfg.model.frame_stack_num)
+        return beg_index, end_index
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1, ready_env_id=None) -> Dict:
         """

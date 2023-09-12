@@ -5,6 +5,7 @@ from ding.policy import create_policy
 
 args = ['conv', 'mlp']
 
+
 @pytest.mark.unittest
 @pytest.mark.parametrize('test_mode_type', args)
 def test_get_target_obs_index_in_step_k(test_mode_type):
@@ -44,7 +45,6 @@ def test_get_target_obs_index_in_step_k(test_mode_type):
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     if test_mode_type == 'conv':
-
         # Test case 1: model_type = 'conv'
         policy._cfg.model.model_type = 'conv'
         # Assume the current step is 2
