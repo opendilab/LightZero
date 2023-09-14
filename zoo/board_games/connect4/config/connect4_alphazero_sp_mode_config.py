@@ -10,14 +10,16 @@ num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
+model_path = None
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 connect4_alphazero_config = dict(
-    exp_name='data_az_ptree/connect4_spmode',
+    exp_name='data_az_ptree/connect4_spmode_evalbyrulebot',
     env=dict(
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',
+        bot_action_type='rule',
         channel_last=False,  # NOTE
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -81,4 +83,4 @@ create_config = connect4_alphazero_create_config
 
 if __name__ == '__main__':
     from lzero.entry import train_alphazero
-    train_alphazero([main_config, create_config], seed=0, model_path='data_az_ptree/connect4_spmode_230830_161936/ckpt/iteration_25900.pth.tar', max_env_step=max_env_step)
+    train_alphazero([main_config, create_config], seed=0, model_path=model_path, max_env_step=max_env_step)
