@@ -877,7 +877,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 try:
-                    root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
+                    root_sampled_actions = np.array([[action.value] for action in roots_sampled_actions[i]])
                 except Exception:
                     # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                     root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
