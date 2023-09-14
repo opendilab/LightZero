@@ -97,24 +97,29 @@
 LightZero 是基于 [PyTorch](https://pytorch.org/) 实现的 MCTS 算法库，在 MCTS 的实现中也用到了 cython 和 cpp。同时，LightZero 的框架主要基于 [DI-engine](https://github.com/opendilab/DI-engine) 实现。目前 LightZero 中集成的算法包括：
 - [AlphaZero](https://www.science.org/doi/10.1126/science.aar6404)
 - [MuZero](https://arxiv.org/abs/1911.08265)
-- [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Sampled MuZero](https://arxiv.org/abs/2104.06303)
+- [Stochastic MuZero](https://openreview.net/pdf?id=X6D9bAHhBQ1)
+- [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Gumbel MuZero](https://openreview.net/pdf?id=bERaNdoegnO&)
+
 
 LightZero 目前支持的环境及算法如下表所示：
 
-| Env./Alg.     | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero |
-|---------------| --------- |--------| ------- | --------------------- | ------------ |
-| Atari         | ---       | ✔      | ✔       | ✔                   | ✔            |
-| TicTacToe     | ✔       | ✔      | 🔒      | 🔒                  | ✔            |
-| Gomoku        | ✔       | ✔      | 🔒      | 🔒                  | ✔            |
-| Go            | 🔒       | 🔒     | 🔒      | 🔒                  | 🔒            |
-| LunarLander   | ---       | ✔      | ✔       | ✔                   | ✔            |
-| BipedalWalker | ---       | ✔      | ✔       | ✔                   | 🔒            |
-| CartPole      | ---       | ✔      | ✔       | ✔                   | ✔            |
-| Pendulum      | ---       | ✔      | ✔       | ✔                   | ✔            |
-| MuJoCo        | ---       | 🔒     | 🔒      | ✔                   | 🔒            |
-
+| Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | 
+|---------------| --------- | ------ |-------------| ------------------ | ---------- |----------------|
+| TicTacToe     | ✔       | ✔      | 🔒           | 🔒                | ✔          | 🔒             |
+| Gomoku        | ✔       | ✔      | 🔒          | 🔒               | ✔          | 🔒             |
+| Connect4      | ✔       | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |
+| 2048          | ✔       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |
+| Chess         | 🔒       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
+| Go            | 🔒       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
+| CartPole      | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
+| Pendulum      | ---       | ✔      | ✔           | ✔                | ✔          | 🔒             |
+| LunarLander   | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
+| BipedalWalker | ---       | ✔      | ✔           | ✔                | ✔          | 🔒              |
+| Atari         | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
+| MuJoCo        | ---       | ✔     | ✔          | ✔                | 🔒         | 🔒               |
+| MiniGrid      | ---       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
 
 <sup>(1): "✔" 表示对应的项目已经完成并经过良好的测试。</sup>
 

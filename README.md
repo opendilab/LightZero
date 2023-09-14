@@ -108,34 +108,39 @@ For the file structure of LightZero, please refer to [lightzero_file_structure](
 LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of MCTS algorithms (sometimes combined with cython and cpp), including:
 - [AlphaZero](https://www.science.org/doi/10.1126/science.aar6404)
 - [MuZero](https://arxiv.org/abs/1911.08265)
-- [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Sampled MuZero](https://arxiv.org/abs/2104.06303)
+- [Stochastic MuZero](https://openreview.net/pdf?id=X6D9bAHhBQ1)
+- [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Gumbel MuZero](https://openreview.net/pdf?id=bERaNdoegnO&)
 
 The environments and algorithms currently supported by LightZero are shown in the table below:
 
-| Env./Alg.      | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero |
-| ------------- | --------- | ------ | ------------- | --------------------- | ------------- |
-| Atari         | ---       | ✔      | ✔       | ✔                   | ✔            |
-| TicTacToe     | ✔       | ✔      | 🔒      | 🔒                  | ✔            |
-| Gomoku        | ✔       | ✔      | 🔒      | 🔒                  | ✔            |
-| Go            | 🔒       | 🔒     | 🔒      | 🔒                  | 🔒            |
-| LunarLander   | ---       | ✔      | ✔       | ✔                   | ✔            |
-| BipedalWalker | ---       | ✔      | ✔       | ✔                   | 🔒            |
-| CartPole      | ---       | ✔      | ✔       | ✔                   | ✔            |
-| Pendulum      | ---       | ✔      | ✔       | ✔                   | ✔            |
-| MuJoCo        | ---       | 🔒     | 🔒      | ✔                   | 🔒            |
+| Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | 
+|---------------| --------- | ------ |-------------| ------------------ | ---------- |----------------|
+| TicTacToe     | ✔       | ✔      | 🔒           | 🔒                | ✔          | 🔒             |
+| Gomoku        | ✔       | ✔      | 🔒          | 🔒               | ✔          | 🔒             |
+| Connect4      | ✔       | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |
+| 2048          | ✔       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |
+| Chess         | 🔒       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
+| Go            | 🔒       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
+| CartPole      | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
+| Pendulum      | ---       | ✔      | ✔           | ✔                | ✔          | 🔒             |
+| LunarLander   | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
+| BipedalWalker | ---       | ✔      | ✔           | ✔                | ✔          | 🔒              |
+| Atari         | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
+| MuJoCo        | ---       | ✔     | ✔          | ✔                | 🔒         | 🔒               |
+| MiniGrid      | ---       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
 
 <sup>(1): "✔" means that the corresponding item is finished and well-tested.</sup>
 
-<sup>(2): "🔒" means that the corresponding item is in the waitinglist (Work In Progress).</sup>
+<sup>(2): "🔒" means that the corresponding item is in the waiting-list (Work In Progress).</sup>
 
 <sup>(3): "---" means that this algorithm doesn't support this environment.</sup>
 
 
 ## Installation
 
-You can install latest LightZero in development from the GitHub source codes with the following command:
+You can install the latest LightZero in development from the GitHub source codes with the following command:
 
 ```bash
 git clone https://github.com/opendilab/LightZero.git
