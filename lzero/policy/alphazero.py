@@ -202,7 +202,7 @@ class AlphaZeroPolicy(Policy):
             'value_loss': value_loss.item(),
             'entropy_loss': entropy_loss.item(),
             'total_grad_norm_before_clip': total_grad_norm_before_clip.item(),
-            'collect_mcts_temperature': self.collect_mcts_temperature,
+            'collect_mcts_temperature': self._collect_mcts_temperature,
         }
 
     def _init_collect(self) -> None:
@@ -212,7 +212,7 @@ class AlphaZeroPolicy(Policy):
         """
         self._collect_mcts = MCTS(self._cfg.mcts)
         self._collect_model = self._model
-        self.collect_mcts_temperature = 1
+        self._collect_mcts_temperature = 1
 
     @torch.no_grad()
     def _forward_collect(self, envs: Dict, obs: Dict, temperature: float = 1) -> Dict[str, torch.Tensor]:
@@ -228,7 +228,7 @@ class AlphaZeroPolicy(Policy):
             - output (:obj:`Dict[str, torch.Tensor]`): The dict of output, the key is env_id and the value is the \
                 the corresponding policy output in this timestep, including action, probs and so on.
         """
-        self.collect_mcts_temperature = temperature
+        self._collect_mcts_temperature = temperature
         ready_env_id = list(envs.keys())
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
@@ -244,7 +244,7 @@ class AlphaZeroPolicy(Policy):
             action, mcts_probs = self._collect_mcts.get_next_action(
                 envs[env_id],
                 policy_forward_fn=self._policy_value_fn,
-                temperature=self.collect_mcts_temperature,
+                temperature=self._collect_mcts_temperature,
                 sample=True
             )
             output[env_id] = {

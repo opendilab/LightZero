@@ -1,6 +1,7 @@
-from zoo.board_games.connect4.config.connect4_alphazero_bot_mode_config import main_config, create_config
-from lzero.entry import eval_alphazero
 import numpy as np
+
+from lzero.entry import eval_alphazero
+from zoo.board_games.connect4.config.connect4_alphazero_bot_mode_config import main_config, create_config
 
 if __name__ == '__main__':
     """ 
@@ -8,9 +9,8 @@ if __name__ == '__main__':
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
     """
-    # model_path = 'data_az_ptree/connect4_rulebot/ckpt/iteration_60000.pth.tar'
-    model_path = "/mnt/nfs/xcy/LightZero/data_az_ptree/connect4_rulebot_230912_090633/ckpt/iteration_44750.pth.tar"
-    seeds = [0]
+    model_path = None
+    seeds = [0, 1, 2, 3, 4]
     num_episodes_each_seed = 1
     # If True, you can play with the agent.
     main_config.env.agent_vs_human = False

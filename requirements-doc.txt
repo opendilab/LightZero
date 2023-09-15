@@ -7,7 +7,7 @@ plantumlcli>=0.0.4
 packaging
 sphinx-multiversion~=0.2.4
 where~=1.0.2
-numpy>=1.19,<2
+numpy>=1.24.4,<2
 easydict>=1.7,<2
 scikit-learn>=0.24.2
 nbsphinx>=0.8.8

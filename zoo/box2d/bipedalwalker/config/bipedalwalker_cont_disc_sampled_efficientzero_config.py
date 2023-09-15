@@ -10,7 +10,8 @@ continuous_action_space = False
 each_dim_disc_size = 4  # thus the total discrete action number is 4**4=256
 K = 20  # num_of_sampled_actions
 num_simulations = 50
-update_per_collect = 200
+update_per_collect = None
+model_update_ratio = 0.25
 batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
@@ -20,10 +21,11 @@ reanalyze_ratio = 0.
 
 bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/bipedalwalker_cont_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_sez_ctree/bipedalwalker_cont_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name='BipedalWalker-v3',
+        env_type='normal',
         continuous=True,
         manually_discretization=True,
         each_dim_disc_size=each_dim_disc_size,
@@ -39,7 +41,7 @@ bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             sigma_type='conditioned',
-            model_type='mlp', 
+            model_type='mlp',
             lstm_hidden_size=256,
             latent_state_dim=256,
             res_connection_in_dynamics=True,
@@ -61,6 +63,7 @@ bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e3),
+        model_update_ratio=model_update_ratio,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -79,10 +82,6 @@ bipedalwalker_cont_disc_sampled_efficientzero_create_config = dict(
         type='sampled_efficientzero',
         import_names=['lzero.policy.sampled_efficientzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 bipedalwalker_cont_disc_sampled_efficientzero_create_config = EasyDict(
     bipedalwalker_cont_disc_sampled_efficientzero_create_config

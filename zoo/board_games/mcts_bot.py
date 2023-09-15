@@ -10,12 +10,11 @@ Overview:
 """
 
 import time
-import copy
 from abc import ABC, abstractmethod
 from collections import defaultdict
 
 import numpy as np
-from easydict import EasyDict
+
 
 class MCTSNode(ABC):
     """
@@ -40,7 +39,7 @@ class MCTSNode(ABC):
                 The methods of this object implement functionalities such as game state transitions and retrieving game results.
             - parent (:obj:`MCTSNode`):  The parent node of the current node. The parent node is primarily used for backpropagation during the Monte Carlo Tree Search. 
                 For the root node, this parent returns None as it does not have a parent node.
-        """    
+        """
         self.env = env
         self.parent = parent
         self.children = []
@@ -107,7 +106,8 @@ class MCTSNode(ABC):
 
     """
         # Calculate the ucb score for every child node in the list.
-        choices_weights = [(child_node.value / child_node.visit_count) + c_param * np.sqrt((2 * np.log(self.visit_count) / child_node.visit_count)) for child_node in self.children]
+        choices_weights = [(child_node.value / child_node.visit_count) + c_param * np.sqrt(
+            (2 * np.log(self.visit_count) / child_node.visit_count)) for child_node in self.children]
         # Save the best action based on the highest UCB score.
         self.best_action = self.expanded_actions[np.argmax(choices_weights)]
         # Choose the child node which has the highest ucb score.
@@ -125,6 +125,7 @@ class MCTSNode(ABC):
             - action(:obj:`int`): A randomly chosen action from the list of possible actions.
         """
         return possible_actions[np.random.randint(len(possible_actions))]
+
 
 class TwoPlayersMCTSNode(MCTSNode):
     """
@@ -153,7 +154,6 @@ class TwoPlayersMCTSNode(MCTSNode):
             self._legal_actions = self.env.legal_actions
         return self._legal_actions
 
-
     @property
     def value(self):
         """
@@ -172,7 +172,8 @@ class TwoPlayersMCTSNode(MCTSNode):
         """
 
         # Determine the number of wins and losses based on the current player at the parent node.
-        wins, loses = (self._results[1], self._results[-1]) if self.parent.env.current_player == 1 else (self._results[-1], self._results[1])
+        wins, loses = (self._results[1], self._results[-1]) if self.parent.env.current_player == 1 else (
+        self._results[-1], self._results[1])
 
         # Calculate and return the Q-value as the difference between wins and losses.
         return wins - loses
@@ -194,20 +195,20 @@ class TwoPlayersMCTSNode(MCTSNode):
         Returns:
             - node(:obj:`TwoPlayersMCTSNode`): The child node object that has been created.
         """
-        
+
         # Choose an untried action from the list of legal actions and pop it out. Only untried actions are left in the list.
         action = self.legal_actions.pop()
-        
+
         # The simulate_action() function returns a new environment which resets the board and the current player flag.
         next_simulator_env = self.env.simulate_action(action)
-        
+
         # Create a new node object for the child node and append it to the children list.
         child_node = TwoPlayersMCTSNode(next_simulator_env, parent=self)
         self.children.append(child_node)
-        
+
         # Add the action that has been tried to the expanded_actions list.
         self.expanded_actions.append(action)
-        
+
         # Return the child node object.
         return child_node
 
@@ -306,7 +307,7 @@ class MCTS(object):
                 leaf_node.backpropagate(reward)
                 if time.time() > end_time:
                     break
-        # If simulations number is provided, run the specified number of simulations.
+        # If a simulation number is provided, run the specified number of simulations.
         else:
             for i in range(0, simulations_number):
                 # print('****simlulation-{}****'.format(i))
@@ -317,15 +318,14 @@ class MCTS(object):
                 # print('reward={}\n'.format(reward))
                 # Backpropagate from the leaf node to the root node.
                 leaf_node.backpropagate(reward)
-        # To select best child go for exploitation only.
+        # To select the best child go for exploitation only.
         if best_action_type == "UCB":
             return self.root.best_child(c_param=0.)
-        
+
         else:
             children_visit_counts = [child_node.visit_count for child_node in self.root.children]
             self.root.best_action = self.root.expanded_actions[np.argmax(children_visit_counts)]
             return self.root.children[np.argmax(children_visit_counts)]
-
 
     #
     def _tree_policy(self):
@@ -352,7 +352,7 @@ class MCTSBot:
     Overview:
         A robot which can use MCTS to make decision, choose an action to take.
     """
- 
+
     def __init__(self, env, bot_name, num_simulation=50):
         """
         Overview:
@@ -366,7 +366,7 @@ class MCTSBot:
         self.num_simulation = num_simulation
         self.simulator_env = env
 
-    def get_actions(self, state, player_index, best_action_type = "UCB"):
+    def get_actions(self, state, player_index, best_action_type="UCB"):
         """
         Overview:
             This function gets the actions that the MCTS Bot will take.
@@ -379,7 +379,7 @@ class MCTSBot:
         Returns:
             - action (:obj:`int`): The best action that the MCTS Bot will take. 
         """
-        # Every time before make a decision, reset the environment to current environment of the game.
+        # Every time before make a decision, reset the environment to the current environment of the game.
         self.simulator_env.reset(start_player_index=player_index, init_state=state)
         root = TwoPlayersMCTSNode(self.simulator_env)
         # Do the MCTS to find the best action to take.

@@ -292,9 +292,7 @@ class MCTS(object):
             # self.simulate_cnt += 1
             # print('simulate_cnt: {}'.format(self.simulate_cnt))
             # print(f'node:{node}, list(node.children.keys()) is: {list(node.children.keys())}. simulate_env.legal_actions is: {simulate_env.legal_actions}')
-
-            action, child_node = self._select_child(node, simulate_env)
-            node = child_node
+            action, node = self._select_child(node, simulate_env)
             # When there are no common elements in ``node.children`` and ``simulate_env.legal_actions``, action would be None, and we set the node to be a leaf node.
             if action is None:
                 break

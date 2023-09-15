@@ -7,7 +7,8 @@ class Connect4RuleBot():
     """
     Overview:
         The rule-based bot for the Connect4 game. The bot follows a set of rules in a certain order until a valid move is found.\
-        The rules are: winning move, blocking move, do not take a move which may lead to opponent win in 3 steps, forming a sequence of 3, forming a sequence of 2, and a random move.
+        The rules are: winning move, blocking move, do not take a move which may lead to opponent win in 3 steps, \
+        forming a sequence of 3, forming a sequence of 2, and a random move.
     """
 
     def __init__(self, env, player):
@@ -46,10 +47,10 @@ class Connect4RuleBot():
         for action in self.legal_actions:
             if self.is_blocking_move(action):
                 return action
-            
+
         # Remove the actions which may lead to opponent to win.
-        self.remove_actions()    
-        
+        self.remove_actions()
+
         # If all the actions are removed, then randomly select an action.
         if len(self.legal_actions) == 0:
             return np.random.choice(self.env.legal_actions)
@@ -83,7 +84,7 @@ class Connect4RuleBot():
         temp_board = self.board.copy()
         temp_board[row][action] = piece
         return self.check_four_in_a_row(temp_board, piece)
-    
+
     def is_winning_move_in_two_steps(self, action):
         """
         Overview:
@@ -114,7 +115,7 @@ class Connect4RuleBot():
         self.board, self.current_player = temp
         if blocking_count >= 2:
             return True
-        else: 
+        else:
             return False
 
     def is_blocking_move(self, action):
@@ -133,7 +134,7 @@ class Connect4RuleBot():
         temp_board = self.board.copy()
         temp_board[row][action] = piece
         return self.check_four_in_a_row(temp_board, piece)
-    
+
     def remove_actions(self):
         """
         Overview:
@@ -153,10 +154,10 @@ class Connect4RuleBot():
             for a in legal_actions:
                 if self.is_winning_move(a) or self.is_winning_move_in_two_steps(a):
                     self.legal_actions.remove(action)
-                    print(f"if take action {action}, then opponent take{a} may win")
-                    print(f"so we should take action from {self.legal_actions}")
+                    # print(f"if take action {action}, then opponent take{a} may win")
+                    # print(f"so we should take action from {self.legal_actions}")
                     break
-                
+
             self.board, self.current_player = temp
 
     def is_sequence_3_move(self, action):
@@ -250,7 +251,6 @@ class Connect4RuleBot():
                     if len(window) == seq_len and window.count(piece) == seq_len:
                         return True
 
-
         return False
 
     def check_four_in_a_row(self, board, piece):
@@ -266,25 +266,29 @@ class Connect4RuleBot():
         # Check horizontal locations
         for col in range(4):
             for row in range(6):
-                if board[row][col] == piece and board[row][col+1] == piece and board[row][col+2] == piece and board[row][col+3] == piece:
+                if board[row][col] == piece and board[row][col + 1] == piece and board[row][col + 2] == piece and \
+                        board[row][col + 3] == piece:
                     return True
 
         # Check vertical locations
         for col in range(7):
             for row in range(3):
-                if board[row][col] == piece and board[row+1][col] == piece and board[row+2][col] == piece and board[row+3][col] == piece:
+                if board[row][col] == piece and board[row + 1][col] == piece and board[row + 2][col] == piece and \
+                        board[row + 3][col] == piece:
                     return True
 
         # Check positively sloped diagonals
         for row in range(3):
             for col in range(4):
-                if board[row][col] == piece and board[row+1][col+1] == piece and board[row+2][col+2] == piece and board[row+3][col+3] == piece:
+                if board[row][col] == piece and board[row + 1][col + 1] == piece and board[row + 2][
+                    col + 2] == piece and board[row + 3][col + 3] == piece:
                     return True
 
         # Check negatively sloped diagonals
         for row in range(3, 6):
             for col in range(4):
-                if board[row][col] == piece and board[row-1][col+1] == piece and board[row-2][col+2] == piece and board[row-3][col+3] == piece:
+                if board[row][col] == piece and board[row - 1][col + 1] == piece and board[row - 2][
+                    col + 2] == piece and board[row - 3][col + 3] == piece:
                     return True
 
         return False

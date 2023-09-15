@@ -6,21 +6,23 @@ from connect4_env import Connect4Env
 from zoo.board_games.connect4.envs.rule_bot import Connect4RuleBot
 
 
-@pytest.mark.envtest
+@pytest.mark.unittest
 class TestConnect4RuleBot():
     """
-    This class is used to test the Connect4RuleBot class methods.
+    Overview:
+        This class is used to test the Connect4RuleBot class methods.
     """
 
     def setup(self):
         """
-        This method is responsible for setting up the initial configurations required for the game environment.
-        It creates an instance of the Connect4Env class and Connect4RuleBot class.
+        Overview:
+            This method is responsible for setting up the initial configurations required for the game environment.
+            It creates an instance of the Connect4Env class and Connect4RuleBot class.
         """
         cfg = EasyDict(
             battle_mode='self_play_mode',
             mcts_mode='self_play_mode',
-            channel_last=True,
+            channel_last=False,
             scale=True,
             agent_vs_human=False,
             prob_random_agent=0,
@@ -36,10 +38,11 @@ class TestConnect4RuleBot():
 
     def test_is_winning_move(self):
         """
-         This test method creates a game situation where the bot has three consecutive pieces in the board.
-         It tests the `is_winning_move` method of the Connect4RuleBot class by asserting that the method returns True
-         when a winning move is possible for the bot.
-         """
+        Overview:
+            This test method creates a game situation where the bot has three consecutive pieces in the board.
+            It tests the `is_winning_move` method of the Connect4RuleBot class by asserting that the method returns True
+            when a winning move is possible for the bot.
+        """
         # Create a chessboard with three consecutive pieces.
         board = np.zeros((6, 7))
         board[5][3] = self.player
@@ -65,9 +68,10 @@ class TestConnect4RuleBot():
 
     def test_is_blocking_move(self):
         """
-        This test method creates a game situation where the opponent has three consecutive pieces in the board.
-        It tests the `is_blocking_move` method of the Connect4RuleBot class by asserting that the method returns True
-        when a blocking move is necessary to prevent the opponent from winning.
+        Overview:
+            This test method creates a game situation where the opponent has three consecutive pieces in the board.
+            It tests the `is_blocking_move` method of the Connect4RuleBot class by asserting that the method returns True
+            when a blocking move is necessary to prevent the opponent from winning.
         """
         """
         # Create a chessboard with three consecutive pieces.
@@ -93,9 +97,10 @@ class TestConnect4RuleBot():
 
     def test_is_sequence_3_move(self):
         """
-        This test method creates a game situation where the bot has two consecutive pieces in the board.
-        It tests the `is_sequence_3_move` method of the Connect4RuleBot class by asserting that the method returns True
-        when placing a piece next to these two consecutive pieces will create a sequence of 3 pieces.
+        Overview:
+            This test method creates a game situation where the bot has two consecutive pieces in the board.
+            It tests the `is_sequence_3_move` method of the Connect4RuleBot class by asserting that the method returns True
+            when placing a piece next to these two consecutive pieces will create a sequence of 3 pieces.
         """
         # Create a chessboard with two consecutive pieces.
         board = np.zeros((6, 7))
@@ -106,12 +111,13 @@ class TestConnect4RuleBot():
 
     def test_is_sequence_2_move(self):
         """
-        This test method creates a game situation where the bot has a single piece in the board.
-        It tests the `is_sequence_2_move` method of the Connect4RuleBot class by asserting that the method returns True
-        when placing a piece next to the single piece will create a sequence of 2 pieces.
-        It also tests for situations where placing a piece will not result in a sequence of 2 pieces.
+        Overview:
+            This test method creates a game situation where the bot has a single piece in the board.
+            It tests the `is_sequence_2_move` method of the Connect4RuleBot class by asserting that the method returns True
+            when placing a piece next to the single piece will create a sequence of 2 pieces.
+            It also tests for situations where placing a piece will not result in a sequence of 2 pieces.
         """
-        # Create a chessboard with one consecutive pieces.
+        # Create a chessboard with one consecutive piece.
         board = np.zeros((6, 7))
         board[5][5] = self.player
         self.bot.board = board
@@ -131,9 +137,10 @@ class TestConnect4RuleBot():
 
     def test_get_action(self):
         """
-        This test method creates a game situation with an empty board.
-        It tests the `get_rule_bot_action` method of the Connect4RuleBot class by asserting that the method returns an action
-        that is within the set of legal actions.
+        Overview:
+            This test method creates a game situation with an empty board.
+            It tests the `get_rule_bot_action` method of the Connect4RuleBot class by asserting that the method returns an action
+            that is within the set of legal actions.
         """
         board = np.zeros((6, 7))
         self.bot.board = board
@@ -162,12 +169,4 @@ class TestConnect4RuleBot():
         self.bot.board = board
         self.bot.legal_actions = [i for i in range(7) if board[0][i] == 0]
         self.bot.remove_actions()
-        assert self.bot.legal_actions == [0,2,5]
-
-
-if __name__ == '__main__':
-    test = TestConnect4RuleBot()
-    test.setup()
-    test.test_remove_actions()
-    test.test_is_winning_move_in_two_steps()
-    test.test_get_action()
+        assert self.bot.legal_actions == [0, 2, 5]
