@@ -104,7 +104,7 @@ setup(
         package_name: ['*.yaml']
         for package_name in find_packages(include=('lzero.*',))
     },
-    python_requires=">=3.7",
+    python_requires=">=3.8, <3.11",
     install_requires=requirements,
     tests_require=group_requirements['test'],
     extras_require=group_requirements,
@@ -123,9 +123,9 @@ setup(
         'Operating System :: POSIX :: Linux',
         # 'Operating System :: Microsoft :: Windows',
         'Operating System :: MacOS :: MacOS X',
-        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
     ],
 )
