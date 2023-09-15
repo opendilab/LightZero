@@ -15,12 +15,12 @@ model_path = None
 # end of the most frequently changed config specified by the user
 # ==============================================================
 connect4_alphazero_config = dict(
-    exp_name='data_az_ptree/connect4_spmode_evalbyrulebot',
+    exp_name='data_az_ptree/connect4_sp-mode_eval-by-rulebot_seed0',
     env=dict(
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',
         bot_action_type='rule',
-        channel_last=False,  # NOTE
+        channel_last=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,

@@ -1,9 +1,10 @@
-import pytest
+import time
+
+import numpy as np
 from easydict import EasyDict
+
 from connect4_env import Connect4Env
 from zoo.board_games.mcts_bot import MCTSBot
-import time
-import numpy as np
 
 cfg = EasyDict(
     battle_mode='self_play_mode',
@@ -15,7 +16,6 @@ cfg = EasyDict(
     prob_expert_agent=0,
     bot_action_type='rule',
     screen_scaling=9,
-    # save_replay=True,
     save_replay=False,
     prob_random_action_in_bot=0,
 )
@@ -99,12 +99,13 @@ def test_mcts_bot_vs_rule_bot(num_simulations=200):
     )
 
 
-def test_mcts_bot_vs_mcts_bot(num_simulations=50):
+def test_mcts_bot_vs_mcts_bot(num_simulations_1=50, num_simulations_2=50):
     """
     Overview:
         A tictactoe game between mcts_bot and rule_bot, where rule_bot take the first move.
     Arguments:
-        - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
+        - num_simulations_1 (:obj:`int`): The number of the simulations of player 1 required to find the best move.
+        - num_simulations_2 (:obj:`int`): The number of the simulations of player 2 required to find the best move.
     """
     # List to record the time required for each decision round and the winner.
     mcts_bot1_time_list = []
@@ -119,8 +120,8 @@ def test_mcts_bot_vs_mcts_bot(num_simulations=50):
         # Reset the environment, set the board to a clean board and the  start player to be player 1.
         env.reset()
         state = env.board
-        player1 = MCTSBot(env, 'a', 200)  # player_index = 0, player = 1
-        player2 = MCTSBot(env, 'a', 1000)
+        player1 = MCTSBot(env, 'a', num_simulations_1)  # player_index = 0, player = 1
+        player2 = MCTSBot(env, 'a', num_simulations_2)
         # Set player 1 to move first.
         player_index = 0
         while not env.get_done_reward()[0]:
@@ -175,6 +176,7 @@ def test_mcts_bot_vs_mcts_bot(num_simulations=50):
         )
     )
 
+
 def test_rule_bot_vs_rule_bot():
     """
     Overview:
@@ -194,7 +196,6 @@ def test_rule_bot_vs_rule_bot():
         env = Connect4Env(EasyDict(cfg))
         # Reset the environment, set the board to a clean board and the  start player to be player 1.
         env.reset(replay_name_suffix=f'test{i}')
-        state = env.board
         # Set player 1 to move first.
         player_index = 0
         while not env.get_done_reward()[0]:
@@ -245,6 +246,8 @@ def test_rule_bot_vs_rule_bot():
             winner, winner.count(-1), winner.count(1), winner.count(2)
         )
     )
+
+
 if __name__ == '__main__':
     # test_mcts_bot_vs_rule_bot(50)
     # test_mcts_bot_vs_rule_bot(200)

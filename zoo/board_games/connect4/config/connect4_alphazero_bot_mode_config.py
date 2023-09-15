@@ -15,7 +15,7 @@ prob_random_action_in_bot = 0
 # end of the most frequently changed config specified by the user
 # ==============================================================
 connect4_alphazero_config = dict(
-    exp_name='data_az_ptree/connect4_mctsbot50',
+    exp_name='data_az_ptree/connect4_mcts-bot_seed0',
     env=dict(
         battle_mode='play_with_bot_mode',
         mcts_mode='play_with_bot_mode',
@@ -33,7 +33,6 @@ connect4_alphazero_config = dict(
         model=dict(
             observation_shape=(3, 6, 7),
             action_space_size=int(1*7),
-            # We use the small size model for tictactoe.
             num_res_blocks=1,
             num_channels=32,
         ),

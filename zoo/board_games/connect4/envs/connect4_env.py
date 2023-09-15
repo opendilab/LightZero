@@ -28,22 +28,23 @@ Reward Space:
     For the ``play_with_bot_mode``, at the time step when the game terminates, if the bot wins, the reward is -1; if the agent wins, the reward is 1; and in all other cases, the reward is 0.
 """
 
+import copy
 import os
 import sys
-import copy
 from typing import List
-import pygame
-import imageio
 
-from gym import spaces
-from easydict import EasyDict
+import imageio
 import numpy as np
+import pygame
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from ditk import logging
+from easydict import EasyDict
+from gym import spaces
 
 from zoo.board_games.connect4.envs.rule_bot import Connect4RuleBot
 from zoo.board_games.mcts_bot import MCTSBot
+
 
 def get_image(path):
     from os import path as os_path
@@ -65,7 +66,7 @@ class Connect4Env(BaseEnv):
         # (str) The mode of the environment when take a step.
         battle_mode='self_play_mode',
         # (str) The mode of the environment when doing the MCTS.
-        mcts_mode='self_play_mode', 
+        mcts_mode='self_play_mode',
         # (str) The type of the bot of the environment.
         bot_action_type='mcts',
         # (bool) Whether to let human to play with the agent when evaluating. If False, then use the bot to evaluate the agent.
@@ -74,7 +75,7 @@ class Connect4Env(BaseEnv):
         prob_random_agent=0,
         # (float) The probability that an expert agent(the bot) is used instead of the learning agent.
         prob_expert_agent=0,
-        # (float) The probability that a random action will be take when calling the bot.
+        # (float) The probability that a random action will be taken when calling the bot.
         prob_random_action_in_bot=0.,
         # (float) The scale of the render screen.
         screen_scaling=9,
@@ -113,8 +114,8 @@ class Connect4Env(BaseEnv):
 
         # Set the mode of interaction between the agent and the environment.
         # options = {'self_play_mode', 'play_with_bot_mode', 'eval_mode'}
-        self.battle_mode = cfg.battle_mode 
-        self.mcts_mode = cfg.mcts_mode 
+        self.battle_mode = cfg.battle_mode
+        self.mcts_mode = cfg.mcts_mode
         assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
         # In ``eval_mode``, we can choose to play with the agent.
         self.agent_vs_human = cfg.agent_vs_human
@@ -125,7 +126,7 @@ class Connect4Env(BaseEnv):
         assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (
                 self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
             f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
-        
+
         # The board state is saved as a one-dimensional array instead of a two-dimensional array for ease of computation in ``step()`` function.
         self.board = [0] * (6 * 7)
 
@@ -201,7 +202,7 @@ class Connect4Env(BaseEnv):
         obs = self.observe()
 
         return BaseEnvTimestep(obs, reward, done, info)
-    
+
     def step(self, action):
         """
         Overview:
@@ -237,10 +238,10 @@ class Connect4Env(BaseEnv):
                                                                                'to_play'] == 1 else timestep.reward
                 if self.save_replay:
                     self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
-                                        format=self.replay_format)
-            
+                                            format=self.replay_format)
+
             return timestep
-        
+
         elif self.battle_mode == 'play_with_bot_mode':
             # Player 1's turn.
             flag = "bot_agent"
@@ -256,7 +257,7 @@ class Connect4Env(BaseEnv):
 
                 if self.save_replay:
                     self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
-                                        format=self.replay_format)
+                                            format=self.replay_format)
 
                 return timestep_player1
 
@@ -279,10 +280,10 @@ class Connect4Env(BaseEnv):
             if timestep.done:
                 if self.save_replay:
                     self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
-                                        format=self.replay_format)
+                                            format=self.replay_format)
 
             return timestep
-        
+
         elif self.battle_mode == 'eval_mode':
             # Player 1's turn.
             flag = "eval_agent"
@@ -298,7 +299,7 @@ class Connect4Env(BaseEnv):
 
                 if self.save_replay:
                     self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
-                                        format=self.replay_format)
+                                            format=self.replay_format)
 
                 return timestep_player1
 
@@ -326,8 +327,8 @@ class Connect4Env(BaseEnv):
             if timestep.done:
                 if self.save_replay:
                     self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
-                                        format=self.replay_format)
-                    
+                                            format=self.replay_format)
+
             return timestep
 
     def reset(self, start_player_index=0, init_state=None, replay_name_suffix=None):
@@ -400,14 +401,14 @@ class Connect4Env(BaseEnv):
             action_mask[i] = 1
 
         if self.battle_mode == 'play_with_bot_mode' or self.battle_mode == 'eval_mode':
-            return {"observation": self.current_state()[1], 
+            return {"observation": self.current_state()[1],
                     "action_mask": action_mask,
                     "board": copy.deepcopy(self.board),
                     "current_player_index": self.players.index(self._current_player),
                     "to_play": -1
                     }
         elif self.battle_mode == 'self_play_mode':
-            return {"observation": self.current_state()[1], 
+            return {"observation": self.current_state()[1],
                     "action_mask": action_mask,
                     "board": copy.deepcopy(self.board),
                     "current_player_index": self.players.index(self._current_player),
@@ -425,7 +426,7 @@ class Connect4Env(BaseEnv):
         Arguments:
             - mode (:obj:`str`): The rendering mode. Options are 'print', 'human', or 'rgb_array_render'.
         """
-        # In 'print' mode ,print the current game board for rendering.
+        # In 'print' mode, print the current game board for rendering.
         if mode == "print":
             print(np.array(self.board).reshape(6, 7))
             return
@@ -733,6 +734,6 @@ class Connect4Env(BaseEnv):
         # evaluate the performance of the current agent.
         cfg.battle_mode = 'eval_mode'
         return [cfg for _ in range(evaluator_env_num)]
-    
+
     def close(self):
         pass
