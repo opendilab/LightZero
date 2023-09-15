@@ -121,8 +121,10 @@ class TicTacToeEnv(BaseEnv):
             self.board = np.array(copy.deepcopy(init_state), dtype="int32")
         else:
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
+
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
+
         if self.battle_mode == 'play_with_bot_mode' or self.battle_mode == 'eval_mode':
             # In ``play_with_bot_mode`` and ``eval_mode``, we need to set the "to_play" parameter in the "obs" dict to -1,
             # because we don't take into account the alternation between players.

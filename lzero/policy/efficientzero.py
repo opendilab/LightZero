@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import torch.optim as optim
 from ding.model import model_wrap
-from ding.policy.base_policy import Policy
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from torch.distributions import Categorical
@@ -15,15 +14,17 @@ from lzero.mcts import EfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts import EfficientZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, negative_cosine_similarity, prepare_obs, \
+    DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, negative_cosine_similarity, \
+    prepare_obs, \
     configure_optimizers
+from lzero.policy.muzero import MuZeroPolicy
 
 
 @POLICY_REGISTRY.register('efficientzero')
-class EfficientZeroPolicy(Policy):
+class EfficientZeroPolicy(MuZeroPolicy):
     """
     Overview:
-        The policy class for EfficientZero.
+        The policy class for EfficientZero proposed in the paper https://arxiv.org/abs/2111.00210.
     """
 
     # The default_config for EfficientZero policy.
@@ -86,6 +87,8 @@ class EfficientZeroPolicy(Policy):
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
         transform2string=False,
+        # (bool) Whether to use gray scale image.
+        gray_scale=False,
         # (bool) Whether to use data augmentation.
         use_augmentation=False,
         # (list) The style of augmentation.
@@ -177,7 +180,7 @@ class EfficientZeroPolicy(Policy):
         eps=dict(
             # (bool) Whether to use eps greedy exploration in collecting data.
             eps_greedy_exploration_in_collect=False,
-            # 'linear', 'exp'
+            # (str) The type of decaying epsilon. Options are 'linear', 'exp'.
             type='linear',
             # (float) The start value of eps.
             start=1.,
@@ -204,6 +207,8 @@ class EfficientZeroPolicy(Policy):
             return 'EfficientZeroModel', ['lzero.model.efficientzero_model']
         elif self._cfg.model.model_type == "mlp":
             return 'EfficientZeroModelMLP', ['lzero.model.efficientzero_model_mlp']
+        else:
+            raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
     def _init_learn(self) -> None:
         """
@@ -265,11 +270,11 @@ class EfficientZeroPolicy(Policy):
     def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
         """
         Overview:
-            The forward function for learning policy in learn mode, which is the core of the learning process.
-            The data is sampled from replay buffer.
+            The forward function for learning policy in learn mode, which is the core of the learning process. \
+            The data is sampled from replay buffer. \
             The loss is calculated by the loss function and the loss is backpropagated to update the model.
         Arguments:
-            - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
+            - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors. \
                 The first tensor is the current_batch, the second tensor is the target_batch.
         Returns:
             - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
@@ -369,12 +374,12 @@ class EfficientZeroPolicy(Policy):
         # ==============================================================
         # the core recurrent_inference in EfficientZero policy.
         # ==============================================================
-        for step_i in range(self._cfg.num_unroll_steps):
+        for step_k in range(self._cfg.num_unroll_steps):
             # unroll with the dynamics function: predict the next ``latent_state``, ``reward_hidden_state``,
             # `` value_prefix`` given current ``latent_state`` ``reward_hidden_state`` and ``action``.
             # And then predict policy_logits and value  with the prediction function.
             network_output = self._learn_model.recurrent_inference(
-                latent_state, reward_hidden_state, action_batch[:, step_i]
+                latent_state, reward_hidden_state, action_batch[:, step_k]
             )
             latent_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(
                 network_output
@@ -388,15 +393,9 @@ class EfficientZeroPolicy(Policy):
             # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
             # ==============================================================
             if self._cfg.ssl_loss_weight > 0:
-                # obtain the oracle hidden states from representation function.
-                if self._cfg.model.model_type == 'conv':
-                    beg_index = self._cfg.model.image_channel * step_i
-                    end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
-                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
-                elif self._cfg.model.model_type == 'mlp':
-                    beg_index = self._cfg.model.observation_shape * step_i
-                    end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
-                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
+                # obtain the oracle latent states from representation function.
+                beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
+                network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
 
                 latent_state = to_tensor(latent_state)
                 representation_state = to_tensor(network_output.latent_state)
@@ -404,7 +403,7 @@ class EfficientZeroPolicy(Policy):
                 # NOTE: no grad for the representation_state branch.
                 dynamic_proj = self._learn_model.project(latent_state, with_grad=True)
                 observation_proj = self._learn_model.project(representation_state, with_grad=False)
-                temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
+                temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_k]
 
                 consistency_loss += temp_loss
 
@@ -414,16 +413,16 @@ class EfficientZeroPolicy(Policy):
             # calculate policy loss for the next ``num_unroll_steps`` unroll steps.
             # NOTE: the +=.
             # ==============================================================
-            policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
+            policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_k + 1])
 
-            # Here we take the hypothetical step k = step_i + 1
+            # Here we take the hypothetical step k = step_k + 1
             prob = torch.softmax(policy_logits, dim=-1)
             dist = Categorical(prob)
             policy_entropy += dist.entropy().mean()
-            target_normalized_visit_count = target_policy[:, step_i + 1]
+            target_normalized_visit_count = target_policy[:, step_k + 1]
 
             # ******* NOTE: target_policy_entropy is only for debug.  ******
-            non_masked_indices = torch.nonzero(mask_batch[:, step_i + 1]).squeeze(-1)
+            non_masked_indices = torch.nonzero(mask_batch[:, step_k + 1]).squeeze(-1)
             # Check if there are any unmasked rows
             if len(non_masked_indices) > 0:
                 target_normalized_visit_count_masked = torch.index_select(
@@ -435,11 +434,11 @@ class EfficientZeroPolicy(Policy):
                 # Set target_policy_entropy to 0 if all rows are masked
                 target_policy_entropy += 0
 
-            value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
-            value_prefix_loss += cross_entropy_loss(value_prefix, target_value_prefix_categorical[:, step_i])
+            value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
+            value_prefix_loss += cross_entropy_loss(value_prefix, target_value_prefix_categorical[:, step_k])
 
             # reset hidden states every ``lstm_horizon_len`` unroll steps.
-            if (step_i + 1) % self._cfg.lstm_horizon_len == 0:
+            if (step_k + 1) % self._cfg.lstm_horizon_len == 0:
                 reward_hidden_state = (
                     torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
                     torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
@@ -489,7 +488,7 @@ class EfficientZeroPolicy(Policy):
             predicted_value_prefixs = predicted_value_prefixs.reshape(-1).unsqueeze(-1)
 
         return {
-            'collect_mcts_temperature': self.collect_mcts_temperature,
+            'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
@@ -525,7 +524,7 @@ class EfficientZeroPolicy(Policy):
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
-        self.collect_mcts_temperature = 1
+        self._collect_mcts_temperature = 1
         self.collect_epsilon = 0.0
 
     def _forward_collect(
@@ -561,7 +560,7 @@ class EfficientZeroPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._collect_model.eval()
-        self.collect_mcts_temperature = temperature
+        self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
         with torch.no_grad():
@@ -596,8 +595,7 @@ class EfficientZeroPolicy(Policy):
                 roots, self._collect_model, latent_state_roots, reward_hidden_state_roots, to_play
             )
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             data_id = [i for i in range(active_collect_env_num)]
@@ -610,7 +608,7 @@ class EfficientZeroPolicy(Policy):
                 if self._cfg.eps.eps_greedy_exploration_in_collect:
                     # eps-greedy collect
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self.collect_mcts_temperature, deterministic=True
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=True
                     )
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                     if np.random.rand() < self.collect_epsilon:
@@ -620,7 +618,7 @@ class EfficientZeroPolicy(Policy):
                     # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                     # the index within the legal action set, rather than the index in the entire action set.
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self.collect_mcts_temperature, deterministic=False
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=False
                     )
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
@@ -697,8 +695,8 @@ class EfficientZeroPolicy(Policy):
             roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
             self._mcts_eval.search(roots, self._eval_model, latent_state_roots, reward_hidden_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
             data_id = [i for i in range(active_eval_env_num)]
             output = {i: None for i in data_id}

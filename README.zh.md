@@ -97,24 +97,29 @@
 LightZero 是基于 [PyTorch](https://pytorch.org/) 实现的 MCTS 算法库，在 MCTS 的实现中也用到了 cython 和 cpp。同时，LightZero 的框架主要基于 [DI-engine](https://github.com/opendilab/DI-engine) 实现。目前 LightZero 中集成的算法包括：
 - [AlphaZero](https://www.science.org/doi/10.1126/science.aar6404)
 - [MuZero](https://arxiv.org/abs/1911.08265)
-- [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Sampled MuZero](https://arxiv.org/abs/2104.06303)
+- [Stochastic MuZero](https://openreview.net/pdf?id=X6D9bAHhBQ1)
+- [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Gumbel MuZero](https://openreview.net/pdf?id=bERaNdoegnO&)
+
 
 LightZero 目前支持的环境及算法如下表所示：
 
-| Env./Alg.     | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero |
-|---------------| --------- |--------| ------- | --------------------- | ------------ |
-| Atari         | ---       | ✔      | ✔       | ✔                   | ✔            |
-| TicTacToe     | ✔       | ✔      | 🔒      | 🔒                  | ✔            |
-| Gomoku        | ✔       | ✔      | 🔒      | 🔒                  | ✔            |
-| Go            | 🔒       | 🔒     | 🔒      | 🔒                  | 🔒            |
-| LunarLander   | ---       | ✔      | ✔       | ✔                   | ✔            |
-| BipedalWalker | ---       | ✔      | ✔       | ✔                   | 🔒            |
-| CartPole      | ---       | ✔      | ✔       | ✔                   | ✔            |
-| Pendulum      | ---       | ✔      | ✔       | ✔                   | ✔            |
-| MuJoCo        | ---       | 🔒     | 🔒      | ✔                   | 🔒            |
-
+| Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | 
+|---------------| --------- | ------ |-------------| ------------------ | ---------- |----------------|
+| TicTacToe     | ✔       | ✔      | 🔒           | 🔒                | ✔          | 🔒             |
+| Gomoku        | ✔       | ✔      | 🔒          | 🔒               | ✔          | 🔒             |
+| Connect4      | ✔       | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |
+| 2048          | ✔       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |
+| Chess         | 🔒       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
+| Go            | 🔒       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
+| CartPole      | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
+| Pendulum      | ---       | ✔      | ✔           | ✔                | ✔          | 🔒             |
+| LunarLander   | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
+| BipedalWalker | ---       | ✔      | ✔           | ✔                | ✔          | 🔒              |
+| Atari         | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
+| MuJoCo        | ---       | ✔     | ✔          | ✔                | 🔒         | 🔒               |
+| MiniGrid      | ---       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
 
 <sup>(1): "✔" 表示对应的项目已经完成并经过良好的测试。</sup>
 
@@ -134,6 +139,32 @@ pip3 install -e .
 
 请注意，LightZero 目前仅支持在 `Linux` 和 `macOS` 平台上进行编译。
 我们正在积极将该支持扩展到 `Windows` 平台。 
+
+### 使用 Docker 进行安装
+
+我们也提供了一个Dockerfile，用于设置包含运行 LightZero 库所需所有依赖项的环境。此 Docker 镜像基于 Ubuntu 20.04，并安装了Python 3.8以及其他必要的工具和库。
+以下是如何使用我们的 Dockerfile 来构建 Docker 镜像，从该镜像运行一个容器，并在容器内执行 LightZero 代码的步骤。
+
+1. **下载 Dockerfile**：Dockerfile 位于 LightZero 仓库的根目录中。将此[文件](https://github.com/opendilab/LightZero/blob/main/Dockerfile)下载到您的本地机器。
+
+2. **准备构建上下文**：在您的本地机器上创建一个新的空目录，将 Dockerfile 移动到此目录，并导航到此目录。这一步有助于在构建过程中避免向 Docker 守护进程发送不必要的文件。
+    ```bash
+    mkdir lightzero-docker
+    mv Dockerfile lightzero-docker/
+    cd lightzero-docker/
+    ```
+3. **构建 Docker 镜像**：使用以下命令构建 Docker 镜像。此命令应在包含 Dockerfile 的目录内运行。
+    ```bash
+    docker build -t ubuntu-py38-lz:latest -f ./Dockerfile .
+    ```
+4. **从镜像运行容器**：使用以下命令以交互模式启动一个 Bash shell 的容器。
+    ```bash
+    docker run -dit --rm ubuntu-py38-lz:latest /bin/bash
+    ```
+5. **在容器内执行 LightZero 代码**：一旦你在容器内部，你可以使用以下命令运行示例 Python 脚本：
+    ```bash
+    python ./LightZero/zoo/classic_control/cartpole/config/cartpole_muzero_config.py
+    ```
 
 ## 快速开始
 使用如下代码在 [CartPole](https://gymnasium.farama.org/environments/classic_control/cart_pole/) 环境上快速训练一个 MuZero 智能体:
@@ -228,6 +259,8 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 [SampledMuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/SampledMuZero.pdf)
 
 [GumbelMuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/GumbelMuZero.pdf)
+
+[StochasticMuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/StochasticMuZero.pdf)
 
 [算法概览图符号表](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/NotationTable.pdf)
 
