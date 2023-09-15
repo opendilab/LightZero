@@ -115,8 +115,10 @@ class Connect4Env(BaseEnv):
         # Set the mode of interaction between the agent and the environment.
         # options = {'self_play_mode', 'play_with_bot_mode', 'eval_mode'}
         self.battle_mode = cfg.battle_mode
-        self.mcts_mode = cfg.mcts_mode
         assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
+        # The mode of MCTS is only used in AlphaZero.
+        self.mcts_mode = 'self_play_mode'
+
         # In ``eval_mode``, we can choose to play with the agent.
         self.agent_vs_human = cfg.agent_vs_human
 

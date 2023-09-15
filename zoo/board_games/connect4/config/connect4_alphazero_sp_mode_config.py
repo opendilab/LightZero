@@ -3,8 +3,8 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 32
-n_episode = 32
+collector_env_num = 8
+n_episode = 8
 evaluator_env_num = 5
 num_simulations = 50
 update_per_collect = 50
@@ -18,7 +18,6 @@ connect4_alphazero_config = dict(
     exp_name='data_az_ptree/connect4_sp-mode_eval-by-rule-bot_seed0',
     env=dict(
         battle_mode='self_play_mode',
-        mcts_mode='self_play_mode',
         bot_action_type='rule',
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -28,13 +27,12 @@ connect4_alphazero_config = dict(
     policy=dict(
         model=dict(
             observation_shape=(3, 6, 7),
-            action_space_size=int(1*7),
+            action_space_size=1,
             num_res_blocks=1,
             num_channels=64,
         ),
         cuda=True,
         env_type='board_games',
-        board_size=3,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
