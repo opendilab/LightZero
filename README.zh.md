@@ -150,11 +150,11 @@ pip3 install -e .
     ```
 3. **构建 Docker 镜像**：使用以下命令构建 Docker 镜像。此命令应在包含 Dockerfile 的目录内运行。
     ```bash
-    docker build -t ubuntu-py38-lz .
+    docker build -t ubuntu-py38-lz:latest -f ./Dockerfile .
     ```
 4. **从镜像运行容器**：使用以下命令以交互模式启动一个 Bash shell 的容器。
     ```bash
-    docker run -it --rm ubuntu-py38-lz /bin/bash
+    docker run -dit --rm ubuntu-py38-lz:latest /bin/bash
     ```
 5. **在容器内执行 LightZero 代码**：一旦你在容器内部，你可以使用以下命令运行示例 Python 脚本：
     ```bash

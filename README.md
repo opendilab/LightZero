@@ -160,11 +160,11 @@ Here's how to use our Dockerfile to build a Docker image, run a container from t
     ```
 3. **Build the Docker image**: Use the following command to build the Docker image. This command should be run from inside the directory that contains the Dockerfile.
     ```bash
-    docker build -t ubuntu-py38-lz .
+    docker build -t ubuntu-py38-lz:latest -f ./Dockerfile .
     ```
 4. **Run a container from the image**: Use the following command to start a container from the image in interactive mode with a Bash shell.
     ```bash
-    docker run -it --rm ubuntu-py38-lz /bin/bash
+    docker run -dit --rm ubuntu-py38-lz:latest /bin/bash
     ```
 5. **Execute LightZero code inside the container**: Once you're inside the container, you can run the example Python script with the following command:
     ```bash

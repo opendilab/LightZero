@@ -8,10 +8,10 @@
 # Before building the Docker image, create a new empty directory, move this Dockerfile into it,
 # and navigate into this directory. This is to avoid sending unnecessary files to the Docker daemon
 # during the build. Then you can then build the Docker image using the following command in your terminal:
-# docker build -t ubuntu-py38-lz .
+# docker build -t ubuntu-py38-lz:latest -f ./Dockerfile .
 
 # To run a container from the image in interactive mode with a Bash shell, you can use:
-# docker run -it --rm ubuntu-py38-lz /bin/bash
+# docker run -dit --rm ubuntu-py38-lz:latest /bin/bash
 
 # Once you're inside the container, you can run the example Python script with:
 # python ./LightZero/zoo/classic_control/cartpole/config/cartpole_muzero_config.py
