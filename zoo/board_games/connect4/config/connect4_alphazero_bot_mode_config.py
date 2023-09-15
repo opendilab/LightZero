@@ -6,16 +6,16 @@ from easydict import EasyDict
 collector_env_num = 32
 n_episode = 32
 evaluator_env_num = 5
-num_simulations = 50
+num_simulations = 10
 update_per_collect = 50
 batch_size = 256
-max_env_step = int(5e5)
+max_env_step = int(1e6)
 prob_random_action_in_bot = 0
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 connect4_alphazero_config = dict(
-    exp_name='data_az_ptree/connect4_rulebot',
+    exp_name='data_az_ptree/connect4_mctsbot50',
     env=dict(
         battle_mode='play_with_bot_mode',
         mcts_mode='play_with_bot_mode',

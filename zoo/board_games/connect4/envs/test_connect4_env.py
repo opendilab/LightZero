@@ -110,7 +110,10 @@ class TestConnect4Env:
             prob_random_agent=0,
             prob_expert_agent=0,
             # bot_action_type='mcts'
-            bot_action_type='rule',
+            bot_action_type='mcts',
+            screen_scaling=9,
+            save_replay=False,
+            prob_random_action_in_bot=0.,
 
         )
         env = Connect4Env(cfg)
@@ -130,7 +133,7 @@ class TestConnect4Env:
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
             # reward is in the perspective of player1
-            env.render()
+            env.render(mode="print")
             if done:
                 if reward != 0 and env.current_player == 2:
                     print('player 1 (human player) win')
@@ -141,6 +144,6 @@ class TestConnect4Env:
                 break
 
 test = TestConnect4Env()
-test.test_self_play_mode()
+# test.test_self_play_mode()
 # test.test_play_with_bot_mode()
-# test.test_eval_mode()
+test.test_eval_mode()

@@ -1,4 +1,4 @@
-from connect4_alphazero_bot_mode_config import main_config, create_config
+from zoo.board_games.connect4.config.connect4_alphazero_bot_mode_config import main_config, create_config
 from lzero.entry import eval_alphazero
 import numpy as np
 

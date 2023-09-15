@@ -26,6 +26,9 @@ class TestConnect4RuleBot():
             prob_random_agent=0,
             prob_expert_agent=0,
             bot_action_type='rule',
+            screen_scaling=9,
+            save_replay=False,
+            prob_random_action_in_bot = 0
         )
         self.env = Connect4Env(cfg)
         self.player = 1
@@ -44,6 +47,21 @@ class TestConnect4RuleBot():
         board[5][5] = self.player
         self.bot.board = board
         assert self.bot.is_winning_move(2) is True  # Winning move is to place a piece in the second column.
+
+    def test_is_winning_move_in_two_steps(self):
+        board = np.zeros((6, 7))
+        board[5][3] = self.player
+        board[5][4] = self.player
+        self.bot.board = board
+        assert self.bot.is_winning_move_in_two_steps(2) is True
+        board = np.zeros((6, 7))
+        board[5][3] = self.player
+        board[5][4] = self.player
+        board[5][0] = 3 - self.player
+        board[4][0] = 3 - self.player
+        board[3][0] = 3 - self.player
+        self.bot.board = board
+        assert self.bot.is_winning_move_in_two_steps(2) is False
 
     def test_is_blocking_move(self):
         """
@@ -121,3 +139,35 @@ class TestConnect4RuleBot():
         self.bot.board = board
         action = self.bot.get_rule_bot_action(board, self.player)
         assert action in self.env.legal_actions
+
+    def test_remove_actions(self):
+        self.bot.next_player = 3 - self.player
+        board = np.zeros((6, 7))
+        board[5][0] = self.player
+        board[5][3] = self.player
+        board[5][4] = self.player
+        board[5][5] = 3 - self.player
+        board[4][3] = 3 - self.player
+        board[4][4] = 3 - self.player
+        board[4][5] = 3 - self.player
+        self.bot.board = board
+        self.bot.legal_actions = [i for i in range(7) if board[0][i] == 0]
+        self.bot.remove_actions()
+        assert self.bot.legal_actions == [0, 1, 3, 4, 5]
+        board = np.zeros((6, 7))
+        board[5][0] = self.player
+        board[4][0] = self.player
+        board[5][3] = 3 - self.player
+        board[5][4] = 3 - self.player
+        self.bot.board = board
+        self.bot.legal_actions = [i for i in range(7) if board[0][i] == 0]
+        self.bot.remove_actions()
+        assert self.bot.legal_actions == [0,2,5]
+
+
+if __name__ == '__main__':
+    test = TestConnect4RuleBot()
+    test.setup()
+    test.test_remove_actions()
+    test.test_is_winning_move_in_two_steps()
+    test.test_get_action()

@@ -259,11 +259,12 @@ class MCTS(object):
         # Unpack the tuples in action_visits list into two separate tuples: actions and visits.
         actions, visits = zip(*action_visits)
 
+        # Calculate the action probabilities based on the visit counts and temperature.
+        # When the visit count of a node is 0, then the corresponding action probability will be 0 in order to prevent the selection of illegal actions.
         visits_t = torch.as_tensor(visits, dtype=torch.float32)
         visits_t = torch.pow(visits_t, 1/temperature)
         action_probs= (visits_t / visits_t.sum()).numpy()
 
-        # Calculate the action probabilities based on the visit counts and temperature.
         # action_probs = nn.functional.softmax(1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0).numpy()
 
         # Choose the next action to take based on the action probabilities.
@@ -293,8 +294,11 @@ class MCTS(object):
             # print(f'node:{node}, list(node.children.keys()) is: {list(node.children.keys())}. simulate_env.legal_actions is: {simulate_env.legal_actions}')
 
             action, child_node = self._select_child(node, simulate_env)
-            simulate_env.step(action)
             node = child_node
+            # When there are no common elements in ``node.children`` and ``simulate_env.legal_actions``, action would be None, and we set the node to be a leaf node.
+            if action is None:
+                break
+            simulate_env.step(action)
 
         done, winner = simulate_env.get_done_winner()
         """
@@ -369,6 +373,9 @@ class MCTS(object):
                     best_score = score
                     action = action_tmp
                     child = child_tmp
+        # If there are no common elements in ``node.children`` and ``simulate_env.legal_actions``, we set the node itself to be a leaf node.
+        if child is None:
+            child = node  # child==None, node is leaf node in ``play_with_bot_mode``.
 
         return action, child
 
