@@ -148,7 +148,7 @@ class Connect4Env(BaseEnv):
 
         # Initialize the screen if the replay is to be saved.
         if self.save_replay:
-            self.render(mode='rgb_array_render')
+            self.render()
 
     def _player_step(self, action, flag):
         """
@@ -229,7 +229,7 @@ class Connect4Env(BaseEnv):
             timestep = self._player_step(action, flag)
 
             if self.save_replay:
-                self.render(mode='rgb_array_render')
+                self.render()
 
             if timestep.done:
                 # The ``eval_episode_return`` is calculated from player 1's perspective.
@@ -247,7 +247,7 @@ class Connect4Env(BaseEnv):
             timestep_player1 = self._player_step(action, flag)
 
             if self.save_replay:
-                self.render(mode='rgb_array_render')
+                self.render()
 
             if timestep_player1.done:
                 # NOTE: in ``play_with_bot_mode``, we must set to_play as -1, because we don't consider the alternation between players.
@@ -269,7 +269,7 @@ class Connect4Env(BaseEnv):
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
             if self.save_replay:
-                self.render(mode='rgb_array_render')
+                self.render()
 
             timestep = timestep_player2
             # NOTE: in ``play_with_bot_mode``, we must set to_play as -1, because we don't consider the alternation between players.
@@ -289,7 +289,7 @@ class Connect4Env(BaseEnv):
             timestep_player1 = self._player_step(action, flag)
 
             if self.save_replay:
-                self.render(mode='rgb_array_render')
+                self.render()
 
             if timestep_player1.done:
                 # NOTE: in ``eval_mode``, we must set to_play as -1, because we don't consider the alternation between players.
@@ -312,7 +312,7 @@ class Connect4Env(BaseEnv):
             timestep_player2 = self._player_step(bot_action, flag)
 
             if self.save_replay:
-                self.render(mode='rgb_array_render')
+                self.render()
 
             # The ``eval_episode_return`` is calculated from player 1's perspective.
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
@@ -418,15 +418,15 @@ class Connect4Env(BaseEnv):
     def legal_actions(self):
         return [i for i in range(7) if self.board[i] == 0]
 
-    def render(self, mode='rgb_array_render'):
+    def render(self, mode='image_realtime_mode'):
         """
         Overview:
             Renders the Connect Four game environment.
         Arguments:
-            - mode (:obj:`str`): The rendering mode. Options are 'print', 'human', or 'rgb_array_render'.
+            - mode (:obj:`str`): The rendering mode. Options are 'state_realtime_mode', 'image_realtime_mode', or 'image_savefile_mode'.
         """
         # In 'print' mode ,print the current game board for rendering.
-        if mode == "print":
+        if mode == "state_realtime_mode":
             print(np.array(self.board).reshape(6, 7))
             return
         # In other two modes, use a screen for rendering. 
@@ -434,10 +434,10 @@ class Connect4Env(BaseEnv):
         screen_height = 86 / 99 * screen_width
         if self.screen is None:
             pygame.init()
-            if mode == "human":
+            if mode == "image_realtime_mode":
                 pygame.display.set_caption("Connect Four")
                 self.screen = pygame.display.set_mode((screen_width, screen_height))
-            elif mode == "rgb_array_render":
+            elif mode == "image_savefile_mode":
                 self.screen = pygame.Surface((screen_width, screen_height))
 
         # Load and scale all of the necessary images.
@@ -478,14 +478,15 @@ class Connect4Env(BaseEnv):
                         int(i / 7) * (tile_size) + (tile_size * (6 / 13)),
                     ),
                 )
-        # TODO: complish the human mode.
-        if mode == "human":
+        if mode == "image_realtime_mode":
             pygame.display.update()
-            self.clock.tick(self.metadata["render_fps"])
+            # self.clock.tick(self.metadata["render_fps"])
 
         # Draw the observation and save to frames.
         observation = np.array(pygame.surfarray.pixels3d(self.screen))
         self.frames.append(np.transpose(observation, axes=(1, 0, 2)))
+
+        self.screen = None
 
         return None
 
