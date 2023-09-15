@@ -6,7 +6,7 @@ from connect4_env import Connect4Env
 from zoo.board_games.connect4.envs.rule_bot import Connect4RuleBot
 
 
-@pytest.mark.envtest
+@pytest.mark.unittest
 class TestConnect4RuleBot():
     """
     Overview:
@@ -22,7 +22,7 @@ class TestConnect4RuleBot():
         cfg = EasyDict(
             battle_mode='self_play_mode',
             mcts_mode='self_play_mode',
-            channel_last=True,
+            channel_last=False,
             scale=True,
             agent_vs_human=False,
             prob_random_agent=0,
@@ -117,7 +117,7 @@ class TestConnect4RuleBot():
             when placing a piece next to the single piece will create a sequence of 2 pieces.
             It also tests for situations where placing a piece will not result in a sequence of 2 pieces.
         """
-        # Create a chessboard with one consecutive pieces.
+        # Create a chessboard with one consecutive piece.
         board = np.zeros((6, 7))
         board[5][5] = self.player
         self.bot.board = board
@@ -169,12 +169,4 @@ class TestConnect4RuleBot():
         self.bot.board = board
         self.bot.legal_actions = [i for i in range(7) if board[0][i] == 0]
         self.bot.remove_actions()
-        assert self.bot.legal_actions == [0,2,5]
-
-
-if __name__ == '__main__':
-    test = TestConnect4RuleBot()
-    test.setup()
-    test.test_remove_actions()
-    test.test_is_winning_move_in_two_steps()
-    test.test_get_action()
+        assert self.bot.legal_actions == [0, 2, 5]

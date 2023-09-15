@@ -15,26 +15,22 @@ model_path = None
 # end of the most frequently changed config specified by the user
 # ==============================================================
 connect4_alphazero_config = dict(
-    exp_name='data_az_ptree/connect4_sp-mode_eval-by-rulebot_seed0',
+    exp_name='data_az_ptree/connect4_sp-mode_eval-by-rule-bot_seed0',
     env=dict(
         battle_mode='self_play_mode',
         mcts_mode='self_play_mode',
         bot_action_type='rule',
-        channel_last=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        torch_compile=False,
-        tensor_float_32=False,
         model=dict(
             observation_shape=(3, 6, 7),
             action_space_size=int(1*7),
-            # We use the small size model for tictactoe.
             num_res_blocks=1,
-            num_channels=32,
+            num_channels=64,
         ),
         cuda=True,
         env_type='board_games',
@@ -70,7 +66,6 @@ connect4_alphazero_create_config = dict(
     ),
     collector=dict(
         type='episode_alphazero',
-        get_train_sample=False,
         import_names=['lzero.worker.alphazero_collector'],
     ),
     evaluator=dict(

@@ -82,7 +82,7 @@ class Connect4Env(BaseEnv):
         # (bool) Whether to save the replay of the game.
         save_replay=False,
         # (bool) Whether to use the 'channel last' format for the observation space. If False, 'channel first' format is used.
-        channel_last=True,
+        channel_last=False,
         # (bool) Whether to scale the observation.
         scale=False,
         # (float) The stop value when training the agent. If the evalue return reach the stop value, then the training will stop.

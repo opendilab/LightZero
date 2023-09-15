@@ -154,8 +154,8 @@ class Connect4RuleBot():
             for a in legal_actions:
                 if self.is_winning_move(a) or self.is_winning_move_in_two_steps(a):
                     self.legal_actions.remove(action)
-                    print(f"if take action {action}, then opponent take{a} may win")
-                    print(f"so we should take action from {self.legal_actions}")
+                    # print(f"if take action {action}, then opponent take{a} may win")
+                    # print(f"so we should take action from {self.legal_actions}")
                     break
 
             self.board, self.current_player = temp

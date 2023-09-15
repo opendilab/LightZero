@@ -6,35 +6,30 @@ from easydict import EasyDict
 collector_env_num = 32
 n_episode = 32
 evaluator_env_num = 5
-num_simulations = 10
+num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
-prob_random_action_in_bot = 0
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 connect4_alphazero_config = dict(
-    exp_name='data_az_ptree/connect4_mcts-bot_seed0',
+    exp_name='data_az_ptree/connect4_rule-bot_seed0',
     env=dict(
         battle_mode='play_with_bot_mode',
         mcts_mode='play_with_bot_mode',
-        bot_action_type='mcts',
-        prob_random_action_in_bot=prob_random_action_in_bot,
-        channel_last=False,  # NOTE
+        bot_action_type='rule',
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        torch_compile=False,
-        tensor_float_32=False,
         model=dict(
             observation_shape=(3, 6, 7),
             action_space_size=int(1*7),
             num_res_blocks=1,
-            num_channels=32,
+            num_channels=64,
         ),
         cuda=True,
         env_type='board_games',
@@ -70,7 +65,6 @@ connect4_alphazero_create_config = dict(
     ),
     collector=dict(
         type='episode_alphazero',
-        get_train_sample=False,
         import_names=['lzero.worker.alphazero_collector'],
     ),
     evaluator=dict(

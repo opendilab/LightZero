@@ -11,7 +11,7 @@ class TestConnect4Env:
         cfg = EasyDict(
             battle_mode='self_play_mode',
             mcts_mode='self_play_mode',
-            channel_last=True,
+            channel_last=False,
             scale=True,
             agent_vs_human=False,
             prob_random_agent=0,
@@ -61,7 +61,7 @@ class TestConnect4Env:
         cfg = EasyDict(
             battle_mode='play_with_bot_mode',
             mcts_mode='play_with_bot_mode',
-            channel_last=True,
+            channel_last=False,
             scale=True,
             agent_vs_human=False,
             prob_random_agent=0,
@@ -99,7 +99,7 @@ class TestConnect4Env:
         cfg = EasyDict(
             battle_mode='eval_mode',
             mcts_mode='play_with_bot_mode',
-            channel_last=True,
+            channel_last=False,
             scale=True,
             agent_vs_human=True,
             prob_random_agent=0,
@@ -136,9 +136,3 @@ class TestConnect4Env:
                 else:
                     print('draw')
                 break
-
-
-test = TestConnect4Env()
-# test.test_self_play_mode()
-# test.test_play_with_bot_mode()
-test.test_eval_mode()
