@@ -421,7 +421,7 @@ class Connect4Env(BaseEnv):
     def legal_actions(self):
         return [i for i in range(7) if self.board[i] == 0]
 
-    def render(self, mode='image_realtime_mode'):
+    def render(self, mode='image_savefile_mode'):
         """
         Overview:
             Renders the Connect Four game environment.

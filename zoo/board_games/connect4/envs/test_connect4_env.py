@@ -13,6 +13,9 @@ class TestConnect4Env:
             mcts_mode='self_play_mode',
             channel_last=False,
             scale=True,
+            screen_scaling=9,
+            prob_random_action_in_bot=0.,
+            save_replay=False,
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
@@ -63,6 +66,9 @@ class TestConnect4Env:
             mcts_mode='play_with_bot_mode',
             channel_last=False,
             scale=True,
+            screen_scaling=9,
+            prob_random_action_in_bot=0.,
+            save_replay=False,
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
@@ -101,19 +107,19 @@ class TestConnect4Env:
             mcts_mode='play_with_bot_mode',
             channel_last=False,
             scale=True,
+            screen_scaling=9,
+            prob_random_action_in_bot=0.,
+            save_replay=False,
             agent_vs_human=True,
             prob_random_agent=0,
             prob_expert_agent=0,
             bot_action_type='mcts',
-            screen_scaling=9,
-            save_replay=False,
-            prob_random_action_in_bot=0.,
 
         )
         env = Connect4Env(cfg)
         env.reset()
         print('init board state: ')
-        env.render()
+        env.render(mode='state_realtime_mode')
         while True:
             """player 1"""
             # action = env.human_to_action()
@@ -127,7 +133,7 @@ class TestConnect4Env:
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
             # reward is in the perspective of player1
-            env.render(mode="print")
+            env.render(mode='state_realtime_mode')
             if done:
                 if reward != 0 and env.current_player == 2:
                     print('player 1 (human player) win')
