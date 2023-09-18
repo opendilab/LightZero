@@ -7,17 +7,17 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 5
 num_simulations = 50
-update_per_collect = 150
+update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 connect4_alphazero_config = dict(
-    exp_name='data_az_ptree/connect4_bot-mode_rule-bot_seed0',
+    exp_name='data_az_ptree/connect4_bot-mode_mcts500-bot_seed0',
     env=dict(
         battle_mode='play_with_bot_mode',
-        bot_action_type='rule',
+        bot_action_type='mcts',
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,

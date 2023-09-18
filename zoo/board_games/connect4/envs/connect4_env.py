@@ -31,7 +31,7 @@ Reward Space:
 import copy
 import os
 import sys
-from typing import List
+from typing import List, Any, Tuple, Optional
 
 import imageio
 import numpy as np
@@ -46,7 +46,7 @@ from zoo.board_games.connect4.envs.rule_bot import Connect4RuleBot
 from zoo.board_games.mcts_bot import MCTSBot
 
 
-def get_image(path):
+def get_image(path: str) -> Any:
     from os import path as os_path
 
     import pygame
@@ -95,7 +95,7 @@ class Connect4Env(BaseEnv):
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
-    def __init__(self, cfg=None) -> None:
+    def __init__(self, cfg: dict = None) -> None:
         # Load the config.
         self.cfg = cfg
 
@@ -145,7 +145,7 @@ class Connect4Env(BaseEnv):
             cfg_temp.save_replay = False
             cfg_temp.bot_action_type = None
             env_mcts = Connect4Env(EasyDict(cfg_temp))
-            self.mcts_bot = MCTSBot(env_mcts, 'mcts_player', 50)
+            self.mcts_bot = MCTSBot(env_mcts, 'mcts_player', 500)
         elif self.bot_action_type == 'rule':
             self.rule_bot = Connect4RuleBot(self, self._current_player)
 
@@ -153,7 +153,7 @@ class Connect4Env(BaseEnv):
         if self.save_replay:
             self.render()
 
-    def _player_step(self, action, flag):
+    def _player_step(self, action: int, flag: int) -> BaseEnvTimestep:
         """
         Overview:
             A function that implements the transition of the environment's state. \
@@ -205,7 +205,7 @@ class Connect4Env(BaseEnv):
 
         return BaseEnvTimestep(obs, reward, done, info)
 
-    def step(self, action):
+    def step(self, action: int) -> BaseEnvTimestep:
         """
         Overview:
             The step function of the environment. It receives an action from the player and returns the state of the environment after performing that action. \
@@ -333,7 +333,7 @@ class Connect4Env(BaseEnv):
 
             return timestep
 
-    def reset(self, start_player_index=0, init_state=None, replay_name_suffix=None):
+    def reset(self, start_player_index: int = 0, init_state: Optional[np.ndarray] = None, replay_name_suffix: Optional[str] = None) -> dict:
         """
         Overview:
             Env reset and custom state start by init_state.
@@ -366,7 +366,7 @@ class Connect4Env(BaseEnv):
         obs = self.observe()
         return obs
 
-    def current_state(self):
+    def current_state(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Overview:
             Obtain the state from the view of current player.\
@@ -395,7 +395,7 @@ class Connect4Env(BaseEnv):
             # (C, W, H)
             return raw_obs, scale_obs
 
-    def observe(self):
+    def observe(self) -> dict:
         legal_moves = self.legal_actions
 
         action_mask = np.zeros(7, "int8")
@@ -418,10 +418,10 @@ class Connect4Env(BaseEnv):
                     }
 
     @property
-    def legal_actions(self):
+    def legal_actions(self) -> List[int]:
         return [i for i in range(7) if self.board[i] == 0]
 
-    def render(self, mode='image_savefile_mode'):
+    def render(self, mode: str = 'image_savefile_mode') -> None:
         """
         Overview:
             Renders the Connect Four game environment.
@@ -493,7 +493,7 @@ class Connect4Env(BaseEnv):
 
         return None
 
-    def save_render_output(self, replay_name_suffix: str = '', replay_path=None, format='gif'):
+    def save_render_output(self, replay_name_suffix: str = '', replay_path: str = None, format: str = 'gif') -> None:
         """
         Overview:
             Save the rendered frames as an output file.
@@ -520,7 +520,7 @@ class Connect4Env(BaseEnv):
         logging.info("Saved output to {}".format(filename))
         self.frames = []
 
-    def get_done_winner(self):
+    def get_done_winner(self) -> Tuple[bool, int]:
         """
         Overview:
             Check if the game is done and find the winner.
@@ -585,7 +585,7 @@ class Connect4Env(BaseEnv):
 
         return False, -1
 
-    def get_done_reward(self):
+    def get_done_reward(self) -> Tuple[bool, int]:
         """
         Overview:
              Check if the game is over and what is the reward in the perspective of player 1.\
@@ -609,11 +609,11 @@ class Connect4Env(BaseEnv):
             reward = None
         return done, reward
 
-    def random_action(self):
+    def random_action(self) -> int:
         action_list = self.legal_actions
         return np.random.choice(action_list)
 
-    def bot_action(self):
+    def bot_action(self) -> int:
         if np.random.rand() < self.prob_random_action_in_bot:
             return self.random_action()
         else:
@@ -622,7 +622,7 @@ class Connect4Env(BaseEnv):
             elif self.bot_action_type == 'mcts':
                 return self.mcts_bot.get_actions(self.board, player_index=self.current_player_index)
 
-    def action_to_string(self, action):
+    def action_to_string(self, action: int) -> str:
         """
         Overview:
             Convert an action number to a string representing the action.
@@ -633,7 +633,7 @@ class Connect4Env(BaseEnv):
         """
         return f"Play column {action + 1}"
 
-    def human_to_action(self):
+    def human_to_action(self) -> int:
         """
         Overview:
             For multiplayer games, ask the user for a legal action \
@@ -670,11 +670,11 @@ class Connect4Env(BaseEnv):
         return "LightZero Connect4 Env"
 
     @property
-    def current_player(self):
+    def current_player(self) -> int:
         return self._current_player
 
     @property
-    def current_player_index(self):
+    def current_player_index(self) -> int:
         """
         Overview:
             current_player_index = 0, current_player = 1 \
@@ -683,7 +683,7 @@ class Connect4Env(BaseEnv):
         return 0 if self._current_player == 1 else 1
 
     @property
-    def next_player(self):
+    def next_player(self) -> int:
         return self.players[0] if self._current_player == self.players[1] else self.players[1]
 
     @property
@@ -698,7 +698,7 @@ class Connect4Env(BaseEnv):
     def reward_space(self) -> spaces.Space:
         return self._reward_space
 
-    def simulate_action(self, action):
+    def simulate_action(self, action: int) -> Any:
         """
         Overview:
             execute action and get next_simulator_env. used in AlphaZero.
@@ -738,5 +738,5 @@ class Connect4Env(BaseEnv):
         cfg.battle_mode = 'eval_mode'
         return [cfg for _ in range(evaluator_env_num)]
 
-    def close(self):
+    def close(self) -> None:
         pass

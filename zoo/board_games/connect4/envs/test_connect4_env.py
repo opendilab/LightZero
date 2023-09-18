@@ -7,7 +7,7 @@ from connect4_env import Connect4Env
 @pytest.mark.envtest
 class TestConnect4Env:
 
-    def test_self_play_mode(self):
+    def test_self_play_mode(self) -> None:
         cfg = EasyDict(
             battle_mode='self_play_mode',
             mcts_mode='self_play_mode',
@@ -60,7 +60,7 @@ class TestConnect4Env:
                     print('draw')
                 break
 
-    def test_play_with_bot_mode(self):
+    def test_play_with_bot_mode(self) -> None:
         cfg = EasyDict(
             battle_mode='play_with_bot_mode',
             mcts_mode='play_with_bot_mode',
@@ -101,7 +101,7 @@ class TestConnect4Env:
                     print('draw')
                 break
 
-    def test_eval_mode(self):
+    def test_eval_mode(self) -> None:
         cfg = EasyDict(
             battle_mode='eval_mode',
             mcts_mode='play_with_bot_mode',

@@ -7,7 +7,7 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 5
 num_simulations = 50
-update_per_collect = 150
+update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
 model_path = None
@@ -27,7 +27,7 @@ connect4_alphazero_config = dict(
     policy=dict(
         model=dict(
             observation_shape=(3, 6, 7),
-            action_space_size=1,
+            action_space_size=7,
             num_res_blocks=1,
             num_channels=64,
         ),

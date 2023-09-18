@@ -1,5 +1,5 @@
 import copy
-
+from typing import List, Dict, Any, Tuple, Union
 import numpy as np
 
 
@@ -11,7 +11,7 @@ class Connect4RuleBot():
         forming a sequence of 3, forming a sequence of 2, and a random move.
     """
 
-    def __init__(self, env, player):
+    def __init__(self, env: Any, player: int) -> None:
         """
         Overview:
             Initializes the bot with the game environment and the player it represents.
@@ -23,7 +23,7 @@ class Connect4RuleBot():
         self.current_player = player
         self.players = self.env.players
 
-    def get_rule_bot_action(self, board, player):
+    def get_rule_bot_action(self, board: np.ndarray, player: int) -> int:
         """
         Overview:
             Determines the next action of the bot based on the current game board and player.
@@ -68,7 +68,7 @@ class Connect4RuleBot():
         # Randomly select a legal move.
         return np.random.choice(self.legal_actions)
 
-    def is_winning_move(self, action):
+    def is_winning_move(self, action: int) -> bool:
         """
         Overview:
             Checks if an action is a winning move.
@@ -85,7 +85,7 @@ class Connect4RuleBot():
         temp_board[row][action] = piece
         return self.check_four_in_a_row(temp_board, piece)
 
-    def is_winning_move_in_two_steps(self, action):
+    def is_winning_move_in_two_steps(self, action: int) -> bool:
         """
         Overview:
             Checks if an action can lead to win in 2 steps.
@@ -118,7 +118,7 @@ class Connect4RuleBot():
         else:
             return False
 
-    def is_blocking_move(self, action):
+    def is_blocking_move(self, action: int) -> bool:
         """
         Overview:
             Checks if an action can block the opponent's winning move.
@@ -135,7 +135,7 @@ class Connect4RuleBot():
         temp_board[row][action] = piece
         return self.check_four_in_a_row(temp_board, piece)
 
-    def remove_actions(self):
+    def remove_actions(self) -> None:
         """
         Overview:
             Remove the actions that may cause the opponent win from ``self.legal_actions``.
@@ -160,7 +160,7 @@ class Connect4RuleBot():
 
             self.board, self.current_player = temp
 
-    def is_sequence_3_move(self, action):
+    def is_sequence_3_move(self, action: int) -> bool:
         """
         Overview:
             Checks if an action can form a sequence of 3 pieces of the bot.
@@ -177,7 +177,7 @@ class Connect4RuleBot():
         temp_board[row][action] = piece
         return self.check_sequence_in_neighbor_board(temp_board, piece, 3, action)
 
-    def is_sequence_2_move(self, action):
+    def is_sequence_2_move(self, action: int) -> bool:
         """
         Overview:
             Checks if an action can form a sequence of 2 pieces of the bot.
@@ -194,7 +194,7 @@ class Connect4RuleBot():
         temp_board[row][action] = piece
         return self.check_sequence_in_neighbor_board(temp_board, piece, 2, action)
 
-    def get_available_row(self, col):
+    def get_available_row(self, col: int) -> bool:
         """
         Overview:
             Gets the available row for a given column.
@@ -208,7 +208,7 @@ class Connect4RuleBot():
                 return row
         return None
 
-    def check_sequence_in_neighbor_board(self, board, piece, seq_len, action):
+    def check_sequence_in_neighbor_board(self, board: np.ndarray, piece: int, seq_len: int, action: int) -> bool:
         """
         Overview:
             Checks if a sequence of the bot's pieces of a given length can be formed in the neighborhood of a given action.
@@ -253,7 +253,7 @@ class Connect4RuleBot():
 
         return False
 
-    def check_four_in_a_row(self, board, piece):
+    def check_four_in_a_row(self, board: np.ndarray, piece: int) -> bool:
         """
         Overview:
             Checks if there are four of the bot's pieces in a row on the current game board.
@@ -294,7 +294,7 @@ class Connect4RuleBot():
         return False
 
     # not used now in this class
-    def check_sequence_in_whole_board(self, board, piece, seq_len):
+    def check_sequence_in_whole_board(self, board: np.ndarray, piece: int, seq_len: int) -> bool:
         """
         Overview:
             Checks if a sequence of the bot's pieces of a given length can be formed anywhere on the current game board.

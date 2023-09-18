@@ -15,7 +15,7 @@ class TestConnect4Bot():
         This class is used to test the Connect4 Bots.
     """
 
-    def setup(self):
+    def setup(self) -> None:
         """
         Overview:
             This method is responsible for setting up the initial configurations required for the game environment.
@@ -35,7 +35,7 @@ class TestConnect4Bot():
             prob_random_action_in_bot=0,
         )
 
-    def test_mcts_bot_vs_rule_bot(self, num_simulations=200):
+    def test_mcts_bot_vs_rule_bot(self, num_simulations: int = 200) -> None:
         """
         Overview:
             A tictactoe game between mcts_bot and rule_bot, where rule_bot take the first move.
@@ -112,7 +112,7 @@ class TestConnect4Bot():
             )
         )
 
-    def test_mcts_bot_vs_mcts_bot(self, num_simulations_1=50, num_simulations_2=50):
+    def test_mcts_bot_vs_mcts_bot(self, num_simulations_1: int = 50, num_simulations_2: int = 50) -> None:
         """
         Overview:
             A tictactoe game between mcts_bot and rule_bot, where rule_bot take the first move.
@@ -189,7 +189,7 @@ class TestConnect4Bot():
             )
         )
 
-    def test_rule_bot_vs_rule_bot(self):
+    def test_rule_bot_vs_rule_bot(self) -> None:
         """
         Overview:
             A tictactoe game between mcts_bot and rule_bot, where rule_bot take the first move.

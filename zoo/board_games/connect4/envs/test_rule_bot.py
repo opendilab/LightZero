@@ -13,7 +13,7 @@ class TestConnect4RuleBot():
         This class is used to test the Connect4RuleBot class methods.
     """
 
-    def setup(self):
+    def setup(self) -> None:
         """
         Overview:
             This method is responsible for setting up the initial configurations required for the game environment.
@@ -36,7 +36,7 @@ class TestConnect4RuleBot():
         self.player = 1
         self.bot = Connect4RuleBot(self.env, self.player)
 
-    def test_is_winning_move(self):
+    def test_is_winning_move(self) -> None:
         """
         Overview:
             This test method creates a game situation where the bot has three consecutive pieces in the board.
@@ -51,7 +51,7 @@ class TestConnect4RuleBot():
         self.bot.board = board
         assert self.bot.is_winning_move(2) is True  # Winning move is to place a piece in the second column.
 
-    def test_is_winning_move_in_two_steps(self):
+    def test_is_winning_move_in_two_steps(self) -> None:
         board = np.zeros((6, 7))
         board[5][3] = self.player
         board[5][4] = self.player
@@ -66,7 +66,7 @@ class TestConnect4RuleBot():
         self.bot.board = board
         assert self.bot.is_winning_move_in_two_steps(2) is False
 
-    def test_is_blocking_move(self):
+    def test_is_blocking_move(self) -> None:
         """
         Overview:
             This test method creates a game situation where the opponent has three consecutive pieces in the board.
@@ -95,7 +95,7 @@ class TestConnect4RuleBot():
         self.bot.board = board
         assert self.bot.is_blocking_move(3) is True  # Placing a piece in the 4th column is a move to prevent the opponent from winning.
 
-    def test_is_sequence_3_move(self):
+    def test_is_sequence_3_move(self) -> None:
         """
         Overview:
             This test method creates a game situation where the bot has two consecutive pieces in the board.
@@ -109,7 +109,7 @@ class TestConnect4RuleBot():
         self.bot.board = board
         assert self.bot.is_sequence_3_move(3) is True  # Placing a piece in the third column should create a three-in-a-row.
 
-    def test_is_sequence_2_move(self):
+    def test_is_sequence_2_move(self) -> None:
         """
         Overview:
             This test method creates a game situation where the bot has a single piece in the board.
@@ -135,7 +135,7 @@ class TestConnect4RuleBot():
         assert self.bot.is_sequence_2_move(4) is False  # Placing a move in the 5th column should not create a two-in-a-row.
         assert self.bot.is_sequence_2_move(6) is False  # Placing a move in the 6th column should not create a two-in-a-row.
 
-    def test_get_action(self):
+    def test_get_action(self) -> None:
         """
         Overview:
             This test method creates a game situation with an empty board.
@@ -147,7 +147,7 @@ class TestConnect4RuleBot():
         action = self.bot.get_rule_bot_action(board, self.player)
         assert action in self.env.legal_actions
 
-    def test_remove_actions(self):
+    def test_remove_actions(self) -> None:
         self.bot.next_player = 3 - self.player
         board = np.zeros((6, 7))
         board[5][0] = self.player
