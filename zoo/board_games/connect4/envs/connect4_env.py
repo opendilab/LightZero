@@ -68,8 +68,11 @@ class Connect4Env(BaseEnv):
         battle_mode='self_play_mode',
         # (str) The mode of the environment when doing the MCTS.
         mcts_mode='self_play_mode',
+        # (str) The render mode. Options are 'None', 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.
+        # If None, then the game will not be rendered.
+        render_mode=None,
         # (str) The type of the bot of the environment.
-        bot_action_type='mcts',
+        bot_action_type='rule',
         # (bool) Whether to let human to play with the agent when evaluating. If False, then use the bot to evaluate the agent.
         agent_vs_human=False,
         # (float) The probability that a random agent is used instead of the learning agent.
@@ -80,8 +83,6 @@ class Connect4Env(BaseEnv):
         prob_random_action_in_bot=0.,
         # (float) The scale of the render screen.
         screen_scaling=9,
-        # (str) Therender mode. If None, then the game will not be rendered. 
-        render_mode=None,
         # (bool) Whether to use the 'channel last' format for the observation space. If False, 'channel first' format is used.
         channel_last=False,
         # (bool) Whether to scale the observation.
@@ -147,7 +148,7 @@ class Connect4Env(BaseEnv):
             cfg_temp.save_replay = False
             cfg_temp.bot_action_type = None
             env_mcts = Connect4Env(EasyDict(cfg_temp))
-            self.mcts_bot = MCTSBot(env_mcts, 'mcts_player', 500)
+            self.mcts_bot = MCTSBot(env_mcts, 'mcts_player', 50)
         elif self.bot_action_type == 'rule':
             self.rule_bot = Connect4RuleBot(self, self._current_player)
 
@@ -208,8 +209,8 @@ class Connect4Env(BaseEnv):
         if done:
             info['eval_episode_return'] = reward
             if self.render_mode == 'image_savefile_mode':
-                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
-                                            format=self.replay_format)
+                self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
+                                        format=self.replay_format)
 
         return BaseEnvTimestep(obs, reward, done, info)
 
@@ -305,7 +306,8 @@ class Connect4Env(BaseEnv):
 
             return timestep
 
-    def reset(self, start_player_index: int = 0, init_state: Optional[np.ndarray] = None, replay_name_suffix: Optional[str] = None) -> dict:
+    def reset(self, start_player_index: int = 0, init_state: Optional[np.ndarray] = None,
+              replay_name_suffix: Optional[str] = None) -> dict:
         """
         Overview:
             Env reset and custom state start by init_state.
@@ -393,143 +395,81 @@ class Connect4Env(BaseEnv):
     def legal_actions(self) -> List[int]:
         return [i for i in range(7) if self.board[i] == 0]
 
-    # def render(self, mode: str = 'image_savefile_mode') -> None:
-    #     """
-    #     Overview:
-    #         Renders the Connect Four game environment.
-    #     Arguments:
-    #         - mode (:obj:`str`): The rendering mode. Options are 'state_realtime_mode', 'image_realtime_mode', or 'image_savefile_mode'.
-    #     """
-    #     # In 'state_realtime_mode' mode ,print the current game board for rendering.
-    #     if mode == "state_realtime_mode":
-    #         print(np.array(self.board).reshape(6, 7))
-    #         return
-    #     # In other two modes, use a screen for rendering. 
-    #     screen_width = 99 * self.screen_scaling
-    #     screen_height = 86 / 99 * screen_width
-    #     pygame.init()
-    #     if mode == "image_realtime_mode":
-    #         pygame.display.set_caption("Connect Four")
-    #         self.screen = pygame.display.set_mode((screen_width, screen_height))
-    #     elif mode == "image_savefile_mode":
-    #         self.screen = pygame.Surface((screen_width, screen_height))
-
-    #     # Load and scale all of the necessary images.
-    #     tile_size = (screen_width * (91 / 99)) / 7
-
-    #     red_chip = get_image(os.path.join("img", "C4RedPiece.png"))
-    #     red_chip = pygame.transform.scale(
-    #         red_chip, (int(tile_size * (9 / 13)), int(tile_size * (9 / 13)))
-    #     )
-
-    #     black_chip = get_image(os.path.join("img", "C4BlackPiece.png"))
-    #     black_chip = pygame.transform.scale(
-    #         black_chip, (int(tile_size * (9 / 13)), int(tile_size * (9 / 13)))
-    #     )
-
-    #     board_img = get_image(os.path.join("img", "Connect4Board.png"))
-    #     board_img = pygame.transform.scale(
-    #         board_img, ((int(screen_width)), int(screen_height))
-    #     )
-
-    #     self.screen.blit(board_img, (0, 0))
-
-    #     # Blit the necessary chips and their positions.
-    #     for i in range(0, 42):
-    #         if self.board[i] == 1:
-    #             self.screen.blit(
-    #                 red_chip,
-    #                 (
-    #                     (i % 7) * (tile_size) + (tile_size * (6 / 13)),
-    #                     int(i / 7) * (tile_size) + (tile_size * (6 / 13)),
-    #                 ),
-    #             )
-    #         elif self.board[i] == 2:
-    #             self.screen.blit(
-    #                 black_chip,
-    #                 (
-    #                     (i % 7) * (tile_size) + (tile_size * (6 / 13)),
-    #                     int(i / 7) * (tile_size) + (tile_size * (6 / 13)),
-    #                 ),
-    #             )
-    #     if mode == "image_realtime_mode":
-    #         pygame.display.update()
-    #         # self.clock.tick(self.metadata["render_fps"])
-    #     elif mode == "image_savefile_mode":
-    #         # Draw the observation and save to frames.
-    #         observation = np.array(pygame.surfarray.pixels3d(self.screen))
-    #         self.frames.append(np.transpose(observation, axes=(1, 0, 2)))
-
-    #     self.screen = None
-
-    #     return None
-    
-    def render(self, mode: str = 'image_savefile_mode') -> None:
+    def render(self, mode: str = None) -> None:
         """
         Overview:
             Renders the Connect Four game environment.
         Arguments:
-            - mode (:obj:`str`): The rendering mode. Options are 'state_realtime_mode', 'image_realtime_mode', or 'image_savefile_mode'.
+            - mode (:obj:`str`): The rendering mode. Options are None, 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.
+                When set to None, the game state is not rendered.
+                In 'state_realtime_mode', the game state is illustrated in a text-based format directly in the console.
+                The 'image_realtime_mode' displays the game as an RGB image in real-time.
+                With 'image_savefile_mode', the game is rendered as an RGB image but not displayed in real-time. Instead, the image is saved to a designated file.
+                Please note that the default rendering mode is set to None.
         """
-        # In 'state_realtime_mode' mode ,print the current game board for rendering.
+        # In 'state_realtime_mode' mode, print the current game board for rendering.
         if mode == "state_realtime_mode":
             print(np.array(self.board).reshape(6, 7))
             return
-        # In other two modes, use a screen for rendering. 
-        screen_width = 99 * self.screen_scaling
-        screen_height = 86 / 99 * screen_width
-        pygame.init()
-        self.screen = pygame.Surface((screen_width, screen_height))
+        else:
+            # In other two modes, use a screen for rendering.
+            screen_width = 99 * self.screen_scaling
+            screen_height = 86 / 99 * screen_width
+            pygame.init()
+            self.screen = pygame.Surface((screen_width, screen_height))
 
-        # Load and scale all of the necessary images.
-        tile_size = (screen_width * (91 / 99)) / 7
+            # Load and scale all of the necessary images.
+            tile_size = (screen_width * (91 / 99)) / 7
 
-        red_chip = get_image(os.path.join("img", "C4RedPiece.png"))
-        red_chip = pygame.transform.scale(
-            red_chip, (int(tile_size * (9 / 13)), int(tile_size * (9 / 13)))
-        )
+            red_chip = get_image(os.path.join("img", "C4RedPiece.png"))
+            red_chip = pygame.transform.scale(
+                red_chip, (int(tile_size * (9 / 13)), int(tile_size * (9 / 13)))
+            )
 
-        black_chip = get_image(os.path.join("img", "C4BlackPiece.png"))
-        black_chip = pygame.transform.scale(
-            black_chip, (int(tile_size * (9 / 13)), int(tile_size * (9 / 13)))
-        )
+            black_chip = get_image(os.path.join("img", "C4BlackPiece.png"))
+            black_chip = pygame.transform.scale(
+                black_chip, (int(tile_size * (9 / 13)), int(tile_size * (9 / 13)))
+            )
 
-        board_img = get_image(os.path.join("img", "Connect4Board.png"))
-        board_img = pygame.transform.scale(
-            board_img, ((int(screen_width)), int(screen_height))
-        )
+            board_img = get_image(os.path.join("img", "Connect4Board.png"))
+            board_img = pygame.transform.scale(
+                board_img, ((int(screen_width)), int(screen_height))
+            )
 
-        self.screen.blit(board_img, (0, 0))
+            self.screen.blit(board_img, (0, 0))
 
-        # Blit the necessary chips and their positions.
-        for i in range(0, 42):
-            if self.board[i] == 1:
-                self.screen.blit(
-                    red_chip,
-                    (
-                        (i % 7) * (tile_size) + (tile_size * (6 / 13)),
-                        int(i / 7) * (tile_size) + (tile_size * (6 / 13)),
-                    ),
-                )
-            elif self.board[i] == 2:
-                self.screen.blit(
-                    black_chip,
-                    (
-                        (i % 7) * (tile_size) + (tile_size * (6 / 13)),
-                        int(i / 7) * (tile_size) + (tile_size * (6 / 13)),
-                    ),
-                )
-        if mode == "image_realtime_mode":
-            plt.imshow(np.asarray(self.screen))
-            plt.draw()
-        elif mode == "image_savefile_mode":
-            # Draw the observation and save to frames.
-            observation = np.array(pygame.surfarray.pixels3d(self.screen))
-            self.frames.append(np.transpose(observation, axes=(1, 0, 2)))
+            # Blit the necessary chips and their positions.
+            for i in range(0, 42):
+                if self.board[i] == 1:
+                    self.screen.blit(
+                        red_chip,
+                        (
+                            (i % 7) * (tile_size) + (tile_size * (6 / 13)),
+                            int(i / 7) * (tile_size) + (tile_size * (6 / 13)),
+                        ),
+                    )
+                elif self.board[i] == 2:
+                    self.screen.blit(
+                        black_chip,
+                        (
+                            (i % 7) * (tile_size) + (tile_size * (6 / 13)),
+                            int(i / 7) * (tile_size) + (tile_size * (6 / 13)),
+                        ),
+                    )
+            if mode == "image_realtime_mode":
+                surface_array = pygame.surfarray.pixels3d(self.screen)
+                surface_array = np.transpose(surface_array, (1, 0, 2))
+                plt.imshow(surface_array)
+                plt.draw()
+                plt.pause(0.001)
+            elif mode == "image_savefile_mode":
+                # Draw the observation and save to frames.
+                observation = np.array(pygame.surfarray.pixels3d(self.screen))
+                self.frames.append(np.transpose(observation, axes=(1, 0, 2)))
 
-        self.screen = None
+            self.screen = None
 
-        return None
+            return None
 
     def save_render_output(self, replay_name_suffix: str = '', replay_path: str = None, format: str = 'gif') -> None:
         """
@@ -547,8 +487,8 @@ class Connect4Env(BaseEnv):
             filename = f'{replay_path}.{format}'
 
         if format == 'gif':
-            # Save frames as a GIF with a duration of 1000 milliseconds per frame.
-            imageio.mimsave(filename, self.frames, 'GIF', duration=1000)
+            # Save frames as a GIF with a duration of 0.1 seconds per frame.
+            imageio.mimsave(filename, self.frames, 'GIF', duration=0.1)
         elif format == 'mp4':
             # Save frames as an MP4 video with a frame rate of 30 frames per second.
             imageio.mimsave(filename, self.frames, fps=30, codec='mpeg4')
