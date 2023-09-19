@@ -87,8 +87,8 @@ class Game2048Env(gym.Env):
     config = dict(
         # (str) The name of the environment registered in the environment registry.
         env_name="game_2048",
-        # (bool) Whether to save the replay of the game.
-        save_replay=False,
+        # (str) Therender mode. If None, then the game will not be rendered. 
+        render_mode=None,
         # (str) The format in which to save the replay. 'gif' is a popular choice.
         replay_format='gif',
         # (str) A suffix for the replay file name to distinguish it from other files.
@@ -144,7 +144,7 @@ class Game2048Env(gym.Env):
         self.replay_format = cfg.replay_format
         self.replay_name_suffix = cfg.replay_name_suffix
         self.replay_path = cfg.replay_path
-        self.save_replay = cfg.save_replay
+        self.render_mode = cfg.render_mode 
         self.render_real_time = cfg.render_real_time
 
         self._save_replay_count = 0
@@ -243,9 +243,9 @@ class Game2048Env(gym.Env):
         else:
             raise NotImplementedError
 
-        # Render the game if the replay is to be saved
-        if self.save_replay:
-            self.render(mode='rgb_array_render')
+        # Render the beginning state of the game.
+        if self.render_mode is not None:
+            self.render(self.render_mode)
 
         return observation
 
@@ -346,15 +346,17 @@ class Game2048Env(gym.Env):
 
         # Prepare information to return
         info = {"raw_reward": raw_reward, "current_max_tile_num": self.highest()}
-        if self.save_replay:
-            self.render(mode='rgb_array_render')
+
+        # Render the new step.
+        if self.render_mode is not None:
+            self.render(self.render_mode)
 
         # If the game has ended, save additional information and the replay if necessary
         if done:
             info['eval_episode_return'] = self._final_eval_reward
-            if self.save_replay:
-                self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
-                                        format=self.replay_format)
+            if self.render_mode == 'image_savefile_mode':
+                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
+                                            format=self.replay_format)
 
         return BaseEnvTimestep(observation, reward, done, info)
 
@@ -634,32 +636,14 @@ class Game2048Env(gym.Env):
                 sys.exit(0)
         return action
 
-    def render(self, mode='human'):
-        if mode == 'rgb_array_render':
-            grey = (128, 128, 128)
-            grid_size = self.grid_size
-
-            # Render with Pillow
-            pil_board = Image.new("RGB", (grid_size * 4, grid_size * 4))
-            draw = ImageDraw.Draw(pil_board)
-            draw.rectangle([0, 0, 4 * grid_size, 4 * grid_size], grey)
-            fnt_path = fm.findfont(fm.FontProperties(family='DejaVu Sans'))
-            fnt = ImageFont.truetype(fnt_path, 30)
-
-            for y in range(4):
-                for x in range(4):
-                    o = self.board[y, x]
-                    if o:
-                        self.draw_tile(draw, x, y, o, fnt)
-
-            # Instead of returning the image, we display it using pyplot
-            if self.render_real_time:
-                plt.imshow(np.asarray(pil_board))
-                plt.draw()
-                # plt.pause(0.001)
-            # Append the frame to frames for gif
-            self.frames.append(np.asarray(pil_board))
-        elif mode == 'human':
+    def render(self, mode='image_savefile_mode'):
+        """
+        Overview:
+            Renders the 2048 game environment.
+        Arguments:
+            - mode (:obj:`str`): The rendering mode. Options are 'state_realtime_mode', 'image_realtime_mode', or 'image_savefile_mode'.
+        """
+        if mode == 'state_realtime_mode':
             s = 'Current Return: {}, '.format(self.episode_return)
             s += 'Current Highest Tile number: {}\n'.format(self.highest())
             npa = np.array(self.board)
@@ -667,6 +651,72 @@ class Game2048Env(gym.Env):
             s += "{}\n".format(grid)
             sys.stdout.write(s)
             return sys.stdout
+        
+        # In other two modes, draw the board.
+        grey = (128, 128, 128)
+        grid_size = self.grid_size
+
+        # Render with Pillow
+        pil_board = Image.new("RGB", (grid_size * 4, grid_size * 4))
+        draw = ImageDraw.Draw(pil_board)
+        draw.rectangle([0, 0, 4 * grid_size, 4 * grid_size], grey)
+        fnt_path = fm.findfont(fm.FontProperties(family='DejaVu Sans'))
+        fnt = ImageFont.truetype(fnt_path, 30)
+
+        for y in range(4):
+            for x in range(4):
+                o = self.board[y, x]
+                if o:
+                    self.draw_tile(draw, x, y, o, fnt)
+
+        # Instead of returning the image, we display it using pyplot
+        if mode == 'image_realtime_mode':
+            plt.imshow(np.asarray(pil_board))
+            plt.draw()
+            # plt.pause(0.001)
+        elif mode == 'image_savefile_mode':
+            # Append the frame to frames for gif
+            self.frames.append(np.asarray(pil_board))
+        
+    # def render(self, mode='human'):
+    #     """
+    #     Overview:
+    #         Renders the 2048 game environment.
+    #     Arguments:
+    #         - mode (:obj:`str`): The rendering mode. Options are 'state_realtime_mode', 'image_realtime_mode', or 'image_savefile_mode'.
+    #     """
+    #     if mode == 'image_savefile_mode':
+    #         grey = (128, 128, 128)
+    #         grid_size = self.grid_size
+
+    #         # Render with Pillow
+    #         pil_board = Image.new("RGB", (grid_size * 4, grid_size * 4))
+    #         draw = ImageDraw.Draw(pil_board)
+    #         draw.rectangle([0, 0, 4 * grid_size, 4 * grid_size], grey)
+    #         fnt_path = fm.findfont(fm.FontProperties(family='DejaVu Sans'))
+    #         fnt = ImageFont.truetype(fnt_path, 30)
+
+    #         for y in range(4):
+    #             for x in range(4):
+    #                 o = self.board[y, x]
+    #                 if o:
+    #                     self.draw_tile(draw, x, y, o, fnt)
+
+    #         # Instead of returning the image, we display it using pyplot
+    #         if self.render_real_time:
+    #             plt.imshow(np.asarray(pil_board))
+    #             plt.draw()
+    #             # plt.pause(0.001)
+    #         # Append the frame to frames for gif
+    #         self.frames.append(np.asarray(pil_board))
+    #     elif mode == 'state_realtime_mode':
+    #         s = 'Current Return: {}, '.format(self.episode_return)
+    #         s += 'Current Highest Tile number: {}\n'.format(self.highest())
+    #         npa = np.array(self.board)
+    #         grid = npa.reshape((self.size, self.size))
+    #         s += "{}\n".format(grid)
+    #         sys.stdout.write(s)
+    #         return sys.stdout
 
     def draw_tile(self, draw, x, y, o, fnt):
         grid_size = self.grid_size

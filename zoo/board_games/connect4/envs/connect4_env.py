@@ -34,6 +34,7 @@ import sys
 from typing import List, Any, Tuple, Optional
 
 import imageio
+import matplotlib.pyplot as plt
 import numpy as np
 import pygame
 from ding.envs import BaseEnv, BaseEnvTimestep
@@ -79,8 +80,8 @@ class Connect4Env(BaseEnv):
         prob_random_action_in_bot=0.,
         # (float) The scale of the render screen.
         screen_scaling=9,
-        # (bool) Whether to save the replay of the game.
-        save_replay=False,
+        # (str) Therender mode. If None, then the game will not be rendered. 
+        render_mode=None,
         # (bool) Whether to use the 'channel last' format for the observation space. If False, 'channel first' format is used.
         channel_last=False,
         # (bool) Whether to scale the observation.
@@ -105,7 +106,8 @@ class Connect4Env(BaseEnv):
 
         # Set the parameters about replay render.
         self.screen_scaling = cfg.screen_scaling
-        self.save_replay = cfg.save_replay
+        # options = {None, 'state_realtime_mode', 'image_realtime_mode', 'image_savefile_mode'}
+        self.render_mode = cfg.render_mode
         self.replay_name_suffix = "test"
         self.replay_path = None
         self.replay_format = 'gif'
@@ -149,9 +151,9 @@ class Connect4Env(BaseEnv):
         elif self.bot_action_type == 'rule':
             self.rule_bot = Connect4RuleBot(self, self._current_player)
 
-        # Initialize the screen if the replay is to be saved.
-        if self.save_replay:
-            self.render()
+        # Render the beginning state of the game.
+        if self.render_mode is not None:
+            self.render(self.render_mode)
 
     def _player_step(self, action: int, flag: int) -> BaseEnvTimestep:
         """
@@ -198,10 +200,16 @@ class Connect4Env(BaseEnv):
 
         self._current_player = self.next_player
 
+        obs = self.observe()
+
+        # Render the new step.
+        if self.render_mode is not None:
+            self.render(self.render_mode)
         if done:
             info['eval_episode_return'] = reward
-
-        obs = self.observe()
+            if self.render_mode == 'image_savefile_mode':
+                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
+                                            format=self.replay_format)
 
         return BaseEnvTimestep(obs, reward, done, info)
 
@@ -231,16 +239,10 @@ class Connect4Env(BaseEnv):
             flag = "agent"
             timestep = self._player_step(action, flag)
 
-            if self.save_replay:
-                self.render()
-
             if timestep.done:
                 # The ``eval_episode_return`` is calculated from player 1's perspective.
                 timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs[
                                                                                'to_play'] == 1 else timestep.reward
-                if self.save_replay:
-                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
-                                            format=self.replay_format)
 
             return timestep
 
@@ -249,17 +251,10 @@ class Connect4Env(BaseEnv):
             flag = "bot_agent"
             timestep_player1 = self._player_step(action, flag)
 
-            if self.save_replay:
-                self.render()
-
             if timestep_player1.done:
                 # NOTE: in ``play_with_bot_mode``, we must set to_play as -1, because we don't consider the alternation between players.
                 # And the ``to_play`` is used in MCTS.
                 timestep_player1.obs['to_play'] = -1
-
-                if self.save_replay:
-                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
-                                            format=self.replay_format)
 
                 return timestep_player1
 
@@ -271,18 +266,10 @@ class Connect4Env(BaseEnv):
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
 
-            if self.save_replay:
-                self.render()
-
             timestep = timestep_player2
             # NOTE: in ``play_with_bot_mode``, we must set to_play as -1, because we don't consider the alternation between players.
             # And the ``to_play`` is used in MCTS.
             timestep.obs['to_play'] = -1
-
-            if timestep.done:
-                if self.save_replay:
-                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
-                                            format=self.replay_format)
 
             return timestep
 
@@ -291,17 +278,10 @@ class Connect4Env(BaseEnv):
             flag = "eval_agent"
             timestep_player1 = self._player_step(action, flag)
 
-            if self.save_replay:
-                self.render()
-
             if timestep_player1.done:
                 # NOTE: in ``eval_mode``, we must set to_play as -1, because we don't consider the alternation between players.
                 # And the ``to_play`` is used in MCTS.
                 timestep_player1.obs['to_play'] = -1
-
-                if self.save_replay:
-                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
-                                            format=self.replay_format)
 
                 return timestep_player1
 
@@ -314,9 +294,6 @@ class Connect4Env(BaseEnv):
             flag = "eval_bot"
             timestep_player2 = self._player_step(bot_action, flag)
 
-            if self.save_replay:
-                self.render()
-
             # The ``eval_episode_return`` is calculated from player 1's perspective.
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
@@ -325,11 +302,6 @@ class Connect4Env(BaseEnv):
             # NOTE: in ``eval_mode``, we must set to_play as -1, because we don't consider the alternation between players.
             # And the ``to_play`` is used in MCTS.
             timestep.obs['to_play'] = -1
-
-            if timestep.done:
-                if self.save_replay:
-                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
-                                            format=self.replay_format)
 
             return timestep
 
@@ -421,6 +393,77 @@ class Connect4Env(BaseEnv):
     def legal_actions(self) -> List[int]:
         return [i for i in range(7) if self.board[i] == 0]
 
+    # def render(self, mode: str = 'image_savefile_mode') -> None:
+    #     """
+    #     Overview:
+    #         Renders the Connect Four game environment.
+    #     Arguments:
+    #         - mode (:obj:`str`): The rendering mode. Options are 'state_realtime_mode', 'image_realtime_mode', or 'image_savefile_mode'.
+    #     """
+    #     # In 'state_realtime_mode' mode ,print the current game board for rendering.
+    #     if mode == "state_realtime_mode":
+    #         print(np.array(self.board).reshape(6, 7))
+    #         return
+    #     # In other two modes, use a screen for rendering. 
+    #     screen_width = 99 * self.screen_scaling
+    #     screen_height = 86 / 99 * screen_width
+    #     pygame.init()
+    #     if mode == "image_realtime_mode":
+    #         pygame.display.set_caption("Connect Four")
+    #         self.screen = pygame.display.set_mode((screen_width, screen_height))
+    #     elif mode == "image_savefile_mode":
+    #         self.screen = pygame.Surface((screen_width, screen_height))
+
+    #     # Load and scale all of the necessary images.
+    #     tile_size = (screen_width * (91 / 99)) / 7
+
+    #     red_chip = get_image(os.path.join("img", "C4RedPiece.png"))
+    #     red_chip = pygame.transform.scale(
+    #         red_chip, (int(tile_size * (9 / 13)), int(tile_size * (9 / 13)))
+    #     )
+
+    #     black_chip = get_image(os.path.join("img", "C4BlackPiece.png"))
+    #     black_chip = pygame.transform.scale(
+    #         black_chip, (int(tile_size * (9 / 13)), int(tile_size * (9 / 13)))
+    #     )
+
+    #     board_img = get_image(os.path.join("img", "Connect4Board.png"))
+    #     board_img = pygame.transform.scale(
+    #         board_img, ((int(screen_width)), int(screen_height))
+    #     )
+
+    #     self.screen.blit(board_img, (0, 0))
+
+    #     # Blit the necessary chips and their positions.
+    #     for i in range(0, 42):
+    #         if self.board[i] == 1:
+    #             self.screen.blit(
+    #                 red_chip,
+    #                 (
+    #                     (i % 7) * (tile_size) + (tile_size * (6 / 13)),
+    #                     int(i / 7) * (tile_size) + (tile_size * (6 / 13)),
+    #                 ),
+    #             )
+    #         elif self.board[i] == 2:
+    #             self.screen.blit(
+    #                 black_chip,
+    #                 (
+    #                     (i % 7) * (tile_size) + (tile_size * (6 / 13)),
+    #                     int(i / 7) * (tile_size) + (tile_size * (6 / 13)),
+    #                 ),
+    #             )
+    #     if mode == "image_realtime_mode":
+    #         pygame.display.update()
+    #         # self.clock.tick(self.metadata["render_fps"])
+    #     elif mode == "image_savefile_mode":
+    #         # Draw the observation and save to frames.
+    #         observation = np.array(pygame.surfarray.pixels3d(self.screen))
+    #         self.frames.append(np.transpose(observation, axes=(1, 0, 2)))
+
+    #     self.screen = None
+
+    #     return None
+    
     def render(self, mode: str = 'image_savefile_mode') -> None:
         """
         Overview:
@@ -428,20 +471,15 @@ class Connect4Env(BaseEnv):
         Arguments:
             - mode (:obj:`str`): The rendering mode. Options are 'state_realtime_mode', 'image_realtime_mode', or 'image_savefile_mode'.
         """
-        # In 'print' mode ,print the current game board for rendering.
+        # In 'state_realtime_mode' mode ,print the current game board for rendering.
         if mode == "state_realtime_mode":
             print(np.array(self.board).reshape(6, 7))
             return
         # In other two modes, use a screen for rendering. 
         screen_width = 99 * self.screen_scaling
         screen_height = 86 / 99 * screen_width
-        if self.screen is None:
-            pygame.init()
-            if mode == "image_realtime_mode":
-                pygame.display.set_caption("Connect Four")
-                self.screen = pygame.display.set_mode((screen_width, screen_height))
-            elif mode == "image_savefile_mode":
-                self.screen = pygame.Surface((screen_width, screen_height))
+        pygame.init()
+        self.screen = pygame.Surface((screen_width, screen_height))
 
         # Load and scale all of the necessary images.
         tile_size = (screen_width * (91 / 99)) / 7
@@ -482,12 +520,12 @@ class Connect4Env(BaseEnv):
                     ),
                 )
         if mode == "image_realtime_mode":
-            pygame.display.update()
-            # self.clock.tick(self.metadata["render_fps"])
-
-        # Draw the observation and save to frames.
-        observation = np.array(pygame.surfarray.pixels3d(self.screen))
-        self.frames.append(np.transpose(observation, axes=(1, 0, 2)))
+            plt.imshow(np.asarray(self.screen))
+            plt.draw()
+        elif mode == "image_savefile_mode":
+            # Draw the observation and save to frames.
+            observation = np.array(pygame.surfarray.pixels3d(self.screen))
+            self.frames.append(np.transpose(observation, axes=(1, 0, 2)))
 
         self.screen = None
 

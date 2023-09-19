@@ -31,7 +31,7 @@ class TestConnect4Bot():
             prob_expert_agent=0,
             bot_action_type='rule',
             screen_scaling=9,
-            save_replay=False,
+            render_mode='image_savefile_mode',
             prob_random_action_in_bot=0,
         )
 
@@ -48,7 +48,7 @@ class TestConnect4Bot():
         winner = []
 
         # Repeat the game for 10 rounds.
-        for i in range(5):
+        for i in range(10):
             print('-' * 10 + str(i) + '-' * 10)
             # Initialize the game, where there are two players: player 1 and player 2.
             env = Connect4Env(EasyDict(self.cfg))
@@ -86,7 +86,7 @@ class TestConnect4Bot():
                     player_index = 0
                 env.step(action)
                 state = env.board
-                print(np.array(state).reshape(6, 7))
+                # print(np.array(state).reshape(6, 7))
 
             # Record the winner.
             winner.append(env.get_done_winner()[1])
@@ -162,7 +162,7 @@ class TestConnect4Bot():
                     player_index = 0
                 env.step(action)
                 state = env.board
-                print(np.array(state).reshape(6, 7))
+                # print(np.array(state).reshape(6, 7))
 
             # Record the winner.
             winner.append(env.get_done_winner()[1])
@@ -202,7 +202,7 @@ class TestConnect4Bot():
         winner = []
 
         # Repeat the game for 10 rounds.
-        for i in range(5):
+        for i in range(10):
             print('-' * 10 + str(i) + '-' * 10)
             # Initialize the game, where there are two players: player 1 and player 2.
             env = Connect4Env(EasyDict(self.cfg))
@@ -234,7 +234,7 @@ class TestConnect4Bot():
                     player_index = 0
                 env.step(action)
                 state = env.board
-                print(np.array(state).reshape(6, 7))
+                # print(np.array(state).reshape(6, 7))
 
             # Record the winner.
             winner.append(env.get_done_winner()[1])

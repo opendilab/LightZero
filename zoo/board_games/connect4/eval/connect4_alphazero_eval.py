@@ -14,7 +14,7 @@ if __name__ == '__main__':
     num_episodes_each_seed = 1
     # If True, you can play with the agent.
     main_config.env.agent_vs_human = False
-    main_config.env.save_replay=True,
+    main_config.env.render_mode = 'image_savefile_mode'
     main_config.policy.mcts.num_simulations = 10
     main_config.env.prob_random_action_in_bot = 0.
     main_config.env.bot_action_type = 'rule'

@@ -15,7 +15,7 @@ class TestConnect4Env:
             scale=True,
             screen_scaling=9,
             prob_random_action_in_bot=0.,
-            save_replay=False,
+            render_mode='state_realtime_mode',
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
@@ -24,7 +24,6 @@ class TestConnect4Env:
         env = Connect4Env(cfg)
         env.reset()
         print('init board state: ')
-        env.render()
         while True:
             """player 1"""
             # action = env.human_to_action()
@@ -39,7 +38,6 @@ class TestConnect4Env:
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
             # print(reward)
-            env.render()
             if done:
                 if reward > 0:
                     print('player 1 win')
@@ -68,7 +66,7 @@ class TestConnect4Env:
             scale=True,
             screen_scaling=9,
             prob_random_action_in_bot=0.,
-            save_replay=False,
+            render_mode='state_realtime_mode',
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
@@ -77,7 +75,6 @@ class TestConnect4Env:
         env = Connect4Env(cfg)
         env.reset()
         print('init board state: ')
-        env.render()
         while True:
             """player 1"""
             action = env.human_to_action()
@@ -91,7 +88,6 @@ class TestConnect4Env:
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
             # reward is in the perspective of player1
-            env.render()
             if done:
                 if reward != 0 and env.current_player == 2:
                     print('player 1 (human player) win')
@@ -109,7 +105,7 @@ class TestConnect4Env:
             scale=True,
             screen_scaling=9,
             prob_random_action_in_bot=0.,
-            save_replay=False,
+            render_mode='image_savefile_mode',
             agent_vs_human=True,
             prob_random_agent=0,
             prob_expert_agent=0,
@@ -117,9 +113,8 @@ class TestConnect4Env:
 
         )
         env = Connect4Env(cfg)
-        env.reset()
+        env.reset(replay_name_suffix=f'test_eval_mode')
         print('init board state: ')
-        env.render(mode='state_realtime_mode')
         while True:
             """player 1"""
             # action = env.human_to_action()
@@ -133,7 +128,6 @@ class TestConnect4Env:
             print('player 1: ' + env.action_to_string(action))
             obs, reward, done, info = env.step(action)
             # reward is in the perspective of player1
-            env.render(mode='state_realtime_mode')
             if done:
                 if reward != 0 and env.current_player == 2:
                     print('player 1 (human player) win')
