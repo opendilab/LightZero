@@ -77,29 +77,31 @@ class Game2048Env(gym.Env):
               - 'raw_reward': The raw reward obtained from the last action.
               - 'current_max_tile_num': The current maximum tile number on the board.
       - Rendering:
-          The 'render' method can be used to visualize the current state of the game. It supports two rendering modes:
-              - 'human': Renders the game in a text-based format in the console.
-              - 'rgb_array_render': Renders the game as an RGB image.
-          Note: The rendering mode is set to 'human' by default.
+          The render method provides a way to visually represent the current state of the game. It offers four distinct rendering modes:
+            When set to None, the game state is not rendered.
+            In 'state_realtime_mode', the game state is illustrated in a text-based format directly in the console.
+            The 'image_realtime_mode' displays the game as an RGB image in real-time.
+            With 'image_savefile_mode', the game is rendered as an RGB image but not displayed in real-time. Instead, the image is saved to a designated file.
+            Please note that the default rendering mode is set to None.
       """
 
     # The default_config for game 2048 env.
     config = dict(
         # (str) The name of the environment registered in the environment registry.
         env_name="game_2048",
-        # (bool) Whether to save the replay of the game.
-        save_replay=False,
+        # (str) The render mode. Options are 'None', 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.
+        # If None, then the game will not be rendered.
+        render_mode=None,
         # (str) The format in which to save the replay. 'gif' is a popular choice.
         replay_format='gif',
         # (str) A suffix for the replay file name to distinguish it from other files.
         replay_name_suffix='eval',
         # (str or None) The directory in which to save the replay file. If None, the file is saved in the current directory.
         replay_path=None,
-        # (bool) Whether to render the game in real time. Useful for debugging, but can slow down training.
-        render_real_time=False,
         # (bool) Whether to scale the actions. If True, actions are divided by the action space size.
         act_scale=True,
-        # (bool) Whether to use the 'channel last' format for the observation space. If False, 'channel first' format is used.
+        # (bool) Whether to use the 'channel last' format for the observation space.
+        # If False, 'channel first' format is used.
         channel_last=True,
         # (str) The type of observation to use. Options are 'raw_board', 'raw_encoded_board', and 'dict_encoded_board'.
         obs_type='dict_encoded_board',
@@ -144,10 +146,8 @@ class Game2048Env(gym.Env):
         self.replay_format = cfg.replay_format
         self.replay_name_suffix = cfg.replay_name_suffix
         self.replay_path = cfg.replay_path
-        self.save_replay = cfg.save_replay
-        self.render_real_time = cfg.render_real_time
+        self.render_mode = cfg.render_mode 
 
-        self._save_replay_count = 0
         self.channel_last = cfg.channel_last
         self.obs_type = cfg.obs_type
         self.reward_type = cfg.reward_type
@@ -243,9 +243,9 @@ class Game2048Env(gym.Env):
         else:
             raise NotImplementedError
 
-        # Render the game if the replay is to be saved
-        if self.save_replay:
-            self.render(mode='rgb_array_render')
+        # Render the beginning state of the game.
+        if self.render_mode is not None:
+            self.render(self.render_mode)
 
         return observation
 
@@ -346,15 +346,17 @@ class Game2048Env(gym.Env):
 
         # Prepare information to return
         info = {"raw_reward": raw_reward, "current_max_tile_num": self.highest()}
-        if self.save_replay:
-            self.render(mode='rgb_array_render')
+
+        # Render the new step.
+        if self.render_mode is not None:
+            self.render(self.render_mode)
 
         # If the game has ended, save additional information and the replay if necessary
         if done:
             info['eval_episode_return'] = self._final_eval_reward
-            if self.save_replay:
-                self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
-                                        format=self.replay_format)
+            if self.render_mode == 'image_savefile_mode':
+                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
+                                            format=self.replay_format)
 
         return BaseEnvTimestep(observation, reward, done, info)
 
@@ -634,8 +636,27 @@ class Game2048Env(gym.Env):
                 sys.exit(0)
         return action
 
-    def render(self, mode='human'):
-        if mode == 'rgb_array_render':
+    def render(self, mode: str = None):
+        """
+        Overview:
+            Renders the 2048 game environment.
+        Arguments:
+            - mode (:obj:`str`): The rendering mode. Options are None, 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.
+                When set to None, the game state is not rendered.
+                In 'state_realtime_mode', the game state is illustrated in a text-based format directly in the console.
+                The 'image_realtime_mode' displays the game as an RGB image in real-time.
+                With 'image_savefile_mode', the game is rendered as an RGB image but not displayed in real-time. Instead, the image is saved to a designated file.
+                Please note that the default rendering mode is set to None.
+        """
+        if mode == 'state_realtime_mode':
+            s = 'Current Return: {}, '.format(self.episode_return)
+            s += 'Current Highest Tile number: {}\n'.format(self.highest())
+            npa = np.array(self.board)
+            grid = npa.reshape((self.size, self.size))
+            s += "{}\n".format(grid)
+            print(s)
+        else:
+            # In other two modes, draw the board.
             grey = (128, 128, 128)
             grid_size = self.grid_size
 
@@ -653,20 +674,13 @@ class Game2048Env(gym.Env):
                         self.draw_tile(draw, x, y, o, fnt)
 
             # Instead of returning the image, we display it using pyplot
-            if self.render_real_time:
+            if mode == 'image_realtime_mode':
                 plt.imshow(np.asarray(pil_board))
                 plt.draw()
                 # plt.pause(0.001)
-            # Append the frame to frames for gif
-            self.frames.append(np.asarray(pil_board))
-        elif mode == 'human':
-            s = 'Current Return: {}, '.format(self.episode_return)
-            s += 'Current Highest Tile number: {}\n'.format(self.highest())
-            npa = np.array(self.board)
-            grid = npa.reshape((self.size, self.size))
-            s += "{}\n".format(grid)
-            sys.stdout.write(s)
-            return sys.stdout
+            elif mode == 'image_savefile_mode':
+                # Append the frame to frames for gif
+                self.frames.append(np.asarray(pil_board))
 
     def draw_tile(self, draw, x, y, o, fnt):
         grid_size = self.grid_size

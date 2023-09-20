@@ -3,49 +3,41 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-board_size = 6  # default_size is 15
-collector_env_num = 32
-n_episode = 32
+collector_env_num = 8
+n_episode = 8
 evaluator_env_num = 5
 num_simulations = 50
 update_per_collect = 50
 batch_size = 256
-max_env_step = int(5e5)
-prob_random_action_in_bot = 0.5
+max_env_step = int(1e6)
+model_path = None
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-gomoku_alphazero_config = dict(
-    exp_name=
-    f'data_az_ptree/gomoku_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
+connect4_alphazero_config = dict(
+    exp_name='data_az_ptree/connect4_bot-mode_seed0',
     env=dict(
-        board_size=board_size,
-        battle_mode='self_play_mode',
-        bot_action_type='v0',
-        prob_random_action_in_bot=prob_random_action_in_bot,
-        channel_last=False,  # NOTE
+        battle_mode='play_with_bot_mode',
+        bot_action_type='rule',
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        torch_compile=False,
-        tensor_float_32=False,
         model=dict(
-            observation_shape=(3, board_size, board_size),
-            action_space_size=int(1 * board_size * board_size),
+            observation_shape=(3, 6, 7),
+            action_space_size=7,
             num_res_blocks=1,
-            num_channels=32,
+            num_channels=64,
         ),
         cuda=True,
-        board_size=board_size,
+        env_type='board_games',
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        manual_temperature_decay=True,
         grad_clip_value=0.5,
         value_weight=1.0,
         entropy_weight=0.0,
@@ -57,13 +49,13 @@ gomoku_alphazero_config = dict(
     ),
 )
 
-gomoku_alphazero_config = EasyDict(gomoku_alphazero_config)
-main_config = gomoku_alphazero_config
+connect4_alphazero_config = EasyDict(connect4_alphazero_config)
+main_config = connect4_alphazero_config
 
-gomoku_alphazero_create_config = dict(
+connect4_alphazero_create_config = dict(
     env=dict(
-        type='gomoku',
-        import_names=['zoo.board_games.gomoku.envs.gomoku_env'],
+        type='connect4',
+        import_names=['zoo.board_games.connect4.envs.connect4_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
@@ -79,18 +71,9 @@ gomoku_alphazero_create_config = dict(
         import_names=['lzero.worker.alphazero_evaluator'],
     )
 )
-gomoku_alphazero_create_config = EasyDict(gomoku_alphazero_create_config)
-create_config = gomoku_alphazero_create_config
+connect4_alphazero_create_config = EasyDict(connect4_alphazero_create_config)
+create_config = connect4_alphazero_create_config
 
 if __name__ == '__main__':
-    if main_config.policy.tensor_float_32:
-        import torch
-
-        # The flag below controls whether to allow TF32 on matmul. This flag defaults to False
-        # in PyTorch 1.12 and later.
-        torch.backends.cuda.matmul.allow_tf32 = True
-        # The flag below controls whether to allow TF32 on cuDNN. This flag defaults to True.
-        torch.backends.cudnn.allow_tf32 = True
-
     from lzero.entry import train_alphazero
-    train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_alphazero([main_config, create_config], seed=0, model_path=model_path, max_env_step=max_env_step)
