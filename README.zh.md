@@ -26,6 +26,8 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
+Updated on 2023.09.21 LightZero-v0.0.2
+
 > LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库。
 
 [English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文

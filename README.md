@@ -27,6 +27,8 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
+Updated on 2023.09.21 LightZero-v0.0.2
+
 > LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkits that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL). 
 
 English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README.zh.md)
