@@ -10,7 +10,7 @@ num_simulations = 25
 update_per_collect = 100
 batch_size = 256
 max_env_step = int(1e5)
-reanalyze_ratio = 0
+reanalyze_ratio = 0.1
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================

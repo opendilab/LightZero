@@ -297,7 +297,7 @@ class GameSegment:
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = []
 
-        assert len(init_observations) == self.frame_stack_num
+        # assert len(init_observations) == self.frame_stack_num
 
         for observation in init_observations:
             self.obs_segment.append(copy.deepcopy(observation))

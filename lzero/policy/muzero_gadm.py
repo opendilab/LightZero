@@ -18,8 +18,8 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
     prepare_obs
 
 
-@POLICY_REGISTRY.register('muzero')
-class MuZeroPolicy(Policy):
+@POLICY_REGISTRY.register('muzero_gadm')
+class MuZeroGADMPolicy(Policy):
     """
     Overview:
         The policy class for MuZero.
@@ -216,6 +216,9 @@ class MuZeroPolicy(Policy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
+        self.action_model = self._cfg.action_model
+        self.latent_prior_model = self._cfg.latent_prior_model
+
         assert self._cfg.optim_type in ['SGD', 'Adam'], self._cfg.optim_type
         # NOTE: in board_games, for fixed lr 0.003, 'Adam' is better than 'SGD'.
         if self._cfg.optim_type == 'SGD':
@@ -280,6 +283,22 @@ class MuZeroPolicy(Policy):
 
         obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
+        # TODO(pu): GADM
+        # 假设 obs_batch_ori 是一个 NumPy 数组
+        obs_batch_ori = obs_batch_ori.reshape((obs_batch_ori.shape[0], 6, 11))
+        # 取出前 5 个观察值
+        obs_batch_ori_5 = obs_batch_ori[:, :5, :]
+        # 将 NumPy 数组转换为 PyTorch 张量
+        obs_batch_ori_5 = torch.from_numpy(obs_batch_ori_5)
+        # 确保 action_batch 也是一个 PyTorch 张量
+        action_batch = torch.from_numpy(action_batch).float() if isinstance(action_batch, np.ndarray) else action_batch
+        # 将张量传入模型
+        latent_action = self.action_model.encode({'action': action_batch, 'obs': obs_batch_ori_5})
+        # 获取编码后的索引并复制
+        action_batch = latent_action.clone().detach()
+        # 将张量的形状变换回原始的形状
+        action_batch = action_batch.view(obs_batch_ori.shape[0], 5)
+
         # do augmentations
         if self._cfg.use_augmentation:
             obs_batch = self.image_transforms.transform(obs_batch)
@@ -288,7 +307,9 @@ class MuZeroPolicy(Policy):
 
         # shape: (batch_size, num_unroll_steps, action_dim)
         # NOTE: .long(), in discrete action space.
-        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
+        # action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
+        action_batch = action_batch.to(self._cfg.device).unsqueeze(-1).long()
+
         data_list = [
             mask_batch,
             target_reward.astype('float32'),
@@ -469,14 +490,14 @@ class MuZeroPolicy(Policy):
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
-        self._collect_mcts_temperature = 1
+        self._collect_mcts_temperature = 1.0
         self.collect_epsilon = 0.0
 
     def _forward_collect(
             self,
             data: torch.Tensor,
             action_mask: list = None,
-            temperature: float = 1,
+            temperature: float = 1.0,
             to_play: List = [-1],
             epsilon: float = 0.25,
             ready_env_id=None
@@ -637,6 +658,19 @@ class MuZeroPolicy(Policy):
             network_output = self._collect_model.initial_inference(data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
+            # if self._cfg.eval_mask_via_latent_prior_model:
+            # TODO(pu): GADM
+            predicted_latent_prior_logits = self.latent_prior_model(data)
+            with torch.no_grad():
+                predicted_latent_prior_probs = torch.softmax(predicted_latent_prior_logits, dim=-1)
+            # Create a new tensor where values in `latent_prior_model` less than `beta` are replaced by 0,
+            # and values greater than or equal to `beta` are replaced by 1.
+            mask_current_q_use_latent_prior_model = torch.where(
+                predicted_latent_prior_probs < self._cfg.prior_beta,
+                torch.full_like(predicted_latent_prior_probs, 0),
+                torch.full_like(predicted_latent_prior_probs, 1))
+            action_mask = mask_current_q_use_latent_prior_model
+
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
                 pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
@@ -675,6 +709,16 @@ class MuZeroPolicy(Policy):
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+
+                # TODO(pu): GADM
+                # here input action is the out of MuZero, is discrete action
+                action = self.action_model.decode(
+                    {
+                        'quantized_index': torch.from_numpy(np.array([action])),
+                        'obs': data[env_id],
+                        'threshold_phase': 'eval' in self._cfg.threshold_phase
+                    }
+                )['recons_action'][0]
 
                 output[env_id] = {
                     'action': action,

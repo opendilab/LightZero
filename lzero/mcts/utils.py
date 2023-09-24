@@ -64,6 +64,7 @@ def prepare_observation(observation_list, model_type='conv'):
         - model_type (:obj:`str`): type of the model. (default is 'conv')
     """
     assert model_type in ['conv', 'mlp']
+    # observation_array = np.array(observation_list, dtype=object)
     observation_array = np.array(observation_list)
 
     if model_type == 'conv':

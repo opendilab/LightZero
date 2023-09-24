@@ -14,8 +14,8 @@ if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
 
 
-@BUFFER_REGISTRY.register('game_buffer_muzero')
-class MuZeroGameBuffer(GameBuffer):
+@BUFFER_REGISTRY.register('game_buffer_muzero_gadm')
+class MuZeroGADMGameBuffer(GameBuffer):
     """
     Overview:
         The specific game buffer for MuZero policy.
@@ -127,8 +127,13 @@ class MuZeroGameBuffer(GameBuffer):
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
+            # actions_tmp += [
+            #     np.random.randint(0, game.action_space_size)
+            #     for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
+            # ]
+            # TODO(pu): GADM
             actions_tmp += [
-                np.random.randint(0, game.action_space_size)
+                np.random.rand(game.action_space_size)
                 for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
             ]
 
@@ -150,6 +155,7 @@ class MuZeroGameBuffer(GameBuffer):
         current_batch = [obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list]
         for i in range(len(current_batch)):
             current_batch[i] = np.asarray(current_batch[i])
+            # current_batch[i] = np.asarray(current_batch[i], dtype=object)
 
         total_transitions = self.get_num_of_transitions()
 
