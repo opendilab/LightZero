@@ -216,8 +216,13 @@ class MuZeroGADMPolicy(Policy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
+        # TODO(pu): GADM
+        # TODO(pu): device
+        self._device = 'cuda:0' if self._cfg.cuda and torch.cuda.is_available() else 'cpu'
         self.action_model = self._cfg.action_model
         self.latent_prior_model = self._cfg.latent_prior_model
+        self.action_model.to(self._device)
+        self.latent_prior_model.to(self._device)
 
         assert self._cfg.optim_type in ['SGD', 'Adam'], self._cfg.optim_type
         # NOTE: in board_games, for fixed lr 0.003, 'Adam' is better than 'SGD'.
@@ -285,7 +290,7 @@ class MuZeroGADMPolicy(Policy):
 
         # TODO(pu): GADM
         # 假设 obs_batch_ori 是一个 NumPy 数组
-        obs_batch_ori = obs_batch_ori.reshape((obs_batch_ori.shape[0], 6, 11))
+        obs_batch_ori = obs_batch_ori.reshape((self._cfg.batch_size, 6, 11))
         # 取出前 5 个观察值
         obs_batch_ori_5 = obs_batch_ori[:, :5, :]
         # 将 NumPy 数组转换为 PyTorch 张量
@@ -293,11 +298,11 @@ class MuZeroGADMPolicy(Policy):
         # 确保 action_batch 也是一个 PyTorch 张量
         action_batch = torch.from_numpy(action_batch).float() if isinstance(action_batch, np.ndarray) else action_batch
         # 将张量传入模型
-        latent_action = self.action_model.encode({'action': action_batch, 'obs': obs_batch_ori_5})
-        # 获取编码后的索引并复制
-        action_batch = latent_action.clone().detach()
+        # import pdb; pdb.set_trace()
+        with torch.no_grad():
+            action_batch = self.action_model.encode({'action': action_batch.to(self._device), 'obs': obs_batch_ori_5.to(self._device)})
         # 将张量的形状变换回原始的形状
-        action_batch = action_batch.view(obs_batch_ori.shape[0], 5)
+        action_batch = action_batch.view(self._cfg.batch_size, 5)
 
         # do augmentations
         if self._cfg.use_augmentation:
@@ -308,7 +313,7 @@ class MuZeroGADMPolicy(Policy):
         # shape: (batch_size, num_unroll_steps, action_dim)
         # NOTE: .long(), in discrete action space.
         # action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
-        action_batch = action_batch.to(self._cfg.device).unsqueeze(-1).long()
+        action_batch = action_batch.unsqueeze(-1).long()
 
         data_list = [
             mask_batch,
@@ -605,6 +610,7 @@ class MuZeroGADMPolicy(Policy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
+
     def _get_target_obs_index_in_step_k(self, step):
         """
         Overview:
@@ -661,8 +667,7 @@ class MuZeroGADMPolicy(Policy):
             # if self._cfg.eval_mask_via_latent_prior_model:
             # TODO(pu): GADM
             predicted_latent_prior_logits = self.latent_prior_model(data)
-            with torch.no_grad():
-                predicted_latent_prior_probs = torch.softmax(predicted_latent_prior_logits, dim=-1)
+            predicted_latent_prior_probs = torch.softmax(predicted_latent_prior_logits, dim=-1)
             # Create a new tensor where values in `latent_prior_model` less than `beta` are replaced by 0,
             # and values greater than or equal to `beta` are replaced by 1.
             mask_current_q_use_latent_prior_model = torch.where(
@@ -708,17 +713,18 @@ class MuZeroGADMPolicy(Policy):
                 )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
-                action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                # action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                action = np.where(action_mask[i].cpu() == 1.0)[0][action_index_in_legal_action_set]
 
                 # TODO(pu): GADM
                 # here input action is the out of MuZero, is discrete action
                 action = self.action_model.decode(
                     {
-                        'quantized_index': torch.from_numpy(np.array([action])),
+                        'quantized_index': torch.from_numpy(np.array([action])).to(data[env_id].device),
                         'obs': data[env_id],
                         'threshold_phase': 'eval' in self._cfg.threshold_phase
                     }
-                )['recons_action'][0]
+                )['recons_action'][0].cpu().numpy()
 
                 output[env_id] = {
                     'action': action,

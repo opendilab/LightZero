@@ -231,6 +231,10 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
+        # TODO(pu): device
+        self._device = 'cuda:0' if self._cfg.cuda and torch.cuda.is_available() else 'cpu'
+        self._cfg.device = self._device
+
         assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
         if self._cfg.model.continuous_action_space:
             # Weight Init for the last output layer of gaussian policy head in prediction network.
@@ -782,7 +786,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
-        self._collect_mcts_temperature = 1
+        self._collect_mcts_temperature = 1.0
 
     def _forward_collect(
             self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1,
@@ -922,6 +926,11 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
+        # TODO(pu): device
+        self._device = 'cuda:0' if self._cfg.cuda and torch.cuda.is_available() else 'cpu'
+        self._cfg.device = self._device
+        self._eval_model.to(self._device)
+
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id=None):
         """
          Overview:
@@ -944,6 +953,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
              - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                  ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
          """
+        # TODO(pu): device
+        data = data.to(self._device)
+
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
         with torch.no_grad():

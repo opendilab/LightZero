@@ -139,8 +139,15 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
             # ==============================================================
             # sampled related core code
             # ==============================================================
-            actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
-                                              self._cfg.num_unroll_steps].tolist()
+            # actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
+            #                                   self._cfg.num_unroll_steps].tolist()
+            # TODO(pu): GADM
+            try:
+                actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
+                                                  self._cfg.num_unroll_steps].tolist()
+            except:
+                actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
+                                                                      self._cfg.num_unroll_steps]
 
             # NOTE: self._cfg.num_unroll_steps + 1
             root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_segment:pos_in_game_segment +
