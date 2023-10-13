@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import torch.optim as optim
 from ding.model import model_wrap
-from ding.policy.base_policy import Policy
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from ditk import logging
@@ -16,18 +15,20 @@ from lzero.mcts import SampledEfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts import SampledEfficientZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, ez_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
+    DiscreteSupport, to_torch_float_tensor, ez_network_output_unpack, select_action, negative_cosine_similarity, \
+    prepare_obs, \
     configure_optimizers
+from lzero.policy.muzero import MuZeroPolicy
 
 
 @POLICY_REGISTRY.register('sampled_efficientzero')
-class SampledEfficientZeroPolicy(Policy):
+class SampledEfficientZeroPolicy(MuZeroPolicy):
     """
     Overview:
-        The policy class for Sampled EfficientZero.
+        The policy class for Sampled EfficientZero proposed in the paper https://arxiv.org/abs/2104.06303.
     """
 
-    # The default_config for Sampled fEficientZero policy.
+    # The default_config for Sampled EfficientZero policy.
     config = dict(
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For 3-dimensional image obs, we use conv model.
@@ -64,7 +65,7 @@ class SampledEfficientZeroPolicy(Policy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
-            norm_type='BN', 
+            norm_type='BN',
         ),
         # ****** common ******
         # (bool) Whether to use multi-gpu training.
@@ -93,6 +94,8 @@ class SampledEfficientZeroPolicy(Policy):
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
         transform2string=False,
+        # (bool) Whether to use gray scale image.
+        gray_scale=False,
         # (bool) Whether to use data augmentation.
         use_augmentation=False,
         # (list) The style of augmentation.
@@ -192,7 +195,7 @@ class SampledEfficientZeroPolicy(Policy):
         eps=dict(
             # (bool) Whether to use eps greedy exploration in collecting data.
             eps_greedy_exploration_in_collect=False,
-            # 'linear', 'exp'
+            # (str) The type of decaying epsilon. Options are 'linear', 'exp'.
             type='linear',
             # (float) The start value of eps.
             start=1.,
@@ -220,6 +223,8 @@ class SampledEfficientZeroPolicy(Policy):
             return 'SampledEfficientZeroModel', ['lzero.model.sampled_efficientzero_model']
         elif self._cfg.model.model_type == "mlp":
             return 'SampledEfficientZeroModelMLP', ['lzero.model.sampled_efficientzero_model_mlp']
+        else:
+            raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
     def _init_learn(self) -> None:
         """
@@ -397,17 +402,15 @@ class SampledEfficientZeroPolicy(Policy):
         value_prefix_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
 
-        gradient_scale = 1 / self._cfg.num_unroll_steps
-
         # ==============================================================
         # the core recurrent_inference in SampledEfficientZero policy.
         # ==============================================================
-        for step_i in range(self._cfg.num_unroll_steps):
+        for step_k in range(self._cfg.num_unroll_steps):
             # unroll with the dynamics function: predict the next ``latent_state``, ``reward_hidden_state``,
             # `` value_prefix`` given current ``latent_state`` ``reward_hidden_state`` and ``action``.
             # And then predict policy_logits and value  with the prediction function.
             network_output = self._learn_model.recurrent_inference(
-                latent_state, reward_hidden_state, action_batch[:, step_i]
+                latent_state, reward_hidden_state, action_batch[:, step_k]
             )
             latent_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(
                 network_output
@@ -422,17 +425,9 @@ class SampledEfficientZeroPolicy(Policy):
                 # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
                 # ==============================================================
                 if self._cfg.ssl_loss_weight > 0:
-                    # obtain the oracle hidden states from representation function.
-                    if self._cfg.model.model_type == 'conv':
-                        beg_index = self._cfg.model.image_channel * step_i
-                        end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
-                        network_output = self._learn_model.initial_inference(
-                            obs_target_batch[:, beg_index:end_index, :, :]
-                        )
-                    elif self._cfg.model.model_type == 'mlp':
-                        beg_index = self._cfg.model.observation_shape * step_i
-                        end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
-                        network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
+                    # obtain the oracle latent states from representation function.
+                    beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
+                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
 
                     latent_state = to_tensor(latent_state)
                     representation_state = to_tensor(network_output.latent_state)
@@ -440,7 +435,7 @@ class SampledEfficientZeroPolicy(Policy):
                     # NOTE: no grad for the representation_state branch.
                     dynamic_proj = self._learn_model.project(latent_state, with_grad=True)
                     observation_proj = self._learn_model.project(representation_state, with_grad=False)
-                    temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
+                    temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_k]
 
                     consistency_loss += temp_loss
 
@@ -459,7 +454,7 @@ class SampledEfficientZeroPolicy(Policy):
                     target_policy,
                     mask_batch,
                     child_sampled_actions_batch,
-                    unroll_step=step_i + 1
+                    unroll_step=step_k + 1
                 )
             else:
                 """discrete action space"""
@@ -469,14 +464,14 @@ class SampledEfficientZeroPolicy(Policy):
                     target_policy,
                     mask_batch,
                     child_sampled_actions_batch,
-                    unroll_step=step_i + 1
+                    unroll_step=step_k + 1
                 )
 
-            value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
-            value_prefix_loss += cross_entropy_loss(value_prefix, target_value_prefix_categorical[:, step_i])
+            value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
+            value_prefix_loss += cross_entropy_loss(value_prefix, target_value_prefix_categorical[:, step_k])
 
             # reset hidden states every ``lstm_horizon_len`` unroll steps.
-            if (step_i + 1) % self._cfg.lstm_horizon_len == 0:
+            if (step_k + 1) % self._cfg.lstm_horizon_len == 0:
                 reward_hidden_state = (
                     torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
                     torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
@@ -498,11 +493,13 @@ class SampledEfficientZeroPolicy(Policy):
         # ==============================================================
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss +
-            self._cfg.policy_entropy_loss_weight * policy_entropy_loss
+                self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss +
+                self._cfg.policy_entropy_loss_weight * policy_entropy_loss
         )
         weighted_total_loss = (weights * loss).mean()
+
+        gradient_scale = 1 / self._cfg.num_unroll_steps
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
@@ -525,28 +522,28 @@ class SampledEfficientZeroPolicy(Policy):
             predicted_value_prefixs = predicted_value_prefixs.reshape(-1).unsqueeze(-1)
 
         return_data = {
-                'cur_lr': self._optimizer.param_groups[0]['lr'],
-                'collect_mcts_temperature': self.collect_mcts_temperature,
-                'weighted_total_loss': weighted_total_loss.item(),
-                'total_loss': loss.mean().item(),
-                'policy_loss': policy_loss.mean().item(),
-                'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-                'value_prefix_loss': value_prefix_loss.mean().item(),
-                'value_loss': value_loss.mean().item(),
-                'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
+            'cur_lr': self._optimizer.param_groups[0]['lr'],
+            'collect_mcts_temperature': self._collect_mcts_temperature,
+            'weighted_total_loss': weighted_total_loss.item(),
+            'total_loss': loss.mean().item(),
+            'policy_loss': policy_loss.mean().item(),
+            'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+            'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+            'value_prefix_loss': value_prefix_loss.mean().item(),
+            'value_loss': value_loss.mean().item(),
+            'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
 
-                # ==============================================================
-                # priority related
-                # ==============================================================
-                'value_priority': value_priority.flatten().mean().item(),
-                'value_priority_orig': value_priority,
-                'target_value_prefix': target_value_prefix.detach().cpu().numpy().mean().item(),
-                'target_value': target_value.detach().cpu().numpy().mean().item(),
-                'transformed_target_value_prefix': transformed_target_value_prefix.detach().cpu().numpy().mean().item(),
-                'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
-                'predicted_value_prefixs': predicted_value_prefixs.detach().cpu().numpy().mean().item(),
-                'predicted_values': predicted_values.detach().cpu().numpy().mean().item()
+            # ==============================================================
+            # priority related
+            # ==============================================================
+            'value_priority': value_priority.flatten().mean().item(),
+            'value_priority_orig': value_priority,
+            'target_value_prefix': target_value_prefix.detach().cpu().numpy().mean().item(),
+            'target_value': target_value.detach().cpu().numpy().mean().item(),
+            'transformed_target_value_prefix': transformed_target_value_prefix.detach().cpu().numpy().mean().item(),
+            'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
+            'predicted_value_prefixs': predicted_value_prefixs.detach().cpu().numpy().mean().item(),
+            'predicted_values': predicted_values.detach().cpu().numpy().mean().item()
         }
 
         if self._cfg.model.continuous_action_space:
@@ -577,7 +574,7 @@ class SampledEfficientZeroPolicy(Policy):
                 'target_sampled_actions_mean': target_sampled_actions[:, :].float().mean().item(),
                 'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
             })
-        
+
         return return_data
 
     def _calculate_policy_loss_cont(
@@ -677,9 +674,9 @@ class SampledEfficientZeroPolicy(Policy):
         if self._cfg.policy_loss_type == 'KL':
             # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
             policy_loss += (
-                torch.exp(target_log_prob_sampled_actions.detach()) *
-                (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
-            ).sum(-1) * mask_batch[:, unroll_step]
+                                   torch.exp(target_log_prob_sampled_actions.detach()) *
+                                   (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
+                           ).sum(-1) * mask_batch[:, unroll_step]
         elif self._cfg.policy_loss_type == 'cross_entropy':
             # cross_entropy loss: - sum(p * log (q) )
             policy_loss += -torch.sum(
@@ -764,9 +761,9 @@ class SampledEfficientZeroPolicy(Policy):
         if self._cfg.policy_loss_type == 'KL':
             # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
             policy_loss += (
-                torch.exp(target_log_prob_sampled_actions.detach()) *
-                (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
-            ).sum(-1) * mask_batch[:, unroll_step]
+                                   torch.exp(target_log_prob_sampled_actions.detach()) *
+                                   (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
+                           ).sum(-1) * mask_batch[:, unroll_step]
         elif self._cfg.policy_loss_type == 'cross_entropy':
             # cross_entropy loss: - sum(p * log (q) )
             policy_loss += -torch.sum(
@@ -785,10 +782,11 @@ class SampledEfficientZeroPolicy(Policy):
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
-        self.collect_mcts_temperature = 1
+        self._collect_mcts_temperature = 1
 
     def _forward_collect(
-        self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1, epsilon: float = 0.25, ready_env_id=None
+            self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1,
+            epsilon: float = 0.25, ready_env_id=None
     ):
         """
         Overview:
@@ -814,7 +812,7 @@ class SampledEfficientZeroPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._collect_model.eval()
-        self.collect_mcts_temperature = temperature
+        self._collect_mcts_temperature = temperature
         active_collect_env_num = data.shape[0]
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
@@ -866,8 +864,8 @@ class SampledEfficientZeroPolicy(Policy):
                 roots, self._collect_model, latent_state_roots, reward_hidden_state_roots, to_play
             )
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
             roots_sampled_actions = roots.get_sampled_actions()  # {list: 1}->{list:6}
 
@@ -886,7 +884,7 @@ class SampledEfficientZeroPolicy(Policy):
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
                 action, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=self.collect_mcts_temperature, deterministic=False
+                    distributions, temperature=self._collect_mcts_temperature, deterministic=False
                 )
                 try:
                     action = roots_sampled_actions[i][action].value
@@ -992,8 +990,8 @@ class SampledEfficientZeroPolicy(Policy):
             roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
             self._mcts_eval.search(roots, self._eval_model, latent_state_roots, reward_hidden_state_roots, to_play)
 
-            roots_visit_count_distributions = roots.get_distributions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+            roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
             # ==============================================================
             # sampled related core code

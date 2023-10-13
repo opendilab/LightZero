@@ -71,7 +71,6 @@ gomoku_alphazero_create_config = dict(
     ),
     collector=dict(
         type='episode_alphazero',
-        get_train_sample=False,
         import_names=['lzero.worker.alphazero_collector'],
     ),
     evaluator=dict(

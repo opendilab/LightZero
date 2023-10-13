@@ -30,7 +30,7 @@ def _load_req(file: str):
 #     def build_extensions(self):
 #         # Override the compiler executables. Importantly, this
 #         # removes the "default" compiler flags that would
-#         # otherwise get passed on to to the compiler, i.e.,
+#         # otherwise get passed on to the compiler, i.e.,
 #         # distutils.sysconfig.get_var("CFLAGS").
 #         self.compiler.set_executable("compiler_so", "g++")
 #         self.compiler.set_executable("compiler_cxx", "g++")
@@ -85,7 +85,7 @@ _LINETRACE = not not os.environ.get('LINETRACE', None)
 
 setup(
     name='LightZero',
-    version='0.0.1',
+    version='0.0.2',
     description='A lightweight and efficient MCTS/AlphaZero/MuZero algorithm toolkits.',
     # long_description=readme,
     long_description_content_type='text/markdown',
@@ -126,6 +126,7 @@ setup(
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
     ],
 )

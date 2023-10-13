@@ -16,7 +16,6 @@
 [![Code Test](https://github.com/opendilab/LightZero/workflows/Code%20Test/badge.svg)](https://github.com/opendilab/LightZero/actions?query=workflow%3A%22Code+Test%22)
 [![Badge Creation](https://github.com/opendilab/LightZero/workflows/Badge%20Creation/badge.svg)](https://github.com/opendilab/LightZero/actions?query=workflow%3A%22Badge+Creation%22)
 [![Package Release](https://github.com/opendilab/LightZero/workflows/Package%20Release/badge.svg)](https://github.com/opendilab/LightZero/actions?query=workflow%3A%22Package+Release%22)
-[![codecov](https://codecov.io/gh/opendilab/LightZero/branch/main/graph/badge.svg?token=XJVDP4EFAT)](https://codecov.io/gh/opendilab/LightZero)
 
 ![GitHub Org's stars](https://img.shields.io/github/stars/opendilab)
 [![GitHub stars](https://img.shields.io/github/stars/opendilab/LightZero)](https://github.com/opendilab/LightZero/stargazers)
@@ -27,9 +26,11 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
+Updated on 2023.09.21 LightZero-v0.0.2
+
 > LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkits that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL). 
 
-English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README.zh.md)
+English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Paper](https://arxiv.org/pdf/2310.08348.pdf)
 
 ## Background
 
@@ -108,34 +109,39 @@ For the file structure of LightZero, please refer to [lightzero_file_structure](
 LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of MCTS algorithms (sometimes combined with cython and cpp), including:
 - [AlphaZero](https://www.science.org/doi/10.1126/science.aar6404)
 - [MuZero](https://arxiv.org/abs/1911.08265)
-- [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Sampled MuZero](https://arxiv.org/abs/2104.06303)
+- [Stochastic MuZero](https://openreview.net/pdf?id=X6D9bAHhBQ1)
+- [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Gumbel MuZero](https://openreview.net/pdf?id=bERaNdoegnO&)
 
 The environments and algorithms currently supported by LightZero are shown in the table below:
 
-| Env./Alg.      | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero |
-| ------------- | --------- | ------ | ------------- | --------------------- | ------------- |
-| Atari         | ---       | ✔      | ✔       | ✔                   | ✔            |
-| TicTacToe     | ✔       | ✔      | 🔒      | 🔒                  | ✔            |
-| Gomoku        | ✔       | ✔      | 🔒      | 🔒                  | ✔            |
-| Go            | 🔒       | 🔒     | 🔒      | 🔒                  | 🔒            |
-| LunarLander   | ---       | ✔      | ✔       | ✔                   | ✔            |
-| BipedalWalker | ---       | ✔      | ✔       | ✔                   | 🔒            |
-| CartPole      | ---       | ✔      | ✔       | ✔                   | ✔            |
-| Pendulum      | ---       | ✔      | ✔       | ✔                   | ✔            |
-| MuJoCo        | ---       | 🔒     | 🔒      | ✔                   | 🔒            |
+| Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | 
+|---------------| --------- | ------ |-------------| ------------------ | ---------- |----------------|
+| TicTacToe     | ✔       | ✔      | 🔒           | 🔒                | ✔          | 🔒             |
+| Gomoku        | ✔       | ✔      | 🔒          | 🔒               | ✔          | 🔒             |
+| Connect4      | ✔       | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |
+| 2048          | ✔       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |
+| Chess         | 🔒       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
+| Go            | 🔒       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
+| CartPole      | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
+| Pendulum      | ---       | ✔      | ✔           | ✔                | ✔          | 🔒             |
+| LunarLander   | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
+| BipedalWalker | ---       | ✔      | ✔           | ✔                | ✔          | 🔒              |
+| Atari         | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
+| MuJoCo        | ---       | ✔     | ✔          | ✔                | 🔒         | 🔒               |
+| MiniGrid      | ---       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
 
 <sup>(1): "✔" means that the corresponding item is finished and well-tested.</sup>
 
-<sup>(2): "🔒" means that the corresponding item is in the waitinglist (Work In Progress).</sup>
+<sup>(2): "🔒" means that the corresponding item is in the waiting-list (Work In Progress).</sup>
 
 <sup>(3): "---" means that this algorithm doesn't support this environment.</sup>
 
 
 ## Installation
 
-You can install latest LightZero in development from the GitHub source codes with the following command:
+You can install the latest LightZero in development from the GitHub source codes with the following command:
 
 ```bash
 git clone https://github.com/opendilab/LightZero.git
@@ -146,6 +152,30 @@ pip3 install -e .
 Kindly note that LightZero currently supports compilation only on `Linux` and `macOS` platforms.
 We are actively working towards extending this support to the `Windows` platform. 
 Your patience during this transition is greatly appreciated.
+
+## Installation with Docker
+
+We also provide a Dockerfile that sets up an environment with all dependencies needed to run the LightZero library. This Docker image is based on Ubuntu 20.04 and installs Python 3.8, along with other necessary tools and libraries.
+Here's how to use our Dockerfile to build a Docker image, run a container from this image, and execute LightZero code inside the container.
+1. **Download the Dockerfile**: The Dockerfile is located in the root directory of the LightZero repository. Download this [file](https://github.com/opendilab/LightZero/blob/main/Dockerfile) to your local machine.
+2. **Prepare the build context**: Create a new empty directory on your local machine, move the Dockerfile into this directory, and navigate into this directory. This step helps to avoid sending unnecessary files to the Docker daemon during the build process.
+    ```bash
+    mkdir lightzero-docker
+    mv Dockerfile lightzero-docker/
+    cd lightzero-docker/
+    ```
+3. **Build the Docker image**: Use the following command to build the Docker image. This command should be run from inside the directory that contains the Dockerfile.
+    ```bash
+    docker build -t ubuntu-py38-lz:latest -f ./Dockerfile .
+    ```
+4. **Run a container from the image**: Use the following command to start a container from the image in interactive mode with a Bash shell.
+    ```bash
+    docker run -dit --rm ubuntu-py38-lz:latest /bin/bash
+    ```
+5. **Execute LightZero code inside the container**: Once you're inside the container, you can run the example Python script with the following command:
+    ```bash
+    python ./LightZero/zoo/classic_control/cartpole/config/cartpole_muzero_config.py
+    ```
 
 [comment]: <> (- [AlphaGo Zero]&#40;https://www.nature.com/articles/nature24270&#41; )
 
@@ -241,6 +271,7 @@ The following are the detailed paper notes (in Chinese) of the above algorithms:
 - [EfficientZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/EfficientZero.pdf)
 - [SampledMuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/SampledMuZero.pdf)
 - [GumbelMuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/GumbelMuZero.pdf)
+- [StochasticMuZero](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/StochasticMuZero.pdf)
 - [NotationTable](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/SymbolTable.pdf)
 
 </details>
@@ -426,11 +457,12 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 ## Citation
 ```latex
 @misc{lightzero,
-    title={{LightZero: OpenDILab} A lightweight and efficient toolkit designed for the MCTS, AlphaZero, and MuZero family of algorithms.},
-    author={LightZero Contributors},
-    publisher = {GitHub},
-    howpublished = {\url{https://github.com/opendilab/LightZero}},
-    year={2023},
+      title={LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios},
+      author={Yazhe Niu and Yuan Pu and Zhenjie Yang and Xueyan Li and Tong Zhou and Jiyuan Ren and Shuai Hu and Hongsheng Li and Yu Liu},
+      year={2023},
+      eprint={2310.08348},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
 }
 ```
 
@@ -444,7 +476,7 @@ This repo is partially based on the following repo, many thanks to their pioneer
 - https://github.com/deepmind/mctx
 
 Special thanks to [@PaParaZz1](https://github.com/PaParaZz1), [@karroyan](https://github.com/karroyan), [@nighood](https://github.com/nighood), 
-[@jayyoung0802](https://github.com/jayyoung0802), [@timothijoe](https://github.com/timothijoe), [@TuTuHuss](https://github.com/TuTuHuss), [@puyuan1996](https://github.com/puyuan1996), [@HansBug](https://github.com/HansBug) for their contributions and support.
+[@jayyoung0802](https://github.com/jayyoung0802), [@timothijoe](https://github.com/timothijoe), [@TuTuHuss](https://github.com/TuTuHuss), [@HarryXuancy](https://github.com/HarryXuancy), [@puyuan1996](https://github.com/puyuan1996), [@HansBug](https://github.com/HansBug) for their contributions and support.
 
 
 ## License

@@ -1,6 +1,9 @@
 # According to the model you want to evaluate, import the corresponding config.
-from lzero.entry import eval_muzero
 import numpy as np
+
+from lzero.entry import eval_muzero
+from zoo.game_2048.config.muzero_2048_config import main_config, create_config
+from zoo.game_2048.config.stochastic_muzero_2048_config import main_config, create_config
 
 if __name__ == "__main__":
     """ 
@@ -8,23 +11,24 @@ if __name__ == "__main__":
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
     """
-    # Take the config of sampled efficientzero as an example
-    from atari_sampled_efficientzero_config import main_config, create_config
 
-    model_path = "/path/ckpt/ckpt_best.pth.tar"
+    model_path = "./ckpt/ckpt_best.pth.tar"
 
     returns_mean_seeds = []
     returns_seeds = []
     seeds = [0]
     num_episodes_each_seed = 1
     total_test_episodes = num_episodes_each_seed * len(seeds)
-    create_config.env_manager.type = 'base' # Visualization requires the 'type' to be set as base
+    create_config.env_manager.type = 'base'  # Visualization requires the 'type' to be set as base
     main_config.env.evaluator_env_num = 1   # Visualization requires the 'env_num' to be set as 1
     main_config.env.n_evaluator_episode = total_test_episodes
-    main_config.env.render_mode_human = True # Whether to enable real-time rendering
-    main_config.env.save_video = True # Whether to save the video, if save the video render_mode_human must to be True
-    main_config.env.save_path = './'
-    main_config.env.eval_max_episode_steps=int(1e3) # Adjust according to different environments
+    main_config.env.save_replay = True  # Whether to save the replay, if save the video render_mode_human must to be True
+    main_config.env.replay_format = 'gif'
+    main_config.env.replay_name_suffix = 'muzero_ns100_s0'
+    # main_config.env.replay_name_suffix = 'stochastic_muzero_ns100_s0'
+
+    main_config.env.replay_path = None
+    main_config.env.max_episode_steps = int(1e9)  # Adjust according to different environments
 
     for seed in seeds:
         returns_mean, returns = eval_muzero(

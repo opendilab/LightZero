@@ -41,11 +41,17 @@ class GameSegment:
         """
         self.action_space = action_space
         self.game_segment_length = game_segment_length
-        self.config = config
-
+        self.num_unroll_steps = config.num_unroll_steps
+        self.td_steps = config.td_steps
         self.frame_stack_num = config.model.frame_stack_num
         self.discount_factor = config.discount_factor
         self.action_space_size = config.model.action_space_size
+        self.gray_scale = config.gray_scale
+        self.transform2string = config.transform2string
+        self.sampled_algo = config.sampled_algo
+        self.gumbel_algo = config.gumbel_algo
+        self.use_ture_chance_label_in_chance_encoder = config.use_ture_chance_label_in_chance_encoder
+
         if isinstance(config.model.observation_shape, int) or len(config.model.observation_shape) == 1:
             # for vector obs input, e.g. classical control and box2d environments
             self.zero_obs_shape = config.model.observation_shape
@@ -71,8 +77,11 @@ class GameSegment:
 
         self.improved_policy_probs = []
 
-        if self.config.sampled_algo:
+        if self.sampled_algo:
             self.root_sampled_actions = []
+        if self.use_ture_chance_label_in_chance_encoder:
+            self.chance_segment = []
+
 
     def get_unroll_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
         """
@@ -89,8 +98,8 @@ class GameSegment:
             if pad_len > 0:
                 pad_frames = np.array([stacked_obs[-1] for _ in range(pad_len)])
                 stacked_obs = np.concatenate((stacked_obs, pad_frames))
-        if self.config.transform2string:
-            stacked_obs = [jpeg_data_decompressor(obs, self.config.gray_scale) for obs in stacked_obs]
+        if self.transform2string:
+            stacked_obs = [jpeg_data_decompressor(obs, self.gray_scale) for obs in stacked_obs]
         return stacked_obs
 
     def zero_obs(self) -> List:
@@ -114,12 +123,10 @@ class GameSegment:
         assert timestep_obs == timestep_reward, "timestep_obs: {}, timestep_reward: {}".format(
             timestep_obs, timestep_reward
         )
-        # TODO:
-        timestep = timestep_obs
         timestep = timestep_reward
         stacked_obs = self.obs_segment[timestep:timestep + self.frame_stack_num]
-        if self.config.transform2string:
-            stacked_obs = [jpeg_data_decompressor(obs, self.config.gray_scale) for obs in stacked_obs]
+        if self.transform2string:
+            stacked_obs = [jpeg_data_decompressor(obs, self.gray_scale) for obs in stacked_obs]
         return stacked_obs
 
     def append(
@@ -128,7 +135,8 @@ class GameSegment:
             obs: np.ndarray,
             reward: np.ndarray,
             action_mask: np.ndarray = None,
-            to_play: int = -1
+            to_play: int = -1,
+            chance: int = 0,
     ) -> None:
         """
         Overview:
@@ -140,10 +148,12 @@ class GameSegment:
 
         self.action_mask_segment.append(action_mask)
         self.to_play_segment.append(to_play)
+        if self.use_ture_chance_label_in_chance_encoder:
+            self.chance_segment.append(chance)
 
     def pad_over(
             self, next_segment_observations: List, next_segment_rewards: List, next_segment_root_values: List,
-            next_segment_child_visits: List, next_segment_improved_policy: List = None
+            next_segment_child_visits: List, next_segment_improved_policy: List = None, next_chances: List = None,
     ) -> None:
         """
         Overview:
@@ -158,15 +168,15 @@ class GameSegment:
             - next_segment_child_visits (:obj:`list`): root visit count distributions of MCTS from the next game_segment
             - next_segment_improved_policy (:obj:`list`): root children select policy of MCTS from the next game_segment (Only used in Gumbel MuZero)
         """
-        assert len(next_segment_observations) <= self.config.num_unroll_steps
-        assert len(next_segment_child_visits) <= self.config.num_unroll_steps
-        assert len(next_segment_root_values) <= self.config.num_unroll_steps + self.config.td_steps
-        assert len(next_segment_rewards) <= self.config.num_unroll_steps + self.config.td_steps - 1
+        assert len(next_segment_observations) <= self.num_unroll_steps
+        assert len(next_segment_child_visits) <= self.num_unroll_steps
+        assert len(next_segment_root_values) <= self.num_unroll_steps + self.num_unroll_steps
+        assert len(next_segment_rewards) <= self.num_unroll_steps + self.num_unroll_steps - 1
         # ==============================================================
         # The core difference between GumbelMuZero and MuZero
         # ==============================================================
-        if self.config.gumbel_algo:
-            assert len(next_segment_improved_policy) <= self.config.num_unroll_steps + self.config.td_steps
+        if self.gumbel_algo:
+            assert len(next_segment_improved_policy) <= self.num_unroll_steps + self.num_unroll_steps
 
         # NOTE: next block observation should start from (stacked_observation - 1) in next trajectory
         for observation in next_segment_observations:
@@ -181,9 +191,12 @@ class GameSegment:
         for child_visits in next_segment_child_visits:
             self.child_visit_segment.append(child_visits)
         
-        if self.config.gumbel_algo:
+        if self.gumbel_algo:
             for improved_policy in next_segment_improved_policy:
                 self.improved_policy_probs.append(improved_policy)
+        if self.use_ture_chance_label_in_chance_encoder:
+            for chances in next_chances:
+                self.chance_segment.append(chances)
 
     def get_targets(self, timestep: int) -> Tuple:
         """
@@ -203,10 +216,10 @@ class GameSegment:
         if idx is None:
             self.child_visit_segment.append([visit_count / sum_visits for visit_count in visit_counts])
             self.root_value_segment.append(root_value)
-            if self.config.sampled_algo:
+            if self.sampled_algo:
                 self.root_sampled_actions.append(root_sampled_actions)
             # store the improved policy in Gumbel Muzero: \pi'=softmax(logits + \sigma(CompletedQ))
-            if self.config.gumbel_algo:
+            if self.gumbel_algo:
                 self.improved_policy_probs.append(improved_policy)
         else:
             self.child_visit_segment[idx] = [visit_count / sum_visits for visit_count in visit_counts]
@@ -247,12 +260,22 @@ class GameSegment:
         self.action_segment = np.array(self.action_segment)
         self.reward_segment = np.array(self.reward_segment)
 
-        self.child_visit_segment = np.array(self.child_visit_segment)
+        # Check if all elements in self.child_visit_segment have the same length
+        if all(len(x) == len(self.child_visit_segment[0]) for x in self.child_visit_segment):
+            self.child_visit_segment = np.array(self.child_visit_segment)
+        else:
+            # In the case of environments with a variable action space, such as board games,
+            # the elements in child_visit_segment may have different lengths.
+            # In such scenarios, it is necessary to use the object data type.
+            self.child_visit_segment = np.array(self.child_visit_segment, dtype=object)
+
         self.root_value_segment = np.array(self.root_value_segment)
         self.improved_policy_probs = np.array(self.improved_policy_probs)
 
         self.action_mask_segment = np.array(self.action_mask_segment)
         self.to_play_segment = np.array(self.to_play_segment)
+        if self.use_ture_chance_label_in_chance_encoder:
+            self.chance_segment = np.array(self.chance_segment)
 
     def reset(self, init_observations: np.ndarray) -> None:
         """
@@ -271,6 +294,8 @@ class GameSegment:
 
         self.action_mask_segment = []
         self.to_play_segment = []
+        if self.use_ture_chance_label_in_chance_encoder:
+            self.chance_segment = []
 
         assert len(init_observations) == self.frame_stack_num
 

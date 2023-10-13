@@ -79,8 +79,8 @@ def eval_alphazero(
         # ==============================================================
         returns = []
         for i in range(num_episodes_each_seed):
-            stop, reward = evaluator.eval()
-            returns.append(reward[0]['eval_episode_return'])
+            stop_flag, episode_info = evaluator.eval()
+            returns.append(episode_info['eval_episode_return'])
 
         returns = np.array(returns)
 
