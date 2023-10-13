@@ -193,13 +193,14 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 
 <details open><summary>点击折叠</summary>
 
-- [AlphaZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/alphazero.py) 和 [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) 在两个棋类游戏（[TicTacToe (井字棋)](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/tictactoe/envs/tictactoe_env.py) 和 [Gomoku (五子棋)](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py)）上的基线结果：
+- [AlphaZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/alphazero.py) 和 [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) 在3个棋类游戏（[TicTacToe (井字棋)](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/tictactoe/envs/tictactoe_env.py)，[Connect4](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/connect4/envs/connect4_env.py) 和 [Gomoku (五子棋)](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py)）上的基线结果：
 <p align="center">
   <img src="assets/benchmark/main/tictactoe_bot-mode_main.png" alt="tictactoe_bot-mode_main" width="30%" height="auto" style="margin: 0 1%;">
+  <img src="assets/benchmark/main/connect4_bot-mode_main.png" alt="connect4_bot-mode_main" width="30%" height="auto" style="margin: 0 1%;">
   <img src="assets/benchmark/main/gomoku_bot-mode_main.png" alt="gomoku_bot-mode_main" width="30%" height="auto" style="margin: 0 1%;">
 </p>
 
-- [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py), [MuZero w/ SSL](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py),[EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/efficientzero.py) 和 [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) 在3个代表性的 [Atari](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py) 离散动作空间环境上的基线结果：
+- [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py)，[MuZero w/ SSL](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py)，[EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/efficientzero.py) 和 [Sampled EfficientZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/sampled_efficientzero.py) 在3个代表性的 [Atari](https://github.com/opendilab/LightZero/blob/main/zoo/atari/envs/atari_lightzero_env.py) 离散动作空间环境上的基线结果：
 <p align="center">
   <img src="assets/benchmark/main/pong_main.png" alt="pong_main" width="23%" height="auto" style="margin: 0 1%;">
   <img src="assets/benchmark/main/qbert_main.png" alt="qbert_main" width="23%" height="auto" style="margin: 0 1%;">
