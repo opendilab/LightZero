@@ -35,6 +35,11 @@ class PettingZooEnv(BaseEnv):
         self._agent_specific_global_state = self._cfg.get('agent_specific_global_state', False)
         if self._act_scale:
             assert self._continuous_actions, 'Only continuous action space env needs act_scale'
+        
+        # joint action
+        import itertools
+        action_space = [0, 1, 2, 3, 4]
+        self.combinations = list(itertools.product(action_space, repeat=3))
 
     def reset(self) -> np.ndarray:
         if not self._init_flag:
@@ -166,8 +171,13 @@ class PettingZooEnv(BaseEnv):
         self._seed = seed
         self._dynamic_seed = dynamic_seed
         np.random.seed(self._seed)
+    
+    def convert_action(self, action):
+        action = self.combinations[action]
+        return action        
 
     def step(self, action: dict) -> BaseEnvTimestep:
+        action = self.convert_action(action)
         self._step_count += 1
         if isinstance(action, dict):
             action = np.array(list(action.values()))
@@ -283,17 +293,21 @@ class PettingZooEnv(BaseEnv):
         )
         # action_mask: All actions are of use(either 1 for discrete or 5 for continuous). Thus all 1.
         # action_mask = np.ones((self._num_agents, *self._action_dim)).astype(np.float32)
-        action_mask = [[1 for _ in range(*self._action_dim)] for _ in range(self._num_agents)]
-        to_play =  [-1 for _ in range(self._num_agents)]  # Moot, for alignment with other environments
+        # action_mask = [[1 for _ in range(*self._action_dim)] for _ in range(self._num_agents)]
+        joint_action_mask = [1 for _ in range(5*5*5)]
+        to_play = [-1]  # Moot, for alignment with other environments
 
-        ret_transform = []
-        for i in range(self._num_agents):
-            tmp = {}
-            for k,v in ret.items():
-                tmp[k] = v[i]
-            tmp['action_mask'] = [1 for _ in range(*self._action_dim)]
-            ret_transform.append(tmp)
-        return {'observation': ret_transform, 'action_mask': action_mask, 'to_play': to_play}
+        # ret_transform = []
+        # for i in range(self._num_agents):
+        #     tmp = {}
+        #     for k,v in ret.items():
+        #         if k == 'global_state':
+        #             tmp[k] = v
+        #         else:
+        #             tmp[k] = v[i]
+        #     # tmp['action_mask'] = [1 for _ in range(*self._action_dim)]
+        #     ret_transform.append(tmp)
+        return {'observation': ret, 'action_mask': joint_action_mask, 'to_play': to_play}
 
     def _process_action(self, action: 'torch.Tensor') -> Dict[str, np.ndarray]:  # noqa
         dict_action = {}

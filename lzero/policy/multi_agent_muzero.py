@@ -63,13 +63,15 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
         self.collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = len(data)
-        data = sum(sum(data, []), [])
+        # data = sum(sum(data, []), [])
+        data = sum(data, [])
         batch_size = len(data)
         data = default_collate(data)
         data = to_device(data, self._device)
         agent_num = self._cfg['model']['agent_num']
-        action_mask = sum(action_mask, [])
+        # action_mask = sum(action_mask, [])
         to_play = np.array(to_play).reshape(-1).tolist()
+        # batch_size = batch_size//agent_num # team
 
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
@@ -78,6 +80,13 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
+            policy_logits = policy_logits.reshape(batch_size, agent_num, -1)
+            # joint action
+            prob_1 = policy_logits[:, 0, :].unsqueeze(1).unsqueeze(2)
+            prob_2 = policy_logits[:, 1, :].unsqueeze(1).unsqueeze(3)
+            prob_3 = policy_logits[:, 2, :].unsqueeze(2).unsqueeze(3)
+            joint_prob = prob_1 * prob_2 * prob_3 # boardcast
+            policy_logits = joint_prob.reshape(8, -1)
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
@@ -125,12 +134,21 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
                     )
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                output[i // agent_num]['action'].append(action)
-                output[i // agent_num]['distributions'].append(distributions)
-                output[i // agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
-                output[i // agent_num]['value'].append(value)
-                output[i // agent_num]['pred_value'].append(pred_values[i])
-                output[i // agent_num]['policy_logits'].append(policy_logits[i])
+                # output[i]['action'].append(action)
+                # output[i]['distributions'].append(distributions)
+                # output[i]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
+                # output[i]['value'].append(value)
+                # output[i]['pred_value'].append(pred_values[i])
+                # output[i]['policy_logits'].append(policy_logits[i])
+
+                output[i] = {
+                    'action': action,
+                    'distributions': distributions,
+                    'visit_count_distribution_entropy': visit_count_distribution_entropy,
+                    'value': value,
+                    'pred_value': pred_values[i],
+                    'policy_logits': policy_logits[i],
+                }
 
         return output
 
@@ -158,12 +176,12 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
         """
         self._eval_model.eval()
         active_eval_env_num = len(data)
-        data = sum(sum(data, []), [])
+        data = sum(data, [])
         batch_size = len(data)
         data = default_collate(data)
         data = to_device(data, self._device)
         agent_num = self._cfg['model']['agent_num']
-        action_mask = sum(action_mask, [])
+        # action_mask = sum(action_mask, [])
         to_play = np.array(to_play).reshape(-1).tolist()
 
         with torch.no_grad():
@@ -175,7 +193,15 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
                 # if not in training, obtain the scalars of the value/reward
                 pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
                 latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
+                # policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
+                policy_logits = policy_logits.reshape(batch_size, agent_num, -1)
+            # joint action
+            prob_1 = policy_logits[:, 0, :].unsqueeze(1).unsqueeze(2)
+            prob_2 = policy_logits[:, 1, :].unsqueeze(1).unsqueeze(3)
+            prob_3 = policy_logits[:, 2, :].unsqueeze(2).unsqueeze(3)
+            joint_prob = prob_1 * prob_2 * prob_3 # boardcast
+            policy_logits = joint_prob.reshape(8, -1)
+            policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
             if self._cfg.mcts_ctree:
@@ -209,11 +235,259 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                output[i // agent_num]['action'].append(action)
-                output[i // agent_num]['distributions'].append(distributions)
-                output[i // agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
-                output[i // agent_num]['value'].append(value)
-                output[i // agent_num]['pred_value'].append(pred_values[i])
-                output[i // agent_num]['policy_logits'].append(policy_logits[i])
+                # output[i // agent_num]['action'].append(action)
+                # output[i // agent_num]['distributions'].append(distributions)
+                # output[i // agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
+                # output[i // agent_num]['value'].append(value)
+                # output[i // agent_num]['pred_value'].append(pred_values[i])
+                # output[i // agent_num]['policy_logits'].append(policy_logits[i])
+
+                output[i] = {
+                    'action': action,
+                    'distributions': distributions,
+                    'visit_count_distribution_entropy': visit_count_distribution_entropy,
+                    'value': value,
+                    'pred_value': pred_values[i],
+                    'policy_logits': policy_logits[i],
+                }
 
         return output
+
+    def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
+        """
+        Overview:
+            The forward function for learning policy in learn mode, which is the core of the learning process.
+            The data is sampled from replay buffer.
+            The loss is calculated by the loss function and the loss is backpropagated to update the model.
+        Arguments:
+            - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
+                The first tensor is the current_batch, the second tensor is the target_batch.
+        Returns:
+            - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
+                current learning loss and learning statistics.
+        """
+        self._learn_model.train()
+        self._target_model.train()
+
+        current_batch, target_batch = data
+        obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
+        target_reward, target_value, target_policy = target_batch
+
+        obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+
+        # do augmentations
+        if self._cfg.use_augmentation:
+            obs_batch = self.image_transforms.transform(obs_batch)
+            if self._cfg.model.self_supervised_learning_loss:
+                obs_target_batch = self.image_transforms.transform(obs_target_batch)
+
+        # shape: (batch_size, num_unroll_steps, action_dim)
+        # NOTE: .long(), in discrete action space.
+        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
+        data_list = [
+            mask_batch,
+            target_reward.astype('float32'),
+            target_value.astype('float32'), target_policy, weights
+        ]
+        [mask_batch, target_reward, target_value, target_policy,
+         weights] = to_torch_float_tensor(data_list, self._cfg.device)
+
+        target_reward = target_reward.view(self._cfg.batch_size, -1)
+        target_value = target_value.view(self._cfg.batch_size, -1)
+
+        assert self._cfg.batch_size == target_reward.size(0)
+
+        # ``scalar_transform`` to transform the original value to the scaled value,
+        # i.e. h(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
+        transformed_target_reward = scalar_transform(target_reward)
+        transformed_target_value = scalar_transform(target_value)
+
+        # transform a scalar to its categorical_distribution. After this transformation, each scalar is
+        # represented as the linear combination of its two adjacent supports.
+        target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
+        target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+
+        # ==============================================================
+        # the core initial_inference in MuZero policy.
+        # ==============================================================
+        network_output = self._learn_model.initial_inference(obs_batch)
+
+        # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
+        latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
+
+        #
+        batch_size = latent_state.shape[0]
+        policy_logits = policy_logits.reshape(batch_size, self._cfg.model.agent_num, -1)
+        prob_1 = policy_logits[:, 0, :].unsqueeze(1).unsqueeze(2)
+        prob_2 = policy_logits[:, 1, :].unsqueeze(1).unsqueeze(3)
+        prob_3 = policy_logits[:, 2, :].unsqueeze(2).unsqueeze(3)
+        joint_prob = prob_1 * prob_2 * prob_3 # boardcast
+        policy_logits = joint_prob.reshape(batch_size, -1)
+
+        # transform the scaled value or its categorical representation to its original value,
+        # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
+        original_value = self.inverse_scalar_transform_handle(value)
+
+        # Note: The following lines are just for debugging.
+        predicted_rewards = []
+        if self._cfg.monitor_extra_statistics:
+            latent_state_list = latent_state.detach().cpu().numpy()
+            predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
+                policy_logits, dim=1
+            ).detach().cpu()
+
+        # calculate the new priorities for each transition.
+        value_priority = L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0])
+        value_priority = value_priority.data.cpu().numpy() + 1e-6
+
+        # ==============================================================
+        # calculate policy and value loss for the first step.
+        # ==============================================================
+        policy_loss = cross_entropy_loss(policy_logits, target_policy[:, 0])
+        value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
+
+        reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+        consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+
+        gradient_scale = 1 / self._cfg.num_unroll_steps
+
+        # ==============================================================
+        # the core recurrent_inference in MuZero policy.
+        # ==============================================================
+        for step_i in range(self._cfg.num_unroll_steps):
+            # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
+            # given current ``latent_state`` and ``action``.
+            # And then predict policy_logits and value with the prediction function.
+            network_output = self._learn_model.recurrent_inference(latent_state, action_batch[:, step_i])
+            latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
+
+            batch_size = latent_state.shape[0]
+            policy_logits = policy_logits.reshape(batch_size, self._cfg.model.agent_num, -1)
+            prob_1 = policy_logits[:, 0, :].unsqueeze(1).unsqueeze(2)
+            prob_2 = policy_logits[:, 1, :].unsqueeze(1).unsqueeze(3)
+            prob_3 = policy_logits[:, 2, :].unsqueeze(2).unsqueeze(3)
+            joint_prob = prob_1 * prob_2 * prob_3 # boardcast
+            policy_logits = joint_prob.reshape(batch_size, -1)
+
+            # transform the scaled value or its categorical representation to its original value,
+            # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
+            original_value = self.inverse_scalar_transform_handle(value)
+
+            if self._cfg.model.self_supervised_learning_loss:
+                # ==============================================================
+                # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
+                # ==============================================================
+                if self._cfg.ssl_loss_weight > 0:
+                    # obtain the oracle hidden states from representation function.
+                    if self._cfg.model.model_type == 'conv':
+                        beg_index = self._cfg.model.image_channel * step_i
+                        end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
+                        network_output = self._learn_model.initial_inference(
+                            obs_target_batch[:, beg_index:end_index, :, :]
+                        )
+                    elif self._cfg.model.model_type == 'mlp':
+                        beg_index = self._cfg.model.observation_shape * step_i
+                        end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
+                        network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
+                    elif self._cfg.model.model_type == 'structure':
+                        obs_target_batch_new = {}
+                        for k, v in obs_target_batch.items():
+                            if k == 'action_mask': 
+                                obs_target_batch_new[k] = v
+                                continue
+                            observation_shape = v.shape[1]//self._cfg.num_unroll_steps
+                            beg_index = observation_shape * step_i
+                            end_index = observation_shape * (step_i + self._cfg.model.frame_stack_num)
+                            obs_target_batch_new[k] = v[:, beg_index:end_index]
+                        network_output = self._learn_model.initial_inference(obs_target_batch_new)
+
+                    latent_state = to_tensor(latent_state)
+                    representation_state = to_tensor(network_output.latent_state)
+
+                    # NOTE: no grad for the representation_state branch
+                    dynamic_proj = self._learn_model.project(latent_state, with_grad=True)
+                    observation_proj = self._learn_model.project(representation_state, with_grad=False)
+                    temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_i]
+                    consistency_loss += temp_loss
+
+            # NOTE: the target policy, target_value_categorical, target_reward_categorical is calculated in
+            # game buffer now.
+            # ==============================================================
+            # calculate policy loss for the next ``num_unroll_steps`` unroll steps.
+            # NOTE: the +=.
+            # ==============================================================
+            policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_i + 1])
+
+            value_loss += cross_entropy_loss(value, target_value_categorical[:, step_i + 1])
+            reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_i])
+
+            # Follow MuZero, set half gradient
+            # latent_state.register_hook(lambda grad: grad * 0.5)
+
+            if self._cfg.monitor_extra_statistics:
+                original_rewards = self.inverse_scalar_transform_handle(reward)
+                original_rewards_cpu = original_rewards.detach().cpu()
+
+                predicted_values = torch.cat(
+                    (predicted_values, self.inverse_scalar_transform_handle(value).detach().cpu())
+                )
+                predicted_rewards.append(original_rewards_cpu)
+                predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
+                latent_state_list = np.concatenate((latent_state_list, latent_state.detach().cpu().numpy()))
+
+        # ==============================================================
+        # the core learn model update step.
+        # ==============================================================
+        # weighted loss with masks (some invalid states which are out of trajectory.)
+        loss = (
+            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
+        )
+        weighted_total_loss = (weights * loss).mean()
+
+        gradient_scale = 1 / self._cfg.num_unroll_steps
+        weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
+        self._optimizer.zero_grad()
+        weighted_total_loss.backward()
+        if self._cfg.multi_gpu:
+            self.sync_gradients(self._learn_model)
+        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
+            self._learn_model.parameters(), self._cfg.grad_clip_value
+        )
+        self._optimizer.step()
+        if self._cfg.lr_piecewise_constant_decay:
+            self.lr_scheduler.step()
+
+        # ==============================================================
+        # the core target model update step.
+        # ==============================================================
+        self._target_model.update(self._learn_model.state_dict())
+
+        if self._cfg.monitor_extra_statistics:
+            predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
+            predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
+
+        return {
+            'collect_mcts_temperature': self.collect_mcts_temperature,
+            'collect_epsilon': self.collect_epsilon,
+            'cur_lr': self._optimizer.param_groups[0]['lr'],
+            'weighted_total_loss': weighted_total_loss.item(),
+            'total_loss': loss.mean().item(),
+            'policy_loss': policy_loss.mean().item(),
+            'reward_loss': reward_loss.mean().item(),
+            'value_loss': value_loss.mean().item(),
+            'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
+
+            # ==============================================================
+            # priority related
+            # ==============================================================
+            'value_priority_orig': value_priority,
+            'value_priority': value_priority.mean().item(),
+            'target_reward': target_reward.detach().cpu().numpy().mean().item(),
+            'target_value': target_value.detach().cpu().numpy().mean().item(),
+            'transformed_target_reward': transformed_target_reward.detach().cpu().numpy().mean().item(),
+            'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
+            'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
+            'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
+            'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
+        }

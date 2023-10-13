@@ -16,7 +16,7 @@ batch_size = 256
 num_simulations = 50
 update_per_collect = 1000
 reanalyze_ratio = 0.
-action_space_size = 5
+action_space_size = 5*5*5
 eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -32,7 +32,7 @@ main_config = dict(
         n_landmark=n_landmark,
         max_cycles=25,
         agent_obs_only=False,
-        agent_specific_global_state=True,
+        agent_specific_global_state=False,
         continuous_actions=False,
         stop_value=0,
         collector_env_num=collector_env_num,

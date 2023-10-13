@@ -18,7 +18,7 @@ from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.entry.utils import random_collect
-from zoo.petting_zoo.model import PettingZooEncoder
+from zoo.petting_zoo.model import PettingZooEncoder, PettingZooPrediction, PettingZooDynamics
 
 def train_muzero(
         input_cfg: Tuple[dict, dict],
@@ -76,7 +76,7 @@ def train_muzero(
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
 
-    model = Encoder(**cfg.policy.model, state_encoder=PettingZooEncoder())
+    model = Encoder(**cfg.policy.model, state_encoder=PettingZooEncoder(), state_prediction=PettingZooPrediction(), state_dynamics=PettingZooDynamics())
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
@@ -156,6 +156,7 @@ def train_muzero(
             collect_kwargs['epsilon'] = 0.0
 
         # Evaluate policy performance.
+        stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
