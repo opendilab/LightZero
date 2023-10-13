@@ -15,7 +15,6 @@
 [![Code Test](https://github.com/opendilab/LightZero/workflows/Code%20Test/badge.svg)](https://github.com/opendilab/LightZero/actions?query=workflow%3A%22Code+Test%22)
 [![Badge Creation](https://github.com/opendilab/LightZero/workflows/Badge%20Creation/badge.svg)](https://github.com/opendilab/LightZero/actions?query=workflow%3A%22Badge+Creation%22)
 [![Package Release](https://github.com/opendilab/LightZero/workflows/Package%20Release/badge.svg)](https://github.com/opendilab/LightZero/actions?query=workflow%3A%22Package+Release%22)
-[![codecov](https://codecov.io/gh/opendilab/LightZero/branch/main/graph/badge.svg?token=XJVDP4EFAT)](https://codecov.io/gh/opendilab/LightZero)
 
 ![GitHub Org's stars](https://img.shields.io/github/stars/opendilab)
 [![GitHub stars](https://img.shields.io/github/stars/opendilab/LightZero)](https://github.com/opendilab/LightZero/stargazers)
@@ -30,7 +29,7 @@ Updated on 2023.09.21 LightZero-v0.0.2
 
 > LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库。
 
-[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文
+[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [论文链接](https://arxiv.org/pdf/2310.08348.pdf)
 
 ## 背景
 
@@ -452,11 +451,12 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 
 ```latex
 @misc{lightzero,
-    title={{LightZero: OpenDILab} A lightweight and efficient toolkit designed for the MCTS, AlphaZero, and MuZero family of algorithms.},
-    author={LightZero Contributors},
-    publisher = {GitHub},
-    howpublished = {\url{https://github.com/opendilab/LightZero}},
-    year={2023},
+      title={LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios},
+      author={Yazhe Niu and Yuan Pu and Zhenjie Yang and Xueyan Li and Tong Zhou and Jiyuan Ren and Shuai Hu and Hongsheng Li and Yu Liu},
+      year={2023},
+      eprint={2310.08348},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
 }
 ```
 
