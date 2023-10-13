@@ -22,6 +22,7 @@ class TestConnect4RuleBot():
         cfg = EasyDict(
             battle_mode='self_play_mode',
             mcts_mode='self_play_mode',
+            render_mode='state_realtime_mode',
             channel_last=False,
             scale=True,
             agent_vs_human=False,
@@ -30,7 +31,7 @@ class TestConnect4RuleBot():
             bot_action_type='rule',
             screen_scaling=9,
             save_replay=False,
-            prob_random_action_in_bot = 0
+            prob_random_action_in_bot=0
         )
         self.env = Connect4Env(cfg)
         self.player = 1

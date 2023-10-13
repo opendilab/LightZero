@@ -10,7 +10,7 @@ class TestConnect4Env:
     def test_self_play_mode(self) -> None:
         cfg = EasyDict(
             battle_mode='self_play_mode',
-            mcts_mode='self_play_mode',
+            bot_action_type='rule',  # {'rule', 'mcts'}
             channel_last=False,
             scale=True,
             screen_scaling=9,
@@ -19,7 +19,6 @@ class TestConnect4Env:
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
-            bot_action_type='rule',  # {'rule', 'mcts'}
         )
         env = Connect4Env(cfg)
         env.reset()
@@ -27,8 +26,8 @@ class TestConnect4Env:
         while True:
             """player 1"""
             # action = env.human_to_action()
-            # action = env.bot_action()
-            action = env.random_action()
+            action = env.bot_action()
+            # action = env.random_action()
 
             # test legal_actions
             # legal_actions = env.legal_actions
@@ -61,7 +60,7 @@ class TestConnect4Env:
     def test_play_with_bot_mode(self) -> None:
         cfg = EasyDict(
             battle_mode='play_with_bot_mode',
-            mcts_mode='play_with_bot_mode',
+            bot_action_type='rule',  # {'rule', 'mcts'}
             channel_last=False,
             scale=True,
             screen_scaling=9,
@@ -70,15 +69,15 @@ class TestConnect4Env:
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
-            bot_action_type='rule',  # {'rule', 'mcts'}
         )
         env = Connect4Env(cfg)
         env.reset()
         print('init board state: ')
         while True:
             """player 1"""
-            action = env.human_to_action()
-            # action = env.bot_action()
+            # action = env.human_to_action()
+            action = env.bot_action()
+            # action = env.random_action()
 
             # test legal_actions
             # legal_actions = env.legal_actions
@@ -100,17 +99,15 @@ class TestConnect4Env:
     def test_eval_mode(self) -> None:
         cfg = EasyDict(
             battle_mode='eval_mode',
-            mcts_mode='play_with_bot_mode',
+            bot_action_type='rule',  # {'rule', 'mcts'}
             channel_last=False,
             scale=True,
             screen_scaling=9,
             prob_random_action_in_bot=0.,
-            render_mode='image_savefile_mode',
-            agent_vs_human=True,
+            render_mode='state_realtime_mode',
+            agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
-            bot_action_type='mcts',
-
         )
         env = Connect4Env(cfg)
         env.reset(replay_name_suffix=f'test_eval_mode')
@@ -119,6 +116,7 @@ class TestConnect4Env:
             """player 1"""
             # action = env.human_to_action()
             action = env.bot_action()
+            # action = env.random_action()
 
             # test legal_actions
             # legal_actions = env.legal_actions

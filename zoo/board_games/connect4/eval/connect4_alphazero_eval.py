@@ -10,11 +10,12 @@ if __name__ == '__main__':
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
     """
     model_path = None
-    seeds = [0, 1, 2, 3, 4]
+    seeds = [0]
     num_episodes_each_seed = 1
     # If True, you can play with the agent.
     main_config.env.agent_vs_human = False
-    main_config.env.render_mode = 'image_savefile_mode'
+    # main_config.env.render_mode = 'image_savefile_mode'
+    main_config.env.render_mode = 'state_realtime_mode'
     main_config.policy.mcts.num_simulations = 10
     main_config.env.prob_random_action_in_bot = 0.
     main_config.env.bot_action_type = 'rule'
