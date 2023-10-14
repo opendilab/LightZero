@@ -16,7 +16,7 @@ from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
     prepare_obs
-
+from ding.utils.data import default_collate
 
 @POLICY_REGISTRY.register('muzero')
 class MuZeroPolicy(Policy):
@@ -298,7 +298,7 @@ class MuZeroPolicy(Policy):
         target_reward = target_reward.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
 
-        assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
+        # assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
         # ``scalar_transform`` to transform the original value to the scaled value,
         # i.e. h(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -505,7 +505,13 @@ class MuZeroPolicy(Policy):
         self._collect_model.eval()
         self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
-        active_collect_env_num = data.shape[0]
+        active_collect_env_num = len(data)
+        # 
+        data = sum(data, [])
+        data = default_collate(data)
+        # data = to_device(data, self._device)
+        to_play = np.array(to_play).reshape(-1).tolist()
+
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
@@ -629,7 +635,12 @@ class MuZeroPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._eval_model.eval()
-        active_eval_env_num = data.shape[0]
+        active_eval_env_num = len(data)
+        #
+        data = sum(data, [])
+        data = default_collate(data)
+        # data = to_device(data, self._device)
+        to_play = np.array(to_play).reshape(-1).tolist()
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)

@@ -9,6 +9,8 @@ import torch.nn as nn
 from easydict import EasyDict
 from scipy.stats import entropy
 from torch.nn import functional as F
+from ding.torch_utils import to_device, to_tensor
+from ding.utils.data import default_collate
 
 
 def visualize_avg_softmax(logits):
@@ -316,6 +318,18 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
             # ``obs_target_batch`` is only used for calculate consistency loss, which take the all obs other than
             # timestep t1, and is only performed in the last 8 timesteps in the second dim in ``obs_batch_ori``.
             obs_target_batch = obs_batch_ori[:, cfg.model.observation_shape:]
+    
+    elif cfg.model.model_type == 'structure':
+        obs_batch = obs_batch_ori[:, 0:cfg.model.frame_stack_num]
+        if cfg.model.self_supervised_learning_loss:
+            obs_target_batch = obs_batch_ori[:, cfg.model.frame_stack_num:]
+        else:
+            obs_target_batch = None
+        # obs_batch
+        obs_batch = obs_batch.tolist()
+        obs_batch = sum(obs_batch, [])
+        obs_batch = default_collate(obs_batch)
+        obs_batch = to_device(obs_batch, device=cfg.device)
 
     return obs_batch, obs_target_batch
 

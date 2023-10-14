@@ -7,6 +7,7 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 
 from .common import MZNetworkOutput, RepresentationNetworkMLP, PredictionNetworkMLP
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
+from ding.utils.default_helper import get_shape0
 
 
 @MODEL_REGISTRY.register('MuZeroModelMLP')
@@ -34,6 +35,9 @@ class MuZeroModelMLP(nn.Module):
         discrete_action_encoding_type: str = 'one_hot',
         norm_type: Optional[str] = 'BN',
         res_connection_in_dynamics: bool = False,
+        state_encoder=None,
+        state_prediction=None,
+        state_dynamics=None,
         *args,
         **kwargs
     ):
@@ -101,30 +105,39 @@ class MuZeroModelMLP(nn.Module):
         self.state_norm = state_norm
         self.res_connection_in_dynamics = res_connection_in_dynamics
 
-        self.representation_network = RepresentationNetworkMLP(
-            observation_shape=observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
-        )
+        if state_encoder == None:
+            self.representation_network = RepresentationNetworkMLP(
+                observation_shape=observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
+            )
+        else:
+            self.representation_network = state_encoder
 
-        self.dynamics_network = DynamicsNetwork(
-            action_encoding_dim=self.action_encoding_dim,
-            num_channels=self.latent_state_dim + self.action_encoding_dim,
-            common_layer_num=2,
-            fc_reward_layers=fc_reward_layers,
-            output_support_size=self.reward_support_size,
-            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            norm_type=norm_type,
-            res_connection_in_dynamics=self.res_connection_in_dynamics,
-        )
+        if state_dynamics == None:
+            self.dynamics_network = DynamicsNetwork(
+                action_encoding_dim=self.action_encoding_dim,
+                num_channels=self.latent_state_dim + self.action_encoding_dim,
+                common_layer_num=2,
+                fc_reward_layers=fc_reward_layers,
+                output_support_size=self.reward_support_size,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                norm_type=norm_type,
+                res_connection_in_dynamics=self.res_connection_in_dynamics,
+            )
+        else:
+            self.dynamics_network = state_dynamics
 
-        self.prediction_network = PredictionNetworkMLP(
-            action_space_size=action_space_size,
-            num_channels=latent_state_dim,
-            fc_value_layers=fc_value_layers,
-            fc_policy_layers=fc_policy_layers,
-            output_support_size=self.value_support_size,
-            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            norm_type=norm_type
-        )
+        if state_prediction == None:
+            self.prediction_network = PredictionNetworkMLP(
+                action_space_size=action_space_size,
+                num_channels=latent_state_dim,
+                fc_value_layers=fc_value_layers,
+                fc_policy_layers=fc_policy_layers,
+                output_support_size=self.value_support_size,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                norm_type=norm_type
+            )
+        else:
+            self.prediction_network = state_prediction
 
         if self.self_supervised_learning_loss:
             # self_supervised_learning_loss related network proposed in EfficientZero
@@ -166,14 +179,14 @@ class MuZeroModelMLP(nn.Module):
             - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
             - latent_state (:obj:`torch.Tensor`): :math:`(B, H)`, where B is batch_size, H is the dimension of latent state.
         """
-        batch_size = obs.size(0)
+        batch_size = get_shape0(obs)
         latent_state = self._representation(obs)
         policy_logits, value = self._prediction(latent_state)
         return MZNetworkOutput(
             value,
             [0. for _ in range(batch_size)],
             policy_logits,
-            latent_state,
+            latent_state[1],
         )
 
     def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
@@ -201,7 +214,7 @@ class MuZeroModelMLP(nn.Module):
         """
         next_latent_state, reward = self._dynamics(latent_state, action)
         policy_logits, value = self._prediction(next_latent_state)
-        return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
+        return MZNetworkOutput(value, reward, policy_logits, next_latent_state[1])
 
     def _representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
         """
