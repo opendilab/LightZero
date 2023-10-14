@@ -319,7 +319,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 #### MuZero series
 - [2022 Online and Offline Reinforcement Learning by Planning with a Learned Model](https://arxiv.org/abs/2104.06294)
 - [2021 Vector Quantized Models for Planning](https://arxiv.org/abs/2106.04615)
-- [2022 Stochastic MuZero: Plannig in Stochastic Environments with A Learned Model](https://openreview.net/pdf?id=X6D9bAHhBQ1)
+- [2022 Stochastic MuZero: Planning in Stochastic Environments with A Learned Model](https://openreview.net/pdf?id=X6D9bAHhBQ1)
 - [2021 Muesli: Combining Improvements in Policy Optimization. ](https://arxiv.org/abs/2104.06159)
 #### MCTS Analysis
 - [2020 Monte-Carlo Tree Search as Regularized Policy Optimization](https://arxiv.org/abs/2007.12509)
