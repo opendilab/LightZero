@@ -17,6 +17,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
     prepare_obs
 from ding.utils.data import default_collate
+from ding.torch_utils import to_device, to_tensor
 
 @POLICY_REGISTRY.register('muzero')
 class MuZeroPolicy(Policy):
@@ -509,7 +510,7 @@ class MuZeroPolicy(Policy):
         # 
         data = sum(data, [])
         data = default_collate(data)
-        # data = to_device(data, self._device)
+        data = to_device(data, self._device)
         to_play = np.array(to_play).reshape(-1).tolist()
 
         with torch.no_grad():
@@ -639,7 +640,7 @@ class MuZeroPolicy(Policy):
         #
         data = sum(data, [])
         data = default_collate(data)
-        # data = to_device(data, self._device)
+        data = to_device(data, self._device)
         to_play = np.array(to_play).reshape(-1).tolist()
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
