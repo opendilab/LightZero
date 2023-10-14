@@ -80,13 +80,13 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
-            policy_logits = policy_logits.reshape(batch_size, agent_num, -1)
-            # joint action
-            prob_1 = policy_logits[:, 0, :].unsqueeze(1).unsqueeze(2)
-            prob_2 = policy_logits[:, 1, :].unsqueeze(1).unsqueeze(3)
-            prob_3 = policy_logits[:, 2, :].unsqueeze(2).unsqueeze(3)
-            joint_prob = prob_1 * prob_2 * prob_3 # boardcast
-            policy_logits = joint_prob.reshape(8, -1)
+            # policy_logits = policy_logits.reshape(batch_size, agent_num, -1)
+            # # joint action
+            # prob_1 = policy_logits[:, 0, :].unsqueeze(1).unsqueeze(2)
+            # prob_2 = policy_logits[:, 1, :].unsqueeze(1).unsqueeze(3)
+            # prob_3 = policy_logits[:, 2, :].unsqueeze(2).unsqueeze(3)
+            # joint_prob = prob_1 * prob_2 * prob_3 # boardcast
+            # policy_logits = joint_prob.reshape(8, -1)
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
@@ -194,13 +194,13 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
                 pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
                 latent_state_roots = latent_state_roots.detach().cpu().numpy()
                 # policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
-                policy_logits = policy_logits.reshape(batch_size, agent_num, -1)
-            # joint action
-            prob_1 = policy_logits[:, 0, :].unsqueeze(1).unsqueeze(2)
-            prob_2 = policy_logits[:, 1, :].unsqueeze(1).unsqueeze(3)
-            prob_3 = policy_logits[:, 2, :].unsqueeze(2).unsqueeze(3)
-            joint_prob = prob_1 * prob_2 * prob_3 # boardcast
-            policy_logits = joint_prob.reshape(8, -1)
+            #     policy_logits = policy_logits.reshape(batch_size, agent_num, -1)
+            # # joint action
+            # prob_1 = policy_logits[:, 0, :].unsqueeze(1).unsqueeze(2)
+            # prob_2 = policy_logits[:, 1, :].unsqueeze(1).unsqueeze(3)
+            # prob_3 = policy_logits[:, 2, :].unsqueeze(2).unsqueeze(3)
+            # joint_prob = prob_1 * prob_2 * prob_3 # boardcast
+            # policy_logits = joint_prob.reshape(8, -1)
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(batch_size)]
@@ -316,13 +316,12 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
         latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
         #
-        batch_size = latent_state.shape[0]
-        policy_logits = policy_logits.reshape(batch_size, self._cfg.model.agent_num, -1)
-        prob_1 = policy_logits[:, 0, :].unsqueeze(1).unsqueeze(2)
-        prob_2 = policy_logits[:, 1, :].unsqueeze(1).unsqueeze(3)
-        prob_3 = policy_logits[:, 2, :].unsqueeze(2).unsqueeze(3)
-        joint_prob = prob_1 * prob_2 * prob_3 # boardcast
-        policy_logits = joint_prob.reshape(batch_size, -1)
+        # policy_logits = policy_logits.reshape(batch_size, self._cfg.model.agent_num, -1)
+        # prob_1 = policy_logits[:, 0, :].unsqueeze(1).unsqueeze(2)
+        # prob_2 = policy_logits[:, 1, :].unsqueeze(1).unsqueeze(3)
+        # prob_3 = policy_logits[:, 2, :].unsqueeze(2).unsqueeze(3)
+        # joint_prob = prob_1 * prob_2 * prob_3 # boardcast
+        # policy_logits = joint_prob.reshape(batch_size, -1)
 
         # transform the scaled value or its categorical representation to its original value,
         # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -361,13 +360,13 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
             network_output = self._learn_model.recurrent_inference(latent_state, action_batch[:, step_i])
             latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
-            batch_size = latent_state.shape[0]
-            policy_logits = policy_logits.reshape(batch_size, self._cfg.model.agent_num, -1)
-            prob_1 = policy_logits[:, 0, :].unsqueeze(1).unsqueeze(2)
-            prob_2 = policy_logits[:, 1, :].unsqueeze(1).unsqueeze(3)
-            prob_3 = policy_logits[:, 2, :].unsqueeze(2).unsqueeze(3)
-            joint_prob = prob_1 * prob_2 * prob_3 # boardcast
-            policy_logits = joint_prob.reshape(batch_size, -1)
+            # batch_size = latent_state.shape[0]
+            # policy_logits = policy_logits.reshape(batch_size, self._cfg.model.agent_num, -1)
+            # prob_1 = policy_logits[:, 0, :].unsqueeze(1).unsqueeze(2)
+            # prob_2 = policy_logits[:, 1, :].unsqueeze(1).unsqueeze(3)
+            # prob_3 = policy_logits[:, 2, :].unsqueeze(2).unsqueeze(3)
+            # joint_prob = prob_1 * prob_2 * prob_3 # boardcast
+            # policy_logits = joint_prob.reshape(batch_size, -1)
 
             # transform the scaled value or its categorical representation to its original value,
             # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.

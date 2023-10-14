@@ -15,29 +15,29 @@ class PettingZooEncoder(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.agent_encoder  = RepresentationNetworkMLP(observation_shape=18, hidden_channels=256, norm_type='BN')
-        self.global_encoder = RepresentationNetworkMLP(observation_shape=30, hidden_channels=256, norm_type='BN')
-        self.encoder = RepresentationNetworkMLP(observation_shape=1024, hidden_channels=256, norm_type='BN')
+        self.agent_encoder  = RepresentationNetworkMLP(observation_shape=18, hidden_channels=128, norm_type='BN')
+        self.global_encoder = RepresentationNetworkMLP(observation_shape=30, hidden_channels=128, norm_type='BN')
+        self.encoder = RepresentationNetworkMLP(observation_shape=512, hidden_channels=128, norm_type='BN')
 
     def forward(self, x):
         # agent
         batch_size, agent_num = x['agent_state'].shape[0], x['agent_state'].shape[1]
         agent_state = x['agent_state'].reshape(batch_size*agent_num, -1)
         agent_state = self.agent_encoder(agent_state)
-        agent_state_B = agent_state.reshape(batch_size, -1) # [8, 384]
-        agent_state_B_A = agent_state.reshape(batch_size*agent_num, -1)
+        agent_state_B = agent_state.reshape(batch_size, -1) # [8, 768]
+        agent_state_B_A = agent_state.reshape(batch_size, agent_num, -1)
         # global
         global_state = self.global_encoder(x['global_state'])
         global_state = self.encoder(torch.cat((agent_state_B, global_state),dim=1))
-        return (agent_state_B_A, global_state)
+        return (agent_state_B, global_state)
     
 
 class PettingZooPrediction(nn.Module):
 
     def __init__(
             self,
-            action_space_size: int=5,
-            num_channels: int=256,
+            action_space_size: int=125,
+            num_channels: int=128,
             common_layer_num: int = 2,
             fc_value_layers: SequenceType = [32],
             fc_policy_layers: SequenceType = [32],
@@ -94,7 +94,7 @@ class PettingZooPrediction(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy_head = MLP(
-            in_channels=self.num_channels,
+            in_channels=self.num_channels*3,
             hidden_channels=fc_policy_layers[0],
             out_channels=action_space_size,
             layer_num=len(fc_policy_layers) + 1,
@@ -129,7 +129,7 @@ class PettingZooDynamics(nn.Module):
     def __init__(
         self,
         action_encoding_dim: int = 125,
-        num_channels: int = 381,
+        num_channels: int = 253,
         common_layer_num: int = 2,
         fc_reward_layers: SequenceType = [32],
         output_support_size: int = 601,
@@ -271,11 +271,12 @@ class PettingZooDynamics(nn.Module):
             next_latent_state = x + latent_state
             next_latent_state_encoding = self.fc_dynamics_2(next_latent_state)
         else:
+            batch_size = state_action_encoding.shape[0]
             next_agent_latent_state_1 = self.fc_dynamics_1(state_action_encoding)
             next_agent_latent_state_2 = self.fc_dynamics_2(state_action_encoding)
             next_agent_latent_state_3 = self.fc_dynamics_3(state_action_encoding)
             next_agent_latent_state = torch.stack((next_agent_latent_state_1, next_agent_latent_state_2, next_agent_latent_state_3), dim=1)
-            next_agent_latent_state = next_agent_latent_state.reshape(-1, 256)
+            next_agent_latent_state = next_agent_latent_state.reshape(batch_size, -1)
             next_global_latent_state = self.fc_dynamics_4(state_action_encoding)
             next_latent_state_encoding = next_global_latent_state
 
