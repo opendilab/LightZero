@@ -67,7 +67,7 @@ For further details, please refer to [Features](#features), [Framework Structure
   - [Other Papers](#other-papers)
 - [Feedback and Contribution](#feedback-and-contribution)
 - [Citation](#citation)
-- [Acknowledgments](#acknowledgments)
+- [Acknowledgements](#acknowledgements)
 - [License](#license)
 
 ### Features
@@ -467,7 +467,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 }
 ```
 
-## Acknowledgments
+## Acknowledgements
 
 This repo is partially based on the following repo, many thanks to their pioneering work:
 
