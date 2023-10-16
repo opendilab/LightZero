@@ -40,7 +40,7 @@ connect4_muzero_config = dict(
         ),
         cuda=True,
         env_type='board_games',
-        game_segment_length=int(6 * 7 / 2),  # for battle_mode='play_with_bot_mode'
+        game_segment_length=int(6 * 7),  # for battle_mode='self_play_mode'
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
@@ -50,7 +50,7 @@ connect4_muzero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
-        td_steps=int(6 * 7 / 2),  # for battle_mode='play_with_bot_mode'
+        td_steps=int(6 * 7),  # for battle_mode='self_play_mode'
         # NOTE：In board_games, we set discount_factor=1.
         discount_factor=1,
         n_episode=n_episode,
