@@ -90,7 +90,7 @@ def action_space(self):
 ```
 
 ### 6. **Render Method**<br>
-The `render` method showcases the game's progression, allowing users to visualize the gameplay. In environments that have implemented the `render` method, it is called with each execution of the `step` function, providing a visual representation of the game at each step.
+The `render` method displays the gameplay of the game for users to observe. For environments that have implemented the `render` method, users can choose whether to call `render` during the execution of the `step` function to render the game state at each step.
 
 ```python
 def render(self, mode: str = 'image_savefile_mode') -> None:
@@ -190,7 +190,7 @@ def bot_action(self) -> int:
 
 ## **LightZeroEnvWrapper**
 
-We provide a [LightZeroEnvWrapper](https://github.com/opendilab/LightZero/blob/main/lzero/envs/wrappers/lightzero_env_wrapper.py) in the lzero/envs/wrappers directory. It wraps classic_control and box2d environments into the format required by LightZero. During initialization, an original environment is passed to the LightZeroEnvWrapper instance, which is initialized using the parent class `gym.Wrapper`. This allows the instance to call methods like `render`, `close`, and `seed` from the original environment. Based on this, the `LightZeroEnvWrapper` class overrides the `step` and `reset` methods to wrap their outputs into a dictionary `lightzero_obs_dict` that conforms to the requirements of LightZero. As a result, the wrapped environment instance meets the requirements of LightZero's custom environments.
+We provide a [LightZeroEnvWrapper](https://github.com/opendilab/LightZero/blob/main/lzero/envs/wrappers/lightzero_env_wrapper.py) in the lzero/envs/wrappers directory. It wraps `classic_control` and `box2d` environments into the format required by LightZero. During initialization, an original environment is passed to the LightZeroEnvWrapper instance, which is initialized using the parent class `gym.Wrapper`. This allows the instance to call methods like `render`, `close`, and `seed` from the original environment. Based on this, the `LightZeroEnvWrapper` class overrides the `step` and `reset` methods to wrap their outputs into a dictionary `lightzero_obs_dict` that conforms to the requirements of LightZero. As a result, the wrapped environment instance meets the requirements of LightZero's custom environments.
 
 ```python
 class LightZeroEnvWrapper(gym.Wrapper):

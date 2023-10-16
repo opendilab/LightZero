@@ -28,7 +28,7 @@ Create a new Python file under the `lzero/policy` directory. This file will cont
 
 ### 3. Implement Your Policy
 
-Within your policy file, you need to define a class to implement your strategy. This class should inherit from the `Policy`  class in DI-engine and implement required methods. Below is a basic framework for a policy class:
+Within your policy file, you need to define a class to implement your strategy. This class should inherit from the `Policy` class in DI-engine and implement required methods. Below is a basic framework for a policy class:
 
 
 ```python
@@ -48,7 +48,7 @@ class MyAlgorithmPolicy(Policy):
         # Initialize your policy here
 
     def default_model(self) -> Tuple[str, List[str]]:
-        # Return this algorithm default model setting for demonstration.
+        # Set the default model name and the import path so that the default model can be loaded during policy initialization
     
     def _init_learn(self):
         # Initialize the learn mode here
@@ -99,7 +99,7 @@ Here, `type` should be set to the registered policy name, and `import_names` sho
 
 ### 5. Possible Other Modifications
 - **Model**: The LightZero `model.common` package provides some common network structures, such as the `RepresentationNetwork` that maps 2D images to a latent space representation and the `PredictionNetwork` used in MCTS for predicting probabilities and node values. If a custom policy requires a specific network model, you need to implement the corresponding model under the `model` folder. For example, the model for the MuZero algorithm is saved in the `muzero_model.py` file, which implements the `DynamicsNetwork` required by the MuZero algorithm and ultimately creates the `MuZeroModel` by calling the existing network structures in the `model.common` package.
-- **Worker**: LightZero provides corresponding workers for AlphaZero and MuZero. Subsequent algorithms like EfficientZero and GumbelMuzero inherit the workers from MuZero. If your algorithm has different logic for data collection, you need to implement the corresponding worker. For example, if your algorithm requires filtering episode data based on certain conditions before adding them to the buffer, you need to modify the `collect` function in the collector file. The following code snippet demonstrates this by calling the `get_train_sample` function to achieve this functionality:
+- **Worker**: LightZero provides corresponding `worker` for AlphaZero and MuZero. Subsequent algorithms like EfficientZero and GumbelMuzero inherit the `worker` from MuZero. If your algorithm has different logic for data collection, you need to implement the corresponding `worker`. For example, if your algorithm requires preprocessing of collected transitions, you can add this segment under the `collect` function of the collector, in which the `get_train_sample` function implements the specific data processing process.
 
 ```Python
 if timestep.done:
@@ -110,7 +110,6 @@ if timestep.done:
     return_data.extend(train_sample)
     self._traj_buffer[env_id].clear()
 ```
-
 
 ### 6. Test Your Policy
 After implementing your strategy, it is crucial to ensure its correctness and effectiveness. To do so, you should write some unit tests to verify that your strategy is functioning correctly. For example, you can test if the strategy can execute in a specific environment and if the output of the strategy matches the expected results. You can refer to the [documentation](https://di-engine-docs.readthedocs.io/zh_CN/latest/22_test/index_zh.html) in the DI-engine for guidance on how to write unit tests. You can add your tests in the `lzero/policy/tests`. When writing tests, try to consider all possible scenarios and boundary conditions to ensure your strategy can run properly in various situations.
@@ -137,23 +136,23 @@ def test_scaling_transform():
     assert (output_1 == output_2).all()
 ```
 
-In the unit test file, you need to mark the tests with `@pytest.mark.unittest` to include them in the Python testing framework. This allows you to run the unit test file directly by entering `pytest -sv xxx.py` in the command line.
+In the unit test file, you need to mark the tests with `@pytest.mark.unittest` to include them in the Python testing framework. This allows you to run the unit test file directly by entering `pytest -sv xxx.py` in the command line. `-sv` is a command option that, when used, prints detailed information to the terminal during the test execution for easier inspection.
 
 ### 7. Comprehensive Testing and Running
 
-   - After ensuring the basic functionality of the policy, you need to use classic environments like cartpole to conduct comprehensive correctness and convergence tests on your policy. This is to verify that your policy can work effectively not only in unit tests but also in real game environments.
-   - You can write related configuration files and entry programs by referring to `cartpole_muzero_config.py`. During the testing process, pay attention to record performance data of the policy, such as the score of each round, the convergence speed of the policy, etc., for analysis and improvement.
+- After ensuring the basic functionality of the policy, you need to use classic environments like cartpole to conduct comprehensive correctness and convergence tests on your policy. This is to verify that your policy can work effectively not only in unit tests but also in real game environments.
+- You can write related configuration files and entry programs by referring to `cartpole_muzero_config.py`. During the testing process, pay attention to record performance data of the policy, such as the score of each round, the convergence speed of the policy, etc., for analysis and improvement.
 
 ### 8. Contribution
 
-   - After completing all the above steps, if you wish to contribute your policy to the LightZero repository, you can submit a Pull Request on the official repository. Before submission, ensure your code complies with the repository's coding standards, all tests have passed, and there are sufficient documents and comments to explain your code and policy.
+- After completing all the above steps, if you wish to contribute your policy to the LightZero repository, you can submit a Pull Request on the official repository. Before submission, ensure your code complies with the repository's coding standards, all tests have passed, and there are sufficient documents and comments to explain your code and policy.
 
-   - In the description of the PR, explain your policy in detail, including its working principle, your implementation method, and its performance in tests. This will help others understand your contribution and speed up the PR review process.
+- In the description of the PR, explain your policy in detail, including its working principle, your implementation method, and its performance in tests. This will help others understand your contribution and speed up the PR review process.
 
 ### 9. Share, Discuss, and Improve
 
-   - After implementing and testing the policy, consider sharing your results and experiences with the community. You can post your policy and test results on forums, blogs, or social media and invite others to review and discuss your work. This not only allows you to receive feedback from others but also helps you build a professional network and may trigger new ideas and collaborations.
-   - Based on your test results and community feedback, continuously improve and optimize your policy. This may involve adjusting policy parameters, improving code performance, or solving problems and bugs that arise. Remember, policy development is an iterative process, and there's always room for improvement.
+- After implementing and testing the policy, consider sharing your results and experiences with the community. You can post your policy and test results on forums, blogs, or social media and invite others to review and discuss your work. This not only allows you to receive feedback from others but also helps you build a professional network and may trigger new ideas and collaborations.
+- Based on your test results and community feedback, continuously improve and optimize your policy. This may involve adjusting policy parameters, improving code performance, or solving problems and bugs that arise. Remember, policy development is an iterative process, and there's always room for improvement.
 
 ## **Considerations**
 
