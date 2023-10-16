@@ -1,13 +1,13 @@
 from easydict import EasyDict
 
-env_name = 'ptz_simple_spread'
+env_name = 'ptz_simple'
 multi_agent = True
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 seed = 0
-n_agent = 3
+n_agent = 1
 n_landmark = n_agent
 collector_env_num = 8
 evaluator_env_num = 8
@@ -16,7 +16,7 @@ batch_size = 256
 num_simulations = 50
 update_per_collect = 50
 reanalyze_ratio = 0.
-action_space_size = 5*5*5
+action_space_size = 5
 eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -27,7 +27,7 @@ main_config = dict(
     f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
     env=dict(
         env_family='mpe',
-        env_id='simple_spread_v2',
+        env_id='simple_v2',
         n_agent=n_agent,
         n_landmark=n_landmark,
         max_cycles=25,
@@ -51,8 +51,8 @@ main_config = dict(
             action_space_size=action_space_size,
             agent_num=n_agent,
             self_supervised_learning_loss=False,  # default is False
-            agent_obs_shape=18,
-            global_obs_shape=30,
+            agent_obs_shape=6,
+            global_obs_shape=8,
             discrete_action_encoding_type='one_hot',
             global_cooperation=True, # TODO: doesn't work now
             hidden_size_list=[256, 256],

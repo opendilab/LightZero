@@ -13,18 +13,29 @@ from lzero.model.utils import get_dynamic_mean, get_reward_mean
 
 class PettingZooEncoder(nn.Module):
 
-    def __init__(self):
+    def __init__(self, cfg):
         super().__init__()
-        self.agent_encoder  = RepresentationNetworkMLP(observation_shape=18, hidden_channels=128, norm_type='BN')
-        self.global_encoder = RepresentationNetworkMLP(observation_shape=30, hidden_channels=128, norm_type='BN')
-        self.encoder = RepresentationNetworkMLP(observation_shape=512, hidden_channels=128, norm_type='BN')
+        self.agent_num = cfg.policy.model.agent_num
+        agent_obs_shape = cfg.policy.model.agent_obs_shape
+        global_obs_shape = cfg.policy.model.global_obs_shape
+        self.agent_encoder  = RepresentationNetworkMLP(observation_shape=agent_obs_shape,
+                                                       hidden_channels=128, 
+                                                       norm_type='BN')
+        
+        self.global_encoder = RepresentationNetworkMLP(observation_shape=global_obs_shape, 
+                                                       hidden_channels=128,
+                                                       norm_type='BN')
+        
+        self.encoder = RepresentationNetworkMLP(observation_shape=128+128*self.agent_num, 
+                                                hidden_channels=128, 
+                                                norm_type='BN')
 
     def forward(self, x):
         # agent
         batch_size, agent_num = x['agent_state'].shape[0], x['agent_state'].shape[1]
         agent_state = x['agent_state'].reshape(batch_size*agent_num, -1)
         agent_state = self.agent_encoder(agent_state)
-        agent_state_B = agent_state.reshape(batch_size, -1) # [8, 768]
+        agent_state_B = agent_state.reshape(batch_size, -1)
         agent_state_B_A = agent_state.reshape(batch_size, agent_num, -1)
         # global
         global_state = self.global_encoder(x['global_state'])
@@ -36,7 +47,8 @@ class PettingZooPrediction(nn.Module):
 
     def __init__(
             self,
-            action_space_size: int=125,
+            cfg,
+            action_space_size: int=5,
             num_channels: int=128,
             common_layer_num: int = 2,
             fc_value_layers: SequenceType = [32],
@@ -65,6 +77,8 @@ class PettingZooPrediction(nn.Module):
         """
         super().__init__()
         self.num_channels = num_channels
+        self.agent_num = cfg.policy.model.agent_num
+        self.action_space_size = pow(action_space_size, self.agent_num)
 
         # ******* common backbone ******
         self.fc_prediction_common = MLP(
@@ -94,9 +108,9 @@ class PettingZooPrediction(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy_head = MLP(
-            in_channels=self.num_channels*3,
+            in_channels=self.num_channels*self.agent_num,
             hidden_channels=fc_policy_layers[0],
-            out_channels=action_space_size,
+            out_channels=self.action_space_size,
             layer_num=len(fc_policy_layers) + 1,
             activation=activation,
             norm_type=norm_type,
@@ -128,7 +142,8 @@ class PettingZooDynamics(nn.Module):
 
     def __init__(
         self,
-        action_encoding_dim: int = 125,
+        cfg,
+        action_encoding_dim: int = 5,
         num_channels: int = 253,
         common_layer_num: int = 2,
         fc_reward_layers: SequenceType = [32],
@@ -156,8 +171,9 @@ class PettingZooDynamics(nn.Module):
             - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection in dynamics network.
         """
         super().__init__()
-        self.num_channels = num_channels
-        self.action_encoding_dim = action_encoding_dim
+        self.agent_num = cfg.policy.model.agent_num
+        self.action_encoding_dim = pow(action_encoding_dim, self.agent_num)
+        self.num_channels = 128 + self.action_encoding_dim
         self.latent_state_dim = self.num_channels - self.action_encoding_dim
 
         self.res_connection_in_dynamics = res_connection_in_dynamics
@@ -187,46 +203,20 @@ class PettingZooDynamics(nn.Module):
                 last_linear_layer_init_zero=False,
             )
         else:
-            self.fc_dynamics_1 = MLP(
-                in_channels=self.num_channels,
-                hidden_channels=self.latent_state_dim,
-                layer_num=common_layer_num,
-                out_channels=self.latent_state_dim,
-                activation=activation,
-                norm_type=norm_type,
-                output_activation=True,
-                output_norm=True,
-                # last_linear_layer_init_zero=False is important for convergence
-                last_linear_layer_init_zero=False,
-            )
+            self.fc_dynamics_list = nn.ModuleList(
+                MLP(in_channels=self.num_channels,
+                    hidden_channels=self.latent_state_dim,
+                    layer_num=common_layer_num,
+                    out_channels=self.latent_state_dim,
+                    activation=activation,
+                    norm_type=norm_type,
+                    output_activation=True,
+                    output_norm=True,
+                    # last_linear_layer_init_zero=False is important for convergence
+                    last_linear_layer_init_zero=False,
+            ) for _ in range(self.agent_num))
 
-            self.fc_dynamics_2 = MLP(
-                in_channels=self.num_channels,
-                hidden_channels=self.latent_state_dim,
-                layer_num=common_layer_num,
-                out_channels=self.latent_state_dim,
-                activation=activation,
-                norm_type=norm_type,
-                output_activation=True,
-                output_norm=True,
-                # last_linear_layer_init_zero=False is important for convergence
-                last_linear_layer_init_zero=False,
-            )
-
-            self.fc_dynamics_3 = MLP(
-                in_channels=self.num_channels,
-                hidden_channels=self.latent_state_dim,
-                layer_num=common_layer_num,
-                out_channels=self.latent_state_dim,
-                activation=activation,
-                norm_type=norm_type,
-                output_activation=True,
-                output_norm=True,
-                # last_linear_layer_init_zero=False is important for convergence
-                last_linear_layer_init_zero=False,
-            )
-
-            self.fc_dynamics_4 = MLP(
+            self.fc_dynamics_global = MLP(
                 in_channels=self.num_channels,
                 hidden_channels=self.latent_state_dim,
                 layer_num=common_layer_num,
@@ -272,12 +262,10 @@ class PettingZooDynamics(nn.Module):
             next_latent_state_encoding = self.fc_dynamics_2(next_latent_state)
         else:
             batch_size = state_action_encoding.shape[0]
-            next_agent_latent_state_1 = self.fc_dynamics_1(state_action_encoding)
-            next_agent_latent_state_2 = self.fc_dynamics_2(state_action_encoding)
-            next_agent_latent_state_3 = self.fc_dynamics_3(state_action_encoding)
-            next_agent_latent_state = torch.stack((next_agent_latent_state_1, next_agent_latent_state_2, next_agent_latent_state_3), dim=1)
+            next_agent_latent_list = [self.fc_dynamics_list[i](state_action_encoding) for i in range(self.agent_num)]
+            next_agent_latent_state = torch.stack(next_agent_latent_list, dim=1)
             next_agent_latent_state = next_agent_latent_state.reshape(batch_size, -1)
-            next_global_latent_state = self.fc_dynamics_4(state_action_encoding)
+            next_global_latent_state = self.fc_dynamics_global(state_action_encoding)
             next_latent_state_encoding = next_global_latent_state
 
         reward = self.fc_reward_head(next_latent_state_encoding)

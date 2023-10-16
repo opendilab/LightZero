@@ -285,7 +285,7 @@ class PettingZooEnv(BaseEnv):
             1
         )
         # action_mask: All actions are of use(either 1 for discrete or 5 for continuous). Thus all 1.
-        joint_action_mask = [1 for _ in range(5*5*5)]
+        joint_action_mask = [1 for _ in range(np.power(5, self._num_agents))]
         return {'observation': ret, 'action_mask': joint_action_mask, 'to_play': [-1]}
 
     def _process_action(self, action: 'torch.Tensor') -> Dict[str, np.ndarray]:  # noqa
