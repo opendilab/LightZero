@@ -28,19 +28,19 @@
 
 Updated on 2023.09.21 LightZero-v0.0.2
 
-> LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkits that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL). 
+> LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL). 
 
 English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Paper](https://arxiv.org/pdf/2310.08348.pdf)
 
 ## Background
 
-The method of combining Monte Carlo Tree Search and Deep Reinforcement Learning represented by AlphaZero and MuZero has achieved superhuman level in various games such as Go and Atari, has also made gratifying progress in scientific fields such as protein structure prediction, matrix multiplication algorithm search, etc. 
+The method of combining Monte Carlo Tree Search and Deep Reinforcement Learning represented by AlphaZero and MuZero has achieved superhuman level in various games such as Go and Atari,and has also made gratifying progress in scientific fields such as protein structure prediction, matrix multiplication algorithm search, etc. 
 The following is an overview of the historical evolution of the Monte Carlo Tree Search algorithm series:
 ![pipeline](assets/mcts_rl_evolution_overview.png)
 
 ## Overview
 
-**LightZero** is an open-source algorithm toolkits that combines MCTS and RL for PyTorch. It provides support for a range of MCTS-based RL algorithms and applications with following advantages:
+**LightZero** is an open-source algorithm toolkit that combines MCTS and RL for PyTorch. It provides support for a range of MCTS-based RL algorithms and applications with the following advantages:
 - Lightweight.
 - Efficient.
 - Easy-to-understand.
@@ -76,7 +76,7 @@ For further details, please refer to [Features](#features), [Framework Structure
 
 **Efficient**: LightZero uses mixed heterogeneous computing programming to improve computational efficiency for the most time-consuming part of MCTS algorithms.
 
-**Easy-to-understand**: LightZero provides detailed documentation and algorithm framework diagrams for all integrated algorithms to help users understand the algorithm's core and compare the differences and similarities between algorithms under the same paradigm. LightZero also provides function call graphs and network structure diagrams for algorithm code implementation, making it easier for users to locate critical code. All the documentations can be found [here](#paper-notes).
+**Easy-to-understand**: LightZero provides detailed documentation and algorithm framework diagrams for all integrated algorithms to help users understand the algorithm's core and compare the differences and similarities between algorithms under the same paradigm. LightZero also provides function call graphs and network structure diagrams for algorithm code implementation, making it easier for users to locate critical code. All the documentation can be found [here](#paper-notes).
 
 ### Framework Structure
 
@@ -448,7 +448,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 - [File an issue](https://github.com/opendilab/LightZero/issues/new/choose) on Github
 - Contact our email (opendilab@pjlab.org.cn)
 
-- We appreciate all the feedbacks and contributions to improve LightZero, both algorithms and system designs. 
+- We appreciate all the feedback and contributions to improve LightZero, both algorithms and system designs. 
 
 [comment]: <> (- Contributes to our future plan [Roadmap]&#40;https://github.com/opendilab/LightZero/projects&#41;)
 
