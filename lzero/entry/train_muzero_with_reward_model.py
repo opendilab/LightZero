@@ -8,20 +8,19 @@ from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
-from ding.utils import set_pkg_seed, get_rank
 from ding.rl_utils import get_epsilon_greedy_fn
+from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
-from lzero.entry.utils import log_buffer_memory_usage
+from lzero.entry.utils import log_buffer_memory_usage, random_collect
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
-from lzero.worker import MuZeroCollector as Collector
-from lzero.worker import MuZeroEvaluator as Evaluator
-from .utils import random_collect
+from lzero.reward_model.rnd_reward_model import RNDRewardModel
+from lzero.worker import MuZeroCollector, MuZeroEvaluator
 
 
-def train_muzero(
+def train_muzero_with_reward_model(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -31,7 +30,7 @@ def train_muzero(
 ) -> 'Policy':  # noqa
     """
     Overview:
-        The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel Muzero.
+        The train entry for MCTS+RL algorithms augmented with reward_model.
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
             ``Tuple[dict, dict]`` type means [user_config, create_cfg].
@@ -47,19 +46,15 @@ def train_muzero(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
-        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'"
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'muzero_rnd', 'sampled_efficientzero'], \
+        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero'"
 
-    if create_cfg.policy.type == 'muzero':
+    if create_cfg.policy.type in ['muzero', 'muzero_rnd']:
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'gumbel_muzero':
-        from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'stochastic_muzero':
-        from lzero.mcts import StochasticMuZeroGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
@@ -84,7 +79,7 @@ def train_muzero(
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
-    tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
+    tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
     # ==============================================================
@@ -94,14 +89,14 @@ def train_muzero(
     batch_size = policy_config.batch_size
     # specific game buffer for MCTS+RL algorithms
     replay_buffer = GameBuffer(policy_config)
-    collector = Collector(
+    collector = MuZeroCollector(
         env=collector_env,
         policy=policy.collect_mode,
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
         policy_config=policy_config
     )
-    evaluator = Evaluator(
+    evaluator = MuZeroEvaluator(
         eval_freq=cfg.policy.eval_freq,
         n_evaluator_episode=cfg.env.n_evaluator_episode,
         stop_value=cfg.env.stop_value,
@@ -111,13 +106,18 @@ def train_muzero(
         exp_name=cfg.exp_name,
         policy_config=policy_config
     )
+    # create reward_model
+    reward_model = RNDRewardModel(cfg.reward_model, policy.collect_mode.get_attribute('device'), tb_logger,
+                                  policy._learn_model.representation_network,
+                                  policy._target_model_for_intrinsic_reward.representation_network,
+                                  cfg.policy.use_momentum_representation_network
+                                  )
 
     # ==============================================================
     # Main loop
     # ==============================================================
     # Learner's before_run hook.
     learner.call_hook('before_run')
-    
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
 
@@ -136,16 +136,12 @@ def train_muzero(
             policy_config.manual_temperature_decay,
             policy_config.fixed_temperature_value,
             policy_config.threshold_training_steps_for_final_temperature,
-            trained_steps=learner.train_iter
+            trained_steps=learner.train_iter,
         )
 
         if policy_config.eps.eps_greedy_exploration_in_collect:
-            epsilon_greedy_fn = get_epsilon_greedy_fn(
-                start=policy_config.eps.start,
-                end=policy_config.eps.end,
-                decay=policy_config.eps.decay,
-                type_=policy_config.eps.type
-            )
+            epsilon_greedy_fn = get_epsilon_greedy_fn(start=policy_config.eps.start, end=policy_config.eps.end,
+                                                      decay=policy_config.eps.decay, type_=policy_config.eps.type)
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
         else:
             collect_kwargs['epsilon'] = 0.0
@@ -158,6 +154,22 @@ def train_muzero(
 
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+
+        # ****** reward_model related code ******
+        # collect data for reward_model training
+        reward_model.collect_data(new_data)
+        # update reward_model
+        if reward_model.cfg.input_type == 'latent_state':
+            # train reward_model with latent_state
+            if len(reward_model.train_latent_state) > reward_model.cfg.batch_size:
+                reward_model.train_with_data()
+        elif reward_model.cfg.input_type in ['obs', 'latent_state']:
+            # train reward_model with obs
+            if len(reward_model.train_obs) > reward_model.cfg.batch_size:
+                reward_model.train_with_data()
+        # clear old data in reward_model
+        reward_model.clear_old_data()
+
         if cfg.policy.update_per_collect is None:
             # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
             collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
@@ -181,8 +193,11 @@ def train_muzero(
                 )
                 break
 
+            # update train_data reward using the augmented reward
+            train_data_augmented = reward_model.estimate(train_data)
+
             # The core train steps for MCTS+RL algorithms.
-            log_vars = learner.train(train_data, collector.envstep)
+            log_vars = learner.train(train_data_augmented, collector.envstep)
 
             if cfg.policy.use_priority:
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
