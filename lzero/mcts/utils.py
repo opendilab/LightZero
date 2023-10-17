@@ -6,6 +6,35 @@ import numpy as np
 from graphviz import Digraph
 
 
+def generate_random_actions_discrete(num_actions: int, action_space_size: int, num_of_sampled_actions: int,
+                                     reshape=False):
+    """
+    Overview:
+        Generate a list of random actions.
+    Arguments:
+        - num_actions (:obj:`int`): The number of actions to generate.
+        - action_space_size (:obj:`int`): The size of the action space.
+        - num_of_sampled_actions (:obj:`int`): The number of sampled actions.
+        - reshape (:obj:`bool`): Whether to reshape the actions.
+    Returns:
+        A list of random actions.
+    """
+    actions = [
+        np.random.randint(0, action_space_size, num_of_sampled_actions).reshape(-1)
+        for _ in range(num_actions)
+    ]
+
+    # If num_of_sampled_actions == 1, flatten the actions to a list of numbers
+    if num_of_sampled_actions == 1:
+        actions = [action[0] for action in actions]
+
+    # Reshape actions if needed
+    if reshape and num_of_sampled_actions > 1:
+        actions = [action.reshape(num_of_sampled_actions, 1) for action in actions]
+
+    return actions
+
+
 @dataclass
 class BufferedData:
     data: Any
