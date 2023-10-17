@@ -17,14 +17,24 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+# continuous_action_space = False
+# K = 5  # num_of_sampled_actions
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# num_simulations = 50
+# update_per_collect = 1000
+# batch_size = 256
+# max_env_step = int(1e6)
+# reanalyze_ratio = 0.
 continuous_action_space = False
 K = 5  # num_of_sampled_actions
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-num_simulations = 50
-update_per_collect = 1000
-batch_size = 256
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 5
+update_per_collect = 1
+batch_size = 2
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
 # ==============================================================
@@ -43,6 +53,7 @@ atari_sampled_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        mcts_ctree=False,
         model=dict(
             observation_shape=(4, 96, 96),
             frame_stack_num=4,
