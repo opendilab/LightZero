@@ -1,3 +1,4 @@
+<div id="top"></div>
 
 # LightZero
 
@@ -482,3 +483,5 @@ Special thanks to [@PaParaZz1](https://github.com/PaParaZz1), [@karroyan](https:
 
 ## License
 All code within this repository is under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+<p align="right">(<a href="#top">back to top</a>)</p>
