@@ -34,7 +34,8 @@ def visualize_avg_softmax(logits):
     plt.xlabel('Classes')
     plt.ylabel('Average Probability')
     plt.title('Average Softmax Probabilities Across the Minibatch')
-    plt.show()
+    plt.savefig('avg_softmax_probabilities.png')
+    plt.close()
 
 
 def calculate_topk_accuracy(logits, true_one_hot, top_k):
@@ -86,7 +87,8 @@ def plot_topk_accuracy(afterstate_policy_logits, true_chance_one_hot, top_k_valu
     plt.xlabel('top_K')
     plt.ylabel('Match Percentage')
     plt.title('Top_K Accuracy')
-    plt.show()
+    plt.savefig('topk_accuracy.png')
+    plt.close()
 
 
 def compare_argmax(afterstate_policy_logits, chance_one_hot):
@@ -122,7 +124,8 @@ def compare_argmax(afterstate_policy_logits, chance_one_hot):
     plt.xlabel('Sample Index')
     plt.ylabel('Equality')
     plt.title('Comparison of argmax')
-    plt.show()
+    plt.savefig('compare_argmax.png')
+    plt.close()
 
 
 def plot_argmax_distribution(true_chance_one_hot):
@@ -150,7 +153,8 @@ def plot_argmax_distribution(true_chance_one_hot):
     plt.xlabel('Argmax Values')
     plt.ylabel('Count')
     plt.title('Distribution of Argmax Values')
-    plt.show()
+    plt.savefig('argmax_distribution.png')
+    plt.close()
 
 
 class LayerNorm(nn.Module):
