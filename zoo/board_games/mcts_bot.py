@@ -12,6 +12,8 @@ Overview:
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from graphviz import Digraph
+import os
 
 import numpy as np
 
@@ -170,7 +172,8 @@ class TwoPlayersMCTSNode(MCTSNode):
                 - If the parent's current player is player 2, then Q-value = 5 - 10 = -5.
             This way, a higher Q-value for a node indicates a higher win rate for the parent's current player.
         """
-
+        if self.parent == None:
+            return 0
         # Determine the number of wins and losses based on the current player at the parent node.
         wins, loses = (self._results[1], self._results[-1]) if self.parent.env.current_player == 1 else (
         self._results[-1], self._results[1])
@@ -345,6 +348,11 @@ class MCTS(object):
             else:
                 current_node = current_node.best_child()
         return current_node
+    
+    def print_tree(self, node, indent="*"):
+        print(indent + str(np.array(node.env.board).reshape(6,7)) + str(node.visit_count))
+        for child in node.children:
+            self.print_tree(child, indent + "*")
 
 
 class MCTSBot:
@@ -366,7 +374,7 @@ class MCTSBot:
         self.num_simulation = num_simulation
         self.simulator_env = env
 
-    def get_actions(self, state, player_index, best_action_type="UCB"):
+    def get_actions(self, state, step, player_index, root=None, best_action_type="UCB"):
         """
         Overview:
             This function gets the actions that the MCTS Bot will take.
@@ -381,8 +389,61 @@ class MCTSBot:
         """
         # Every time before make a decision, reset the environment to the current environment of the game.
         self.simulator_env.reset(start_player_index=player_index, init_state=state)
-        root = TwoPlayersMCTSNode(self.simulator_env)
+        if root == None:
+            root = TwoPlayersMCTSNode(self.simulator_env)
         # Do the MCTS to find the best action to take.
         mcts = MCTS(root)
-        mcts.best_action(self.num_simulation, best_action_type=best_action_type)
-        return root.best_action
+        child_node = mcts.best_action(self.num_simulation, best_action_type=best_action_type)
+        if step == 2 or step == 3 or step == 4:
+            self.plot_simulation_graph(root, step)
+        # if step == 3:
+        #     self.plot_simulation_graph(root, step)
+
+        return root.best_action, child_node
+
+    def obtain_tree_topology(self, root, to_play=-1):
+        node_stack = []
+        edge_topology_list = []
+        node_topology_list = []
+        node_id_list = []
+        node_stack.append(root)
+        while len(node_stack) > 0:
+            node = node_stack[-1]
+            node_stack.pop()
+            node_dict = {}
+            node_dict['node_id'] = np.array(node.env.board).reshape(6,7)
+            node_dict['visit_count'] = node.visit_count
+            # node_dict['policy_prior'] = node.prior
+            node_dict['value'] = node.value
+            node_topology_list.append(node_dict)
+
+            # node_id_list.append(node.simulation_index)
+            for child in node.children:
+                # child.parent_simulation_index = node.simulation_index
+                edge_dict = {}
+                edge_dict['parent_id'] = np.array(node.env.board).reshape(6,7)
+                edge_dict['child_id'] = np.array(child.env.board).reshape(6,7)
+                edge_topology_list.append(edge_dict)
+                node_stack.append(child)
+        return edge_topology_list, node_id_list, node_topology_list
+
+
+    def plot_simulation_graph(self, env_root, current_step, graph_directory=None):
+        edge_topology_list, node_id_list, node_topology_list = self.obtain_tree_topology(env_root)
+        dot = Digraph(comment='this is direction')
+        for node_topology in node_topology_list:
+            node_name = str(node_topology['node_id'])
+            label = f"{node_topology['node_id']}, \n visit_count: {node_topology['visit_count']}, \n value: {round(node_topology['value'], 4)}"
+            dot.node(node_name, label=label)
+        for edge_topology in edge_topology_list:
+            parent_id = str(edge_topology['parent_id'])
+            child_id = str(edge_topology['child_id'])
+            label = parent_id + '-' + child_id
+            dot.edge(parent_id, child_id, label=None)
+        if graph_directory is None:
+            graph_directory = './data_visualize/'
+        if not os.path.exists(graph_directory):
+            os.makedirs(graph_directory)
+        graph_path = graph_directory + 'simulation_visualize_' + str(current_step) + 'step.gv'
+        dot.format = 'png'
+        dot.render(graph_path, view=False)
