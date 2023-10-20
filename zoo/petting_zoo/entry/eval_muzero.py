@@ -13,30 +13,31 @@ from ding.rl_utils import get_epsilon_greedy_fn
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
-from lzero.worker import MuZeroCollector as Collector
-from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
-from lzero.entry.utils import random_collect
-from zoo.petting_zoo.model import PettingZooEncoder
+from lzero.policy.random_policy import LightZeroRandomPolicy
+from lzero.worker import MuZeroCollector as Collector
+from lzero.worker import MuZeroEvaluator as Evaluator
+from zoo.petting_zoo.model import PettingZooEncoder, PettingZooPrediction, PettingZooDynamics
 
 def eval_muzero(main_cfg, create_cfg, seed=0):
-    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'multi_agent_efficientzero', 'multi_agent_muzero'], \
-        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'multi_agent_efficientzero', 'multi_agent_muzero'"
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
+        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'"
 
-    if create_cfg.policy.type == 'muzero' or create_cfg.policy.type == 'multi_agent_muzero':
+    if create_cfg.policy.type == 'muzero':
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
         from lzero.model.muzero_model_mlp import MuZeroModelMLP as Encoder
-    elif create_cfg.policy.type == 'efficientzero' or create_cfg.policy.type == 'multi_agent_efficientzero':
+    elif create_cfg.policy.type == 'efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
-        from lzero.model.efficientzero_model_mlp import EfficientZeroModelMLP as Encoder
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'gumbel_muzero':
         from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
+    elif create_cfg.policy.type == 'stochastic_muzero':
+        from lzero.mcts import StochasticMuZeroGameBuffer as GameBuffer
 
     main_cfg.policy.device = 'cpu'
-    main_cfg.policy.load_path = 'exp_name/ckpt/ckpt_best.pth.tar'
+    main_cfg.policy.load_path = '/Users/yangzhenjie/code/LightZero/zoo/petting_zoo/entry/ckpt_best.pth.tar'
     main_cfg.env.replay_path = './'      # when visualize must set as  base
     create_cfg.env_manager.type = 'base' # when visualize must set as  base
     main_cfg.env.evaluator_env_num = 1   # only 1 env for save replay
@@ -51,7 +52,7 @@ def eval_muzero(main_cfg, create_cfg, seed=0):
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
 
-    model = Encoder(**cfg.policy.model, state_encoder=PettingZooEncoder())
+    model = Encoder(**cfg.policy.model, state_encoder=PettingZooEncoder(cfg), state_prediction=PettingZooPrediction(cfg), state_dynamics=PettingZooDynamics(cfg))
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
     policy.eval_mode.load_state_dict(torch.load(cfg.policy.load_path, map_location=cfg.policy.device))
 
@@ -77,5 +78,5 @@ def eval_muzero(main_cfg, create_cfg, seed=0):
     return stop, reward
 
 if __name__ == '__main__':
-    from zoo.petting_zoo.config.ptz_simple_spread_ez_config import main_config, create_config
+    from zoo.petting_zoo.config.ptz_simple_mz_config import main_config, create_config
     eval_muzero(main_config, create_config, seed=0)
