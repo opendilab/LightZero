@@ -23,9 +23,8 @@ class PettingZooEnv(BaseEnv):
     def __init__(self, cfg: dict) -> None:
         self._cfg = cfg
         self._init_flag = False
-        self._replay_path = None
-        # self._replay_path = self._cfg.get('replay_path', None)
-        # self.frame_list = []
+        self._replay_path = self._cfg.get('replay_path', None)
+        self.frame_list = []
         self._env_family = self._cfg.env_family
         self._env_id = self._cfg.env_id
         self._num_agents = self._cfg.n_agent
@@ -40,7 +39,7 @@ class PettingZooEnv(BaseEnv):
         # joint action
         import itertools
         action_space = [0, 1, 2, 3, 4]
-        self.combinations = list(itertools.product(action_space, repeat=3))
+        self.combinations = list(itertools.product(action_space, repeat=self._num_agents))
 
     def reset(self) -> np.ndarray:
         if not self._init_flag:
@@ -64,10 +63,10 @@ class PettingZooEnv(BaseEnv):
         # if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
         #     np_seed = 100 * np.random.randint(1, 1000)
         #     self._env.seed(self._seed + np_seed)
-        if self._replay_path is not None:
-            self._env = gym.wrappers.Monitor(
-                self._env, self._replay_path, video_callable=lambda episode_id: True, force=True
-            )
+        # if self._replay_path is not None:
+        #     self._env = gym.wrappers.Monitor(
+        #         self._env, self._replay_path, video_callable=lambda episode_id: True, force=True
+        #     )
         if hasattr(self, '_seed'):
             obs = self._env.reset(seed=self._seed)
         else:
@@ -208,12 +207,12 @@ class PettingZooEnv(BaseEnv):
 
         # for agent in self._agents:
         #     self._eval_episode_return[agent] += rew[agent]
-        # if self._replay_path is not None:
-        #     self.frame_list.append(Image.fromarray(self._env.render()))
+        if self._replay_path is not None:
+            self.frame_list.append(Image.fromarray(self._env.render()))
         if done_n:  # or reduce(lambda x, y: x and y, done.values())
             info['eval_episode_return'] = self._eval_episode_return
-            # if self._replay_path is not None:
-            #     self.frame_list[0].save('out.gif', save_all=True, append_images=self.frame_list[1:], duration=3, loop=0)
+            if self._replay_path is not None:
+                self.frame_list[0].save('out.gif', save_all=True, append_images=self.frame_list[1:], duration=3, loop=0)
         # for agent in rew:
         #     rew[agent] = to_ndarray([rew[agent]])
         return BaseEnvTimestep(obs_n, rew_n, done_n, info)
@@ -333,7 +332,7 @@ class simple_spread_raw_env(SimpleEnv):
         scenario = Scenario()
         world = scenario.make_world(N)
         super().__init__(scenario, world, max_cycles, continuous_actions=continuous_actions, local_ratio=local_ratio)
-        # self.render_mode = 'rgb_array'
+        self.render_mode = 'rgb_array'
         self.metadata['name'] = "simple_spread_v2"
 
     def _execute_world_step(self):
@@ -370,21 +369,21 @@ class simple_spread_raw_env(SimpleEnv):
 
             self.rewards[agent.name] = reward
 
-    # def render(self):
-    #     if self.render_mode is None:
-    #         gym.logger.warn(
-    #             "You are calling render method without specifying any render mode."
-    #         )
-    #         return
+    def render(self):
+        if self.render_mode is None:
+            gym.logger.warn(
+                "You are calling render method without specifying any render mode."
+            )
+            return
 
-    #     self.enable_render(self.render_mode)
+        self.enable_render(self.render_mode)
 
-    #     self.draw()
-    #     observation = np.array(pygame.surfarray.pixels3d(self.screen))
-    #     if self.render_mode == "human":
-    #         pygame.display.flip()
-    #     return (
-    #         np.transpose(observation, axes=(1, 0, 2))
-    #         if self.render_mode == "rgb_array"
-    #         else None
-    #     )
+        self.draw()
+        observation = np.array(pygame.surfarray.pixels3d(self.screen))
+        if self.render_mode == "human":
+            pygame.display.flip()
+        return (
+            np.transpose(observation, axes=(1, 0, 2))
+            if self.render_mode == "rgb_array"
+            else None
+        )
