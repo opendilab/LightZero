@@ -23,7 +23,7 @@ class PettingZooEncoder(nn.Module):
                                                        norm_type='BN')
         
         self.global_encoder = RepresentationNetworkMLP(observation_shape=global_obs_shape, 
-                                                       hidden_channels=128,
+                                                       hidden_channels=256,
                                                        norm_type='BN')
         
         self.encoder = RepresentationNetworkMLP(observation_shape=128+128*self.agent_num, 
@@ -32,15 +32,16 @@ class PettingZooEncoder(nn.Module):
 
     def forward(self, x):
         # agent
-        batch_size, agent_num = x['agent_state'].shape[0], x['agent_state'].shape[1]
-        agent_state = x['agent_state'].reshape(batch_size*agent_num, -1)
-        agent_state = self.agent_encoder(agent_state)
-        agent_state_B = agent_state.reshape(batch_size, -1)
-        agent_state_B_A = agent_state.reshape(batch_size, agent_num, -1)
+        batch_size, agent_num = x['global_state'].shape[0], x['global_state'].shape[1]
+        latent_state = x['global_state'].reshape(batch_size*agent_num, -1)
+        latent_state = self.global_encoder(latent_state)
+        return latent_state
+        # agent_state_B = agent_state.reshape(batch_size, -1)
+        # agent_state_B_A = agent_state.reshape(batch_size, agent_num, -1)
         # global
-        global_state = self.global_encoder(x['global_state'])
-        global_state = self.encoder(torch.cat((agent_state_B, global_state),dim=1))
-        return (agent_state_B, global_state)
+        # global_state = self.global_encoder(x['global_state'])
+        # global_state = self.encoder(torch.cat((agent_state_B, global_state),dim=1))
+        # return (agent_state_B, global_state)
     
 
 class PettingZooPrediction(nn.Module):

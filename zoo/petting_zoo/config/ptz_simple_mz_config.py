@@ -32,7 +32,7 @@ main_config = dict(
         n_landmark=n_landmark,
         max_cycles=25,
         agent_obs_only=False,
-        agent_specific_global_state=False,
+        agent_specific_global_state=True,
         continuous_actions=False,
         stop_value=0,
         collector_env_num=collector_env_num,
@@ -52,7 +52,7 @@ main_config = dict(
             agent_num=n_agent,
             self_supervised_learning_loss=False,  # default is False
             agent_obs_shape=6,
-            global_obs_shape=8,
+            global_obs_shape=14,
             discrete_action_encoding_type='one_hot',
             global_cooperation=True, # TODO: doesn't work now
             hidden_size_list=[256, 256],
@@ -97,7 +97,7 @@ create_config = dict(
         import_names=['zoo.petting_zoo.envs.petting_zoo_simple_spread_env'],
         type='petting_zoo',
     ),
-    env_manager=dict(type='base'),
+    env_manager=dict(type='subprocess'),
     policy=dict(
         type='muzero',
         import_names=['lzero.policy.muzero'],

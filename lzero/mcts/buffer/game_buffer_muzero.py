@@ -201,12 +201,12 @@ class MuZeroGameBuffer(GameBuffer):
               td_steps_list, action_mask_segment, to_play_segment
         """
         zero_obs = game_segment_list[0].zero_obs()
-        zero_obs = np.array([{'agent_state': np.zeros((3, 18), dtype=np.float32),
-                     'global_state': np.zeros((30,), dtype=np.float32),
-                     'agent_alone_state': np.zeros((3, 14), dtype=np.float32),
-                     'agent_alone_padding_state': np.zeros((3, 18), dtype=np.float32),}])
+        # zero_obs = np.array([{'agent_state': np.zeros((3, 18), dtype=np.float32),
+        #              'global_state': np.zeros((30,), dtype=np.float32),
+        #              'agent_alone_state': np.zeros((3, 14), dtype=np.float32),
+        #              'agent_alone_padding_state': np.zeros((3, 18), dtype=np.float32),}])
         zero_obs = np.array([{'agent_state': np.zeros((1, 6), dtype=np.float32),
-                'global_state': np.zeros((8,), dtype=np.float32),
+                'global_state': np.zeros((1, 14), dtype=np.float32),
                 'agent_alone_state': np.zeros((1, 12), dtype=np.float32),
                 'agent_alone_padding_state': np.zeros((1, 12), dtype=np.float32),}])
         value_obs_list = []

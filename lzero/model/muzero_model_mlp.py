@@ -186,7 +186,7 @@ class MuZeroModelMLP(nn.Module):
             value,
             [0. for _ in range(batch_size)],
             policy_logits,
-            latent_state[1],
+            latent_state,
         )
 
     def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
@@ -214,7 +214,7 @@ class MuZeroModelMLP(nn.Module):
         """
         next_latent_state, reward = self._dynamics(latent_state, action)
         policy_logits, value = self._prediction(next_latent_state)
-        return MZNetworkOutput(value, reward, policy_logits, next_latent_state[1])
+        return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
 
     def _representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
         """
