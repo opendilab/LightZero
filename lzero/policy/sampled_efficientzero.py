@@ -170,6 +170,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
         # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
         fixed_temperature_value=0.25,
+        # (bool) Whether to use the true chance in MCTS in 2048 env.
+        use_ture_chance_label_in_chance_encoder=False,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
@@ -881,6 +883,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 except Exception:
                     # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
                     root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
+
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
                 action, visit_count_distribution_entropy = select_action(

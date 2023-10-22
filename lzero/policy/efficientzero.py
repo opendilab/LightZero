@@ -155,6 +155,8 @@ class EfficientZeroPolicy(MuZeroPolicy):
         # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
         # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
         fixed_temperature_value=0.25,
+        # (bool) Whether to use the true chance in MCTS in 2048 env.
+        use_ture_chance_label_in_chance_encoder=False,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
