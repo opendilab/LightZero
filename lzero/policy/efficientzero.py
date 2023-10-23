@@ -18,6 +18,8 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
     prepare_obs, \
     configure_optimizers
 from lzero.policy.muzero import MuZeroPolicy
+from ding.utils.data import default_collate
+from ding.torch_utils import to_device, to_tensor
 
 
 @POLICY_REGISTRY.register('efficientzero')
@@ -307,7 +309,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
 
         target_value_prefix = target_value_prefix.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
-        assert obs_batch.size(0) == self._cfg.batch_size == target_value_prefix.size(0)
+        # assert obs_batch.size(0) == self._cfg.batch_size == target_value_prefix.size(0)
 
         # ``scalar_transform`` to transform the original value to the scaled value,
         # i.e. h(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -562,7 +564,13 @@ class EfficientZeroPolicy(MuZeroPolicy):
         self._collect_model.eval()
         self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
-        active_collect_env_num = data.shape[0]
+        active_collect_env_num = len(data)
+        # 
+        data = sum(data, [])
+        data = default_collate(data)
+        data = to_device(data, self._device)
+        to_play = np.array(to_play).reshape(-1).tolist()
+
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
@@ -667,7 +675,12 @@ class EfficientZeroPolicy(MuZeroPolicy):
                  ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
          """
         self._eval_model.eval()
-        active_eval_env_num = data.shape[0]
+        active_eval_env_num = len(data)
+        #
+        data = sum(data, [])
+        data = default_collate(data)
+        data = to_device(data, self._device)
+        to_play = np.array(to_play).reshape(-1).tolist()
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._eval_model.initial_inference(data)

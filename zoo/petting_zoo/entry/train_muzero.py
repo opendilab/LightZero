@@ -56,6 +56,7 @@ def train_muzero(
         from lzero.model.muzero_model_mlp import MuZeroModelMLP as Encoder
     elif create_cfg.policy.type == 'efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
+        from lzero.model.efficientzero_model_mlp import EfficientZeroModelMLP as Encoder
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'gumbel_muzero':

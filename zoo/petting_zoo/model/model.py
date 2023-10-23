@@ -32,8 +32,8 @@ class PettingZooEncoder(nn.Module):
 
     def forward(self, x):
         # agent
-        batch_size, agent_num = x['global_state'].shape[0], x['global_state'].shape[1]
-        latent_state = x['global_state'].reshape(batch_size*agent_num, -1)
+        batch_size = x['global_state'].shape[0]
+        latent_state = x['global_state'].reshape(batch_size, -1)
         latent_state = self.global_encoder(latent_state)
         return latent_state
         # agent_state_B = agent_state.reshape(batch_size, -1)

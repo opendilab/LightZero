@@ -254,11 +254,12 @@ class PettingZooEnv(BaseEnv):
         #               - agent_state info
         #               - global_state info
         if self._agent_specific_global_state:
-            ret['global_state'] = np.concatenate(
-                [ret['agent_state'],
-                 np.expand_dims(ret['global_state'], axis=0).repeat(self._num_agents, axis=0)],
-                axis=1
-            )
+            ret['global_state'] = np.concatenate((np.concatenate(ret['agent_state']), ret['global_state']))
+            # ret['global_state'] = np.concatenate(
+            #     [ret['agent_state'],
+            #      np.expand_dims(ret['global_state'], axis=0).repeat(self._num_agents, axis=0)],
+            #     axis=1
+            # )
         # agent_alone_state: Shape (n_agent, 2 + 2 + n_landmark * 2 + (n_agent - 1) * 2).
         #                    Stacked observation. Exclude other agents' positions from agent_state. Contains
         #                    - agent itself's state(velocity + position) +
