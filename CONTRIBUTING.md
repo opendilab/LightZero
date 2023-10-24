@@ -27,7 +27,7 @@ We're thrilled that you want to contribute to LightZero. Your help is invaluable
 
 7. **Create a Pull Request** 🎉
    - Go to the [LightZero repository](https://github.com/opendilab/LightZero).
-   - Click on "New Pull Request".
+   - Click on "New Pull Request."
    - Fill in the details and submit your PR.
    - Please make sure your PR has a clear title and description.
 
@@ -47,6 +47,12 @@ We follow a few simple guidelines:
 - Use meaningful variable and function names.
 - Comment your code when necessary.
 - Ensure your code adheres to existing coding styles and standards.
+
+For detailed information on code style, unit testing, and code review, please refer to our documentation:
+
+- [Code Style](https://di-engine-docs.readthedocs.io/en/latest/21_code_style/index.html)
+- [Unit Test](https://di-engine-docs.readthedocs.io/en/latest/22_test/index.html)
+- [Code Review](https://di-engine-docs.readthedocs.io/en/latest/24_cooperation/git_guide.html)
 
 ## 🤖 Code of Conduct
 
