@@ -1,9 +1,9 @@
 """
 Overview:
-    Implement games between different bots to test the win rates and the speed.
+    Implemrnt games between different bots to test the win rates and the speed.
 Example:
-    test_tictactoe_mcts_bot_vs_alphabeta_bot means a game between mcts_bot and alphabeta_bot where 
-    mcts_bot makes the first move (i.e. bots on the left make the first move).
+    eval_tictactoe_mcts_bot_vs_alphabeta_bot means a game between mcts_bot and alphabeta_bot where 
+    mcts_bot makes the first move(bots on the left make the first move).
 """
 import time
 
@@ -17,7 +17,8 @@ from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 cfg_tictactoe = dict(
     battle_mode='self_play_mode',
     agent_vs_human=False,
-    bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+    # bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+    bot_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
     prob_random_agent=0,
     prob_expert_agent=0,
     channel_last=True,
@@ -26,7 +27,7 @@ cfg_tictactoe = dict(
 )
 
 
-def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
+def eval_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
     """
     Overview:
         A tictactoe game between mcts_bot and rule_bot, where rule_bot take the first move.
@@ -39,7 +40,7 @@ def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
     winner = []
 
     # Repeat the game for 10 rounds.
-    for i in range(10):
+    for i in range(1):
         print('-' * 10 + str(i) + '-' * 10)
         # Initialize the game, where there are two players: player 1 and player 2.
         env = TicTacToeEnv(EasyDict(cfg_tictactoe))
@@ -101,7 +102,7 @@ def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
     )
 
 
-def test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
+def eval_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
     """
     Overview:
         A tictactoe game between alphabeta_bot and rule_bot, where alphabeta_bot take the first move.
@@ -179,7 +180,7 @@ def test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
     )
 
 
-def test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
+def eval_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
     """
     Overview:
         A tictactoe game between alphabeta_bot and mcts_bot, where mcts_bot take the first move.
@@ -259,7 +260,7 @@ def test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
     )
 
 
-def test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
+def eval_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
     """
     Overview:
         A tictactoe game between rule_bot and alphabeta_bot, where rule_bot take the first move.
@@ -337,7 +338,7 @@ def test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
     )
 
 
-def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
+def eval_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
     """
     Overview:
         A tictactoe game between mcts_bot and alphabeta_bot, where mcts_bot take the first move.
@@ -429,7 +430,7 @@ cfg_gomoku = dict(
 )
 
 
-def test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
+def eval_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
     """
     Overview:
         A tictactoe game between mcts_bot and rule_bot, where rule_bot take the first move.
@@ -511,16 +512,16 @@ if __name__ == '__main__':
     # ==============================================================
     # test win rate between alphabeta_bot and rule_bot_v0/mcts_bot
     # ==============================================================
-    # test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot()
-    # test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot()
-    # test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=2000)
-    # test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=2000)
+    # eval_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot()
+    # eval_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot()
+    # eval_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=2000)
+    # eval_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=2000)
 
     # ==============================================================
     # test win rate between mcts_bot and rule_bot_v0
     # ==============================================================
-    test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50)
-    # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=100)
-    # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=500)
-    # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=1000)
-    # test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=1000)
+    eval_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=5)
+    eval_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=10)
+    eval_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=5)
+    eval_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=10)
+    eval_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=10)

@@ -28,8 +28,21 @@ gomoku_alphazero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        # ==============================================================
+        # for the creation of simulation env
+        agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        scale=True,
+        check_action_to_connect4_in_bot_v0=False,
+        # ==============================================================
     ),
     policy=dict(
+        # ==============================================================
+        # for the creation of simulation env
+        simulation_env_name='gomoku',
+        simulation_env_config_type='play_with_bot',
+        # ==============================================================
         torch_compile=False,
         tensor_float_32=False,
         model=dict(

@@ -18,13 +18,26 @@ tictactoe_alphazero_config = dict(
     env=dict(
         board_size=3,
         battle_mode='self_play_mode',
+        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
         channel_last=False,  # NOTE
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        # ==============================================================
+        # for the creation of simulation env
+        agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        scale=True,
+        # ==============================================================
     ),
     policy=dict(
+        # ==============================================================
+        # for the creation of simulation env
+        simulation_env_name='tictactoe',
+        simulation_env_config_type='self_play',
+        # ==============================================================
         model=dict(
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),
