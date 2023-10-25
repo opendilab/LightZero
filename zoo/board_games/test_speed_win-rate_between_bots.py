@@ -360,6 +360,7 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
         player = MCTSBot(env, 'a', num_simulations)  # player_index = 0, player = 1
         # Set player 1 to move first.
         player_index = 0
+        step = 1
         while not env.get_done_reward()[0]:
             """
             Overview:
@@ -369,7 +370,7 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
             if player_index == 0:
                 t1 = time.time()
                 # action = env.mcts_bot()
-                action = player.get_actions(state, player_index=player_index, best_action_type = "most_visit")
+                action = player.get_actions(state, step, player_index, best_action_type = "most_visit")
                 t2 = time.time()
                 # print("The time difference is :", t2-t1)
                 # mcts_bot_time_list.append(t2 - t1)
@@ -387,6 +388,7 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
                 alphabeta_pruning_time_list.append(t2 - t1)
                 player_index = 0
             env.step(action)
+            step += 1
             state = env.board
             # Print the result of the game.
             if env.get_done_reward()[0]:
