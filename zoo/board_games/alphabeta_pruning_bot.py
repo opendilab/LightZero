@@ -17,7 +17,7 @@ class Node():
         super().__init__()
         self.env = env
         self.board = board
-        self.legal_actions = legal_actions
+        self.legal_actions = copy.deepcopy(legal_actions)
         self.children = []
         self.parent = parent
         self.prev_action = prev_action

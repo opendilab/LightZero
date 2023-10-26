@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 
 import numpy as np
-
+import copy
 
 class MCTSNode(ABC):
     """
@@ -151,7 +151,7 @@ class TwoPlayersMCTSNode(MCTSNode):
     @property
     def legal_actions(self):
         if self._legal_actions is None:
-            self._legal_actions = self.env.legal_actions
+            self._legal_actions = copy.deepcopy(self.env.legal_actions)
         return self._legal_actions
 
     @property
@@ -195,7 +195,6 @@ class TwoPlayersMCTSNode(MCTSNode):
         Returns:
             - node(:obj:`TwoPlayersMCTSNode`): The child node object that has been created.
         """
-
         # Choose an untried action from the list of legal actions and pop it out. Only untried actions are left in the list.
         action = self.legal_actions.pop()
 

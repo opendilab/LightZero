@@ -9,6 +9,7 @@ from ding.policy.base_policy import Policy
 from ding.torch_utils import to_device
 from ding.utils import POLICY_REGISTRY
 from ding.utils.data import default_collate
+from easydict import EasyDict
 
 from lzero.mcts.ptree.ptree_az import MCTS
 from lzero.policy import configure_optimizers
@@ -210,17 +211,17 @@ class AlphaZeroPolicy(Policy):
         Overview:
             Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
-        self._collect_mcts = MCTS(self._cfg.mcts)
+        self._get_simulation_env()
         self._collect_model = self._model
         self._collect_mcts_temperature = 1
+        self._collect_mcts = MCTS(self._cfg.mcts, self.simulate_env)
 
     @torch.no_grad()
-    def _forward_collect(self, envs: Dict, obs: Dict, temperature: float = 1) -> Dict[str, torch.Tensor]:
+    def _forward_collect(self, obs: Dict, temperature: float = 1) -> Dict[str, torch.Tensor]:
         """
         Overview:
             The forward function for collecting data in collect mode. Use real env to execute MCTS search.
         Arguments:
-            - envs (:obj:`Dict`): The dict of colletor envs, the key is env_id and the value is the env instance.
             - obs (:obj:`Dict`): The dict of obs, the key is env_id and the value is the \
                 corresponding obs in this timestep.
             - temperature (:obj:`float`): The temperature for MCTS search.
@@ -229,20 +230,16 @@ class AlphaZeroPolicy(Policy):
                 the corresponding policy output in this timestep, including action, probs and so on.
         """
         self._collect_mcts_temperature = temperature
-        ready_env_id = list(envs.keys())
+        ready_env_id = list(obs.keys())
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
         output = {}
         self._policy_model = self._collect_model
         for env_id in ready_env_id:
-            # print('[collect] start_player_index={}'.format(start_player_index[env_id]))
-            # print('[collect] init_state=\n{}'.format(init_state[env_id]))
-            envs[env_id].reset(
-                start_player_index=start_player_index[env_id],
-                init_state=init_state[env_id],
-            )
+            state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
+                                                       init_state=init_state[env_id], ))
             action, mcts_probs = self._collect_mcts.get_next_action(
-                envs[env_id],
+                state_config_for_simulation_env_reset,
                 policy_forward_fn=self._policy_value_fn,
                 temperature=self._collect_mcts_temperature,
                 sample=True
@@ -258,15 +255,18 @@ class AlphaZeroPolicy(Policy):
         Overview:
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
-        self._eval_mcts = MCTS(self._cfg.mcts)
+        self._get_simulation_env()
+        import copy
+        mcts_eval_config = copy.deepcopy(self._cfg.mcts)
+        mcts_eval_config.num_simulations = mcts_eval_config.num_simulations * 2
+        self._eval_mcts = MCTS(mcts_eval_config, self.simulate_env)
         self._eval_model = self._model
 
-    def _forward_eval(self, envs: Dict, obs: Dict) -> Dict[str, torch.Tensor]:
+    def _forward_eval(self, obs: Dict) -> Dict[str, torch.Tensor]:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode, similar to ``self._forward_collect``.
         Arguments:
-            - envs (:obj:`Dict`): The dict of colletor envs, the key is env_id and the value is the env instance.
             - obs (:obj:`Dict`): The dict of obs, the key is env_id and the value is the \
                 corresponding obs in this timestep.
         Returns:
@@ -279,20 +279,41 @@ class AlphaZeroPolicy(Policy):
         output = {}
         self._policy_model = self._eval_model
         for env_id in ready_env_id:
-            # print('[eval] start_player_index={}'.format(start_player_index[env_id]))
-            # print('[eval] init_state=\n {}'.format(init_state[env_id]))
-            envs[env_id].reset(
-                start_player_index=start_player_index[env_id],
-                init_state=init_state[env_id],
-            )
+            state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
+                                                       init_state=init_state[env_id],))
             action, mcts_probs = self._eval_mcts.get_next_action(
-                envs[env_id], policy_forward_fn=self._policy_value_fn, temperature=1.0, sample=False
+                state_config_for_simulation_env_reset, policy_forward_fn=self._policy_value_fn, temperature=1.0, sample=False
             )
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,
             }
         return output
+
+    def _get_simulation_env(self):
+        if self._cfg.simulation_env_name == 'tictactoe':
+            from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
+            if self._cfg.simulation_env_config_type == 'play_with_bot':
+                from zoo.board_games.tictactoe.config.tictactoe_alphazero_bot_mode_config import \
+                    tictactoe_alphazero_config
+            elif self._cfg.simulation_env_config_type == 'self_play':
+                from zoo.board_games.tictactoe.config.tictactoe_alphazero_sp_mode_config import \
+                    tictactoe_alphazero_config
+            else:
+                raise NotImplementedError
+            self.simulate_env = TicTacToeEnv(tictactoe_alphazero_config.env)
+
+        elif self._cfg.simulation_env_name == 'gomoku':
+            from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
+            if self._cfg.simulation_env_config_type == 'play_with_bot':
+                from zoo.board_games.gomoku.config.gomoku_alphazero_bot_mode_config import gomoku_alphazero_config
+            elif self._cfg.simulation_env_config_type == 'self_play':
+                from zoo.board_games.gomoku.config.gomoku_alphazero_sp_mode_config import gomoku_alphazero_config
+            else:
+                raise NotImplementedError
+            self.simulate_env = GomokuEnv(gomoku_alphazero_config.env)
+        else:
+            raise NotImplementedError
 
     @torch.no_grad()
     def _policy_value_fn(self, env: 'Env') -> Tuple[Dict[int, np.ndarray], float]:  # noqa

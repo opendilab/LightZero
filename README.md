@@ -31,11 +31,14 @@ Updated on 2023.09.21 LightZero-v0.0.2
 
 > LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL). 
 
-English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Paper](https://arxiv.org/pdf/2310.08348.pdf)
+English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Paper](https://arxiv.org/pdf/2310.08348.pdf)
 
 ## Background
 
-The method of combining Monte Carlo Tree Search and Deep Reinforcement Learning represented by AlphaZero and MuZero has achieved superhuman level in various games such as Go and Atari,and has also made gratifying progress in scientific fields such as protein structure prediction, matrix multiplication algorithm search, etc. 
+The integration of Monte Carlo Tree Search and Deep Reinforcement Learning,
+exemplified by AlphaZero and MuZero,
+has achieved unprecedented performance levels in various games, including Go and Atari.
+This advanced methodology has also made significant strides in scientific domains like protein structure prediction and the search for matrix multiplication algorithms.
 The following is an overview of the historical evolution of the Monte Carlo Tree Search algorithm series:
 ![pipeline](assets/mcts_rl_evolution_overview.png)
 
@@ -484,4 +487,4 @@ Special thanks to [@PaParaZz1](https://github.com/PaParaZz1), [@karroyan](https:
 ## License
 All code within this repository is under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
-<p align="right">(<a href="#top">back to top</a>)</p>
+<p align="right">(<a href="#top">Back to top</a>)</p>
