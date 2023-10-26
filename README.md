@@ -31,11 +31,11 @@ Updated on 2023.09.21 LightZero-v0.0.2
 
 > LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL). 
 
-English | [简体中文](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Paper](https://arxiv.org/pdf/2310.08348.pdf)
+English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Paper in English](https://arxiv.org/pdf/2310.08348.pdf)
 
 ## Background
 
-The method of combining Monte Carlo Tree Search and Deep Reinforcement Learning represented by AlphaZero and MuZero has achieved superhuman level in various games such as Go and Atari,and has also made gratifying progress in scientific fields such as protein structure prediction, matrix multiplication algorithm search, etc. 
+The method of combining Monte Carlo Tree Search and Deep Reinforcement Learning represented by AlphaZero and MuZero has achieved superhuman level in various games such as Go and Atari and has also made gratifying progress in scientific fields such as protein structure prediction, matrix multiplication algorithm search, etc. 
 The following is an overview of the historical evolution of the Monte Carlo Tree Search algorithm series:
 ![pipeline](assets/mcts_rl_evolution_overview.png)
 
@@ -107,7 +107,7 @@ The above picture is the framework pipeline of LightZero. We briefly introduce t
 For the file structure of LightZero, please refer to [lightzero_file_structure](https://github.com/opendilab/LightZero/blob/main/assets/lightzero_file_structure.svg).
 
 ### Integrated Algorithms
-LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of MCTS algorithms (sometimes combined with cython and cpp), including:
+LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of MCTS algorithms (sometimes combined with python and cpp), including:
 - [AlphaZero](https://www.science.org/doi/10.1126/science.aar6404)
 - [MuZero](https://arxiv.org/abs/1911.08265)
 - [Sampled MuZero](https://arxiv.org/abs/2104.06303)
