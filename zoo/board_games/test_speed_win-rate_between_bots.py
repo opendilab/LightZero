@@ -33,6 +33,7 @@ def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
     Arguments:
         - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
+    cfg_tictactoe['bot_action_type'] = 'v0'
     # List to record the time required for each decision round and the winner.
     mcts_bot_time_list = []
     bot_action_time_list = []
@@ -108,6 +109,8 @@ def test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
     Arguments:
         - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
+    cfg_tictactoe['bot_action_type'] = 'alpha_beta_pruning'
+
     # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
     rule_bot_v0_time_list = []
@@ -186,6 +189,8 @@ def test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
     Arguments:
         - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
+    cfg_tictactoe['bot_action_type'] = 'alpha_beta_pruning'
+
     # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
     mcts_bot_time_list = []
@@ -266,6 +271,8 @@ def test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
     Arguments:
         - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
+    cfg_tictactoe['bot_action_type'] = 'alpha_beta_pruning'
+
     # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
     rule_bot_v0_time_list = []
@@ -344,6 +351,8 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
     Arguments:
         - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
+    cfg_tictactoe['bot_action_type'] = 'alpha_beta_pruning'
+
     # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
     mcts_bot_time_list = []
@@ -509,10 +518,13 @@ def test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
 
 if __name__ == '__main__':
     # ==============================================================
-    # test win rate between alphabeta_bot and rule_bot_v0/mcts_bot
+    # test win rate between alphabeta_bot and rule_bot_v0
     # ==============================================================
     # test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot()
     # test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot()
+    # ==============================================================
+    # test win rate between alphabeta_bot and mcts_bot
+    # ==============================================================
     # test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=2000)
     # test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=2000)
 
@@ -520,7 +532,7 @@ if __name__ == '__main__':
     # test win rate between mcts_bot and rule_bot_v0
     # ==============================================================
     test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50)
-    # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=100)
     # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=500)
     # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=1000)
+
     # test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=1000)
