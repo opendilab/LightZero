@@ -25,8 +25,7 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 minigrid_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/{env_name}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_'
-             f'collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}pelw{policy_entropy_loss_weight}__seed{seed}',
+    exp_name=f'data_ez_ctree/{env_name}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,

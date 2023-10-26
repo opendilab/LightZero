@@ -20,7 +20,6 @@ batch_size = 256
 
 reanalyze_ratio = 0
 random_collect_episode_num = 0
-init_temperature_value_for_decay = 1.0
 td_steps = 5
 policy_entropy_loss_weight = 0.
 threshold_training_steps_for_final_temperature = int(5e5)
@@ -30,8 +29,7 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 minigrid_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/{env_name}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_'
-             f'collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}pelw{policy_entropy_loss_weight}__seed{seed}',
+    exp_name=f'data_sez_ctree/{env_name}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
     env=dict(
         env_name=env_name,
         continuous=False,

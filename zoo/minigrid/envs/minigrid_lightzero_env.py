@@ -10,13 +10,14 @@ from ding.envs import ObsPlusPrevActRewWrapper
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
 from dizoo.minigrid.envs.minigrid_wrapper import ViewSizeWrapper
+from dizoo.minigrid.envs.minigrid_env import MiniGridEnv
 from easydict import EasyDict
 from matplotlib import animation
 from minigrid.wrappers import FlatObsWrapper
 
 
 @ENV_REGISTRY.register('minigrid_lightzero')
-class MiniGridEnv(BaseEnv):
+class MiniGridEnvLightZero(MiniGridEnv):
     """
     Overview:
         A MiniGrid environment for LightZero, based on OpenAI Gym.

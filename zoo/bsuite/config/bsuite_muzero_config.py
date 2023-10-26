@@ -17,6 +17,8 @@ elif env_name == 'bandit_noise/0':
 elif env_name in ['memory_size/0']:
     action_space_size = 2
     observation_shape = 3
+else:
+    raise NotImplementedError
 
 
 # ==============================================================
