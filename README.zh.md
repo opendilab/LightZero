@@ -480,4 +480,5 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 
 本仓库中的所有代码都符合 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)。
 
-<p align="right">(<a href="#top">返回顶部</a>)</p>
+
+<p align="right">(<a href="#top">回到顶部</a>)</p>
