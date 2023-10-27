@@ -9,10 +9,16 @@ import time
 
 import numpy as np
 from easydict import EasyDict
+import psutil
 
 from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 from zoo.board_games.mcts_bot import MCTSBot
 from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
+
+def get_memory_usage():
+    process = psutil.Process()
+    memory_info = process.memory_info()
+    return memory_info.rss
 
 cfg_tictactoe = dict(
     battle_mode='self_play_mode',
@@ -352,6 +358,8 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
     # Repeat the game for 10 rounds.
     for i in range(10):
         print('-' * 10 + str(i) + '-' * 10)
+        memory_usage = get_memory_usage()
+        print(f"初始内存使用量: {memory_usage} 字节")
         # Initialize the game, where there are two players: player 1 and player 2.
         env = TicTacToeEnv(EasyDict(cfg_tictactoe))
         # Reset the environment, set the board  to a clean board and the  start player to be player 1.
@@ -370,7 +378,7 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
             if player_index == 0:
                 t1 = time.time()
                 # action = env.mcts_bot()
-                action = player.get_actions(state, step, player_index, best_action_type = "most_visit")
+                action = player.get_actions(state, step, player_index, best_action_type = "most_visit")[0]
                 t2 = time.time()
                 # print("The time difference is :", t2-t1)
                 # mcts_bot_time_list.append(t2 - t1)
@@ -393,6 +401,12 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
             # Print the result of the game.
             if env.get_done_reward()[0]:
                 print(state)
+                
+            temp = memory_usage
+            memory_usage = get_memory_usage()
+            memory_cost = memory_usage - temp
+            print(f"搜索后内存使用量: {memory_usage} 字节")
+            print(f"搜索增加的内存使用量: {memory_cost} 字节")
         # Record the winner.
         winner.append(env.get_done_winner()[1])
 

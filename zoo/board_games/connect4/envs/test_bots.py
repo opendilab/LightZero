@@ -3,10 +3,16 @@ import time
 import numpy as np
 import pytest
 from easydict import EasyDict
+import psutil
 
 from connect4_env import Connect4Env
 from zoo.board_games.mcts_bot import MCTSBot
 
+
+def get_memory_usage():
+    process = psutil.Process()
+    memory_info = process.memory_info()
+    return memory_info.rss
 
 @pytest.mark.unittest
 class TestConnect4Bot():
@@ -31,7 +37,7 @@ class TestConnect4Bot():
             prob_expert_agent=0,
             bot_action_type='rule',
             screen_scaling=9,
-            render_mode='image_savefile_mode',
+            render_mode= None,
             prob_random_action_in_bot=0,
         )
 
@@ -50,6 +56,8 @@ class TestConnect4Bot():
         # Repeat the game for 10 rounds.
         for i in range(10):
             print('-' * 10 + str(i) + '-' * 10)
+            memory_usage = get_memory_usage()
+            print(f"初始内存使用量: {memory_usage} 字节")
             # Initialize the game, where there are two players: player 1 and player 2.
             env = Connect4Env(EasyDict(self.cfg))
             # Reset the environment, set the board to a clean board and the  start player to be player 1.
@@ -61,6 +69,7 @@ class TestConnect4Bot():
             player = MCTSBot(env_mcts, 'a', num_simulations)  # player_index = 0, player = 1
             # Set player 1 to move first.
             player_index = 0
+            step = 1
             while not env.get_done_reward()[0]:
                 """
                 Overview:
@@ -70,7 +79,7 @@ class TestConnect4Bot():
                 if player_index == 0:
                     t1 = time.time()
                     # action = env.bot_action()
-                    action = player.get_actions(state, player_index=player_index)
+                    action, node = player.get_actions(state, step, player_index=player_index)
                     t2 = time.time()
                     # print("The time difference is :", t2-t1)
                     mcts_bot_time_list.append(t2 - t1)
@@ -86,7 +95,13 @@ class TestConnect4Bot():
                     player_index = 0
                 env.step(action)
                 state = env.board
-                # print(np.array(state).reshape(6, 7))
+                step += 1
+                print(np.array(state).reshape(6, 7))
+                temp = memory_usage
+                memory_usage = get_memory_usage()
+                memory_cost = memory_usage - temp
+                print(f"搜索后内存使用量: {memory_usage} 字节")
+                print(f"搜索增加的内存使用量: {memory_cost} 字节")
 
             # Record the winner.
             winner.append(env.get_done_winner()[1])
@@ -128,13 +143,15 @@ class TestConnect4Bot():
         # Repeat the game for 10 rounds.
         for i in range(1):
             print('-' * 10 + str(i) + '-' * 10)
+            memory_usage = get_memory_usage()
+            print(f"初始内存使用量: {memory_usage} 字节")
             # Initialize the game, where there are two players: player 1 and player 2.
             env = Connect4Env(EasyDict(self.cfg))
             # Reset the environment, set the board to a clean board and the  start player to be player 1.
             env.reset()
             state = env.board
             player1 = MCTSBot(env, 'a', num_simulations_1)  # player_index = 0, player = 1
-            player2 = MCTSBot(env, 'a', num_simulations_2)
+            player2 = MCTSBot(env, 'b', num_simulations_2)
             # Set player 1 to move first.
             player_index = 0
             step = 1
@@ -148,7 +165,7 @@ class TestConnect4Bot():
                 if player_index == 0:
                     t1 = time.time()
                     # action = env.bot_action()
-                    action, node = player1.get_actions(state, step, player_index)
+                    action, node, visit = player1.get_actions(state, step, player_index)
                     t2 = time.time()
                     # print("The time difference is :", t2-t1)
                     mcts_bot1_time_list.append(t2 - t1)
@@ -157,7 +174,7 @@ class TestConnect4Bot():
                 else:
                     t1 = time.time()
                     # action = env.bot_action()
-                    action, node = player2.get_actions(state, step, player_index, node)
+                    action, node, visit = player2.get_actions(state, step, player_index, num_simulation=visit)
                     t2 = time.time()
                     # print("The time difference is :", t2-t1)
                     mcts_bot2_time_list.append(t2 - t1)
@@ -166,6 +183,11 @@ class TestConnect4Bot():
                 step += 1
                 state = env.board
                 print(np.array(state).reshape(6, 7))
+                temp = memory_usage
+                memory_usage = get_memory_usage()
+                memory_cost = memory_usage - temp
+                print(f"搜索后内存使用量: {memory_usage} 字节")
+                print(f"搜索增加的内存使用量: {memory_cost} 字节")
 
             # Record the winner.
             winner.append(env.get_done_winner()[1])
@@ -207,6 +229,8 @@ class TestConnect4Bot():
         # Repeat the game for 10 rounds.
         for i in range(10):
             print('-' * 10 + str(i) + '-' * 10)
+            memory_usage = get_memory_usage()
+            print(f"初始内存使用量: {memory_usage} 字节")
             # Initialize the game, where there are two players: player 1 and player 2.
             env = Connect4Env(EasyDict(self.cfg))
             # Reset the environment, set the board to a clean board and the  start player to be player 1.
@@ -237,7 +261,12 @@ class TestConnect4Bot():
                     player_index = 0
                 env.step(action)
                 state = env.board
-                # print(np.array(state).reshape(6, 7))
+                print(np.array(state).reshape(6, 7))
+                temp = memory_usage
+                memory_usage = get_memory_usage()
+                memory_cost = memory_usage - temp
+                print(f"搜索后内存使用量: {memory_usage} 字节")
+                print(f"搜索增加的内存使用量: {memory_cost} 字节")
 
             # Record the winner.
             winner.append(env.get_done_winner()[1])
@@ -266,4 +295,5 @@ class TestConnect4Bot():
 if __name__ == "__main__":
     test=TestConnect4Bot()
     test.setup()
-    test.test_mcts_bot_vs_mcts_bot(50,50)
+    test.test_mcts_bot_vs_mcts_bot(2000,200)
+    # test.test_mcts_bot_vs_rule_bot()

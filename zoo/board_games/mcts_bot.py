@@ -10,6 +10,7 @@ Overview:
 """
 
 import time
+import copy
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from graphviz import Digraph
@@ -153,7 +154,7 @@ class TwoPlayersMCTSNode(MCTSNode):
     @property
     def legal_actions(self):
         if self._legal_actions is None:
-            self._legal_actions = self.env.legal_actions
+            self._legal_actions = copy.deepcopy(self.env.legal_actions)
         return self._legal_actions
 
     @property
@@ -374,7 +375,7 @@ class MCTSBot:
         self.num_simulation = num_simulation
         self.simulator_env = env
 
-    def get_actions(self, state, step, player_index, root=None, best_action_type="UCB"):
+    def get_actions(self, state, step, player_index, root=None, num_simulation=None, best_action_type="UCB"):
         """
         Overview:
             This function gets the actions that the MCTS Bot will take.
@@ -393,13 +394,19 @@ class MCTSBot:
             root = TwoPlayersMCTSNode(self.simulator_env)
         # Do the MCTS to find the best action to take.
         mcts = MCTS(root)
-        child_node = mcts.best_action(self.num_simulation, best_action_type=best_action_type)
-        if step == 2 or step == 3 or step == 4:
+        if num_simulation == None:
+            child_node = mcts.best_action(self.num_simulation, best_action_type=best_action_type)
+        else:
+            child_node = mcts.best_action(num_simulation, best_action_type=best_action_type)
+        print(root.visit_count)
+        if step%2 == 1:
+            self.plot_simulation_graph(child_node, step)
+        else:
             self.plot_simulation_graph(root, step)
         # if step == 3:
         #     self.plot_simulation_graph(root, step)
 
-        return root.best_action, child_node
+        return root.best_action, child_node, int(child_node.visit_count)
 
     def obtain_tree_topology(self, root, to_play=-1):
         node_stack = []
@@ -427,9 +434,37 @@ class MCTSBot:
                 node_stack.append(child)
         return edge_topology_list, node_id_list, node_topology_list
 
+    def obtain_child_topology(self, root, to_play=-1):
+            edge_topology_list = []
+            node_topology_list = []
+            node_id_list = []
+            node = root
+            node_dict = {}
+            node_dict['node_id'] = np.array(node.env.board).reshape(6,7)
+            node_dict['visit_count'] = node.visit_count
+            # node_dict['policy_prior'] = node.prior
+            node_dict['value'] = node.value
+            node_topology_list.append(node_dict)
 
-    def plot_simulation_graph(self, env_root, current_step, graph_directory=None):
-        edge_topology_list, node_id_list, node_topology_list = self.obtain_tree_topology(env_root)
+            for child in node.children:
+                # child.parent_simulation_index = node.simulation_index
+                edge_dict = {}
+                edge_dict['parent_id'] = np.array(node.env.board).reshape(6,7)
+                edge_dict['child_id'] = np.array(child.env.board).reshape(6,7)
+                edge_topology_list.append(edge_dict)
+                node_dict = {}
+                node_dict['node_id'] = np.array(child.env.board).reshape(6,7)
+                node_dict['visit_count'] = child.visit_count
+                # node_dict['policy_prior'] = node.prior
+                node_dict['value'] = child.value
+                node_topology_list.append(node_dict)
+            return edge_topology_list, node_id_list, node_topology_list
+
+    def plot_simulation_graph(self, env_root, current_step, type="child", graph_directory=None):
+        if type == "child":
+            edge_topology_list, node_id_list, node_topology_list = self.obtain_child_topology(env_root)
+        elif type == "tree":
+            edge_topology_list, node_id_list, node_topology_list = self.obtain_tree_topology(env_root)
         dot = Digraph(comment='this is direction')
         for node_topology in node_topology_list:
             node_name = str(node_topology['node_id'])
@@ -444,6 +479,6 @@ class MCTSBot:
             graph_directory = './data_visualize/'
         if not os.path.exists(graph_directory):
             os.makedirs(graph_directory)
-        graph_path = graph_directory + 'simulation_visualize_' + str(current_step) + 'step.gv'
+        graph_path = graph_directory + 'same_num_' + str(current_step) + 'step.gv'
         dot.format = 'png'
         dot.render(graph_path, view=False)
