@@ -29,6 +29,7 @@ def eval_muzero(main_cfg, create_cfg, seed=0):
         from lzero.model.muzero_model_mlp import MuZeroModelMLP as Encoder
     elif create_cfg.policy.type == 'efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
+        from lzero.model.efficientzero_model_mlp import EfficientZeroModelMLP as Encoder
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'gumbel_muzero':
@@ -52,7 +53,8 @@ def eval_muzero(main_cfg, create_cfg, seed=0):
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
 
-    model = Encoder(**cfg.policy.model, state_encoder=PettingZooEncoder(cfg), state_prediction=PettingZooPrediction(cfg), state_dynamics=PettingZooDynamics(cfg))
+    # model = Encoder(**cfg.policy.model, state_encoder=PettingZooEncoder(cfg), state_prediction=PettingZooPrediction(cfg), state_dynamics=PettingZooDynamics(cfg))
+    model = Encoder(**cfg.policy.model, state_encoder=PettingZooEncoder(cfg))
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
     policy.eval_mode.load_state_dict(torch.load(cfg.policy.load_path, map_location=cfg.policy.device))
 
@@ -78,5 +80,6 @@ def eval_muzero(main_cfg, create_cfg, seed=0):
     return stop, reward
 
 if __name__ == '__main__':
-    from zoo.petting_zoo.config.ptz_simple_mz_config import main_config, create_config
+    # from zoo.petting_zoo.config.ptz_simple_mz_config import main_config, create_config
+    from zoo.petting_zoo.config.ptz_simple_ez_config import main_config, create_config
     eval_muzero(main_config, create_config, seed=0)
