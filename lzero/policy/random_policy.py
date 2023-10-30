@@ -20,7 +20,7 @@ class LightZeroRandomPolicy(Policy):
         cfg: dict,
         model: Optional[Union[type, torch.nn.Module]] = None,
         enable_field: Optional[List[str]] = None,
-        action_space = None,
+        action_space: Any = None,
     ):
         if cfg.type == 'muzero':
             from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
@@ -65,15 +65,15 @@ class LightZeroRandomPolicy(Policy):
             elif self._cfg.type == 'muzero':
                 return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
             elif self._cfg.type == 'sampled_efficientzero':
-                return 'SampledEfficientZeroModelMLP', ['lzero.model.sampled_efficientzero_modelMLP']
+                return 'SampledEfficientZeroModelMLP', ['lzero.model.sampled_efficientzero_model_mlp']
             else:
                 raise NotImplementedError("need to implement pipeline: {}".format(self._cfg.type))
 
     def _init_collect(self) -> None:
         """
-         Overview:
-             Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
-         """
+        Overview:
+            Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
+        """
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
             self._mcts_collect = self.MCTSCtree(self._cfg)
@@ -92,8 +92,8 @@ class LightZeroRandomPolicy(Policy):
         temperature: float = 1,
         to_play: List = [-1],
         epsilon: float = 0.25,
-        ready_env_id=None,
-    ):
+        ready_env_id: np.array = None,
+    ) -> Dict:
         """
         Overview:
             The forward function for collecting data in collect mode. Use model to execute MCTS search.
@@ -141,7 +141,7 @@ class LightZeroRandomPolicy(Policy):
                 )
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
-            if self._cfg.model.continuous_action_space is True:
+            if self._cfg.model.continuous_action_space:
                 # when the action space of the environment is continuous, action_mask[:] is None.
                 # NOTE: in continuous action space env: we set all legal_actions as -1
                 legal_actions = [
@@ -208,11 +208,12 @@ class LightZeroRandomPolicy(Policy):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
 
                 if self._cfg.type in ['sampled_efficientzero']:
-                    try:
-                        root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
-                    except Exception:
-                        # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                    if self._cfg.mcts_ctree:
+                        # In ctree, the method roots.get_sampled_actions() returns a list object.
                         root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
+                    else:
+                        # In ptree, the same method roots.get_sampled_actions() returns an Action object.
+                        root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
 
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
@@ -220,32 +221,32 @@ class LightZeroRandomPolicy(Policy):
                     distributions, temperature=self._collect_mcts_temperature, deterministic=False
                 )
 
-                # ****** sample a random action from the legal action set ********
-                if self._cfg.type in ['sampled_efficientzero']:
-                    random_action = self.action_space.sample()
-                else:
-                    # all items except action are formally obtained from MCTS
-                    random_action = int(np.random.choice(legal_actions[env_id], 1))
                 # ****************************************************************
-                # NOTE: The action is randomly selected from the legal action set, the distribution is the real visit count distribution from the MCTS seraech.
+                # NOTE: The action is randomly selected from the legal action set, 
+                # the distribution is the real visit count distribution from the MCTS search.
                 if self._cfg.type in ['sampled_efficientzero']:
+                    # ****** sample a random action from the legal action set ********
+                    random_action = self.action_space.sample()
                     output[env_id] = {
                         'action': random_action,
-                        'distributions': distributions,
+                        'visit_count_distributions': distributions,
                         'root_sampled_actions': root_sampled_actions,
                         'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                        'value': value,
-                        'pred_value': pred_values[i],
-                        'policy_logits': policy_logits[i],
+                        'searched_value': value,
+                        'predicted_value': pred_values[i],
+                        'predicted_policy_logits': policy_logits[i],
                     }
                 else:
+                    # ****** sample a random action from the legal action set ********
+                    random_action = int(np.random.choice(legal_actions[env_id], 1))
+                    # all items except action are formally obtained from MCTS
                     output[env_id] = {
                         'action': random_action,
-                        'distributions': distributions,
+                        'visit_count_distributions': distributions,
                         'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                        'value': value,
-                        'pred_value': pred_values[i],
-                        'policy_logits': policy_logits[i],
+                        'searched_value': value,
+                        'predicted_value': pred_values[i],
+                        'predicted_policy_logits': policy_logits[i],
                     }
 
         return output
@@ -268,7 +269,7 @@ class LightZeroRandomPolicy(Policy):
     def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
         pass
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id=None):
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None,):
         pass
 
     def _monitor_vars_learn(self) -> List[str]:

@@ -155,7 +155,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
         # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
         # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
         fixed_temperature_value=0.25,
-        # (bool) Whether to use the true chance in MCTS in 2048 env.
+        # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
 
         # ****** Priority ******
@@ -626,11 +626,11 @@ class EfficientZeroPolicy(MuZeroPolicy):
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                 output[env_id] = {
                     'action': action,
-                    'distributions': distributions,
+                    'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'value': value,
-                    'pred_value': pred_values[i],
-                    'policy_logits': policy_logits[i],
+                    'searched_value': value,
+                    'predicted_value': pred_values[i],
+                    'predicted_policy_logits': policy_logits[i],
                 }
 
         return output
@@ -646,7 +646,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id=None):
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None,):
         """
          Overview:
              The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -718,11 +718,11 @@ class EfficientZeroPolicy(MuZeroPolicy):
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                 output[env_id] = {
                     'action': action,
-                    'distributions': distributions,
+                    'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'value': value,
-                    'pred_value': pred_values[i],
-                    'policy_logits': policy_logits[i],
+                    'searched_value': value,
+                    'predicted_value': pred_values[i],
+                    'predicted_policy_logits': policy_logits[i],
                 }
 
         return output

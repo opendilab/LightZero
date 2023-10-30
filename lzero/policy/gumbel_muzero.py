@@ -486,7 +486,7 @@ class GumeblMuZeroPolicy(MuZeroPolicy):
             action_mask: list = None,
             temperature: float = 1,
             to_play: List = [-1],
-            ready_env_id=None
+            ready_env_id: np.array = None,
     ) -> Dict:
         """
         Overview:
@@ -572,13 +572,13 @@ class GumeblMuZeroPolicy(MuZeroPolicy):
                 action = np.argmax([v for v in valid_value])
                 output[env_id] = {
                     'action': action,
-                    'distributions': distributions,
+                    'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'value': value,
+                    'searched_value': value,
                     'roots_completed_value': roots_completed_value,
                     'improved_policy_probs': improved_policy_probs,
-                    'pred_value': pred_values[i],
-                    'policy_logits': policy_logits[i],
+                    'predicted_value': pred_values[i],
+                    'predicted_policy_logits': policy_logits[i],
                 }
 
         return output
@@ -594,7 +594,7 @@ class GumeblMuZeroPolicy(MuZeroPolicy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1, ready_env_id=None) -> Dict:
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1, ready_env_id: np.array = None,) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -674,11 +674,11 @@ class GumeblMuZeroPolicy(MuZeroPolicy):
 
                 output[env_id] = {
                     'action': action,
-                    'distributions': distributions,
+                    'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'value': value,
-                    'pred_value': pred_values[i],
-                    'policy_logits': policy_logits[i],
+                    'searched_value': value,
+                    'predicted_value': pred_values[i],
+                    'predicted_policy_logits': policy_logits[i],
                 }
 
         return output
