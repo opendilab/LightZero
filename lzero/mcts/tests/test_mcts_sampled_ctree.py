@@ -29,7 +29,7 @@ class MuZeroModelFake(torch.nn.Module):
         reward_hidden_state_state = (torch.zeros(size=(1, batch_size, 16)), torch.zeros(size=(1, batch_size, 16)))
 
         output = {
-            'searched_value': value,
+            'value': value,
             'value_prefix': value_prefix,
             'policy_logits': policy_logits,
             'latent_state': latent_state,
@@ -48,7 +48,7 @@ class MuZeroModelFake(torch.nn.Module):
         # policy_logits = torch.zeros(size=(batch_size, self.action_num))
 
         output = {
-            'searched_value': value,
+            'value': value,
             'value_prefix': value_prefix,
             'policy_logits': policy_logits,
             'latent_state': latent_state,
