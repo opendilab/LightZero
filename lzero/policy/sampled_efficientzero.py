@@ -170,6 +170,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
         # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
         fixed_temperature_value=0.25,
+        # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
+        use_ture_chance_label_in_chance_encoder=False,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
@@ -786,7 +788,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
     def _forward_collect(
             self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1,
-            epsilon: float = 0.25, ready_env_id=None
+            epsilon: float = 0.25, ready_env_id: np.array = None,
     ):
         """
         Overview:
@@ -876,22 +878,25 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                try:
-                    root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
-                except Exception:
-                    # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                if self._cfg.mcts_ctree:
+                    # In ctree, the method roots.get_sampled_actions() returns a list object.
                     root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
+                else:
+                    # In ptree, the same method roots.get_sampled_actions() returns an Action object.
+                    root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
+
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
                 action, visit_count_distribution_entropy = select_action(
                     distributions, temperature=self._collect_mcts_temperature, deterministic=False
                 )
-                try:
-                    action = roots_sampled_actions[i][action].value
-                    # logging.warning('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
-                except Exception:
-                    # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+
+                if self._cfg.mcts_ctree:
+                    # In ctree, the method roots.get_sampled_actions() returns a list object.
                     action = np.array(roots_sampled_actions[i][action])
+                else:
+                    # In ptree, the same method roots.get_sampled_actions() returns an Action object.
+                    action = roots_sampled_actions[i][action].value
 
                 if not self._cfg.model.continuous_action_space:
                     if len(action.shape) == 0:
@@ -901,12 +906,12 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
                 output[env_id] = {
                     'action': action,
-                    'distributions': distributions,
+                    'visit_count_distributions': distributions,
                     'root_sampled_actions': root_sampled_actions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'value': value,
-                    'pred_value': pred_values[i],
-                    'policy_logits': policy_logits[i],
+                    'searched_value': value,
+                    'predicted_value': pred_values[i],
+                    'predicted_policy_logits': policy_logits[i],
                 }
 
         return output
@@ -922,7 +927,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id=None):
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None,):
         """
          Overview:
              The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -1037,12 +1042,12 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
                 output[env_id] = {
                     'action': action,
-                    'distributions': distributions,
+                    'visit_count_distributions': distributions,
                     'root_sampled_actions': root_sampled_actions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'value': value,
-                    'pred_value': pred_values[i],
-                    'policy_logits': policy_logits[i],
+                    'searched_value': value,
+                    'predicted_value': pred_values[i],
+                    'predicted_policy_logits': policy_logits[i],
                 }
 
         return output
