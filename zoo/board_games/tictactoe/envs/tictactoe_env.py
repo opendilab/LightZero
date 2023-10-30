@@ -329,6 +329,8 @@ class TicTacToeEnv(BaseEnv):
             return self.rule_bot_v0()
         elif self.bot_action_type == 'alpha_beta_pruning':
             return self.bot_action_alpha_beta_pruning()
+        else:
+            raise NotImplementedError
 
     def bot_action_alpha_beta_pruning(self):
         action = self.alpha_beta_pruning_player.get_best_action(self.board, player_index=self.current_player_index)

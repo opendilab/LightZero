@@ -8,6 +8,7 @@ from ding.model import model_wrap
 from ding.policy.base_policy import Policy
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
+from torch.distributions import Categorical
 from torch.nn import L1Loss
 
 from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
@@ -60,6 +61,8 @@ class MuZeroPolicy(Policy):
             norm_type='BN',
         ),
         # ****** common ******
+        # (bool) whether to use rnd model.
+        use_rnd_model=False,
         # (bool) Whether to use multi-gpu training.
         multi_gpu=False,
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
@@ -116,6 +119,8 @@ class MuZeroPolicy(Policy):
         learning_rate=0.2,
         # (int) Frequency of target network update.
         target_update_freq=100,
+        # (int) Frequency of target network update.
+        target_update_freq_for_intrinsic_reward=1000,
         # (float) Weight decay for training policy network.
         weight_decay=1e-4,
         # (float) One-order Momentum in optimizer, which stabilizes the training process (gradient direction).
@@ -138,6 +143,8 @@ class MuZeroPolicy(Policy):
         value_loss_weight=0.25,
         # (float) The weight of policy loss.
         policy_loss_weight=1,
+        # (float) The weight of policy entropy loss.
+        policy_entropy_loss_weight=0,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
@@ -256,6 +263,22 @@ class MuZeroPolicy(Policy):
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
 
+        if self._cfg.use_rnd_model:
+            if self._cfg.target_model_for_intrinsic_reward_update_type == 'assign':
+                self._target_model_for_intrinsic_reward = model_wrap(
+                    self._target_model,
+                    wrapper_name='target',
+                    update_type='assign',
+                    update_kwargs={'freq': self._cfg.target_update_freq_for_intrinsic_reward}
+                )
+            elif self._cfg.target_model_for_intrinsic_reward_update_type == 'momentum':
+                self._target_model_for_intrinsic_reward = model_wrap(
+                    self._target_model,
+                    wrapper_name='target',
+                    update_type='momentum',
+                    update_kwargs={'theta': self._cfg.target_update_theta_for_intrinsic_reward}
+                )
+
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         Overview:
@@ -271,6 +294,8 @@ class MuZeroPolicy(Policy):
         """
         self._learn_model.train()
         self._target_model.train()
+        if self._cfg.use_rnd_model:
+            self._target_model_for_intrinsic_reward.train()
 
         current_batch, target_batch = data
         obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
@@ -340,6 +365,11 @@ class MuZeroPolicy(Policy):
         policy_loss = cross_entropy_loss(policy_logits, target_policy[:, 0])
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
+        prob = torch.softmax(policy_logits, dim=-1)
+        dist = Categorical(prob)
+        policy_entropy_loss = -dist.entropy()
+
+
         reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
 
@@ -383,6 +413,10 @@ class MuZeroPolicy(Policy):
             # ==============================================================
             policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_k + 1])
 
+            prob = torch.softmax(policy_logits, dim=-1)
+            dist = Categorical(prob)
+            policy_entropy_loss += -dist.entropy()
+
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
 
@@ -406,7 +440,8 @@ class MuZeroPolicy(Policy):
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
                 self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
+                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss +
+                self._cfg.policy_entropy_loss_weight * policy_entropy_loss
         )
         weighted_total_loss = (weights * loss).mean()
 
@@ -427,6 +462,8 @@ class MuZeroPolicy(Policy):
         # the core target model update step.
         # ==============================================================
         self._target_model.update(self._learn_model.state_dict())
+        if self._cfg.use_rnd_model:
+            self._target_model_for_intrinsic_reward.update(self._learn_model.state_dict())
 
         if self._cfg.monitor_extra_statistics:
             predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
@@ -439,6 +476,7 @@ class MuZeroPolicy(Policy):
             'weighted_total_loss': weighted_total_loss.item(),
             'total_loss': loss.mean().item(),
             'policy_loss': policy_loss.mean().item(),
+            'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),
             'reward_loss': reward_loss.mean().item(),
             'value_loss': value_loss.mean().item(),
             'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
@@ -467,7 +505,7 @@ class MuZeroPolicy(Policy):
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
-        self._collect_mcts_temperature = 1
+        self._collect_mcts_temperature = 1.
         self.collect_epsilon = 0.0
 
     def _forward_collect(
@@ -697,6 +735,7 @@ class MuZeroPolicy(Policy):
             'weighted_total_loss',
             'total_loss',
             'policy_loss',
+            'policy_entropy',
             'reward_loss',
             'value_loss',
             'consistency_loss',
