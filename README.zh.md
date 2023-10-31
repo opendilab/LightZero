@@ -464,27 +464,23 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 ```
 
 ## 致谢
-
-本算法库的实现部分基于以下 github 库，非常感谢这些开创性工作：
-
+此算法库的实现部分基于以下 GitHub 仓库，非常感谢这些开创性工作：
 - https://github.com/opendilab/DI-engine
+- https://github.com/deepmind/mctx
 - https://github.com/YeWR/EfficientZero
 - https://github.com/werner-duvaud/muzero-general
-- https://github.com/deepmind/mctx
 
-特别感谢 [@PaParaZz1](https://github.com/PaParaZz1), [@karroyan](https://github.com/karroyan), [@nighood](https://github.com/nighood), 
-[@jayyoung0802](https://github.com/jayyoung0802), [@timothijoe](https://github.com/timothijoe), [@TuTuHuss](https://github.com/TuTuHuss), [@HarryXuancy](https://github.com/HarryXuancy), [@puyuan1996](https://github.com/puyuan1996), [@HansBug](https://github.com/HansBug) 在本算法库中的贡献和支持。
+特别感谢以下贡献者 [@PaParaZz1](https://github.com/PaParaZz1), [@karroyan](https://github.com/karroyan), [@nighood](https://github.com/nighood), 
+[@jayyoung0802](https://github.com/jayyoung0802), [@timothijoe](https://github.com/timothijoe), [@TuTuHuss](https://github.com/TuTuHuss), [@HarryXuancy](https://github.com/HarryXuancy), [@puyuan1996](https://github.com/puyuan1996), [@HansBug](https://github.com/HansBug) 对本项目的贡献和支持。
 
+感谢所有为此项目做出贡献的人：
+<a href="https://github.com/opendilab/LightZero/graphs/contributors">
+<img src="https://contrib.rocks/image?repo=opendilab/LightZero" />
+</a>
 
 ## 许可证
 
 本仓库中的所有代码都符合 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)。
 
-
 <p align="right">(<a href="#top">回到顶部</a>)</p>
 
-### 感谢我们的贡献者
-
-<a href="https://github.com/opendilab/LightZero/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=opendilab/LightZero" />
-</a>

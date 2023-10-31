@@ -473,24 +473,23 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 ## Acknowledgments
 
-This repo is partially based on the following repo, many thanks to their pioneering work:
-
+This project has been developed partially based on the following pioneering works on GitHub repositories.
+We express our profound gratitude for these foundational resources:
 - https://github.com/opendilab/DI-engine
+- https://github.com/deepmind/mctx
 - https://github.com/YeWR/EfficientZero
 - https://github.com/werner-duvaud/muzero-general
-- https://github.com/deepmind/mctx
 
-Special thanks to [@PaParaZz1](https://github.com/PaParaZz1), [@karroyan](https://github.com/karroyan), [@nighood](https://github.com/nighood), 
-[@jayyoung0802](https://github.com/jayyoung0802), [@timothijoe](https://github.com/timothijoe), [@TuTuHuss](https://github.com/TuTuHuss), [@HarryXuancy](https://github.com/HarryXuancy), [@puyuan1996](https://github.com/puyuan1996), [@HansBug](https://github.com/HansBug) for their contributions and support.
+We would like to extend our special thanks to the following contributors [@PaParaZz1](https://github.com/PaParaZz1), [@karroyan](https://github.com/karroyan), [@nighood](https://github.com/nighood), 
+[@jayyoung0802](https://github.com/jayyoung0802), [@timothijoe](https://github.com/timothijoe), [@TuTuHuss](https://github.com/TuTuHuss), [@HarryXuancy](https://github.com/HarryXuancy), [@puyuan1996](https://github.com/puyuan1996), [@HansBug](https://github.com/HansBug) for their valuable contributions and support to this algorithm library.
+
+Thanks to all who contributed to this project:
+<a href="https://github.com/opendilab/LightZero/graphs/contributors">
+<img src="https://contrib.rocks/image?repo=opendilab/LightZero" />
+</a>
 
 
 ## License
 All code within this repository is under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
-
-### Thanks to our contributors
-
-<a href="https://github.com/opendilab/LightZero/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=opendilab/LightZero" />
-</a>
 
 <p align="right">(<a href="#top">Back to top</a>)</p>
