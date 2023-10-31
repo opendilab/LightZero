@@ -482,3 +482,9 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 
 
 <p align="right">(<a href="#top">回到顶部</a>)</p>
+
+### 感谢我们的贡献者
+
+<a href="https://github.com/opendilab/LightZero/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=opendilab/LightZero" />
+</a>

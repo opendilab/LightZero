@@ -487,4 +487,10 @@ Special thanks to [@PaParaZz1](https://github.com/PaParaZz1), [@karroyan](https:
 ## License
 All code within this repository is under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
+### Thanks to our contributors
+
+<a href="https://github.com/opendilab/LightZero/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=opendilab/LightZero" />
+</a>
+
 <p align="right">(<a href="#top">Back to top</a>)</p>
