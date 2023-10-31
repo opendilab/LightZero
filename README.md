@@ -483,6 +483,12 @@ This repo is partially based on the following repo, many thanks to their pioneer
 Special thanks to [@PaParaZz1](https://github.com/PaParaZz1), [@karroyan](https://github.com/karroyan), [@nighood](https://github.com/nighood), 
 [@jayyoung0802](https://github.com/jayyoung0802), [@timothijoe](https://github.com/timothijoe), [@TuTuHuss](https://github.com/TuTuHuss), [@HarryXuancy](https://github.com/HarryXuancy), [@puyuan1996](https://github.com/puyuan1996), [@HansBug](https://github.com/HansBug) for their contributions and support.
 
+### Thank to our contributors
+
+<a href="https://github.com/mohitd404/LightZero/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=mohitd404/LightZero" />
+</a>
+
 
 ## License
 All code within this repository is under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
