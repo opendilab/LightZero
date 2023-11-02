@@ -229,32 +229,48 @@ class GameSegment:
     def game_segment_to_array(self) -> None:
         """
         Overview:
-            post processing the data when a ``GameSegment`` block is full.
-        Note:
-        game_segment element shape:
-            e.g. game_segment_length=20, stack=4, num_unroll_steps=5, td_steps=5
+            Post-process the data when a `GameSegment` block is full. This function converts various game segment
+            elements into numpy arrays for easier manipulation and processing.
+        Structure:
+            The structure and shapes of different game segment elements are as follows. Let's assume
+            `game_segment_length`=20, `stack`=4, `num_unroll_steps`=5, `td_steps`=5:
 
-            obs:            game_segment_length + stack + num_unroll_steps, 20+4+5
-            action:         game_segment_length -> 20
-            reward:         game_segment_length + num_unroll_steps + td_steps -1  20+5+5-1
-            root_values:    game_segment_length + num_unroll_steps + td_steps -> 20+5+5
-            child_visits：  game_segment_length + num_unroll_steps -> 20+5
-            to_play:        game_segment_length -> 20
-            action_mask:    game_segment_length -> 20
+            - obs:            game_segment_length + stack + num_unroll_steps, 20+4+5
+            - action:         game_segment_length -> 20
+            - reward:         game_segment_length + num_unroll_steps + td_steps -1  20+5+5-1
+            - root_values:    game_segment_length + num_unroll_steps + td_steps -> 20+5+5
+            - child_visits:   game_segment_length + num_unroll_steps -> 20+5
+            - to_play:        game_segment_length -> 20
+            - action_mask:    game_segment_length -> 20
+        Examples:
+            Here is an illustration of the structure of `obs` and `rew` for two consecutive game segments
+            (game_segment_i and game_segment_i+1):
 
-        game_segment_t:
-            obs:  4       20        5
-                 ----|----...----|-----|
-        game_segment_t+1:
-            obs:               4       20        5
-                             ----|----...----|-----|
+            - game_segment_i (obs):     4       20        5
+                                      ----|----...----|-----|
+            - game_segment_i+1 (obs):              4       20        5
+                                                  ----|----...----|-----|
 
-        game_segment_t:
-            rew:     20        5      4
-                 ----...----|------|-----|
-        game_segment_t+1:
-            rew:             20        5    4
-                        ----...----|------|-----|
+            - game_segment_i (rew):        20        5      4
+                                      ----...----|------|-----|
+            - game_segment_i+1 (rew):                 20        5    4
+                                                 ----...----|------|-----|
+
+        Postprocessing:
+            - self.obs_segment (:obj:`numpy.ndarray`): A numpy array version of the original obs_segment.
+            - self.action_segment (:obj:`numpy.ndarray`): A numpy array version of the original action_segment.
+            - self.reward_segment (:obj:`numpy.ndarray`): A numpy array version of the original reward_segment.
+            - self.child_visit_segment (:obj:`numpy.ndarray`): A numpy array version of the original child_visit_segment.
+            - self.root_value_segment (:obj:`numpy.ndarray`): A numpy array version of the original root_value_segment.
+            - self.improved_policy_probs (:obj:`numpy.ndarray`): A numpy array version of the original improved_policy_probs.
+            - self.action_mask_segment (:obj:`numpy.ndarray`): A numpy array version of the original action_mask_segment.
+            - self.to_play_segment (:obj:`numpy.ndarray`): A numpy array version of the original to_play_segment.
+            - self.chance_segment (:obj:`numpy.ndarray`, optional): A numpy array version of the original chance_segment. Only
+               created if `self.use_ture_chance_label_in_chance_encoder` is True.
+
+        .. note::
+            For environments with a variable action space, such as board games, the elements in `child_visit_segment` may have
+            different lengths. In such scenarios, it is necessary to use the object data type for `self.child_visit_segment`.
         """
         self.obs_segment = np.array(self.obs_segment)
         self.action_segment = np.array(self.action_segment)
