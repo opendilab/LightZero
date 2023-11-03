@@ -587,8 +587,14 @@ class MAPolicy(Policy):
                 #     'policy_logits': policy_logits[i],
                 # }
             for i, env_id in enumerate(ready_env_id):
+                # print(f"for the env {env_id}")
                 policy_values = torch.softmax(torch.tensor([policy_logits[i][a] for a in legal_actions[i]]), dim=0).tolist()
+                if sum(policy_values) != 1:
+                    # print(policy_values)
+                    # print(sum(policy_values))
+                    policy_values[-1] += 1 - sum(policy_values)
                 action_index_in_legal_action_set = np.random.choice(len(legal_actions[i]), p=policy_values)
+                # print(action_index_in_legal_action_set)
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                 #更改后的output应该是：。其中action由policy_logits直接采样得到。
                 output[env_id] = {
