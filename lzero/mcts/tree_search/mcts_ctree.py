@@ -314,7 +314,8 @@ class MuZeroMCTSCtree(object):
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
-                network_output = model.recurrent_inference(latent_states, last_actions)
+                # network_output = model.recurrent_inference(latent_states, last_actions)
+                network_output = model.recurrent_inference(last_actions)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
