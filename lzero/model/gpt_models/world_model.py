@@ -43,7 +43,9 @@ class WorldModel(nn.Module):
 
         self.transformer = Transformer(config)
         self.num_observations_tokens = 16
-        self.device = 'cpu'
+        # self.device = 'cpu'
+        self.device = config.device
+
 
         all_but_last_obs_tokens_pattern = torch.ones(config.tokens_per_block)
         all_but_last_obs_tokens_pattern[-2] = 0

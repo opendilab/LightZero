@@ -338,13 +338,13 @@ class MuZeroGPTPolicy(Policy):
 
         # compute_loss(self, batch: Batch, tokenizer: Tokenizer, ** kwargs: Any)
 
-        batch_for_gpt ={}
+        batch_for_gpt = {}
         batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size,-1, 4)  # (B, T, O) or (B, T, C, H, W)
         batch_for_gpt['actions'] = action_batch.squeeze(-1)  # (B, T-1, A) -> (B, T-1)
 
         batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]  # (B, T, R)
 
-        batch_for_gpt['mask_padding'] = mask_batch == 1.0 # (B, T) TODO
+        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # (B, T) TODO
 
         batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]  # (B, T-1, O) or (B, T-1, C, H, W)
         batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]  # (B, T-1) TODO
