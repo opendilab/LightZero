@@ -9,7 +9,7 @@ from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
 
 if TYPE_CHECKING:
-    from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy, GumeblMuZeroPolicy
+    from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy, GumbelMuZeroPolicy
 
 
 @BUFFER_REGISTRY.register('game_buffer')
