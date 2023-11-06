@@ -170,13 +170,13 @@ class GameSegment:
         """
         assert len(next_segment_observations) <= self.num_unroll_steps
         assert len(next_segment_child_visits) <= self.num_unroll_steps
-        assert len(next_segment_root_values) <= self.num_unroll_steps + self.num_unroll_steps
-        assert len(next_segment_rewards) <= self.num_unroll_steps + self.num_unroll_steps - 1
+        assert len(next_segment_root_values) <= self.num_unroll_steps + self.td_steps
+        assert len(next_segment_rewards) <= self.num_unroll_steps + self.td_steps - 1
         # ==============================================================
         # The core difference between GumbelMuZero and MuZero
         # ==============================================================
         if self.gumbel_algo:
-            assert len(next_segment_improved_policy) <= self.num_unroll_steps + self.num_unroll_steps
+            assert len(next_segment_improved_policy) <= self.num_unroll_steps + self.td_steps
 
         # NOTE: next block observation should start from (stacked_observation - 1) in next trajectory
         for observation in next_segment_observations:
