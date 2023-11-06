@@ -20,7 +20,7 @@ from lzero.policy.muzero import MuZeroPolicy
 
 
 @POLICY_REGISTRY.register('gumbel_muzero')
-class GumeblMuZeroPolicy(MuZeroPolicy):
+class GumbelMuZeroPolicy(MuZeroPolicy):
     """
     Overview:
         The policy class for Gumbel MuZero proposed in the paper https://openreview.net/forum?id=bERaNdoegnO.
