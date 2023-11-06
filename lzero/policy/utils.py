@@ -11,6 +11,34 @@ from scipy.stats import entropy
 from torch.nn import functional as F
 
 
+def pad_and_get_lengths(inputs, num_of_sampled_actions):
+    """
+    Overview:
+        Pad root_sampled_actions to make sure that the length of root_sampled_actions is equal to num_of_sampled_actions.
+        Also record the true length of each sequence before padding.
+    Arguments:
+        - inputs (:obj:`List[dict]`): The input data.
+        - num_of_sampled_actions (:obj:`int`): The number of sampled actions.
+    Returns:
+        - inputs (:obj:`List[dict]`): The input data after padding. Each dict also contains 'action_length' which indicates
+                                      the true length of 'root_sampled_actions' before padding.
+    Example:
+        >>> inputs = [{'root_sampled_actions': torch.tensor([1, 2])}, {'root_sampled_actions': torch.tensor([3, 4, 5])}]
+        >>> num_of_sampled_actions = 5
+        >>> result = pad_and_get_lengths(inputs, num_of_sampled_actions)
+        >>> print(result)  # Prints [{'root_sampled_actions': tensor([1, 2, 2, 2, 2]), 'action_length': 2},
+                                       {'root_sampled_actions': tensor([3, 4, 5, 5, 5]), 'action_length': 3}]
+    """
+    for input_dict in inputs:
+        root_sampled_actions = input_dict['root_sampled_actions']
+        input_dict['action_length'] = len(root_sampled_actions)
+        if len(root_sampled_actions) < num_of_sampled_actions:
+            # Use the last element to pad root_sampled_actions
+            padding = root_sampled_actions[-1].repeat(num_of_sampled_actions - len(root_sampled_actions))
+            input_dict['root_sampled_actions'] = torch.cat((root_sampled_actions, padding))
+    return inputs
+
+
 def visualize_avg_softmax(logits):
     """
     Overview:
@@ -344,6 +372,12 @@ def negative_cosine_similarity(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tens
     x1 = F.normalize(x1, p=2., dim=-1, eps=1e-5)
     x2 = F.normalize(x2, p=2., dim=-1, eps=1e-5)
     return -(x1 * x2).sum(dim=1)
+
+
+def compute_entropy(policy_probs: torch.Tensor) -> torch.Tensor:
+    dist = torch.distributions.Categorical(probs=policy_probs)
+    entropy = dist.entropy().mean()
+    return entropy
 
 
 def get_max_entropy(action_shape: int) -> np.float32:

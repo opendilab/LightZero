@@ -123,7 +123,6 @@ class Node:
 
             for action_index in range(self.num_of_sampled_actions):
                 self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
-                    # prob[action_index], # NOTE: this is a bug
                     prob[sampled_actions[action_index]],  #
                     action_space_size=self.action_space_size,
                     num_of_sampled_actions=self.num_of_sampled_actions,
@@ -403,6 +402,7 @@ class Roots:
             - python_sampled_actions: a vector of sampled_actions for each root, e.g. the size of original action space is 6, the K=3,
             python_sampled_actions = [[1,3,0], [2,4,0], [5,4,1]].
         """
+        # TODO(pu): root_sampled_actions bug in discere action space?
         sampled_actions = []
         for i in range(self.root_num):
             sampled_actions.append(self.roots[i].legal_actions)
@@ -774,20 +774,79 @@ def batch_backpropagate(
             )
 
 
-class Action:
-    """Class that represent an action of a game."""
+from typing import Union
+import numpy as np
 
-    def __init__(self, value: float) -> None:
+class Action:
+    """
+    Class that represents an action of a game.
+
+    Attributes:
+        value (Union[int, np.ndarray]): The value of the action. Can be either an integer or a numpy array.
+    """
+
+    def __init__(self, value: Union[int, np.ndarray]) -> None:
+        """
+        Initializes the Action with the given value.
+
+        Args:
+            value (Union[int, np.ndarray]): The value of the action.
+        """
         self.value = value
 
-    def __hash__(self) -> hash:
-        return hash(self.value.tostring())
+    def __hash__(self) -> int:
+        """
+        Returns a hash of the Action's value.
+
+        If the value is a numpy array, it is flattened to a tuple and then hashed.
+        If the value is a single integer, it is hashed directly.
+
+        Returns:
+            int: The hash of the Action's value.
+        """
+        if isinstance(self.value, np.ndarray):
+            if self.value.ndim == 0:
+                return hash(self.value.item())
+            else:
+                return hash(tuple(self.value.flatten()))
+        else:
+            return hash(self.value)
 
     def __eq__(self, other: "Action") -> bool:
-        return (self.value == other.value).all()
+        """
+        Determines if this Action is equal to another Action.
+
+        If both values are numpy arrays, they are compared element-wise.
+        Otherwise, they are compared directly.
+
+        Args:
+            other (Action): The Action to compare with.
+
+        Returns:
+            bool: True if the two Actions are equal, False otherwise.
+        """
+        if isinstance(self.value, np.ndarray) and isinstance(other.value, np.ndarray):
+            return np.array_equal(self.value, other.value)
+        else:
+            return self.value == other.value
 
     def __gt__(self, other: "Action") -> bool:
-        return self.value[0] > other.value[0]
+        """
+        Determines if this Action's value is greater than another Action's value.
+
+        Args:
+            other (Action): The Action to compare with.
+
+        Returns:
+            bool: True if this Action's value is greater, False otherwise.
+        """
+        return self.value > other.value
 
     def __repr__(self) -> str:
+        """
+        Returns a string representation of this Action.
+
+        Returns:
+            str: A string representation of the Action's value.
+        """
         return str(self.value)

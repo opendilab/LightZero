@@ -162,7 +162,7 @@ class AlphaZeroPolicy(Policy):
         mcts_probs = mcts_probs.to(device=self._device, dtype=torch.float)
         reward = reward.to(device=self._device, dtype=torch.float)
 
-        action_probs, values = self._learn_model.compute_prob_value(state_batch)
+        action_probs, values = self._learn_model.compute_policy_value(state_batch)
         log_probs = torch.log(action_probs)
 
         # calculate policy entropy, for monitoring only
@@ -323,7 +323,7 @@ class AlphaZeroPolicy(Policy):
             device=self._device, dtype=torch.float
         ).unsqueeze(0)
         with torch.no_grad():
-            action_probs, value = self._policy_model.compute_prob_value(current_state_scale)
+            action_probs, value = self._policy_model.compute_policy_value(current_state_scale)
         action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
         return action_probs_dict, value.item()
 
