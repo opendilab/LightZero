@@ -3,14 +3,15 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 25
-# update_per_collect = 100
-# batch_size = 256
-# max_env_step = int(1e5)
-# reanalyze_ratio = 0
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 25
+update_per_collect = 100
+batch_size = 256
+max_env_step = int(1e5)
+reanalyze_ratio = 0
+num_unroll_steps=5 #20
 
 
 # collector_env_num = 1
@@ -21,17 +22,18 @@ from easydict import EasyDict
 # batch_size = 5
 # max_env_step = int(1e5)
 # reanalyze_ratio = 0
+# num_unroll_steps=5
 
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 25
-update_per_collect = 10
-batch_size = 64
-max_env_step = int(1e5)
-reanalyze_ratio = 0
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 25
+# update_per_collect = 10
+# batch_size = 64
+# max_env_step = int(1e5)
+# reanalyze_ratio = 0
 
-num_unroll_steps=20
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -52,12 +54,12 @@ cartpole_muzero_gpt_config = dict(
         model=dict(
             observation_shape=4,
             action_space_size=2,
-            model_type='mlp', 
+            model_type='mlp',
             lstm_hidden_size=128,
             latent_state_dim=128,
             self_supervised_learning_loss=True,  # NOTE: default is False.
             discrete_action_encoding_type='one_hot',
-            norm_type='BN', 
+            norm_type='BN',
         ),
         cuda=True,
         env_type='not_board_games',
@@ -71,8 +73,8 @@ cartpole_muzero_gpt_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        # eval_freq=int(2e2),
-        eval_freq=int(2),
+        eval_freq=int(2e2),
+        # eval_freq=int(2),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
