@@ -2,7 +2,7 @@ import pytest
 from ding.utils import EasyTimer
 from easydict import EasyDict
 
-from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
+from zoo.board_games.gomoku.envs.gomoku_env_ui import GomokuEnv
 
 timer = EasyTimer(cuda=True)
 

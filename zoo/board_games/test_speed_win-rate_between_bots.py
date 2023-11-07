@@ -10,7 +10,7 @@ import time
 import numpy as np
 from easydict import EasyDict
 
-from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
+from zoo.board_games.gomoku.envs.gomoku_env_ui import GomokuEnv
 from zoo.board_games.mcts_bot import MCTSBot
 from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 

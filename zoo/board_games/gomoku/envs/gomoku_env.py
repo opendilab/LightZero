@@ -1,19 +1,24 @@
 import copy
+import os
 import random
 import sys
 from functools import lru_cache
-from typing import List
+from typing import List, Any
 
 import gym
+import imageio
 import numpy as np
+import pygame
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
+from matplotlib import pyplot as plt
 from zoo.board_games.gomoku.envs.legal_actions_cython import legal_actions_cython
 from zoo.board_games.gomoku.envs.get_done_winner_cython import get_done_winner_cython
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
+from zoo.board_games.connect4.envs.connect4_env import Connect4Env
 from zoo.board_games.gomoku.envs.gomoku_rule_bot_v1 import GomokuRuleBotV1
 from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_case1, \
     check_action_to_special_connect4_case2, \
@@ -41,18 +46,35 @@ def _get_done_winner_func_lru(board_size, board_tuple):
 @ENV_REGISTRY.register('gomoku')
 class GomokuEnv(BaseEnv):
     config = dict(
+        # (str) The name of the environment registered in the environment registry.
         env_name="Gomoku",
-        prob_random_agent=0,
+        # (int) The size of the board.
         board_size=6,
+        # (str) The mode of the environment when take a step.
         battle_mode='self_play_mode',
+        # (str) The mode of the environment when doing the MCTS.
         mcts_mode='self_play_mode',  # only used in AlphaZero
+        # (str) The render mode. Options are 'None', 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.
+        # If None, then the game will not be rendered.
+        render_mode=None,
+        # (float) The scale of the render screen.
+        screen_scaling=9,
+        # (bool) Whether to use the 'channel last' format for the observation space. If False, 'channel first' format is used.
         channel_last=False,
+        # (bool) Whether to scale the observation.
         scale=True,
+        # (bool) Whether to let human to play with the agent when evaluating. If False, then use the bot to evaluate the agent.
         agent_vs_human=False,
-        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+        # (str) The type of the bot of the environment.
+        bot_action_type='v1',  # {'v0', 'v1', 'alpha_beta_pruning'}
+        # (float) The probability that a random agent is used instead of the learning agent.
+        prob_random_agent=0,
+        # (float) The probability that a random action will be taken when calling the bot.
         prob_random_action_in_bot=0.,
+        # (bool) Whether to check the action to connect 4 in the bot v0.
         check_action_to_connect4_in_bot_v0=False,
-        stop_value=1,
+        # (float) The stop value when training the agent. If the evalue return reach the stop value, then the training will stop.
+        stop_value=2,
     )
 
     @classmethod
@@ -102,6 +124,16 @@ class GomokuEnv(BaseEnv):
         self.agent_vs_human = cfg.agent_vs_human
         self.bot_action_type = cfg.bot_action_type
 
+        # Set the parameters about replay render.
+        self.screen_scaling = cfg.screen_scaling
+        # options = {None, 'state_realtime_mode', 'image_realtime_mode', 'image_savefile_mode'}
+        self.render_mode = cfg.render_mode
+        self.replay_name_suffix = "test"
+        self.replay_path = None
+        self.replay_format = 'gif'  # 'mp4' #
+        self.screen = None
+        self.frames = []
+
         self.players = [1, 2]
         self.board_markers = [str(i + 1) for i in range(self.board_size)]
         self.total_num_actions = self.board_size * self.board_size
@@ -146,6 +178,11 @@ class GomokuEnv(BaseEnv):
                 'current_player_index': self.start_player_index,
                 'to_play': self.current_player
             }
+
+        # Render the beginning state of the game.
+        if self.render_mode is not None:
+            self.render(self.render_mode)
+
         return obs
 
     def reset_v2(self, start_player_index=0, init_state=None):
@@ -167,7 +204,8 @@ class GomokuEnv(BaseEnv):
             timestep = self._player_step(action)
             if timestep.done:
                 # The eval_episode_return is calculated from Player 1's perspective.
-                timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs['to_play'] == 1 else timestep.reward
+                timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs[
+                                                                               'to_play'] == 1 else timestep.reward
             return timestep
         elif self.battle_mode == 'play_with_bot_mode':
             # player 1 battle with expert player 2
@@ -254,9 +292,15 @@ class GomokuEnv(BaseEnv):
         """
         self.current_player = self.to_play
 
+        # Render the new step.
+        if self.render_mode is not None:
+            self.render(self.render_mode)
+
         if done:
             info['eval_episode_return'] = reward
-            # print('gomoku one episode done: ', info)
+            if self.render_mode == 'image_savefile_mode':
+                self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
+                                        format=self.replay_format)
 
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
@@ -770,7 +814,108 @@ class GomokuEnv(BaseEnv):
         self._dynamic_seed = dynamic_seed
         np.random.seed(self._seed)
 
-    def render(self, mode="human"):
+    def render(self, mode: str = None) -> None:
+        """
+        Overview:
+            Renders the Gomoku (Five in a Row) game environment.
+        Arguments:
+            - mode (:obj:`str`): The mode to render with. Options are: None, 'human', 'state_realtime_mode',
+                'image_realtime_mode', 'image_savefile_mode'.
+        """
+        # 'state_realtime_mode' mode, print the current game board for rendering.
+        if mode == "state_realtime_mode":
+            print(np.array(self.board).reshape(self.board_size, self.board_size))
+            return
+        else:
+            # Other modes, use a screen for rendering.
+            screen_width = self.board_size * self.screen_scaling
+            screen_height = self.board_size * self.screen_scaling
+            pygame.init()
+            self.screen = pygame.Surface((screen_width, screen_height))
+
+            # Load and scale all of the necessary images.
+            tile_size = screen_width / self.board_size
+
+            black_chip = self.get_image(os.path.join("img", "Gomoku_BlackPiece.png"))
+            black_chip = pygame.transform.scale(
+                black_chip, (int(tile_size), int(tile_size))
+            )
+
+            white_chip = self.get_image(os.path.join("img", "Gomoku_WhitePiece.png"))
+            white_chip = pygame.transform.scale(
+                white_chip, (int(tile_size), int(tile_size))
+            )
+
+            board_img = self.get_image(os.path.join("img", "GomokuBoard.png"))
+            board_img = pygame.transform.scale(
+                board_img, (int(screen_width), int(screen_height))
+            )
+
+            self.screen.blit(board_img, (0, 0))
+
+            # Blit the necessary chips and their positions.
+            for row in range(self.board_size):
+                for col in range(self.board_size):
+                    if self.board[row][col] == 1:  # Black piece
+                        self.screen.blit(
+                            black_chip,
+                            (
+                                col * tile_size,
+                                row * tile_size,
+                            ),
+                        )
+                    elif self.board[row][col] == 2:  # White piece
+                        self.screen.blit(
+                            white_chip,
+                            (
+                                col * tile_size,
+                                row * tile_size,
+                            ),
+                        )
+            if mode == "image_realtime_mode":
+                surface_array = pygame.surfarray.pixels3d(self.screen)
+                surface_array = np.transpose(surface_array, (1, 0, 2))
+                plt.imshow(surface_array)
+                plt.draw()
+                plt.pause(0.001)
+            elif mode == "image_savefile_mode":
+                # Draw the observation and save to frames.
+                observation = np.array(pygame.surfarray.pixels3d(self.screen))
+                self.frames.append(np.transpose(observation, axes=(1, 0, 2)))
+
+            self.screen = None
+
+            return None
+
+    def save_render_output(self, replay_name_suffix: str = '', replay_path: str = None, format: str = 'gif') -> None:
+        """
+        Overview:
+            Save the rendered frames as an output file.
+        Arguments:
+            - replay_name_suffix (:obj:`str`): The suffix to be added to the replay filename.
+            - replay_path (:obj:`str`): The path to save the replay file. If None, the default filename will be used.
+            - format (:obj:`str`): The format of the output file. Options are 'gif' or 'mp4'.
+        """
+        # At the end of the episode, save the frames.
+        if replay_path is None:
+            filename = f'game_gomoku_{self.board_size}_{replay_name_suffix}.{format}'
+        else:
+            filename = f'{replay_path}.{format}'
+
+        if format == 'gif':
+            # Save frames as a GIF with a duration of 0.1 seconds per frame.
+            # imageio.mimsave(filename, self.frames, 'GIF', duration=0.1)
+            imageio.mimsave(filename, self.frames, 'GIF', fps=30, subrectangles=True)
+        elif format == 'mp4':
+            # Save frames as an MP4 video with a frame rate of 30 frames per second.
+            imageio.mimsave(filename, self.frames, fps=30, codec='mpeg4')
+
+        else:
+            raise ValueError("Unsupported format: {}".format(format))
+        logging.info("Saved output to {}".format(filename))
+        self.frames = []
+
+    def render_naive(self, mode="human"):
         marker = "   "
         for i in range(self.board_size):
             if i <= 8:
@@ -829,3 +974,13 @@ class GomokuEnv(BaseEnv):
 
     def close(self) -> None:
         pass
+
+    def get_image(self, path: str) -> Any:
+        from os import path as os_path
+        import pygame
+
+        cwd = os_path.dirname(__file__)
+        image = pygame.image.load(cwd + "/" + path)
+        sfc = pygame.Surface(image.get_size(), flags=pygame.SRCALPHA)
+        sfc.blit(image, (0, 0))
+        return sfc

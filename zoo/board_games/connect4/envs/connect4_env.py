@@ -47,16 +47,7 @@ from zoo.board_games.connect4.envs.rule_bot import Connect4RuleBot
 from zoo.board_games.mcts_bot import MCTSBot
 
 
-def get_image(path: str) -> Any:
-    from os import path as os_path
 
-    import pygame
-
-    cwd = os_path.dirname(__file__)
-    image = pygame.image.load(cwd + "/" + path)
-    sfc = pygame.Surface(image.get_size(), flags=pygame.SRCALPHA)
-    sfc.blit(image, (0, 0))
-    return sfc
 
 
 @ENV_REGISTRY.register('connect4')
@@ -421,17 +412,17 @@ class Connect4Env(BaseEnv):
             # Load and scale all of the necessary images.
             tile_size = (screen_width * (91 / 99)) / 7
 
-            red_chip = get_image(os.path.join("img", "C4RedPiece.png"))
+            red_chip = self.get_image(os.path.join("img", "C4RedPiece.png"))
             red_chip = pygame.transform.scale(
                 red_chip, (int(tile_size * (9 / 13)), int(tile_size * (9 / 13)))
             )
 
-            black_chip = get_image(os.path.join("img", "C4BlackPiece.png"))
+            black_chip = self.get_image(os.path.join("img", "C4BlackPiece.png"))
             black_chip = pygame.transform.scale(
                 black_chip, (int(tile_size * (9 / 13)), int(tile_size * (9 / 13)))
             )
 
-            board_img = get_image(os.path.join("img", "Connect4Board.png"))
+            board_img = self.get_image(os.path.join("img", "Connect4Board.png"))
             board_img = pygame.transform.scale(
                 board_img, ((int(screen_width)), int(screen_height))
             )
@@ -718,3 +709,13 @@ class Connect4Env(BaseEnv):
 
     def close(self) -> None:
         pass
+
+    def get_image(self, path: str) -> Any:
+        from os import path as os_path
+        import pygame
+
+        cwd = os_path.dirname(__file__)
+        image = pygame.image.load(cwd + "/" + path)
+        sfc = pygame.Surface(image.get_size(), flags=pygame.SRCALPHA)
+        sfc.blit(image, (0, 0))
+        return sfc

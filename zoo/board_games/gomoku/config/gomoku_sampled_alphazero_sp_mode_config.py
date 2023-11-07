@@ -33,7 +33,6 @@ gomoku_sampled_alphazero_config = dict(
         manager=dict(shared_memory=False, ),
         env_name="Gomoku",
         prob_random_agent=0,
-        mcts_mode='self_play_mode',  # only used in AlphaZero
         scale=True,
         agent_vs_human=False,
         check_action_to_connect4_in_bot_v0=False,

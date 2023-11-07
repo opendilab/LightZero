@@ -3,7 +3,7 @@ import pytest
 import time
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
-from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
+from zoo.board_games.gomoku.envs.gomoku_env_ui import GomokuEnv
 
 cfg = dict(
     board_size=5,
