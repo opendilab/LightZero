@@ -208,7 +208,7 @@ class MuZeroModelGPT(nn.Module):
 
         # obs discrete distribution to one_hot latent state?
         # torch.Size([8, 16, 512]) -> torch.Size([8, 16])
-        latent_state = logits_observations
+        latent_state = torch.argmax(logits_observations, dim=2, keepdim=False)
 
         # torch.Size([8, 1, 2]) - > torch.Size([8, 2])
         policy_logits = policy_logits.squeeze(1)
@@ -255,7 +255,7 @@ class MuZeroModelGPT(nn.Module):
         logits_observations, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
 
         # obs discrete distribution to one_hot latent state?
-        # torch.Size([8, 16, 512])
+        # torch.Size([8, 16])
         next_latent_state = logits_observations
 
         # torch.Size([8, 1, 2]) - > torch.Size([8, 2])
