@@ -304,7 +304,7 @@ class AlphaZeroPolicy(Policy):
             self.simulate_env = TicTacToeEnv(tictactoe_alphazero_config.env)
 
         elif self._cfg.simulation_env_name == 'gomoku':
-            from zoo.board_games.gomoku.envs.gomoku_env_ui import GomokuEnv
+            from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
             if self._cfg.simulation_env_config_type == 'play_with_bot':
                 from zoo.board_games.gomoku.config.gomoku_alphazero_bot_mode_config import gomoku_alphazero_config
             elif self._cfg.simulation_env_config_type == 'self_play':

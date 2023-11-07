@@ -130,7 +130,7 @@ class GomokuEnv(BaseEnv):
         self.render_mode = cfg.render_mode
         self.replay_name_suffix = "test"
         self.replay_path = None
-        self.replay_format = 'gif'  # 'mp4' #
+        self.replay_format = 'gif'  # options={'gif', 'mp4'}
         self.screen = None
         self.frames = []
 

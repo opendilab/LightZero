@@ -4,14 +4,16 @@ from easydict import EasyDict
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 board_size = 6  # default_size is 15
-collector_env_num = 32
-n_episode = 32
-evaluator_env_num = 5
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(5e5)
 prob_random_action_in_bot = 0.5
+mcts_ctree = True
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -21,9 +23,9 @@ gomoku_alphazero_config = dict(
     env=dict(
         board_size=board_size,
         battle_mode='play_with_bot_mode',
-        bot_action_type='v0',
+        bot_action_type='v1',
         prob_random_action_in_bot=prob_random_action_in_bot,
-        channel_last=False,  # NOTE
+        channel_last=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -35,9 +37,13 @@ gomoku_alphazero_config = dict(
         prob_expert_agent=0,
         scale=True,
         check_action_to_connect4_in_bot_v0=False,
+        mcts_ctree=mcts_ctree,
+        screen_scaling=9,
+        render_mode=None,
         # ==============================================================
     ),
     policy=dict(
+        mcts_ctree=mcts_ctree,
         # ==============================================================
         # for the creation of simulation env
         simulation_env_name='gomoku',
