@@ -45,7 +45,7 @@ class WorldModel(nn.Module):
         self.num_observations_tokens = 16
         # self.device = 'cpu'
         self.device = config.device
-
+        self.support_size = config.support_size
 
         all_but_last_obs_tokens_pattern = torch.ones(config.tokens_per_block)
         all_but_last_obs_tokens_pattern[-2] = 0
@@ -90,7 +90,7 @@ class WorldModel(nn.Module):
             head_module=nn.Sequential(
                 nn.Linear(config.embed_dim, config.embed_dim),
                 nn.ReLU(),
-                nn.Linear(config.embed_dim, 601)
+                nn.Linear(config.embed_dim, self.support_size)
             )
         )
 
@@ -127,11 +127,26 @@ class WorldModel(nn.Module):
             head_module=nn.Sequential(
                 nn.Linear(config.embed_dim, config.embed_dim),
                 nn.ReLU(),
-                nn.Linear(config.embed_dim, 601)  # TODO(pu): action shape
+                nn.Linear(config.embed_dim, self.support_size)  # TODO(pu): action shape
             )
         )
 
         self.apply(init_weights)
+
+        # last_linear_layer_init_zero=True is beneficial for convergence speed.
+        last_linear_layer_init_zero = True  # TODO
+        if last_linear_layer_init_zero:
+            # Locate the last linear layer and initialize its weights and biases to 0.
+            for _, layer in enumerate(reversed(self.head_policy.head_module)):
+                if isinstance(layer, nn.Linear):
+                    nn.init.zeros_(layer.weight)
+                    nn.init.zeros_(layer.bias)
+                    break
+            for _, layer in enumerate(reversed(self.head_value.head_module)):
+                if isinstance(layer, nn.Linear):
+                    nn.init.zeros_(layer.weight)
+                    nn.init.zeros_(layer.bias)
+                    break
 
     def __repr__(self) -> str:
         return "world_model"
@@ -260,8 +275,11 @@ class WorldModel(nn.Module):
 
         output_sequence, obs_tokens = [], []
 
-        if self.keys_values_wm.size + num_passes > self.config.max_tokens:
-            _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
+        # if self.keys_values_wm.size + num_passes > self.config.max_tokens:
+        #     _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
+        # TODO: reset
+        _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
+
 
         token = action.clone().detach() if isinstance(action, torch.Tensor) else torch.tensor(action, dtype=torch.long)
         token = token.reshape(-1, 1).to(self.device)  # (B, 1)
@@ -318,9 +336,16 @@ class WorldModel(nn.Module):
                                                                                            batch['ends'],
                                                                                            batch['mask_padding'])
 
+        """
+        >>> # Example of target with class probabilities
+        >>> input = torch.randn(3, 5, requires_grad=True)
+        >>> target = torch.randn(3, 5).softmax(dim=1)
+        >>> loss = F.cross_entropy(input, target)
+        >>> loss.backward()
+        """
         logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o')
         loss_obs = F.cross_entropy(logits_observations, labels_observations)
-        loss_rewards = F.cross_entropy(rearrange(outputs.logits_rewards, 'b t e -> (b t) e'), labels_rewards)
+        # loss_rewards = F.cross_entropy(rearrange(outputs.logits_rewards, 'b t e -> (b t) e'), labels_rewards)
         loss_ends = F.cross_entropy(rearrange(outputs.logits_ends, 'b t e -> (b t) e'), labels_ends)
 
         # return LossWithIntermediateLosses(loss_obs=loss_obs, loss_rewards=loss_rewards, loss_ends=loss_ends)
@@ -328,16 +353,48 @@ class WorldModel(nn.Module):
         labels_policy, labels_value = self.compute_labels_world_model_value_policy(batch['target_value'],
                                                                                    batch['target_policy'],
                                                                                    batch['mask_padding'])
-        loss_policy = F.cross_entropy(rearrange(outputs.logits_policy, 'b t e -> (b t) e'), labels_policy)
-        loss_value = F.cross_entropy(rearrange(outputs.logits_value, 'b t e -> (b t) e'), labels_value)
+
+        # loss_policy = F.cross_entropy(rearrange(outputs.logits_policy, 'b t e -> (b t) e'), labels_policy)
+        # loss_value = F.cross_entropy(rearrange(outputs.logits_value, 'b t e -> (b t) e'), labels_value)
+
+        loss_rewards = self.compute_kl_loss(outputs, labels_rewards, batch, element='rewards')
+        loss_policy  = self.compute_kl_loss(outputs, labels_policy, batch, element='policy')
+        loss_value   = self.compute_kl_loss(outputs, labels_value, batch, element='value')
 
         # return LossWithIntermediateLosses(loss_obs=loss_obs, loss_rewards=loss_rewards, loss_ends=loss_ends, loss_value=loss_value, loss_policy=loss_policy)
         return LossWithIntermediateLosses(loss_obs=loss_obs, loss_rewards=loss_rewards, loss_value=loss_value,
                                           loss_policy=loss_policy)
 
+
+    def compute_kl_loss(self, outputs, labels, batch, element='rewards'):
+        # Assume outputs.logits_rewards and labels are your predictions and targets
+        # And mask_padding is a boolean tensor with True at positions to keep and False at positions to ignore
+
+        if element == 'rewards':
+            logits = outputs.logits_rewards
+        elif element == 'policy':
+            logits = outputs.logits_policy
+        elif element == 'value':
+            logits = outputs.logits_value
+
+        # Reshape your tensors
+        logits_rewards = rearrange(logits, 'b t e -> (b t) e')
+        labels = labels.reshape(-1, labels.shape[
+            -1])  # Assuming labels originally has shape [b, t, reward_dim]
+
+        # Reshape your mask
+        mask_padding = rearrange(batch['mask_padding'], 'b t -> (b t)').unsqueeze(-1)
+
+        # Compute the loss
+        loss_rewards = F.kl_div(torch.softmax(logits_rewards, dim=-1).log(), labels, reduction='none')
+
+        # Apply the mask
+        loss_rewards = loss_rewards.masked_select(mask_padding).mean()
+        return loss_rewards
+
     def compute_labels_world_model(self, obs_tokens: torch.Tensor, rewards: torch.Tensor, ends: torch.Tensor,
                                    mask_padding: torch.BoolTensor) -> Tuple[
-        torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        torch.Tensor, torch.Tensor, torch.Tensor]:
         assert torch.all(ends.sum(dim=1) <= 1)  # at most 1 done
         mask_fill = torch.logical_not(mask_padding)
         labels_observations = rearrange(obs_tokens.masked_fill(mask_fill.unsqueeze(-1).expand_as(obs_tokens), -100),
@@ -350,11 +407,11 @@ class WorldModel(nn.Module):
 
         labels_ends = ends.masked_fill(mask_fill, -100)
         # return labels_observations.reshape(-1), labels_rewards.reshape(-1), labels_ends.reshape(-1)
-        return labels_observations.reshape(-1), labels_rewards.reshape(-1, 601), labels_ends.reshape(-1)
+        return labels_observations.reshape(-1), labels_rewards.reshape(-1, self.support_size), labels_ends.reshape(-1)
 
     def compute_labels_world_model_value_policy(self, target_value: torch.Tensor, target_policy: torch.Tensor,
                                                 mask_padding: torch.BoolTensor) -> Tuple[
-        torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        torch.Tensor, torch.Tensor]:
 
         mask_fill = torch.logical_not(mask_padding)
         mask_fill_policy = mask_fill.unsqueeze(-1).expand_as(target_policy)
@@ -362,5 +419,5 @@ class WorldModel(nn.Module):
 
         mask_fill_value = mask_fill.unsqueeze(-1).expand_as(target_value)
         labels_value = target_value.masked_fill(mask_fill_value, -100)
-        return labels_policy.reshape(-1, 2), labels_value.reshape(-1, 601)  # TODO(pu)
+        return labels_policy.reshape(-1, 2), labels_value.reshape(-1, self.support_size)  # TODO(pu)
         # return labels_policy.reshape(-1, ), labels_value.reshape(-1)

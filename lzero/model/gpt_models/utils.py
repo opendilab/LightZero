@@ -38,7 +38,8 @@ def configure_optimizer(model, learning_rate, weight_decay, *blacklist_module_na
     inter_params = decay & no_decay
     union_params = decay | no_decay
     assert len(inter_params) == 0, f"parameters {str(inter_params)} made it into both decay/no_decay sets!"
-    assert len(param_dict.keys() - union_params) == 0, f"parameters {str(param_dict.keys() - union_params)} were not separated into either decay/no_decay set!"
+    assert len(
+        param_dict.keys() - union_params) == 0, f"parameters {str(param_dict.keys() - union_params)} were not separated into either decay/no_decay set!"
 
     # create the pytorch optimizer object
     optim_groups = [
@@ -94,7 +95,37 @@ def compute_lambda_returns(rewards, values, ends, gamma, lambda_):
 
 class LossWithIntermediateLosses:
     def __init__(self, **kwargs):
-        self.loss_total = sum(kwargs.values())
+        # self.loss_total = sum(kwargs.values())
+
+        # Ensure that kwargs is not empty
+        if not kwargs:
+            raise ValueError("At least one loss must be provided")
+
+        # Get a reference device from one of the provided losses
+        device = next(iter(kwargs.values())).device
+
+        self.obs_loss_weight = 1.
+        self.reward_loss_weight = 1.
+        self.value_loss_weight = 0.25
+        self.policy_loss_weight = 1.
+        self.ends_loss_weight = 1.
+
+        # Initialize the total loss tensor on the correct device
+        self.loss_total = torch.tensor(0., device=device)
+        for k, v in kwargs.items():
+            if k == 'loss_obs':
+                self.loss_total += self.obs_loss_weight * v
+            elif k == 'loss_rewards':
+                self.loss_total += self.reward_loss_weight * v
+            elif k == 'loss_policy':
+                self.loss_total += self.policy_loss_weight * v
+            elif k == 'loss_value':
+                self.loss_total += self.value_loss_weight * v
+            elif k == 'loss_ends':
+                self.loss_total += self.ends_loss_weight * v
+            else:
+                raise ValueError(f"Unknown loss type : {k}")
+
         self.intermediate_losses = {k: v.item() for k, v in kwargs.items()}
 
     def __truediv__(self, value):
@@ -145,7 +176,7 @@ class RandomHeuristic:
 
 
 def make_video(fname, fps, frames):
-    assert frames.ndim == 4 # (t, h, w, c)
+    assert frames.ndim == 4  # (t, h, w, c)
     t, h, w, c = frames.shape
     assert c == 3
 
