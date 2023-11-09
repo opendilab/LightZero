@@ -80,10 +80,6 @@ gomoku_gumbel_muzero_create_config = dict(
         type='gumbel_muzero',
         import_names=['lzero.policy.gumbel_muzero'],
     ),
-    collector=dict(
-        type='gumbel_muzero',
-        import_names=['lzero.worker.gumbel_muzero_collector'],
-    )
 )
 gomoku_gumbel_muzero_create_config = EasyDict(gomoku_gumbel_muzero_create_config)
 create_config = gomoku_gumbel_muzero_create_config
