@@ -71,11 +71,6 @@ lunarlander_gumbel_muzero_create_config = dict(
         type='gumbel_muzero',
         import_names=['lzero.policy.gumbel_muzero'],
     ),
-    collector=dict(
-        type='gumbel_muzero',
-        get_train_sample=True,
-        import_names=['lzero.worker.gumbel_muzero_collector'],
-    )
 )
 lunarlander_gumbel_muzero_create_config = EasyDict(lunarlander_gumbel_muzero_create_config)
 create_config = lunarlander_gumbel_muzero_create_config

@@ -20,7 +20,7 @@ from lzero.policy.muzero import MuZeroPolicy
 
 
 @POLICY_REGISTRY.register('gumbel_muzero')
-class GumeblMuZeroPolicy(MuZeroPolicy):
+class GumbelMuZeroPolicy(MuZeroPolicy):
     """
     Overview:
         The policy class for Gumbel MuZero proposed in the paper https://openreview.net/forum?id=bERaNdoegnO.
@@ -486,6 +486,7 @@ class GumeblMuZeroPolicy(MuZeroPolicy):
             action_mask: list = None,
             temperature: float = 1,
             to_play: List = [-1],
+            epsilon: float = 0.25,
             ready_env_id: np.array = None,
     ) -> Dict:
         """
@@ -514,6 +515,7 @@ class GumeblMuZeroPolicy(MuZeroPolicy):
         """
         self._collect_model.eval()
         self._collect_mcts_temperature = temperature
+        self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
@@ -560,6 +562,7 @@ class GumeblMuZeroPolicy(MuZeroPolicy):
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value, improved_policy_probs = roots_visit_count_distributions[i], roots_values[i], roots_improved_policy_probs[i]
+
                 roots_completed_value = roots_completed_values[i]
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
@@ -570,6 +573,7 @@ class GumeblMuZeroPolicy(MuZeroPolicy):
                 # entire action set.
                 valid_value = np.where(action_mask[i] == 1.0, improved_policy_probs, 0.0)
                 action = np.argmax([v for v in valid_value])
+
                 output[env_id] = {
                     'action': action,
                     'visit_count_distributions': distributions,
