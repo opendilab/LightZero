@@ -125,7 +125,7 @@ from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 
 
 # 测试函数
-def test_ui():
+def test_human_vs_bot_ui():
     cfg = EasyDict(
         board_size=15,
         battle_mode='play_with_bot_mode',
@@ -162,4 +162,4 @@ def test_ui():
 
 
 if __name__ == "__main__":
-    test_ui()
+    test_human_vs_bot_ui()

@@ -36,6 +36,8 @@ gomoku_alphazero_config = dict(
         scale=True,
         check_action_to_connect4_in_bot_v0=False,
         # ==============================================================
+        screen_scaling=9,
+        render_mode=None,
     ),
     policy=dict(
         # ==============================================================

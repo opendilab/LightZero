@@ -14,6 +14,8 @@ from ding.utils import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
 from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from zoo.board_games.gomoku.envs.legal_actions_cython import legal_actions_cython
 from zoo.board_games.gomoku.envs.get_done_winner_cython import get_done_winner_cython
 
@@ -143,6 +145,9 @@ class GomokuEnv(BaseEnv):
         if self.bot_action_type == 'alpha_beta_pruning':
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
 
+        self.fig, self.ax = plt.subplots(figsize=(self.board_size, self.board_size))
+        plt.ion()
+
     def reset(self, start_player_index=0, init_state=None):
         self._observation_space = gym.spaces.Box(
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.int32
@@ -240,7 +245,7 @@ class GomokuEnv(BaseEnv):
             timestep_player1 = self._player_step(action)
             if self.agent_vs_human:
                 print('player 1 (agent): ' + self.action_to_string(action))  # Note: visualize
-                self.render()
+                self.render(mode="image_realtime_mode")
 
             if timestep_player1.done:
                 # in eval_mode, we set to_play as None/-1, because we don't consider the alternation between players
@@ -257,7 +262,7 @@ class GomokuEnv(BaseEnv):
             timestep_player2 = self._player_step(bot_action)
             if self.agent_vs_human:
                 print('player 2 (human): ' + self.action_to_string(bot_action))  # Note: visualize
-                self.render()
+                self.render(mode="image_realtime_mode")
 
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
@@ -293,8 +298,10 @@ class GomokuEnv(BaseEnv):
         self.current_player = self.to_play
 
         # Render the new step.
-        if self.render_mode is not None:
-            self.render(self.render_mode)
+        # The following code is used to save the rendered images in both
+        # collect/eval step and the simulated mcts step.
+        # if self.render_mode is not None:
+        #     self.render(self.render_mode)
 
         if done:
             info['eval_episode_return'] = reward
@@ -814,10 +821,80 @@ class GomokuEnv(BaseEnv):
         self._dynamic_seed = dynamic_seed
         np.random.seed(self._seed)
 
-    def render(self, mode: str = None) -> None:
+    def draw_board(self):
         """
         Overview:
-            Renders the Gomoku (Five in a Row) game environment.
+            This method draws the Gomoku board using matplotlib.
+        """
+
+        # Clear the previous board
+        self.ax.clear()
+
+        # Set the limits of the x and y axes
+        self.ax.set_xlim(0, self.board_size + 1)
+        self.ax.set_ylim(self.board_size + 1, 0)
+
+        # Set the board background color
+        self.ax.set_facecolor('peachpuff')
+
+        # Draw the grid lines
+        for i in range(self.board_size + 1):
+            self.ax.plot([i + 1, i + 1], [1, self.board_size], color='black')
+            self.ax.plot([1, self.board_size], [i + 1, i + 1], color='black')
+    def render(self, mode="state_realtime_mode"):
+        """
+        Overview:
+            The render method is used to draw the current state of the game. The rendering mode can be
+            set according to the needs of the user.
+        Arguments:
+            - mode (str): Rendering mode, options are "state_realtime_mode", "image_realtime_mode",
+              and "image_savefile_mode".
+        """
+        # Print the state of the board directly
+        if mode == "state_realtime_mode":
+            print(np.array(self.board).reshape(self.board_size, self.board_size))
+            return
+        # Render the game as an image
+        elif mode == "image_realtime_mode" or mode == "image_savefile_mode":
+            self.draw_board()
+            # Draw the pieces on the board
+            for x in range(self.board_size):
+                for y in range(self.board_size):
+                    if self.board[x][y] == 1:  # Black piece
+                        circle = patches.Circle((y + 1, x + 1), 0.4, edgecolor='black',
+                                                facecolor='black', zorder=3)
+                        self.ax.add_patch(circle)
+                    elif self.board[x][y] == 2:  # White piece
+                        circle = patches.Circle((y + 1, x + 1), 0.4, edgecolor='black',
+                                                facecolor='white', zorder=3)
+                        self.ax.add_patch(circle)
+            # Set the title of the game
+            plt.title('Agent vs. Human: ' + ('Black Turn' if self.current_player == 1 else 'White Turn'))
+            # If in realtime mode, draw and pause briefly
+            if mode == "image_realtime_mode":
+                plt.draw()
+                plt.pause(0.1)
+            # In savefile mode, save the current frame to the frames list
+            elif mode == "image_savefile_mode":
+                # Save the current frame to the frames list.
+                self.fig.canvas.draw()
+                image = np.frombuffer(self.fig.canvas.tostring_rgb(), dtype='uint8')
+                image = image.reshape(self.fig.canvas.get_width_height()[::-1] + (3,))
+                self.frames.append(image)
+
+    def close(self):
+        """
+        Overview:
+            This method is used to display the final game board to the user and turn off interactive
+            mode in matplotlib.
+        """
+        plt.ioff()
+        plt.show()
+
+    def render_for_b15(self, mode: str = None) -> None:
+        """
+        Overview:
+            Renders the Gomoku (Five in a Row) game environment. Now only support board_size=15.
         Arguments:
             - mode (:obj:`str`): The mode to render with. Options are: None, 'human', 'state_realtime_mode',
                 'image_realtime_mode', 'image_savefile_mode'.

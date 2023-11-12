@@ -409,7 +409,9 @@ class SampledAlphaZeroPolicy(Policy):
             else:
                 from lzero.mcts.ptree.ptree_az import MCTS
             mcts_eval_config = copy.deepcopy(self._cfg.mcts)
-            mcts_eval_config.num_simulations = mcts_eval_config.num_simulations * 2
+            # TODO
+            mcts_eval_config.num_simulations = mcts_eval_config.num_simulations
+            # mcts_eval_config.num_simulations = min(800, mcts_eval_config.num_simulations * 4)
 
             self._eval_mcts = MCTS(mcts_eval_config, self.simulate_env)
 
@@ -463,46 +465,46 @@ class SampledAlphaZeroPolicy(Policy):
         return output
 
     def _get_simulation_env(self):
-        assert self._cfg.simulate_env_name in ['tictactoe', 'gomoku', 'go'], self._cfg.simulate_env_name
-        assert self._cfg.simulate_env_config_type in ['play_with_bot', 'self_play', 'league', 'sampled_play_with_bot'], self._cfg.simulate_env_config_type
-        if self._cfg.simulate_env_name == 'tictactoe':
+        assert self._cfg.simulation_env_name in ['tictactoe', 'gomoku', 'go'], self._cfg.simulation_env_name
+        assert self._cfg.simulation_env_config_type in ['play_with_bot', 'self_play', 'league', 'sampled_play_with_bot'], self._cfg.simulation_env_config_type
+        if self._cfg.simulation_env_name == 'tictactoe':
             from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
-            if self._cfg.simulate_env_config_type == 'play_with_bot':
+            if self._cfg.simulation_env_config_type == 'play_with_bot':
                 from zoo.board_games.tictactoe.config.tictactoe_alphazero_bot_mode_config import \
                     tictactoe_alphazero_config
-            elif self._cfg.simulate_env_config_type == 'self_play':
+            elif self._cfg.simulation_env_config_type == 'self_play':
                 from zoo.board_games.tictactoe.config.tictactoe_alphazero_sp_mode_config import \
                     tictactoe_alphazero_config
-            elif self._cfg.simulate_env_config_type == 'league':
+            elif self._cfg.simulation_env_config_type == 'league':
                 from zoo.board_games.tictactoe.config.tictactoe_alphazero_league_config import \
                     tictactoe_alphazero_config
-            elif self._cfg.simulate_env_config_type == 'sampled_play_with_bot':
+            elif self._cfg.simulation_env_config_type == 'sampled_play_with_bot':
                 from zoo.board_games.tictactoe.config.tictactoe_sampled_alphazero_bot_mode_config import \
                     tictactoe_sampled_alphazero_config as tictactoe_alphazero_config
 
             self.simulate_env = TicTacToeEnv(tictactoe_alphazero_config.env)
 
-        elif self._cfg.simulate_env_name == 'gomoku':
-            from zoo.board_games.gomoku.envs.gomoku_env_ui import GomokuEnv
-            if self._cfg.simulate_env_config_type == 'play_with_bot':
+        elif self._cfg.simulation_env_name == 'gomoku':
+            from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
+            if self._cfg.simulation_env_config_type == 'play_with_bot':
                 from zoo.board_games.gomoku.config.gomoku_alphazero_bot_mode_config import gomoku_alphazero_config
-            elif self._cfg.simulate_env_config_type == 'self_play':
+            elif self._cfg.simulation_env_config_type == 'self_play':
                 from zoo.board_games.gomoku.config.gomoku_alphazero_sp_mode_config import gomoku_alphazero_config
-            elif self._cfg.simulate_env_config_type == 'league':
+            elif self._cfg.simulation_env_config_type == 'league':
                 from zoo.board_games.gomoku.config.gomoku_alphazero_league_config import gomoku_alphazero_config
-            elif self._cfg.simulate_env_config_type == 'sampled_play_with_bot':
+            elif self._cfg.simulation_env_config_type == 'sampled_play_with_bot':
                 from zoo.board_games.gomoku.config.gomoku_sampled_alphazero_bot_mode_config import gomoku_sampled_alphazero_config as gomoku_alphazero_config
 
             self.simulate_env = GomokuEnv(gomoku_alphazero_config.env)
-        elif self._cfg.simulate_env_name == 'go':
+        elif self._cfg.simulation_env_name == 'go':
             from zoo.board_games.go.envs.go_env import GoEnv
-            if self._cfg.simulate_env_config_type == 'play_with_bot':
+            if self._cfg.simulation_env_config_type == 'play_with_bot':
                 from zoo.board_games.go.config.go_alphazero_bot_mode_config import go_alphazero_config
-            elif self._cfg.simulate_env_config_type == 'self_play':
+            elif self._cfg.simulation_env_config_type == 'self_play':
                 from zoo.board_games.go.config.go_alphazero_sp_mode_config import go_alphazero_config
-            elif self._cfg.simulate_env_config_type == 'league':
+            elif self._cfg.simulation_env_config_type == 'league':
                 from zoo.board_games.go.config.go_alphazero_league_config import go_alphazero_config
-            elif self._cfg.simulate_env_config_type == 'sampled_play_with_bot':
+            elif self._cfg.simulation_env_config_type == 'sampled_play_with_bot':
                 from zoo.board_games.go.config.go_sampled_alphazero_bot_mode_config import \
                     go_sampled_alphazero_config as go_alphazero_config
 
