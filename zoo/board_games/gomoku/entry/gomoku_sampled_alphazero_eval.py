@@ -8,8 +8,7 @@ if __name__ == '__main__':
     point to the ckpt file of the pretrained model, and an absolute path is recommended.
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
     """
-    # model_path = './ckpt/ckpt_best.pth.tar'
-    model_path = '/Users/puyuan/code/LightZero/league_tb_gomoku/gomoku_bs6_sampled_alphazero_bot-mode_v1_rand0.0_na20_ns100_upc50_seed0_231107_120520/ckpt/ckpt_best.pth.tar'
+    model_path = './ckpt/ckpt_best.pth.tar'
     seeds = [0]
     num_episodes_each_seed = 1
     # If True, you can play with the agent.

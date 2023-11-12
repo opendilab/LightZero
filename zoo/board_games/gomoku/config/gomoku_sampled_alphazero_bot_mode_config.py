@@ -5,7 +5,6 @@ from easydict import EasyDict
 # ==============================================================
 board_size = 6
 num_simulations = 100
-# num_simulations = 1
 
 update_per_collect = 50
 # board_size = 9
