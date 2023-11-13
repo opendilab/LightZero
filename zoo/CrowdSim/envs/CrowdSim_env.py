@@ -62,6 +62,7 @@ class CrowdSimEnv(BaseEnv):
         obs_list = to_ndarray(raw_obs.to_tensor())
         # human_obs, robot_obs = obs_list
         obs = np.concatenate(obs_list,axis=0).flatten() # for 1 dim e.g.(244,)
+        assert len(obs)==(self._robot_num+self._human_num)*4
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
@@ -85,6 +86,7 @@ class CrowdSimEnv(BaseEnv):
         raw_obs, rew, done, info = self._env.step(real_action)
         obs_list = to_ndarray(raw_obs.to_tensor())
         obs = np.concatenate(obs_list,axis=0).flatten() # for 1 dim e.g.(244,)
+        assert len(obs)==(self._robot_num+self._human_num)*4
 
         self._eval_episode_return += rew
         if done:

@@ -1,7 +1,6 @@
 from easydict import EasyDict
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = '2'
-
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -22,9 +21,9 @@ one_uav_action_space = [[0, 0], [30, 0], [-30, 0], [0, 30], [0, -30]]
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-CrowdSim_efficientzero_config = dict(
+CrowdSim_muzero_config = dict(
     exp_name=
-    f'result/crowd_num_human/CrowdSim_efficientzero_step{max_env_step}_uav{robot_num}_human{human_num}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'result/crowd_num_human/CrowdSim_muzero_ssl_step{max_env_step}_uav{robot_num}__human{human_num}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='CrowdSim-v0',
         robot_num = robot_num,
@@ -44,9 +43,10 @@ CrowdSim_efficientzero_config = dict(
             model_type='mlp', 
             lstm_hidden_size=256,
             latent_state_dim=256,
+            self_supervised_learning_loss=True,  # NOTE: default is False.
             discrete_action_encoding_type='one_hot',
-            # res_connection_in_dynamics=True,
-            norm_type='BN', 
+            res_connection_in_dynamics=True,
+            norm_type='BN',
         ),
         cuda=True,
         env_type='not_board_games',
@@ -56,6 +56,8 @@ CrowdSim_efficientzero_config = dict(
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
+        ssl_loss_weight=2,  # NOTE: default is 0.
+        grad_clip_value=0.5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
@@ -66,26 +68,26 @@ CrowdSim_efficientzero_config = dict(
     ),
 )
 
-CrowdSim_efficientzero_config = EasyDict(CrowdSim_efficientzero_config)
-main_config = CrowdSim_efficientzero_config
+CrowdSim_muzero_config = EasyDict(CrowdSim_muzero_config)
+main_config = CrowdSim_muzero_config
 
-CrowdSim_efficientzero_create_config = dict(
+CrowdSim_muzero_create_config = dict(
     env=dict(
         type='crowdsim_lightzero',
         import_names=['zoo.CrowdSim.envs.CrowdSim_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='efficientzero',
-        import_names=['lzero.policy.efficientzero'],
+        type='muzero',
+        import_names=['lzero.policy.muzero'],
     ),
     collector=dict(
         type='episode_muzero',
         import_names=['lzero.worker.muzero_collector'],
     )
 )
-CrowdSim_efficientzero_create_config = EasyDict(CrowdSim_efficientzero_create_config)
-create_config = CrowdSim_efficientzero_create_config
+CrowdSim_muzero_create_config = EasyDict(CrowdSim_muzero_create_config)
+create_config = CrowdSim_muzero_create_config
 
 if __name__ == "__main__":
     # Users can use different train entry by specifying the entry_type.
