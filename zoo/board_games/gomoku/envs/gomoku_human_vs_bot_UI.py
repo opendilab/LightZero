@@ -131,13 +131,14 @@ from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 def test_human_vs_bot_ui():
     cfg = EasyDict(
         # board_size=15,
+        # board_size=9,
         board_size=6,
         battle_mode='play_with_bot_mode',
         prob_random_agent=0,
         channel_last=False,
         scale=True,
         agent_vs_human=False,
-        bot_action_type='v1',
+        bot_action_type='v0',
         prob_random_action_in_bot=0.,
         render_mode='state_realtime_mode',
         screen_scaling=9,

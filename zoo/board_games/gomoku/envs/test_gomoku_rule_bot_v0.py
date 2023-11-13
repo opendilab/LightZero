@@ -5,8 +5,8 @@ from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 
 cfg = EasyDict(
     prob_random_agent=0,
-    board_size=6,
-    # board_size=9,
+    # board_size=6,
+    board_size=9,
     battle_mode='self_play_mode',
     channel_last=False,
     scale=True,
@@ -66,7 +66,7 @@ class TestExpertActionV0:
         """
         board_size=6, test 10 episodes:
         =================================================
-        v0 vs v1: 0 bot_v0 win, 2 bot_v1 win, 8 draw
+        v0 vs v1: 0 bot_v0 win, 5 bot_v1 win, 5 draw
         v1 vs v0: 0 bot_v0 win, 4 bot_v1 win, 6 draw
         v0 vs v0: 0 player1 win, 4 player2 win, 6 draw
         v1 vs v1: 0 player1 win, 0 player2 win, 10 draw
@@ -85,7 +85,7 @@ class TestExpertActionV0:
         =================================================
         """
         env = GomokuEnv(cfg)
-        test_episodes = 3
+        test_episodes = 1
         for i in range(test_episodes):
             obs = env.reset()
             # print('init board state: ', obs)
@@ -108,7 +108,7 @@ class TestExpertActionV0:
                     print('=' * 20)
                     break
 
-                env.bot_action_type = 'v0'
+                env.bot_action_type = 'v1'
                 action = env.bot_action()
                 # action = env.random_action()
                 # action = env.human_to_action()
@@ -127,5 +127,5 @@ class TestExpertActionV0:
 
 
 test = TestExpertActionV0()
-# test.test_v0_vs_v1()
-test.test_naive()
+test.test_v0_vs_v1()
+# test.test_naive()
