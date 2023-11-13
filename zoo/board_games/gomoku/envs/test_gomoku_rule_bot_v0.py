@@ -36,7 +36,7 @@ class TestExpertActionV0:
                 print('action index of player 1 is:', action)
                 print('player 1: ' + env.action_to_string(action))
                 obs, reward, done, info = env.step(action)
-                # env.render('image_realtime_mode')
+                env.render('image_realtime_mode')
                 if done:
                     print('=' * 20)
                     if reward > 0:
@@ -52,7 +52,7 @@ class TestExpertActionV0:
                 print('action index of player 2 is:', action)
                 print('player 2: ' + env.action_to_string(action))
                 obs, reward, done, info = env.step(action)
-                # env.render('image_realtime_mode')
+                env.render('image_realtime_mode')
                 if done:
                     print('=' * 20)
                     if reward > 0:
@@ -127,5 +127,5 @@ class TestExpertActionV0:
 
 
 test = TestExpertActionV0()
-test.test_v0_vs_v1()
-# test.test_naive()
+# test.test_v0_vs_v1()
+test.test_naive()

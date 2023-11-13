@@ -1,5 +1,8 @@
 import os
 import subprocess
+import matplotlib
+
+matplotlib.use("TkAgg")
 import tkinter as tk
 
 import imageio
@@ -113,7 +116,7 @@ class GomokuUI(tk.Tk):
     def update_turn_label(self):
         # Change the label text
         turn_text = "Human's Turn (Black)" if self.env.current_player == 1 else "AI's Turn (White)"
-        self.canvas.create_text(self.canvas_size // 2, self.cell_size, text=turn_text, font=("Arial", 10))
+        self.canvas.create_text(self.canvas_size // 2 + 5, self.cell_size // 2 + 15, text=turn_text, font=("Arial", 10))
 
     def coord_to_action(self, x, y):
         # Adjusted the coordinate system
@@ -127,7 +130,8 @@ from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 # 测试函数
 def test_human_vs_bot_ui():
     cfg = EasyDict(
-        board_size=15,
+        # board_size=15,
+        board_size=6,
         battle_mode='play_with_bot_mode',
         prob_random_agent=0,
         channel_last=False,
