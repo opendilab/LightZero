@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
+sys.path.append('./LightZero/lzero/mcts/ctree/ctree_alphazero/build')
 
 import mcts_alphazero
 n = mcts_alphazero.Node()

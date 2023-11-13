@@ -183,7 +183,7 @@ public:
             }
         }
 
-        // 转换action_visits为两个分离的数组
+        // Convert 'action_visits' into two separate arrays.
         std::vector<int> actions;
         std::vector<int> visits;
         for (const auto& av : action_visits) {
@@ -208,7 +208,6 @@ public:
 
     // This function performs a simulation from a given node until a leaf node is reached or a terminal state is reached.
     void _simulate(Node* node, py::object simulate_env, py::object policy_value_func) {
-        // std::cout << "position21 " << std::endl;
         while (!node->is_leaf()) {
             int action;
             std::tie(action, node) = _select_child(node, simulate_env);
@@ -227,20 +226,16 @@ public:
         double leaf_value;
         if (!done) {
             leaf_value = _expand_leaf_node(node, simulate_env, policy_value_func);
-            // std::cout << "position23 " << std::endl;
         }
         else {
-            // if (simulate_env.attr("mcts_mode") == "self_play_mode") {
-             if (simulate_env.attr("mcts_mode").cast<std::string>() == "self_play_mode") {  // 使用get_mcts_mode()方法替代mcts_mode成员
-                // std::cout << "position24 " << std::endl;
-
+             if (simulate_env.attr("mcts_mode").cast<std::string>() == "self_play_mode") {
                 if (winner == -1) {
                     leaf_value = 0;
                 } else {
                     leaf_value = (simulate_env.attr("current_player").cast<int>() == winner) ? 1 : -1;
                 }
             }
-            else if (simulate_env.attr("mcts_mode").cast<std::string>() == "play_with_bot_mode") {  // 使用get_mcts_mode()方法替代mcts_mode成员
+            else if (simulate_env.attr("mcts_mode").cast<std::string>() == "play_with_bot_mode") {
                 if (winner == -1) {
                     leaf_value = 0;
                 } else if (winner == 1) {
