@@ -1,7 +1,10 @@
 import os
 import subprocess
+from typing import Optional
+
 import matplotlib
 
+# Use the TkAgg backend for matplotlib
 matplotlib.use("TkAgg")
 import tkinter as tk
 
@@ -10,20 +13,38 @@ from PIL import ImageGrab
 
 
 class GomokuUI(tk.Tk):
-    def __init__(self, gomoku_env, save_frames=True):
+    def __init__(
+            self,
+            gomoku_env: "GomokuEnv",
+            save_frames: bool = True
+    ) -> None:
+        """
+        Overview:
+            Initialize the GomokuUI class. This class provides the user interface for the Gomoku game.
+        Arguments:
+            - gomoku_env (:obj:`GomokuEnv`): An instance of GomokuEnv which provides the game environment.
+            - save_frames (:obj:`bool`): A boolean to decide whether to save frames for creating a gif, default is True.
+        """
         tk.Tk.__init__(self)
         self.env = gomoku_env
         self.board_size = gomoku_env.board_size
-        self.cell_size = 50
-        self.canvas_size = self.cell_size * (self.board_size + 1)
+        self.cell_size = 50  # the size of each cell in the UI
+        self.canvas_size = self.cell_size * (self.board_size + 1)  # the size of the canvas
 
+        # Create a canvas for drawing
         self.canvas = tk.Canvas(self, width=self.canvas_size, height=self.canvas_size, bg='peach puff')
         self.canvas.pack()
-        self.frames = []
-        self.canvas.bind("<Button-1>", self.click)
+        self.frames = []  # used to store frames when save_frames is True
+        self.canvas.bind("<Button-1>", self.click)  # bind the click event to the canvas
         self.save_frames = save_frames
 
-    def click(self, event):
+    def click(self, event: tk.Event) -> None:
+        """
+        Overview:
+            This method is called every time the canvas is clicked.
+        Arguments:
+            - event (:obj:`tk.Event`): The event object containing information about the click.
+        """
         # Adjust the x and y coordinates to account for the boundary
         adjusted_x = event.y - self.cell_size
         adjusted_y = event.x - self.cell_size
@@ -35,7 +56,14 @@ class GomokuUI(tk.Tk):
         action = self.coord_to_action(x, y)
         self.update_board(action, from_ui=True)
 
-    def update_board(self, action=None, from_ui=False):
+    def update_board(self, action: Optional[int] = None, from_ui: bool = False) -> None:
+        """
+        Overview:
+            Update the board state based on the action taken.
+        Arguments:
+            - action (:obj:`int`, optional): The action to be taken, default is None.
+            - from_ui (:obj:`bool`, optional): Flag to indicate if action is from user interface, default is False.
+        """
         if from_ui:
             print('player 1: ' + self.env.action_to_string(action))
             timestep = self.env.step(action)
@@ -65,7 +93,15 @@ class GomokuUI(tk.Tk):
         if self.timestep.done:
             self.quit()
 
-    def draw_piece(self, x, y, color):
+    def draw_piece(self, x: int, y: int, color: str) -> None:
+        """
+        Overview:
+            Draw a game piece on the board.
+        Arguments:
+            - x (:obj:`int`): The x-coordinate of the piece.
+            - y (:obj:`int`): The y-coordinate of the piece.
+            - color (:obj:`str`): The color of the piece.
+        """
         padding = self.cell_size // 2
         self.canvas.create_oval(y * self.cell_size + padding, x * self.cell_size + padding,
                                 (y + 1) * self.cell_size + padding, (x + 1) * self.cell_size + padding, fill=color)
@@ -78,13 +114,17 @@ class GomokuUI(tk.Tk):
         y1 = y + self.canvas.winfo_height()
 
         # Grab the image and save it
-        img = ImageGrab.grab(bbox=(x, y, x1, y1))  # bbox参数定义了截图区域
+        img = ImageGrab.grab(bbox=(x, y, x1, y1))
         img.save("frame.png")
 
         # Append the image to the frames
         self.frames.append(imageio.imread("frame.png"))
 
-    def save_frame(self):
+    def save_frame(self) -> None:
+        """
+        Overview:
+            Save the current frame of the game board.
+        """
         # Generate Postscript from the canvas
         ps = self.canvas.postscript(colormode='color')
 
@@ -98,11 +138,20 @@ class GomokuUI(tk.Tk):
         # Append the PNG to the frames
         self.frames.append(imageio.imread('frame.png'))
 
-    def save_gif(self, file_name):
-        # Save frames as gif file
+    def save_gif(self, file_name: str) -> None:
+        """
+        Overview:
+            Save all stored frames as a gif file.
+        Arguments:
+            - file_name (:obj:`str`): The name of the gif file to be saved.
+        """
         imageio.mimsave(file_name, self.frames, 'GIF', duration=0.1)
 
-    def draw_board(self):
+    def draw_board(self) -> None:
+        """
+        Overview:
+            Draw the game board on the canvas.
+        """
         self.canvas.create_text(self.canvas_size // 2, self.cell_size // 2, text="Gomoku (Human vs AI)",
                                 font=("Arial", 10))
         # Reduce the loop count to avoid drawing extra lines
@@ -113,12 +162,25 @@ class GomokuUI(tk.Tk):
                                     i * self.cell_size)
         self.update_turn_label()
 
-    def update_turn_label(self):
+    def update_turn_label(self) -> None:
+        """
+        Overview:
+            Update the turn label on the canvas.
+        """
         # Change the label text
         turn_text = "Human's Turn (Black)" if self.env.current_player == 1 else "AI's Turn (White)"
         self.canvas.create_text(self.canvas_size // 2 + 5, self.cell_size // 2 + 15, text=turn_text, font=("Arial", 10))
 
-    def coord_to_action(self, x, y):
+    def coord_to_action(self, x: int, y: int) -> int:
+        """
+        Overview:
+            Convert coordinates to an action.
+        Arguments:
+            - x (:obj:`int`): The x-coordinate.
+            - y (:obj:`int`): The y-coordinate.
+        Returns:
+            - action (:obj:`int`): The action corresponding to the coordinates.
+        """
         # Adjusted the coordinate system
         return x * self.board_size + y
 
@@ -127,8 +189,11 @@ from easydict import EasyDict
 from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 
 
-# 测试函数
-def test_human_vs_bot_ui():
+def test_human_vs_bot_ui() -> None:
+    """
+    Overview:
+        Test function for running a Gomoku game between a human player and a bot.
+    """
     cfg = EasyDict(
         # board_size=15,
         # board_size=9,

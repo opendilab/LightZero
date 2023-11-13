@@ -5,8 +5,7 @@ from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 
 cfg = EasyDict(
     prob_random_agent=0,
-    # board_size=6,
-    board_size=9,
+    board_size=6,
     battle_mode='self_play_mode',
     channel_last=False,
     scale=True,
@@ -126,6 +125,6 @@ class TestExpertActionV0:
                     break
 
 
-test = TestExpertActionV0()
-test.test_v0_vs_v1()
+# test = TestExpertActionV0()
+# test.test_v0_vs_v1()
 # test.test_naive()

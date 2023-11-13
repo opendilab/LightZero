@@ -5,7 +5,6 @@ from easydict import EasyDict
 # ==============================================================
 board_size = 6
 num_simulations = 100
-
 update_per_collect = 50
 # board_size = 9
 # num_simulations = 200
@@ -18,18 +17,6 @@ batch_size = 256
 max_env_step = int(10e6)
 prob_random_action_in_bot = 0.5
 mcts_ctree = False
-
-# board_size = 6
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 5
-# update_per_collect = 2
-# batch_size = 2
-# max_env_step = int(5e5)
-# prob_random_action_in_bot = 0.5
-# mcts_ctree = False
-# num_of_sampled_actions = 5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -42,7 +29,7 @@ gomoku_sampled_alphazero_config = dict(
         battle_mode='play_with_bot_mode',
         bot_action_type='v0',
         prob_random_action_in_bot=prob_random_action_in_bot,
-        channel_last=False,  # NOTE
+        channel_last=False,
         use_katago_bot=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

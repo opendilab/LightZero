@@ -399,7 +399,7 @@ class SampledAlphaZeroPolicy(Policy):
         self._get_simulation_env()
         # TODO(pu): use double num_simulations for evaluation
         if self._cfg.mcts_ctree:
-            self._eval_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves, 2 * self._cfg.mcts.num_simulations,
+            self._eval_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves, min(800, mcts_eval_config.num_simulations * 4),
                                                   self._cfg.mcts.pb_c_base,
                                                   self._cfg.mcts.pb_c_init, self._cfg.mcts.root_dirichlet_alpha,
                                                   self._cfg.mcts.root_noise_weight, self.simulate_env)
@@ -409,9 +409,9 @@ class SampledAlphaZeroPolicy(Policy):
             else:
                 from lzero.mcts.ptree.ptree_az import MCTS
             mcts_eval_config = copy.deepcopy(self._cfg.mcts)
-            # TODO
-            mcts_eval_config.num_simulations = mcts_eval_config.num_simulations
-            # mcts_eval_config.num_simulations = min(800, mcts_eval_config.num_simulations * 4)
+            # TODO(pu): how to set proper num_simulations for evaluation
+            # mcts_eval_config.num_simulations = mcts_eval_config.num_simulations
+            mcts_eval_config.num_simulations = min(800, mcts_eval_config.num_simulations * 4)
 
             self._eval_mcts = MCTS(mcts_eval_config, self.simulate_env)
 

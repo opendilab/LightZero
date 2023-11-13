@@ -258,7 +258,9 @@ class AlphaZeroPolicy(Policy):
         self._get_simulation_env()
         import copy
         mcts_eval_config = copy.deepcopy(self._cfg.mcts)
-        mcts_eval_config.num_simulations = mcts_eval_config.num_simulations * 2
+        # TODO(pu): how to set proper num_simulations for evaluation
+        # mcts_eval_config.num_simulations = mcts_eval_config.num_simulations
+        mcts_eval_config.num_simulations = min(800, mcts_eval_config.num_simulations * 4)
         self._eval_mcts = MCTS(mcts_eval_config, self.simulate_env)
         self._eval_model = self._model
 
