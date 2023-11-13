@@ -12,7 +12,7 @@ class GomokuRuleBotV0:
         forming a sequence of 4, forming a sequence of 3, forming a sequence of 2, and a random move.
     """
 
-    def __init__(self, env: Any, player: int, search_only_in_neighbor: bool = True) -> None:
+    def __init__(self, env: Any, player: int, search_only_in_neighbor: bool = False) -> None:
         """
         Overview:
             Initializes the bot with the game environment and the player it represents.

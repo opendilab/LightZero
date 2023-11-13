@@ -1,32 +1,25 @@
 import copy
-import itertools
 import os
-import random
 import sys
 from functools import lru_cache
 from typing import List, Any
 
 import gym
 import imageio
+import matplotlib.patches as patches
+import matplotlib.pyplot as plt
 import numpy as np
 import pygame
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
-from matplotlib import pyplot as plt
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from zoo.board_games.gomoku.envs.legal_actions_cython import legal_actions_cython
 from zoo.board_games.gomoku.envs.get_done_winner_cython import get_done_winner_cython
+from zoo.board_games.gomoku.envs.legal_actions_cython import legal_actions_cython
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
-from zoo.board_games.connect4.envs.connect4_env import Connect4Env
 from zoo.board_games.gomoku.envs.gomoku_rule_bot_v0 import GomokuRuleBotV0
 from zoo.board_games.gomoku.envs.gomoku_rule_bot_v1 import GomokuRuleBotV1
-from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_case1, \
-    check_action_to_special_connect4_case2, \
-    check_action_to_connect4
 
 
 @lru_cache(maxsize=512)
