@@ -1,7 +1,7 @@
 import pytest
 from easydict import EasyDict
 
-from zoo.board_games.gomoku.envs.gomoku_env_ui import GomokuEnv
+from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
 
 cfg = EasyDict(
     prob_random_agent=0,
