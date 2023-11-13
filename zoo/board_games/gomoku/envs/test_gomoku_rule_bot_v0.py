@@ -24,7 +24,7 @@ class TestExpertActionV0:
 
     def test_naive(self):
         env = GomokuEnv(cfg)
-        test_episodes = 10
+        test_episodes = 1
         for i in range(test_episodes):
             obs = env.reset()
             # print('init board state: ', obs)

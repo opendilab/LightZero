@@ -23,6 +23,7 @@ class GomokuRuleBotV0():
         self.current_player = player
         self.players = self.env.players
         self.board_size = self.env.board_size
+        self.dp = None
 
     def get_rule_bot_action(self, board: np.ndarray, player: int) -> int:
         """
@@ -34,45 +35,57 @@ class GomokuRuleBotV0():
         Returns:
             - action(:obj:`int`): The next action of the bot.
         """
-        self.legal_actions = self.env.legal_actions
+        self.board = np.array(copy.deepcopy(board)).reshape(self.board_size, self.board_size)
+        # Initialize dp array if it's None
+        if self.dp is None:
+            self.dp = np.zeros((self.board_size, self.board_size, 8), dtype=int)
+            self.update_dp(self.board)
         self.current_player = player
         self.next_player = self.players[0] if self.current_player == self.players[1] else self.players[1]
-        self.board = np.array(copy.deepcopy(board)).reshape(self.board_size, self.board_size)
-
-        # Check if there is a winning move.
+        self.legal_actions = set(self.env.legal_actions)  # Store legal actions in a set
+        # Only consider the neighbor positions of the pieces on the board
+        # self.legal_actions = set([self.env.coord_to_action(i + dx, j + dy) for i in range(self.board_size) for j in range(self.board_size) if self.board[i, j] != 0 for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)] if 0 <= i + dx < self.board_size and 0 <= j + dy < self.board_size and self.board[i + dx, j + dy] == 0])
+        # Check if there is a winning move and blocking move.
         for action in self.legal_actions:
             if self.is_winning_move(action):
                 return action
-
-        # Check if there is a move to block opponent's winning move.
-        for action in self.legal_actions:
-            if self.is_blocking_move(action):
+            elif self.is_blocking_move(action):
                 return action
-
         # Remove the actions which may lead to opponent to win.
         self.remove_actions()
-
         # If all the actions are removed, then randomly select an action.
         if len(self.legal_actions) == 0:
             return np.random.choice(self.env.legal_actions)
-
-        # Check if there is a move to form a sequence of 4.
+        # Check if there is a move to form a sequence of 4, 3, and 2.
         for action in self.legal_actions:
-            if self.is_sequence_4_move(action):
+            if self.is_sequence_X_move(action, 4):
                 return action
-
-        # Check if there is a move to form a sequence of 3.
         for action in self.legal_actions:
-            if self.is_sequence_3_move(action):
+            if self.is_sequence_X_move(action, 3):
                 return action
-
-        # Check if there is a move to form a sequence of 2.
         for action in self.legal_actions:
-            if self.is_sequence_2_move(action):
+            if self.is_sequence_X_move(action, 2):
                 return action
-
         # Randomly select a legal move.
-        return np.random.choice(self.legal_actions)
+        return np.random.choice(list(self.legal_actions))
+
+    def update_dp(self, board: np.ndarray = None) -> None:
+        directions = [(0, 1), (1, 0), (-1, 1), (1, 1)]
+        for i in range(self.board_size):
+            for j in range(self.board_size):
+                if board[i, j]:
+                    for d, (dx, dy) in enumerate(directions):
+                        nx, ny = i + dx, j + dy
+                        if 0 <= nx < self.board_size and 0 <= ny < self.board_size:
+                            self.dp[nx, ny, d] = (self.dp[i, j, d] + 1) if board[i, j] == board[nx, ny] else 0
+
+    def is_sequence_X_move(self, action: int, X: int) -> bool:
+        """
+        Checks if an action can form a sequence of X pieces of the bot.
+        """
+        piece = self.current_player
+        temp_board = self._place_piece(action, piece)
+        return self.check_sequence_in_neighbor_board(temp_board, piece, X, action)
 
     def is_winning_move(self, action: int) -> bool:
         """
@@ -150,8 +163,7 @@ class GomokuRuleBotV0():
         Overview:
             Remove the actions that may cause the opponent win from ``self.legal_actions``.
         """
-        temp_list = self.legal_actions.copy()
-        for action in temp_list:
+        for action in list(self.legal_actions):  # Convert to list to avoid modifying the set during iteration
             temp = [self.board.copy(), self.current_player]
 
             piece = self.current_player
@@ -165,58 +177,18 @@ class GomokuRuleBotV0():
                 for action in range(self.board_size * self.board_size)
                 if self.board[self.env.action_to_coord(action)] == 0
             ]
-            # print(f'if we take action {action}, then the legal actions for opponent are {legal_actions}')
             for a in legal_actions:
                 if self.is_winning_move(a) or self.is_winning_move_in_two_steps(a):
-                    self.legal_actions.remove(action)
-                    # print(f"if take action {action}, then opponent take{a} may win")
-                    # print(f"so we should remove action from {self.legal_actions}")
+                    self.legal_actions.discard(action)  # Use discard instead of remove to avoid KeyError
                     break
 
             self.board, self.current_player = temp
-
-    def is_sequence_4_move(self, action: int) -> bool:
-        """
-        Checks if an action can form a sequence of 4 pieces of the bot.
-        """
-        piece = self.current_player
-
-        temp_board = self._place_piece(action, piece)
-
-        return self.check_sequence_in_neighbor_board(temp_board, piece, 4, action)
-
-    def is_sequence_3_move(self, action: int) -> bool:
-        """
-        Overview:
-            Checks if an action can form a sequence of 3 pieces of the bot.
-        Arguments:
-            - action(:obj:`int`): The action to be checked.
-        Returns:
-            - result(:obj:`bool`): True if the action can form a sequence of 3 pieces of the bot; False otherwise.
-        """
-        piece = self.current_player
-
-        temp_board = self._place_piece(action, piece)
-
-        return self.check_sequence_in_neighbor_board(temp_board, piece, 3, action)
-
-    def is_sequence_2_move(self, action: int) -> bool:
-        """
-        Overview:
-            Checks if an action can form a sequence of 2 pieces of the bot.
-        Arguments:
-            - action(:obj:`int`): The action to be checked.
-        Returns:
-            - result(:obj:`bool`): True if the action can form a sequence of 2 pieces of the bot; False otherwise.
-        """
-        piece = self.current_player
-        temp_board = self._place_piece(action, piece)
-        return self.check_sequence_in_neighbor_board(temp_board, piece, 2, action)
 
     def _place_piece(self, action, piece):
         action_x, action_y = self.env.action_to_coord(action)
         temp_board = self.board.copy()
         temp_board[action_x][action_y] = piece
+        self.update_dp(temp_board)
         return temp_board
 
     def check_sequence_in_neighbor_board(self, board: np.ndarray, piece: int, seq_len: int, action: int) -> bool:
@@ -258,32 +230,46 @@ class GomokuRuleBotV0():
 
     def check_five_in_a_row(self, board: np.ndarray, piece: int) -> bool:
         """
-        Overview:
-            Checks if there are five of the bot's pieces in a row on the current game board.
-        Arguments:
-            - board(:obj:`int`): The current game board.
-            - piece(:obj:`int`): The piece of the bot.
-        Returns:
-            - Result(:obj:`bool`): True if there are five of the bot's pieces in a row; False otherwise.
+        Use dp array to check if there are five in a row in constant time
         """
-        # Check horizontal and vertical locations
+        directions = [(0, 1), (1, 0), (-1, 1), (1, 1)]
         for i in range(self.board_size):
-            for j in range(self.board_size - 5 + 1):
-                # Check horizontal
-                if np.all(board[i, j:j + 5] == piece):
-                    return True
-                # Check vertical
-                if np.all(board[j:j + 5, i] == piece):
-                    return True
-
-        # Check diagonals
-        for i in range(self.board_size - 5 + 1):
-            for j in range(self.board_size - 5 + 1):
-                # Check positively sloped diagonals
-                if np.all(board[range(i, i + 5), range(j, j + 5)] == piece):
-                    return True
-                # Check negatively sloped diagonals
-                if np.all(board[range(i, i + 5), range(j + 5 - 1, j - 1, -1)] == piece):
-                    return True
-
+            for j in range(self.board_size):
+                if board[i, j] == piece:
+                    for d, (dx, dy) in enumerate(directions):
+                        if 0 <= i - dx < self.board_size and 0 <= j - dy < self.board_size and self.dp[
+                            i, j, d] + 1 >= 5:
+                            return True
         return False
+
+    # def check_five_in_a_row_naive(self, board: np.ndarray, piece: int) -> bool:
+    #     """
+    #     Overview:
+    #         Checks if there are five of the bot's pieces in a row on the current game board.
+    #     Arguments:
+    #         - board(:obj:`int`): The current game board.
+    #         - piece(:obj:`int`): The piece of the bot.
+    #     Returns:
+    #         - Result(:obj:`bool`): True if there are five of the bot's pieces in a row; False otherwise.
+    #     """
+    #     # Check horizontal and vertical locations
+    #     for i in range(self.board_size):
+    #         for j in range(self.board_size - 5 + 1):
+    #             # Check horizontal
+    #             if np.all(board[i, j:j + 5] == piece):
+    #                 return True
+    #             # Check vertical
+    #             if np.all(board[j:j + 5, i] == piece):
+    #                 return True
+    #
+    #     # Check diagonals
+    #     for i in range(self.board_size - 5 + 1):
+    #         for j in range(self.board_size - 5 + 1):
+    #             # Check positively sloped diagonals
+    #             if np.all(board[range(i, i + 5), range(j, j + 5)] == piece):
+    #                 return True
+    #             # Check negatively sloped diagonals
+    #             if np.all(board[range(i, i + 5), range(j + 5 - 1, j - 1, -1)] == piece):
+    #                 return True
+    #
+    #     return False
