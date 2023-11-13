@@ -17,18 +17,6 @@ batch_size = 256
 max_env_step = int(10e6)
 prob_random_action_in_bot = 0.5
 mcts_ctree = False
-
-# board_size = 6
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 5
-# update_per_collect = 2
-# batch_size = 2
-# max_env_step = int(5e5)
-# prob_random_action_in_bot = 0.5
-# mcts_ctree = False
-# num_of_sampled_actions = 5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -41,20 +29,31 @@ gomoku_sampled_alphazero_config = dict(
         battle_mode='play_with_bot_mode',
         bot_action_type='v0',
         prob_random_action_in_bot=prob_random_action_in_bot,
-        channel_last=False,  # NOTE
+        channel_last=False,
         use_katago_bot=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        env_name="gomoku",
-        prob_random_agent=0,
-        scale=True,
+        # ==============================================================
+        # for the creation of simulation env
         agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        scale=True,
         check_action_to_connect4_in_bot_v0=False,
+        simulation_env_name="gomoku",
+        # ==============================================================
         mcts_ctree=mcts_ctree,
+        screen_scaling=9,
+        render_mode=None,
     ),
     policy=dict(
+        # ==============================================================
+        # for the creation of simulation env
+        simulation_env_name='gomoku',
+        simulation_env_config_type='sampled_play_with_bot',
+        # ==============================================================
         torch_compile=False,
         tensor_float_32=False,
         model=dict(
@@ -65,8 +64,6 @@ gomoku_sampled_alphazero_config = dict(
         ),
         sampled_algo=True,
         mcts_ctree=mcts_ctree,
-        simulate_env_config_type='sampled_play_with_bot',
-        simulate_env_name="gomoku",
         policy_loss_type='KL',
         cuda=True,
         board_size=board_size,

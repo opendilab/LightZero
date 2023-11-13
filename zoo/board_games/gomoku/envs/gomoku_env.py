@@ -1,28 +1,25 @@
 import copy
 import os
-import random
 import sys
 from functools import lru_cache
 from typing import List, Any
 
 import gym
 import imageio
+import matplotlib.patches as patches
+import matplotlib.pyplot as plt
 import numpy as np
 import pygame
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
-from matplotlib import pyplot as plt
-from zoo.board_games.gomoku.envs.legal_actions_cython import legal_actions_cython
 from zoo.board_games.gomoku.envs.get_done_winner_cython import get_done_winner_cython
+from zoo.board_games.gomoku.envs.legal_actions_cython import legal_actions_cython
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
-from zoo.board_games.connect4.envs.connect4_env import Connect4Env
+from zoo.board_games.gomoku.envs.gomoku_rule_bot_v0 import GomokuRuleBotV0
 from zoo.board_games.gomoku.envs.gomoku_rule_bot_v1 import GomokuRuleBotV1
-from zoo.board_games.gomoku.envs.utils import check_action_to_special_connect4_case1, \
-    check_action_to_special_connect4_case2, \
-    check_action_to_connect4
 
 
 @lru_cache(maxsize=512)
@@ -66,7 +63,7 @@ class GomokuEnv(BaseEnv):
         # (bool) Whether to let human to play with the agent when evaluating. If False, then use the bot to evaluate the agent.
         agent_vs_human=False,
         # (str) The type of the bot of the environment.
-        bot_action_type='v1',  # {'v0', 'v1', 'alpha_beta_pruning'}
+        bot_action_type='v1',  # {'v0', 'v1', 'alpha_beta_pruning'}, 'v1' is faster and stronger than 'v0' now.
         # (float) The probability that a random agent is used instead of the learning agent.
         prob_random_agent=0,
         # (float) The probability that a random action will be taken when calling the bot.
@@ -130,11 +127,12 @@ class GomokuEnv(BaseEnv):
         self.render_mode = cfg.render_mode
         self.replay_name_suffix = "test"
         self.replay_path = None
-        self.replay_format = 'gif'  # options={'gif', 'mp4'}
+        self.replay_format = 'gif'  # 'mp4' #
         self.screen = None
         self.frames = []
 
         self.players = [1, 2]
+        self._current_player = 1
         self.board_markers = [str(i + 1) for i in range(self.board_size)]
         self.total_num_actions = self.board_size * self.board_size
         self.gomoku_rule_bot_v1 = GomokuRuleBotV1()
@@ -142,6 +140,11 @@ class GomokuEnv(BaseEnv):
 
         if self.bot_action_type == 'alpha_beta_pruning':
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
+        elif self.bot_action_type == 'v0':
+            self.rule_bot = GomokuRuleBotV0(self, self._current_player)
+
+        self.fig, self.ax = plt.subplots(figsize=(self.board_size, self.board_size))
+        plt.ion()
 
     def reset(self, start_player_index=0, init_state=None):
         self._observation_space = gym.spaces.Box(
@@ -240,7 +243,7 @@ class GomokuEnv(BaseEnv):
             timestep_player1 = self._player_step(action)
             if self.agent_vs_human:
                 print('player 1 (agent): ' + self.action_to_string(action))  # Note: visualize
-                self.render()
+                self.render(mode="image_realtime_mode")
 
             if timestep_player1.done:
                 # in eval_mode, we set to_play as None/-1, because we don't consider the alternation between players
@@ -257,7 +260,7 @@ class GomokuEnv(BaseEnv):
             timestep_player2 = self._player_step(bot_action)
             if self.agent_vs_human:
                 print('player 2 (human): ' + self.action_to_string(bot_action))  # Note: visualize
-                self.render()
+                self.render(mode="image_realtime_mode")
 
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
@@ -293,8 +296,10 @@ class GomokuEnv(BaseEnv):
         self.current_player = self.to_play
 
         # Render the new step.
-        if self.render_mode is not None:
-            self.render(self.render_mode)
+        # The following code is used to save the rendered images in both
+        # collect/eval step and the simulated mcts step.
+        # if self.render_mode is not None:
+        #     self.render(self.render_mode)
 
         if done:
             info['eval_episode_return'] = reward
@@ -374,8 +379,10 @@ class GomokuEnv(BaseEnv):
         if np.random.rand() < self.prob_random_action_in_bot:
             return self.random_action()
         else:
+            # if self.bot_action_type == 'v0':
+            # return self.rule_bot_v0()
             if self.bot_action_type == 'v0':
-                return self.rule_bot_v0()
+                return self.rule_bot.get_rule_bot_action(self.board, self._current_player)
             elif self.bot_action_type == 'v1':
                 return self.rule_bot_v1()
             elif self.bot_action_type == 'alpha_beta_pruning':
@@ -391,299 +398,6 @@ class GomokuEnv(BaseEnv):
         # NOTE: we use the original raw_obs for ``gomoku_rule_bot_v1.get_action()``
         obs = {'observation': self.current_state()[0], 'action_mask': action_mask}
         return self.gomoku_rule_bot_v1.get_action(obs)
-
-    def rule_bot_v0(self):
-        """
-        Overview:
-            Hard coded agent v0 for gomoku env.
-            Considering the situation of to-connect-4 and to-connect-5 in a sliding window of 5X5, and lacks the consideration of the entire chessboard.
-            In each sliding window of 5X5, first random sample a action from legal_actions,
-            then take the action that will lead a connect4 or connect-5 of current/oppenent player's pieces.
-        Returns:
-            - action (:obj:`int`): the expert action to take in the current game state.
-        """
-        assert self.board_size >= 5, "current rule_bot_v0 is only support board_size>=5!"
-        # To easily calculate expert action, we convert the chessboard notation:
-        # from player 1:  1, player 2: 2
-        # to   player 1: -1, player 2: 1
-        # TODO: more elegant implementation
-        board_deepcopy = copy.deepcopy(self.board)
-        for i in range(board_deepcopy.shape[0]):
-            for j in range(board_deepcopy.shape[1]):
-                if board_deepcopy[i][j] == 1:
-                    board_deepcopy[i][j] = -1
-                elif board_deepcopy[i][j] == 2:
-                    board_deepcopy[i][j] = 1
-
-        # first random sample a action from legal_actions
-        action = np.random.choice(self.legal_actions)
-
-        size_of_board_template = 5
-        shift_distance = [
-            [i, j] for i in range(self.board_size - size_of_board_template + 1)
-            for j in range(self.board_size - size_of_board_template + 1)
-        ]
-        action_block_opponent_to_connect5 = None
-        action_to_connect4 = None
-        action_to_special_connect4_case1 = None
-        action_to_special_connect4_case2 = None
-
-        min_to_connect = 3
-
-        for board_block_index in range((self.board_size - size_of_board_template + 1) ** 2):
-            """
-            e.g., self.board_size=6
-            board_block_index =[0,1,2,3]
-            shift_distance = (0,0), (0,1), (1,0), (1,1)
-            """
-            shfit_tmp_board = copy.deepcopy(
-                board_deepcopy[shift_distance[board_block_index][0]:size_of_board_template +
-                                                                    shift_distance[board_block_index][0],
-                shift_distance[board_block_index][1]:size_of_board_template +
-                                                     shift_distance[board_block_index][1]]
-            )
-
-            # Horizontal and vertical checks
-            for i in range(size_of_board_template):
-                if abs(sum(shfit_tmp_board[i, :])) >= min_to_connect:
-                    # if i-th horizontal line has three same pieces and two empty position, or four same pieces and one opponent piece.
-                    # e.g., case1: .xxx. , case2: oxxxx
-
-                    # find the index in the i-th horizontal line
-                    zero_position_index = np.where(shfit_tmp_board[i, :] == 0)[0]
-                    if zero_position_index.shape[0] == 0:
-                        logging.debug(
-                            'there is no empty position in this searched five positions, continue to search...'
-                        )
-                    else:
-                        if zero_position_index.shape[0] == 2:
-                            ind = random.choice(zero_position_index)
-                        elif zero_position_index.shape[0] == 1:
-                            ind = zero_position_index[0]
-                        # convert ind to action
-                        # the action that will lead a connect5 of current or opponent player's pieces
-                        action = np.ravel_multi_index(
-                            (
-                                np.array([i + shift_distance[board_block_index][0]]
-                                         ), np.array([ind + shift_distance[board_block_index][1]])
-                            ), (self.board_size, self.board_size)
-                        )[0]
-                        if self.check_action_to_connect4_in_bot_v0:
-                            if check_action_to_special_connect4_case1(shfit_tmp_board[i, :]):
-                                action_to_special_connect4_case1 = action
-                            if check_action_to_special_connect4_case2(shfit_tmp_board[i, :]):
-                                action_to_special_connect4_case2 = action
-                            if check_action_to_connect4(shfit_tmp_board[i, :]):
-                                action_to_connect4 = action
-                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[i, :]) > 0) and abs(sum(
-                                shfit_tmp_board[i, :])) == size_of_board_template - 1:
-                            # immediately take the action that will lead a connect5 of current player's pieces
-                            return action
-                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[i, :]) < 0) and abs(sum(
-                                shfit_tmp_board[i, :])) == size_of_board_template - 1:
-                            # memory the action that will lead a connect5 of opponent player's pieces, to avoid the forget
-                            action_block_opponent_to_connect5 = action
-
-                if abs(sum(shfit_tmp_board[:, i])) >= min_to_connect:
-                    # if i-th vertical has three same pieces and two empty position, or four same pieces and one opponent piece.
-                    # e.g., case1: .xxx. , case2: oxxxx
-
-                    # find the index in the i-th vertical line
-                    zero_position_index = np.where(shfit_tmp_board[:, i] == 0)[0]
-                    if zero_position_index.shape[0] == 0:
-                        logging.debug(
-                            'there is no empty position in this searched five positions, continue to search...'
-                        )
-                    else:
-                        if zero_position_index.shape[0] == 2:
-                            ind = random.choice(zero_position_index)
-                        elif zero_position_index.shape[0] == 1:
-                            ind = zero_position_index[0]
-
-                        # convert ind to action
-                        # the action that will lead a connect5 of current or opponent player's pieces
-                        action = np.ravel_multi_index(
-                            (
-                                np.array([ind + shift_distance[board_block_index][0]]
-                                         ), np.array([i + shift_distance[board_block_index][1]])
-                            ), (self.board_size, self.board_size)
-                        )[0]
-                        if self.check_action_to_connect4_in_bot_v0:
-                            if check_action_to_special_connect4_case1(shfit_tmp_board[:, i]):
-                                action_to_special_connect4_case1 = action
-                            if check_action_to_special_connect4_case2(shfit_tmp_board[:, i]):
-                                action_to_special_connect4_case2 = action
-                            if check_action_to_connect4(shfit_tmp_board[:, i]):
-                                action_to_connect4 = action
-                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[:, i]) > 0) and abs(sum(
-                                shfit_tmp_board[:, i])) == size_of_board_template - 1:
-                            # immediately take the action that will lead a connect5 of current player's pieces
-                            return action
-                        if (self.current_player_to_compute_bot_action * sum(shfit_tmp_board[:, i]) < 0) and abs(sum(
-                                shfit_tmp_board[:, i])) == size_of_board_template - 1:
-                            # memory the action that will lead a connect5 of opponent player's pieces, to avoid the forget
-                            action_block_opponent_to_connect5 = action
-
-            # Diagonal checks
-            diag = shfit_tmp_board.diagonal()
-            anti_diag = np.fliplr(shfit_tmp_board).diagonal()
-            if abs(sum(diag)) >= min_to_connect:
-                # if diagonal has three same pieces and two empty position, or four same pieces and one opponent piece.
-                # e.g., case1: .xxx. , case2: oxxxx
-                # find the index in the diag vector
-
-                zero_position_index = np.where(diag == 0)[0]
-                if zero_position_index.shape[0] == 0:
-                    logging.debug('there is no empty position in this searched five positions, continue to search...')
-                else:
-                    if zero_position_index.shape[0] == 2:
-                        ind = random.choice(zero_position_index)
-                    elif zero_position_index.shape[0] == 1:
-                        ind = zero_position_index[0]
-
-                    # convert ind to action
-                    # the action that will lead a connect5 of current or opponent player's pieces
-                    action = np.ravel_multi_index(
-                        (
-                            np.array([ind + shift_distance[board_block_index][0]]
-                                     ), np.array([ind + shift_distance[board_block_index][1]])
-                        ), (self.board_size, self.board_size)
-                    )[0]
-                    if self.check_action_to_connect4_in_bot_v0:
-                        if check_action_to_special_connect4_case1(diag):
-                            action_to_special_connect4_case1 = action
-                        if check_action_to_special_connect4_case2(diag):
-                            action_to_special_connect4_case2 = action
-                        if check_action_to_connect4(diag):
-                            action_to_connect4 = action
-                    if self.current_player_to_compute_bot_action * sum(diag) > 0 and abs(
-                            sum(diag)) == size_of_board_template - 1:
-                        # immediately take the action that will lead a connect5 of current player's pieces
-                        return action
-                    if self.current_player_to_compute_bot_action * sum(diag) < 0 and abs(
-                            sum(diag)) == size_of_board_template - 1:
-                        # memory the action that will lead a connect5 of opponent player's pieces, to avoid the forget
-                        action_block_opponent_to_connect5 = action
-
-            if abs(sum(anti_diag)) >= min_to_connect:
-                # if anti-diagonal has three same pieces and two empty position, or four same pieces and one opponent piece.
-                # e.g., case1: .xxx. , case2: oxxxx
-
-                # find the index in the anti_diag vector
-                zero_position_index = np.where(anti_diag == 0)[0]
-                if zero_position_index.shape[0] == 0:
-                    logging.debug('there is no empty position in this searched five positions, continue to search...')
-                else:
-                    if zero_position_index.shape[0] == 2:
-                        ind = random.choice(zero_position_index)
-                    elif zero_position_index.shape[0] == 1:
-                        ind = zero_position_index[0]
-                    # convert ind to action
-                    # the action that will lead a connect5 of current or opponent player's pieces
-                    action = np.ravel_multi_index(
-                        (
-                            np.array([ind + shift_distance[board_block_index][0]]),
-                            np.array([size_of_board_template - 1 - ind + shift_distance[board_block_index][1]])
-                        ), (self.board_size, self.board_size)
-                    )[0]
-                    if self.check_action_to_connect4_in_bot_v0:
-                        if check_action_to_special_connect4_case1(anti_diag):
-                            action_to_special_connect4_case1 = action
-                        if check_action_to_special_connect4_case2(anti_diag):
-                            action_to_special_connect4_case2 = action
-                        if check_action_to_connect4(anti_diag):
-                            action_to_connect4 = action
-                    if self.current_player_to_compute_bot_action * sum(anti_diag) > 0 and abs(
-                            sum(anti_diag)) == size_of_board_template - 1:
-                        # immediately take the action that will lead a connect5 of current player's pieces
-                        return action
-                    if self.current_player_to_compute_bot_action * sum(anti_diag) < 0 and abs(
-                            sum(anti_diag)) == size_of_board_template - 1:
-                        # memory the action that will lead a connect5 of opponent player's pieces, to avoid the forget
-                        action_block_opponent_to_connect5 = action
-
-        if action_block_opponent_to_connect5 is not None:
-            return action_block_opponent_to_connect5
-        elif action_to_special_connect4_case1 is not None:
-            return action_to_special_connect4_case1
-        elif action_to_special_connect4_case2 is not None:
-            return action_to_special_connect4_case2
-        elif action_to_connect4 is not None:
-            return action_to_connect4
-        else:
-            return action
-
-    def naive_rule_bot_v0_for_board_size_5(self):
-        """
-        Overview:
-            Hard coded expert agent for gomoku env.
-            First random sample a action from legal_actions, then take the action that will lead a connect4 of current player's pieces.
-        Returns:
-            - action (:obj:`int`): the expert action to take in the current game state.
-        """
-        assert self.board_size == 5, "current naive_rule_bot_v0 is only support board_size=5!"
-        # To easily calculate expert action, we convert the chessboard notation:
-        # from player 1:  1, player 2: 2
-        # to   player 1: -1, player 2: 1
-        # TODO: more elegant implementation
-        board = copy.deepcopy(self.board)
-        for i in range(board.shape[0]):
-            for j in range(board.shape[1]):
-                if board[i][j] == 1:
-                    board[i][j] = -1
-                elif board[i][j] == 2:
-                    board[i][j] = 1
-
-        # first random sample a action from legal_actions
-        action = np.random.choice(self.legal_actions)
-        # Horizontal and vertical checks
-        for i in range(self.board_size):
-            if abs(sum(board[i, :])) == 4:
-                # if i-th horizontal line has four same pieces and one empty position
-                # find the index in the i-th horizontal line
-                ind = np.where(board[i, :] == 0)[0][0]
-                # convert ind to action
-                action = np.ravel_multi_index((np.array([i]), np.array([ind])), (self.board_size, self.board_size))[0]
-                if self.current_player_to_compute_bot_action * sum(board[i, :]) > 0:
-                    # immediately take the action that will lead a connect5 of current player's pieces
-                    return action
-
-            if abs(sum(board[:, i])) == 4:
-                # if i-th vertical line has two same pieces and one empty position
-                # find the index in the i-th vertical line
-                ind = np.where(board[:, i] == 0)[0][0]
-                # convert ind to action
-                action = np.ravel_multi_index((np.array([ind]), np.array([i])), (self.board_size, self.board_size))[0]
-                if self.current_player_to_compute_bot_action * sum(board[:, i]) > 0:
-                    # immediately take the action that will lead a connect5 of current player's pieces
-                    return action
-
-        # Diagonal checks
-        diag = board.diagonal()
-        anti_diag = np.fliplr(board).diagonal()
-        if abs(sum(diag)) == 4:
-            # if diagonal has two same pieces and one empty position
-            # find the index in the diag vector
-            ind = np.where(diag == 0)[0][0]
-            # convert ind to action
-            action = np.ravel_multi_index((np.array([ind]), np.array([ind])), (self.board_size, self.board_size))[0]
-            if self.current_player_to_compute_bot_action * sum(diag) > 0:
-                # immediately take the action that will lead a connect5 of current player's pieces
-                return action
-
-        if abs(sum(anti_diag)) == 4:
-            # if anti-diagonal has two same pieces and one empty position
-            # find the index in the anti_diag vector
-            ind = np.where(anti_diag == 0)[0][0]
-            # convert ind to action
-            action = np.ravel_multi_index(
-                (np.array([ind]), np.array([self.board_size - 1 - ind])), (self.board_size, self.board_size)
-            )[0]
-            if self.current_player_to_compute_bot_action * sum(anti_diag) > 0:
-                # immediately take the action that will lead a connect5 of current player's pieces
-                return action
-
-        return action
 
     @property
     def current_player(self):
@@ -814,10 +528,81 @@ class GomokuEnv(BaseEnv):
         self._dynamic_seed = dynamic_seed
         np.random.seed(self._seed)
 
-    def render(self, mode: str = None) -> None:
+    def draw_board(self):
         """
         Overview:
-            Renders the Gomoku (Five in a Row) game environment.
+            This method draws the Gomoku board using matplotlib.
+        """
+
+        # Clear the previous board
+        self.ax.clear()
+
+        # Set the limits of the x and y axes
+        self.ax.set_xlim(0, self.board_size + 1)
+        self.ax.set_ylim(self.board_size + 1, 0)
+
+        # Set the board background color
+        self.ax.set_facecolor('peachpuff')
+
+        # Draw the grid lines
+        for i in range(self.board_size + 1):
+            self.ax.plot([i + 1, i + 1], [1, self.board_size], color='black')
+            self.ax.plot([1, self.board_size], [i + 1, i + 1], color='black')
+
+    def render(self, mode="state_realtime_mode"):
+        """
+        Overview:
+            The render method is used to draw the current state of the game. The rendering mode can be
+            set according to the needs of the user.
+        Arguments:
+            - mode (str): Rendering mode, options are "state_realtime_mode", "image_realtime_mode",
+              and "image_savefile_mode".
+        """
+        # Print the state of the board directly
+        if mode == "state_realtime_mode":
+            print(np.array(self.board).reshape(self.board_size, self.board_size))
+            return
+        # Render the game as an image
+        elif mode == "image_realtime_mode" or mode == "image_savefile_mode":
+            self.draw_board()
+            # Draw the pieces on the board
+            for x in range(self.board_size):
+                for y in range(self.board_size):
+                    if self.board[x][y] == 1:  # Black piece
+                        circle = patches.Circle((y + 1, x + 1), 0.4, edgecolor='black',
+                                                facecolor='black', zorder=3)
+                        self.ax.add_patch(circle)
+                    elif self.board[x][y] == 2:  # White piece
+                        circle = patches.Circle((y + 1, x + 1), 0.4, edgecolor='black',
+                                                facecolor='white', zorder=3)
+                        self.ax.add_patch(circle)
+            # Set the title of the game
+            plt.title('Agent vs. Human: ' + ('Black Turn' if self.current_player == 1 else 'White Turn'))
+            # If in realtime mode, draw and pause briefly
+            if mode == "image_realtime_mode":
+                plt.draw()
+                plt.pause(0.1)
+            # In savefile mode, save the current frame to the frames list
+            elif mode == "image_savefile_mode":
+                # Save the current frame to the frames list.
+                self.fig.canvas.draw()
+                image = np.frombuffer(self.fig.canvas.tostring_rgb(), dtype='uint8')
+                image = image.reshape(self.fig.canvas.get_width_height()[::-1] + (3,))
+                self.frames.append(image)
+
+    def close(self):
+        """
+        Overview:
+            This method is used to display the final game board to the user and turn off interactive
+            mode in matplotlib.
+        """
+        plt.ioff()
+        plt.show()
+
+    def render_for_b15(self, mode: str = None) -> None:
+        """
+        Overview:
+            Renders the Gomoku (Five in a Row) game environment. Now only support board_size=15.
         Arguments:
             - mode (:obj:`str`): The mode to render with. Options are: None, 'human', 'state_realtime_mode',
                 'image_realtime_mode', 'image_savefile_mode'.

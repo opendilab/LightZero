@@ -385,6 +385,7 @@ namespace tree
                 #else
                     disc_action_with_probs.emplace_back(std::make_pair(iter, disturbed_probs[iter]));
                 #endif
+                // disc_action_with_probs.emplace_back(std::make_pair(iter, disturbed_probs[iter]));
             }
 
             std::sort(disc_action_with_probs.begin(), disc_action_with_probs.end(), cmp);

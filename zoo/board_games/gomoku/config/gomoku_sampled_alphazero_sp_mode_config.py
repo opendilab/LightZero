@@ -31,14 +31,25 @@ gomoku_sampled_alphazero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        env_name="Gomoku",
-        prob_random_agent=0,
-        scale=True,
+        # ==============================================================
+        # for the creation of simulation env
         agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        scale=True,
         check_action_to_connect4_in_bot_v0=False,
+        simulation_env_name="gomoku",
+        # ==============================================================
         mcts_ctree=mcts_ctree,
+        screen_scaling=9,
+        render_mode=None,
     ),
     policy=dict(
+        # ==============================================================
+        # for the creation of simulation env
+        simulation_env_name='gomoku',
+        simulation_env_config_type='sampled_self_play',
+        # ==============================================================
         torch_compile=False,
         tensor_float_32=False,
         model=dict(
@@ -48,9 +59,7 @@ gomoku_sampled_alphazero_config = dict(
             num_channels=32,
         ),
         sampled_algo=True,
-        simulate_env_name="gomoku",
         mcts_ctree=mcts_ctree,
-        simulate_env_config_type='sampled_self_play',
         policy_loss_type='KL',
         cuda=True,
         board_size=board_size,

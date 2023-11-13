@@ -211,7 +211,7 @@ class PredictionNetwork(nn.Module):
     def __init__(
             self,
             action_space_size: int,
-            continuous_action_space,
+            continuous_action_space: bool,
             num_res_blocks: int,
             num_channels: int,
             value_head_channels: int,

@@ -41,6 +41,8 @@ gomoku_alphazero_config = dict(
         screen_scaling=9,
         render_mode=None,
         # ==============================================================
+        screen_scaling=9,
+        render_mode=None,
     ),
     policy=dict(
         mcts_ctree=mcts_ctree,

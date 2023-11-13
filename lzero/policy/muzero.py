@@ -526,6 +526,7 @@ class MuZeroPolicy(Policy):
             - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
             - temperature (:obj:`float`): The temperature of the policy.
             - to_play (:obj:`int`): The player to play.
+            - epsilon (:obj:`float`): The epsilon of the eps greedy exploration.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
         Shape:
             - data (:obj:`torch.Tensor`):
@@ -535,6 +536,7 @@ class MuZeroPolicy(Policy):
             - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
             - temperature: :math:`(1, )`.
             - to_play: :math:`(N, 1)`, where N is the number of collect_env.
+            - epsilon: :math:`(1, )`.
             - ready_env_id: None
         Returns:
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
