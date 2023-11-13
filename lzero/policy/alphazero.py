@@ -162,7 +162,7 @@ class AlphaZeroPolicy(Policy):
         mcts_probs = mcts_probs.to(device=self._device, dtype=torch.float)
         reward = reward.to(device=self._device, dtype=torch.float)
 
-        action_probs, values = self._learn_model.compute_prob_value(state_batch)
+        action_probs, values = self._learn_model.compute_policy_value(state_batch)
         log_probs = torch.log(action_probs)
 
         # calculate policy entropy, for monitoring only
@@ -258,7 +258,9 @@ class AlphaZeroPolicy(Policy):
         self._get_simulation_env()
         import copy
         mcts_eval_config = copy.deepcopy(self._cfg.mcts)
-        mcts_eval_config.num_simulations = mcts_eval_config.num_simulations * 2
+        # TODO(pu): how to set proper num_simulations for evaluation
+        # mcts_eval_config.num_simulations = mcts_eval_config.num_simulations
+        mcts_eval_config.num_simulations = min(800, mcts_eval_config.num_simulations * 4)
         self._eval_mcts = MCTS(mcts_eval_config, self.simulate_env)
         self._eval_model = self._model
 
@@ -323,7 +325,7 @@ class AlphaZeroPolicy(Policy):
             device=self._device, dtype=torch.float
         ).unsqueeze(0)
         with torch.no_grad():
-            action_probs, value = self._policy_model.compute_prob_value(current_state_scale)
+            action_probs, value = self._policy_model.compute_policy_value(current_state_scale)
         action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
         return action_probs_dict, value.item()
 
