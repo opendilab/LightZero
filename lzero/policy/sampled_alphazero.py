@@ -177,7 +177,6 @@ class SampledAlphaZeroPolicy(Policy):
                 del input_dict['next_obs']['katago_game_state']
 
         # list of dict -> dict of list
-        # inputs_deepcopy = copy.deepcopy(inputs)
         # only for env with variable legal actions
         inputs = pad_and_get_lengths(inputs, self._cfg.mcts.num_of_sampled_actions)
         inputs = default_collate(inputs)
@@ -208,14 +207,8 @@ class SampledAlphaZeroPolicy(Policy):
         # ==============================================================
         # policy loss
         # ==============================================================
-        # mcts_visit_count_probs = mcts_visit_count_probs / (mcts_visit_count_probs.sum(dim=1, keepdim=True) + 1e-6)
-        # policy_loss = torch.nn.functional.kl_div(
-        #     policy_log_probs, mcts_visit_count_probs, reduction='batchmean'
-        # )
-        # orig implementation
-        # policy_loss = -torch.mean(torch.sum(mcts_visit_count_probs * policy_log_probs, 1))
-
-        policy_loss = self._calculate_policy_loss_disc(policy_probs, mcts_visit_count_probs, root_sampled_actions, valid_action_length)
+        policy_loss = self._calculate_policy_loss_disc(policy_probs, mcts_visit_count_probs, root_sampled_actions,
+                                                       valid_action_length)
 
         # ==============================================================
         # value loss
@@ -286,8 +279,6 @@ class SampledAlphaZeroPolicy(Policy):
                 sampled_policy_probs.log(), sampled_target_policy, reduction='none'
             )
 
-            # TODO(pu)
-            # 使用 nan_to_num 将 loss 中的 nan 值设置为0
             loss = torch.nan_to_num(loss)
 
             # Apply the mask to the loss
@@ -315,7 +306,6 @@ class SampledAlphaZeroPolicy(Policy):
         else:
             raise ValueError(f"Invalid policy_loss_type: {self._cfg.policy_loss_type}")
 
-
         return loss
 
     def _init_collect(self) -> None:
@@ -327,6 +317,9 @@ class SampledAlphaZeroPolicy(Policy):
 
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
+            import sys
+            sys.path.append('./LightZero/lzero/mcts/ctree/ctree_alphazero/build')
+            import mcts_alphazero
             self._collect_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves, self._cfg.mcts.num_simulations,
                                                      self._cfg.mcts.pb_c_base,
                                                      self._cfg.mcts.pb_c_init, self._cfg.mcts.root_dirichlet_alpha,
@@ -368,7 +361,6 @@ class SampledAlphaZeroPolicy(Policy):
         for env_id in ready_env_id:
             # print('[collect] start_player_index={}'.format(start_player_index[env_id]))
             # print('[collect] init_state=\n{}'.format(init_state[env_id]))
-
             state_config_for_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
                                                        init_state=init_state[env_id],
                                                        katago_policy_init=True,
@@ -397,9 +389,13 @@ class SampledAlphaZeroPolicy(Policy):
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._get_simulation_env()
-        # TODO(pu): use double num_simulations for evaluation
         if self._cfg.mcts_ctree:
-            self._eval_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves, min(800, mcts_eval_config.num_simulations * 4),
+            import sys
+            sys.path.append('./LightZero/lzero/mcts/ctree/ctree_alphazero/build')
+            import mcts_alphazero
+            # TODO(pu): how to set proper num_simulations for evaluation
+            self._eval_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves,
+                                                  min(800, self._cfg.mcts.num_simulations * 4),
                                                   self._cfg.mcts.pb_c_base,
                                                   self._cfg.mcts.pb_c_init, self._cfg.mcts.root_dirichlet_alpha,
                                                   self._cfg.mcts.root_noise_weight, self.simulate_env)
@@ -410,9 +406,7 @@ class SampledAlphaZeroPolicy(Policy):
                 from lzero.mcts.ptree.ptree_az import MCTS
             mcts_eval_config = copy.deepcopy(self._cfg.mcts)
             # TODO(pu): how to set proper num_simulations for evaluation
-            # mcts_eval_config.num_simulations = mcts_eval_config.num_simulations
             mcts_eval_config.num_simulations = min(800, mcts_eval_config.num_simulations * 4)
-
             self._eval_mcts = MCTS(mcts_eval_config, self.simulate_env)
 
         self._eval_model = self._model
@@ -449,8 +443,9 @@ class SampledAlphaZeroPolicy(Policy):
                                                        katago_game_state=katago_game_state[env_id]))
 
             # try:
-            action, mcts_visit_count_probs = self._eval_mcts.get_next_action(state_config_for_env_reset, self._policy_value_func,
-                                                                 1.0, False)
+            action, mcts_visit_count_probs = self._eval_mcts.get_next_action(state_config_for_env_reset,
+                                                                             self._policy_value_func,
+                                                                             1.0, False)
             # except Exception as e:
             #     print(f"Exception occurred: {e}")
             #     print(f"Is self._policy_value_func callable? {callable(self._policy_value_func)}")
@@ -466,7 +461,8 @@ class SampledAlphaZeroPolicy(Policy):
 
     def _get_simulation_env(self):
         assert self._cfg.simulation_env_name in ['tictactoe', 'gomoku', 'go'], self._cfg.simulation_env_name
-        assert self._cfg.simulation_env_config_type in ['play_with_bot', 'self_play', 'league', 'sampled_play_with_bot'], self._cfg.simulation_env_config_type
+        assert self._cfg.simulation_env_config_type in ['play_with_bot', 'self_play', 'league',
+                                                        'sampled_play_with_bot'], self._cfg.simulation_env_config_type
         if self._cfg.simulation_env_name == 'tictactoe':
             from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
             if self._cfg.simulation_env_config_type == 'play_with_bot':
@@ -493,7 +489,8 @@ class SampledAlphaZeroPolicy(Policy):
             elif self._cfg.simulation_env_config_type == 'league':
                 from zoo.board_games.gomoku.config.gomoku_alphazero_league_config import gomoku_alphazero_config
             elif self._cfg.simulation_env_config_type == 'sampled_play_with_bot':
-                from zoo.board_games.gomoku.config.gomoku_sampled_alphazero_bot_mode_config import gomoku_sampled_alphazero_config as gomoku_alphazero_config
+                from zoo.board_games.gomoku.config.gomoku_sampled_alphazero_bot_mode_config import \
+                    gomoku_sampled_alphazero_config as gomoku_alphazero_config
 
             self.simulate_env = GomokuEnv(gomoku_alphazero_config.env)
         elif self._cfg.simulation_env_name == 'go':

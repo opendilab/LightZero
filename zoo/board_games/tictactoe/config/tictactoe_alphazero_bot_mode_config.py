@@ -10,6 +10,7 @@ num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
+mcts_ctree = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -31,6 +32,7 @@ tictactoe_alphazero_config = dict(
         prob_random_agent=0,
         prob_expert_agent=0,
         scale=True,
+        mcts_ctree=mcts_ctree,
         # ==============================================================
     ),
     policy=dict(
@@ -39,6 +41,7 @@ tictactoe_alphazero_config = dict(
         simulation_env_name='tictactoe',
         simulation_env_config_type='play_with_bot',
         # ==============================================================
+        mcts_ctree=mcts_ctree,
         model=dict(
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),
