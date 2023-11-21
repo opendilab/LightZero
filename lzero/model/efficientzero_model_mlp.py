@@ -128,7 +128,17 @@ class EfficientZeroModelMLP(nn.Module):
                 res_connection_in_dynamics=self.res_connection_in_dynamics,
             )
         else:
-            self.dynamics_network = state_dynamics
+            self.dynamics_network = state_dynamics(
+                action_encoding_dim=self.action_encoding_dim,
+                num_channels=latent_state_dim + self.action_encoding_dim,
+                common_layer_num=2,
+                lstm_hidden_size=lstm_hidden_size,
+                fc_reward_layers=fc_reward_layers,
+                output_support_size=self.reward_support_size,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                norm_type=norm_type,
+                res_connection_in_dynamics=self.res_connection_in_dynamics,
+            )
 
         if state_prediction == None:
             self.prediction_network = PredictionNetworkMLP(
@@ -141,7 +151,16 @@ class EfficientZeroModelMLP(nn.Module):
                 norm_type=norm_type
             )
         else:
-            self.prediction_network = state_prediction
+            self.prediction_network = state_prediction(
+                action_space_size=action_space_size,
+                num_channels=latent_state_dim,
+                fc_value_layers=fc_value_layers,
+                fc_policy_layers=fc_policy_layers,
+                output_support_size=self.value_support_size,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                norm_type=norm_type
+
+            )
 
         if self.self_supervised_learning_loss:
             # self_supervised_learning_loss related network proposed in EfficientZero
@@ -186,7 +205,7 @@ class EfficientZeroModelMLP(nn.Module):
         """
         batch_size = get_shape0(obs)
         latent_state = self._representation(obs)
-        device = latent_state.device
+        device = latent_state[0].device
         policy_logits, value = self._prediction(latent_state)
         # zero initialization for reward hidden states
         # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
@@ -307,19 +326,22 @@ class EfficientZeroModelMLP(nn.Module):
                 # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
                 action_encoding = action_encoding.unsqueeze(-1)
 
-        action_encoding = action_encoding.to(latent_state.device).float()
+        agent_latent_state, global_latent_state = latent_state
+        action_encoding = action_encoding.to(agent_latent_state.device).float()
         # state_action_encoding shape: (batch_size, latent_state[1] + action_dim]) or
         # (batch_size, latent_state[1] + action_space_size]) depending on the discrete_action_encoding_type.
-        state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
+        agent_state_action_encoding = torch.cat((agent_latent_state, action_encoding), dim=1)
+        global_state_action_encoding = torch.cat((agent_latent_state, global_latent_state, action_encoding), dim=1)
 
         # NOTE: the key difference with MuZero
-        next_latent_state, next_reward_hidden_state, value_prefix = self.dynamics_network(
-            state_action_encoding, reward_hidden_state
+        (next_agent_latent_state, next_global_latent_state), next_reward_hidden_state, value_prefix = self.dynamics_network(
+            (agent_state_action_encoding, global_state_action_encoding), reward_hidden_state
         )
 
         if self.state_norm:
-            next_latent_state = renormalize(next_latent_state)
-        return next_latent_state, next_reward_hidden_state, value_prefix
+            next_agent_latent_state = renormalize(next_agent_latent_state)
+            next_global_latent_state = renormalize(next_global_latent_state)
+        return (next_agent_latent_state, next_global_latent_state), next_reward_hidden_state, value_prefix
 
     def project(self, latent_state: torch.Tensor, with_grad=True):
         """

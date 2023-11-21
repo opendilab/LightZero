@@ -18,7 +18,7 @@ from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
-from zoo.petting_zoo.model import PettingZooEncoder, PettingZooPrediction, PettingZooDynamics
+from zoo.petting_zoo.model import PettingZooEncoder, PettingZooPrediction
 
 def eval_muzero(main_cfg, create_cfg, seed=0):
     assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \

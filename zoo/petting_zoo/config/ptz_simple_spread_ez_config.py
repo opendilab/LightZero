@@ -24,7 +24,7 @@ eps_greedy_exploration_in_collect = True
 
 main_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
+    f'data_ez_ctree/{env_name}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
     env=dict(
         env_family='mpe',
         env_id='simple_spread_v2',
@@ -99,8 +99,8 @@ create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero',
-        import_names=['lzero.policy.muzero'],
+        type='efficientzero',
+        import_names=['lzero.policy.efficientzero'],
     ),
     collector=dict(
         type='episode_muzero',
@@ -108,8 +108,8 @@ create_config = dict(
     )
 )
 create_config = EasyDict(create_config)
-ptz_simple_spread_muzero_config = main_config
-ptz_simple_spread_muzero_create_config = create_config
+ptz_simple_spread_efficientzero_config = main_config
+ptz_simple_spread_efficientzero_create_config = create_config
 
 if __name__ == "__main__":
     from zoo.petting_zoo.entry import train_muzero

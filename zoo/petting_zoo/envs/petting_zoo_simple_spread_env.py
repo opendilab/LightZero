@@ -36,11 +36,6 @@ class PettingZooEnv(BaseEnv):
         if self._act_scale:
             assert self._continuous_actions, 'Only continuous action space env needs act_scale'
 
-        # joint action
-        import itertools
-        action_space = [0, 1, 2, 3, 4]
-        self.combinations = list(itertools.product(action_space, repeat=self._num_agents))
-
     def reset(self) -> np.ndarray:
         if not self._init_flag:
             # In order to align with the simple spread in Multiagent Particle Env (MPE),
@@ -172,8 +167,7 @@ class PettingZooEnv(BaseEnv):
         self._dynamic_seed = dynamic_seed
         np.random.seed(self._seed)
 
-    def step(self, action: int) -> BaseEnvTimestep:
-        action = np.array(self.combinations[action])
+    def step(self, action) -> BaseEnvTimestep:
         self._step_count += 1
         action = self._process_action(action)
         if self._act_scale:
@@ -254,12 +248,11 @@ class PettingZooEnv(BaseEnv):
         #               - agent_state info
         #               - global_state info
         if self._agent_specific_global_state:
-            ret['global_state'] = np.concatenate((np.concatenate(ret['agent_state']), ret['global_state']))
-            # ret['global_state'] = np.concatenate(
-            #     [ret['agent_state'],
-            #      np.expand_dims(ret['global_state'], axis=0).repeat(self._num_agents, axis=0)],
-            #     axis=1
-            # )
+            ret['global_state'] = np.concatenate(
+                [ret['agent_state'],
+                 np.expand_dims(ret['global_state'], axis=0).repeat(self._num_agents, axis=0)],
+                axis=1
+            )
         # agent_alone_state: Shape (n_agent, 2 + 2 + n_landmark * 2 + (n_agent - 1) * 2).
         #                    Stacked observation. Exclude other agents' positions from agent_state. Contains
         #                    - agent itself's state(velocity + position) +
@@ -285,8 +278,14 @@ class PettingZooEnv(BaseEnv):
             1
         )
         # action_mask: All actions are of use(either 1 for discrete or 5 for continuous). Thus all 1.
-        joint_action_mask = [1 for _ in range(np.power(5, self._num_agents))]
-        return {'observation': ret, 'action_mask': joint_action_mask, 'to_play': [-1]}
+        action_mask = [[1 for _ in range(*self._action_dim)] for _ in range(self._num_agents)]
+        ret_transform = []
+        for i in range(self._num_agents):
+            tmp = {}
+            for k,v in ret.items():
+                tmp[k] = v[i]
+            ret_transform.append(tmp)
+        return {'observation': ret_transform, 'action_mask': action_mask, 'to_play': [-1 for _ in range(self._num_agents)]}
 
     def _process_action(self, action: 'torch.Tensor') -> Dict[str, np.ndarray]:  # noqa
         dict_action = {}

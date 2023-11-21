@@ -1,1 +1,1 @@
-from .model import PettingZooEncoder, PettingZooPrediction, PettingZooDynamics
+from .model import PettingZooEncoder, PettingZooPrediction, PettingZooEZDynamics, PettingZooMZDynamics

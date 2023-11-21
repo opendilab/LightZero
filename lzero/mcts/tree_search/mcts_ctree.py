@@ -96,7 +96,9 @@ class EfficientZeroMCTSCtree(object):
             pb_c_base, pb_c_init, discount_factor = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount_factor
 
             # the data storage of latent states: storing the latent state of all the nodes in one search.
-            latent_state_batch_in_search_path = [latent_state_roots]
+            agent_latent_state_roots, global_latent_state_roots = latent_state_roots
+            agent_latent_state_batch_in_search_path = [agent_latent_state_roots]
+            global_latent_state_batch_in_search_path = [global_latent_state_roots]
             # the data storage of value prefix hidden states in LSTM
             reward_hidden_state_c_batch = [reward_hidden_state_roots[0]]
             reward_hidden_state_h_batch = [reward_hidden_state_roots[1]]
@@ -108,7 +110,8 @@ class EfficientZeroMCTSCtree(object):
             for simulation_index in range(self._cfg.num_simulations):
                 # In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.
 
-                latent_states = []
+                agent_latent_states = []
+                global_latent_states = []
                 hidden_states_c_reward = []
                 hidden_states_h_reward = []
 
@@ -132,11 +135,13 @@ class EfficientZeroMCTSCtree(object):
 
                 # obtain the latent state for leaf node
                 for ix, iy in zip(latent_state_index_in_search_path, latent_state_index_in_batch):
-                    latent_states.append(latent_state_batch_in_search_path[ix][iy])
+                    agent_latent_states.append(agent_latent_state_batch_in_search_path[ix][iy])
+                    global_latent_states.append(global_latent_state_batch_in_search_path[ix][iy])
                     hidden_states_c_reward.append(reward_hidden_state_c_batch[ix][0][iy])
                     hidden_states_h_reward.append(reward_hidden_state_h_batch[ix][0][iy])
 
-                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
+                agent_latent_states = torch.from_numpy(np.asarray(agent_latent_states)).to(self._cfg.device).float()
+                global_latent_states = torch.from_numpy(np.asarray(global_latent_states)).to(self._cfg.device).float()
                 hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(self._cfg.device
                                                                                                  ).unsqueeze(0)
                 hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(self._cfg.device
@@ -151,10 +156,12 @@ class EfficientZeroMCTSCtree(object):
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
                 network_output = model.recurrent_inference(
-                    latent_states, (hidden_states_c_reward, hidden_states_h_reward), last_actions
+                    (agent_latent_states, global_latent_states), (hidden_states_c_reward, hidden_states_h_reward), last_actions
                 )
+                network_output_agent_latent_state, network_output_global_latent_state = network_output.latent_state 
 
-                network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
+                network_output_agent_latent_state = to_detach_cpu_numpy(network_output_agent_latent_state)
+                network_output_global_latent_state = to_detach_cpu_numpy(network_output_global_latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
                 network_output.value = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value))
                 network_output.value_prefix = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value_prefix))
@@ -164,7 +171,8 @@ class EfficientZeroMCTSCtree(object):
                     network_output.reward_hidden_state[1].detach().cpu().numpy()
                 )
 
-                latent_state_batch_in_search_path.append(network_output.latent_state)
+                agent_latent_state_batch_in_search_path.append(network_output_agent_latent_state)
+                global_latent_state_batch_in_search_path.append(network_output_global_latent_state)
                 # tolist() is to be compatible with cpp datatype.
                 value_prefix_batch = network_output.value_prefix.reshape(-1).tolist()
                 value_batch = network_output.value.reshape(-1).tolist()
@@ -273,7 +281,9 @@ class MuZeroMCTSCtree(object):
             batch_size = roots.num
             pb_c_base, pb_c_init, discount_factor = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount_factor
             # the data storage of latent states: storing the latent state of all the nodes in the search.
-            latent_state_batch_in_search_path = [latent_state_roots]
+            agent_latent_state_roots, global_latent_state_roots = latent_state_roots
+            agent_latent_state_batch_in_search_path = [agent_latent_state_roots]
+            global_latent_state_batch_in_search_path = [global_latent_state_roots]
 
             # minimax value storage
             min_max_stats_lst = tree_muzero.MinMaxStatsList(batch_size)
@@ -282,7 +292,8 @@ class MuZeroMCTSCtree(object):
             for simulation_index in range(self._cfg.num_simulations):
                 # In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.
 
-                latent_states = []
+                agent_latent_states = []
+                global_latent_states = []
 
                 # prepare a result wrapper to transport results between python and c++ parts
                 results = tree_muzero.ResultsWrapper(num=batch_size)
@@ -302,9 +313,11 @@ class MuZeroMCTSCtree(object):
 
                 # obtain the latent state for leaf node
                 for ix, iy in zip(latent_state_index_in_search_path, latent_state_index_in_batch):
-                    latent_states.append(latent_state_batch_in_search_path[ix][iy])
+                    agent_latent_states.append(agent_latent_state_batch_in_search_path[ix][iy])
+                    global_latent_states.append(global_latent_state_batch_in_search_path[ix][iy])
 
-                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
+                agent_latent_states = torch.from_numpy(np.asarray(agent_latent_states)).to(self._cfg.device).float()
+                global_latent_states = torch.from_numpy(np.asarray(global_latent_states)).to(self._cfg.device).float()
                 # .long() is only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
                 """
@@ -314,14 +327,19 @@ class MuZeroMCTSCtree(object):
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
-                network_output = model.recurrent_inference(latent_states, last_actions)
+                network_output = model.recurrent_inference((agent_latent_states, global_latent_states), last_actions)
 
-                network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
+                network_output_agent_latent_state, network_output_global_latent_state = network_output.latent_state 
+
+                # network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
+                network_output_agent_latent_state = to_detach_cpu_numpy(network_output_agent_latent_state)
+                network_output_global_latent_state = to_detach_cpu_numpy(network_output_global_latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
                 network_output.value = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value))
                 network_output.reward = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.reward))
 
-                latent_state_batch_in_search_path.append(network_output.latent_state)
+                agent_latent_state_batch_in_search_path.append(network_output_agent_latent_state)
+                global_latent_state_batch_in_search_path.append(network_output_global_latent_state)
                 # tolist() is to be compatible with cpp datatype.
                 reward_batch = network_output.reward.reshape(-1).tolist()
                 value_batch = network_output.value.reshape(-1).tolist()

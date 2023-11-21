@@ -102,15 +102,15 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
             - reward_value_context (:obj:`list`): value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens,
               td_steps_list, action_mask_segment, to_play_segment
         """
-        # zero_obs = game_segment_list[0].zero_obs()
-        # zero_obs = np.array([{'agent_state': np.zeros((3, 18), dtype=np.float32),
-        #         'global_state': np.zeros((84,), dtype=np.float32),
-        #         'agent_alone_state': np.zeros((3, 14), dtype=np.float32),
-        #         'agent_alone_padding_state': np.zeros((3, 18), dtype=np.float32),}])
-        zero_obs = np.array([{'agent_state': np.zeros((1, 6), dtype=np.float32),
+        zero_obs = game_segment_list[0].zero_obs()
+        # zero_obs = np.array([{'agent_state': np.zeros((18,), dtype=np.float32),
+        #              'global_state': np.zeros((48,), dtype=np.float32),
+        #              'agent_alone_state': np.zeros((14,), dtype=np.float32),
+        #              'agent_alone_padding_state': np.zeros((18,), dtype=np.float32),}])
+        zero_obs = np.array([{'agent_state': np.zeros((6,), dtype=np.float32),
                 'global_state': np.zeros((14, ), dtype=np.float32),
-                'agent_alone_state': np.zeros((1, 12), dtype=np.float32),
-                'agent_alone_padding_state': np.zeros((1, 12), dtype=np.float32),}])
+                'agent_alone_state': np.zeros((12,), dtype=np.float32),
+                'agent_alone_padding_state': np.zeros((12,), dtype=np.float32),}])
         value_obs_list = []
         # the value is valid or not (out of trajectory)
         value_mask = []
@@ -221,13 +221,16 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                     # EfficientZero related core code
                     # ==============================================================
                     # if not in training, obtain the scalars of the value/reward
-                    [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                        [
-                            m_output.latent_state,
-                            inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
-                            m_output.policy_logits
-                        ]
-                    )
+                    # [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                    #     [
+                    #         m_output.latent_state,
+                    #         inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    #         m_output.policy_logits
+                    #     ]
+                    # )
+                    m_output.latent_state = (to_detach_cpu_numpy(m_output.latent_state[0]), to_detach_cpu_numpy(m_output.latent_state[1]))
+                    m_output.value = to_detach_cpu_numpy(inverse_scalar_transform(m_output.value, self._cfg.model.support_scale))
+                    m_output.policy_logits = to_detach_cpu_numpy(m_output.policy_logits)
                     m_output.reward_hidden_state = (
                         m_output.reward_hidden_state[0].detach().cpu().numpy(),
                         m_output.reward_hidden_state[1].detach().cpu().numpy()

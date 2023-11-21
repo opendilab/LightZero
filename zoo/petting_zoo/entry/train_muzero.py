@@ -18,7 +18,7 @@ from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
-from zoo.petting_zoo.model import PettingZooEncoder, PettingZooPrediction, PettingZooDynamics
+from zoo.petting_zoo.model import PettingZooEncoder, PettingZooPrediction
 from lzero.entry.utils import random_collect
 
 
@@ -54,9 +54,13 @@ def train_muzero(
     if create_cfg.policy.type == 'muzero':
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
         from lzero.model.muzero_model_mlp import MuZeroModelMLP as Encoder
+        from zoo.petting_zoo.model import PettingZooMZDynamics as PettingZooDynamics
+
     elif create_cfg.policy.type == 'efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
         from lzero.model.efficientzero_model_mlp import EfficientZeroModelMLP as Encoder
+        from zoo.petting_zoo.model import PettingZooEZDynamics as PettingZooDynamics
+
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'gumbel_muzero':
@@ -80,8 +84,8 @@ def train_muzero(
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
 
-    # model = Encoder(**cfg.policy.model, state_encoder=PettingZooEncoder(cfg), state_prediction=PettingZooPrediction(cfg), state_dynamics=PettingZooDynamics(cfg))
-    model = Encoder(**cfg.policy.model, state_encoder=PettingZooEncoder(cfg))
+    model = Encoder(**cfg.policy.model, state_encoder=PettingZooEncoder(cfg), state_prediction=PettingZooPrediction, state_dynamics=PettingZooDynamics)
+    # model = Encoder(**cfg.policy.model, state_encoder=PettingZooEncoder(cfg))
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
