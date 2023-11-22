@@ -61,7 +61,7 @@ def train_ma(
     elif create_cfg.policy.type == 'stochastic_muzero':
         from lzero.mcts import StochasticMuZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'ma':
-        from lzero.mcts import MuZeroGameBuffer as GameBuffer
+        from lzero.mcts import MAGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
@@ -155,11 +155,13 @@ def train_ma(
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+            # print("evaluated!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             if stop:
                 break
 
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+        # print("collected new data")
         if cfg.policy.update_per_collect is None:
             # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
             collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
@@ -169,8 +171,10 @@ def train_ma(
 
         # save returned new_data collected by the collector
         replay_buffer.push_game_segments(new_data)
+        # print("remark 11111111111111111")
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
+        # print("remark 22222222222222222222")
 
 
 
@@ -182,9 +186,10 @@ def train_ma(
             if replay_buffer.get_num_of_transitions() > batch_size:
 
 
-
+                # print("remark 00000000")
                 # policy对sample的影响是什么？？？？？？？？？？？？？？？？？？？？？？？？？
                 train_data = replay_buffer.sample(batch_size, policy)
+                # print("remark 33333333333333333333")
 
 
 

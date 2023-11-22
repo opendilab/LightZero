@@ -380,6 +380,8 @@ class MACollector(ISerialCollector):
         ready_env_id = set()
         remain_episode = n_episode
 
+        temp_visit_list = [0.0 for i in range(self._env.action_space.n)]
+
         while True:
             with self._timer:
                 # Get current ready env obs.
@@ -506,6 +508,8 @@ class MACollector(ISerialCollector):
 
                     # 因为没有进行search，所以这句话删掉！！！！！！！！！！在learn的时候使用！！！！！！！！！！！！
                     # game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
+                    game_segments[env_id].store_search_stats(temp_visit_list, 0)
+
 
 
 

@@ -57,6 +57,36 @@ class Node:
         for action, prior in policy.items():
             self.children[action] = Node(prior)
 
+    # 另一个版本的expand函数，将复用数据中的Q值在expand时加入
+    # def expand_with_reuse(self, to_play: int, simulation_index: int, batch_index: int, reward: float,
+    #            policy_logits: List[float], arm: int, arm_value, arm_visit) -> None:
+    #     """
+    #     Overview:
+    #         Expand the child nodes of the current node.
+    #     Arguments:
+    #         - to_play (:obj:`Class int`): which player to play the game in the current node.
+    #         - simulation_index (:obj:`Class int`): the x/first index of hidden state vector of the current node, i.e. the search depth.
+    #         - batch_index (:obj:`Class int`): the y/second index of hidden state vector of the current node, i.e. the index of batch root node, its maximum is ``batch_size``/``env_num``.
+    #         - value_prefix: (:obj:`Class float`): the value prefix of the current node.
+    #         - policy_logits: (:obj:`Class List`): the policy logit of the child nodes.
+    #     """
+    #     self.to_play = to_play
+    #     if self.legal_actions is None:
+    #         self.legal_actions = np.arange(len(policy_logits))
+
+    #     self.simulation_index = simulation_index
+    #     self.batch_index = batch_index
+    #     self.reward = reward
+
+    #     policy_values = torch.softmax(torch.tensor([policy_logits[a] for a in self.legal_actions]), dim=0).tolist()
+    #     policy = {a: policy_values[i] for i, a in enumerate(self.legal_actions)}
+    #     for action, prior in policy.items():
+    #         self.children[action] = Node(prior)
+    #         # 判断是不是已知的arm，如果是的话就预先填好visit和value
+    #         if action == arm:
+    #             self.children[action].visit_count = arm_visit
+    #             self.children[action].value_sum = arm_visit * arm_value
+
     def add_exploration_noise(self, exploration_fraction: float, noises: List[float]) -> None:
         """
         Overview:
@@ -186,10 +216,46 @@ class Roots:
 
         """
         for i in range(self.root_num):
+        #这里写个特别的expand函数，能把复用信息expand到节点里
             if to_play is None:
                 self.roots[i].expand(-1, 0, i, rewards[i], policies[i])
             else:
                 self.roots[i].expand(to_play[i], 0, i, rewards[i], policies[i])
+
+            # 这里加噪不变
+            self.roots[i].add_exploration_noise(root_noise_weight, noises[i])
+            self.roots[i].visit_count += 1
+
+    # 实现一板prepare函数，能单独对已知arm进行特殊展开
+    # 复用的形式可以有几种，但是每一种都要把已知arm的访问次数和搜索的value结果得到,搜索得到的概率分布要不要呢？怎么利用呢？（暂时不用）
+    def prepare_with_reuse(
+                    self,
+            root_noise_weight: float,
+            noises: List[float],
+            rewards: List[float],
+            policies: List[List[float]],
+            arms,
+            arm_values,
+            arm_visit,
+            to_play: int = -1
+    ) -> None:
+        """
+        Overview:
+            Expand the roots and add noises.
+        Arguments:
+            - root_noise_weight: the exploration fraction of roots
+            - noises: the vector of noise add to the roots.
+            - rewards: the vector of rewards of each root.
+            - policies: the vector of policy logits of each root.
+            - to_play_batch: the vector of the player side of each root.
+
+        """
+        # 这边在expand的时候就给arm所对应的节点赋予value和visit值
+        for i in range(self.root_num):
+            if to_play is None:
+                self.roots[i].expand_with_reuse(-1, 0, i, rewards[i], policies[i], arms[i], arm_values[i], arm_visit)
+            else:
+                self.roots[i].expand_with_reuse(to_play[i], 0, i, rewards[i], policies[i], arms[i], arm_values[i], arm_visit)
 
             self.roots[i].add_exploration_noise(root_noise_weight, noises[i])
             self.roots[i].visit_count += 1
@@ -333,7 +399,54 @@ def select_child(
         action = random.choice(max_index_lst)
     return action
 
+def select_root_child(
+        root: Node, min_max_stats: MinMaxStats, pb_c_base: float, pb_c_int: float, discount_factor: float,
+        mean_q: float, players: int, true_action=None, reuse_value = 0
+) -> Union[int, float]:
+    """
+    Overview:
+        Select the child node of the roots according to ucb scores.
+    Arguments:
+        - root: the roots to select the child node.
+        - min_max_stats (:obj:`Class MinMaxStats`):  a tool used to min-max normalize the score.
+        - pb_c_base (:obj:`Class Float`): constant c1 used in pUCT rule, typically 1.25.
+        - pb_c_int (:obj:`Class Float`): constant c2 used in pUCT rule, typically 19652.
+        - discount_factor (:obj:`Class Float`): The discount factor used in calculating bootstrapped value, if env is board_games, we set discount_factor=1.
+        - mean_q (:obj:`Class Float`): the mean q value of the parent node.
+        - players (:obj:`Class Int`): the number of players. one/in self-play-mode board games.
+    Returns:
+        - action (:obj:`Union[int, float]`): Choose the action with the highest ucb score.
+    """
+    max_score = -np.inf
+    epsilon = 0.000001
+    max_index_lst = []
+    # 如果a是已知动作则不进行ucbscore的计算
+    for a in root.legal_actions:
+        child = root.get_child(a)
+        if a == true_action:
+            temp_score = compute_arm_score(
+                child, min_max_stats, mean_q, reuse_value, root.visit_count, pb_c_base, pb_c_int, discount_factor, players
+            )
+        else:
+            temp_score = compute_ucb_score(
+                child, min_max_stats, mean_q, root.visit_count, pb_c_base, pb_c_int, discount_factor, players
+            )
+        if max_score < temp_score:
+            max_score = temp_score
+            max_index_lst.clear()
+            max_index_lst.append(a)
+        elif temp_score >= max_score - epsilon:
+            # NOTE: if the difference is less than epsilon = 0.000001, we random choice action from max_index_lst
+            max_index_lst.append(a)
 
+    action = 0
+    if len(max_index_lst) > 0:
+        action = random.choice(max_index_lst)
+    return action
+
+
+
+# !!!!!!!!!!!!!!!!!!!搞懂ucb score是怎么计算的！！！！！！！！！！！！！！！！！！！
 def compute_ucb_score(
         child: Node,
         min_max_stats: MinMaxStats,
@@ -385,6 +498,67 @@ def compute_ucb_score(
     return ucb_score
 
 
+def compute_arm_score(
+        child: Node,
+        min_max_stats: MinMaxStats,
+        parent_mean_q: float,
+        reuse_value,
+        total_children_visit_counts: float,
+        pb_c_base: float,
+        pb_c_init: float,
+        discount_factor: float,
+        players: int = 1,
+) -> float:
+    """
+    Overview:
+        Compute the ucb score of the child.
+        Arguments:
+            - child: the child node to compute ucb score.
+            - min_max_stats: a tool used to min-max normalize the score.
+            - parent_mean_q: the mean q value of the parent node.
+            - is_reset: whether the value prefix needs to be reset.
+            - total_children_visit_counts: the total visit counts of the child nodes of the parent node.
+            - parent_value_prefix: the value prefix of parent node.
+            - pb_c_base: constants c2 in muzero.
+            - pb_c_init: constants c1 in muzero.
+            - disount_factor: the discount factor of reward.
+            - players: the number of players.
+            - continuous_action_space: whether the action space is continous in current env.
+        Outputs:
+            - ucb_value: the ucb score of the child.
+    """
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!想想对于这个已知的arm，prior要怎么处理
+    pb_c = math.log((total_children_visit_counts + pb_c_base + 1) / pb_c_base) + pb_c_init
+    pb_c *= (math.sqrt(total_children_visit_counts) / (child.visit_count + 1))
+
+    prior_score = pb_c * child.prior
+    # if child.visit_count == 0:
+    #     value_score = parent_mean_q
+    # else:
+    #     true_reward = child.reward
+    #     if players == 1:
+    #         value_score = true_reward + discount_factor * child.value
+    #     elif players == 2:
+    #         value_score = true_reward + discount_factor * (-child.value)
+
+    # value_score = min_max_stats.normalize(value_score)
+    # 这边visit_count为0时不用预设为parent_q了，直接将value值设定为reuse_value值，以及将reuse_value update到minmaxstatus里
+    if child.visit_count == 0:
+        value_score = parent_mean_q
+    else:
+        # !!!!!!!!!!!!!!!!!!!这边暂时不考虑玩家切换的问题！！！！！！！！！！！！！！！！！！！！！！！！1
+        true_reward = child.reward
+        value_score = true_reward + discount_factor * reuse_value
+    min_max_stats.update(value_score)
+    value_score = min_max_stats.normalize(value_score)
+    if value_score < 0:
+        value_score = 0
+    if value_score > 1:
+        value_score = 1
+    ucb_score = prior_score + value_score
+
+    return ucb_score
+
 def batch_traverse(
         roots: Any,
         pb_c_base: float,
@@ -393,6 +567,8 @@ def batch_traverse(
         min_max_stats_lst: List[MinMaxStats],
         results: SearchResults,
         virtual_to_play: List,
+        true_action,
+        reuse_value,
 ) -> Tuple[List[None], List[None], List[None], list]:
     """
     Overview:
@@ -425,7 +601,9 @@ def batch_traverse(
         players = 1
 
     results.search_paths = {i: [] for i in range(results.num)}
+    # print(f"the traverse range is {results.num}")
     for i in range(results.num):
+        # print(f"i is {i}")
         node = roots.roots[i]
         is_root = 1
         search_len = 0
@@ -439,13 +617,21 @@ def batch_traverse(
         while node.expanded:
 
             mean_q = node.compute_mean_q(is_root, parent_q, discount_factor)
-            is_root = 0
             parent_q = mean_q
 
             # select action according to the pUCT rule.
-            action = select_child(
-                node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players
-            )
+            # 修改select child函数，使其在根节点处选择节点时，考虑已知节点
+            if is_root and true_action is not None and reuse_value is not None:
+                # print(f"min_max_stats_lst.stats_lst[i] is {min_max_stats_lst.stats_lst[i]}")
+                # print(f"true_action[i] is {true_action[i]}")
+                # print(f"reuse_value[i] is {reuse_value[i]}")
+                action = select_root_child(
+                    node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players, true_action[i], reuse_value[i]   
+                )
+            else:
+                action = select_child(
+                    node, min_max_stats_lst.stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players
+                )
             if players == 2:
                 # Players play turn by turn
                 if virtual_to_play[i] == 1:
@@ -469,6 +655,13 @@ def batch_traverse(
             results.search_lens[i] = search_len
             # while we break out the while loop, results.nodes[i] save the leaf node.
             results.nodes[i] = node
+
+            if true_action is not None and reuse_value is not None:
+                if is_root and action == true_action[i] and node.expanded:
+                    # print("break is triggered")
+                    print()
+                    break
+            is_root = 0
 
     # print(f'env {i} one simulation done!')
     return results.latent_state_index_in_search_path, results.latent_state_index_in_batch, results.last_actions, virtual_to_play

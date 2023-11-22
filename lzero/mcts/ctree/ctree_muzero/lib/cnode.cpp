@@ -481,6 +481,7 @@ namespace tree
         if (to_play == -1)
         {           
             // for play-with-bot-mode
+            // printf("111111111111111111\n");
             float bootstrap_value = value;
             int path_len = search_path.size();
             for (int i = path_len - 1; i >= 0; --i)
@@ -548,6 +549,67 @@ namespace tree
         }
     }
 
+    void cbatch_backpropagate_with_reuse(int current_latent_state_index, float discount_factor, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &to_play_batch, std::vector<int> &no_inference_lst, std::vector<int> &reuse_lst, std::vector<float> &reuse_value_lst)
+    {
+        /*
+        Overview:
+            Expand the nodes along the search path and update the infos.
+        Arguments:
+            - current_latent_state_index: The index of latent state of the leaf node in the search path.
+            - discount_factor: the discount factor of reward.
+            - value_prefixs: the value prefixs of nodes along the search path.
+            - values: the values to propagate along the search path.
+            - policies: the policy logits of nodes along the search path.
+            - min_max_stats: a tool used to min-max normalize the q value.
+            - results: the search results.
+            - to_play_batch: the batch of which player is playing on this node.
+        */
+        int count_a = 0;
+        int count_b = 0;
+        int count_c = 0;
+        float value_propagate = 0;
+        // printf("no_inference_lst is:");
+        // printf(no_inference_lst);
+        // printf("reuse lst is");
+        // printf(reuse_lst);
+        // printf("reuse value lst is");
+        // printf(reuse_value_lst);
+        // 也许可以再传一个复用lst和reuse_value lst进来，然后判断下属不属于复用，以此确定value的值
+        // printf("check1\n");
+        for (int i = 0; i < results.num; ++i)
+        {
+            // 判断一下是不是需要展开的节点!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            // 对于要展开的节点进行展开，不要展开的就跳过！！！！！！！！！！！！！！！！！！！！！！！！！1
+            if (i == no_inference_lst[count_a])
+            {
+                count_a = count_a + 1;
+                value_propagate = reuse_value_lst[i];
+                // printf("count_a is %d\n", count_a);
+                
+                // results.nodes[i]->expand(to_play_batch[i], current_latent_state_index, i, value_prefixs[i], policies[i]);
+            }
+            else
+            {
+                results.nodes[i]->expand(to_play_batch[i], current_latent_state_index, count_b, value_prefixs[count_b], policies[count_b]);
+                if (i == reuse_lst[count_c])
+                {
+                    value_propagate = reuse_value_lst[i];
+                    count_c = count_c + 1;
+                    // printf("count_c is %d\n", count_c);
+                }
+                else
+                {
+                    value_propagate = values[count_b];
+                }
+                count_b = count_b + 1;
+                // printf("count_b is %d\n", count_b);
+            }
+
+            cbackpropagate(results.search_paths[i], min_max_stats_lst->stats_lst[i], to_play_batch[i], value_propagate, discount_factor);
+            // printf("propagated\n");
+        }
+    }
+
     int cselect_child(CNode *root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount_factor, float mean_q, int players)
     {
         /*
@@ -572,6 +634,61 @@ namespace tree
 
             CNode *child = root->get_child(a);
             float temp_score = cucb_score(child, min_max_stats, mean_q, root->visit_count - 1, pb_c_base, pb_c_init, discount_factor, players);
+
+            if (max_score < temp_score)
+            {
+                max_score = temp_score;
+
+                max_index_lst.clear();
+                max_index_lst.push_back(a);
+            }
+            else if (temp_score >= max_score - epsilon)
+            {
+                max_index_lst.push_back(a);
+            }
+        }
+
+        int action = 0;
+        if (max_index_lst.size() > 0)
+        {
+            int rand_index = rand() % max_index_lst.size();
+            action = max_index_lst[rand_index];
+        }
+        return action;
+    }
+
+    int cselect_root_child(CNode *root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount_factor, float mean_q, int players, int true_action, float reuse_value)
+    {
+        /*
+        Overview:
+            Select the child node of the roots according to ucb scores.
+        Arguments:
+            - root: the roots to select the child node.
+            - min_max_stats: a tool used to min-max normalize the score.
+            - pb_c_base: constants c2 in muzero.
+            - pb_c_init: constants c1 in muzero.
+            - disount_factor: the discount factor of reward.
+            - mean_q: the mean q value of the parent node.
+            - players: the number of players.
+        Outputs:
+            - action: the action to select.
+        */
+        float max_score = FLOAT_MIN;
+        const float epsilon = 0.000001;
+        std::vector<int> max_index_lst;
+        for (auto a : root->legal_actions)
+        {
+
+            CNode *child = root->get_child(a);
+            float temp_score = 0.0;
+            if (a == true_action)
+            {
+                temp_score = carm_score(child, min_max_stats, mean_q, reuse_value, root->visit_count - 1, pb_c_base, pb_c_init, discount_factor, players);
+            }
+            else
+            {
+                temp_score = cucb_score(child, min_max_stats, mean_q, root->visit_count - 1, pb_c_base, pb_c_init, discount_factor, players);
+            }
 
             if (max_score < temp_score)
             {
@@ -628,6 +745,54 @@ namespace tree
                 value_score = true_reward + discount_factor * child->value();
             else if (players == 2)
                 value_score = true_reward + discount_factor * (-child->value());
+        }
+
+        value_score = min_max_stats.normalize(value_score);
+
+        if (value_score < 0)
+            value_score = 0;
+        if (value_score > 1)
+            value_score = 1;
+
+        float ucb_value = prior_score + value_score;
+        return ucb_value;
+    }
+
+
+    float carm_score(CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, float reuse_value, float total_children_visit_counts, float pb_c_base, float pb_c_init, float discount_factor, int players)
+    {
+        /*
+        Overview:
+            Compute the ucb score of the child.
+        Arguments:
+            - child: the child node to compute ucb score.
+            - min_max_stats: a tool used to min-max normalize the score.
+            - mean_q: the mean q value of the parent node.
+            - total_children_visit_counts: the total visit counts of the child nodes of the parent node.
+            - pb_c_base: constants c2 in muzero.
+            - pb_c_init: constants c1 in muzero.
+            - disount_factor: the discount factor of reward.
+            - players: the number of players.
+        Outputs:
+            - ucb_value: the ucb score of the child.
+        */
+        // 对已知arm的先验没有进行特别的处理！！！！！！！！！！！！！！！！！！！！！！！
+        float pb_c = 0.0, prior_score = 0.0, value_score = 0.0;
+        pb_c = log((total_children_visit_counts + pb_c_base + 1) / pb_c_base) + pb_c_init;
+        pb_c *= (sqrt(total_children_visit_counts) / (child->visit_count + 1));
+
+        prior_score = pb_c * child->prior;
+        if (child->visit_count == 0)
+        {
+            value_score = parent_mean_q;
+        }
+        else
+        {
+            float true_reward = child->reward;
+            if (players == 1)
+                value_score = true_reward + discount_factor * reuse_value;
+            else if (players == 2)
+                value_score = true_reward + discount_factor * (-reuse_value);
         }
 
         value_score = min_max_stats.normalize(value_score);
@@ -709,6 +874,119 @@ namespace tree
             results.search_lens.push_back(search_len);
             results.nodes.push_back(node);
             results.virtual_to_play_batchs.push_back(virtual_to_play_batch[i]);
+        }
+    }
+
+
+    void cbatch_traverse_with_reuse(CRoots *roots, int pb_c_base, float pb_c_init, float discount_factor, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &virtual_to_play_batch, std::vector<int> &true_action, std::vector<float> &reuse_value)
+    {
+        /*
+        Overview:
+            Search node path from the roots.
+        Arguments:
+            - roots: the roots that search from.
+            - pb_c_base: constants c2 in muzero.
+            - pb_c_init: constants c1 in muzero.
+            - disount_factor: the discount factor of reward.
+            - min_max_stats: a tool used to min-max normalize the score.
+            - results: the search results.
+            - virtual_to_play_batch: the batch of which player is playing on this node.
+        */
+        // set seed
+        get_time_and_set_rand_seed();
+
+        int last_action = -1;
+        float parent_q = 0.0;
+        results.search_lens = std::vector<int>();
+
+        int players = 0;
+        int largest_element = *max_element(virtual_to_play_batch.begin(), virtual_to_play_batch.end()); // 0 or 2
+        if (largest_element == -1)
+            players = 1;
+        else
+            players = 2;
+
+        for (int i = 0; i < results.num; ++i)
+        {
+            CNode *node = &(roots->roots[i]);
+            // printf("check the code");
+            int is_root = 1;
+            int search_len = 0;
+            results.search_paths[i].push_back(node);
+
+            while (node->expanded())
+            {
+                float mean_q = node->compute_mean_q(is_root, parent_q, discount_factor);
+                parent_q = mean_q;
+
+                // if (is_root && true_action != NULL && reuse_value != NULL)
+                int action = 0;
+                if (is_root)
+                {
+                    action = cselect_root_child(node, min_max_stats_lst->stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players, true_action[i], reuse_value[i]);
+                }
+                else
+                {
+                    action = cselect_child(node, min_max_stats_lst->stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players);
+                }
+                
+                if (players > 1)
+                {
+                    assert(virtual_to_play_batch[i] == 1 || virtual_to_play_batch[i] == 2);
+                    if (virtual_to_play_batch[i] == 1)
+                        virtual_to_play_batch[i] = 2;
+                    else
+                        virtual_to_play_batch[i] = 1;
+                }
+
+                node->best_action = action;
+                // next
+                node = node->get_child(action);
+                last_action = action;
+                results.search_paths[i].push_back(node);
+                search_len += 1;
+
+                // if(true_action != NULL && reuse_value != NULL)
+                // {
+                //     if(is_root && action == true_action[i])
+                //     {
+                //         break;
+                //         printf("break is triggered");
+                //     }
+                // }
+
+                if(is_root && action == true_action[i])
+                {
+                    break;
+                    printf("break is triggered");
+                }
+
+                is_root = 0;
+
+            }
+
+            if (node->expanded())
+            {
+                results.latent_state_index_in_search_path.push_back(-1);
+                results.latent_state_index_in_batch.push_back(i);
+
+                results.last_actions.push_back(last_action);
+                results.search_lens.push_back(search_len);
+                results.nodes.push_back(node);
+                results.virtual_to_play_batchs.push_back(virtual_to_play_batch[i]);
+            }
+            else
+            {
+                CNode *parent = results.search_paths[i][results.search_paths[i].size() - 2];
+
+                results.latent_state_index_in_search_path.push_back(parent->current_latent_state_index);
+                results.latent_state_index_in_batch.push_back(parent->batch_index);
+
+                results.last_actions.push_back(last_action);
+                results.search_lens.push_back(search_len);
+                results.nodes.push_back(node);
+                results.virtual_to_play_batchs.push_back(virtual_to_play_batch[i]);
+            }
         }
     }
 

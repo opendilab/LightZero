@@ -25,7 +25,7 @@ update_per_collect = None
 batch_size = 256
 model_update_ratio = 0.25
 max_env_step = int(2e6)
-reanalyze_ratio = 1.0
+reanalyze_ratio = 0.25
 
 eps_greedy_exploration_in_collect = True
 # ==============================================================
@@ -34,7 +34,7 @@ eps_greedy_exploration_in_collect = True
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/mzsslreuse',
+    f'data_mz_ctree/{env_name[:-14]}/ratio0.25',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -94,17 +94,17 @@ atari_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero',
-        import_names=['lzero.policy.muzero'],
+        type='ma',
+        import_names=['lzero.policy.ma'],
     ),
     collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
+        type='episode_ma',
+        import_names=['lzero.worker.ma_collector'],
     )
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=1, max_env_step=max_env_step)
+    from lzero.entry import train_ma
+    train_ma([main_config, create_config], seed=1, max_env_step=max_env_step)

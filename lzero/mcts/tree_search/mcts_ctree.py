@@ -338,6 +338,134 @@ class MuZeroMCTSCtree(object):
                     min_max_stats_lst, results, virtual_to_play_batch
                 )
 
+    def search_with_reuse(
+            self,
+            roots: Any,
+            model: torch.nn.Module,
+            latent_state_roots: List[Any],
+            to_play_batch: Union[int, List[Any]],
+            true_action_list = None,
+            reuse_value_list = None
+    ) -> None:
+        """
+        Overview:
+            Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
+            Use the cpp ctree.
+        Arguments:
+            - roots (:obj:`Any`): a batch of expanded root nodes
+            - latent_state_roots (:obj:`list`): the hidden states of the roots
+            - to_play_batch (:obj:`list`): the to_play_batch list used in in self-play-mode board games
+        """
+        with torch.no_grad():
+            model.eval()
+
+            # preparation some constant
+            batch_size = roots.num
+            pb_c_base, pb_c_init, discount_factor = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount_factor
+            # the data storage of latent states: storing the latent state of all the nodes in the search.
+            latent_state_batch_in_search_path = [latent_state_roots]
+
+            # minimax value storage
+            min_max_stats_lst = tree_muzero.MinMaxStatsList(batch_size)
+            min_max_stats_lst.set_delta(self._cfg.value_delta_max)
+
+            for simulation_index in range(self._cfg.num_simulations):
+                # In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.
+
+                latent_states = []
+                # 用于记录所有需要推断的节点对应的action!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                temp_actions = []
+                no_inference_lst = []
+                reuse_lst = []
+
+                # prepare a result wrapper to transport results between python and c++ parts
+                results = tree_muzero.ResultsWrapper(num=batch_size)
+
+                # latent_state_index_in_search_path: the first index of leaf node states in latent_state_batch_in_search_path, i.e. is current_latent_state_index in one the search.
+                # latent_state_index_in_batch: the second index of leaf node states in latent_state_batch_in_search_path, i.e. the index in the batch, whose maximum is ``batch_size``.
+                # e.g. the latent state of the leaf node in (x, y) is latent_state_batch_in_search_path[x, y], where x is current_latent_state_index, y is batch_index.
+                # The index of value prefix hidden state of the leaf node are in the same manner.
+                """
+                MCTS stage 1: Selection
+                    Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
+                """
+                latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse_with_reuse(
+                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                    copy.deepcopy(to_play_batch), true_action_list, reuse_value_list
+                )
+
+                # obtain the latent state for leaf node
+                for count, (ix, iy) in enumerate(zip(latent_state_index_in_search_path, latent_state_index_in_batch)):
+                    if ix != -1:
+                        latent_states.append(latent_state_batch_in_search_path[ix][iy])
+                        temp_actions.append(last_actions[count])
+                    else:
+                        no_inference_lst.append(iy)
+                    if ix == 0 and last_actions[count] == true_action_list[count]:
+                        reuse_lst.append(count)
+
+                length = len(temp_actions)
+                # print(f"temp actions are {temp_actions}, the length is {len(temp_actions)}, the length of states is {len(latent_states)}")
+                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
+                # .long() is only for discrete action
+                # 需要改变last_actions使其只包含需要推断的节点对应的动作！！！！！！！！！！！！！
+                # 在batch_traverse时就不将非推理节点对应的动作加入last_action的列表！！！！！！！！！！！！！！！！！！！
+                temp_actions = torch.from_numpy(np.asarray(temp_actions)).to(self._cfg.device).long()
+                """
+                MCTS stage 2: Expansion
+                    At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function.
+                    Then we calculate the policy_logits and value for the leaf node (next_latent_state) by the prediction function. (aka. evaluation)
+                MCTS stage 3: Backup
+                    At the end of the simulation, the statistics along the trajectory are updated.
+                """
+                #这边或许可以选择只对需要进入次态的节点进行推断！！！！！！！！！！！！！！！！！！！！！！！
+                #即latent states的个数不再等于batch_size!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                # 在for ix iy这个环节如果ix=-1则iy存储的是相应的batch_size序号，加入一个lst中，记录所有不用展开的node(即已知arm)
+                if length != 0:
+                    network_output = model.recurrent_inference(latent_states, temp_actions)
+
+                    network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
+                    network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
+                    network_output.value = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value))
+                    network_output.reward = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.reward))
+
+                    latent_state_batch_in_search_path.append(network_output.latent_state)
+                    # tolist() is to be compatible with cpp datatype.
+                    reward_batch = network_output.reward.reshape(-1).tolist()
+                    # 需要将可复用位置的value换成reuse value!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    value_batch = network_output.value.reshape(-1).tolist()
+                    policy_logits_batch = network_output.policy_logits.tolist()
+                else:
+                    # breakpoint()
+                    # print(latent_states.shape)
+                    latent_state_batch_in_search_path.append([])
+                    # tolist() is to be compatible with cpp datatype.
+                    reward_batch = []
+                    # 需要将可复用位置的value换成reuse value!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    value_batch = []
+                    policy_logits_batch = []
+
+                # In ``batch_backpropagate()``, we first expand the leaf node using ``the policy_logits`` and
+                # ``reward`` predicted by the model, then perform backpropagation along the search path to update the
+                # statistics.
+
+                # NOTE: simulation_index + 1 is very important, which is the depth of the current leaf node.
+                current_latent_state_index = simulation_index + 1
+                # 现在reward_batch等的size都是缩减过的，但是在需要推断的节点中保持了先后顺序！！！！！！！！！！！！！！！！！！！！！！！
+                # 将
+                # if no_inference_lst == []:
+                #     no_inference_lst = [-1,-1, -1, -1, -1]
+                # print(f"the reuse value lst is {reuse_value_list}")
+                # 补空，防止c代码中访问到长度以外的元素导致程序崩溃！！！！！！！！！！！！！！！！！！！！
+                no_inference_lst.append(-1)
+                reuse_lst.append(-1)
+                # print(f"the no inference lst is {no_inference_lst}")
+                # print(f"the reuse lst is {reuse_lst}")
+                tree_muzero.batch_backpropagate_with_reuse(
+                    current_latent_state_index, discount_factor, reward_batch, value_batch, policy_logits_batch,
+                    min_max_stats_lst, results, virtual_to_play_batch, no_inference_lst, reuse_lst, reuse_value_list
+                )
+
 class GumbelMuZeroMCTSCtree(object):
     """
     Overview:
