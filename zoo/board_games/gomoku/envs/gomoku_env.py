@@ -68,10 +68,10 @@ class GomokuEnv(BaseEnv):
         prob_random_agent=0,
         # (float) The probability that a random action will be taken when calling the bot.
         prob_random_action_in_bot=0.,
-        # (bool) Whether to check the action to connect 4 in the bot v0.
-        check_action_to_connect4_in_bot_v0=False,
         # (float) The stop value when training the agent. If the evalue return reach the stop value, then the training will stop.
         stop_value=2,
+        # (bool) Whether to use the MCTS ctree in AlphaZero. If True, then the AlphaZero MCTS ctree will be used.
+        alphazero_mcts_ctree=False,
     )
 
     @classmethod
@@ -117,7 +117,6 @@ class GomokuEnv(BaseEnv):
         self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
         self.channel_last = cfg.channel_last
         self.scale = cfg.scale
-        self.check_action_to_connect4_in_bot_v0 = cfg.check_action_to_connect4_in_bot_v0
         self.agent_vs_human = cfg.agent_vs_human
         self.bot_action_type = cfg.bot_action_type
 
@@ -142,11 +141,30 @@ class GomokuEnv(BaseEnv):
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
         elif self.bot_action_type == 'v0':
             self.rule_bot = GomokuRuleBotV0(self, self._current_player)
+        self.alphazero_mcts_ctree = cfg.alphazero_mcts_ctree
+        if not self.alphazero_mcts_ctree:
+            # plt is not work in mcts_ctree mode
+            self.fig, self.ax = plt.subplots(figsize=(self.board_size, self.board_size))
+            plt.ion()
 
-        self.fig, self.ax = plt.subplots(figsize=(self.board_size, self.board_size))
-        plt.ion()
+    def reset(self, start_player_index=0, init_state=None, katago_policy_init=False, katago_game_state=None):
+        """
+        Overview:
+            This method resets the environment and optionally starts with a custom state specified by 'init_state'.
+        Arguments:
+            - start_player_index (:obj:`int`, optional): Specifies the starting player. The players are [1,2] and
+                their corresponding indices are [0,1]. Defaults to 0.
+            - init_state (:obj:`Any`, optional): The custom starting state. If provided, the game starts from this state.
+                Defaults to None.
+            - katago_policy_init (:obj:`bool`, optional): This parameter is used to maintain compatibility with the
+                handling of 'katago' related parts in 'alphazero_mcts_ctree' in Go. Defaults to False.
+            - katago_game_state (:obj:`Any`, optional): This parameter is similar to 'katago_policy_init' and is used to
+                maintain compatibility with 'katago' in 'alphazero_mcts_ctree'. Defaults to None.
+        """
+        if self.alphazero_mcts_ctree and init_state is not None:
+            # Convert byte string to np.ndarray
+            init_state = np.frombuffer(init_state, dtype=np.int32)
 
-    def reset(self, start_player_index=0, init_state=None):
         self._observation_space = gym.spaces.Box(
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.int32
         )
@@ -156,6 +174,8 @@ class GomokuEnv(BaseEnv):
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
             self.board = np.array(copy.deepcopy(init_state), dtype="int32")
+            if self.alphazero_mcts_ctree:
+                self.board = self.board.reshape((self.board_size, self.board_size))
         else:
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
         action_mask = np.zeros(self.total_num_actions, 'int8')

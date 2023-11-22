@@ -18,7 +18,7 @@ mcts_ctree = True
 # ==============================================================
 gomoku_alphazero_config = dict(
     exp_name=
-    f'data_az_ptree/gomoku_alphazero_bot-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
+    f'data_az_ctree/gomoku_alphazero_bot-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         board_size=board_size,
         battle_mode='play_with_bot_mode',
@@ -35,10 +35,9 @@ gomoku_alphazero_config = dict(
         prob_random_agent=0,
         prob_expert_agent=0,
         scale=True,
-        check_action_to_connect4_in_bot_v0=False,
-        mcts_ctree=mcts_ctree,
         screen_scaling=9,
         render_mode=None,
+        alphazero_mcts_ctree=mcts_ctree,
         # ==============================================================
     ),
     policy=dict(
