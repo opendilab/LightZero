@@ -338,13 +338,13 @@ class MuZeroGPTPolicy(Policy):
 
         # compute_loss(self, batch: Batch, tokenizer: Tokenizer, ** kwargs: Any)
 
-        batch_for_gpt ={}
-        batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size,-1, 4)  # (B, T, O) or (B, T, C, H, W)
+        batch_for_gpt = {}
+        batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  4)  # (B, T, O) or (B, T, C, H, W)
         batch_for_gpt['actions'] = action_batch.squeeze(-1)  # (B, T-1, A) -> (B, T-1)
 
         batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]  # (B, T, R)
 
-        batch_for_gpt['mask_padding'] = mask_batch == 1.0 # (B, T) TODO
+        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # (B, T) TODO
 
         batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]  # (B, T-1, O) or (B, T-1, C, H, W)
         batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]  # (B, T-1) TODO
@@ -353,7 +353,7 @@ class MuZeroGPTPolicy(Policy):
         batch_for_gpt['target_value'] = target_value_categorical[:, :-1]  # (B, T-1, V)
         batch_for_gpt['target_policy'] = target_policy[:, :-1]  # (B, T-1, A)
 
-        self._learn_model.world_model.train()
+        # self._learn_model.world_model.train()
 
         intermediate_losses = defaultdict(float)
         losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._learn_model.tokenizer)
@@ -361,7 +361,7 @@ class MuZeroGPTPolicy(Policy):
 
         for loss_name, loss_value in losses.intermediate_losses.items():
             intermediate_losses[f"{loss_name}"] += loss_value
-        print(intermediate_losses)
+        # print(intermediate_losses)
         obs_loss = intermediate_losses['loss_obs']
         reward_loss = intermediate_losses['loss_rewards']
         policy_loss = intermediate_losses['loss_policy']

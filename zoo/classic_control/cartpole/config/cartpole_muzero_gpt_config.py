@@ -39,7 +39,7 @@ num_unroll_steps=5 #20
 # ==============================================================
 
 cartpole_muzero_gpt_config = dict(
-    exp_name=f'data_mz_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_H{num_unroll_steps}_seed0',
+    exp_name=f'data_mz_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_H{num_unroll_steps}_emb128_nlayers2_ssize21_initzero_reset_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -54,12 +54,15 @@ cartpole_muzero_gpt_config = dict(
         model=dict(
             observation_shape=4,
             action_space_size=2,
-            model_type='mlp', 
+            model_type='mlp',
             lstm_hidden_size=128,
             latent_state_dim=128,
             self_supervised_learning_loss=True,  # NOTE: default is False.
             discrete_action_encoding_type='one_hot',
-            norm_type='BN', 
+            norm_type='BN',
+            reward_support_size=21,
+            value_support_size=21,
+            support_scale=10,
         ),
         cuda=True,
         env_type='not_board_games',

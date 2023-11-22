@@ -279,10 +279,6 @@ class MuZeroMCTSCtree(object):
             min_max_stats_lst = tree_muzero.MinMaxStatsList(batch_size)
             min_max_stats_lst.set_delta(self._cfg.value_delta_max)
 
-            state_action_history = []  # 初始化 state_action_history 变量
-            last_latent_state = latent_state_roots
-            # 你可能需要在每次搜索开始时清除past_keys_values_cache，以防止缓存过大：
-            model.world_model.past_keys_values_cache.clear()  # 清除缓存
             for simulation_index in range(self._cfg.num_simulations):
                 # In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.
 
@@ -312,10 +308,6 @@ class MuZeroMCTSCtree(object):
                 # TODO: .long() is only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
 
-                # TODO
-                # 在每次模拟后更新 state_action_history
-                state_action_history.append((last_latent_state, last_actions))
-
                 """
                 MCTS stage 2: Expansion
                     At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function.
@@ -324,10 +316,7 @@ class MuZeroMCTSCtree(object):
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
                 # network_output = model.recurrent_inference(latent_states, last_actions) # for classic muzero
-                # network_output = model.recurrent_inference(last_actions)  # TODO: for muzero_gpt latent_states is not used in the model.
-
-                network_output = model.recurrent_inference(state_action_history)  # TODO: latent_states is not used in the model.
-
+                network_output = model.recurrent_inference(last_actions)  # TODO: for muzero_gpt latent_states is not used in the model.
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
@@ -335,10 +324,6 @@ class MuZeroMCTSCtree(object):
                 network_output.reward = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.reward))
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
-
-                # TODO
-                last_latent_state = network_output.latent_state
-
                 # tolist() is to be compatible with cpp datatype.
                 reward_batch = network_output.reward.reshape(-1).tolist()
                 value_batch = network_output.value.reshape(-1).tolist()
