@@ -34,7 +34,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/reuse_mctsvalue_ratio1',
+    f'data_mz_ctree/{env_name[:-14]}/mzssl_ratio1',
     env=dict(
         env_name=env_name,
         obs_shape=(4, 96, 96),
@@ -95,17 +95,17 @@ atari_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='ma',
-        import_names=['lzero.policy.ma'],
+        type='muzero',
+        import_names=['lzero.policy.muzero'],
     ),
     collector=dict(
-        type='episode_ma',
-        import_names=['lzero.worker.ma_collector'],
+        type='episode_muzero',
+        import_names=['lzero.worker.muzero_collector'],
     )
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_ma
-    train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import train_muzero
+    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
