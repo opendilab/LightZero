@@ -20,7 +20,7 @@ class AtariLightZeroEnv(BaseEnv):
         n_evaluator_episode=3,
         env_name='PongNoFrameskip-v4',
         env_type='Atari',
-        obs_shape=(4, 96, 96),
+        observation_shape=(4, 96, 96),
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
         gray_scale=True,

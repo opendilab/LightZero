@@ -211,7 +211,8 @@ class MuZeroGPTPolicy(Policy):
             by import_names path. For MuZero, ``lzero.model.muzero_gpt_model.MuZeroModel``
         """
         if self._cfg.model.model_type == "conv":
-            return 'MuZeroModel', ['lzero.model.muzero_gpt_model']
+            # return 'MuZeroModel', ['lzero.model.muzero_gpt_model']
+            return 'MuZeroModelGPT', ['lzero.model.muzero_gpt_model']
         elif self._cfg.model.model_type == "mlp":
             return 'MuZeroModelGPT', ['lzero.model.muzero_gpt_model_vector_obs']
         else:
@@ -252,6 +253,10 @@ class MuZeroGPTPolicy(Policy):
             update_kwargs={'freq': self._cfg.target_update_freq}
         )
         self._learn_model = self._model
+
+        # TODO: only for debug
+        for param in self._learn_model.tokenizer.parameters():
+            param.requires_grad = False
 
         if self._cfg.use_augmentation:
             self.image_transforms = ImageTransforms(
@@ -339,12 +344,16 @@ class MuZeroGPTPolicy(Policy):
         # compute_loss(self, batch: Batch, tokenizer: Tokenizer, ** kwargs: Any)
 
         batch_for_gpt = {}
-        batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  4)  # (B, T, O) or (B, T, C, H, W)
+        # TODO: for cartpole self._cfg.model.observation_shape
+        # batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
+        batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  *self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
+
+
         batch_for_gpt['actions'] = action_batch.squeeze(-1)  # (B, T-1, A) -> (B, T-1)
 
         batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]  # (B, T, R)
 
-        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # (B, T) TODO
+        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # (B, T) TODO: 0 means invalid padding data
 
         batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]  # (B, T-1, O) or (B, T-1, C, H, W)
         batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]  # (B, T-1) TODO
@@ -357,6 +366,8 @@ class MuZeroGPTPolicy(Policy):
 
         intermediate_losses = defaultdict(float)
         losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._learn_model.tokenizer)
+        
+        # TODO: train tokenlizer
         weighted_total_loss = losses.loss_total
 
         for loss_name, loss_value in losses.intermediate_losses.items():
@@ -371,6 +382,10 @@ class MuZeroGPTPolicy(Policy):
         # ==============================================================
         # the core learn model update step.
         # ==============================================================
+        """
+        for name, parameter in self._learn_model.named_parameters():
+            print(name)
+        """
         gradient_scale = 1 / self._cfg.num_unroll_steps
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
@@ -469,8 +484,8 @@ class MuZeroGPTPolicy(Policy):
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
         with torch.no_grad():
-            # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
+            # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()

@@ -22,6 +22,7 @@ from PIL import Image
 import torch
 from torch.distributions.categorical import Categorical
 import torchvision
+from joblib import hash
 
 
 @dataclass
@@ -44,9 +45,10 @@ class WorldModel(nn.Module):
 
         self.transformer = Transformer(config)
         self.num_observations_tokens = 16
-        # self.device = 'cpu'
         self.device = config.device
         self.support_size = config.support_size
+        self.action_shape = config.action_shape
+
 
         all_but_last_obs_tokens_pattern = torch.ones(config.tokens_per_block)
         all_but_last_obs_tokens_pattern[-2] = 0
@@ -119,7 +121,7 @@ class WorldModel(nn.Module):
             head_module=nn.Sequential(
                 nn.Linear(config.embed_dim, config.embed_dim),
                 nn.ReLU(),
-                nn.Linear(config.embed_dim, 2)  # TODO(pu); action shape
+                nn.Linear(config.embed_dim, self.action_shape)  # TODO(pu); action shape
             )
         )
         self.head_value = Head(
@@ -149,7 +151,11 @@ class WorldModel(nn.Module):
                     nn.init.zeros_(layer.bias)
                     break
 
-        self.past_keys_values_cache = {}
+        # self.past_keys_values_cache = {}
+        from collections import deque
+        # TODO: Transformer更新后应该清除缓存
+        self.max_cache_size = 10000
+        self.past_keys_values_cache = deque(maxlen=self.max_cache_size)
 
     def __repr__(self) -> str:
         return "world_model"
@@ -296,8 +302,6 @@ class WorldModel(nn.Module):
         # 从这个位置开始的 action_history
         action_history_from_last_root = state_action_history[last_root_position:]
         cache_key = tuple(action_history_from_last_root)
-
-        from joblib import hash
         cache_key = hash(action_history_from_last_root)
 
         if cache_key in self.past_keys_values_cache:
@@ -344,8 +348,14 @@ class WorldModel(nn.Module):
         obs = self.decode_obs_tokens() if should_predict_next_obs else None
         # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
 
-        # TODO: 在计算结束后，更新缓存
-        self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+        # TODO: 在计算结束后，更新缓存. 是否需要deepcopy
+        # self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+
+        # 每次需要添加新的键值对时，检查缓存大小并根据需要弹出最旧的缓存项
+        if len(self.past_keys_values_cache) >= self.max_cache_size:
+            self.past_keys_values_cache.popleft()
+            # 这样可以在固定的内存空间中保持缓存，并自动清理旧的缓存项。
+        self.past_keys_values_cache.append((cache_key, copy.deepcopy(self.keys_values_wm)))
 
         return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
 
@@ -395,6 +405,7 @@ class WorldModel(nn.Module):
             # obs is a 3-dimensional image
             pass
         elif len(batch['observations'][0, 0].shape) == 1:
+            print('obs is a 1-dimensional vector.')
             # TODO()
             # obs is a 1-dimensional vector
             original_shape = list(batch['observations'].shape)
@@ -498,5 +509,5 @@ class WorldModel(nn.Module):
 
         mask_fill_value = mask_fill.unsqueeze(-1).expand_as(target_value)
         labels_value = target_value.masked_fill(mask_fill_value, -100)
-        return labels_policy.reshape(-1, 2), labels_value.reshape(-1, self.support_size)  # TODO(pu)
+        return labels_policy.reshape(-1, self.action_shape), labels_value.reshape(-1, self.support_size)  # TODO(pu)
         # return labels_policy.reshape(-1, ), labels_value.reshape(-1)

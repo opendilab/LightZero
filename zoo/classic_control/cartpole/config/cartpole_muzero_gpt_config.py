@@ -9,9 +9,9 @@ evaluator_env_num = 3
 num_simulations = 25
 update_per_collect = 100
 batch_size = 256
-max_env_step = int(1e5)
+max_env_step = int(1e6)
 reanalyze_ratio = 0
-num_unroll_steps=5 #20
+num_unroll_steps = 20
 
 
 # collector_env_num = 1
@@ -39,7 +39,7 @@ num_unroll_steps=5 #20
 # ==============================================================
 
 cartpole_muzero_gpt_config = dict(
-    exp_name=f'data_mz_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_H{num_unroll_steps}_emb128_nlayers2_ssize21_initzero_reset_seed0',
+    exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_ssize21_fixtokenizer_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
