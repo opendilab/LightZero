@@ -1,7 +1,7 @@
 import copy
 from typing import Optional
 
-import gym
+import gymnasium as gym
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.envs.common.common_function import affine_transform
@@ -70,12 +70,15 @@ class PendulumEnv(BaseEnv):
             self._init_flag = True
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
-            self._env.seed(self._seed + np_seed)
-            self._action_space.seed(self._seed + np_seed)
-        elif hasattr(self, '_seed'):
-            self._env.seed(self._seed)
+            self._seed = self._seed + np_seed
             self._action_space.seed(self._seed)
-        obs = self._env.reset()
+            obs, _ = self._env.reset(seed=self._seed)
+        elif hasattr(self, '_seed'): 
+            self._action_space.seed(self._seed)
+            obs, _ = self._env.reset(seed=self._seed)
+        else:
+            self._action_space.seed(self._seed)
+            obs, _ = self._env.reset()
         obs = to_ndarray(obs).astype(np.float32)
         self._eval_episode_return = 0.
 
@@ -106,7 +109,7 @@ class PendulumEnv(BaseEnv):
         # scale into [-2, 2]
         if self._act_scale:
             action = affine_transform(action, min_val=self._env.action_space.low, max_val=self._env.action_space.high)
-        obs, rew, done, info = self._env.step(action)
+        obs, rew, done, _, info = self._env.step(action)
         self._eval_episode_return += rew
         obs = to_ndarray(obs).astype(np.float32)
         # wrapped to be transferred to a array with shape (1,)

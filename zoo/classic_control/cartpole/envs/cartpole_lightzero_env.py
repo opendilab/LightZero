@@ -1,6 +1,6 @@
 from typing import Union, Optional
 
-import gym
+import gymnasium as gym
 import numpy as np
 
 from ding.envs import BaseEnv, BaseEnvTimestep
@@ -42,14 +42,17 @@ class CartPoleEnv(BaseEnv):
             self._init_flag = True
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
-            self._env.seed(self._seed + np_seed)
-            self._action_space.seed(self._seed + np_seed)
-        elif hasattr(self, '_seed'):
-            self._env.seed(self._seed)
+            self._seed = self._seed + np_seed
             self._action_space.seed(self._seed)
+            obs, _ = self._env.reset(seed=self._seed)
+        elif hasattr(self, '_seed'):
+            self._action_space.seed(self._seed)
+            obs, _ = self._env.reset(seed=self._seed)
+        else:
+            self._action_space.seed(self._seed)
+            obs, _ = self._env.reset()
         self._observation_space = self._env.observation_space
         self._eval_episode_return = 0
-        obs = self._env.reset()
         obs = to_ndarray(obs)
 
         action_mask = np.ones(self.action_space.n, 'int8')
@@ -71,7 +74,7 @@ class CartPoleEnv(BaseEnv):
         if isinstance(action, np.ndarray) and action.shape == (1, ):
             action = action.squeeze()  # 0-dim array
 
-        obs, rew, done, info = self._env.step(action)
+        obs, rew, done, _, info = self._env.step(action)
 
         self._eval_episode_return += rew
         if done:

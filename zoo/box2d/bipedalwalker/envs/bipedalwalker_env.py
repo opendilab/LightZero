@@ -1,7 +1,7 @@
 from typing import Any, List, Union, Optional
 import time
 import copy
-import gym
+import gymnasium as gym
 import os
 import numpy as np
 from easydict import EasyDict
@@ -58,11 +58,6 @@ class BipedalWalkerEnv(BaseEnv):
                 low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1, ), dtype=np.float32
             )
             self._init_flag = True
-        if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
-            np_seed = 100 * np.random.randint(1, 1000)
-            self._env.seed(self._seed + np_seed)
-        elif hasattr(self, '_seed'):
-            self._env.seed(self._seed)
         if self._replay_path is not None:
             self._env = gym.wrappers.RecordVideo(
                 self._env,
@@ -70,7 +65,14 @@ class BipedalWalkerEnv(BaseEnv):
                 episode_trigger=lambda episode_id: True,
                 name_prefix='rl-video-{}'.format(id(self))
             )
-        obs = self._env.reset()
+        if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
+            np_seed = 100 * np.random.randint(1, 1000)
+            self._seed = self._seed + np_seed
+            obs, _ = self._env.reset(seed=self._seed)  # using the reset method of Gymnasium env
+        elif hasattr(self, '_seed'):
+            obs, _ = self._env.reset(seed=self._seed)
+        else:
+            obs, _ = self._env.reset()
         obs = to_ndarray(obs).astype(np.float32)
         self._eval_episode_return = 0
         if self._save_replay_gif:
@@ -103,7 +105,7 @@ class BipedalWalkerEnv(BaseEnv):
         if self._save_replay_gif:
             self._frames.append(self._env.render(mode='rgb_array'))
 
-        obs, rew, done, info = self._env.step(action)
+        obs, rew, done, _, info = self._env.step(action)
 
         action_mask = None
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
