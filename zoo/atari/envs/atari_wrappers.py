@@ -2,6 +2,7 @@
 # https://github.com/openai/baselines/blob/master/baselines/common/atari_wrappers.py
 
 import cv2
+import gymnasium 
 import gym
 import numpy as np
 from ding.envs import NoopResetWrapper, MaxAndSkipWrapper, EpisodicLifeWrapper, FireResetWrapper, WarpFrameWrapper, \
@@ -87,10 +88,11 @@ def wrap_lightzero(config, episode_life, clip_rewards):
         - the wrapped atari environment.
     """
     if config.render_mode_human:
-        env = gym.make(config.env_name, render_mode='human')
+        env = gymnasium.make(config.env_name, render_mode='human')
     else:
-        env = gym.make(config.env_name)
+        env = gymnasium.make(config.env_name)
     assert 'NoFrameskip' in env.spec.id
+    env = GymToGymnasiumWrapper(env)
     env = NoopResetWrapper(env, noop_max=30)
     env = MaxAndSkipWrapper(env, skip=config.frame_skip)
     if episode_life:
@@ -227,3 +229,22 @@ class GameWrapper(gym.Wrapper):
 
     def legal_actions(self):
         return [_ for _ in range(self.env.action_space.n)]
+
+class GymToGymnasiumWrapper(gym.Wrapper):
+
+    def __init__(self, env):
+        assert isinstance(env, gymnasium.Env), type(env)
+        super().__init__(env)
+        self._seed = None
+
+    def seed(self, seed):
+        self._seed = seed
+
+    def reset(self):
+        # print("hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
+        if self._seed is not None:
+            obs, _ = self.env.reset(seed=self._seed)
+            return obs
+        else:
+            obs, _ = self.env.reset()
+            return obs
