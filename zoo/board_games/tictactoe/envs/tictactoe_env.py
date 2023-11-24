@@ -3,7 +3,7 @@ import sys
 from functools import lru_cache
 from typing import List
 
-import gym
+import gymnasium as gym
 import numpy as np
 from ding.envs.env.base_env import BaseEnv, BaseEnvTimestep
 from ding.utils.registry_factory import ENV_REGISTRY
