@@ -16,12 +16,12 @@ mcts_ctree = True
 # ==============================================================
 
 tictactoe_alphazero_config = dict(
-    exp_name=f'data_az_ptree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_az_ctree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         board_size=3,
         battle_mode='play_with_bot_mode',
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
-        channel_last=False,  # NOTE
+        channel_last=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -32,16 +32,16 @@ tictactoe_alphazero_config = dict(
         prob_random_agent=0,
         prob_expert_agent=0,
         scale=True,
-        mcts_ctree=mcts_ctree,
+        alphazero_mcts_ctree=mcts_ctree,
         # ==============================================================
     ),
     policy=dict(
+        mcts_ctree=mcts_ctree,
         # ==============================================================
         # for the creation of simulation env
         simulation_env_name='tictactoe',
         simulation_env_config_type='play_with_bot',
         # ==============================================================
-        mcts_ctree=mcts_ctree,
         model=dict(
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),
