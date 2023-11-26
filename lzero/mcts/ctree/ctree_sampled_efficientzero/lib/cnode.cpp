@@ -381,7 +381,7 @@ namespace tree
             for (size_t iter = 0; iter < disturbed_probs.size(); iter++)
             {
                 #ifdef __APPLE__
-                    disc_action_with_probs.__emplace_back(std::make_pair(iter, disturbed_probs[iter]));
+                    disc_action_with_probs.emplace_back(std::make_pair(iter, disturbed_probs[iter]));
                 #else
                     disc_action_with_probs.emplace_back(std::make_pair(iter, disturbed_probs[iter]));
                 #endif

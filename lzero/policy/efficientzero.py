@@ -401,6 +401,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
                 # obtain the oracle latent states from representation function.
                 beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
                 obs_target_batch_tmp = default_collate(obs_target_batch[:, beg_index:end_index].squeeze())
+                obs_target_batch_tmp = to_device(obs_target_batch_tmp, self._device)
                 network_output = self._learn_model.initial_inference(obs_target_batch_tmp)
 
                 latent_state = to_tensor(latent_state)
