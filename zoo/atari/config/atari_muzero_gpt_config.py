@@ -28,21 +28,29 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # eps_greedy_exploration_in_collect = False
 # num_unroll_steps = 20
 
-collector_env_num = 1
-n_episode = 1
+collector_env_num = 8
+n_episode = 8
 evaluator_env_num = 1
-# num_simulations = 20
-num_simulations = 2
-# update_per_collect = 100
-# batch_size = 64
-# update_per_collect = 50
-update_per_collect = 2
-
-batch_size = 32
+num_simulations = 20
+update_per_collect = None
+model_update_ratio = 1
+batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = False
 num_unroll_steps = 20
+
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 20
+# update_per_collect = None
+# model_update_ratio = 1
+# batch_size = 64
+# max_env_step = int(1e6)
+# reanalyze_ratio = 0.
+# eps_greedy_exploration_in_collect = False
+# num_unroll_steps = 20
 
 # collector_env_num = 1
 # n_episode = 1
@@ -61,7 +69,7 @@ num_unroll_steps = 20
 
 atari_muzero_config = dict(
     # exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
-    exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_H{num_unroll_steps}_vocabsize128_nlayers2_ssize21_initzero_seed0',
+    exp_name=f'data_mz_gpt_ctree_1127/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_nofixtokenizer_mediumnet_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -74,11 +82,11 @@ atari_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        collect_max_episode_steps=int(20),
-        eval_max_episode_steps=int(20),
+        # collect_max_episode_steps=int(20),
+        # eval_max_episode_steps=int(20),
         # # TODO
-        # collect_max_episode_steps=int(2e3),
-        # eval_max_episode_steps=int(5e3),
+        collect_max_episode_steps=int(2e3),
+        eval_max_episode_steps=int(5e3),
     ),
     policy=dict(
         num_unroll_steps=num_unroll_steps,
@@ -118,10 +126,14 @@ atari_muzero_config = dict(
         ),
         use_augmentation=True,
         update_per_collect=update_per_collect,
+        model_update_ratio = model_update_ratio,
         batch_size=batch_size,
         optim_type='SGD',
         lr_piecewise_constant_decay=True,
         learning_rate=0.2,
+        # optim_type='Adam',
+        # lr_piecewise_constant_decay=False,
+        # learning_rate=0.003,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         ssl_loss_weight=2,  # default is 0
@@ -152,3 +164,10 @@ create_config = atari_muzero_create_config
 if __name__ == "__main__":
     from lzero.entry import train_muzero_gpt
     train_muzero_gpt([main_config, create_config], seed=0, max_env_step=max_env_step)
+
+    # 下面为cprofile的代码
+    # from lzero.entry import train_muzero_gpt
+    # def run(max_env_step: int):
+    #     train_muzero_gpt([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # import cProfile
+    # cProfile.run(f"run({2000})", filename="pong_muzero_gpt_ctree_cprofile_2k_envstep", sort="cumulative")

@@ -255,8 +255,8 @@ class MuZeroGPTPolicy(Policy):
         self._learn_model = self._model
 
         # TODO: only for debug
-        for param in self._learn_model.tokenizer.parameters():
-            param.requires_grad = False
+        # for param in self._learn_model.tokenizer.parameters():
+        #     param.requires_grad = False
 
         if self._cfg.use_augmentation:
             self.image_transforms = ImageTransforms(
@@ -345,8 +345,10 @@ class MuZeroGPTPolicy(Policy):
 
         batch_for_gpt = {}
         # TODO: for cartpole self._cfg.model.observation_shape
-        # batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
-        batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  *self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
+        if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape)==1:
+            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
+        elif len(self._cfg.model.observation_shape)==3:
+            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  *self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
 
 
         batch_for_gpt['actions'] = action_batch.squeeze(-1)  # (B, T-1, A) -> (B, T-1)
@@ -547,6 +549,7 @@ class MuZeroGPTPolicy(Policy):
                 }
 
         return output
+
 
     def _init_eval(self) -> None:
         """

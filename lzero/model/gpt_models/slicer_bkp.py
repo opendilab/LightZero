@@ -1,5 +1,6 @@
 import math
-from typing import List, Dict
+from typing import List
+
 import torch
 import torch.nn as nn
 
@@ -12,20 +13,12 @@ class Slicer(nn.Module):
         kept_indices = torch.where(block_mask)[0].repeat(max_blocks)
         offsets = torch.arange(max_blocks).repeat_interleave(self.num_kept_tokens)
         self.register_buffer('indices', kept_indices + block_mask.size(0) * offsets)
-        self.cache: Dict[str, torch.Tensor] = {}
 
     def compute_slice(self, num_steps: int, prev_steps: int = 0) -> torch.Tensor:
-        cache_key = f"{num_steps}_{prev_steps}"
-        if cache_key in self.cache:
-            return self.cache[cache_key]
-
         total_steps = num_steps + prev_steps
         num_blocks = math.ceil(total_steps / self.block_size)
         indices = self.indices[:num_blocks * self.num_kept_tokens]
-        result = indices[torch.logical_and(prev_steps <= indices, indices < total_steps)] - prev_steps
-
-        self.cache[cache_key] = result
-        return result
+        return indices[torch.logical_and(prev_steps <= indices, indices < total_steps)] - prev_steps
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError

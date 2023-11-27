@@ -48,7 +48,7 @@ class WorldModel(nn.Module):
         self.device = config.device
         self.support_size = config.support_size
         self.action_shape = config.action_shape
-
+        self.max_cache_size = config.max_cache_size
 
         all_but_last_obs_tokens_pattern = torch.ones(config.tokens_per_block)
         all_but_last_obs_tokens_pattern[-2] = 0
@@ -151,11 +151,12 @@ class WorldModel(nn.Module):
                     nn.init.zeros_(layer.bias)
                     break
 
-        # self.past_keys_values_cache = {}
-        from collections import deque
-        # TODO: Transformer更新后应该清除缓存
-        self.max_cache_size = 10000
-        self.past_keys_values_cache = deque(maxlen=self.max_cache_size)
+        self.past_keys_values_cache = {}
+        # from collections import deque
+        # # TODO: Transformer更新后应该清除缓存
+        # # self.max_cache_size = 10000
+        # # self.max_cache_size = 20*200
+        # self.past_keys_values_cache = deque(maxlen=self.max_cache_size)
 
     def __repr__(self) -> str:
         return "world_model"
@@ -349,13 +350,13 @@ class WorldModel(nn.Module):
         # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
 
         # TODO: 在计算结束后，更新缓存. 是否需要deepcopy
-        # self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+        self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
 
         # 每次需要添加新的键值对时，检查缓存大小并根据需要弹出最旧的缓存项
-        if len(self.past_keys_values_cache) >= self.max_cache_size:
-            self.past_keys_values_cache.popleft()
-            # 这样可以在固定的内存空间中保持缓存，并自动清理旧的缓存项。
-        self.past_keys_values_cache.append((cache_key, copy.deepcopy(self.keys_values_wm)))
+        # if len(self.past_keys_values_cache) >= self.max_cache_size:
+        #     self.past_keys_values_cache.popleft()
+        #     # 这样可以在固定的内存空间中保持缓存，并自动清理旧的缓存项。
+        # self.past_keys_values_cache.append((cache_key, copy.deepcopy(self.keys_values_wm)))
 
         return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
 
@@ -405,7 +406,7 @@ class WorldModel(nn.Module):
             # obs is a 3-dimensional image
             pass
         elif len(batch['observations'][0, 0].shape) == 1:
-            print('obs is a 1-dimensional vector.')
+            # print('obs is a 1-dimensional vector.')
             # TODO()
             # obs is a 1-dimensional vector
             original_shape = list(batch['observations'].shape)

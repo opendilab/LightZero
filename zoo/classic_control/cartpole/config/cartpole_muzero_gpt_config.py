@@ -3,16 +3,29 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# num_simulations = 25
+# update_per_collect = 100
+# batch_size = 256
+# max_env_step = int(1e6)
+# reanalyze_ratio = 0
+# num_unroll_steps = 20
+
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 3
+evaluator_env_num = 1
 num_simulations = 25
+# update_per_collect = None
+model_update_ratio = 1
 update_per_collect = 100
+# model_update_ratio = 1
+# batch_size = 64
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0
 num_unroll_steps = 20
-
 
 # collector_env_num = 1
 # n_episode = 1
@@ -39,7 +52,7 @@ num_unroll_steps = 20
 # ==============================================================
 
 cartpole_muzero_gpt_config = dict(
-    exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_ssize21_fixtokenizer_seed0',
+    exp_name=f'data_mz_gpt_ctree_1127_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_mcs20_fixtokenizer_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -60,6 +73,9 @@ cartpole_muzero_gpt_config = dict(
             self_supervised_learning_loss=True,  # NOTE: default is False.
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
+            # reward_support_size=601,
+            # value_support_size=601,
+            # support_scale=300,
             reward_support_size=21,
             value_support_size=21,
             support_scale=10,
@@ -68,6 +84,7 @@ cartpole_muzero_gpt_config = dict(
         env_type='not_board_games',
         game_segment_length=50,
         update_per_collect=update_per_collect,
+        model_update_ratio=model_update_ratio,
         batch_size=batch_size,
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
