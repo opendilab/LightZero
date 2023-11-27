@@ -241,7 +241,6 @@ class GymToGymnasiumWrapper(gym.Wrapper):
         self._seed = seed
 
     def reset(self):
-        # print("hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
         if self._seed is not None:
             obs, _ = self.env.reset(seed=self._seed)
             return obs

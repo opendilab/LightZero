@@ -49,7 +49,6 @@ class CartPoleEnv(BaseEnv):
             self._action_space.seed(self._seed)
             obs, _ = self._env.reset(seed=self._seed)
         else:
-            self._action_space.seed(self._seed)
             obs, _ = self._env.reset()
         self._observation_space = self._env.observation_space
         self._eval_episode_return = 0

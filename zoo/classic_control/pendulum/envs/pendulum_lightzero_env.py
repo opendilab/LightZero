@@ -77,7 +77,6 @@ class PendulumEnv(BaseEnv):
             self._action_space.seed(self._seed)
             obs, _ = self._env.reset(seed=self._seed)
         else:
-            self._action_space.seed(self._seed)
             obs, _ = self._env.reset()
         obs = to_ndarray(obs).astype(np.float32)
         self._eval_episode_return = 0.
