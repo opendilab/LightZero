@@ -13,29 +13,28 @@ from easydict import EasyDict
 # reanalyze_ratio = 0
 # num_unroll_steps = 20
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 1
-num_simulations = 25
-# update_per_collect = None
-model_update_ratio = 1
-update_per_collect = 100
-# model_update_ratio = 1
-# batch_size = 64
-batch_size = 256
-max_env_step = int(1e6)
-reanalyze_ratio = 0
-num_unroll_steps = 20
-
-# collector_env_num = 1
-# n_episode = 1
+# collector_env_num = 8
+# n_episode = 8
 # evaluator_env_num = 1
-# num_simulations = 5
-# update_per_collect = 2
-# batch_size = 5
-# max_env_step = int(1e5)
+# num_simulations = 25
+# model_update_ratio = 1
+# update_per_collect = 200
+# batch_size = 256
+# max_env_step = int(1e6)
 # reanalyze_ratio = 0
-# num_unroll_steps=5
+# num_unroll_steps = 20
+
+
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 5
+update_per_collect = 2
+model_update_ratio = 1
+batch_size = 5
+max_env_step = int(1e5)
+reanalyze_ratio = 0
+num_unroll_steps=20
 
 # collector_env_num = 1
 # n_episode = 1
@@ -52,7 +51,7 @@ num_unroll_steps = 20
 # ==============================================================
 
 cartpole_muzero_gpt_config = dict(
-    exp_name=f'data_mz_gpt_ctree_1127_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_mcs20_fixtokenizer_seed0',
+    exp_name=f'data_mz_gpt_ctree_1127_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_mcs5e3_fixtokenizer_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -81,6 +80,7 @@ cartpole_muzero_gpt_config = dict(
             support_scale=10,
         ),
         cuda=True,
+        # cuda=False,
         env_type='not_board_games',
         game_segment_length=50,
         update_per_collect=update_per_collect,

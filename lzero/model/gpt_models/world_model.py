@@ -1,28 +1,27 @@
 import copy
 from dataclasses import dataclass
+import random
 from typing import Any, Optional, Tuple
+from typing import List, Optional, Union
 
+from PIL import Image
 from einops import rearrange
+from einops import rearrange
+import gym
+from joblib import hash
+import numpy as np
 import torch
+import torch
+from torch.distributions.categorical import Categorical
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
 
 from .kv_caching import KeysValues
 from .slicer import Embedder, Head
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
-from .utils import init_weights, LossWithIntermediateLosses
-import random
-from typing import List, Optional, Union
-
-import gym
-from einops import rearrange
-import numpy as np
-from PIL import Image
-import torch
-from torch.distributions.categorical import Categorical
-import torchvision
-from joblib import hash
+from .utils import LossWithIntermediateLosses, init_weights
 
 
 @dataclass
@@ -51,26 +50,26 @@ class WorldModel(nn.Module):
         self.max_cache_size = config.max_cache_size
 
         all_but_last_obs_tokens_pattern = torch.ones(config.tokens_per_block)
-        all_but_last_obs_tokens_pattern[-2] = 0
-        act_tokens_pattern = torch.zeros(self.config.tokens_per_block)
-        act_tokens_pattern[-1] = 1
-        obs_tokens_pattern = 1 - act_tokens_pattern
+        all_but_last_obs_tokens_pattern[-2] = 0 # 1,...,0,1
+
+        act_tokens_pattern = torch.zeros(self.config.tokens_per_block)  # 17
+        act_tokens_pattern[-1] = 1   # 0,...,0,1
+        obs_tokens_pattern = 1 - act_tokens_pattern  # 1,...,1,0
 
         value_policy_tokens_pattern = torch.zeros(config.tokens_per_block)
-        value_policy_tokens_pattern[-2] = 1
+        value_policy_tokens_pattern[-2] = 1  # 0,...,1,0
 
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim)
 
         self.embedder = Embedder(
             max_blocks=config.max_blocks,
             block_masks=[act_tokens_pattern, obs_tokens_pattern],
-            embedding_tables=nn.ModuleList(
-                [nn.Embedding(act_vocab_size, config.embed_dim), nn.Embedding(obs_vocab_size, config.embed_dim)])
+            embedding_tables=nn.ModuleList([nn.Embedding(act_vocab_size, config.embed_dim), nn.Embedding(obs_vocab_size, config.embed_dim)])
         )
 
         self.head_observations = Head(
             max_blocks=config.max_blocks,
-            block_mask=all_but_last_obs_tokens_pattern,
+            block_mask=all_but_last_obs_tokens_pattern, # 1,...,0,1 # https://github.com/eloialonso/iris/issues/19
             head_module=nn.Sequential(
                 nn.Linear(config.embed_dim, config.embed_dim),
                 nn.ReLU(),
@@ -78,18 +77,9 @@ class WorldModel(nn.Module):
             )
         )
 
-        # self.head_rewards = Head(
-        #     max_blocks=config.max_blocks,
-        #     block_mask=act_tokens_pattern,
-        #     head_module=nn.Sequential(
-        #         nn.Linear(config.embed_dim, config.embed_dim),
-        #         nn.ReLU(),
-        #         nn.Linear(config.embed_dim, 3)
-        #     )
-        # )
         self.head_rewards = Head(
             max_blocks=config.max_blocks,
-            block_mask=act_tokens_pattern,
+            block_mask=act_tokens_pattern,  # 0,...,0,1
             head_module=nn.Sequential(
                 nn.Linear(config.embed_dim, config.embed_dim),
                 nn.ReLU(),
@@ -99,16 +89,16 @@ class WorldModel(nn.Module):
 
         self.head_ends = Head(
             max_blocks=config.max_blocks,
-            block_mask=act_tokens_pattern,
+            block_mask=act_tokens_pattern,  # 0,...,0,1
             head_module=nn.Sequential(
                 nn.Linear(config.embed_dim, config.embed_dim),
                 nn.ReLU(),
                 nn.Linear(config.embed_dim, 2)
             )
         )
-        self.head_observations_for_inference = Head(
+        self.head_observations_for_root = Head( # TODO
             max_blocks=config.max_blocks,
-            block_mask=obs_tokens_pattern,
+            block_mask=obs_tokens_pattern,  # 1,...,1,0
             head_module=nn.Sequential(
                 nn.Linear(config.embed_dim, config.embed_dim),
                 nn.ReLU(),
@@ -151,58 +141,37 @@ class WorldModel(nn.Module):
                     nn.init.zeros_(layer.bias)
                     break
 
-        self.past_keys_values_cache = {}
-        # from collections import deque
+        # self.past_keys_values_cache = {}
+        from collections import deque
         # # TODO: Transformer更新后应该清除缓存
-        # # self.max_cache_size = 10000
-        # # self.max_cache_size = 20*200
-        # self.past_keys_values_cache = deque(maxlen=self.max_cache_size)
+        self.past_keys_values_cache = deque(maxlen=self.max_cache_size)
+        self.cache_dict = {}
 
     def __repr__(self) -> str:
         return "world_model"
 
-    def forward_recurrent(self, tokens: torch.LongTensor, past_keys_values: Optional[KeysValues] = None,
-                          inference=True) -> WorldModelOutput:
-
-        num_steps = tokens.size(1)  # (B, T)
-        assert num_steps <= self.config.max_tokens
-        prev_steps = 0 if past_keys_values is None else past_keys_values.size
-        # if prev_steps > 0:
-        #     print('prev_steps > 0')
-
-        sequences = self.embedder(tokens, num_steps, prev_steps) + self.pos_emb(
-            prev_steps + torch.arange(num_steps, device=tokens.device))
-
-        x = self.transformer(sequences, past_keys_values)
-
-        logits_observations = self.head_observations_for_inference(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_ends = self.head_ends(x, num_steps=num_steps, prev_steps=prev_steps)
-        # return WorldModelOutput(x, logits_observations, logits_rewards, logits_ends)
-
-        logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
-
-        return WorldModelOutput(x, logits_observations, logits_rewards, logits_ends, logits_policy, logits_value)
 
     def forward(self, tokens: torch.LongTensor, past_keys_values: Optional[KeysValues] = None,
-                inference=False) -> WorldModelOutput:
+                is_root=False) -> WorldModelOutput:
 
         num_steps = tokens.size(1)  # (B, T)
         assert num_steps <= self.config.max_tokens
         prev_steps = 0 if past_keys_values is None else past_keys_values.size
         # if prev_steps > 0:
         #     print('prev_steps > 0')
+        # print(f'{num_steps}, {prev_steps}')
+        sequences = self.embedder(tokens, num_steps, prev_steps) + self.pos_emb(prev_steps + torch.arange(num_steps, device=tokens.device))
 
-        sequences = self.embedder(tokens, num_steps, prev_steps) + self.pos_emb(
-            prev_steps + torch.arange(num_steps, device=tokens.device))
-
+        # print('transformer forward begin')
         x = self.transformer(sequences, past_keys_values)
+        # print('transformer forward done')
 
-        if inference:
-            logits_observations = self.head_observations_for_inference(x, num_steps=num_steps, prev_steps=prev_steps)
+        if is_root:
+            logits_observations = self.head_observations_for_root(x, num_steps=num_steps, prev_steps=prev_steps)
         else:
+            # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
             logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
+        
         logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_ends = self.head_ends(x, num_steps=num_steps, prev_steps=prev_steps)
         # return WorldModelOutput(x, logits_observations, logits_rewards, logits_ends)
@@ -255,8 +224,8 @@ class WorldModel(nn.Module):
         assert num_observations_tokens == self.num_observations_tokens
         # self.keys_values_wm = self.world_model.transformer.generate_empty_keys_values(n=n, max_tokens=self.world_model.config.max_tokens)
         self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
-        outputs_wm = self.forward(obs_tokens, past_keys_values=self.keys_values_wm,
-                                  inference=True)  # TODO: inference=False
+        # outputs_wm = self.forward(obs_tokens, past_keys_values=self.keys_values_wm, is_root=True)  # Note: is_root=True
+        outputs_wm = self.forward(obs_tokens, past_keys_values=self.keys_values_wm, is_root=False)  # Note: is_root=True
 
         # return outputs_wm.output_sequence  # (B, K, E)
         return outputs_wm
@@ -302,14 +271,18 @@ class WorldModel(nn.Module):
 
         # 从这个位置开始的 action_history
         action_history_from_last_root = state_action_history[last_root_position:]
-        cache_key = tuple(action_history_from_last_root)
+        # cache_key = tuple(action_history_from_last_root)
         cache_key = hash(action_history_from_last_root)
 
-        if cache_key in self.past_keys_values_cache:
-            self.keys_values_wm = self.past_keys_values_cache[cache_key]
-        else:
-            pass
-            # 如果没有找到对应的缓存，那么进行正常的计算
+        # if cache_key in self.past_keys_values_cache:
+        #     self.keys_values_wm = self.past_keys_values_cache[cache_key]
+        # else:
+        #     pass
+        #     # 如果没有找到对应的缓存，那么进行正常的计算
+        
+        tmp = self.cache_dict.get(cache_key)
+        if tmp is not None:
+            self.keys_values_wm = tmp 
 
         assert self.keys_values_wm is not None and self.num_observations_tokens is not None
 
@@ -327,20 +300,26 @@ class WorldModel(nn.Module):
         token = token.reshape(-1, 1).to(self.device)  # (B, 1)
 
         for k in range(num_passes):  # assumption that there is only one action token.
+            # action_token obs_token, ..., obs_token  1+16
+            #
+
             # obs is in token level
+            # num_steps=1, prev_steps=16
             outputs_wm = self.forward(token, past_keys_values=self.keys_values_wm,
-                                      inference=False)  # TODO: inference=False
+                                      is_root=False)  # TODO: inference=False  
+            # if k==0, action_token self.head_observations 1,...,0,1
             output_sequence.append(outputs_wm.output_sequence)
 
             if k == 0:
                 # reward = Categorical(logits=outputs_wm.logits_rewards).sample().float().cpu().numpy().reshape(-1) - 1   # (B,)
-                done = Categorical(logits=outputs_wm.logits_ends).sample().cpu().numpy().astype(bool).reshape(
-                    -1)  # (B,)
-
+                done = Categorical(logits=outputs_wm.logits_ends).sample().cpu().numpy().astype(bool).reshape(-1)  # (B,)
                 reward = outputs_wm.logits_rewards  # (B,)
 
             if k < self.num_observations_tokens:
+                # 一共产生16个obs_token，每次产生一个
                 token = Categorical(logits=outputs_wm.logits_observations).sample()
+                if len(token.shape) != 2:
+                    token = token.squeeze(-1)  # (B, 1)
                 obs_tokens.append(token)
 
         output_sequence = torch.cat(output_sequence, dim=1)  # (B, 1 + K, E)
@@ -350,13 +329,20 @@ class WorldModel(nn.Module):
         # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
 
         # TODO: 在计算结束后，更新缓存. 是否需要deepcopy
-        self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
-
-        # 每次需要添加新的键值对时，检查缓存大小并根据需要弹出最旧的缓存项
+        # self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+        # # 每次需要添加新的键值对时，检查缓存大小并根据需要弹出最旧的缓存项
         # if len(self.past_keys_values_cache) >= self.max_cache_size:
         #     self.past_keys_values_cache.popleft()
         #     # 这样可以在固定的内存空间中保持缓存，并自动清理旧的缓存项。
         # self.past_keys_values_cache.append((cache_key, copy.deepcopy(self.keys_values_wm)))
+
+        # If the cache is full, remove the oldest item from the dictionary
+        if len(self.past_keys_values_cache) == self.max_cache_size:
+            oldest_key = self.past_keys_values_cache.popleft()
+            del self.cache_dict[oldest_key]
+        # Add the new item to the deque and dictionary
+        self.past_keys_values_cache.append(cache_key)
+        self.cache_dict[cache_key] = copy.deepcopy(self.keys_values_wm)
 
         return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
 
@@ -378,7 +364,7 @@ class WorldModel(nn.Module):
         for k in range(num_passes):  # assumption that there is only one action token.
             # obs is in token level
             outputs_wm = self.forward(token, past_keys_values=self.keys_values_wm,
-                                      inference=False)  # TODO: inference=False
+                                      is_root=False)  # TODO: is_root=False
             output_sequence.append(outputs_wm.output_sequence)
 
             if k == 0:
@@ -422,7 +408,7 @@ class WorldModel(nn.Module):
         tokens = rearrange(torch.cat((obs_tokens, act_tokens), dim=2), 'b l k1 -> b (l k1)')  # (B, L(K+1))
 
         # outputs = self(tokens)
-        outputs = self.forward(tokens, inference=False)
+        outputs = self.forward(tokens, is_root=False)
 
         labels_observations, labels_rewards, labels_ends = self.compute_labels_world_model(obs_tokens, batch['rewards'],
                                                                                            batch['ends'],
@@ -470,8 +456,7 @@ class WorldModel(nn.Module):
 
         # Reshape your tensors
         logits_rewards = rearrange(logits, 'b t e -> (b t) e')
-        labels = labels.reshape(-1, labels.shape[
-            -1])  # Assuming labels originally has shape [b, t, reward_dim]
+        labels = labels.reshape(-1, labels.shape[-1])  # Assuming labels originally has shape [b, t, reward_dim]
 
         # Reshape your mask
         mask_padding = rearrange(batch['mask_padding'], 'b t -> (b t)').unsqueeze(-1)
