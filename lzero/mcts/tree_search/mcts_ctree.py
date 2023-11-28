@@ -315,7 +315,9 @@ class MuZeroMCTSCtree(object):
 
                 # TODO
                 # 在每次模拟后更新 state_action_history
-                state_action_history.append((last_latent_state, last_actions))
+                state_action_history.append((last_latent_state, last_actions.cpu().numpy()))
+                # state_action_history.append(last_latent_state)
+                # state_action_history.append(last_actions)
 
                 """
                 MCTS stage 2: Expansion

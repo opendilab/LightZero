@@ -201,14 +201,23 @@ class MuZeroModelGPT(nn.Module):
         #     latent_state,
         # )
 
-        x, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
+        # x, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
+        #     obs)
+        # logits_observations, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
+
+        # # obs discrete distribution to one_hot latent state?
+        # # torch.Size([8, 16, 512]) -> torch.Size([8, 16])
+        # latent_state = torch.argmax(logits_observations, dim=2, keepdim=False)
+
+        x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
             obs)
-        logits_observations, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
+        reward, policy_logits, value = logits_rewards, logits_policy, logits_value
 
         # obs discrete distribution to one_hot latent state?
         # torch.Size([8, 16, 512]) -> torch.Size([8, 16])
-        latent_state = torch.argmax(logits_observations, dim=2, keepdim=False)
+        latent_state = obs_token
 
+        # TODO: root value policy_logit 
         # torch.Size([8, 1, 2]) - > torch.Size([8, 2])
         policy_logits = policy_logits.squeeze(1)
         # torch.Size([8, 1, 601]) - > torch.Size([8, 601])
@@ -216,7 +225,7 @@ class MuZeroModelGPT(nn.Module):
 
         return MZNetworkOutput(
             value,
-            [0. for _ in range(batch_size)],
+            [0. for _ in range(batch_size)], # reward 
             policy_logits,
             latent_state,
         )

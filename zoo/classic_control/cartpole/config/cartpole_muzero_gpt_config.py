@@ -51,7 +51,7 @@ num_unroll_steps=20
 # ==============================================================
 
 cartpole_muzero_gpt_config = dict(
-    exp_name=f'data_mz_gpt_ctree_1127_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_mcs5e3_fixtokenizer_seed0',
+    exp_name=f'data_mz_gpt_ctree_1128/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_mcs5e3_fixedtokenizer_fixinitlatent_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,

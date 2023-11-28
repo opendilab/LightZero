@@ -179,6 +179,7 @@ class WorldModel(nn.Module):
         logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
 
+        # TODO: root reward value
         return WorldModelOutput(x, logits_observations, logits_rewards, logits_ends, logits_policy, logits_value)
 
     @torch.no_grad()
@@ -216,7 +217,7 @@ class WorldModel(nn.Module):
         outputs_wm = self.refresh_keys_values_with_initial_obs_tokens(obs_tokens)
         self.obs_tokens = obs_tokens
 
-        return outputs_wm, self.decode_obs_tokens()
+        return outputs_wm, self.decode_obs_tokens(), self.obs_tokens
 
     @torch.no_grad()
     def refresh_keys_values_with_initial_obs_tokens(self, obs_tokens: torch.LongTensor) -> torch.FloatTensor:
@@ -244,9 +245,22 @@ class WorldModel(nn.Module):
             expanded_observations = expanded_observations.expand(*desired_shape)
             obs = expanded_observations
 
-        outputs_wm, _ = self.reset_from_initial_observations(obs)
+        outputs_wm, _, obs_tokens = self.reset_from_initial_observations(obs)
 
-        return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
+        # TODO
+        # If the cache is full, remove the oldest item from the dictionary
+        if len(self.past_keys_values_cache) == self.max_cache_size:
+            oldest_key = self.past_keys_values_cache.popleft()
+            del self.cache_dict[oldest_key]
+
+        cache_key = hash([obs_tokens.cpu().numpy()])
+        # Add the new item to the deque and dictionary
+        self.past_keys_values_cache.append(cache_key)
+        self.cache_dict[cache_key] = copy.deepcopy(self.keys_values_wm)
+
+        # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
+        return outputs_wm.output_sequence, obs_tokens, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
+
 
     def forward_recurrent_inference(self, state_action_history, should_predict_next_obs: bool = True):
 
@@ -270,9 +284,13 @@ class WorldModel(nn.Module):
             i for i, (latent_state, _) in enumerate(state_action_history) if np.array_equal(latent_state, root_latent_state))
 
         # 从这个位置开始的 action_history
-        action_history_from_last_root = state_action_history[last_root_position:]
-        # cache_key = tuple(action_history_from_last_root)
-        cache_key = hash(action_history_from_last_root)
+        # state_action_history_from_last_root = state_action_history[last_root_position:]
+        # [(s0,a0)] -> [s0]
+        # [(s0,a0),(s1,a1)] -> [(s0,a0),s1]
+        state_action_history_from_last_root = state_action_history[last_root_position:-1] + [state_action_history[-1][0]]
+
+        # cache_key = tuple(state_action_history_from_last_root)
+        cache_key = hash(state_action_history_from_last_root)
 
         # if cache_key in self.past_keys_values_cache:
         #     self.keys_values_wm = self.past_keys_values_cache[cache_key]
@@ -305,12 +323,12 @@ class WorldModel(nn.Module):
 
             # obs is in token level
             # num_steps=1, prev_steps=16
-            outputs_wm = self.forward(token, past_keys_values=self.keys_values_wm,
-                                      is_root=False)  # TODO: inference=False  
+            outputs_wm = self.forward(token, past_keys_values=self.keys_values_wm, is_root=False)  # TODO: inference=False  
             # if k==0, action_token self.head_observations 1,...,0,1
             output_sequence.append(outputs_wm.output_sequence)
 
             if k == 0:
+                # if k==0, token is action_token  outputs_wm.logits_rewards 是有值的
                 # reward = Categorical(logits=outputs_wm.logits_rewards).sample().float().cpu().numpy().reshape(-1) - 1   # (B,)
                 done = Categorical(logits=outputs_wm.logits_ends).sample().cpu().numpy().astype(bool).reshape(-1)  # (B,)
                 reward = outputs_wm.logits_rewards  # (B,)
@@ -335,6 +353,12 @@ class WorldModel(nn.Module):
         #     self.past_keys_values_cache.popleft()
         #     # 这样可以在固定的内存空间中保持缓存，并自动清理旧的缓存项。
         # self.past_keys_values_cache.append((cache_key, copy.deepcopy(self.keys_values_wm)))
+
+        # [(s0,a0)] -> [(s0,a0),s1]
+        # [(s0,a0),(s1,a1)] -> [(s0,a0),(s1,a1), s2]
+        state_action_history_from_last_root = [state_action_history[last_root_position], self.obs_tokens.cpu().numpy()]
+        # cache_key = tuple(state_action_history_from_last_root)
+        cache_key = hash(state_action_history_from_last_root)
 
         # If the cache is full, remove the oldest item from the dictionary
         if len(self.past_keys_values_cache) == self.max_cache_size:
