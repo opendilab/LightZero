@@ -23,7 +23,6 @@ from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
 
-# from memory_profiler import profile
 
 @dataclass
 class WorldModelOutput:
@@ -127,7 +126,8 @@ class WorldModel(nn.Module):
 
         self.apply(init_weights)
 
-        last_linear_layer_init_zero = True  # TODO: is beneficial for convergence speed.
+        # last_linear_layer_init_zero=True is beneficial for convergence speed.
+        last_linear_layer_init_zero = True  # TODO
         if last_linear_layer_init_zero:
             # Locate the last linear layer and initialize its weights and biases to 0.
             for _, layer in enumerate(reversed(self.head_policy.head_module)):
@@ -141,15 +141,11 @@ class WorldModel(nn.Module):
                     nn.init.zeros_(layer.bias)
                     break
 
-        import collections
-        # self.past_keys_values_cache = collections.OrderedDict()
-        self.past_keys_values_cache = {}
-        # from collections import deque
-        # self.past_keys_values_cache = deque(maxlen=self.max_cache_size)
-        # self.cache_dict = {}
-        # TODO: Transformer更新后应该清除缓存
-
-
+        # self.past_keys_values_cache = {}
+        from collections import deque
+        # # TODO: Transformer更新后应该清除缓存
+        self.past_keys_values_cache = deque(maxlen=self.max_cache_size)
+        self.cache_dict = {}
 
     def __repr__(self) -> str:
         return "world_model"
@@ -229,7 +225,8 @@ class WorldModel(nn.Module):
         assert num_observations_tokens == self.num_observations_tokens
         # self.keys_values_wm = self.world_model.transformer.generate_empty_keys_values(n=n, max_tokens=self.world_model.config.max_tokens)
         self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
-        outputs_wm = self.forward(obs_tokens, past_keys_values=self.keys_values_wm, is_root=False)  # Note: is_root=False
+        # outputs_wm = self.forward(obs_tokens, past_keys_values=self.keys_values_wm, is_root=True)  # Note: is_root=True
+        outputs_wm = self.forward(obs_tokens, past_keys_values=self.keys_values_wm, is_root=False)  # Note: is_root=True
 
         # return outputs_wm.output_sequence  # (B, K, E)
         return outputs_wm
@@ -251,47 +248,50 @@ class WorldModel(nn.Module):
         outputs_wm, _, obs_tokens = self.reset_from_initial_observations(obs)
 
         # TODO
-        cache_key = hash([obs_tokens.detach().cpu().numpy()])
-        # self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
-        # self.past_keys_values_cache[cache_key] = self.keys_values_wm
-        # self.past_keys_values_cache.clear()
-
+        cache_key = hash([obs_tokens.cpu().numpy()])
+        # Add the new item to the deque and dictionary
+        self.past_keys_values_cache.append(cache_key)
+        self.cache_dict[cache_key] = self.keys_values_wm # Use clone to avoid unnecessary deep copy
+        # self.cache_dict[cache_key] = copy.deepcopy(self.keys_values_wm)
 
         # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
         return outputs_wm.output_sequence, obs_tokens, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
 
-    # @profile
-    # TODO: only for inference, not for training
-    @torch.no_grad()
+
     def forward_recurrent_inference(self, state_action_history, should_predict_next_obs: bool = True):
+
         # 已知state_action_history[0] 是 (root_latent_state, last_actions) 并且state_action_history[-1]是最后一步的latent state和action
         # 而且中间可能有很多个(root_latent_state, *） 由于transformer在计算时应该都是从(root_latent_state, root_action）开始 unroll的，因此我希望
         # 找到这样的一个(root_latent_state, root_action）的最后一个位置，然后从这个位置找到其在keys_values_cache中的对应的value，然后从这个value开始
         # 进行unroll，这样就可以保证在进行推断时，不会出现重复计算的情况
 
-        # 我们只需要找到最后一个root_latent_state的位置，然后从这个位置开始的action_history就可以了，不需要找到
+        # 你好，你的实现好像有个bug，就是我们只需要找到最后一个root_latent_state的位置，然后从这个位置开始的action_history就可以了，不需要找到
         # 最后一个root_action的位置，因为这个位置可能是不对的，因为在root_state可能有多个不同的action
+
+        # 找到 action_history 中最后一个 root_latent_state, root_action 的位置
+        # root_latent_state, root_action = state_action_history[0]
+        # last_root_position = max(i for i, (latent_state, action) in enumerate(state_action_history) if
+        #                  np.array_equal(latent_state, root_latent_state) and
+        #                  (torch.equal(action, root_action) if isinstance(action, torch.Tensor) else action == root_action))
 
         # 找到 action_history 中最后一个 root_latent_state 的位置
         root_latent_state, _ = state_action_history[0]
         last_root_position = max(
             i for i, (latent_state, _) in enumerate(state_action_history) if np.array_equal(latent_state, root_latent_state))
 
-        # 从位置last_root_position开始的 state_action_history
+        # 从这个位置开始的 action_history
+        # state_action_history_from_last_root = state_action_history[last_root_position:]
         # [(s0,a0)] -> [s0]
         # [(s0,a0),(s1,a1)] -> [(s0,a0),s1]
         state_action_history_from_last_root = state_action_history[last_root_position:-1] + [state_action_history[-1][0]]
-        if last_root_position>0:
-            print('debug')
+
         # cache_key = tuple(state_action_history_from_last_root)
         cache_key = hash(state_action_history_from_last_root)
         
-        if cache_key in self.past_keys_values_cache:
-            # self.keys_values_wm = self.past_keys_values_cache[cache_key]
-            self.keys_values_wm = copy.deepcopy(self.past_keys_values_cache[cache_key])
-
-            # 如果没有找到对应的缓存，那么直接使用当前的self.keys_values_wm
-        # self.past_keys_values_cache.clear()
+        # Before updating self.keys_values_wm, delete the old one to free memory
+        tmp = self.cache_dict.get(cache_key)
+        if tmp is not None:
+            self.keys_values_wm = tmp 
 
         assert self.keys_values_wm is not None and self.num_observations_tokens is not None
 
@@ -313,7 +313,7 @@ class WorldModel(nn.Module):
 
             # obs is in token level
             # num_steps=1, prev_steps=16
-            outputs_wm = self.forward(token, past_keys_values=self.keys_values_wm, is_root=False)
+            outputs_wm = self.forward(token, past_keys_values=self.keys_values_wm, is_root=False)  # TODO: inference=False  
             # if k==0, action_token self.head_observations 1,...,0,1
             output_sequence.append(outputs_wm.output_sequence)
 
@@ -340,24 +340,57 @@ class WorldModel(nn.Module):
 
         # [(s0,a0)] -> [(s0,a0),s1]
         # [(s0,a0),(s1,a1)] -> [(s0,a0),(s1,a1), s2]
-        state_action_history_from_last_root = [state_action_history[last_root_position], self.obs_tokens.detach().cpu().numpy()]
+        state_action_history_from_last_root = [state_action_history[last_root_position], self.obs_tokens.cpu().numpy()]
+        # cache_key = tuple(state_action_history_from_last_root)
         cache_key = hash(state_action_history_from_last_root)
 
-        # TODO: 在计算结束后，更新缓存. 是否需要deepcopy
-        self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
-        # self.past_keys_values_cache.clear()
-        if len(self.past_keys_values_cache) > self.max_cache_size:
-        # if len(self.past_keys_values_cache) > 20:
-            self.past_keys_values_cache.clear()
-            # 删除字典中的一些元素
-            # for key in list(self.past_keys_values_cache.keys()):
-            #     del self.past_keys_values_cache[key]
-
-            # # 告诉 PyTorch 清空 GPU 内存缓存
-            # torch.cuda.empty_cache()
+        # If the cache is full, remove the oldest item from the dictionary
+        if len(self.past_keys_values_cache) > self.max_cache_size or len(self.cache_dict) > self.max_cache_size:
+            oldest_key = self.past_keys_values_cache.popleft()
+            del self.cache_dict[oldest_key]
+        # Add the new item to the deque and dictionary
+        self.past_keys_values_cache.append(cache_key)
+        self.cache_dict[cache_key] = self.keys_values_wm # Use clone to avoid unnecessary deep copy
 
         return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
+        assert self.keys_values_wm is not None and self.num_observations_tokens is not None
 
+        num_passes = 1 + self.num_observations_tokens if should_predict_next_obs else 1
+
+        output_sequence, obs_tokens = [], []
+
+        # if self.keys_values_wm.size + num_passes > self.config.max_tokens:
+        #     _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
+        # TODO: reset
+        _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
+
+        token = action.clone().detach() if isinstance(action, torch.Tensor) else torch.tensor(action, dtype=torch.long)
+        token = token.reshape(-1, 1).to(self.device)  # (B, 1)
+
+        for k in range(num_passes):  # assumption that there is only one action token.
+            # obs is in token level
+            outputs_wm = self.forward(token, past_keys_values=self.keys_values_wm,
+                                      is_root=False)  # TODO: is_root=False
+            output_sequence.append(outputs_wm.output_sequence)
+
+            if k == 0:
+                # reward = Categorical(logits=outputs_wm.logits_rewards).sample().float().cpu().numpy().reshape(-1) - 1   # (B,)
+                done = Categorical(logits=outputs_wm.logits_ends).sample().cpu().numpy().astype(bool).reshape(
+                    -1)  # (B,)
+
+                reward = outputs_wm.logits_rewards  # (B,)
+
+            if k < self.num_observations_tokens:
+                token = Categorical(logits=outputs_wm.logits_observations).sample()
+                obs_tokens.append(token)
+
+        output_sequence = torch.cat(output_sequence, dim=1)  # (B, 1 + K, E)
+        self.obs_tokens = torch.cat(obs_tokens, dim=1)  # (B, K)
+
+        obs = self.decode_obs_tokens() if should_predict_next_obs else None
+        # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
+
+        return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
 
     def compute_loss(self, batch, tokenizer: Tokenizer, **kwargs: Any) -> LossWithIntermediateLosses:
 

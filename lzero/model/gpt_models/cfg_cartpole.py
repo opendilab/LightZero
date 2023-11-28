@@ -17,7 +17,7 @@ cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',
                          'out_ch': 3, 'dropout': 0.0}} # TODO: for cartpole
 
 cfg['world_model'] = {
-                        'tokens_per_block': 17,
+                      'tokens_per_block': 17,
                       'max_blocks': 20,
                         "max_tokens": 17 * 20,  # TODO： horizon
                       'attention': 'causal',
@@ -30,12 +30,12 @@ cfg['world_model'] = {
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
                       "device": 'cuda:0',
-                    #   "device": 'cpu',
-                      'support_size': 601,
-                      # 'support_size': 21,
+                      # "device": 'cpu',
+                      # 'support_size': 601,
+                      'support_size': 21,
                       'action_shape': 2,# TODO: for cartpole
-                      'max_cache_size':5000,
-                      # 'max_cache_size':20,
+                      # 'max_cache_size': 5000,
+                      'max_cache_size':25,
                       }
 
 from easydict import EasyDict

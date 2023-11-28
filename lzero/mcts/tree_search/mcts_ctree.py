@@ -284,6 +284,8 @@ class MuZeroMCTSCtree(object):
             # TODO
             # 你可能需要在每次搜索开始时清除past_keys_values_cache，以防止缓存过大：
             # model.world_model.past_keys_values_cache.clear()  # 清除缓存
+            # if len(model.world_model.past_keys_values_cache) > self._cfg.max_cache_size:
+            #     model.world_model.past_keys_values_cache.clear()  # 清除缓存
             for simulation_index in range(self._cfg.num_simulations):
                 # In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.
 
@@ -315,7 +317,7 @@ class MuZeroMCTSCtree(object):
 
                 # TODO
                 # 在每次模拟后更新 state_action_history
-                state_action_history.append((last_latent_state, last_actions.cpu().numpy()))
+                state_action_history.append((last_latent_state, last_actions.detach().cpu().numpy()))
                 # state_action_history.append(last_latent_state)
                 # state_action_history.append(last_actions)
 

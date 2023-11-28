@@ -255,8 +255,8 @@ class MuZeroGPTPolicy(Policy):
         self._learn_model = self._model
 
         # TODO: only for debug
-        for param in self._learn_model.tokenizer.parameters():
-            param.requires_grad = False
+        # for param in self._learn_model.tokenizer.parameters():
+        #     param.requires_grad = False
 
         if self._cfg.use_augmentation:
             self.image_transforms = ImageTransforms(
