@@ -36,6 +36,11 @@ class AlphaZeroPolicy(Policy):
             # (int) The number of channels of hidden states in AlphaZero model.
             num_channels=32,
         ),
+        # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
+        # this variable is used in ``collector``.
+        sampled_algo=False,
+        # (bool) Whether to enable the gumbel-based algorithm (e.g. Gumbel Muzero)
+        gumbel_algo=False,
         # (bool) Whether to use multi-gpu training.
         multi_gpu=False,
         # (bool) Whether to use cuda for network.
@@ -350,6 +355,15 @@ class AlphaZeroPolicy(Policy):
             else:
                 raise NotImplementedError
             self.simulate_env = GomokuEnv(gomoku_alphazero_config.env)
+        elif self._cfg.simulation_env_name == 'connect4':
+            from zoo.board_games.connect4.envs.connect4_env import Connect4Env
+            if self._cfg.simulation_env_config_type == 'play_with_bot':
+                from zoo.board_games.connect4.config.connect4_alphazero_bot_mode_config import connect4_alphazero_config
+            elif self._cfg.simulation_env_config_type == 'self_play':
+                from zoo.board_games.connect4.config.connect4_alphazero_sp_mode_config import connect4_alphazero_config
+            else:
+                raise NotImplementedError
+            self.simulate_env = Connect4Env(connect4_alphazero_config.env)
         else:
             raise NotImplementedError
 

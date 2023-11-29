@@ -1,5 +1,6 @@
 import copy
 import logging
+import os
 import sys
 from typing import List
 
@@ -713,9 +714,11 @@ class Game2048Env(gym.Env):
     def save_render_output(self, replay_name_suffix: str = '', replay_path=None, format='gif'):
         # At the end of the episode, save the frames to a gif or mp4 file
         if replay_path is None:
-            filename = f'game_2048_{replay_name_suffix}.{format}'
+            filename = f'2048_{replay_name_suffix}.{format}'
         else:
-            filename = f'{replay_path}.{format}'
+            if not os.path.exists(replay_path):
+                os.makedirs(replay_path)
+            filename = replay_path+f'/2048_{replay_name_suffix}.{format}'
 
         if format == 'gif':
             imageio.mimsave(filename, self.frames, 'GIF')

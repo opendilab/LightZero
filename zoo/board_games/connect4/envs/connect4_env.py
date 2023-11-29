@@ -62,6 +62,8 @@ class Connect4Env(BaseEnv):
         # (str) The render mode. Options are 'None', 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.
         # If None, then the game will not be rendered.
         render_mode=None,
+        # (str) The suffix of the replay name.
+        replay_path='./video',
         # (str) The type of the bot of the environment.
         bot_action_type='rule',
         # (bool) Whether to let human to play with the agent when evaluating. If False, then use the bot to evaluate the agent.
@@ -101,7 +103,7 @@ class Connect4Env(BaseEnv):
         # options = {None, 'state_realtime_mode', 'image_realtime_mode', 'image_savefile_mode'}
         self.render_mode = cfg.render_mode
         self.replay_name_suffix = "test"
-        self.replay_path = None
+        self.replay_path = cfg.replay_path
         self.replay_format = 'gif'
         self.screen = None
         self.frames = []
@@ -473,9 +475,11 @@ class Connect4Env(BaseEnv):
         """
         # At the end of the episode, save the frames.
         if replay_path is None:
-            filename = f'game_connect4_{replay_name_suffix}.{format}'
+            filename = f'connect4_{replay_name_suffix}.{format}'
         else:
-            filename = f'{replay_path}.{format}'
+            if not os.path.exists(replay_path):
+                os.makedirs(replay_path)
+            filename = replay_path+f'/connect4_{replay_name_suffix}.{format}'
 
         if format == 'gif':
             # Save frames as a GIF with a duration of 0.1 seconds per frame.
