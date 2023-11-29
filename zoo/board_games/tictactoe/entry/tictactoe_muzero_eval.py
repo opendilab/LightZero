@@ -9,7 +9,9 @@ if __name__ == "__main__":
     In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
     """
 
-    model_path = "./ckpt/ckpt_best.pth.tar"
+    # model_path = "./ckpt/ckpt_best.pth.tar"
+    model_path = None
+
     seeds = [0]
     num_episodes_each_seed = 5
     # If True, you can play with the agent.
