@@ -24,14 +24,19 @@ class LunarLanderEnv(CartPoleEnv):
     """
 
     config = dict(
+        # (str) The gym environment name.
         env_name="LunarLander-v2",
+        # (bool) If True, save the replay as a gif file.
         save_replay_gif=False,
+        # (str or None) The path to save the replay gif. If None, the replay gif will not be saved.
         replay_path_gif=None,
+        # (str or None) The path to save the replay. If None, the replay will not be saved.
         replay_path=None,
+        # (bool) If True, the action will be scaled.
         act_scale=True,
-        delay_reward_step=0,
-        prob_random_agent=0.,
+        # (int) The maximum number of steps for each episode during collection.
         collect_max_episode_steps=int(1.08e5),
+        # (int) The maximum number of steps for each episode during evaluation.
         eval_max_episode_steps=int(1.08e5),
     )
 
@@ -58,9 +63,9 @@ class LunarLanderEnv(CartPoleEnv):
         self._init_flag = False
         # env_name options = {'LunarLander-v2', 'LunarLanderContinuous-v2'}
         self._env_name = cfg.env_name
-        self._replay_path = cfg.get('replay_path', None)
-        self._replay_path_gif = cfg.get('replay_path_gif', None)
-        self._save_replay_gif = cfg.get('save_replay_gif', False)
+        self._replay_path = cfg.replay_path
+        self._replay_path_gif = cfg.replay_path_gif
+        self._save_replay_gif = cfg.save_replay_gif
         self._save_replay_count = 0
         if 'Continuous' in self._env_name:
             self._act_scale = cfg.act_scale  # act_scale only works in continuous env
@@ -140,9 +145,10 @@ class LunarLanderEnv(CartPoleEnv):
             if self._save_replay_gif:
                 if not os.path.exists(self._replay_path_gif):
                     os.makedirs(self._replay_path_gif)
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 path = os.path.join(
                     self._replay_path_gif,
-                    '{}_episode_{}_seed{}.gif'.format(self._env_name, self._save_replay_count, self._seed)
+                    '{}_episode_{}_seed{}_{}.gif'.format(self._env_name, self._save_replay_count, self._seed, timestamp)
                 )
                 self.display_frames_as_gif(self._frames, path)
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
@@ -160,13 +166,6 @@ class LunarLanderEnv(CartPoleEnv):
             - legal_actions (:obj:`np.ndarray`): An array of legal actions.
         """
         return np.arange(self._action_space.n)
-
-    def enable_save_replay(self, replay_path: Optional[str] = None) -> None:
-        if replay_path is None:
-            replay_path = './video'
-        self._replay_path = replay_path
-        self._save_replay_gif = True
-        self._save_replay_count = 0
 
     @staticmethod
     def display_frames_as_gif(frames: list, path: str) -> None:

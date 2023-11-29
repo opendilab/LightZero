@@ -9,11 +9,17 @@ from zoo.box2d.lunarlander.envs import LunarLanderEnv
     'cfg', [
         EasyDict({
             'env_name': 'LunarLander-v2',
-            'act_scale': False
+            'act_scale': False,
+            'replay_path': None,
+            'replay_path_gif': None,
+            'save_replay_gif': False,
         }),
         EasyDict({
             'env_name': 'LunarLanderContinuous-v2',
-            'act_scale': True
+            'act_scale': True,
+            'replay_path': None,
+            'replay_path_gif': None,
+            'save_replay_gif': False,
         })
     ]
 )

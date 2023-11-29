@@ -16,27 +16,41 @@ if __name__ == "__main__":
         - returns_mean_seeds (:obj:`np.array`): Array of mean return values for each seed.
         - returns_seeds (:obj:`np.array`): Array of all return values for each seed.
     """
-    # Take the config of MuZero as an example
+    # Importing the necessary configuration files from the atari muzero configuration in the zoo directory.
     from zoo.atari.config.atari_muzero_config import main_config, create_config
 
-    # model_path = "/path/ckpt/ckpt_best.pth.tar"
+    # model_path is the path to the trained MuZero model checkpoint.
+    # If no path is provided, the script will use the default model.
     model_path = None
 
+    # seeds is a list of seed values for the random number generator, used to initialize the environment.
     seeds = [0]
+    # num_episodes_each_seed is the number of episodes to run for each seed.
     num_episodes_each_seed = 1
+    # total_test_episodes is the total number of test episodes, calculated as the product of the number of seeds and the number of episodes per seed
     total_test_episodes = num_episodes_each_seed * len(seeds)
-    create_config.env_manager.type = 'base'  # Visualization requires the 'type' to be set as base
-    main_config.env.evaluator_env_num = 1  # Visualization requires the 'env_num' to be set as 1
+
+    # Setting the type of the environment manager to 'base' for the visualization purposes.
+    create_config.env_manager.type = 'base'
+    # The number of environments to evaluate concurrently. Set to 1 for visualization purposes.
+    main_config.env.evaluator_env_num = 1
+    # The total number of evaluation episodes that should be run.
     main_config.env.n_evaluator_episode = total_test_episodes
-    main_config.env.render_mode_human = False  # Whether to enable real-time rendering
+    # A boolean flag indicating whether to render the environments in real-time.
+    main_config.env.render_mode_human = False
 
-    main_config.env.save_replay = True  # Whether to save the video
+    # A boolean flag indicating whether to save the video of the environment.
+    main_config.env.save_replay = True
+    # The path where the recorded video will be saved.
     main_config.env.save_path = './video'
-    main_config.env.eval_max_episode_steps = int(20)  # Adjust according to different environments
+    # The maximum number of steps for each episode during evaluation. This may need to be adjusted based on the specific characteristics of the environment.
+    main_config.env.eval_max_episode_steps = int(20)
 
+    # These lists will store the mean and total rewards for each seed.
     returns_mean_seeds = []
     returns_seeds = []
 
+    # The main evaluation loop. For each seed, the MuZero model is evaluated and the mean and total rewards are recorded.
     for seed in seeds:
         returns_mean, returns = eval_muzero(
             [main_config, create_config],
@@ -49,11 +63,13 @@ if __name__ == "__main__":
         returns_mean_seeds.append(returns_mean)
         returns_seeds.append(returns)
 
+    # Convert the list of mean and total rewards into numpy arrays for easier statistical analysis.
     returns_mean_seeds = np.array(returns_mean_seeds)
     returns_seeds = np.array(returns_seeds)
 
+    # Printing the evaluation results. The average reward and the total reward for each seed are displayed, followed by the mean reward across all seeds.
     print("=" * 20)
-    print(f'We eval total {len(seeds)} seeds. In each seed, we eval {num_episodes_each_seed} episodes.')
-    print(f'In seeds {seeds}, returns_mean_seeds is {returns_mean_seeds}, returns is {returns_seeds}')
-    print('In all seeds, reward_mean:', returns_mean_seeds.mean())
+    print(f"We evaluated a total of {len(seeds)} seeds. For each seed, we evaluated {num_episodes_each_seed} episode(s).")
+    print(f"For seeds {seeds}, the mean returns are {returns_mean_seeds}, and the returns are {returns_seeds}.")
+    print("Across all seeds, the mean reward is:", returns_mean_seeds.mean())
     print("=" * 20)

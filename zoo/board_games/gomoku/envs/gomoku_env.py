@@ -54,6 +54,8 @@ class GomokuEnv(BaseEnv):
         # (str) The render mode. Options are 'None', 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.
         # If None, then the game will not be rendered.
         render_mode=None,
+        # (str) The suffix of the replay name.
+        replay_path='./video',
         # (float) The scale of the render screen.
         screen_scaling=9,
         # (bool) Whether to use the 'channel last' format for the observation space. If False, 'channel first' format is used.
@@ -125,7 +127,7 @@ class GomokuEnv(BaseEnv):
         # options = {None, 'state_realtime_mode', 'image_realtime_mode', 'image_savefile_mode'}
         self.render_mode = cfg.render_mode
         self.replay_name_suffix = "test"
-        self.replay_path = None
+        self.replay_path = cfg.replay_path
         self.replay_format = 'gif'  # 'mp4' #
         self.screen = None
         self.frames = []
@@ -259,8 +261,10 @@ class GomokuEnv(BaseEnv):
         elif self.battle_mode == 'eval_mode':
             # player 1 battle with expert player 2
 
+            self._env.render(self.render_mode)
             # player 1's turn
             timestep_player1 = self._player_step(action)
+            self._env.render(self.render_mode)
             if self.agent_vs_human:
                 print('player 1 (agent): ' + self.action_to_string(action))  # Note: visualize
                 self.render(mode="image_realtime_mode")
@@ -278,6 +282,7 @@ class GomokuEnv(BaseEnv):
                 # bot_action = self.random_action()
 
             timestep_player2 = self._player_step(bot_action)
+            self._env.render(self.render_mode)
             if self.agent_vs_human:
                 print('player 2 (human): ' + self.action_to_string(bot_action))  # Note: visualize
                 self.render(mode="image_realtime_mode")
@@ -315,14 +320,14 @@ class GomokuEnv(BaseEnv):
         """
         self.current_player = self.to_play
 
-        # Render the new step.
-        # The following code is used to save the rendered images in both
-        # collect/eval step and the simulated mcts step.
+        # The following code will save the rendered images in both env step in collect/eval phase and the env step in
+        # simulated mcts.
         # if self.render_mode is not None:
         #     self.render(self.render_mode)
 
         if done:
             info['eval_episode_return'] = reward
+            self._env.render(self.render_mode)
             if self.render_mode == 'image_savefile_mode':
                 self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
                                         format=self.replay_format)
@@ -578,6 +583,8 @@ class GomokuEnv(BaseEnv):
             - mode (str): Rendering mode, options are "state_realtime_mode", "image_realtime_mode",
               and "image_savefile_mode".
         """
+        if mode is None:
+            return
         # Print the state of the board directly
         if mode == "state_realtime_mode":
             print(np.array(self.board).reshape(self.board_size, self.board_size))
@@ -607,7 +614,14 @@ class GomokuEnv(BaseEnv):
                 # Save the current frame to the frames list.
                 self.fig.canvas.draw()
                 image = np.frombuffer(self.fig.canvas.tostring_rgb(), dtype='uint8')
-                image = image.reshape(self.fig.canvas.get_width_height()[::-1] + (3,))
+
+                # Get the width and height of the figure
+                width, height = self.fig.get_size_inches() * self.fig.get_dpi()
+                width = int(width)
+                height = int(height)
+                image = image.reshape(height, width, 3)
+
+                # image = image.reshape(self.fig.canvas.get_width_height()[::-1] + (3,))
                 self.frames.append(image)
 
     def close(self):
@@ -703,9 +717,11 @@ class GomokuEnv(BaseEnv):
         """
         # At the end of the episode, save the frames.
         if replay_path is None:
-            filename = f'game_gomoku_{self.board_size}_{replay_name_suffix}.{format}'
+            filename = f'gomoku_{self.board_size}_{replay_name_suffix}.{format}'
         else:
-            filename = f'{replay_path}.{format}'
+            if not os.path.exists(replay_path):
+                os.makedirs(replay_path)
+            filename = replay_path+f'/gomoku_{self.board_size}_{replay_name_suffix}.{format}'
 
         if format == 'gif':
             # Save frames as a GIF with a duration of 0.1 seconds per frame.

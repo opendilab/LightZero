@@ -11,7 +11,7 @@ if __name__ == "__main__":
     """
     model_path = "./ckpt/ckpt_best.pth.tar"
     seeds = [0]
-    num_episodes_each_seed = 5
+    num_episodes_each_seed = 1
     main_config.env.evaluator_env_num = 1
     main_config.env.n_evaluator_episode = 1
     total_test_episodes = num_episodes_each_seed * len(seeds)
@@ -31,8 +31,9 @@ if __name__ == "__main__":
     returns_mean_seeds = np.array(returns_mean_seeds)
     returns_seeds = np.array(returns_seeds)
 
+    # Print evaluation results
     print("=" * 20)
-    print(f'We eval total {len(seeds)} seeds. In each seed, we eval {num_episodes_each_seed} episodes.')
-    print(f'In seeds {seeds}, returns_mean_seeds is {returns_mean_seeds}, returns is {returns_seeds}')
-    print('In all seeds, reward_mean:', returns_mean_seeds.mean())
+    print(f"We evaluated a total of {len(seeds)} seeds. For each seed, we evaluated {num_episodes_each_seed} episode(s).")
+    print(f"For seeds {seeds}, the mean returns are {returns_mean_seeds}, and the returns are {returns_seeds}.")
+    print("Across all seeds, the mean reward is:", returns_mean_seeds.mean())
     print("=" * 20)
