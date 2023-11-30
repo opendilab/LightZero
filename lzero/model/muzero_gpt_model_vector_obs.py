@@ -101,20 +101,20 @@ class MuZeroModelGPT(nn.Module):
         self.state_norm = state_norm
         self.res_connection_in_dynamics = res_connection_in_dynamics
 
-        self.representation_network = RepresentationNetworkMLP(
-            observation_shape=observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
-        )
+        # self.representation_network = RepresentationNetworkMLP(
+        #     observation_shape=observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
+        # )
 
-        self.dynamics_network = DynamicsNetwork(
-            action_encoding_dim=self.action_encoding_dim,
-            num_channels=self.latent_state_dim + self.action_encoding_dim,
-            common_layer_num=2,
-            fc_reward_layers=fc_reward_layers,
-            output_support_size=self.reward_support_size,
-            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            norm_type=norm_type,
-            res_connection_in_dynamics=self.res_connection_in_dynamics,
-        )
+        # self.dynamics_network = DynamicsNetwork(
+        #     action_encoding_dim=self.action_encoding_dim,
+        #     num_channels=self.latent_state_dim + self.action_encoding_dim,
+        #     common_layer_num=2,
+        #     fc_reward_layers=fc_reward_layers,
+        #     output_support_size=self.reward_support_size,
+        #     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+        #     norm_type=norm_type,
+        #     res_connection_in_dynamics=self.res_connection_in_dynamics,
+        # )
 
         from .gpt_models.world_model import WorldModel
         from .gpt_models.tokenizer.tokenizer import Tokenizer
@@ -130,42 +130,42 @@ class MuZeroModelGPT(nn.Module):
         print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
 
         # self.dynamics_network = self.world_model
-        self.dynamics_network = DynamicsNetwork(
-            action_encoding_dim=self.action_encoding_dim,
-            num_channels=self.latent_state_dim + self.action_encoding_dim,
-            common_layer_num=2,
-            fc_reward_layers=fc_reward_layers,
-            output_support_size=self.reward_support_size,
-            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            norm_type=norm_type,
-            res_connection_in_dynamics=self.res_connection_in_dynamics,
-        )
+        # self.dynamics_network = DynamicsNetwork(
+        #     action_encoding_dim=self.action_encoding_dim,
+        #     num_channels=self.latent_state_dim + self.action_encoding_dim,
+        #     common_layer_num=2,
+        #     fc_reward_layers=fc_reward_layers,
+        #     output_support_size=self.reward_support_size,
+        #     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+        #     norm_type=norm_type,
+        #     res_connection_in_dynamics=self.res_connection_in_dynamics,
+        # )
 
-        self.prediction_network = PredictionNetworkMLP(
-            action_space_size=action_space_size,
-            num_channels=latent_state_dim,
-            fc_value_layers=fc_value_layers,
-            fc_policy_layers=fc_policy_layers,
-            output_support_size=self.value_support_size,
-            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            norm_type=norm_type
-        )
+        # self.prediction_network = PredictionNetworkMLP(
+        #     action_space_size=action_space_size,
+        #     num_channels=latent_state_dim,
+        #     fc_value_layers=fc_value_layers,
+        #     fc_policy_layers=fc_policy_layers,
+        #     output_support_size=self.value_support_size,
+        #     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+        #     norm_type=norm_type
+        # )
 
-        if self.self_supervised_learning_loss:
-            # self_supervised_learning_loss related network proposed in EfficientZero
-            self.projection_input_dim = latent_state_dim
+        # if self.self_supervised_learning_loss:
+        #     # self_supervised_learning_loss related network proposed in EfficientZero
+        #     self.projection_input_dim = latent_state_dim
 
-            self.projection = nn.Sequential(
-                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-                nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
-            )
-            self.prediction_head = nn.Sequential(
-                nn.Linear(self.proj_out, self.pred_hid),
-                nn.BatchNorm1d(self.pred_hid),
-                activation,
-                nn.Linear(self.pred_hid, self.pred_out),
-            )
+        #     self.projection = nn.Sequential(
+        #         nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+        #         nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+        #         nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
+        #     )
+        #     self.prediction_head = nn.Sequential(
+        #         nn.Linear(self.proj_out, self.pred_hid),
+        #         nn.BatchNorm1d(self.pred_hid),
+        #         activation,
+        #         nn.Linear(self.pred_hid, self.pred_out),
+        #     )
 
     def initial_inference(self, obs: torch.Tensor) -> MZNetworkOutput:
         """
@@ -230,7 +230,7 @@ class MuZeroModelGPT(nn.Module):
             latent_state,
         )
 
-    def recurrent_inference(self, action: torch.Tensor) -> MZNetworkOutput:
+    def recurrent_inference(self, state_action_history: torch.Tensor) -> MZNetworkOutput:
         """
         Overview:
             Recurrent inference of MuZero model, which is the rollout step of the MuZero model.
@@ -259,7 +259,7 @@ class MuZeroModelGPT(nn.Module):
         # return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
 
         x, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
-            action)
+            state_action_history)
         logits_observations, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
 
         # obs discrete distribution to one_hot latent state?

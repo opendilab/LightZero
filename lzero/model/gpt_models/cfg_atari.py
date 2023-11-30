@@ -42,7 +42,7 @@ cfg['world_model'] = {
                       'support_size': 601,
                       'action_shape': 6,# TODO：for atari
                       # 'max_cache_size':5000,
-                      'max_cache_size':25,
+                      'max_cache_size':50,
 
                       }
 

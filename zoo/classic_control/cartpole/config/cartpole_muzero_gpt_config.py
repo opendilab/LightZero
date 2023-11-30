@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-# torch.cuda.set_device(1)
+torch.cuda.set_device(0)
 # torch.cuda.empty_cache()
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -19,37 +19,55 @@ import torch
 # num_unroll_steps = 20
 
 
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 25
-# num_simulations = 5  # debug
-update_per_collect = 20
-model_update_ratio = 1
-batch_size = 32
-max_env_step = int(1e5)
-reanalyze_ratio = 0
-num_unroll_steps = 20
-# num_unroll_steps = 5 # debug
-
-# debug
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
-# num_simulations = 25 
-# update_per_collect = 2
+# num_simulations = 25
+# # num_simulations = 5  # debug
+# update_per_collect = 20
 # model_update_ratio = 1
-# batch_size = 2
+# batch_size = 32
 # max_env_step = int(1e5)
 # reanalyze_ratio = 0
+# num_unroll_steps = 20
+# # num_unroll_steps = 5 # debug
+
+
+
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 25
+# update_per_collect = 20
+# model_update_ratio = 1
+# batch_size = 32
+# max_env_step = int(1e5)
+# reanalyze_ratio = 0
+# # num_unroll_steps = 20
 # num_unroll_steps = 5
+
+
+
+# debug
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 5 
+update_per_collect = 2
+model_update_ratio = 1
+batch_size = 2
+max_env_step = int(1e5)
+reanalyze_ratio = 0
+num_unroll_steps = 5
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 cartpole_muzero_gpt_config = dict(
-    exp_name=f'data_mz_gpt_ctree_1128/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_mcs25_fixedtokenizer_fixinitlatent_fixloss_seed0',
+    exp_name=f'data_mz_gpt_ctree_1128_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_mcs25_fixedtokenizer_fixloss_fixlatent_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1128/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_mcs500_fixedtokenizer_fixloss_fixlatent_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1128/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_clear-25_fixedtokenizer_fixloss_fixlatent_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -91,7 +109,7 @@ cartpole_muzero_gpt_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(1e3),
+        eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

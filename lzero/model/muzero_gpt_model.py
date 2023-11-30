@@ -132,28 +132,28 @@ class MuZeroModelGPT(nn.Module):
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
 
-        self.representation_network = RepresentationNetwork(
-            observation_shape,
-            num_res_blocks,
-            num_channels,
-            downsample,
-            activation=activation,
-            norm_type=norm_type
-        )
-        self.dynamics_network = DynamicsNetwork(
-            observation_shape,
-            self.action_encoding_dim,
-            num_res_blocks,
-            num_channels + self.action_encoding_dim,
-            reward_head_channels,
-            fc_reward_layers,
-            self.reward_support_size,
-            flatten_output_size_for_reward_head,
-            downsample,
-            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            activation=activation,
-            norm_type=norm_type
-        )
+        # self.representation_network = RepresentationNetwork(
+        #     observation_shape,
+        #     num_res_blocks,
+        #     num_channels,
+        #     downsample,
+        #     activation=activation,
+        #     norm_type=norm_type
+        # )
+        # self.dynamics_network = DynamicsNetwork(
+        #     observation_shape,
+        #     self.action_encoding_dim,
+        #     num_res_blocks,
+        #     num_channels + self.action_encoding_dim,
+        #     reward_head_channels,
+        #     fc_reward_layers,
+        #     self.reward_support_size,
+        #     flatten_output_size_for_reward_head,
+        #     downsample,
+        #     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+        #     activation=activation,
+        #     norm_type=norm_type
+        # )
 
         from .gpt_models.world_model import WorldModel
         from .gpt_models.tokenizer.tokenizer import Tokenizer
@@ -169,47 +169,47 @@ class MuZeroModelGPT(nn.Module):
         print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
 
 
-        self.prediction_network = PredictionNetwork(
-            observation_shape,
-            action_space_size,
-            num_res_blocks,
-            num_channels,
-            value_head_channels,
-            policy_head_channels,
-            fc_value_layers,
-            fc_policy_layers,
-            self.value_support_size,
-            flatten_output_size_for_value_head,
-            flatten_output_size_for_policy_head,
-            downsample,
-            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            activation=activation,
-            norm_type=norm_type
-        )
+        # self.prediction_network = PredictionNetwork(
+        #     observation_shape,
+        #     action_space_size,
+        #     num_res_blocks,
+        #     num_channels,
+        #     value_head_channels,
+        #     policy_head_channels,
+        #     fc_value_layers,
+        #     fc_policy_layers,
+        #     self.value_support_size,
+        #     flatten_output_size_for_value_head,
+        #     flatten_output_size_for_policy_head,
+        #     downsample,
+        #     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+        #     activation=activation,
+        #     norm_type=norm_type
+        # )
 
-        if self.self_supervised_learning_loss:
-            # projection used in EfficientZero
-            if self.downsample:
-                # In Atari, if the observation_shape is set to (12, 96, 96), which indicates the original shape of
-                # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
-                # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
-                # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
-                ceil_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
-                self.projection_input_dim = num_channels * ceil_size
-            else:
-                self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
+        # if self.self_supervised_learning_loss:
+        #     # projection used in EfficientZero
+        #     if self.downsample:
+        #         # In Atari, if the observation_shape is set to (12, 96, 96), which indicates the original shape of
+        #         # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
+        #         # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
+        #         # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
+        #         ceil_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
+        #         self.projection_input_dim = num_channels * ceil_size
+        #     else:
+        #         self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
-            self.projection = nn.Sequential(
-                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-                nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
-            )
-            self.prediction_head = nn.Sequential(
-                nn.Linear(self.proj_out, self.pred_hid),
-                nn.BatchNorm1d(self.pred_hid),
-                activation,
-                nn.Linear(self.pred_hid, self.pred_out),
-            )
+        #     self.projection = nn.Sequential(
+        #         nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+        #         nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+        #         nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
+        #     )
+        #     self.prediction_head = nn.Sequential(
+        #         nn.Linear(self.proj_out, self.pred_hid),
+        #         nn.BatchNorm1d(self.pred_hid),
+        #         activation,
+        #         nn.Linear(self.pred_hid, self.pred_out),
+        #     )
 
     def initial_inference(self, obs: torch.Tensor) -> MZNetworkOutput:
         """
@@ -265,7 +265,7 @@ class MuZeroModelGPT(nn.Module):
         )
 
     # def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
-    def recurrent_inference(self, action: torch.Tensor) -> MZNetworkOutput:
+    def recurrent_inference(self, state_action_history: torch.Tensor) -> MZNetworkOutput:
         """
         Overview:
             Recurrent inference of MuZero model, which is the rollout step of the MuZero model.
@@ -299,7 +299,7 @@ class MuZeroModelGPT(nn.Module):
         # return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
 
         x, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
-            action)
+            state_action_history)
         logits_observations, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
 
         # obs discrete distribution to one_hot latent state?

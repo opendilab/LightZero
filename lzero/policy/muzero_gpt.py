@@ -246,6 +246,7 @@ class MuZeroGPTPolicy(Policy):
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
+
         self._target_model = model_wrap(
             self._target_model,
             wrapper_name='target',
@@ -255,8 +256,8 @@ class MuZeroGPTPolicy(Policy):
         self._learn_model = self._model
 
         # TODO: only for debug
-        for param in self._learn_model.tokenizer.parameters():
-            param.requires_grad = False
+        # for param in self._learn_model.tokenizer.parameters():
+        #     param.requires_grad = False
 
         if self._cfg.use_augmentation:
             self.image_transforms = ImageTransforms(

@@ -22,6 +22,52 @@ from .slicer import Embedder, Head
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
+import collections
+
+from annoy import AnnoyIndex
+
+class NNKeyValue:
+    def __init__(self, max_cache_size, dim=128):
+        self.max_cache_size = max_cache_size
+        self.dim = dim  # dimensionality of the vectors
+        self.past_keys_values_cache = collections.OrderedDict()
+        self.annoy_index = AnnoyIndex(self.dim, 'euclidean')  # use Euclidean distance
+        self.counter = 0  # to keep track of the number of items in the index
+
+    def add_to_cache(self, key, value):
+        self.past_keys_values_cache[key] = value
+        self.annoy_index.add_item(self.counter, key)
+        self.counter += 1
+
+        if len(self.past_keys_values_cache) > self.max_cache_size:
+            self.past_keys_values_cache.popitem(last=False)  # removes the earliest inserted item
+            self.annoy_index.unbuild()  # need to unbuild before adding new items
+            # rebuild the index with only the latest max_cache_size items
+            self.counter = 0
+            for key in self.past_keys_values_cache.keys():
+                self.annoy_index.add_item(self.counter, key)
+                self.counter += 1
+
+        self.annoy_index.build(10)  # 10 trees, increase if accuracy is not sufficient
+
+    def find_closest(self, query, threshold):
+        index = self.annoy_index.get_nns_by_vector(query, 1, include_distances=True)
+        if index[1][0] <= threshold:
+            return list(self.past_keys_values_cache.keys())[index[0][0]]
+        else:
+            return None
+
+    def get_annoy_index_copy(self):
+        new_annoy_index = AnnoyIndex(self.dim, 'euclidean')
+        for i in range(self.counter):
+            new_annoy_index.add_item(i, self.annoy_index.get_item_vector(i))
+        new_annoy_index.build(10)
+        return new_annoy_index
+
+# new_instance = NNKeyValue(self.max_cache_size, self.dim)
+# new_instance.past_keys_values_cache = copy.deepcopy(self.past_keys_values_cache)
+# new_instance.annoy_index = self.get_annoy_index_copy()
+# new_instance.counter = self.counter
 
 # from memory_profiler import profile
 
@@ -146,7 +192,6 @@ class WorldModel(nn.Module):
                     nn.init.zeros_(layer.bias)
                     break
 
-        import collections
         self.past_keys_values_cache = collections.OrderedDict()
         # self.past_keys_values_cache = {}
         # from collections import deque
@@ -155,6 +200,7 @@ class WorldModel(nn.Module):
         # TODO: Transformer更新后应该清除缓存
 
 
+        self.nn_key_value = NNKeyValue(max_cache_size=self.max_cache_size, dim=128)
 
     def __repr__(self) -> str:
         return "world_model"
@@ -263,7 +309,9 @@ class WorldModel(nn.Module):
         else:
             # collect eval only for env_num=1
             cache_key = tuple(obs_tokens.squeeze(0).detach().cpu().numpy())
-            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+            # self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+
+            self.nn_key_value.add_to_cache(cache_key, copy.deepcopy(self.keys_values_wm))
 
         # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
         return outputs_wm.output_sequence, obs_tokens, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
@@ -279,19 +327,26 @@ class WorldModel(nn.Module):
 
         latest_state = state_action_history[-1][0]
 
-        matched_key = None
-        for key in self.past_keys_values_cache.keys():
-            # TODO：从后往前寻找，因为后面的是最新的
-            # 将 key 转换为 numpy 数组并与 latest_state 进行比较
-            if np.allclose(np.array(key), latest_state, atol=1e-5):  # atol 是差值的阈值
-                matched_key = key
-                break  # 如果找到匹配的 key，就退出循环
+        # matched_key = None
+        # for key in self.past_keys_values_cache.keys():
+        #     # TODO：从后往前寻找，因为后面的是最新的
+        #     # 将 key 转换为 numpy 数组并与 latest_state 进行比较
+        #     if np.allclose(np.array(key), latest_state, atol=1e-5):  # atol 是差值的阈值
+        #         matched_key = key
+        #         break  # 如果找到匹配的 key，就退出循环
+        # if matched_key is not None:
+        #     self.keys_values_wm = copy.deepcopy(self.past_keys_values_cache[matched_key])
+        # else:
+        #     # NOTE: very important
+        #     _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.long).to(self.device))
 
-        if matched_key is not None:
-            self.keys_values_wm = copy.deepcopy(self.past_keys_values_cache[matched_key])
+        find = self.nn_key_value.find_closest(query=latest_state, threshold=1e-5)
+        if find is not None:
+            self.keys_values_wm = find
         else:
             # NOTE: very important
             _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.long).to(self.device))
+
 
         assert self.keys_values_wm is not None and self.num_observations_tokens is not None
 
@@ -341,10 +396,14 @@ class WorldModel(nn.Module):
         cache_key = tuple(self.obs_tokens.squeeze(0).detach().cpu().numpy())
 
         # TODO: 在计算结束后，更新缓存. 是否需要deepcopy
-        self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
-        if len(self.past_keys_values_cache) > self.max_cache_size:
-            # TODO: lru_cache
-            self.past_keys_values_cache.popitem(last=False)  # Removes the earliest inserted item
+        # self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+        # if len(self.past_keys_values_cache) > self.max_cache_size:
+        #     # TODO: lru_cache
+        #     self.past_keys_values_cache.popitem(last=False)  # Removes the earliest inserted item
+        
+        self.nn_key_value.add_to_cache(cache_key, copy.deepcopy(self.keys_values_wm))
+
+
 
         return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
 
