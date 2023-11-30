@@ -13,6 +13,7 @@ class Slicer(nn.Module):
         self.num_kept_tokens = block_mask.sum().long().item()
         kept_indices = torch.where(block_mask)[0].repeat(max_blocks)
         offsets = torch.arange(max_blocks).repeat_interleave(self.num_kept_tokens)
+        # 17*20 的所有token中 保留的token的索引
         self.register_buffer('indices', kept_indices + block_mask.size(0) * offsets)
         self.cache = defaultdict(torch.Tensor)
 
@@ -25,6 +26,11 @@ class Slicer(nn.Module):
             result = indices[torch.logical_and(prev_steps <= indices, indices < total_steps)] - prev_steps
             self.cache[cache_key] = result
         return self.cache[cache_key]
+        # total_steps = num_steps + prev_steps
+        # num_blocks = math.ceil(total_steps / self.block_size)
+        # indices = self.indices[:num_blocks * self.num_kept_tokens]
+        # result = indices[torch.logical_and(prev_steps <= indices, indices < total_steps)] - prev_steps
+        # return result
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError
