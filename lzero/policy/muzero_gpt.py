@@ -353,16 +353,20 @@ class MuZeroGPTPolicy(Policy):
 
         batch_for_gpt['actions'] = action_batch.squeeze(-1)  # (B, T-1, A) -> (B, T-1)
 
-        batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]  # (B, T, R)
+        batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]  # (B, T, R) -> (B, T-1, R)
 
-        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # (B, T) TODO: 0 means invalid padding data
+        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # (B, T) NOTE: 0 means invalid padding data
+        batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]  # (B, T-1) TODO
+
 
         batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]  # (B, T-1, O) or (B, T-1, C, H, W)
-        batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]  # (B, T-1) TODO
-        batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long, device=self._cfg.device)
+        batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long, device=self._cfg.device) # (B, T-1)
 
         batch_for_gpt['target_value'] = target_value_categorical[:, :-1]  # (B, T-1, V)
         batch_for_gpt['target_policy'] = target_policy[:, :-1]  # (B, T-1, A)
+        # NOTE: TODO: next latent state's policy value
+        # batch_for_gpt['target_value'] = target_value_categorical[:, 1:]  # (B, T-1, V)
+        # batch_for_gpt['target_policy'] = target_policy[:, 1:]  # (B, T-1, A)
 
         # self._learn_model.world_model.train()
 

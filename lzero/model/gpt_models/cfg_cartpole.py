@@ -31,8 +31,8 @@ cfg['world_model'] = {
                       'attn_pdrop': 0.1,
                       "device": 'cuda:0',
                       # "device": 'cpu',
-                      # 'support_size': 601,
-                      'support_size': 21,
+                      'support_size': 601,
+                      # 'support_size': 21,
                       'action_shape': 2,# TODO: for cartpole
                       # 'max_cache_size': 5000,
                       'max_cache_size':25,

@@ -57,8 +57,13 @@ class WorldModel(nn.Module):
         act_tokens_pattern[-1] = 1   # 0,...,0,1
         obs_tokens_pattern = 1 - act_tokens_pattern  # 1,...,1,0
 
+        # current latent state's policy value
         value_policy_tokens_pattern = torch.zeros(config.tokens_per_block)
-        value_policy_tokens_pattern[-2] = 1  # 0,...,1,0
+        value_policy_tokens_pattern[-2] = 1  # [0,...,1,0]
+
+        # next latent state's policy value
+        # value_policy_tokens_pattern = torch.zeros(config.tokens_per_block)
+        # value_policy_tokens_pattern[-1] = 1  # [0,...,0,1]
 
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim)
 
@@ -108,7 +113,7 @@ class WorldModel(nn.Module):
         )
         self.head_policy = Head(
             max_blocks=config.max_blocks,
-            block_mask=value_policy_tokens_pattern,  # TODO: value_policy_tokens_pattern
+            block_mask=value_policy_tokens_pattern,  # TODO: value_policy_tokens_pattern # [0,...,1,0]
             head_module=nn.Sequential(
                 nn.Linear(config.embed_dim, config.embed_dim),
                 nn.ReLU(),
@@ -352,12 +357,6 @@ class WorldModel(nn.Module):
         if len(self.past_keys_values_cache) > self.max_cache_size:
         # if len(self.past_keys_values_cache) > 20:
             self.past_keys_values_cache.clear()
-            # 删除字典中的一些元素
-            # for key in list(self.past_keys_values_cache.keys()):
-            #     del self.past_keys_values_cache[key]
-
-            # # 告诉 PyTorch 清空 GPU 内存缓存
-            # torch.cuda.empty_cache()
 
         return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
 
@@ -383,7 +382,6 @@ class WorldModel(nn.Module):
         act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
         tokens = rearrange(torch.cat((obs_tokens, act_tokens), dim=2), 'b l k1 -> b (l k1)')  # (B, L(K+1))
 
-        # outputs = self(tokens)
         outputs = self.forward(tokens, is_root=False)
 
         labels_observations, labels_rewards, labels_ends = self.compute_labels_world_model(obs_tokens, batch['rewards'],
@@ -399,27 +397,21 @@ class WorldModel(nn.Module):
         """
         logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o')
         loss_obs = F.cross_entropy(logits_observations, labels_observations)
-        # loss_rewards = F.cross_entropy(rearrange(outputs.logits_rewards, 'b t e -> (b t) e'), labels_rewards)
         loss_ends = F.cross_entropy(rearrange(outputs.logits_ends, 'b t e -> (b t) e'), labels_ends)
 
-        # return LossWithIntermediateLosses(loss_obs=loss_obs, loss_rewards=loss_rewards, loss_ends=loss_ends)
 
         labels_policy, labels_value = self.compute_labels_world_model_value_policy(batch['target_value'],
                                                                                    batch['target_policy'],
                                                                                    batch['mask_padding'])
 
-        # loss_policy = F.cross_entropy(rearrange(outputs.logits_policy, 'b t e -> (b t) e'), labels_policy)
-        # loss_value = F.cross_entropy(rearrange(outputs.logits_value, 'b t e -> (b t) e'), labels_value)
+        loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
+        loss_policy = self.compute_cross_entropy_loss(outputs, labels_policy, batch, element='policy')
+        loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
 
-        loss_rewards = self.compute_kl_loss(outputs, labels_rewards, batch, element='rewards')
-        loss_policy = self.compute_kl_loss(outputs, labels_policy, batch, element='policy')
-        loss_value = self.compute_kl_loss(outputs, labels_value, batch, element='value')
-
-        # return LossWithIntermediateLosses(loss_obs=loss_obs, loss_rewards=loss_rewards, loss_ends=loss_ends, loss_value=loss_value, loss_policy=loss_policy)
         return LossWithIntermediateLosses(loss_obs=loss_obs, loss_rewards=loss_rewards, loss_value=loss_value,
                                           loss_policy=loss_policy)
 
-    def compute_kl_loss(self, outputs, labels, batch, element='rewards'):
+    def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
         # Assume outputs.logits_rewards and labels are your predictions and targets
         # And mask_padding is a boolean tensor with True at positions to keep and False at positions to ignore
 
@@ -434,20 +426,18 @@ class WorldModel(nn.Module):
         logits_rewards = rearrange(logits, 'b t e -> (b t) e')
         labels = labels.reshape(-1, labels.shape[-1])  # Assuming labels originally has shape [b, t, reward_dim]
 
-        # Reshape your mask
+        # Reshape your mask. True means valid data.
         mask_padding = rearrange(batch['mask_padding'], 'b t -> (b t)').unsqueeze(-1)
 
-        # Compute the loss
-        loss_rewards = F.kl_div(torch.softmax(logits_rewards, dim=-1).log(), labels, reduction='none')
+        loss_rewards = -(torch.log_softmax(logits_rewards, dim=1) * labels).sum(1)
+        loss_rewards = (loss_rewards * mask_padding.squeeze(-1)).mean()
 
-        # Apply the mask
-        loss_rewards = loss_rewards.masked_select(mask_padding).mean()
         return loss_rewards
 
     def compute_labels_world_model(self, obs_tokens: torch.Tensor, rewards: torch.Tensor, ends: torch.Tensor,
                                    mask_padding: torch.BoolTensor) -> Tuple[
         torch.Tensor, torch.Tensor, torch.Tensor]:
-        assert torch.all(ends.sum(dim=1) <= 1)  # at most 1 done
+        assert torch.all(ends.sum(dim=1) <= 1)  # each sequence sample has at most 1 done
         mask_fill = torch.logical_not(mask_padding)
         labels_observations = rearrange(obs_tokens.masked_fill(mask_fill.unsqueeze(-1).expand_as(obs_tokens), -100),
                                         'b t k -> b (t k)')[:, 1:]
@@ -458,7 +448,6 @@ class WorldModel(nn.Module):
         labels_rewards = rewards.masked_fill(mask_fill_rewards, -100)
 
         labels_ends = ends.masked_fill(mask_fill, -100)
-        # return labels_observations.reshape(-1), labels_rewards.reshape(-1), labels_ends.reshape(-1)
         return labels_observations.reshape(-1), labels_rewards.reshape(-1, self.support_size), labels_ends.reshape(-1)
 
     def compute_labels_world_model_value_policy(self, target_value: torch.Tensor, target_policy: torch.Tensor,
@@ -472,4 +461,3 @@ class WorldModel(nn.Module):
         mask_fill_value = mask_fill.unsqueeze(-1).expand_as(target_value)
         labels_value = target_value.masked_fill(mask_fill_value, -100)
         return labels_policy.reshape(-1, self.action_shape), labels_value.reshape(-1, self.support_size)  # TODO(pu)
-        # return labels_policy.reshape(-1, ), labels_value.reshape(-1)
