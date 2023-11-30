@@ -33,9 +33,9 @@ num_unroll_steps = 20
 # num_unroll_steps = 5 # debug
 
 # debug
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
 # num_simulations = 25 
 # update_per_collect = 2
 # model_update_ratio = 1
@@ -91,8 +91,7 @@ cartpole_muzero_gpt_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(2e2),
-        # eval_freq=int(2),
+        eval_freq=int(1e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

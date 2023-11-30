@@ -286,10 +286,10 @@ class WorldModel(nn.Module):
         # [(s0,a0)] -> [s0]
         # [(s0,a0),(s1,a1)] -> [(s0,a0),s1]
         state_action_history_from_last_root = state_action_history[last_root_position:-1] + [state_action_history[-1][0]]
-        if last_root_position>0:
-            print('='*20)
-            print('last_root_position>0')
-            print('='*20)
+        # if last_root_position>0:
+        #     print('='*20)
+        #     print('last_root_position>0')
+        #     print('='*20)
 
         # cache_key = tuple(state_action_history_from_last_root)
         cache_key = hash(state_action_history_from_last_root)

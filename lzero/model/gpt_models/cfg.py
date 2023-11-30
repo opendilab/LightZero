@@ -34,8 +34,8 @@ cfg['world_model'] = {
                       'support_size': 601,
                       # 'support_size': 21,
                       'action_shape': 2,# TODO: for cartpole
-                      # 'max_cache_size': 5000,
-                      'max_cache_size':25,
+                      'max_cache_size': 500,
+                      # 'max_cache_size':25,
                       }
 
 from easydict import EasyDict

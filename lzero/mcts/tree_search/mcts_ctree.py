@@ -317,7 +317,9 @@ class MuZeroMCTSCtree(object):
 
                 # TODO
                 # 在每次模拟后更新 state_action_history
-                state_action_history.append((last_latent_state, last_actions.detach().cpu().numpy()))
+                # state_action_history.append((last_latent_state, last_actions.detach().cpu().numpy()))
+                state_action_history.append((latent_states.detach().cpu().numpy(), last_actions.detach().cpu().numpy()))
+
                 # state_action_history.append(last_latent_state)
                 # state_action_history.append(last_actions)
 
