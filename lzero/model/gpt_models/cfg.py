@@ -41,7 +41,7 @@ cfg['world_model'] = {
                     #   "device": 'cpu',
                       'support_size': 601,
                       'action_shape': 6,# TODO：for atari
-                      # 'max_cache_size':200,
+                      # 'max_cache_size':5000,
                       'max_cache_size':25,
 
                       }

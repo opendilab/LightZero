@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(2)
+torch.cuda.set_device(1)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -19,28 +19,29 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 1
+# num_simulations = 25
+# update_per_collect = None
+# model_update_ratio = 1
+# batch_size = 64
+# max_env_step = int(1e6)
+# reanalyze_ratio = 0.
+# eps_greedy_exploration_in_collect = False
+# num_unroll_steps = 20
+
+collector_env_num = 1
+n_episode = 1
 evaluator_env_num = 1
-num_simulations = 25
-update_per_collect = None
+num_simulations = 50
+update_per_collect = 200
 model_update_ratio = 1
 batch_size = 64
 max_env_step = int(1e6)
-reanalyze_ratio = 0.
-eps_greedy_exploration_in_collect = False
+reanalyze_ratio = 0
 num_unroll_steps = 20
-
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# num_simulations = 25
-# update_per_collect = 20
-# model_update_ratio = 1
-# batch_size = 32
-# max_env_step = int(1e5)
-# reanalyze_ratio = 0
-# num_unroll_steps = 20
+eps_greedy_exploration_in_collect = False
 
 
 # ==============================================================
@@ -48,7 +49,7 @@ num_unroll_steps = 20
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_mz_gpt_ctree_1128/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_mcs25_nofixedtokenizer_fixinitlatent_cprofile2k_seed0',
+    exp_name=f'data_mz_gpt_ctree_1128/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_mcs25_nofixedtokenizer_fixinitlatent_seed0',
     # exp_name=f'data_mz_gpt_ctree_1128/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_mcs200_nofixedtokenizer_fixinitlatent_seed0',
     
     env=dict(
@@ -143,12 +144,12 @@ atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    # from lzero.entry import train_muzero_gpt
-    # train_muzero_gpt([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import train_muzero_gpt
+    train_muzero_gpt([main_config, create_config], seed=0, max_env_step=max_env_step)
 
     # 下面为cprofile的代码
-    from lzero.entry import train_muzero_gpt
-    def run(max_env_step: int):
-        train_muzero_gpt([main_config, create_config], seed=0, max_env_step=max_env_step)
-    import cProfile
-    cProfile.run(f"run({2000})", filename="pong_muzero_gpt_ctree_cprofile_2k_envstep", sort="cumulative")
+    # from lzero.entry import train_muzero_gpt
+    # def run(max_env_step: int):
+    #     train_muzero_gpt([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # import cProfile
+    # cProfile.run(f"run({2000})", filename="pong_muzero_gpt_ctree_cprofile_2k_envstep", sort="cumulative")

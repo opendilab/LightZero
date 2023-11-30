@@ -19,30 +19,30 @@ import torch
 # num_unroll_steps = 20
 
 
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 25
-# num_simulations = 5  # debug
-update_per_collect = 20
-model_update_ratio = 1
-batch_size = 32
-max_env_step = int(1e5)
-reanalyze_ratio = 0
-num_unroll_steps = 20
-# num_unroll_steps = 5 # debug
-
-# debug
 # collector_env_num = 1
 # n_episode = 1
 # evaluator_env_num = 1
-# num_simulations = 5  
-# update_per_collect = 2
+# num_simulations = 25
+# # num_simulations = 5  # debug
+# update_per_collect = 20
 # model_update_ratio = 1
-# batch_size = 2
+# batch_size = 32
 # max_env_step = int(1e5)
 # reanalyze_ratio = 0
-# num_unroll_steps = 5
+# num_unroll_steps = 20
+# # num_unroll_steps = 5 # debug
+
+# debug
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+num_simulations = 25 
+update_per_collect = 2
+model_update_ratio = 1
+batch_size = 2
+max_env_step = int(1e5)
+reanalyze_ratio = 0
+num_unroll_steps = 5
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
