@@ -391,6 +391,7 @@ class WorldModel(nn.Module):
         >>> loss.backward()
         """
         logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o')
+        # TODO: 无效样本padding -100，为什么可以在这个loss中使得对应的loss被忽略掉
         loss_obs = F.cross_entropy(logits_observations, labels_observations)
         loss_ends = F.cross_entropy(rearrange(outputs.logits_ends, 'b t e -> (b t) e'), labels_ends)
 

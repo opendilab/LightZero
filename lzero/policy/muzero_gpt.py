@@ -371,6 +371,14 @@ class MuZeroGPTPolicy(Policy):
 
         # self._learn_model.world_model.train()
 
+        # get valid target_policy data
+        valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
+        # compute entropy of each policy
+        target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
+        # compute average entropy
+        average_target_policy_entropy = target_policy_entropy.mean().item()
+        # print(f'Average entropy: {average_entropy}')
+
         intermediate_losses = defaultdict(float)
         losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._learn_model.tokenizer)
         
@@ -378,13 +386,13 @@ class MuZeroGPTPolicy(Policy):
         weighted_total_loss = losses.loss_total
 
         for loss_name, loss_value in losses.intermediate_losses.items():
-            intermediate_losses[f"{loss_name}"] += loss_value
+            intermediate_losses[f"{loss_name}"] = loss_value
+
         # print(intermediate_losses)
         obs_loss = intermediate_losses['loss_obs']
         reward_loss = intermediate_losses['loss_rewards']
         policy_loss = intermediate_losses['loss_policy']
         value_loss = intermediate_losses['loss_value']
-
 
         # ==============================================================
         # the core learn model update step.
@@ -395,6 +403,7 @@ class MuZeroGPTPolicy(Policy):
         """
         gradient_scale = 1 / self._cfg.num_unroll_steps
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
+
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
         if self._cfg.multi_gpu:
@@ -421,6 +430,7 @@ class MuZeroGPTPolicy(Policy):
             'weighted_total_loss': weighted_total_loss.item(),
             'obs_loss': obs_loss,
             'policy_loss': policy_loss,
+            'target_policy_entropy': average_target_policy_entropy,
             # 'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),
             'reward_loss': reward_loss,
             'value_loss': value_loss,
@@ -683,7 +693,8 @@ class MuZeroGPTPolicy(Policy):
             # 'total_loss',
             'obs_loss',
             'policy_loss',
-            'policy_entropy',
+            # 'policy_entropy',
+            'target_policy_entropy',
             'reward_loss',
             'value_loss',
             'consistency_loss',

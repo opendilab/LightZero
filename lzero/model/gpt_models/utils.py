@@ -108,7 +108,9 @@ class LossWithIntermediateLosses:
         self.reward_loss_weight = 1.
         self.value_loss_weight = 0.25
         self.policy_loss_weight = 1.
-        self.ends_loss_weight = 1.
+        # self.ends_loss_weight = 1.
+        self.ends_loss_weight = 0.
+
 
         # Initialize the total loss tensor on the correct device
         self.loss_total = torch.tensor(0., device=device)
