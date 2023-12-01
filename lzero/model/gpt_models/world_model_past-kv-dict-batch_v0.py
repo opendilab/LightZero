@@ -22,52 +22,6 @@ from .slicer import Embedder, Head
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
-import collections
-
-from annoy import AnnoyIndex
-
-class NNKeyValue:
-    def __init__(self, max_cache_size, dim=128):
-        self.max_cache_size = max_cache_size
-        self.dim = dim  # dimensionality of the vectors
-        self.past_keys_values_cache = collections.OrderedDict()
-        self.annoy_index = AnnoyIndex(self.dim, 'euclidean')  # use Euclidean distance
-        self.counter = 0  # to keep track of the number of items in the index
-
-    def add_to_cache(self, key, value):
-        self.past_keys_values_cache[key] = value
-        self.annoy_index.add_item(self.counter, key)
-        self.counter += 1
-
-        if len(self.past_keys_values_cache) > self.max_cache_size:
-            self.past_keys_values_cache.popitem(last=False)  # removes the earliest inserted item
-            self.annoy_index.unbuild()  # need to unbuild before adding new items
-            # rebuild the index with only the latest max_cache_size items
-            self.counter = 0
-            for key in self.past_keys_values_cache.keys():
-                self.annoy_index.add_item(self.counter, key)
-                self.counter += 1
-
-        self.annoy_index.build(10)  # 10 trees, increase if accuracy is not sufficient
-
-    def find_closest(self, query, threshold):
-        index = self.annoy_index.get_nns_by_vector(query, 1, include_distances=True)
-        if index[1][0] <= threshold:
-            return list(self.past_keys_values_cache.keys())[index[0][0]]
-        else:
-            return None
-
-    def get_annoy_index_copy(self):
-        new_annoy_index = AnnoyIndex(self.dim, 'euclidean')
-        for i in range(self.counter):
-            new_annoy_index.add_item(i, self.annoy_index.get_item_vector(i))
-        new_annoy_index.build(10)
-        return new_annoy_index
-
-# new_instance = NNKeyValue(self.max_cache_size, self.dim)
-# new_instance.past_keys_values_cache = copy.deepcopy(self.past_keys_values_cache)
-# new_instance.annoy_index = self.get_annoy_index_copy()
-# new_instance.counter = self.counter
 
 # from memory_profiler import profile
 
@@ -95,6 +49,8 @@ class WorldModel(nn.Module):
         self.support_size = config.support_size
         self.action_shape = config.action_shape
         self.max_cache_size = config.max_cache_size
+        self.env_num = config.env_num
+
 
         all_but_last_obs_tokens_pattern = torch.ones(config.tokens_per_block)
         all_but_last_obs_tokens_pattern[-2] = 0 # 1,...,0,1
@@ -192,6 +148,7 @@ class WorldModel(nn.Module):
                     nn.init.zeros_(layer.bias)
                     break
 
+        import collections
         self.past_keys_values_cache = collections.OrderedDict()
         # self.past_keys_values_cache = {}
         # from collections import deque
@@ -200,7 +157,6 @@ class WorldModel(nn.Module):
         # TODO: Transformer更新后应该清除缓存
 
 
-        self.nn_key_value = NNKeyValue(max_cache_size=self.max_cache_size, dim=128)
 
     def __repr__(self) -> str:
         return "world_model"
@@ -303,115 +259,131 @@ class WorldModel(nn.Module):
         outputs_wm, _, obs_tokens = self.reset_from_initial_observations(obs)
 
         # TODO
-        if obs_tokens.shape[0] > 1:
-            # TODO: minibatch
-            pass
-        else:
+        if obs_tokens.shape[0] == 1:
             # collect eval only for env_num=1
             cache_key = tuple(obs_tokens.squeeze(0).detach().cpu().numpy())
-            # self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
-
-            self.nn_key_value.add_to_cache(cache_key, copy.deepcopy(self.keys_values_wm))
+            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+        elif obs_tokens.shape[0] == 8:
+            # collect eval only for env_num=8
+            for i in range(8):
+                cache_key = tuple(obs_tokens[i].squeeze(0).detach().cpu().numpy())
+                # NOTE：如何从8个样本的KV中分离出各自的？
+                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
 
         # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
         return outputs_wm.output_sequence, obs_tokens, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
 
+
     """
-    past-kv-annoy-envnum1 
-    TODO 把1个样本的self.keys_values_wm 希望用更高效的查询方式annoy， 可以直接用hash dict的get
+    past-kv-dict-batch envnum8 
+    把8个样本的self.keys_values_wm 各自考虑各自的 TODO
     """
 
     # @profile
     # TODO: only for inference, not for training
     @torch.no_grad()
-    def forward_recurrent_inference(self, state_action_history, should_predict_next_obs: bool = True):
+    def forward_recurrent_inference(self, state_action_histories, should_predict_next_obs: bool = True):
         # 一般来讲，在一次 MCTS search中，我们需要维护H长度的context来使用transformer进行推理。
         # 由于在一次search里面。agent最多访问sim个不同的节点，因此我们只需维护一个 {(state:kv_cache)}的列表。
         # 但如果假设环境是MDP的话，然后根据当前的 latest_state s_t 在这个列表中查找即可
         # TODO: 但如果假设环境是非MDP的话，需要维护一个 {(rootstate_action_history:kv_cache)}的列表？
 
-        latest_state = state_action_history[-1][0]
+        # state_action_histories = [(s0,a0),(s1,a1)]
+        batch_size = state_action_histories[0][0].shape[0]  # Assuming all batches have the same size
 
-        # matched_key = None
-        # for key in self.past_keys_values_cache.keys():
-        #     # TODO：从后往前寻找，因为后面的是最新的
-        #     # 将 key 转换为 numpy 数组并与 latest_state 进行比较
-        #     if np.allclose(np.array(key), latest_state, atol=1e-5):  # atol 是差值的阈值
-        #         matched_key = key
-        #         break  # 如果找到匹配的 key，就退出循环
-        # if matched_key is not None:
-        #     self.keys_values_wm = copy.deepcopy(self.past_keys_values_cache[matched_key])
-        # else:
-        #     # NOTE: very important
-        #     _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.long).to(self.device))
+        # Initialize a list of empty lists of length batch_size
+        state_action_histories_per_sample = [[] for _ in range(batch_size)]
+        # For each (state, action) pair in the history
+        for state, action in state_action_histories:
+            # For each sample in the batch
+            for i in range(batch_size):
+                # Add the (state, action) pair for this sample to its history
+                state_action_histories_per_sample[i].append((state[i].unsqueeze(0), action[i]))
 
-        find = self.nn_key_value.find_closest(query=latest_state, threshold=1e-5)
-        if find is not None:
-            self.keys_values_wm = find
-        else:
-            # NOTE: very important
-            _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.long).to(self.device))
+        # Now state_action_histories_per_sample is a list of length batch_size,
+        # where each element is a list of (state, action) pairs for a sample
 
+        output_sequences, obs_tokens_list, rewards, policy_logits, value_logits = [], [], [], [], []
+        for state_action_history in state_action_histories_per_sample:
 
-        assert self.keys_values_wm is not None and self.num_observations_tokens is not None
+            latest_state = state_action_history[-1][0]
 
-        num_passes = 1 + self.num_observations_tokens if should_predict_next_obs else 1
+            matched_key = None
+            for key in self.past_keys_values_cache.keys():
+                # TODO：从后往前寻找，因为后面的是最新的
+                # 将 key 转换为 numpy 数组并与 latest_state 进行比较
+                if np.allclose(np.array(key), latest_state, atol=1e-5):  # atol 是差值的阈值
+                    matched_key = key
+                    break  # 如果找到匹配的 key，就退出循环
 
-        output_sequence, obs_tokens = [], []
+            if matched_key is not None:
+                self.keys_values_wm = copy.deepcopy(self.past_keys_values_cache[matched_key])
+            else:
+                # NOTE: very important
+                _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.long).to(self.device))
 
-        if self.keys_values_wm.size + num_passes > self.config.max_tokens:
-            # TODO: the impact
-            _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
+            assert self.keys_values_wm is not None and self.num_observations_tokens is not None
 
-        # TODO
-        action = state_action_history[-1][-1]
+            num_passes = 1 + self.num_observations_tokens if should_predict_next_obs else 1
 
-        token = action.clone().detach() if isinstance(action, torch.Tensor) else torch.tensor(action, dtype=torch.long)
-        token = token.reshape(-1, 1).to(self.device)  # (B, 1)
+            output_sequence, obs_tokens = [], []
 
-        for k in range(num_passes):  # assumption that there is only one action token.
-            # action_token obs_token, ..., obs_token  1+16
+            if self.keys_values_wm.size + num_passes > self.config.max_tokens:
+                # TODO: the impact
+                _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
 
-            # obs is in token level
-            # num_steps=1, prev_steps=16
-            outputs_wm = self.forward(token, past_keys_values=self.keys_values_wm, is_root=False)
-            # if k==0, action_token self.head_observations 1,...,0,1
-            output_sequence.append(outputs_wm.output_sequence)
+            # TODO
+            action = state_action_history[-1][-1]
 
-            if k == 0:
-                # if k==0, token is action_token  outputs_wm.logits_rewards 是有值的
-                # reward = Categorical(logits=outputs_wm.logits_rewards).sample().float().cpu().numpy().reshape(-1) - 1   # (B,)
-                done = Categorical(logits=outputs_wm.logits_ends).sample().cpu().numpy().astype(bool).reshape(-1)  # (B,)
-                reward = outputs_wm.logits_rewards  # (B,)
+            token = action.clone().detach() if isinstance(action, torch.Tensor) else torch.tensor(action, dtype=torch.long)
+            token = token.reshape(-1, 1).to(self.device)  # (B, 1)
 
-            if k < self.num_observations_tokens:
-                # 一共产生16个obs_token，每次产生一个
-                token = Categorical(logits=outputs_wm.logits_observations).sample()
-                if len(token.shape) != 2:
-                    token = token.squeeze(-1)  # (B, 1)
-                obs_tokens.append(token)
+            for k in range(num_passes):  # assumption that there is only one action token.
+                # action_token obs_token, ..., obs_token  1+16
 
-        output_sequence = torch.cat(output_sequence, dim=1)  # (B, 1 + K, E)
-        # Before updating self.obs_tokens, delete the old one to free memory
-        del self.obs_tokens
-        self.obs_tokens = torch.cat(obs_tokens, dim=1)  # (B, K)
+                # obs is in token level
+                # num_steps=1, prev_steps=16
+                outputs_wm = self.forward(token, past_keys_values=self.keys_values_wm, is_root=False)
+                # if k==0, action_token self.head_observations 1,...,0,1
+                output_sequence.append(outputs_wm.output_sequence)
 
-        obs = self.decode_obs_tokens() if should_predict_next_obs else None
+                if k == 0:
+                    # if k==0, token is action_token  outputs_wm.logits_rewards 是有值的
+                    # reward = Categorical(logits=outputs_wm.logits_rewards).sample().float().cpu().numpy().reshape(-1) - 1   # (B,)
+                    done = Categorical(logits=outputs_wm.logits_ends).sample().cpu().numpy().astype(bool).reshape(-1)  # (B,)
+                    reward = outputs_wm.logits_rewards  # (B,)
 
-        cache_key = tuple(self.obs_tokens.squeeze(0).detach().cpu().numpy())
+                if k < self.num_observations_tokens:
+                    # 一共产生16个obs_token，每次产生一个
+                    token = Categorical(logits=outputs_wm.logits_observations).sample()
+                    if len(token.shape) != 2:
+                        token = token.squeeze(-1)  # (B, 1)
+                    obs_tokens.append(token)
 
-        # TODO: 在计算结束后，更新缓存. 是否需要deepcopy
-        # self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
-        # if len(self.past_keys_values_cache) > self.max_cache_size:
-        #     # TODO: lru_cache
-        #     self.past_keys_values_cache.popitem(last=False)  # Removes the earliest inserted item
-        
-        self.nn_key_value.add_to_cache(cache_key, copy.deepcopy(self.keys_values_wm))
+            output_sequence = torch.cat(output_sequence, dim=1)  # (B, 1 + K, E)
+            # Before updating self.obs_tokens, delete the old one to free memory
+            del self.obs_tokens
+            self.obs_tokens = torch.cat(obs_tokens, dim=1)  # (B, K)
 
+            obs = self.decode_obs_tokens() if should_predict_next_obs else None
 
+            cache_key = tuple(self.obs_tokens.squeeze(0).detach().cpu().numpy())
 
-        return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
+            # TODO: 在计算结束后，更新缓存. 是否需要deepcopy
+            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+            if len(self.past_keys_values_cache) > self.max_cache_size:
+                # TODO: lru_cache
+                self.past_keys_values_cache.popitem(last=False)  # Removes the earliest inserted item
 
+            # return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
+
+        output_sequences = torch.stack(output_sequences, dim=1)
+        obs_tokens_list = torch.stack(obs_tokens_list, dim=1)
+        rewards = torch.stack(rewards, dim=1)
+        policy_logits = torch.stack(policy_logits, dim=1)
+        value_logits = torch.stack(value_logits, dim=1)
+
+        return output_sequences, obs_tokens_list, rewards, policy_logits, value_logits
 
     def compute_loss(self, batch, tokenizer: Tokenizer, **kwargs: Any) -> LossWithIntermediateLosses:
 

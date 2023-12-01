@@ -153,7 +153,9 @@ class WorldModel(nn.Module):
         # self.past_keys_values_cache = deque(maxlen=self.max_cache_size)
         # self.cache_dict = {}
         # TODO: Transformer更新后应该清除缓存
-
+        print('='*20)
+        print('we use world_model_past-kv-dict-envnum1 now!')
+        print('='*20)
 
 
     def __repr__(self) -> str:
@@ -267,6 +269,11 @@ class WorldModel(nn.Module):
 
         # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
         return outputs_wm.output_sequence, obs_tokens, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
+
+    """
+    past-kv-dict-envnum1
+    把1个样本的self.keys_values_wm 看做一个整体来寻找 TODO for key in self.past_keys_values_cache.keys(): 换成dict.get()
+    """
 
     # @profile
     # TODO: only for inference, not for training

@@ -24,10 +24,10 @@ cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',
                     #  'out_ch': 3, 'dropout': 0.0}}  # TODO：for atari
 cfg['world_model'] = {
                         'tokens_per_block': 17,
-                      'max_blocks': 20,
-                        "max_tokens": 17 * 20,  # TODO： horizon
-                    #   'max_blocks': 5,
-                    #   "max_tokens": 17 * 5,  # TODO： horizon
+                      # 'max_blocks': 20,
+                      #   "max_tokens": 17 * 20,  # TODO： horizon
+                      'max_blocks': 5,
+                      "max_tokens": 17 * 5,  # TODO： horizon
                       'attention': 'causal',
                       # 'num_layers': 10,# TODO：for atari
                       'num_layers': 2, # TODO：for atari debug
@@ -37,12 +37,12 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:0',
+                      "device": 'cuda:3',
                     #   "device": 'cpu',
                       'support_size': 601,
                       'action_shape': 6,# TODO：for atari
-                      # 'max_cache_size':5000,
-                      'max_cache_size':50,
+                      'max_cache_size':5000,
+                      "env_num":8,
 
                       }
 

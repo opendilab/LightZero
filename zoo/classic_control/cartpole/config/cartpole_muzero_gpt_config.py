@@ -6,68 +6,40 @@ torch.cuda.set_device(0)
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 1
-# num_simulations = 25
-# model_update_ratio = 1
-# update_per_collect = 200
-# # batch_size = 256
-# batch_size = 64
-# max_env_step = int(1e5)
-# reanalyze_ratio = 0
-# num_unroll_steps = 20
 
-
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# num_simulations = 25
-# # num_simulations = 5  # debug
-# update_per_collect = 20
-# model_update_ratio = 1
-# batch_size = 32
-# max_env_step = int(1e5)
-# reanalyze_ratio = 0
-# num_unroll_steps = 20
-# # num_unroll_steps = 5 # debug
-
-
-
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# num_simulations = 25
-# update_per_collect = 20
-# model_update_ratio = 1
-# batch_size = 32
-# max_env_step = int(1e5)
-# reanalyze_ratio = 0
-# # num_unroll_steps = 20
-# num_unroll_steps = 5
-
-
-
-# debug
 collector_env_num = 1
 n_episode = 1
 evaluator_env_num = 1
-num_simulations = 5 
-update_per_collect = 2
+num_simulations = 25
+update_per_collect = 20
 model_update_ratio = 1
-batch_size = 2
+batch_size = 64
 max_env_step = int(1e5)
 reanalyze_ratio = 0
+# num_unroll_steps = 20
 num_unroll_steps = 5
+
+
+# debug
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 25 
+# update_per_collect = 2
+# model_update_ratio = 1
+# batch_size = 2
+# max_env_step = int(1e5)
+# reanalyze_ratio = 0
+# num_unroll_steps = 5
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 cartpole_muzero_gpt_config = dict(
-    exp_name=f'data_mz_gpt_ctree_1128_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_mcs25_fixedtokenizer_fixloss_fixlatent_seed0',
-    # exp_name=f'data_mz_gpt_ctree_1128/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_mcs500_fixedtokenizer_fixloss_fixlatent_seed0',
-    # exp_name=f'data_mz_gpt_ctree_1128/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_clear-25_fixedtokenizer_fixloss_fixlatent_seed0',
+    exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_mcs25_batch1_fixedtokenizer_fixloss_fixlatent_fixedslice_seed0',
+    # exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_mcs500_fixedtokenizer_fixloss_fixlatent_seed0',
+    # exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_clear-25_fixedtokenizer_fixloss_fixlatent_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -78,6 +50,7 @@ cartpole_muzero_gpt_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/cartpole_muzero_gpt_ns25_upc20-mur1_rr0_H5_nlayers2_emd128_mediumnet_bs64_mcs25_fixedtokenizer_fixloss_fixlatent_seed0/ckpt/ckpt_best.pth.tar',
         num_unroll_steps=num_unroll_steps,
         model=dict(
             observation_shape=4,

@@ -188,6 +188,7 @@ def train_muzero_gpt(
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
         
         # NOTE: TODO
+        # TODO: for batch world model ,to improve kv reuse, we could donot reset
         policy._learn_model.world_model.past_keys_values_cache.clear()
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
