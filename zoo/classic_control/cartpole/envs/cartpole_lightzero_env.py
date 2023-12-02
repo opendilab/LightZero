@@ -1,3 +1,4 @@
+import copy
 from datetime import datetime
 from typing import Union, Optional, Dict
 
@@ -7,6 +8,7 @@ from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.envs import ObsPlusPrevActRewWrapper
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
+from easydict import EasyDict
 
 
 @ENV_REGISTRY.register('cartpole_lightzero')
@@ -17,6 +19,20 @@ class CartPoleEnv(BaseEnv):
     actions. It also includes properties for accessing the observation space, action space, and reward space of the
     environment.
     """
+
+    config = dict(
+        # env_name (str): The name of the environment.
+        env_name="CartPole-v0",
+        # replay_path (str): The path to save the replay video. If None, the replay will not be saved.
+        # Only effective when env_manager.type is 'base'.
+        replay_path=None,
+    )
+
+    @classmethod
+    def default_config(cls: type) -> EasyDict:
+        cfg = EasyDict(copy.deepcopy(cls.config))
+        cfg.cfg_type = cls.__name__ + 'Dict'
+        return cfg
 
     def __init__(self, cfg: dict = {}) -> None:
         """

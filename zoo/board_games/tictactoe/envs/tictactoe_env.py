@@ -38,17 +38,33 @@ def _get_done_winner_func_lru(board_tuple):
 
 @ENV_REGISTRY.register('tictactoe')
 class TicTacToeEnv(BaseEnv):
+
     config = dict(
+        # env_name (str): The name of the environment.
         env_name="TicTacToe",
+        # battle_mode (str): The mode of the battle. Choices are 'self_play_mode' or 'alpha_beta_pruning'.
         battle_mode='self_play_mode',
-        mcts_mode='self_play_mode',  # only used in AlphaZero
-        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+        # mcts_mode (str): The mode of Monte Carlo Tree Search. This is only used in AlphaZero.
+        mcts_mode='self_play_mode',
+        # bot_action_type (str): The type of action the bot should take. Choices are 'v0' or 'alpha_beta_pruning'.
+        bot_action_type='v0',
+        # save_replay_gif (bool): If True, the replay will be saved as a gif file.
+        save_replay_gif=False,
+        # replay_path_gif (str): The path to save the replay gif.
+        replay_path_gif='./replay_gif',
+        # agent_vs_human (bool): If True, the agent will play against a human.
         agent_vs_human=False,
+        # prob_random_agent (int): The probability of the random agent.
         prob_random_agent=0,
+        # prob_expert_agent (int): The probability of the expert agent.
         prob_expert_agent=0,
+        # channel_last (bool): If True, the channel will be the last dimension.
         channel_last=True,
+        # scale (bool): If True, the pixel values will be scaled.
         scale=True,
+        # stop_value (int): The value to stop the game.
         stop_value=1,
+        # alphazero_mcts_ctree (bool): If True, the Monte Carlo Tree Search from AlphaZero is used.
         alphazero_mcts_ctree=False,
     )
 

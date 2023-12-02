@@ -54,8 +54,8 @@ class GomokuEnv(BaseEnv):
         # (str) The render mode. Options are 'None', 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.
         # If None, then the game will not be rendered.
         render_mode=None,
-        # (str) The suffix of the replay name.
-        replay_path='./video',
+        # (str or None) The directory in which to save the replay file. If None, the file is saved in the current directory.
+        replay_path=None,
         # (float) The scale of the render screen.
         screen_scaling=9,
         # (bool) Whether to use the 'channel last' format for the observation space. If False, 'channel first' format is used.

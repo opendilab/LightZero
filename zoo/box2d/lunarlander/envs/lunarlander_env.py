@@ -30,7 +30,8 @@ class LunarLanderEnv(CartPoleEnv):
         save_replay_gif=False,
         # (str or None) The path to save the replay gif. If None, the replay gif will not be saved.
         replay_path_gif=None,
-        # (str or None) The path to save the replay. If None, the replay will not be saved.
+        # replay_path (str or None): The path to save the replay video. If None, the replay will not be saved.
+        # Only effective when env_manager.type is 'base'.
         replay_path=None,
         # (bool) If True, the action will be scaled.
         act_scale=True,

@@ -31,7 +31,8 @@ class PendulumEnv(CartPoleEnv):
     config = dict(
         # (bool) Whether to use continuous action space
         continuous=True,
-        # (str) The path to save replay videos
+        # replay_path (str or None): The path to save the replay video. If None, the replay will not be saved.
+        # Only effective when env_manager.type is 'base'.
         replay_path=None,
         # (bool) Whether to scale action into [-2, 2]
         act_scale=True,

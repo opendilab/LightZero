@@ -44,8 +44,9 @@ class AtariLightZeroEnv(BaseEnv):
         render_mode_human=False,
         # (bool) If True, a video of the game play is saved.
         save_replay=False,
-        # (str) The path to save the video.
-        replay_path='./video',
+        # replay_path (str or None): The path to save the replay video. If None, the replay will not be saved.
+        # Only effective when env_manager.type is 'base'.
+        replay_path=None,
         # (bool) If set to True, the game screen is converted to grayscale, reducing the complexity of the observation space.
         gray_scale=True,
         # (int) The number of frames to skip between each action. Higher values result in faster simulation.

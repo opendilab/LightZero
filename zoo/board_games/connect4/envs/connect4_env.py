@@ -47,9 +47,6 @@ from zoo.board_games.connect4.envs.rule_bot import Connect4RuleBot
 from zoo.board_games.mcts_bot import MCTSBot
 
 
-
-
-
 @ENV_REGISTRY.register('connect4')
 class Connect4Env(BaseEnv):
     config = dict(
@@ -62,8 +59,8 @@ class Connect4Env(BaseEnv):
         # (str) The render mode. Options are 'None', 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.
         # If None, then the game will not be rendered.
         render_mode=None,
-        # (str) The suffix of the replay name.
-        replay_path='./video',
+        # (str or None) The directory in which to save the replay file. If None, the file is saved in the current directory.
+        replay_path=None,
         # (str) The type of the bot of the environment.
         bot_action_type='rule',
         # (bool) Whether to let human to play with the agent when evaluating. If False, then use the bot to evaluate the agent.
@@ -479,7 +476,7 @@ class Connect4Env(BaseEnv):
         else:
             if not os.path.exists(replay_path):
                 os.makedirs(replay_path)
-            filename = replay_path+f'/connect4_{replay_name_suffix}.{format}'
+            filename = replay_path + f'/connect4_{replay_name_suffix}.{format}'
 
         if format == 'gif':
             # Save frames as a GIF with a duration of 0.1 seconds per frame.

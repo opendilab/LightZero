@@ -147,7 +147,7 @@ class Game2048Env(gym.Env):
         self.replay_format = cfg.replay_format
         self.replay_name_suffix = cfg.replay_name_suffix
         self.replay_path = cfg.replay_path
-        self.render_mode = cfg.render_mode 
+        self.render_mode = cfg.render_mode
 
         self.channel_last = cfg.channel_last
         self.obs_type = cfg.obs_type
@@ -356,8 +356,8 @@ class Game2048Env(gym.Env):
         if done:
             info['eval_episode_return'] = self._final_eval_reward
             if self.render_mode == 'image_savefile_mode':
-                    self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
-                                            format=self.replay_format)
+                self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
+                                        format=self.replay_format)
 
         return BaseEnvTimestep(observation, reward, done, info)
 
@@ -718,7 +718,7 @@ class Game2048Env(gym.Env):
         else:
             if not os.path.exists(replay_path):
                 os.makedirs(replay_path)
-            filename = replay_path+f'/2048_{replay_name_suffix}.{format}'
+            filename = replay_path + f'/2048_{replay_name_suffix}.{format}'
 
         if format == 'gif':
             imageio.mimsave(filename, self.frames, 'GIF')
