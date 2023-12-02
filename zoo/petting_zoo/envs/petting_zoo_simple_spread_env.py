@@ -282,8 +282,12 @@ class PettingZooEnv(BaseEnv):
         ret_transform = []
         for i in range(self._num_agents):
             tmp = {}
+            tmp['agent_id'] = i
             for k,v in ret.items():
-                tmp[k] = v[i]
+                if k == 'global_state':
+                    tmp[k] = v
+                else:
+                    tmp[k] = v[i]
             ret_transform.append(tmp)
         return {'observation': ret_transform, 'action_mask': action_mask, 'to_play': [-1 for _ in range(self._num_agents)]}
 

@@ -29,11 +29,11 @@ class PettingZooEncoder(nn.Module):
 
     def forward(self, x):
         # agent
-        agent_state = x['agent_state'].reshape(-1, self.agent_obs_shape)
+        agent_state = x['agent_state']
         agent_state = self.agent_encoder(agent_state)
         # agent_state = agent_state.reshape(batch_size, agent_num, -1)
         # global
-        global_state = x['global_state'].reshape(-1, self.global_obs_shape)
+        global_state = x['global_state']
         global_state = self.global_encoder(global_state)
         # global_state = global_state.reshape(batch_size, agent_num, -1)
         return (agent_state, global_state)
@@ -206,10 +206,10 @@ class PettingZooMZDynamics(nn.Module):
                 last_linear_layer_init_zero=False,
             )
             self.global_fc_dynamics_1 = MLP(
-                in_channels=517,
+                in_channels=1024,
                 hidden_channels=self.latent_state_dim,
                 layer_num=common_layer_num,
-                out_channels=512,
+                out_channels=256,
                 activation=activation,
                 norm_type=norm_type,
                 output_activation=True,
@@ -218,7 +218,7 @@ class PettingZooMZDynamics(nn.Module):
                 last_linear_layer_init_zero=False,
             )
             self.global_fc_dynamics_2 = MLP(
-                in_channels=self.latent_state_dim,
+                in_channels=256,
                 hidden_channels=self.latent_state_dim,
                 layer_num=common_layer_num,
                 out_channels=self.latent_state_dim,
@@ -299,17 +299,19 @@ class PettingZooMZDynamics(nn.Module):
             # next_latent_state = x + latent_state
             # next_latent_state_encoding = self.fc_dynamics_2(next_latent_state)
 
-            agent_state_action_encoding, global_state_action_encoding = state_action_encoding
+            agent_state_action_encoding, global_latent_state = state_action_encoding
+            batch_size = agent_state_action_encoding.shape[0] // 3
             # agent
             agent_latent_state = agent_state_action_encoding[:, :-self.action_encoding_dim]
             x = self.agent_fc_dynamics_1(agent_state_action_encoding)
             next_agent_latent_state = x + agent_latent_state
-            next_agent_latent_state_encoding = self.agent_fc_dynamics_2(next_agent_latent_state)
+            # next_agent_latent_state_encoding = self.agent_fc_dynamics_2(next_agent_latent_state)
             # global
-            global_latent_state = global_state_action_encoding[:, :-self.action_encoding_dim] #
-            x = self.global_fc_dynamics_1(global_state_action_encoding)  # x 512
-            next_global_latent_state = x + global_latent_state
-            next_global_latent_state = self.fc_alignment(next_global_latent_state)
+            next_agent_latent_state_tmp = next_agent_latent_state.reshape(batch_size, -1)
+            global_latent_state = global_latent_state[::3, ]
+            global_latent_state = torch.cat((next_agent_latent_state_tmp, global_latent_state), dim=1)
+            next_global_latent_state = self.global_fc_dynamics_1(global_latent_state)  # x 512
+            next_global_latent_state = next_global_latent_state.unsqueeze(1).expand(-1, 3, -1).reshape(-1, 256)
             next_global_latent_state_encoding = self.global_fc_dynamics_2(next_global_latent_state)
         else:
             agent_state_action_encoding, global_state_action_encoding = state_action_encoding

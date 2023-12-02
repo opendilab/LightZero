@@ -118,33 +118,41 @@ class GameBuffer(ABC, object):
 
         # +1e-6 for numerical stability
         probs = self.game_pos_priorities ** self._alpha + 1e-6
-        probs /= probs.sum()
+        if self._cfg.multi_agent:
+            probs = np.array([probs[i] for i in range(0, len(probs), self._cfg.model.agent_num)])  #TODO: check this
+            probs /= probs.sum()
+        else:
+            probs /= probs.sum()
 
         # sample according to transition index
         # TODO(pu): replace=True
-        batch_index_list = np.random.choice(num_of_transitions, batch_size, p=probs, replace=False)
+        batch_index_list = np.random.choice(num_of_transitions//self._cfg.model.agent_num, batch_size, p=probs, replace=False)
 
         if self._cfg.reanalyze_outdated is True:
             # NOTE: used in reanalyze part
             batch_index_list.sort()
 
-        weights_list = (num_of_transitions * probs[batch_index_list]) ** (-self._beta)
+        weights_list = ((num_of_transitions//self._cfg.model.agent_num) * probs[batch_index_list]) ** (-self._beta)
         weights_list /= weights_list.max()
 
         game_segment_list = []
         pos_in_game_segment_list = []
+        agent_id_list = []
+        true_batch_index_list = []
 
         for idx in batch_index_list:
-            game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
+            game_segment_idx, pos_in_game_segment, agent_id = self.game_segment_game_pos_look_up[idx]
             game_segment_idx -= self.base_idx
-            game_segment = self.game_segment_buffer[game_segment_idx]
+            for i in range(self._cfg.model.agent_num):
+                game_segment = self.game_segment_buffer[game_segment_idx*self._cfg.model.agent_num+i]
+                game_segment_list.append(game_segment)
+                pos_in_game_segment_list.append(pos_in_game_segment)
+                agent_id_list.append(agent_id+i)
+                true_batch_index_list.append(idx)
 
-            game_segment_list.append(game_segment)
-            pos_in_game_segment_list.append(pos_in_game_segment)
+        make_time = [time.time() for _ in range(len(true_batch_index_list))]
 
-        make_time = [time.time() for _ in range(len(batch_index_list))]
-
-        orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
+        orig_data = (game_segment_list, pos_in_game_segment_list, true_batch_index_list, weights_list, make_time)
         return orig_data
 
     def _preprocess_to_play_and_action_mask(
@@ -349,8 +357,9 @@ class GameBuffer(ABC, object):
             self.game_pos_priorities = np.concatenate((self.game_pos_priorities, priorities))
 
         self.game_segment_buffer.append(data)
+        agent_id = data.obs_segment[0]['agent_id']
         self.game_segment_game_pos_look_up += [
-            (self.base_idx + len(self.game_segment_buffer) - 1, step_pos) for step_pos in range(len(data))
+            (self.base_idx + len(self.game_segment_buffer) - 1, step_pos, agent_id) for step_pos in range(len(data))
         ]
 
     def remove_oldest_data_to_fit(self) -> None:

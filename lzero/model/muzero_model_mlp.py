@@ -315,8 +315,8 @@ class MuZeroModelMLP(nn.Module):
         # state_action_encoding shape: (batch_size, latent_state[1] + action_dim]) or
         # (batch_size, latent_state[1] + action_space_size]) depending on the discrete_action_encoding_type.
         agent_state_action_encoding = torch.cat((agent_latent_state, action_encoding), dim=1)
-        global_state_action_encoding = torch.cat((agent_latent_state, global_latent_state, action_encoding), dim=1)
-        (next_agent_latent_state, next_global_latent_state), reward = self.dynamics_network((agent_state_action_encoding, global_state_action_encoding))
+        # global_state_action_encoding = torch.cat((agent_latent_state, global_latent_state, action_encoding), dim=1)
+        (next_agent_latent_state, next_global_latent_state), reward = self.dynamics_network((agent_state_action_encoding, global_latent_state))
 
         if not self.state_norm:
             return (next_agent_latent_state, next_global_latent_state), reward

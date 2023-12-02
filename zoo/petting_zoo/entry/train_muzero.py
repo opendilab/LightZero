@@ -179,7 +179,7 @@ def train_muzero(
         # Learn policy from collected data.
         for i in range(update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
-            if replay_buffer.get_num_of_transitions() > batch_size:
+            if replay_buffer.get_num_of_transitions()//3 > batch_size:
                 train_data = replay_buffer.sample(batch_size, policy)
             else:
                 logging.warning(

@@ -201,14 +201,17 @@ class MuZeroGameBuffer(GameBuffer):
               td_steps_list, action_mask_segment, to_play_segment
         """
         zero_obs = game_segment_list[0].zero_obs()
-        zero_obs = np.array([{'agent_state': np.zeros((18,), dtype=np.float32),
-                     'global_state': np.zeros((48,), dtype=np.float32),
-                     'agent_alone_state': np.zeros((14,), dtype=np.float32),
-                     'agent_alone_padding_state': np.zeros((18,), dtype=np.float32),}])
-        zero_obs = np.array([{'agent_state': np.zeros((6,), dtype=np.float32),
-                'global_state': np.zeros((14, ), dtype=np.float32),
-                'agent_alone_state': np.zeros((12,), dtype=np.float32),
-                'agent_alone_padding_state': np.zeros((12,), dtype=np.float32),}])
+        zero_obs = np.array([{
+                            'agent_id': np.array(0),
+                            'agent_state': np.zeros((18,), dtype=np.float32),
+                            'global_state': np.zeros((30,), dtype=np.float32),
+                            'agent_alone_state': np.zeros((14,), dtype=np.float32),
+                            'agent_alone_padding_state': np.zeros((18,), dtype=np.float32),
+                        }])
+        # zero_obs = np.array([{'agent_state': np.zeros((6,), dtype=np.float32),
+        #         'global_state': np.zeros((14, ), dtype=np.float32),
+        #         'agent_alone_state': np.zeros((12,), dtype=np.float32),
+        #         'agent_alone_padding_state': np.zeros((12,), dtype=np.float32),}])
         value_obs_list = []
         # the value is valid or not (out of game_segment)
         value_mask = []
@@ -218,7 +221,7 @@ class MuZeroGameBuffer(GameBuffer):
         action_mask_segment, to_play_segment = [], []
 
         td_steps_list = []
-        for game_segment, state_index, idx in zip(game_segment_list, pos_in_game_segment_list, batch_index_list):
+        for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
             game_segment_len = len(game_segment)
             game_segment_lens.append(game_segment_len)
 

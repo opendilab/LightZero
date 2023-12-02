@@ -297,8 +297,8 @@ class MuZeroPolicy(Policy):
         [mask_batch, target_reward, target_value, target_policy,
          weights] = to_torch_float_tensor(data_list, self._cfg.device)
 
-        target_reward = target_reward.view(self._cfg.batch_size, -1)
-        target_value = target_value.view(self._cfg.batch_size, -1)
+        target_reward = target_reward.view(self._cfg.batch_size*self._cfg.model.agent_num, -1)
+        target_value = target_value.view(self._cfg.batch_size*self._cfg.model.agent_num, -1)
 
         # assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
@@ -344,8 +344,8 @@ class MuZeroPolicy(Policy):
         policy_loss = cross_entropy_loss(policy_logits, target_policy[:, 0])
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
-        reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
-        consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+        reward_loss = torch.zeros(self._cfg.batch_size*self._cfg.model.agent_num, device=self._cfg.device)
+        consistency_loss = torch.zeros(self._cfg.batch_size*self._cfg.model.agent_num, device=self._cfg.device)
 
         # ==============================================================
         # the core recurrent_inference in MuZero policy.
@@ -420,6 +420,7 @@ class MuZeroPolicy(Policy):
                 self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
                 self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
         )
+        weights = weights.repeat_interleave(3)
         weighted_total_loss = (weights * loss).mean()
 
         gradient_scale = 1 / self._cfg.num_unroll_steps
