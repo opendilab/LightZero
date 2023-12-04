@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING, List, Any, Union
 import numpy as np
 import torch
 from easydict import EasyDict
+# from line_profiler import line_profiler
+# import cProfile
 
 from lzero.mcts.ctree.ctree_efficientzero import ez_tree as tree_efficientzero
 from lzero.mcts.ctree.ctree_muzero import mz_tree as tree_muzero
@@ -253,6 +255,7 @@ class MuZeroMCTSCtree(object):
         from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
         return ctree.Roots(active_collect_env_num, legal_actions)
 
+    # @profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
                                                                                                           List[Any]]
@@ -338,6 +341,7 @@ class MuZeroMCTSCtree(object):
                     min_max_stats_lst, results, virtual_to_play_batch
                 )
 
+    # @profile
     def search_with_reuse(
             self,
             roots: Any,
@@ -465,6 +469,7 @@ class MuZeroMCTSCtree(object):
                     current_latent_state_index, discount_factor, reward_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, virtual_to_play_batch, no_inference_lst, reuse_lst, reuse_value_list
                 )
+        return length
 
 class GumbelMuZeroMCTSCtree(object):
     """

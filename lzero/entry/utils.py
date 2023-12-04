@@ -73,3 +73,37 @@ def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: Summa
 
     # Record the memory usage of the process to TensorBoard.
     writer.add_scalar('Buffer/memory_usage/process', process_memory_usage_mb, train_iter)
+
+def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:
+    
+    sample_times = buffer.sample_times
+
+    if sample_times == 0:
+        return
+
+    # Record average reanalyze time.
+    total_compute_target_re_time = buffer.compute_target_re_time
+    average_reanalyze_time = total_compute_target_re_time / sample_times
+    writer.add_scalar('Buffer/average_reanalyze_time', average_reanalyze_time, train_iter)
+
+    # Record average origin search time.
+    total_origin_search_time = buffer.origin_search_time
+    average_origin_search_time = total_origin_search_time / sample_times
+    writer.add_scalar('Buffer/average_origin_search_time', average_origin_search_time, train_iter)
+
+    # Record average reuse search time.
+    total_reuse_search_time = buffer.reuse_search_time
+    average_reuse_search_time = total_reuse_search_time / sample_times
+    writer.add_scalar('Buffer/average_reuse_search_time', average_reuse_search_time, train_iter)
+
+    # Record average reanalyze time.
+    total_active_root_num = buffer.active_root_num
+    average_active_root_num = total_active_root_num / sample_times
+    writer.add_scalar('Buffer/average_active_root_num', average_active_root_num, train_iter)
+
+    # Reset the time records.
+    buffer.sample_times = 0
+    buffer.compute_target_re_time = 0
+    buffer.reuse_search_time = 0
+    buffer.origin_search_time = 0
+    buffer.active_root_num = 0

@@ -13,7 +13,7 @@ from ding.rl_utils import get_epsilon_greedy_fn
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
-from lzero.entry.utils import log_buffer_memory_usage
+from lzero.entry.utils import log_buffer_memory_usage, log_buffer_run_time
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
@@ -129,6 +129,7 @@ def train_muzero(
 
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
+        log_buffer_run_time(learner.train_iter, replay_buffer, tb_logger)
         collect_kwargs = {}
         # set temperature for visit count distributions according to the train_iter,
         # please refer to Appendix D in MuZero paper for details.

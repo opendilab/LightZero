@@ -32,7 +32,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/ma1_test',
+    f'data_mz_ctree/{env_name[:-14]}/reuse_test',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -91,22 +91,17 @@ atari_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='ma',
-        import_names=['lzero.policy.ma'],
+        type='muzero',
+        import_names=['lzero.policy.muzero'],
     ),
-    collector=dict(
-        type='episode_ma',
-        import_names=['lzero.worker.ma_collector'],
-    )
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_ma
-    train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)
-    # 下面为cprofile的代码
+    from lzero.entry import train_reuse
     # def run(max_env_step: int):
-    #     train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)
+    #     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
     # import cProfile
-    # cProfile.run(f"run({30000})", filename="pong_ma_refined", sort="cumulative")
+    # cProfile.run(f"run({30000})", filename="pong_mzssl", sort="cumulative")
+    train_reuse([main_config, create_config], seed=0, max_env_step=max_env_step)

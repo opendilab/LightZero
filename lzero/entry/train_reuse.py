@@ -16,12 +16,12 @@ from tensorboardX import SummaryWriter
 from lzero.entry.utils import log_buffer_memory_usage, log_buffer_run_time
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
-from lzero.worker import MACollector as Collector
+from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 
 
-def train_ma(
+def train_reuse(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -47,11 +47,11 @@ def train_ma(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero', 'ma'], \
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
         "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'"
 
     if create_cfg.policy.type == 'muzero':
-        from lzero.mcts import MuZeroGameBuffer as GameBuffer
+        from lzero.mcts import MAGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'sampled_efficientzero':
@@ -60,8 +60,6 @@ def train_ma(
         from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'stochastic_muzero':
         from lzero.mcts import StochasticMuZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'ma':
-        from lzero.mcts import MAGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
@@ -156,47 +154,25 @@ def train_ma(
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-            # print("evaluated!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             if stop:
                 break
 
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
-        # print("collected new data")
         if cfg.policy.update_per_collect is None:
             # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
             collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
             update_per_collect = int(collected_transitions_num * cfg.policy.model_update_ratio)
-
-
-
         # save returned new_data collected by the collector
         replay_buffer.push_game_segments(new_data)
-        # print("remark 11111111111111111")
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
-        # print("remark 22222222222222222222")
-
-
-
-
 
         # Learn policy from collected data.
         for i in range(update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
             if replay_buffer.get_num_of_transitions() > batch_size:
-
-
-                # print("remark 00000000")
-                # policy对sample的影响是什么？？？？？？？？？？？？？？？？？？？？？？？？？
-                #!!!!!!!!!!!!!!!!!!!!!!!!!value是sample时就计算好的所以如果一次sample多次训练的话会增强value的off-policy性？？？？？？？？？？？
-                # 在非reannalyze的情况一采多训会影响value,reanalyze的情况则会额外影响policy！！！！！！！！！！！！！！！
                 train_data = replay_buffer.sample(batch_size, policy)
-                # print("remark 33333333333333333333")
-
-
-
-
             else:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '

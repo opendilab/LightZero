@@ -2,8 +2,9 @@ from typing import Any, List, Tuple, Union, TYPE_CHECKING, Optional
 
 import numpy as np
 import torch
-from ding.utils import BUFFER_REGISTRY
+from ding.utils import BUFFER_REGISTRY, EasyTimer
 import builtins
+# from line_profiler import line_profiler
 
 from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
@@ -14,7 +15,15 @@ from .game_buffer import GameBuffer
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
 
-
+def compute_all_filters(data, num_unroll_steps):
+    data_by_iter = []
+    for iter in range(num_unroll_steps + 1):
+        iter_data = [x for i, x in enumerate(data)
+                    if (i + 1) % (num_unroll_steps + 1) ==
+                    ((num_unroll_steps + 1 - iter) % (num_unroll_steps + 1))]
+        data_by_iter.append(iter_data)
+    return data_by_iter
+    
 @BUFFER_REGISTRY.register('game_buffer_ma')
 class MAGameBuffer(GameBuffer):
     """
@@ -49,6 +58,15 @@ class MAGameBuffer(GameBuffer):
         self.game_pos_priorities = []
         self.game_segment_game_pos_look_up = []
 
+        self._compute_target_timer = EasyTimer()
+        self._reuse_search_timer = EasyTimer()
+        self._origin_search_timer = EasyTimer()
+        self.compute_target_re_time = 0
+        self.reuse_search_time = 0
+        self.origin_search_time = 0
+        self.sample_times = 0
+        self.active_root_num = 0
+
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
     ) -> List[Any]:
@@ -76,7 +94,11 @@ class MAGameBuffer(GameBuffer):
         # 这边如果重构代码成只在non re的范围构造contex则可以不加==1这个条件！！！！！！！！！！！！！！！！！！！！！！！！！！
         if not (search_contex == None):
             self._search_and_save_policy(search_contex, policy._target_model)
-        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
+        
+        with self._compute_target_timer:
+            batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
+        self.compute_target_re_time += self._compute_target_timer.value
+
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
             policy_non_re_context, self._cfg.model.action_space_size
         )
@@ -93,6 +115,7 @@ class MAGameBuffer(GameBuffer):
 
         # a batch contains the current_batch and the target_batch
         train_data = [current_batch, target_batch]
+        self.sample_times += 1
         return train_data
 
     def _make_batch(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
@@ -768,6 +791,7 @@ class MAGameBuffer(GameBuffer):
 
         return None
     
+    # @profile
     def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any) -> np.ndarray:
         """
         Overview:
@@ -855,27 +879,65 @@ class MAGameBuffer(GameBuffer):
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
                 # print("use ctree")
+                legal_actions_by_iter = compute_all_filters(legal_actions, self._cfg.num_unroll_steps)
+                noises_by_iter = compute_all_filters(noises, self._cfg.num_unroll_steps)
+                reward_pool_by_iter = compute_all_filters(reward_pool, self._cfg.num_unroll_steps)
+                policy_logits_pool_by_iter = compute_all_filters(policy_logits_pool, self._cfg.num_unroll_steps)
+                to_play_by_iter = compute_all_filters(to_play, self._cfg.num_unroll_steps)
+                latent_state_roots_by_iter = compute_all_filters(latent_state_roots, self._cfg.num_unroll_steps)
+                true_action_by_iter = compute_all_filters(true_action, self._cfg.num_unroll_steps)
+
                 temp_values = []
                 temp_distributions = []
+                mcts_ctree = MCTSCtree(self._cfg)
+                temp_search_time = 0
+                temp_length = 0
+
                 for iter in range(self._cfg.num_unroll_steps + 1):
                     iter_batch_size = transition_batch_size / (self._cfg.num_unroll_steps + 1)
-                    # print(f"transition batch size = {transition_batch_size}, and iter batch size = {iter_batch_size}")
-                    legal_actions_iter = [x for i, x in enumerate(legal_actions) if (i + 1) % (self._cfg.num_unroll_steps + 1) == ((self._cfg.num_unroll_steps + 1 - iter) % (self._cfg.num_unroll_steps + 1))]
-                    # print(f"the search iter is {iter}, legal actions are {legal_actions}, and iter legal actions are {legal_actions_iter}")
-                    roots = MCTSCtree.roots(iter_batch_size, legal_actions_iter)
-                    iter_noises = [x for i, x in enumerate(noises) if (i + 1) % (self._cfg.num_unroll_steps + 1) == ((self._cfg.num_unroll_steps + 1 - iter) % (self._cfg.num_unroll_steps + 1))]
-                    # print(f"the search iter is {iter}, noises are {noises}, and !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!iter noises are {iter_noises}")
-                    iter_reward_pool = [x for i, x in enumerate(reward_pool) if (i + 1) % (self._cfg.num_unroll_steps + 1) == ((self._cfg.num_unroll_steps + 1 - iter) % (self._cfg.num_unroll_steps + 1))]
-                    # print(f"the search iter is {iter}, rewards are {reward_pool}, and iter rewards are {iter_reward_pool}")
-                    iter_policy_pool = [x for i, x in enumerate(policy_logits_pool) if (i + 1) % (self._cfg.num_unroll_steps + 1) == ((self._cfg.num_unroll_steps + 1 - iter) % (self._cfg.num_unroll_steps + 1))]
-                    iter_to_play = [x for i, x in enumerate(to_play) if (i + 1) % (self._cfg.num_unroll_steps + 1) == ((self._cfg.num_unroll_steps + 1 - iter) % (self._cfg.num_unroll_steps + 1))]
-                    roots.prepare(self._cfg.root_noise_weight, iter_noises, iter_reward_pool, iter_policy_pool, iter_to_play)
-                    iter_latent_states = [x for i, x in enumerate(latent_state_roots) if (i + 1) % (self._cfg.num_unroll_steps + 1) == ((self._cfg.num_unroll_steps + 1 - iter) % (self._cfg.num_unroll_steps + 1))]
+                    roots = MCTSCtree.roots(iter_batch_size, legal_actions_by_iter[iter])
+
+                    roots.prepare(self._cfg.root_noise_weight, 
+                                noises_by_iter[iter], 
+                                reward_pool_by_iter[iter],
+                                policy_logits_pool_by_iter[iter], 
+                                to_play_by_iter[iter])
+
                     if iter == 0:
-                        MCTSCtree(self._cfg).search(roots, model, iter_latent_states, iter_to_play)
+                        with self._origin_search_timer:
+                            mcts_ctree.search(roots, model, latent_state_roots_by_iter[iter], to_play_by_iter[iter])
+                        self.origin_search_time += self._origin_search_timer.value
                     else:
-                        true_action_list = [x for i, x in enumerate(true_action) if (i + 1) % (self._cfg.num_unroll_steps + 1) == ((self._cfg.num_unroll_steps + 1 - iter) % (self._cfg.num_unroll_steps + 1))]
-                        MCTSCtree(self._cfg).search_with_reuse(roots, model, iter_latent_states, iter_to_play, true_action_list=true_action_list, reuse_value_list=iter_values)
+                        with self._reuse_search_timer:
+                            length = mcts_ctree.search_with_reuse(roots, model, latent_state_roots_by_iter[iter], 
+                                                        to_play_by_iter[iter],
+                                                        true_action_list=true_action_by_iter[iter], 
+                                                        reuse_value_list=iter_values)
+                        temp_search_time += self._reuse_search_timer.value
+                        temp_length += length
+                        
+                # for iter in range(self._cfg.num_unroll_steps + 1):
+                #     iter_batch_size = transition_batch_size / (self._cfg.num_unroll_steps + 1)
+                #     # print(f"transition batch size = {transition_batch_size}, and iter batch size = {iter_batch_size}")
+                #     legal_actions_iter = [x for i, x in enumerate(legal_actions) if (i + 1) % (self._cfg.num_unroll_steps + 1) == ((self._cfg.num_unroll_steps + 1 - iter) % (self._cfg.num_unroll_steps + 1))]
+                #     # print(f"the search iter is {iter}, legal actions are {legal_actions}, and iter legal actions are {legal_actions_iter}")
+                #     roots = MCTSCtree.roots(iter_batch_size, legal_actions_iter)
+                #     iter_noises = [x for i, x in enumerate(noises) if (i + 1) % (self._cfg.num_unroll_steps + 1) == ((self._cfg.num_unroll_steps + 1 - iter) % (self._cfg.num_unroll_steps + 1))]
+                #     # print(f"the search iter is {iter}, noises are {noises}, and !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!iter noises are {iter_noises}")
+                #     iter_reward_pool = [x for i, x in enumerate(reward_pool) if (i + 1) % (self._cfg.num_unroll_steps + 1) == ((self._cfg.num_unroll_steps + 1 - iter) % (self._cfg.num_unroll_steps + 1))]
+                #     # print(f"the search iter is {iter}, rewards are {reward_pool}, and iter rewards are {iter_reward_pool}")
+                #     iter_policy_pool = [x for i, x in enumerate(policy_logits_pool) if (i + 1) % (self._cfg.num_unroll_steps + 1) == ((self._cfg.num_unroll_steps + 1 - iter) % (self._cfg.num_unroll_steps + 1))]
+                #     iter_to_play = [x for i, x in enumerate(to_play) if (i + 1) % (self._cfg.num_unroll_steps + 1) == ((self._cfg.num_unroll_steps + 1 - iter) % (self._cfg.num_unroll_steps + 1))]
+                #     roots.prepare(self._cfg.root_noise_weight, iter_noises, iter_reward_pool, iter_policy_pool, iter_to_play)
+                #     iter_latent_states = [x for i, x in enumerate(latent_state_roots) if (i + 1) % (self._cfg.num_unroll_steps + 1) == ((self._cfg.num_unroll_steps + 1 - iter) % (self._cfg.num_unroll_steps + 1))]
+                #     if iter == 0:
+                #         MCTSCtree(self._cfg).search(roots, model, iter_latent_states, iter_to_play)
+                #     else:
+                #         true_action_list = [x for i, x in enumerate(true_action) if (i + 1) % (self._cfg.num_unroll_steps + 1) == ((self._cfg.num_unroll_steps + 1 - iter) % (self._cfg.num_unroll_steps + 1))]
+                #         MCTSCtree(self._cfg).search_with_reuse(roots, model, iter_latent_states, iter_to_play, true_action_list=true_action_list, reuse_value_list=iter_values)
+
+
+
                     iter_values = roots.get_values()
                     iter_distributions = roots.get_distributions()
                     temp_values.append(iter_values)
@@ -932,6 +994,8 @@ class MAGameBuffer(GameBuffer):
                     # 搜索完取出复用数据
                     value_reuse = search_iter.get_values()
 
+            self.reuse_search_time += (temp_search_time / self._cfg.num_unroll_steps)
+            self.active_root_num += (temp_length / self._cfg.num_unroll_steps)
 
 
             roots_legal_actions_list = legal_actions
