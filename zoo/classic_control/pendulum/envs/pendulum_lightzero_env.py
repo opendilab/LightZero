@@ -108,7 +108,8 @@ class PendulumEnv(BaseEnv):
         # scale into [-2, 2]
         if self._act_scale:
             action = affine_transform(action, min_val=self._env.action_space.low, max_val=self._env.action_space.high)
-        obs, rew, done, _, info = self._env.step(action)
+        obs, rew, terminated, truncated, info = self._env.step(action)
+        done = terminated or truncated
         self._eval_episode_return += rew
         obs = to_ndarray(obs).astype(np.float32)
         # wrapped to be transferred to a array with shape (1,)

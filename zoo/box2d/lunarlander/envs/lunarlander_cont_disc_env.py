@@ -137,7 +137,8 @@ class LunarLanderDiscEnv(BaseEnv):
             action = affine_transform(action, min_val=-1, max_val=1)
         if self._save_replay_gif:
             self._frames.append(self._env.render(mode='rgb_array'))
-        obs, rew, done, _, info = self._env.step(action)
+        obs, rew, terminated, truncated, info = self._env.step(action)
+        done = terminated or truncated
 
         action_mask = np.ones(self._action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}

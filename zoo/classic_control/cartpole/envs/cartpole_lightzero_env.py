@@ -73,7 +73,8 @@ class CartPoleEnv(BaseEnv):
         if isinstance(action, np.ndarray) and action.shape == (1, ):
             action = action.squeeze()  # 0-dim array
 
-        obs, rew, done, _, info = self._env.step(action)
+        obs, rew, terminated, truncated, info = self._env.step(action)
+        done = terminated or truncated
 
         self._eval_episode_return += rew
         if done:

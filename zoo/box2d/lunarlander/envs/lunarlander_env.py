@@ -106,7 +106,8 @@ class LunarLanderEnv(BaseEnv):
         if self._save_replay_gif:
             self._frames.append(self._env.render(mode='rgb_array'))
 
-        obs, rew, done, _, info = self._env.step(action)
+        obs, rew, terminated, truncated, info = self._env.step(action)
+        done = terminated or truncated
         if 'Continuous' not in self._env_name:
             action_mask = np.ones(4, 'int8')
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
