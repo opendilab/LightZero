@@ -3,7 +3,7 @@ from typing import List
 
 import bsuite
 import gymnasium as gym
-from zoo.atari.envs.atari_wrappers import GymToGymnasiumWrapper
+from zoo.atari.envs.atari_wrappers import GymnasiumToGymWrapper
 import numpy as np
 from bsuite import sweep
 from bsuite.utils import gym_wrapper
@@ -23,7 +23,7 @@ class BSuiteEnv(BaseEnv):
     def reset(self) -> np.ndarray:
         if not self._init_flag:
             raw_env = bsuite.load_from_id(bsuite_id=self.env_name)
-            raw_env = GymToGymnasiumWrapper(raw_env)
+            raw_env = GymnasiumToGymWrapper(raw_env)
             self._env = gym_wrapper.GymFromDMEnv(raw_env)
             self._observation_space = self._env.observation_space
             self._action_space = self._env.action_space
