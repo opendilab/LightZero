@@ -53,6 +53,8 @@ class GameBuffer(ABC, object):
         self._cfg = default_config
         self._cfg = cfg
         assert self._cfg.env_type in ['not_board_games', 'board_games']
+        assert self._cfg.action_type in ['fixed_action_space', 'varied_action_space']
+
         self.replay_buffer_size = self._cfg.replay_buffer_size
         self.batch_size = self._cfg.batch_size
         self._alpha = self._cfg.priority_prob_alpha

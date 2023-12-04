@@ -3,14 +3,24 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-num_simulations = 25
-update_per_collect = 100
-batch_size = 256
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# num_simulations = 25
+# update_per_collect = 100
+# batch_size = 256
+# max_env_step = int(1e5)
+# reanalyze_ratio = 0
+
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 5
+update_per_collect = 1
+batch_size = 2
 max_env_step = int(1e5)
 reanalyze_ratio = 0
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -39,6 +49,7 @@ cartpole_muzero_config = dict(
         ),
         cuda=True,
         env_type='not_board_games',
+        action_type='varied_action_space',
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,

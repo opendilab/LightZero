@@ -40,6 +40,7 @@ connect4_muzero_config = dict(
         ),
         cuda=True,
         env_type='board_games',
+        action_type='varied_action_space',
         game_segment_length=int(6 * 7 / 2),  # for battle_mode='play_with_bot_mode'
         update_per_collect=update_per_collect,
         batch_size=batch_size,
