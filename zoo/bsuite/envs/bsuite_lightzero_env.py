@@ -2,7 +2,8 @@ import copy
 from typing import List
 
 import bsuite
-import gym
+import gymnasium as gym
+from zoo.atari.envs.atari_wrappers import GymToGymnasiumWrapper
 import numpy as np
 from bsuite import sweep
 from bsuite.utils import gym_wrapper
@@ -22,6 +23,7 @@ class BSuiteEnv(BaseEnv):
     def reset(self) -> np.ndarray:
         if not self._init_flag:
             raw_env = bsuite.load_from_id(bsuite_id=self.env_name)
+            raw_env = GymToGymnasiumWrapper(raw_env)
             self._env = gym_wrapper.GymFromDMEnv(raw_env)
             self._observation_space = self._env.observation_space
             self._action_space = self._env.action_space
@@ -31,10 +33,12 @@ class BSuiteEnv(BaseEnv):
             self._init_flag = True
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
-            self._env.seed(self._seed + np_seed)
+            self._seed = self._seed + np_seed
+            obs, _ = self._env.reset(seed=self._seed)
         elif hasattr(self, '_seed'):
-            self._env.seed(self._seed)
-        obs = self._env.reset()
+            obs, _ = self._env.reset(seed=self._seed)
+        else:
+            obs, _ = self._env.reset()
         if obs.shape[0] == 1:
             obs = obs[0]
         obs = to_ndarray(obs).astype(np.float32)
@@ -56,7 +60,8 @@ class BSuiteEnv(BaseEnv):
         np.random.seed(self._seed)
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
-        obs, rew, done, info = self._env.step(action)
+        obs, rew, terminated, truncated, info = self._env.step(action)
+        done = terminated or truncated
         self._eval_episode_return += rew
         if done:
             info['eval_episode_return'] = self._eval_episode_return

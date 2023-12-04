@@ -3,7 +3,7 @@ import logging
 import sys
 from typing import List
 
-import gym
+import gymnasium as gym
 import imageio
 import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
@@ -13,8 +13,8 @@ from ding.envs import BaseEnvTimestep
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
-from gym import spaces
-from gym.utils import seeding
+from gymnasium import spaces
+from gymnasium.utils import seeding
 
 
 @ENV_REGISTRY.register('game_2048')
