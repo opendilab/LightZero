@@ -49,6 +49,7 @@ jobs:
         shell: bash
         run: |
           brew install tree cloc wget curl make zip graphviz
+          brew upgrade clang
           dot -V
       - name: Set up python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
