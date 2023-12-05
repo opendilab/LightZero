@@ -126,5 +126,5 @@ if __name__ == "__main__":
         [main_config, create_config],  # type: ignore
         seed=0,
         max_env_step=max_env_step,
-        model_path=str(model_path),
+        model_path=None if model_path is None else str(model_path),
     )
