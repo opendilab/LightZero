@@ -41,7 +41,7 @@ class CartPoleEnv(BaseEnv):
         self._cfg = cfg
         self._init_flag = False
         self._continuous = False
-        self._replay_path = cfg.replay_path
+        self._replay_path = cfg.replay_path if hasattr(cfg, 'replay_path') else None
         self._observation_space = gym.spaces.Box(
             low=np.array([-4.8, float("-inf"), -0.42, float("-inf")]),
             high=np.array([4.8, float("inf"), 0.42, float("inf")]),
