@@ -1,18 +1,21 @@
 import copy
+import os
 import sys
+from datetime import datetime
 from functools import lru_cache
 from typing import List
 
 import gymnasium as gym
+import matplotlib.pyplot as plt
 import numpy as np
 from ding.envs.env.base_env import BaseEnv, BaseEnvTimestep
 from ding.utils.registry_factory import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
+from zoo.board_games.tictactoe.envs.get_done_winner_cython import get_done_winner_cython
+from zoo.board_games.tictactoe.envs.legal_actions_cython import legal_actions_cython
 
 from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
-from zoo.board_games.tictactoe.envs.legal_actions_cython import legal_actions_cython
-from zoo.board_games.tictactoe.envs.get_done_winner_cython import get_done_winner_cython
 
 
 @lru_cache(maxsize=512)
@@ -35,17 +38,34 @@ def _get_done_winner_func_lru(board_tuple):
 
 @ENV_REGISTRY.register('tictactoe')
 class TicTacToeEnv(BaseEnv):
+
     config = dict(
+        # env_name (str): The name of the environment.
         env_name="TicTacToe",
+        # battle_mode (str): The mode of the battle. Choices are 'self_play_mode' or 'alpha_beta_pruning'.
         battle_mode='self_play_mode',
-        mcts_mode='self_play_mode',  # only used in AlphaZero
-        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+        # mcts_mode (str): The mode of Monte Carlo Tree Search. This is only used in AlphaZero.
+        mcts_mode='self_play_mode',
+        # bot_action_type (str): The type of action the bot should take. Choices are 'v0' or 'alpha_beta_pruning'.
+        bot_action_type='v0',
+        # save_replay_gif (bool): If True, the replay will be saved as a gif file.
+        save_replay_gif=False,
+        # replay_path_gif (str): The path to save the replay gif.
+        replay_path_gif='./replay_gif',
+        # agent_vs_human (bool): If True, the agent will play against a human.
         agent_vs_human=False,
+        # prob_random_agent (int): The probability of the random agent.
         prob_random_agent=0,
+        # prob_expert_agent (int): The probability of the expert agent.
         prob_expert_agent=0,
+        # channel_last (bool): If True, the channel will be the last dimension.
         channel_last=True,
+        # scale (bool): If True, the pixel values will be scaled.
         scale=True,
+        # stop_value (int): The value to stop the game.
         stop_value=1,
+        # alphazero_mcts_ctree (bool): If True, the Monte Carlo Tree Search from AlphaZero is used.
+        alphazero_mcts_ctree=False,
     )
 
     @classmethod
@@ -76,6 +96,10 @@ class TicTacToeEnv(BaseEnv):
         self.bot_action_type = cfg.bot_action_type
         if 'alpha_beta_pruning' in self.bot_action_type:
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
+        self.alphazero_mcts_ctree = cfg.alphazero_mcts_ctree
+        self._replay_path_gif = cfg.replay_path_gif
+        self._save_replay_gif = cfg.save_replay_gif
+        self._save_replay_count = 0
 
     @property
     def legal_actions(self):
@@ -94,17 +118,37 @@ class TicTacToeEnv(BaseEnv):
         return _legal_actions_func_lru(tuple(map(tuple, self.board)))
 
     def get_done_winner(self):
+        """
+        Overview:
+             Check if the game is over and who the winner is. Return 'done' and 'winner'.
+        Returns:
+            - outputs (:obj:`Tuple`): Tuple containing 'done' and 'winner',
+                - if player 1 win,     'done' = True, 'winner' = 1
+                - if player 2 win,     'done' = True, 'winner' = 2
+                - if draw,             'done' = True, 'winner' = -1
+                - if game is not over, 'done' = False, 'winner' = -1
+        """
         # Convert NumPy arrays to nested tuples to make them hashable.
         return _get_done_winner_func_lru(tuple(map(tuple, self.board)))
 
-    def reset(self, start_player_index=0, init_state=None):
+    def reset(self, start_player_index=0, init_state=None, katago_policy_init=False, katago_game_state=None):
         """
         Overview:
-            Env reset and custom state start by init_state
+            This method resets the environment and optionally starts with a custom state specified by 'init_state'.
         Arguments:
-            start_player_index: players = [1,2], player_index = [0,1]
-            init_state: custom start state.
+            - start_player_index (:obj:`int`, optional): Specifies the starting player. The players are [1,2] and
+                their corresponding indices are [0,1]. Defaults to 0.
+            - init_state (:obj:`Any`, optional): The custom starting state. If provided, the game starts from this state.
+                Defaults to None.
+            - katago_policy_init (:obj:`bool`, optional): This parameter is used to maintain compatibility with the
+                handling of 'katago' related parts in 'alphazero_mcts_ctree' in Go. Defaults to False.
+            - katago_game_state (:obj:`Any`, optional): This parameter is similar to 'katago_policy_init' and is used to
+                maintain compatibility with 'katago' in 'alphazero_mcts_ctree'. Defaults to None.
         """
+        if self.alphazero_mcts_ctree and init_state is not None:
+            # Convert byte string to np.ndarray
+            init_state = np.frombuffer(init_state, dtype=np.int32)
+
         if self.scale:
             self._observation_space = gym.spaces.Box(
                 low=0, high=1, shape=(self.board_size, self.board_size, 3), dtype=np.float32
@@ -119,6 +163,8 @@ class TicTacToeEnv(BaseEnv):
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
             self.board = np.array(copy.deepcopy(init_state), dtype="int32")
+            if self.alphazero_mcts_ctree:
+                self.board = self.board.reshape((self.board_size, self.board_size))
         else:
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
 
@@ -146,6 +192,9 @@ class TicTacToeEnv(BaseEnv):
                 'current_player_index': self.start_player_index,
                 'to_play': self.current_player
             }
+        if self._save_replay_gif:
+            self._frames = []
+
         return obs
 
     def reset_v2(self, start_player_index=0, init_state=None):
@@ -172,7 +221,8 @@ class TicTacToeEnv(BaseEnv):
             timestep = self._player_step(action)
             if timestep.done:
                 # The eval_episode_return is calculated from Player 1's perspective。
-                timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs['to_play'] == 1 else timestep.reward
+                timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs[
+                                                                               'to_play'] == 1 else timestep.reward
             return timestep
         elif self.battle_mode == 'play_with_bot_mode':
             # player 1 battle with expert player 2
@@ -204,12 +254,27 @@ class TicTacToeEnv(BaseEnv):
             # player 1 battle with expert player 2
 
             # player 1's turn
+            if self._save_replay_gif:
+                self._frames.append(self._env.render(mode='rgb_array'))
             timestep_player1 = self._player_step(action)
             # self.env.render()
             if timestep_player1.done:
                 # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
                 # And the to_play is used in MCTS.
                 timestep_player1.obs['to_play'] = -1
+
+                if self._save_replay_gif:
+                    if not os.path.exists(self._replay_path_gif):
+                        os.makedirs(self._replay_path_gif)
+                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                    path = os.path.join(
+                        self._replay_path_gif,
+                        'tictactoe_episode_{}_{}.gif'.format(self._save_replay_count, timestamp)
+                    )
+                    self.display_frames_as_gif(self._frames, path)
+                    print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
+                    self._save_replay_count += 1
+
                 return timestep_player1
 
             # player 2's turn
@@ -218,7 +283,11 @@ class TicTacToeEnv(BaseEnv):
             else:
                 bot_action = self.bot_action()
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
+            if self._save_replay_gif:
+                self._frames.append(self._env.render(mode='rgb_array'))
             timestep_player2 = self._player_step(bot_action)
+            if self._save_replay_gif:
+                self._frames.append(self._env.render(mode='rgb_array'))
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
@@ -228,9 +297,23 @@ class TicTacToeEnv(BaseEnv):
             # And the to_play is used in MCTS.
             timestep.obs['to_play'] = -1
 
+            if timestep_player2.done:
+                if self._save_replay_gif:
+                    if not os.path.exists(self._replay_path_gif):
+                        os.makedirs(self._replay_path_gif)
+                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                    path = os.path.join(
+                        self._replay_path_gif,
+                        'tictactoe_episode_{}_{}.gif'.format(self._save_replay_count, timestamp)
+                    )
+                    self.display_frames_as_gif(self._frames, path)
+                    print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
+                    self._save_replay_count += 1
+
             return timestep
 
     def _player_step(self, action):
+
         if action in self.legal_actions:
             row, col = self.action_to_coord(action)
             self.board[row, col] = self.current_player
@@ -247,16 +330,15 @@ class TicTacToeEnv(BaseEnv):
         done, winner = self.get_done_winner()
 
         reward = np.array(float(winner == self.current_player)).astype(np.float32)
-        info = {'next player to play': self.to_play}
+        info = {'next player to play': self.next_player}
         """
         NOTE: here exchange the player
         """
-        self.current_player = self.to_play
+        self.current_player = self.next_player
 
         if done:
             info['eval_episode_return'] = reward
             # print('tictactoe one episode done: ', info)
-
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
         obs = {
@@ -277,11 +359,11 @@ class TicTacToeEnv(BaseEnv):
         Returns:
             - current_state (:obj:`array`):
                 the 0 dim means which positions is occupied by self.current_player,
-                the 1 dim indicates which positions are occupied by self.to_play,
+                the 1 dim indicates which positions are occupied by self.next_player,
                 the 2 dim indicates which player is the to_play player, 1 means player 1, 2 means player 2
         """
         board_curr_player = np.where(self.board == self.current_player, 1, 0)
-        board_opponent_player = np.where(self.board == self.to_play, 1, 0)
+        board_opponent_player = np.where(self.board == self.next_player, 1, 0)
         board_to_play = np.full((self.board_size, self.board_size), self.current_player)
         raw_obs = np.array([board_curr_player, board_opponent_player, board_to_play], dtype=np.float32)
         if self.scale:
@@ -413,13 +495,14 @@ class TicTacToeEnv(BaseEnv):
     @property
     def current_player_index(self):
         """
-        current_player_index = 0, current_player = 1
-        current_player_index = 1, current_player = 2
+        Overview:
+            current_player_index = 0, current_player = 1
+            current_player_index = 1, current_player = 2
         """
         return 0 if self._current_player == 1 else 1
 
     @property
-    def to_play(self):
+    def next_player(self):
         return self.players[0] if self.current_player == self.players[1] else self.players[1]
 
     @property
@@ -534,6 +617,92 @@ class TicTacToeEnv(BaseEnv):
 
         return new_board, new_legal_actions
 
+    def render(self, mode="human"):
+        """
+        Render the game state, either as a string (mode='human') or as an RGB image (mode='rgb_array').
+
+        Arguments:
+            - mode (:obj:`str`): The mode to render with. Valid modes are:
+                - 'human': render to the current display or terminal and
+                - 'rgb_array': Return an numpy.ndarray with shape (x, y, 3),
+                  representing RGB values for an image of the board
+        Returns:
+            if mode is:
+            - 'human': returns None
+            - 'rgb_array': return a numpy array representing the rendered image.
+        Raises:
+            ValueError: If the provided mode is unknown.
+        """
+        if mode == 'human':
+            print(self.board)
+        elif mode == 'rgb_array':
+            dpi = 80
+            fig, ax = plt.subplots(figsize=(6, 6), dpi=dpi)
+
+            # """Piece is in the cross point of row and col"""
+            # # Draw a black background, white grid
+            # ax.imshow(np.zeros((self.board_size, self.board_size, 3)), origin='lower')
+            # ax.grid(color='white', linewidth=2)
+            #
+            # # Draw the 'X' and 'O' symbols for each player
+            # for i in range(self.board_size):
+            #     for j in range(self.board_size):
+            #         if self.board[i, j] == 1:  # Player 1
+            #             ax.text(j, i, 'X', ha='center', va='center', color='white', fontsize=24)
+            #         elif self.board[i, j] == 2:  # Player 2
+            #             ax.text(j, i, 'O', ha='center', va='center', color='white', fontsize=24)
+
+            # # Setup the axes
+            # ax.set_xticks(np.arange(self.board_size))
+            # ax.set_yticks(np.arange(self.board_size))
+
+            """Piece is in the center point of grid"""
+            # Draw a peachpuff background, black grid
+            ax.imshow(np.ones((self.board_size, self.board_size, 3)) * np.array([255, 218, 185]) / 255, origin='lower')
+            ax.grid(color='black', linewidth=2)
+
+            # Draw the 'X' and 'O' symbols for each player
+            for i in range(self.board_size):
+                for j in range(self.board_size):
+                    if self.board[i, j] == 1:  # Player 1
+                        ax.text(j, i, 'X', ha='center', va='center', color='black', fontsize=24)
+                    elif self.board[i, j] == 2:  # Player 2
+                        ax.text(j, i, 'O', ha='center', va='center', color='white', fontsize=24)
+
+            # Setup the axes
+            ax.set_xticks(np.arange(0.5, self.board_size, 1))
+            ax.set_yticks(np.arange(0.5, self.board_size, 1))
+
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.xaxis.set_ticks_position('none')
+            ax.yaxis.set_ticks_position('none')
+
+            # Set the title of the game
+            plt.title('TicTacToe: ' + ('Black Turn' if self.current_player == 1 else 'White Turn'))
+
+            fig.canvas.draw()
+
+            # Get the width and height of the figure
+            width, height = fig.get_size_inches() * fig.get_dpi()
+            width = int(width)
+            height = int(height)
+
+            # Use the width and height values to reshape the numpy array
+            img = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
+            img = img.reshape(height, width, 3)
+
+            plt.close(fig)
+
+            return img
+        else:
+            raise ValueError(f"Unknown mode '{mode}', it should be either 'human' or 'rgb_array'.")
+
+    @staticmethod
+    def display_frames_as_gif(frames: list, path: str) -> None:
+        import imageio
+        imageio.mimsave(path, frames, fps=20)
+
     def clone(self):
         return copy.deepcopy(self)
 
@@ -541,9 +710,6 @@ class TicTacToeEnv(BaseEnv):
         self._seed = seed
         self._dynamic_seed = dynamic_seed
         np.random.seed(self._seed)
-
-    def render(self, mode="human"):
-        print(self.board)
 
     @property
     def observation_space(self) -> gym.spaces.Space:

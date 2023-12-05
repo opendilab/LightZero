@@ -54,6 +54,8 @@ class GomokuEnv(BaseEnv):
         # (str) The render mode. Options are 'None', 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.
         # If None, then the game will not be rendered.
         render_mode=None,
+        # (str or None) The directory in which to save the replay file. If None, the file is saved in the current directory.
+        replay_path=None,
         # (float) The scale of the render screen.
         screen_scaling=9,
         # (bool) Whether to use the 'channel last' format for the observation space. If False, 'channel first' format is used.
@@ -68,10 +70,10 @@ class GomokuEnv(BaseEnv):
         prob_random_agent=0,
         # (float) The probability that a random action will be taken when calling the bot.
         prob_random_action_in_bot=0.,
-        # (bool) Whether to check the action to connect 4 in the bot v0.
-        check_action_to_connect4_in_bot_v0=False,
         # (float) The stop value when training the agent. If the evalue return reach the stop value, then the training will stop.
         stop_value=2,
+        # (bool) Whether to use the MCTS ctree in AlphaZero. If True, then the AlphaZero MCTS ctree will be used.
+        alphazero_mcts_ctree=False,
     )
 
     @classmethod
@@ -117,7 +119,6 @@ class GomokuEnv(BaseEnv):
         self.prob_random_action_in_bot = cfg.prob_random_action_in_bot
         self.channel_last = cfg.channel_last
         self.scale = cfg.scale
-        self.check_action_to_connect4_in_bot_v0 = cfg.check_action_to_connect4_in_bot_v0
         self.agent_vs_human = cfg.agent_vs_human
         self.bot_action_type = cfg.bot_action_type
 
@@ -126,7 +127,7 @@ class GomokuEnv(BaseEnv):
         # options = {None, 'state_realtime_mode', 'image_realtime_mode', 'image_savefile_mode'}
         self.render_mode = cfg.render_mode
         self.replay_name_suffix = "test"
-        self.replay_path = None
+        self.replay_path = cfg.replay_path
         self.replay_format = 'gif'  # 'mp4' #
         self.screen = None
         self.frames = []
@@ -142,11 +143,30 @@ class GomokuEnv(BaseEnv):
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
         elif self.bot_action_type == 'v0':
             self.rule_bot = GomokuRuleBotV0(self, self._current_player)
+        self.alphazero_mcts_ctree = cfg.alphazero_mcts_ctree
+        if not self.alphazero_mcts_ctree:
+            # plt is not work in mcts_ctree mode
+            self.fig, self.ax = plt.subplots(figsize=(self.board_size, self.board_size))
+            plt.ion()
 
-        self.fig, self.ax = plt.subplots(figsize=(self.board_size, self.board_size))
-        plt.ion()
+    def reset(self, start_player_index=0, init_state=None, katago_policy_init=False, katago_game_state=None):
+        """
+        Overview:
+            This method resets the environment and optionally starts with a custom state specified by 'init_state'.
+        Arguments:
+            - start_player_index (:obj:`int`, optional): Specifies the starting player. The players are [1,2] and
+                their corresponding indices are [0,1]. Defaults to 0.
+            - init_state (:obj:`Any`, optional): The custom starting state. If provided, the game starts from this state.
+                Defaults to None.
+            - katago_policy_init (:obj:`bool`, optional): This parameter is used to maintain compatibility with the
+                handling of 'katago' related parts in 'alphazero_mcts_ctree' in Go. Defaults to False.
+            - katago_game_state (:obj:`Any`, optional): This parameter is similar to 'katago_policy_init' and is used to
+                maintain compatibility with 'katago' in 'alphazero_mcts_ctree'. Defaults to None.
+        """
+        if self.alphazero_mcts_ctree and init_state is not None:
+            # Convert byte string to np.ndarray
+            init_state = np.frombuffer(init_state, dtype=np.int32)
 
-    def reset(self, start_player_index=0, init_state=None):
         self._observation_space = gym.spaces.Box(
             low=0, high=2, shape=(self.board_size, self.board_size, 3), dtype=np.int32
         )
@@ -156,6 +176,8 @@ class GomokuEnv(BaseEnv):
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
             self.board = np.array(copy.deepcopy(init_state), dtype="int32")
+            if self.alphazero_mcts_ctree:
+                self.board = self.board.reshape((self.board_size, self.board_size))
         else:
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
         action_mask = np.zeros(self.total_num_actions, 'int8')
@@ -239,8 +261,10 @@ class GomokuEnv(BaseEnv):
         elif self.battle_mode == 'eval_mode':
             # player 1 battle with expert player 2
 
+            self._env.render(self.render_mode)
             # player 1's turn
             timestep_player1 = self._player_step(action)
+            self._env.render(self.render_mode)
             if self.agent_vs_human:
                 print('player 1 (agent): ' + self.action_to_string(action))  # Note: visualize
                 self.render(mode="image_realtime_mode")
@@ -258,6 +282,7 @@ class GomokuEnv(BaseEnv):
                 # bot_action = self.random_action()
 
             timestep_player2 = self._player_step(bot_action)
+            self._env.render(self.render_mode)
             if self.agent_vs_human:
                 print('player 2 (human): ' + self.action_to_string(bot_action))  # Note: visualize
                 self.render(mode="image_realtime_mode")
@@ -295,14 +320,14 @@ class GomokuEnv(BaseEnv):
         """
         self.current_player = self.to_play
 
-        # Render the new step.
-        # The following code is used to save the rendered images in both
-        # collect/eval step and the simulated mcts step.
+        # The following code will save the rendered images in both env step in collect/eval phase and the env step in
+        # simulated mcts.
         # if self.render_mode is not None:
         #     self.render(self.render_mode)
 
         if done:
             info['eval_episode_return'] = reward
+            self._env.render(self.render_mode)
             if self.render_mode == 'image_savefile_mode':
                 self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
                                         format=self.replay_format)
@@ -558,6 +583,8 @@ class GomokuEnv(BaseEnv):
             - mode (str): Rendering mode, options are "state_realtime_mode", "image_realtime_mode",
               and "image_savefile_mode".
         """
+        if mode is None:
+            return
         # Print the state of the board directly
         if mode == "state_realtime_mode":
             print(np.array(self.board).reshape(self.board_size, self.board_size))
@@ -587,7 +614,14 @@ class GomokuEnv(BaseEnv):
                 # Save the current frame to the frames list.
                 self.fig.canvas.draw()
                 image = np.frombuffer(self.fig.canvas.tostring_rgb(), dtype='uint8')
-                image = image.reshape(self.fig.canvas.get_width_height()[::-1] + (3,))
+
+                # Get the width and height of the figure
+                width, height = self.fig.get_size_inches() * self.fig.get_dpi()
+                width = int(width)
+                height = int(height)
+                image = image.reshape(height, width, 3)
+
+                # image = image.reshape(self.fig.canvas.get_width_height()[::-1] + (3,))
                 self.frames.append(image)
 
     def close(self):
@@ -683,9 +717,11 @@ class GomokuEnv(BaseEnv):
         """
         # At the end of the episode, save the frames.
         if replay_path is None:
-            filename = f'game_gomoku_{self.board_size}_{replay_name_suffix}.{format}'
+            filename = f'gomoku_{self.board_size}_{replay_name_suffix}.{format}'
         else:
-            filename = f'{replay_path}.{format}'
+            if not os.path.exists(replay_path):
+                os.makedirs(replay_path)
+            filename = replay_path+f'/gomoku_{self.board_size}_{replay_name_suffix}.{format}'
 
         if format == 'gif':
             # Save frames as a GIF with a duration of 0.1 seconds per frame.

@@ -1,5 +1,6 @@
-# Borrow a lot from openai baselines:
-# https://github.com/openai/baselines/blob/master/baselines/common/atari_wrappers.py
+# Adapted from openai baselines: https://github.com/openai/baselines/blob/master/baselines/common/atari_wrappers.py
+from datetime import datetime
+from typing import Optional
 
 import cv2
 import gymnasium 
@@ -9,9 +10,11 @@ from ding.envs import NoopResetWrapper, MaxAndSkipWrapper, EpisodicLifeWrapper, 
     ScaledFloatFrameWrapper, \
     ClipRewardWrapper, FrameStackWrapper
 from ding.utils.compression_helper import jpeg_data_compressor
+from easydict import EasyDict
 from gym.wrappers import RecordVideo
 
 
+# only for reference now
 def wrap_deepmind(env_id, episode_life=True, clip_rewards=True, frame_stack=4, scale=True, warp_frame=True):
     """Configure environment for DeepMind-style Atari. The observation is
     channel-first: (c, h, w) instead of (h, w, c).
@@ -43,6 +46,7 @@ def wrap_deepmind(env_id, episode_life=True, clip_rewards=True, frame_stack=4, s
     return env
 
 
+# only for reference now
 def wrap_deepmind_mr(env_id, episode_life=True, clip_rewards=True, frame_stack=4, scale=True, warp_frame=True):
     """Configure environment for DeepMind-style Atari. The observation is
     channel-first: (c, h, w) instead of (h, w, c).
@@ -74,18 +78,17 @@ def wrap_deepmind_mr(env_id, episode_life=True, clip_rewards=True, frame_stack=4
     return env
 
 
-def wrap_lightzero(config, episode_life, clip_rewards):
+def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> gym.Env:
     """
     Overview:
         Configure environment for MuZero-style Atari. The observation is
         channel-first: (c, h, w) instead of (h, w, c).
     Arguments:
-        - config (:obj:`Dict`): Dict containing configuration.
-        - wrap_frame (:obj:`bool`):
-        - save_video (:obj:`bool`):
-        - save_path (:obj:`bool`):
+        - config (:obj:`Dict`): Dict containing configuration parameters for the environment.
+        - episode_life (:obj:`bool`): If True, the agent starts with a set number of lives and loses them during the game.
+        - clip_rewards (:obj:`bool`): If True, the rewards are clipped to a certain range.
     Return:
-        - the wrapped atari environment.
+        - env (:obj:`gym.Env`): The wrapped Atari environment with the given configurations.
     """
     if config.render_mode_human:
         env = gymnasium.make(config.env_name, render_mode='human')
@@ -105,13 +108,14 @@ def wrap_lightzero(config, episode_life, clip_rewards):
         env = ScaledFloatFrameWrapper(env)
     if clip_rewards:
         env = ClipRewardWrapper(env)
-    if config.save_video:
-        import random, string
+    if config.save_replay:
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        video_name = f'{env.spec.id}-video-{timestamp}'
         env = RecordVideo(
             env,
-            video_folder=config.save_path,
+            video_folder=config.replay_path,
             episode_trigger=lambda episode_id: True,
-            name_prefix='rl-video-{}'.format(''.join(random.choice(string.ascii_lowercase) for i in range(5))),
+            name_prefix=video_name
         )
 
     env = JpegWrapper(env, transform2string=config.transform2string)
@@ -122,8 +126,17 @@ def wrap_lightzero(config, episode_life, clip_rewards):
 
 
 class TimeLimit(gym.Wrapper):
+    """
+    Overview:
+        A wrapper that limits the maximum number of steps in an episode.
+    """
 
-    def __init__(self, env, max_episode_steps=None):
+    def __init__(self, env: gym.Env, max_episode_steps: Optional[int] = None):
+        """
+        Arguments:
+            - env (:obj:`gym.Env`): The environment to wrap.
+            - max_episode_steps (:obj:`Optional[int]`): Maximum number of steps per episode. If None, no limit is applied.
+        """
         super(TimeLimit, self).__init__(env)
         self._max_episode_steps = max_episode_steps
         self._elapsed_steps = 0
@@ -142,12 +155,20 @@ class TimeLimit(gym.Wrapper):
 
 
 class WarpFrame(gym.ObservationWrapper):
+    """
+    Overview:
+        A wrapper that warps frames to 84x84 as done in the Nature paper and later work.
+    """
 
-    def __init__(self, env, width=84, height=84, grayscale=True, dict_space_key=None):
+    def __init__(self, env: gym.Env, width: int = 84, height: int = 84, grayscale: bool = True,
+                 dict_space_key: Optional[str] = None):
         """
-        Warp frames to 84x84 as done in the Nature paper and later work.
-        If the environment uses dictionary observations, `dict_space_key` can be specified which indicates which
-        observation should be warped.
+        Arguments:
+            - env (:obj:`gym.Env`): The environment to wrap.
+            - width (:obj:`int`): The width to which the frames are resized.
+            - height (:obj:`int`): The height to which the frames are resized.
+            - grayscale (:obj:`bool`): If True, convert frames to grayscale.
+            - dict_space_key (:obj:`Optional[str]`): If specified, indicates which observation should be warped.
         """
         super().__init__(env)
         self._width = width
@@ -194,10 +215,16 @@ class WarpFrame(gym.ObservationWrapper):
 
 
 class JpegWrapper(gym.Wrapper):
+    """
+    Overview:
+        A wrapper that converts the observation into a string to save memory.
+    """
 
-    def __init__(self, env, transform2string=True):
+    def __init__(self, env: gym.Env, transform2string: bool = True):
         """
-        Overview: convert the observation into string to save memory
+        Arguments:
+            - env (:obj:`gym.Env`): The environment to wrap.
+            - transform2string (:obj:`bool`): If True, transform the observations to string.
         """
         super().__init__(env)
         self.transform2string = transform2string
@@ -220,10 +247,15 @@ class JpegWrapper(gym.Wrapper):
 
 
 class GameWrapper(gym.Wrapper):
+    """
+    Overview:
+        A wrapper to adapt the environment to the game interface.
+    """
 
-    def __init__(self, env):
+    def __init__(self, env: gym.Env):
         """
-        Overview: warp env to adapt the game interface
+        Arguments:
+            - env (:obj:`gym.Env`): The environment to wrap.
         """
         super().__init__(env)
 

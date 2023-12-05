@@ -1,10 +1,10 @@
-from zoo.board_games.gomoku.config.gomoku_alphazero_bot_mode_config import main_config, create_config
-from lzero.entry import eval_alphazero
+from zoo.board_games.connect4.config.connect4_muzero_bot_mode_config import main_config, create_config
+from lzero.entry import eval_muzero
 import numpy as np
 
 if __name__ == '__main__':
     """
-    Entry point for the evaluation of the AlphaZero model on the Gomoku environment. 
+    Entry point for the evaluation of the MuZero model on the Connect4 environment. 
 
     Variables:
         - model_path (:obj:`Optional[str]`): The pretrained model path, which should point to the ckpt file of the 
@@ -19,7 +19,6 @@ if __name__ == '__main__':
     """
     # model_path = './ckpt/ckpt_best.pth.tar'
     model_path = None
-
     seeds = [0]
     num_episodes_each_seed = 1
     # If True, you can play with the agent.
@@ -29,16 +28,16 @@ if __name__ == '__main__':
     main_config.env.render_mode = 'image_savefile_mode'
     main_config.env.replay_path = './video'
 
+    main_config.env.prob_random_action_in_bot = 0.
+    main_config.env.bot_action_type = 'rule'
     create_config.env_manager.type = 'base'
-    main_config.env.alphazero_mcts_ctree = False
-    main_config.policy.mcts_ctree = False
     main_config.env.evaluator_env_num = 1
     main_config.env.n_evaluator_episode = 1
     total_test_episodes = num_episodes_each_seed * len(seeds)
     returns_mean_seeds = []
     returns_seeds = []
     for seed in seeds:
-        returns_mean, returns = eval_alphazero(
+        returns_mean, returns = eval_muzero(
             [main_config, create_config],
             seed=seed,
             num_episodes_each_seed=num_episodes_each_seed,

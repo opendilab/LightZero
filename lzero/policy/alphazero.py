@@ -36,6 +36,11 @@ class AlphaZeroPolicy(Policy):
             # (int) The number of channels of hidden states in AlphaZero model.
             num_channels=32,
         ),
+        # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
+        # this variable is used in ``collector``.
+        sampled_algo=False,
+        # (bool) Whether to enable the gumbel-based algorithm (e.g. Gumbel Muzero)
+        gumbel_algo=False,
         # (bool) Whether to use multi-gpu training.
         multi_gpu=False,
         # (bool) Whether to use cuda for network.
@@ -246,18 +251,20 @@ class AlphaZeroPolicy(Policy):
         self._collect_mcts_temperature = temperature
         ready_env_id = list(obs.keys())
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
+        # If 'katago_game_state' is in the observation of the given environment ID, it's value is used.
+        # If it's not present (which will raise a KeyError), None is used instead.
+        # This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.
+        katago_game_state = {env_id: obs[env_id].get('katago_game_state', None) for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
         output = {}
         self._policy_model = self._collect_model
         for env_id in ready_env_id:
             state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
-                                                                  init_state=init_state[env_id], ))
-            action, mcts_probs = self._collect_mcts.get_next_action(
-                state_config_for_simulation_env_reset,
-                policy_forward_fn=self._policy_value_fn,
-                temperature=self._collect_mcts_temperature,
-                sample=True
-            )
+                                                                  init_state=init_state[env_id],
+                                                                  katago_policy_init=False,
+                                                                  katago_game_state=katago_game_state[env_id]))
+            action, mcts_probs = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self._collect_mcts_temperature, True)
+
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,
@@ -305,15 +312,20 @@ class AlphaZeroPolicy(Policy):
         """
         ready_env_id = list(obs.keys())
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
+        # If 'katago_game_state' is in the observation of the given environment ID, it's value is used.
+        # If it's not present (which will raise a KeyError), None is used instead.
+        # This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.
+        katago_game_state = {env_id: obs[env_id].get('katago_game_state', None) for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
         output = {}
         self._policy_model = self._eval_model
         for env_id in ready_env_id:
             state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
-                                                                  init_state=init_state[env_id], ))
+                                                                  init_state=init_state[env_id],
+                                                                  katago_policy_init=False,
+                                                                  katago_game_state=katago_game_state[env_id]))
             action, mcts_probs = self._eval_mcts.get_next_action(
-                state_config_for_simulation_env_reset, policy_forward_fn=self._policy_value_fn, temperature=1.0,
-                sample=False
+                state_config_for_simulation_env_reset, self._policy_value_fn, 1.0, False
             )
             output[env_id] = {
                 'action': action,
@@ -343,6 +355,15 @@ class AlphaZeroPolicy(Policy):
             else:
                 raise NotImplementedError
             self.simulate_env = GomokuEnv(gomoku_alphazero_config.env)
+        elif self._cfg.simulation_env_name == 'connect4':
+            from zoo.board_games.connect4.envs.connect4_env import Connect4Env
+            if self._cfg.simulation_env_config_type == 'play_with_bot':
+                from zoo.board_games.connect4.config.connect4_alphazero_bot_mode_config import connect4_alphazero_config
+            elif self._cfg.simulation_env_config_type == 'self_play':
+                from zoo.board_games.connect4.config.connect4_alphazero_sp_mode_config import connect4_alphazero_config
+            else:
+                raise NotImplementedError
+            self.simulate_env = Connect4Env(connect4_alphazero_config.env)
         else:
             raise NotImplementedError
 
