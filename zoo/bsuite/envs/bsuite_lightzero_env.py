@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from typing import Union, Optional, Dict, List
 
-import gym
+import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
 import bsuite

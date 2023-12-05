@@ -5,7 +5,7 @@ from datetime import datetime
 from functools import lru_cache
 from typing import List
 
-import gym
+import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
 from ding.envs.env.base_env import BaseEnv, BaseEnvTimestep

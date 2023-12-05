@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import pytest
-import gym
+import gymnasium as gym
 import numpy as np
 
 from ding.envs import DingEnvWrapper

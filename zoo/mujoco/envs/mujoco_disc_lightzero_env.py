@@ -2,7 +2,7 @@ import os
 from itertools import product
 from typing import Union
 
-import gym
+import gymnasium as gym
 import numpy as np
 from ding.envs import BaseEnvTimestep
 from ding.envs.common import save_frames_as_gif

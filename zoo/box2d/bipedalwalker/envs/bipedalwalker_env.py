@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from typing import List, Optional, Dict
 
-import gym
+import gymnasium as gym
 import numpy as np
 from ding.envs import BaseEnvTimestep
 from ding.envs.common import affine_transform
@@ -93,11 +93,6 @@ class BipedalWalkerEnv(CartPoleEnv):
                 low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1, ), dtype=np.float32
             )
             self._init_flag = True
-        if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
-            np_seed = 100 * np.random.randint(1, 1000)
-            self._env.seed(self._seed + np_seed)
-        elif hasattr(self, '_seed'):
-            self._env.seed(self._seed)
         if self._replay_path is not None:
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             video_name = f'{self._env.spec.id}-video-{timestamp}'
@@ -107,7 +102,14 @@ class BipedalWalkerEnv(CartPoleEnv):
                 episode_trigger=lambda episode_id: True,
                 name_prefix=video_name
             )
-        obs = self._env.reset()
+        if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
+            np_seed = 100 * np.random.randint(1, 1000)
+            self._seed = self._seed + np_seed
+            obs, _ = self._env.reset(seed=self._seed)  # using the reset method of Gymnasium env
+        elif hasattr(self, '_seed'):
+            obs, _ = self._env.reset(seed=self._seed)
+        else:
+            obs, _ = self._env.reset()
         obs = to_ndarray(obs).astype(np.float32)
         self._eval_episode_return = 0
         if self._save_replay_gif:
@@ -135,7 +137,8 @@ class BipedalWalkerEnv(CartPoleEnv):
         if self._save_replay_gif:
             self._frames.append(self._env.render(mode='rgb_array'))
 
-        obs, rew, done, info = self._env.step(action)
+        obs, rew, terminated, truncated, info = self._env.step(action)
+        done = terminated or truncated
 
         action_mask = None
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}

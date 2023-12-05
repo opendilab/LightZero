@@ -41,7 +41,7 @@ from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
-from gym import spaces
+from gymnasium import spaces
 
 from zoo.board_games.connect4.envs.rule_bot import Connect4RuleBot
 from zoo.board_games.mcts_bot import MCTSBot

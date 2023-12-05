@@ -4,7 +4,7 @@ import sys
 from functools import lru_cache
 from typing import List, Any
 
-import gym
+import gymnasium as gym
 import imageio
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
