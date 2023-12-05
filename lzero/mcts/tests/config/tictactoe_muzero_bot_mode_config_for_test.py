@@ -32,6 +32,9 @@ tictactoe_muzero_config = dict(
         channel_last=True,
         scale=True,
         stop_value=1,
+        alphazero_mcts_ctree=False,
+        save_replay_gif=False,
+        replay_path_gif='./replay_gif',
     ),
     policy=dict(
         sampled_algo=False,
