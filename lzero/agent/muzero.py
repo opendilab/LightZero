@@ -32,6 +32,12 @@ from lzero.mcts import MuZeroGameBuffer
 
 
 class MuZeroAgent:
+    """
+    Overview:
+        Agent class for execution MuZero algorithms. It includes train, deploy, batch_evaluate methods.
+    Interface:
+        __init__, train, deploy, batch_evaluate
+    """
 
     supported_env_list = list(supported_env_cfg.keys())
 
@@ -44,6 +50,20 @@ class MuZeroAgent:
             cfg: Optional[Union[EasyDict, dict]] = None,
             policy_state_dict: str = None,
     ) -> None:
+        """
+        Overview:
+            Initialize agent object.
+        Arguments:
+            - env_id (:obj:`str`): The environment id registered in gym.
+            - seed (:obj:`int`): The random seed to set. Default to 0.
+            - exp_name (:obj:`str`): The name of the experiment. Default to None.
+            - model (:obj:`Optional[torch.nn.Module]`): Instance of torch.nn.Module. Default to None. \
+                If None, the default model will be generated.
+            - cfg (:obj:`Optional[Union[EasyDict, dict]]`): Config in dict type. Default to None. \
+                If None, the default config will be used.
+            - policy_state_dict (:obj:`str`): The path of the pretrained model. Default to None. \
+                If set, the pretrained model will be loaded.
+        """
         assert env_id is not None or cfg["main_config"]["env_id"] is not None, "Please specify env_id or cfg."
 
         if cfg is not None and not isinstance(cfg, EasyDict):
@@ -105,6 +125,12 @@ class MuZeroAgent:
         self,
         step: int = int(1e7),
     ) -> TrainingReturn:
+        """
+        Overview:
+            Train the agent by interacting with the environment for ``step`` times.
+        Arguments:
+            - step (:obj:`int`): The total number of interactions with the environment. Default to 1e7.
+        """
 
         collector_env = create_env_manager(
             self.cfg.env.manager, [partial(self.env_fn, cfg=c) for c in self.collector_env_cfg]
@@ -240,6 +266,21 @@ class MuZeroAgent:
             seed: Optional[Union[int, List]] = None,
             debug: bool = False
     ) -> EvalReturn:
+        """
+        Overview:
+            Deploy the agent by interacting with the environment. The performance of the agent will be evaluated. \
+            Average return and standard deviation of the return will be returned. \
+            A video will be saved if ``enable_save_replay`` is set to True.
+        Arguments:
+            - enable_save_replay (:obj:`bool`): Whether to save the replay video. Default to False.
+            - concatenate_all_replay (:obj:`bool`): Whether to concatenate all the replay videos into one video. \
+                Default to False.
+            - replay_save_path (:obj:`str`): The path to save the replay video. Default to None. \
+                If None, a default path will be used.
+            - seed (:obj:`Optional[Union[int, List]]`): The random seed to set. Default to None. \
+                If None, the default seed 0 will be used.
+            - debug (:obj:`bool`): Whether to enable the debug mode. Default to False.
+        """
 
         deply_configs = [self.evaluator_env_cfg[0]]
 
@@ -310,6 +351,13 @@ class MuZeroAgent:
         self,
         n_evaluator_episode: int = None,
     ) -> EvalReturn:
+        """
+        Overview:
+            Evaluate the agent by interacting with the environment for ``n_evaluator_episode`` times.
+        Arguments:
+            - n_evaluator_episode (:obj:`int`): The total number of interactions with the environment. Default to None. \
+                If None, the default value in configuration will be used.
+        """
 
         evaluator_env = create_env_manager(
             self.cfg.env.manager, [partial(self.env_fn, cfg=c) for c in self.evaluator_env_cfg]
@@ -346,6 +394,13 @@ class MuZeroAgent:
 
     @property
     def best(self):
+        """
+        Overview:
+            Load the best model and return the agent.
+        .. note::
+            The best model is saved in ``./exp_name/ckpt/ckpt_best.pth.tar``.
+            If called, the agent will load the best model and lose the current policy.
+        """
         best_model_file_path = os.path.join(self.checkpoint_save_dir, "ckpt_best.pth.tar")
         # Load best model if it exists
         if os.path.exists(best_model_file_path):
