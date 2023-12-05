@@ -28,6 +28,7 @@ class BSuiteEnv(BaseEnv):
         # (str) The gym environment name.
         env_name='memory_len/9',
         # (bool) If True, save the replay as a gif file.
+        # Due to the definition of the environment, rendering images of certain sub-environments are meaningless.
         save_replay_gif=False,
         # (str or None) The path to save the replay gif. If None, the replay gif will not be saved.
         replay_path_gif=None,

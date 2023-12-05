@@ -34,7 +34,7 @@ class MujocoDiscEnvLZ(MujocoDiscEnv):
     def __init__(self, cfg: dict) -> None:
         """
         Overview:
-            Initialize the Mujoco environment with the given config dictionary.
+            Initialize the MuJoCo environment with the given config dictionary.
         Arguments:
             - cfg (:obj:`dict`): Configuration dictionary.
         """

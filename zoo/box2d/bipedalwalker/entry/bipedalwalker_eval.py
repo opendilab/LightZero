@@ -6,7 +6,7 @@ import numpy as np
 if __name__ == "__main__":
     """
     Overview:
-        Evaluate the model performance by running multiple episodes with different seeds using the MuZero algorithm.
+        Evaluate the model performance by running multiple episodes with different seeds using the Sampled EfficientZero algorithm.
         The evaluation results (returns and mean returns) are printed out for each seed and summarized for all seeds. 
     Variables:
         - model_path (:obj:`str`): Path to the pretrained model's checkpoint file. Usually something like 

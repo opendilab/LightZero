@@ -28,7 +28,7 @@ class BipedalWalkerDiscEnv(BipedalWalkerEnv):
     def default_config(cls: type) -> EasyDict:
         """
         Overview:
-            Get the default configuration of the LunarLander environment.
+            Get the default configuration of the BipedalWalker environment.
         Returns:
             - cfg (:obj:`EasyDict`): Default configuration dictionary.
         """
@@ -61,7 +61,7 @@ class BipedalWalkerDiscEnv(BipedalWalkerEnv):
     def __init__(self, cfg: dict) -> None:
         """
         Overview:
-            Initialize the LunarLander environment with the given config dictionary.
+            Initialize the BipedalWalker environment with the given config dictionary.
         Arguments:
             - cfg (:obj:`dict`): Configuration dictionary.
         """
