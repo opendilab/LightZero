@@ -136,6 +136,8 @@ class LunarLanderEnv(CartPoleEnv):
         obs, rew, done, info = self._env.step(action)
         if 'Continuous' not in self._env_name:
             action_mask = np.ones(4, 'int8')
+            # TODO: test the performance of varied_action_space.
+            action_mask[0] = 0
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         else:
             action_mask = None
