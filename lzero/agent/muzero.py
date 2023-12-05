@@ -1,42 +1,44 @@
 import os
 from functools import partial
-from typing import Optional, Union, List, Tuple
-from ditk import logging
-from easydict import EasyDict
+from typing import Optional, Union, List
 
 import numpy as np
 import torch
-import treetensor.torch as ttorch
-
-from ding.config import compile_config
+from ding.bonus.common import TrainingReturn, EvalReturn
+from ding.config import save_config_py, compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
-from ding.utils import set_pkg_seed, get_rank
 from ding.rl_utils import get_epsilon_greedy_fn
+from ding.utils import set_pkg_seed, get_rank
 from ding.worker import BaseLearner
-from ding.config import save_config_py, compile_config
-from ding.utils import get_env_fps, render
-from ding.bonus.common import TrainingReturn, EvalReturn
-
+from ditk import logging
+from easydict import EasyDict
 from tensorboardX import SummaryWriter
 
+from lzero.agent.config.muzero import supported_env_cfg
 from lzero.entry.utils import log_buffer_memory_usage, random_collect
+from lzero.mcts import MuZeroGameBuffer
 from lzero.policy import visit_count_temperature
 from lzero.policy.muzero import MuZeroPolicy
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
-from lzero.agent.config.muzero import supported_env_cfg
-from lzero.mcts import MuZeroGameBuffer
 
 
 class MuZeroAgent:
     """
     Overview:
-        Agent class for execution MuZero algorithms. It includes train, deploy, batch_evaluate methods.
-    Interface:
+        Agent class for executing MuZero algorithms which include methods for training, deployment, and batch evaluation.
+    Interfaces:
         __init__, train, deploy, batch_evaluate
+    Properties:
+        best
+
+    .. note::
+        This agent class is tailored for use with the HuggingFace Model Zoo for LightZero
+        (e.g. https://huggingface.co/OpenDILabCommunity/CartPole-v0-MuZero),
+         and provides methods such as "train" and "deploy".
     """
 
     supported_env_list = list(supported_env_cfg.keys())
@@ -52,17 +54,18 @@ class MuZeroAgent:
     ) -> None:
         """
         Overview:
-            Initialize agent object.
+            Initialize the MuZeroAgent instance with environment parameters, model, and configuration.
         Arguments:
-            - env_id (:obj:`str`): The environment id registered in gym.
-            - seed (:obj:`int`): The random seed to set. Default to 0.
-            - exp_name (:obj:`str`): The name of the experiment. Default to None.
-            - model (:obj:`Optional[torch.nn.Module]`): Instance of torch.nn.Module. Default to None. \
-                If None, the default model will be generated.
-            - cfg (:obj:`Optional[Union[EasyDict, dict]]`): Config in dict type. Default to None. \
-                If None, the default config will be used.
-            - policy_state_dict (:obj:`str`): The path of the pretrained model. Default to None. \
-                If set, the pretrained model will be loaded.
+            - env_id (:obj:`str`): Identifier for the environment to be used, registered in gym.
+            - seed (:obj:`int`): Random seed for reproducibility. Defaults to 0.
+            - exp_name (:obj:`Optional[str]`): Name for the experiment. Defaults to None.
+            - model (:obj:`Optional[torch.nn.Module]`): PyTorch module to be used as the model. If None, a default model is created. Defaults to None.
+            - cfg (:obj:`Optional[Union[EasyDict, dict]]`): Configuration for the agent. If None, default configuration will be used. Defaults to None.
+            - policy_state_dict (:obj:`Optional[str]`): Path to a pre-trained model state dictionary. If provided, state dict will be loaded. Defaults to None.
+
+        .. note::
+            - If `env_id` is not specified, it must be included in `cfg`.
+            - The `supported_env_list` contains all the environment IDs that are supported by this agent.
         """
         assert env_id is not None or cfg["main_config"]["env_id"] is not None, "Please specify env_id or cfg."
 
@@ -109,7 +112,6 @@ class MuZeroAgent:
                 model = MuZeroModel(**self.cfg.policy.model)
             else:
                 raise NotImplementedError
-        #self.policy = MuZeroPolicy(self.cfg.policy, model=model)
         if self.cfg.policy.cuda and torch.cuda.is_available():
             self.cfg.policy.device = 'cuda'
         else:
@@ -127,9 +129,13 @@ class MuZeroAgent:
     ) -> TrainingReturn:
         """
         Overview:
-            Train the agent by interacting with the environment for ``step`` times.
+            Train the agent through interactions with the environment.
         Arguments:
-            - step (:obj:`int`): The total number of interactions with the environment. Default to 1e7.
+            - step (:obj:`int`): Total number of environment steps to train for. Defaults to 10 million (1e7).
+        Returns:
+            - A `TrainingReturn` object containing training information, such as logs and potentially a URL to a training dashboard.
+        .. note::
+            The method involves interacting with the environment, collecting experience, and optimizing the model.
         """
 
         collector_env = create_env_manager(
@@ -268,18 +274,17 @@ class MuZeroAgent:
     ) -> EvalReturn:
         """
         Overview:
-            Deploy the agent by interacting with the environment. The performance of the agent will be evaluated. \
-            Average return and standard deviation of the return will be returned. \
-            A video will be saved if ``enable_save_replay`` is set to True.
+            Deploy the agent for evaluation in the environment, with optional replay saving. The performance of the
+            agent will be evaluated. Average return and standard deviation of the return will be returned. 
+            If `enable_save_replay` is True, replay videos are saved in the specified `replay_save_path`.
         Arguments:
-            - enable_save_replay (:obj:`bool`): Whether to save the replay video. Default to False.
-            - concatenate_all_replay (:obj:`bool`): Whether to concatenate all the replay videos into one video. \
-                Default to False.
-            - replay_save_path (:obj:`str`): The path to save the replay video. Default to None. \
-                If None, a default path will be used.
-            - seed (:obj:`Optional[Union[int, List]]`): The random seed to set. Default to None. \
-                If None, the default seed 0 will be used.
+            - enable_save_replay (:obj:`bool`): Flag to enable saving of replay footage. Defaults to False.
+            - concatenate_all_replay (:obj:`bool`): Whether to concatenate all replay videos into one file. Defaults to False.
+            - replay_save_path (:obj:`Optional[str]`): Directory path to save replay videos. Defaults to None, which sets a default path.
+            - seed (:obj:`Optional[Union[int, List[int]]]`): Seed or list of seeds for environment reproducibility. Defaults to None.
             - debug (:obj:`bool`): Whether to enable the debug mode. Default to False.
+        Returns:
+            - An `EvalReturn` object containing evaluation metrics such as mean and standard deviation of returns.
         """
 
         deply_configs = [self.evaluator_env_cfg[0]]
@@ -353,12 +358,16 @@ class MuZeroAgent:
     ) -> EvalReturn:
         """
         Overview:
-            Evaluate the agent by interacting with the environment for ``n_evaluator_episode`` times.
+            Perform a batch evaluation of the agent over a specified number of episodes: ``n_evaluator_episode``.
         Arguments:
-            - n_evaluator_episode (:obj:`int`): The total number of interactions with the environment. Default to None. \
-                If None, the default value in configuration will be used.
-        """
+            - n_evaluator_episode (:obj:`Optional[int]`): Number of episodes to run the evaluation.
+                If None, uses default value from configuration. Defaults to None.
+        Returns:
+            - An `EvalReturn` object with evaluation results such as mean and standard deviation of returns.
 
+        .. note::
+            This method evaluates the agent's performance across multiple episodes to gauge its effectiveness.
+        """
         evaluator_env = create_env_manager(
             self.cfg.env.manager, [partial(self.env_fn, cfg=c) for c in self.evaluator_env_cfg]
         )
@@ -396,11 +405,15 @@ class MuZeroAgent:
     def best(self):
         """
         Overview:
-            Load the best model and return the agent.
+            Provides access to the best model according to evaluation metrics.
+        Returns:
+            - The agent with the best model loaded.
+
         .. note::
-            The best model is saved in ``./exp_name/ckpt/ckpt_best.pth.tar``.
-            If called, the agent will load the best model and lose the current policy.
+            The best model is saved in the path `./exp_name/ckpt/ckpt_best.pth.tar`.
+            When this property is accessed, the agent instance will load the best model state.
         """
+
         best_model_file_path = os.path.join(self.checkpoint_save_dir, "ckpt_best.pth.tar")
         # Load best model if it exists
         if os.path.exists(best_model_file_path):
