@@ -1,4 +1,4 @@
-from bsuite_muzero_config import main_config, create_config
+from zoo.bsuite.config.bsuite_muzero_config import main_config, create_config
 from lzero.entry import eval_muzero
 import numpy as np
 

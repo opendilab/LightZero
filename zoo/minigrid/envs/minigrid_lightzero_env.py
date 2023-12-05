@@ -1,5 +1,6 @@
 import copy
 import os
+from datetime import datetime
 from typing import List, Optional
 
 import gymnasium as gym
@@ -31,8 +32,14 @@ class MiniGridEnvLightZero(MiniGridEnv):
         _max_step (int): Maximum number of steps for the environment.
     """
     config = dict(
+        # (str) The gym environment name.
         env_name='MiniGrid-Empty-8x8-v0',
+        # (bool) If True, save the replay as a gif file.
+        save_replay_gif=False,
+        # (str or None) The path to save the replay gif. If None, the replay gif will not be saved.
+        replay_path_gif=None,
         flat_obs=True,
+        # (int) The maximum number of steps for each episode.
         max_step=300,
     )
 
@@ -60,8 +67,10 @@ class MiniGridEnvLightZero(MiniGridEnv):
         self._init_flag = False
         self._env_name = cfg.env_name
         self._flat_obs = cfg.flat_obs
-        self._save_replay = False
+        self._save_replay_gif = cfg.save_replay_gif
+        self._replay_path_gif = cfg.replay_path_gif
         self._max_step = cfg.max_step
+        self._save_replay_count = 0
 
     def reset(self) -> np.ndarray:
         """
@@ -71,7 +80,7 @@ class MiniGridEnvLightZero(MiniGridEnv):
             - obs (:obj:`np.ndarray`): Initial observation from the environment.
         """
         if not self._init_flag:
-            if self._save_replay:
+            if self._save_replay_gif:
                 self._env = gym.make(self._env_name, render_mode="rgb_array")
             else:
                 self._env = gym.make(self._env_name)
@@ -115,7 +124,7 @@ class MiniGridEnvLightZero(MiniGridEnv):
         obs = to_ndarray(obs)
         self._eval_episode_return = 0
         self._current_step = 0
-        if self._save_replay:
+        if self._save_replay_gif:
             self._frames = []
 
         action_mask = np.ones(self.action_space.n, 'int8')
@@ -159,7 +168,7 @@ class MiniGridEnvLightZero(MiniGridEnv):
         """
         if isinstance(action, np.ndarray) and action.shape == (1, ):
             action = action.squeeze()  # 0-dim array
-        if self._save_replay:
+        if self._save_replay_gif:
             self._frames.append(self._env.render())
         # using the step method of Gymnasium env, return is (observation, reward, terminated, truncated, info)
         obs, rew, done, _, info = self._env.step(action)
@@ -172,11 +181,16 @@ class MiniGridEnvLightZero(MiniGridEnv):
             info['eval_episode_return'] = self._eval_episode_return
             info['current_step'] = self._current_step
             info['max_step'] = self._max_step
-            if self._save_replay:
+            if self._save_replay_gif:
+                if not os.path.exists(self._replay_path_gif):
+                    os.makedirs(self._replay_path_gif)
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 path = os.path.join(
-                    self._replay_path, '{}_episode_{}.gif'.format(self._env_name, self._save_replay_count)
+                    self._replay_path_gif,
+                    '{}_episode_{}_seed{}_{}.gif'.format(self._env_name, self._save_replay_count, self._seed, timestamp)
                 )
                 self.display_frames_as_gif(self._frames, path)
+                print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
                 self._save_replay_count += 1
         obs = to_ndarray(obs)
         rew = to_ndarray([rew])  # wrapped to be transferred to an array with shape (1,)
