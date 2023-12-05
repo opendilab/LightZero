@@ -1,11 +1,8 @@
 from datetime import datetime
 
-import gym
+import gymnasium as gym
 import copy
 import os
-from itertools import product
-
-import gym
 import numpy as np
 from ding.envs import BaseEnvTimestep
 from ding.envs import ObsPlusPrevActRewWrapper
@@ -109,10 +106,12 @@ class LunarLanderDiscEnv(LunarLanderEnv):
             self._init_flag = True
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
-            self._env.seed(self._seed + np_seed)
+            self._seed = self._seed + np_seed
+            obs, _ = self._env.reset(seed=self._seed)  # using the reset method of Gymnasium env
         elif hasattr(self, '_seed'):
-            self._env.seed(self._seed)
-        obs = self._env.reset()
+            obs, _ = self._env.reset(seed=self._seed)
+        else:
+            obs, _ = self._env.reset()
         obs = to_ndarray(obs)
         self._eval_episode_return = 0
         if self._save_replay_gif:
@@ -148,7 +147,8 @@ class LunarLanderDiscEnv(LunarLanderEnv):
             action = affine_transform(action, min_val=-1, max_val=1)
         if self._save_replay_gif:
             self._frames.append(self._env.render(mode='rgb_array'))
-        obs, rew, done, info = self._env.step(action)
+        obs, rew, terminated, truncated, info = self._env.step(action)
+        done = terminated or truncated
 
         action_mask = np.ones(self._action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}

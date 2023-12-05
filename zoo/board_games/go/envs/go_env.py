@@ -9,7 +9,7 @@ import numpy as np
 import pygame
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
-from gym import spaces
+from gymnasium import spaces
 from pettingzoo.classic.go import coords, go
 from pettingzoo.utils.agent_selector import agent_selector
 
