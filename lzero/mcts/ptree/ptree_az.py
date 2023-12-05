@@ -402,7 +402,7 @@ class MCTS(object):
         Overview:
             Compute UCB score. The score for a node is based on its value, plus an exploration bonus based on the prior.
             For more details, please refer to this paper: http://gauss.ececs.uc.edu/Workshops/isaim2010/papers/rosin.pdf
-            UCB = Q(s,a) + P(s,a) \cdot \frac{N(\text{parent})}{1+N(\text{child})} \cdot \left(c_1 + \log\left(\frac{N(\text{parent})+c_2+1}{c_2}\right)\right)
+            UCB = Q(s,a) + P(s,a) \cdot \frac{ \sqrt{N(\text{parent})}}{1+N(\text{child})} \cdot \left(c_1 + \log\left(\frac{N(\text{parent})+c_2+1}{c_2}\right)\right)
             - Q(s,a): value of a child node.
             - P(s,a): The prior of a child node.
             - N(parent): The number of the visiting of the parent node.

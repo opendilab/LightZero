@@ -10,13 +10,13 @@ num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
-mcts_ctree = True
+mcts_ctree = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 tictactoe_alphazero_config = dict(
-    exp_name=f'data_az_ctree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_az_ptree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         board_size=3,
         battle_mode='play_with_bot_mode',
@@ -33,6 +33,8 @@ tictactoe_alphazero_config = dict(
         prob_expert_agent=0,
         scale=True,
         alphazero_mcts_ctree=mcts_ctree,
+        save_replay_gif=False,
+        replay_path_gif='./replay_gif',
         # ==============================================================
     ),
     policy=dict(
