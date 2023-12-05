@@ -68,6 +68,7 @@ lunarlander_gumbel_muzero_create_config = dict(
         type='lunarlander',
         import_names=['zoo.box2d.lunarlander.envs.lunarlander_env'],
     ),
+    # TODO: test the performance of varied_action_space.
     # env_manager=dict(type='subprocess'),
     env_manager=dict(type='base'),
     policy=dict(

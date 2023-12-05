@@ -84,10 +84,6 @@ class CartPoleEnv(BaseEnv):
         obs = to_ndarray(obs)
 
         action_mask = np.ones(self.action_space.n, 'int8')
-
-        # Here I set the action 2 to be invalid:
-        action_mask[0] = 0
-
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
         return obs
