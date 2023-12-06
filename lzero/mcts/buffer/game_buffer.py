@@ -57,6 +57,9 @@ class GameBuffer(ABC, object):
         self.batch_size = self._cfg.batch_size
         self._alpha = self._cfg.priority_prob_alpha
         self._beta = self._cfg.priority_prob_beta
+        self._multi_agent = self._cfg.model.get('multi_agent', False)
+        if self._multi_agent:
+            self._num_agents = self._cfg.model.get('agent_num', 1)
 
         self.game_segment_buffer = []
         self.game_pos_priorities = []
@@ -344,9 +347,18 @@ class GameBuffer(ABC, object):
             )
         else:
             assert len(data) == len(meta['priorities']), " priorities should be of same length as the game steps"
-            priorities = meta['priorities'].copy().reshape(-1)
-            priorities[valid_len:len(data)] = 0.
-            self.game_pos_priorities = np.concatenate((self.game_pos_priorities, priorities))
+            if self._multi_agent:
+                priorities = meta['priorities'].copy()
+                priorities[valid_len:len(data)] = np.zeros_like(priorities[0])
+                if len(self.game_pos_priorities) == 0:
+                    self.game_pos_priorities = priorities
+                else:
+                    self.game_pos_priorities = np.concatenate((self.game_pos_priorities, priorities))
+
+            else:
+                priorities = priorities.reshape(-1)
+                priorities[valid_len:len(data)] = 0.
+                self.game_pos_priorities = np.concatenate((self.game_pos_priorities, priorities))
 
         self.game_segment_buffer.append(data)
         self.game_segment_game_pos_look_up += [

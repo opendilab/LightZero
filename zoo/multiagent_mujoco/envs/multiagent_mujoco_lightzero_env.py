@@ -10,7 +10,7 @@ from ding.utils import ENV_REGISTRY
 from dizoo.multiagent_mujoco.envs.multi_mujoco_env import MujocoEnv,MujocoMulti
 
 
-@ENV_REGISTRY.register('mujoco_lightzero')
+@ENV_REGISTRY.register('multiagent_mujoco_lightzero')
 class MAMujocoEnvLZ(MujocoEnv):
     """
     Overview:

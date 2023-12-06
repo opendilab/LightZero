@@ -670,7 +670,10 @@ class MuZeroGameBuffer(GameBuffer):
                     else:
                         # NOTE: the invalid padding target policy, O is to make sure the correspoding cross_entropy_loss=0
                         policy_mask.append(0)
-                        target_policies.append([0 for _ in range(policy_shape)])
+                        if self._multi_agent:
+                            target_policies.append([np.zeros_like(child_visit[0][0])] * self._cfg.model.agent_num)
+                        else:
+                            target_policies.append([0 for _ in range(policy_shape)])
 
                     policy_index += 1
 

@@ -9,7 +9,8 @@ import torch.nn as nn
 from easydict import EasyDict
 from scipy.stats import entropy
 from torch.nn import functional as F
-
+from ding.torch_utils import to_tensor, to_device, to_dtype, to_ndarray
+from ding.utils.data import default_collate, default_decollate
 
 def visualize_avg_softmax(logits):
     """
@@ -311,15 +312,24 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
         obs_shape:      4    4       4      4     4    4
                        ----, ----,  ----, ----,  ----,  ----,
         """
-        obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
+        # obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
+        obs_batch_ori = to_dtype(to_device(to_tensor(obs_batch_ori), cfg.device), torch.float)
         # ``obs_batch`` is used in ``initial_inference()``, which is the first stacked obs at timestep t1 in
         # ``obs_batch_ori``. shape is (4, 4*3) = (4, 12)
-        obs_batch = obs_batch_ori[:, 0:cfg.model.frame_stack_num * cfg.model.observation_shape]
+        if cfg.model.multi_agent:
+            obs_batch_ori = default_collate(obs_batch_ori)
+            obs_batch = obs_batch_ori[0]
+        else:
+            obs_batch = obs_batch_ori[:, 0:cfg.model.frame_stack_num * cfg.model.observation_shape]
 
         if cfg.model.self_supervised_learning_loss:
             # ``obs_target_batch`` is only used for calculate consistency loss, which take the all obs other than
             # timestep t1, and is only performed in the last 8 timesteps in the second dim in ``obs_batch_ori``.
-            obs_target_batch = obs_batch_ori[:, cfg.model.observation_shape:]
+            if cfg.model.multi_agent:
+                obs_target_batch = obs_batch_ori[1:]
+                obs_target_batch = default_collate(obs_target_batch)    # {'agent_state': (num_unroll_steps, batch_size, agent_num, obs_shape)
+            else:
+                obs_target_batch = obs_batch_ori[:, cfg.model.observation_shape:]
 
     return obs_batch, obs_target_batch
 
