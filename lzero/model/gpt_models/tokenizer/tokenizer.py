@@ -67,7 +67,10 @@ class Tokenizer(nn.Module):
         commitment_loss = (z.detach() - z_quantized).pow(2).mean() + beta * (z - z_quantized.detach()).pow(2).mean()
 
         reconstruction_loss = torch.abs(observations - reconstructions).mean()
+        # TODO: cartpole
         perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
+        # perceptual_loss = torch.zeros_like(reconstruction_loss)
+
 
         return LossWithIntermediateLosses(commitment_loss=commitment_loss, reconstruction_loss=reconstruction_loss, perceptual_loss=perceptual_loss)
 

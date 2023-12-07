@@ -49,6 +49,8 @@ class WorldModel(nn.Module):
         self.support_size = config.support_size
         self.action_shape = config.action_shape
         self.max_cache_size = config.max_cache_size
+        self.env_num = config.env_num
+
 
         all_but_last_obs_tokens_pattern = torch.ones(config.tokens_per_block)
         all_but_last_obs_tokens_pattern[-2] = 0 # 1,...,0,1
@@ -148,14 +150,7 @@ class WorldModel(nn.Module):
 
         import collections
         self.past_keys_values_cache = collections.OrderedDict()
-        # self.past_keys_values_cache = {}
-        # from collections import deque
-        # self.past_keys_values_cache = deque(maxlen=self.max_cache_size)
-        # self.cache_dict = {}
         # TODO: Transformer更新后应该清除缓存
-        print('='*20)
-        print('we use world_model_past-kv-dict-envnum1 now!')
-        print('='*20)
 
 
     def __repr__(self) -> str:
@@ -204,7 +199,11 @@ class WorldModel(nn.Module):
         embedded_tokens = self.tokenizer.embedding(self.obs_tokens)  # (B, K, E)
         z = rearrange(embedded_tokens, 'b (h w) e -> b e h w', h=int(np.sqrt(self.num_observations_tokens)))
         rec = self.tokenizer.decode(z, should_postprocess=True)  # (B, C, H, W)
+        # TODO: for atari image
         return torch.clamp(rec, 0, 1)
+        # for cartpole obs
+        # return rec
+
 
     @torch.no_grad()
     def render(self):
@@ -245,10 +244,10 @@ class WorldModel(nn.Module):
     def forward_initial_inference(self, obs: torch.LongTensor, should_predict_next_obs: bool = True):
 
         if len(obs[0].shape) == 3:
-            # obs is a 3-dimensional image
+            # obs is a 3-dimensional image, for atari
             pass
         elif len(obs[0].shape) == 1:
-            # TODO()
+            # TODO(): for cartpole, 4 -> 4,64,64
             # obs is a 1-dimensional vector
             original_shape = list(obs.shape)
             desired_shape = original_shape + [64, 64]
@@ -256,23 +255,36 @@ class WorldModel(nn.Module):
             expanded_observations = expanded_observations.expand(*desired_shape)
             obs = expanded_observations
 
+            # for cartpole, 4 -> 3,64,64
+            # obs is a 1-dimensional vector
+            # original_shape = list(obs.shape)
+            # desired_shape = original_shape[:-1] + [3, 64, 64]  # 修改最后一个维度为3，然后添加64和64
+            # repeated_observations = obs.repeat(1, int(3*64*64/original_shape[-1]))  # 将最后一个维度复制到3,64,64
+            # obs = repeated_observations.view(*desired_shape)  # 重新调整形状到3,64,64
+            
+
         outputs_wm, _, obs_tokens = self.reset_from_initial_observations(obs)
 
-        # TODO
-        if obs_tokens.shape[0] > 1:
-            # TODO: minibatch
-            pass
-        else:
-            # collect eval only for env_num=1
-            cache_key = tuple(obs_tokens.squeeze(0).detach().cpu().numpy())
+        # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
+        if obs_tokens.shape[0] == 1:
+            # This branch will be executed only when env_num=1
+            cache_key = hash(obs_tokens.squeeze(0).detach().cpu().numpy())
+            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+        elif obs_tokens.shape[0] == self.env_num:
+            # This branch will be executed only when env_num=8
+            cache_key = hash(obs_tokens.detach().cpu().numpy().astype('int'))
+            # Store the KV_cache for all 8 samples together
             self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
 
         # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
         return outputs_wm.output_sequence, obs_tokens, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
 
+
     """
-    past-kv-dict-envnum1
-    把1个样本的self.keys_values_wm 看做一个整体来寻找 TODO for key in self.past_keys_values_cache.keys(): 换成dict.get()
+    past-kv-dict-batch envnum8 
+    把8个样本的self.keys_values_wm 看做一个整体来寻找
+
+    TODO：很多时候都是执行的refresh_keys_values_with_initial_obs_tokens，导致没有充分利用序列建模能力？
     """
 
     # @profile
@@ -286,19 +298,32 @@ class WorldModel(nn.Module):
 
         latest_state = state_action_history[-1][0]
 
-        matched_key = None
-        for key in self.past_keys_values_cache.keys():
-            # TODO：从后往前寻找，因为后面的是最新的
-            # 将 key 转换为 numpy 数组并与 latest_state 进行比较
-            if np.allclose(np.array(key), latest_state, atol=1e-5):  # atol 是差值的阈值
-                matched_key = key
-                break  # 如果找到匹配的 key，就退出循环
+        # Compute the hash of latest_state
+        hash_latest_state = hash(latest_state.astype('int'))
 
-        if matched_key is not None:
-            self.keys_values_wm = copy.deepcopy(self.past_keys_values_cache[matched_key])
+        # Try to get the value associated with the hash of latest_state
+        matched_value = self.past_keys_values_cache.get(hash_latest_state)
+        if matched_value is not None:
+            # If a matching value is found, do something with it
+            self.keys_values_wm = copy.deepcopy(matched_value)
+            # print('find matched_value!')
         else:
+            # If no matching value is found, handle the case accordingly
             # NOTE: very important
             _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.long).to(self.device))
+            # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
+            if latest_state.shape[0] == 1:
+                # This branch will be executed only when env_num=1
+                cache_key = hash(latest_state.squeeze(0).astype('int'))
+                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+            elif latest_state.shape[0] == self.env_num:
+                # This branch will be executed only when env_num=8
+                cache_key = hash(latest_state.astype('int'))
+                # Store the KV_cache for all 8 samples together
+                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+            # print('not find matched_value!')
+
+
 
         assert self.keys_values_wm is not None and self.num_observations_tokens is not None
 
@@ -308,7 +333,18 @@ class WorldModel(nn.Module):
 
         if self.keys_values_wm.size + num_passes > self.config.max_tokens:
             # TODO: the impact
-            _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
+            # _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
+            _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.long).to(self.device))
+            # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
+            if latest_state.shape[0] == 1:
+                # This branch will be executed only when env_num=1
+                cache_key = hash(latest_state.squeeze(0).astype('int'))
+                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+            elif latest_state.shape[0] == self.env_num:
+                # This branch will be executed only when env_num=8
+                cache_key = hash(latest_state.astype('int'))
+                # Store the KV_cache for all 8 samples together
+                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
 
         # TODO
         action = state_action_history[-1][-1]
@@ -345,7 +381,8 @@ class WorldModel(nn.Module):
 
         obs = self.decode_obs_tokens() if should_predict_next_obs else None
 
-        cache_key = tuple(self.obs_tokens.squeeze(0).detach().cpu().numpy())
+        # cache_key = hash(self.obs_tokens.detach().cpu().numpy().astype('int'))
+        cache_key = hash(self.obs_tokens.detach().cpu().numpy())
 
         # TODO: 在计算结束后，更新缓存. 是否需要deepcopy
         self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
@@ -391,7 +428,6 @@ class WorldModel(nn.Module):
         >>> loss.backward()
         """
         logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o')
-        # TODO: 无效样本padding -100，为什么可以在这个loss中使得对应的loss被忽略掉
         loss_obs = F.cross_entropy(logits_observations, labels_observations)
         loss_ends = F.cross_entropy(rearrange(outputs.logits_ends, 'b t e -> (b t) e'), labels_ends)
 

@@ -124,7 +124,7 @@ class MuZeroModelGPT(nn.Module):
         Encoder = Encoder(cfg.tokenizer.encoder)
         Decoder = Decoder(cfg.tokenizer.decoder)
         self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True)
-        self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=2,
+        self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
                                       config=cfg.world_model, tokenizer=self.tokenizer)
         print(f'{sum(p.numel() for p in self.tokenizer.parameters())} parameters in agent.tokenizer')
         print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
@@ -273,6 +273,7 @@ class MuZeroModelGPT(nn.Module):
 
         # torch.Size([8,]) - > torch.Size([8, 1])
         # reward = torch.tensor(reward).unsqueeze(-1) # TODO(pu)
+        # torch.Size([8, 1, 601]) - > torch.Size([8, 601])
         reward = reward.squeeze(1)
 
         return MZNetworkOutput(value, reward, policy_logits, next_latent_state)

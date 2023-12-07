@@ -1,45 +1,44 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(2)
 # torch.cuda.empty_cache()
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 
 
-# collector_env_num = 1
-# n_episode = 1
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 1
+num_simulations = 25
+update_per_collect = 200
+model_update_ratio = 1
+batch_size = 64
+max_env_step = int(5e5)
+reanalyze_ratio = 0
+# num_unroll_steps = 20
+num_unroll_steps = 5
+
+
+# # debug
+# collector_env_num = 2
+# n_episode = 2
 # evaluator_env_num = 1
-# num_simulations = 25
-# update_per_collect = 20
+# num_simulations = 2
+# update_per_collect = 2
 # model_update_ratio = 1
-# batch_size = 64
+# batch_size = 2
 # max_env_step = int(1e5)
 # reanalyze_ratio = 0
-# # num_unroll_steps = 20
 # num_unroll_steps = 5
-
-
-# debug
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 25 
-update_per_collect = 2
-model_update_ratio = 1
-batch_size = 2
-max_env_step = int(1e5)
-reanalyze_ratio = 0
-num_unroll_steps = 5
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 cartpole_muzero_gpt_config = dict(
-    exp_name=f'data_mz_gpt_ctree_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_mcs25_batch1_fixedtokenizer_fixloss_fixlatent_fixedslice_seed0',
-    # exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_mcs500_fixedtokenizer_fixloss_fixlatent_seed0',
-    # exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_bs{batch_size}_clear-25_fixedtokenizer_fixloss_fixlatent_seed0',
+    exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_batch8_recons-obs_bs{batch_size}_seed0',
+    # exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_batch8_not-fixedtokenizer_bs{batch_size}_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -61,12 +60,12 @@ cartpole_muzero_gpt_config = dict(
             self_supervised_learning_loss=True,  # NOTE: default is False.
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
-            reward_support_size=601,
-            value_support_size=601,
-            support_scale=300,
-            # reward_support_size=21,
-            # value_support_size=21,
-            # support_scale=10,
+            # reward_support_size=601,
+            # value_support_size=601,
+            # support_scale=300,
+            reward_support_size=21,
+            value_support_size=21,
+            support_scale=10,
         ),
         cuda=True,
         # cuda=False,

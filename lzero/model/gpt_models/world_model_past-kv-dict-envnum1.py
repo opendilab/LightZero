@@ -23,6 +23,7 @@ from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
 
+# from memory_profiler import profile
 
 @dataclass
 class WorldModelOutput:
@@ -56,8 +57,13 @@ class WorldModel(nn.Module):
         act_tokens_pattern[-1] = 1   # 0,...,0,1
         obs_tokens_pattern = 1 - act_tokens_pattern  # 1,...,1,0
 
+        # current latent state's policy value
         value_policy_tokens_pattern = torch.zeros(config.tokens_per_block)
-        value_policy_tokens_pattern[-2] = 1  # 0,...,1,0
+        value_policy_tokens_pattern[-2] = 1  # [0,...,1,0]
+
+        # next latent state's policy value
+        # value_policy_tokens_pattern = torch.zeros(config.tokens_per_block)
+        # value_policy_tokens_pattern[-1] = 1  # [0,...,0,1]
 
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim)
 
@@ -107,7 +113,7 @@ class WorldModel(nn.Module):
         )
         self.head_policy = Head(
             max_blocks=config.max_blocks,
-            block_mask=value_policy_tokens_pattern,  # TODO: value_policy_tokens_pattern
+            block_mask=value_policy_tokens_pattern,  # TODO: value_policy_tokens_pattern # [0,...,1,0]
             head_module=nn.Sequential(
                 nn.Linear(config.embed_dim, config.embed_dim),
                 nn.ReLU(),
@@ -126,8 +132,7 @@ class WorldModel(nn.Module):
 
         self.apply(init_weights)
 
-        # last_linear_layer_init_zero=True is beneficial for convergence speed.
-        last_linear_layer_init_zero = True  # TODO
+        last_linear_layer_init_zero = True  # TODO: is beneficial for convergence speed.
         if last_linear_layer_init_zero:
             # Locate the last linear layer and initialize its weights and biases to 0.
             for _, layer in enumerate(reversed(self.head_policy.head_module)):
@@ -141,11 +146,17 @@ class WorldModel(nn.Module):
                     nn.init.zeros_(layer.bias)
                     break
 
+        import collections
+        self.past_keys_values_cache = collections.OrderedDict()
         # self.past_keys_values_cache = {}
-        from collections import deque
-        # # TODO: Transformer更新后应该清除缓存
-        self.past_keys_values_cache = deque(maxlen=self.max_cache_size)
-        self.cache_dict = {}
+        # from collections import deque
+        # self.past_keys_values_cache = deque(maxlen=self.max_cache_size)
+        # self.cache_dict = {}
+        # TODO: Transformer更新后应该清除缓存
+        print('='*20)
+        print('we use world_model_past-kv-dict-envnum1 now!')
+        print('='*20)
+
 
     def __repr__(self) -> str:
         return "world_model"
@@ -225,12 +236,12 @@ class WorldModel(nn.Module):
         assert num_observations_tokens == self.num_observations_tokens
         # self.keys_values_wm = self.world_model.transformer.generate_empty_keys_values(n=n, max_tokens=self.world_model.config.max_tokens)
         self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
-        # outputs_wm = self.forward(obs_tokens, past_keys_values=self.keys_values_wm, is_root=True)  # Note: is_root=True
-        outputs_wm = self.forward(obs_tokens, past_keys_values=self.keys_values_wm, is_root=False)  # Note: is_root=True
+        outputs_wm = self.forward(obs_tokens, past_keys_values=self.keys_values_wm, is_root=False)  # Note: is_root=False
 
         # return outputs_wm.output_sequence  # (B, K, E)
         return outputs_wm
 
+    @torch.no_grad()
     def forward_initial_inference(self, obs: torch.LongTensor, should_predict_next_obs: bool = True):
 
         if len(obs[0].shape) == 3:
@@ -248,50 +259,46 @@ class WorldModel(nn.Module):
         outputs_wm, _, obs_tokens = self.reset_from_initial_observations(obs)
 
         # TODO
-        cache_key = hash([obs_tokens.cpu().numpy()])
-        # Add the new item to the deque and dictionary
-        self.past_keys_values_cache.append(cache_key)
-        self.cache_dict[cache_key] = self.keys_values_wm # Use clone to avoid unnecessary deep copy
-        # self.cache_dict[cache_key] = copy.deepcopy(self.keys_values_wm)
+        if obs_tokens.shape[0] > 1:
+            # TODO: minibatch
+            pass
+        else:
+            # collect eval only for env_num=1
+            cache_key = tuple(obs_tokens.squeeze(0).detach().cpu().numpy())
+            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
 
         # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
         return outputs_wm.output_sequence, obs_tokens, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
 
+    """
+    past-kv-dict-envnum1
+    把1个样本的self.keys_values_wm 看做一个整体来寻找 TODO for key in self.past_keys_values_cache.keys(): 换成dict.get()
+    """
 
+    # @profile
+    # TODO: only for inference, not for training
+    @torch.no_grad()
     def forward_recurrent_inference(self, state_action_history, should_predict_next_obs: bool = True):
+        # 一般来讲，在一次 MCTS search中，我们需要维护H长度的context来使用transformer进行推理。
+        # 由于在一次search里面。agent最多访问sim个不同的节点，因此我们只需维护一个 {(state:kv_cache)}的列表。
+        # 但如果假设环境是MDP的话，然后根据当前的 latest_state s_t 在这个列表中查找即可
+        # TODO: 但如果假设环境是非MDP的话，需要维护一个 {(rootstate_action_history:kv_cache)}的列表？
 
-        # 已知state_action_history[0] 是 (root_latent_state, last_actions) 并且state_action_history[-1]是最后一步的latent state和action
-        # 而且中间可能有很多个(root_latent_state, *） 由于transformer在计算时应该都是从(root_latent_state, root_action）开始 unroll的，因此我希望
-        # 找到这样的一个(root_latent_state, root_action）的最后一个位置，然后从这个位置找到其在keys_values_cache中的对应的value，然后从这个value开始
-        # 进行unroll，这样就可以保证在进行推断时，不会出现重复计算的情况
+        latest_state = state_action_history[-1][0]
 
-        # 你好，你的实现好像有个bug，就是我们只需要找到最后一个root_latent_state的位置，然后从这个位置开始的action_history就可以了，不需要找到
-        # 最后一个root_action的位置，因为这个位置可能是不对的，因为在root_state可能有多个不同的action
+        matched_key = None
+        for key in self.past_keys_values_cache.keys():
+            # TODO：从后往前寻找，因为后面的是最新的
+            # 将 key 转换为 numpy 数组并与 latest_state 进行比较
+            if np.allclose(np.array(key), latest_state, atol=1e-5):  # atol 是差值的阈值
+                matched_key = key
+                break  # 如果找到匹配的 key，就退出循环
 
-        # 找到 action_history 中最后一个 root_latent_state, root_action 的位置
-        # root_latent_state, root_action = state_action_history[0]
-        # last_root_position = max(i for i, (latent_state, action) in enumerate(state_action_history) if
-        #                  np.array_equal(latent_state, root_latent_state) and
-        #                  (torch.equal(action, root_action) if isinstance(action, torch.Tensor) else action == root_action))
-
-        # 找到 action_history 中最后一个 root_latent_state 的位置
-        root_latent_state, _ = state_action_history[0]
-        last_root_position = max(
-            i for i, (latent_state, _) in enumerate(state_action_history) if np.array_equal(latent_state, root_latent_state))
-
-        # 从这个位置开始的 action_history
-        # state_action_history_from_last_root = state_action_history[last_root_position:]
-        # [(s0,a0)] -> [s0]
-        # [(s0,a0),(s1,a1)] -> [(s0,a0),s1]
-        state_action_history_from_last_root = state_action_history[last_root_position:-1] + [state_action_history[-1][0]]
-
-        # cache_key = tuple(state_action_history_from_last_root)
-        cache_key = hash(state_action_history_from_last_root)
-        
-        # Before updating self.keys_values_wm, delete the old one to free memory
-        tmp = self.cache_dict.get(cache_key)
-        if tmp is not None:
-            self.keys_values_wm = tmp 
+        if matched_key is not None:
+            self.keys_values_wm = copy.deepcopy(self.past_keys_values_cache[matched_key])
+        else:
+            # NOTE: very important
+            _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.long).to(self.device))
 
         assert self.keys_values_wm is not None and self.num_observations_tokens is not None
 
@@ -300,6 +307,7 @@ class WorldModel(nn.Module):
         output_sequence, obs_tokens = [], []
 
         if self.keys_values_wm.size + num_passes > self.config.max_tokens:
+            # TODO: the impact
             _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
 
         # TODO
@@ -313,7 +321,7 @@ class WorldModel(nn.Module):
 
             # obs is in token level
             # num_steps=1, prev_steps=16
-            outputs_wm = self.forward(token, past_keys_values=self.keys_values_wm, is_root=False)  # TODO: inference=False  
+            outputs_wm = self.forward(token, past_keys_values=self.keys_values_wm, is_root=False)
             # if k==0, action_token self.head_observations 1,...,0,1
             output_sequence.append(outputs_wm.output_sequence)
 
@@ -336,61 +344,17 @@ class WorldModel(nn.Module):
         self.obs_tokens = torch.cat(obs_tokens, dim=1)  # (B, K)
 
         obs = self.decode_obs_tokens() if should_predict_next_obs else None
-        # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
 
-        # [(s0,a0)] -> [(s0,a0),s1]
-        # [(s0,a0),(s1,a1)] -> [(s0,a0),(s1,a1), s2]
-        state_action_history_from_last_root = [state_action_history[last_root_position], self.obs_tokens.cpu().numpy()]
-        # cache_key = tuple(state_action_history_from_last_root)
-        cache_key = hash(state_action_history_from_last_root)
+        cache_key = tuple(self.obs_tokens.squeeze(0).detach().cpu().numpy())
 
-        # If the cache is full, remove the oldest item from the dictionary
-        if len(self.past_keys_values_cache) > self.max_cache_size or len(self.cache_dict) > self.max_cache_size:
-            oldest_key = self.past_keys_values_cache.popleft()
-            del self.cache_dict[oldest_key]
-        # Add the new item to the deque and dictionary
-        self.past_keys_values_cache.append(cache_key)
-        self.cache_dict[cache_key] = self.keys_values_wm # Use clone to avoid unnecessary deep copy
+        # TODO: 在计算结束后，更新缓存. 是否需要deepcopy
+        self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+        if len(self.past_keys_values_cache) > self.max_cache_size:
+            # TODO: lru_cache
+            self.past_keys_values_cache.popitem(last=False)  # Removes the earliest inserted item
 
         return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
-        assert self.keys_values_wm is not None and self.num_observations_tokens is not None
 
-        num_passes = 1 + self.num_observations_tokens if should_predict_next_obs else 1
-
-        output_sequence, obs_tokens = [], []
-
-        # if self.keys_values_wm.size + num_passes > self.config.max_tokens:
-        #     _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
-        # TODO: reset
-        _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
-
-        token = action.clone().detach() if isinstance(action, torch.Tensor) else torch.tensor(action, dtype=torch.long)
-        token = token.reshape(-1, 1).to(self.device)  # (B, 1)
-
-        for k in range(num_passes):  # assumption that there is only one action token.
-            # obs is in token level
-            outputs_wm = self.forward(token, past_keys_values=self.keys_values_wm,
-                                      is_root=False)  # TODO: is_root=False
-            output_sequence.append(outputs_wm.output_sequence)
-
-            if k == 0:
-                # reward = Categorical(logits=outputs_wm.logits_rewards).sample().float().cpu().numpy().reshape(-1) - 1   # (B,)
-                done = Categorical(logits=outputs_wm.logits_ends).sample().cpu().numpy().astype(bool).reshape(
-                    -1)  # (B,)
-
-                reward = outputs_wm.logits_rewards  # (B,)
-
-            if k < self.num_observations_tokens:
-                token = Categorical(logits=outputs_wm.logits_observations).sample()
-                obs_tokens.append(token)
-
-        output_sequence = torch.cat(output_sequence, dim=1)  # (B, 1 + K, E)
-        self.obs_tokens = torch.cat(obs_tokens, dim=1)  # (B, K)
-
-        obs = self.decode_obs_tokens() if should_predict_next_obs else None
-        # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
-
-        return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
 
     def compute_loss(self, batch, tokenizer: Tokenizer, **kwargs: Any) -> LossWithIntermediateLosses:
 
@@ -413,7 +377,6 @@ class WorldModel(nn.Module):
         act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
         tokens = rearrange(torch.cat((obs_tokens, act_tokens), dim=2), 'b l k1 -> b (l k1)')  # (B, L(K+1))
 
-        # outputs = self(tokens)
         outputs = self.forward(tokens, is_root=False)
 
         labels_observations, labels_rewards, labels_ends = self.compute_labels_world_model(obs_tokens, batch['rewards'],
@@ -428,28 +391,23 @@ class WorldModel(nn.Module):
         >>> loss.backward()
         """
         logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o')
+        # TODO: 无效样本padding -100，为什么可以在这个loss中使得对应的loss被忽略掉
         loss_obs = F.cross_entropy(logits_observations, labels_observations)
-        # loss_rewards = F.cross_entropy(rearrange(outputs.logits_rewards, 'b t e -> (b t) e'), labels_rewards)
         loss_ends = F.cross_entropy(rearrange(outputs.logits_ends, 'b t e -> (b t) e'), labels_ends)
 
-        # return LossWithIntermediateLosses(loss_obs=loss_obs, loss_rewards=loss_rewards, loss_ends=loss_ends)
 
         labels_policy, labels_value = self.compute_labels_world_model_value_policy(batch['target_value'],
                                                                                    batch['target_policy'],
                                                                                    batch['mask_padding'])
 
-        # loss_policy = F.cross_entropy(rearrange(outputs.logits_policy, 'b t e -> (b t) e'), labels_policy)
-        # loss_value = F.cross_entropy(rearrange(outputs.logits_value, 'b t e -> (b t) e'), labels_value)
+        loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
+        loss_policy = self.compute_cross_entropy_loss(outputs, labels_policy, batch, element='policy')
+        loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
 
-        loss_rewards = self.compute_kl_loss(outputs, labels_rewards, batch, element='rewards')
-        loss_policy = self.compute_kl_loss(outputs, labels_policy, batch, element='policy')
-        loss_value = self.compute_kl_loss(outputs, labels_value, batch, element='value')
-
-        # return LossWithIntermediateLosses(loss_obs=loss_obs, loss_rewards=loss_rewards, loss_ends=loss_ends, loss_value=loss_value, loss_policy=loss_policy)
         return LossWithIntermediateLosses(loss_obs=loss_obs, loss_rewards=loss_rewards, loss_value=loss_value,
                                           loss_policy=loss_policy)
 
-    def compute_kl_loss(self, outputs, labels, batch, element='rewards'):
+    def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
         # Assume outputs.logits_rewards and labels are your predictions and targets
         # And mask_padding is a boolean tensor with True at positions to keep and False at positions to ignore
 
@@ -464,20 +422,18 @@ class WorldModel(nn.Module):
         logits_rewards = rearrange(logits, 'b t e -> (b t) e')
         labels = labels.reshape(-1, labels.shape[-1])  # Assuming labels originally has shape [b, t, reward_dim]
 
-        # Reshape your mask
+        # Reshape your mask. True means valid data.
         mask_padding = rearrange(batch['mask_padding'], 'b t -> (b t)').unsqueeze(-1)
 
-        # Compute the loss
-        loss_rewards = F.kl_div(torch.softmax(logits_rewards, dim=-1).log(), labels, reduction='none')
+        loss_rewards = -(torch.log_softmax(logits_rewards, dim=1) * labels).sum(1)
+        loss_rewards = (loss_rewards * mask_padding.squeeze(-1)).mean()
 
-        # Apply the mask
-        loss_rewards = loss_rewards.masked_select(mask_padding).mean()
         return loss_rewards
 
     def compute_labels_world_model(self, obs_tokens: torch.Tensor, rewards: torch.Tensor, ends: torch.Tensor,
                                    mask_padding: torch.BoolTensor) -> Tuple[
         torch.Tensor, torch.Tensor, torch.Tensor]:
-        assert torch.all(ends.sum(dim=1) <= 1)  # at most 1 done
+        assert torch.all(ends.sum(dim=1) <= 1)  # each sequence sample has at most 1 done
         mask_fill = torch.logical_not(mask_padding)
         labels_observations = rearrange(obs_tokens.masked_fill(mask_fill.unsqueeze(-1).expand_as(obs_tokens), -100),
                                         'b t k -> b (t k)')[:, 1:]
@@ -488,7 +444,6 @@ class WorldModel(nn.Module):
         labels_rewards = rewards.masked_fill(mask_fill_rewards, -100)
 
         labels_ends = ends.masked_fill(mask_fill, -100)
-        # return labels_observations.reshape(-1), labels_rewards.reshape(-1), labels_ends.reshape(-1)
         return labels_observations.reshape(-1), labels_rewards.reshape(-1, self.support_size), labels_ends.reshape(-1)
 
     def compute_labels_world_model_value_policy(self, target_value: torch.Tensor, target_policy: torch.Tensor,
@@ -502,4 +457,3 @@ class WorldModel(nn.Module):
         mask_fill_value = mask_fill.unsqueeze(-1).expand_as(target_value)
         labels_value = target_value.masked_fill(mask_fill_value, -100)
         return labels_policy.reshape(-1, self.action_shape), labels_value.reshape(-1, self.support_size)  # TODO(pu)
-        # return labels_policy.reshape(-1, ), labels_value.reshape(-1)

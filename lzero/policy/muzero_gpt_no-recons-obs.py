@@ -17,49 +17,7 @@ from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
-    prepare_obs, configure_optimizers
-
-
-def configure_optimizer(model, learning_rate, weight_decay, exclude_submodules, *blacklist_module_names):
-    """Credits to https://github.com/karpathy/minGPT"""
-    # separate out all parameters to those that will and won't experience regularizing weight decay
-    decay = set()
-    no_decay = set()
-    whitelist_weight_modules = [torch.nn.Linear, torch.nn.Conv1d]
-    blacklist_weight_modules = [torch.nn.LayerNorm, torch.nn.Embedding]
-    
-    # Here, we make sure to exclude parameters from specified submodules when creating param_dict
-    param_dict = {}
-    for mn, m in model.named_modules():
-        if any(mn.startswith(module_name) for module_name in exclude_submodules):
-            continue  # skip parameters from excluded submodules
-        for pn, p in m.named_parameters(recurse=False):
-            fpn = f'{mn}.{pn}' if mn else pn  # full param name
-            if not any(fpn.startswith(bl_module_name) for bl_module_name in blacklist_module_names):
-                param_dict[fpn] = p
-                if 'bias' in pn:
-                    no_decay.add(fpn)
-                elif pn.endswith('weight') and isinstance(m, tuple(whitelist_weight_modules)):
-                    decay.add(fpn)
-                elif pn.endswith('weight') and isinstance(m, tuple(blacklist_weight_modules)):
-                    no_decay.add(fpn)
-                else:
-                    decay.add(fpn)  # Default behavior is to add to decay
-
-    # Validate that we considered every parameter
-    inter_params = decay & no_decay
-    union_params = decay | no_decay
-    assert len(inter_params) == 0, f"parameters {str(inter_params)} made it into both decay/no_decay sets!"
-    assert len(param_dict.keys() - union_params) == 0, f"parameters {str(param_dict.keys() - union_params)} were not separated into either decay/no_decay set!"
-
-    # Create the PyTorch optimizer object
-    optim_groups = [
-        {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": weight_decay},
-        {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
-    ]
-    optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate)
-    return optimizer
-
+    prepare_obs
 
 
 @POLICY_REGISTRY.register('muzero_gpt')
@@ -265,51 +223,26 @@ class MuZeroGPTPolicy(Policy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
-        # assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
-        # # NOTE: in board_games, for fixed lr 0.003, 'Adam' is better than 'SGD'.
-        # if self._cfg.optim_type == 'SGD':
-        #     self._optimizer = optim.SGD(
-        #         self._model.parameters(),
-        #         lr=self._cfg.learning_rate,
-        #         momentum=self._cfg.momentum,
-        #         weight_decay=self._cfg.weight_decay,
-        #     )
-        # elif self._cfg.optim_type == 'Adam':
-        #     self._optimizer = optim.Adam(
-        #         self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
-        #     )
-        # elif self._cfg.optim_type == 'AdamW':
-        #     self._optimizer = configure_optimizers(
-        #         model=self._model,
-        #         weight_decay=self._cfg.weight_decay,
-        #         learning_rate=self._cfg.learning_rate,
-        #         device_type=self._cfg.device
-        #     )
-        
-        self._optimizer_tokenizer = optim.Adam(
-            self._model.tokenizer.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
-        )
-        # TODO: nanoGPT optimizer
-        self._optimizer_world_model = configure_optimizer(
-            model=self._model.world_model,
-            learning_rate=self._cfg.learning_rate,
-            weight_decay=self._cfg.weight_decay,
-            exclude_submodules=['tokenizer']
-        )
+        assert self._cfg.optim_type in ['SGD', 'Adam'], self._cfg.optim_type
+        # NOTE: in board_games, for fixed lr 0.003, 'Adam' is better than 'SGD'.
+        if self._cfg.optim_type == 'SGD':
+            self._optimizer = optim.SGD(
+                self._model.parameters(),
+                lr=self._cfg.learning_rate,
+                momentum=self._cfg.momentum,
+                weight_decay=self._cfg.weight_decay,
+            )
+        elif self._cfg.optim_type == 'Adam':
+            self._optimizer = optim.Adam(
+                self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
+            )
 
-        # self._optimizer_world_model = configure_optimizers(
-        #     model=self._model.world_model,
-        #     weight_decay=self._cfg.weight_decay,
-        #     learning_rate=self._cfg.learning_rate,
-        #     device_type=self._cfg.device
-        # )
-
-        # if self._cfg.lr_piecewise_constant_decay:
-        #     from torch.optim.lr_scheduler import LambdaLR
-        #     max_step = self._cfg.threshold_training_steps_for_final_lr
-        #     # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
-        #     lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
-        #     self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
+        if self._cfg.lr_piecewise_constant_decay:
+            from torch.optim.lr_scheduler import LambdaLR
+            max_step = self._cfg.threshold_training_steps_for_final_lr
+            # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
+            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
+            self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
@@ -446,17 +379,15 @@ class MuZeroGPTPolicy(Policy):
         average_target_policy_entropy = target_policy_entropy.mean().item()
         # print(f'Average entropy: {average_entropy}')
 
-
-        
-
-        # ==============================================================
-        # update world model
-        # ==============================================================
         intermediate_losses = defaultdict(float)
         losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._learn_model.tokenizer)
+        
+        # TODO: train tokenlizer
         weighted_total_loss = losses.loss_total
+
         for loss_name, loss_value in losses.intermediate_losses.items():
             intermediate_losses[f"{loss_name}"] = loss_value
+
         # print(intermediate_losses)
         obs_loss = intermediate_losses['loss_obs']
         reward_loss = intermediate_losses['loss_rewards']
@@ -472,36 +403,17 @@ class MuZeroGPTPolicy(Policy):
         """
         gradient_scale = 1 / self._cfg.num_unroll_steps
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
-        self._optimizer_world_model.zero_grad()
+
+        self._optimizer.zero_grad()
         weighted_total_loss.backward()
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
-            self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
+            self._learn_model.parameters(), self._cfg.grad_clip_value
         )
-        self._optimizer_world_model.step()
+        self._optimizer.step()
         if self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()
-
-
-        # ==============================================================
-        # update tokenizer
-        # ==============================================================
-        # TODO: train tokenlizer
-        losses_tokenizer = self._learn_model.tokenizer.compute_loss(batch_for_gpt)
-        self._optimizer_tokenizer.zero_grad()
-        losses_tokenizer.loss_total.backward()
-        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
-            self._learn_model.tokenizer.parameters(), self._cfg.grad_clip_value
-        )
-        self._optimizer_tokenizer.step()
-        intermediate_losses_tokenizer= defaultdict(float)
-        for loss_name, loss_value in losses_tokenizer.intermediate_losses.items():
-            intermediate_losses_tokenizer[f"{loss_name}"] = loss_value
-        # print(intermediate_losses)
-        commitment_loss= intermediate_losses_tokenizer['commitment_loss']
-        reconstruction_loss = intermediate_losses_tokenizer['reconstruction_loss']
-        perceptual_loss = intermediate_losses_tokenizer['perceptual_loss']
 
         # ==============================================================
         # the core target model update step.
@@ -514,9 +426,7 @@ class MuZeroGPTPolicy(Policy):
         return {
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
-            'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
-            'cur_lr_tokenizer': self._optimizer_tokenizer.param_groups[0]['lr'],
-
+            'cur_lr': self._optimizer.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
             'obs_loss': obs_loss,
             'policy_loss': policy_loss,
@@ -538,11 +448,7 @@ class MuZeroGPTPolicy(Policy):
             'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
             # 'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
             # 'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
-            'total_grad_norm_before_clip': total_grad_norm_before_clip.item(),
-
-            'commitment_loss':commitment_loss,
-            'reconstruction_loss':reconstruction_loss,
-            'perceptual_loss': perceptual_loss,
+            'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
         }
 
     def _init_collect(self) -> None:
@@ -782,10 +688,7 @@ class MuZeroGPTPolicy(Policy):
         """
         return [
             'collect_mcts_temperature',
-            # 'cur_lr',
-              'cur_lr_world_model',
-            'cur_lr_tokenizer',
-
+            'cur_lr',
             'weighted_total_loss',
             # 'total_loss',
             'obs_loss',
@@ -803,10 +706,6 @@ class MuZeroGPTPolicy(Policy):
             # 'transformed_target_reward',
             # 'transformed_target_value',
             'total_grad_norm_before_clip',
-            # tokenizer
-            'commitment_loss',
-            'reconstruction_loss',
-            'perceptual_loss',
         ]
 
     def _state_dict_learn(self) -> Dict[str, Any]:
@@ -819,9 +718,7 @@ class MuZeroGPTPolicy(Policy):
         return {
             'model': self._learn_model.state_dict(),
             'target_model': self._target_model.state_dict(),
-            'optimizer_world_model': self._optimizer_world_model.state_dict(),
-            'optimizer_tokenizer': self._optimizer_tokenizer.state_dict(),
-
+            'optimizer': self._optimizer.state_dict(),
         }
 
     def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
@@ -833,8 +730,7 @@ class MuZeroGPTPolicy(Policy):
         """
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
-        self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
-        self._optimizer_tokenizer.load_state_dict(state_dict['optimizer_tokenizer'])
+        self._optimizer.load_state_dict(state_dict['optimizer'])
 
     def _process_transition(self, obs, policy_output, timestep):
         # be compatible with DI-engine Policy class
