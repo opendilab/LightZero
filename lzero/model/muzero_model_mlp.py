@@ -69,6 +69,7 @@ class MuZeroModelMLP(nn.Module):
             - discrete_action_encoding_type (:obj:`str`): The encoding type of discrete action, which can be 'one_hot' or 'not_one_hot'.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection for dynamics network, default set it to False.
+            - state_encoder (:obj:`Optional[nn.Module]`): The state encoder network, which is used to encode the raw observation to latent state.
         """
         super(MuZeroModelMLP, self).__init__()
         self.categorical_distribution = categorical_distribution

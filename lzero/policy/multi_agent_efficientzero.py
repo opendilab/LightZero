@@ -19,7 +19,9 @@ from ding.torch_utils import to_device, to_tensor
 class MultiAgentEfficientZeroPolicy(EfficientZeroPolicy):
     """
     Overview:
-        The policy class for Multi Agent EfficientZero.
+        The policy class for Multi Agent EfficientZero. 
+        Independent Learning mode is a method in which each agent learns and adapts to the environment independently \
+        without directly considering the learning and strategies of other agents.
     """
 
     def _forward_collect(
@@ -212,6 +214,7 @@ class MultiAgentEfficientZeroPolicy(EfficientZeroPolicy):
                 )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                # Save according to agent dimension
                 output[i // agent_num]['action'].append(action)
                 output[i // agent_num]['distributions'].append(distributions)
                 output[i // agent_num]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)

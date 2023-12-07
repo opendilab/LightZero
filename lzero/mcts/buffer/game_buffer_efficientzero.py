@@ -46,7 +46,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
         self.base_idx = 0
         self.clear_time = 0
 
-        self.tmp_obs = None # for value obs list [46 + 4(td_step)] not < 50(game_segment)
+        self.tmp_obs = None # since value obs list [46 + 4(td_step)] >= 50(game_segment), need pad
 
     def sample(self, batch_size: int, policy: Any) -> List[Any]:
         """

@@ -25,6 +25,8 @@ class MultiAgentMuZeroPolicy(MuZeroPolicy):
     """
     Overview:
         The policy class for Multi Agent MuZero.
+        Independent Learning mode is a method in which each agent learns and adapts to the environment independently \
+        without directly considering the learning and strategies of other agents.
     """
 
     def _forward_collect(
