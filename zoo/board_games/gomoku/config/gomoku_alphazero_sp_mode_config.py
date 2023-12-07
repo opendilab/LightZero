@@ -37,6 +37,7 @@ gomoku_alphazero_config = dict(
         scale=True,
         screen_scaling=9,
         render_mode=None,
+        replay_path=None,
         alphazero_mcts_ctree=mcts_ctree,
         # ==============================================================
     ),

@@ -12,7 +12,7 @@ update_per_collect = 50
 batch_size = 256
 max_env_step = int(5e5)
 prob_random_action_in_bot = 0.5
-mcts_ctree = True
+mcts_ctree = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -37,6 +37,7 @@ gomoku_alphazero_config = dict(
         scale=True,
         screen_scaling=9,
         render_mode=None,
+        replay_path=None,
         alphazero_mcts_ctree=mcts_ctree,
         # ==============================================================
     ),

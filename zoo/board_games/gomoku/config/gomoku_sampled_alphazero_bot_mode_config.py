@@ -43,10 +43,11 @@ gomoku_sampled_alphazero_config = dict(
         scale=True,
         check_action_to_connect4_in_bot_v0=False,
         simulation_env_name="gomoku",
-        # ==============================================================
-        mcts_ctree=mcts_ctree,
         screen_scaling=9,
         render_mode=None,
+        replay_path=None,
+        alphazero_mcts_ctree=mcts_ctree,
+        # ==============================================================
     ),
     policy=dict(
         # ==============================================================

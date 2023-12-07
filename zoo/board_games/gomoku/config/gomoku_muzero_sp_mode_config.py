@@ -45,6 +45,7 @@ gomoku_muzero_config = dict(
         ),
         cuda=True,
         env_type='board_games',
+        action_type='varied_action_space',
         game_segment_length=int(board_size * board_size),  # for battle_mode='self_play_mode'
         update_per_collect=update_per_collect,
         batch_size=batch_size,

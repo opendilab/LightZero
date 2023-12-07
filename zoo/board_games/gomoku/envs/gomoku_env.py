@@ -42,6 +42,16 @@ def _get_done_winner_func_lru(board_size, board_tuple):
 
 @ENV_REGISTRY.register('gomoku')
 class GomokuEnv(BaseEnv):
+    """
+    Overview:
+        A Gomoku environment that inherits from the BaseEnv. This environment can be used for training and
+        evaluating AI players for the game of Gomoku.
+
+    .. note::
+        For the latest macOS, you should set context='spawn' or 'forkserver' in ding/envs/env_manager/subprocess_env_manager.py
+        to be able to use subprocess env_manager.
+    """
+
     config = dict(
         # (str) The name of the environment registered in the environment registry.
         env_name="Gomoku",
@@ -404,8 +414,6 @@ class GomokuEnv(BaseEnv):
         if np.random.rand() < self.prob_random_action_in_bot:
             return self.random_action()
         else:
-            # if self.bot_action_type == 'v0':
-            # return self.rule_bot_v0()
             if self.bot_action_type == 'v0':
                 return self.rule_bot.get_rule_bot_action(self.board, self._current_player)
             elif self.bot_action_type == 'v1':
@@ -798,8 +806,6 @@ class GomokuEnv(BaseEnv):
 
     def get_image(self, path: str) -> Any:
         from os import path as os_path
-        import pygame
-
         cwd = os_path.dirname(__file__)
         image = pygame.image.load(cwd + "/" + path)
         sfc = pygame.Surface(image.get_size(), flags=pygame.SRCALPHA)

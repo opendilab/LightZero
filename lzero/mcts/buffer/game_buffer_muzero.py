@@ -33,6 +33,7 @@ class MuZeroGameBuffer(GameBuffer):
         default_config.update(cfg)
         self._cfg = default_config
         assert self._cfg.env_type in ['not_board_games', 'board_games']
+        assert self._cfg.action_type in ['fixed_action_space', 'varied_action_space']
         self.replay_buffer_size = self._cfg.replay_buffer_size
         self.batch_size = self._cfg.batch_size
         self._alpha = self._cfg.priority_prob_alpha
@@ -497,7 +498,7 @@ class MuZeroGameBuffer(GameBuffer):
 
         # for board games
         policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, game_segment_lens, action_mask_segment, \
-        to_play_segment = policy_re_context  # noqa
+        to_play_segment = policy_re_context
         # transition_batch_size = game_segment_batch_size * (self._cfg.num_unroll_steps + 1)
         transition_batch_size = len(policy_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)
@@ -579,7 +580,7 @@ class MuZeroGameBuffer(GameBuffer):
                                 list(np.ones(self._cfg.model.action_space_size) / self._cfg.model.action_space_size)
                             )
                         else:
-                            if self._cfg.env_type == 'not_board_games':
+                            if self._cfg.action_type == 'fixed_action_space':
                                 # for atari/classic_control/box2d environments that only have one player.
                                 sum_visits = sum(distributions)
                                 policy = [visit_count / sum_visits for visit_count in distributions]
@@ -657,7 +658,7 @@ class MuZeroGameBuffer(GameBuffer):
                         policy_mask.append(1)
                         # NOTE: child_visit is already a distribution
                         distributions = child_visit[current_index]
-                        if self._cfg.env_type == 'not_board_games':
+                        if self._cfg.action_type == 'fixed_action_space':
                             # for atari/classic_control/box2d environments that only have one player.
                             target_policies.append(distributions)
                         else:

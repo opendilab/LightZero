@@ -380,12 +380,14 @@ namespace tree
             // After sorting, the first vector is the index, and the second vector is the probability value after perturbation sorted from large to small.
             for (size_t iter = 0; iter < disturbed_probs.size(); iter++)
             {
-//                #ifdef __APPLE__
-//                    disc_action_with_probs.__emplace_back(std::make_pair(iter, disturbed_probs[iter]));
-//                #else
-//                    disc_action_with_probs.emplace_back(std::make_pair(iter, disturbed_probs[iter]));
-//                #endif
-                 disc_action_with_probs.emplace_back(std::make_pair(iter, disturbed_probs[iter]));
+
+            #ifdef __GNUC__
+                // Use push_back for GCC
+                disc_action_with_probs.push_back(std::make_pair(iter, disturbed_probs[iter]));
+            #else
+                // Use emplace_back for other compilers
+                disc_action_with_probs.emplace_back(std::make_pair(iter, disturbed_probs[iter]));
+            #endif
             }
 
             std::sort(disc_action_with_probs.begin(), disc_action_with_probs.end(), cmp);
