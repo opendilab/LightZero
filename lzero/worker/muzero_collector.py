@@ -253,6 +253,8 @@ class MuZeroCollector(ISerialCollector):
         end_index = beg_index + self.unroll_plus_td_steps - 1
 
         pad_reward_lst = game_segments[i].reward_segment[beg_index:end_index]
+        if self.policy_config.use_ture_chance_label_in_chance_encoder:
+            chance_lst = game_segments[i].chance_segment[beg_index:end_index]
 
         beg_index = 0
         end_index = beg_index + self.unroll_plus_td_steps
@@ -266,7 +268,10 @@ class MuZeroCollector(ISerialCollector):
         if self.policy_config.gumbel_algo:
             last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst, next_segment_improved_policy = pad_improved_policy_prob)
         else:
-            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
+            if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst, next_chances = chance_lst)
+            else:
+                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
         """
         Note:
             game_segment element shape:
@@ -420,6 +425,8 @@ class MuZeroCollector(ISerialCollector):
 
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
+        if self.policy_config.use_ture_chance_label_in_chance_encoder:
+            chance_dict = {i: to_ndarray(init_obs[i]['chance']) for i in range(env_nums)}
 
         if self._multi_agent:
             agent_num = len(init_obs[0]['action_mask'])
@@ -515,6 +522,9 @@ class MuZeroCollector(ISerialCollector):
                 to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
                 action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
+                if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                    chance_dict = {env_id: chance_dict[env_id] for env_id in ready_env_id}
+                    chance = [chance_dict[env_id] for env_id in ready_env_id]
 
                 if self.policy_config.model.model_type:
                     if self.policy_config.model.model_type in ['conv', 'mlp']:
@@ -544,8 +554,8 @@ class MuZeroCollector(ISerialCollector):
                         k: v['root_sampled_actions']
                         for k, v in policy_output.items()
                     }
-                value_dict_no_env_id = {k: v['value'] for k, v in policy_output.items()}
-                pred_value_dict_no_env_id = {k: v['pred_value'] for k, v in policy_output.items()}
+                value_dict_no_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
+                pred_value_dict_no_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
                 visit_entropy_dict_no_env_id = {
                     k: v['visit_count_distribution_entropy']
                     for k, v in policy_output.items()
@@ -639,6 +649,8 @@ class MuZeroCollector(ISerialCollector):
                     # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
                     action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                     to_play_dict[env_id] = to_ndarray(obs['to_play'])
+                    if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                        chance_dict[env_id] = to_ndarray(obs['chance'])
 
                     if self.policy_config.ignore_done:
                         dones[env_id] = False
@@ -821,6 +833,8 @@ class MuZeroCollector(ISerialCollector):
 
                         action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                         to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
+                        if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                            chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
                         if self._multi_agent:
                             for agent_id in range(agent_num):

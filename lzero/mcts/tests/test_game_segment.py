@@ -17,14 +17,14 @@ def test_game_segment(test_algo):
     if test_algo == 'EfficientZero':
         from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTSCtree
         from lzero.model.efficientzero_model import EfficientZeroModel as Model
-        from lzero.mcts.tests.atari_efficientzero_config_test import atari_efficientzero_config as config
+        from lzero.mcts.tests.config.atari_efficientzero_config_for_test import atari_efficientzero_config as config
         from zoo.atari.envs.atari_lightzero_env import AtariLightZeroEnv
         envs = [AtariLightZeroEnv(config.env) for _ in range(config.env.evaluator_env_num)]
 
     elif test_algo == 'MuZero':
         from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
         from lzero.model.muzero_model import MuZeroModel as Model
-        from lzero.mcts.tests.tictactoe_muzero_bot_mode_config_test import tictactoe_muzero_config as config
+        from lzero.mcts.tests.config.tictactoe_muzero_bot_mode_config_for_test import tictactoe_muzero_config as config
         from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
         envs = [TicTacToeEnv(config.env) for _ in range(config.env.evaluator_env_num)]
 

@@ -6,7 +6,7 @@ from ding.utils import BUFFER_REGISTRY
 
 from lzero.mcts.tree_search.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts.tree_search.mcts_ptree_sampled import SampledEfficientZeroMCTSPtree as MCTSPtree
-from lzero.mcts.utils import prepare_observation
+from lzero.mcts.utils import prepare_observation, generate_random_actions_discrete
 from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
 from .game_buffer_efficientzero import EfficientZeroGameBuffer
 
@@ -161,27 +161,25 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     for _ in range(self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp))
                 ]
             else:
-                actions_tmp += [
-                    np.random.randint(0, self._cfg.model.action_space_size, 1).item()
-                    for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
-                ]
-                if len(root_sampled_actions_tmp[0].shape) == 1:
-                    root_sampled_actions_tmp += [
-                        np.arange(self._cfg.model.action_space_size)
-                        # NOTE: self._cfg.num_unroll_steps + 1
-                        for _ in range(self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp))
-                    ]
-                else:
-                    root_sampled_actions_tmp += [
-                        np.random.randint(0, self._cfg.model.action_space_size,
-                                          self._cfg.model.num_of_sampled_actions).reshape(
-                                              self._cfg.model.num_of_sampled_actions, 1
-                                          )  # NOTE: self._cfg.num_unroll_steps + 1
-                        for _ in range(self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp))
-                    ]
+                # generate random `padded actions_tmp`
+                actions_tmp += generate_random_actions_discrete(
+                    self._cfg.num_unroll_steps - len(actions_tmp),
+                    self._cfg.model.action_space_size,
+                    1  # Number of sampled actions for actions_tmp is 1
+                )
+
+                # generate random padded `root_sampled_actions_tmp`
+                # root_sampled_action have different shape in mcts_ctree and mcts_ptree, thus we need to pad differently
+                reshape = True if self._cfg.mcts_ctree else False
+                root_sampled_actions_tmp += generate_random_actions_discrete(
+                    self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp),
+                    self._cfg.model.action_space_size,
+                    self._cfg.model.num_of_sampled_actions,
+                    reshape=reshape
+                )
 
             # obtain the input observations
-            # stack+num_unroll_steps  4+5
+            # stack+num_unroll_steps = 4+5
             # pad if length of obs in game_segment is less than stack+num_unroll_steps
             obs_list.append(
                 game_lst[i].get_unroll_obs(

@@ -13,20 +13,18 @@ on:
 jobs:
   unittest:
     name: Code test
-    #runs-on: ${{ matrix.os }}
-    runs-on: self-hosted
+    runs-on: ${{ matrix.os }}
     if: "!contains(github.event.head_commit.message, 'ci skip')"
     strategy:
       fail-fast: false
       matrix:
         os:
-          - 'ubuntu-20.04'
+          - 'self-hosted-ubuntu'
           - 'macos-12'
         python-version:
-          - '3.7.17'
-          - '3.8.17'
-          - '3.9.17'
-
+          - '3.8'
+          - '3.9'
+          - '3.10'
     steps:
       - name: Get system version for Linux
         if: ${{ runner.os == 'Linux' }}
@@ -46,13 +44,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 20
-      - name: Set up system dependences on linux
-        if: ${{ runner.os == 'Linux' }}
-        shell: bash
-        run: |
-          yum update
-          yum install -y tree cloc wget curl make graphviz
-          dot -V
       - name: Set up system dependences on MacOS
         if: ${{ env.OS_NAME == 'MacOS' }}
         shell: bash
@@ -73,6 +64,7 @@ jobs:
           pip install -r requirements-test.txt
           pip uninstall DI-engine -y
           pip install git+http://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env]
+          pip install transformers
       - name: Run unittest on MacOS or Linux
         if: ${{ env.OS_NAME == 'MacOS' || env.OS_NAME == 'Linux'}}
         env:
@@ -80,7 +72,7 @@ jobs:
           LINETRACE: 1
         shell: bash
         run: |
-          make clean build unittest
+            make clean build unittest
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:

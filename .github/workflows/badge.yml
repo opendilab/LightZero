@@ -7,8 +7,7 @@ on:
 jobs:
   update-badges:
     name: Update Badges
-    #runs-on: ubuntu-latest
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version:
@@ -22,8 +21,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Download cloc
         run: |
-          yum update -y
-          yum install -y cloc
+          sudo apt-get update -y
+          sudo apt-get install -y cloc
       - name: Get the Numbers
         run: |
           cloc .

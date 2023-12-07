@@ -3,26 +3,28 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-continuous_action_space = False
-each_dim_disc_size = 4  # thus the total discrete action number is 4**4=256
-num_simulations = 50
-update_per_collect = 200
-batch_size = 256
-max_env_step = int(5e6)
-reanalyze_ratio = 0.
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# continuous_action_space = False
+# each_dim_disc_size = 4  # thus the total discrete action number is 4**4=256
+# num_simulations = 50
+# update_per_collect = None
+# model_update_ratio = 0.25
+# batch_size = 256
+# max_env_step = int(5e6)
+# reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 bipedalwalker_cont_disc_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/bipedalwalker_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_sez_ctree/bipedalwalker_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name='BipedalWalker-v3',
+        env_type='normal',
         manually_discretization=True,
         continuous=False,
         each_dim_disc_size=each_dim_disc_size,
@@ -59,6 +61,7 @@ bipedalwalker_cont_disc_efficientzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e3),
+        model_update_ratio=model_update_ratio,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -77,10 +80,6 @@ bipedalwalker_cont_disc_efficientzero_create_config = dict(
         type='efficientzero',
         import_names=['lzero.policy.efficientzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 bipedalwalker_cont_disc_efficientzero_create_config = EasyDict(bipedalwalker_cont_disc_efficientzero_create_config)
 create_config = bipedalwalker_cont_disc_efficientzero_create_config

@@ -1,10 +1,11 @@
 from collections import namedtuple
 from typing import Optional, Callable, Tuple
-
+import torch
 import numpy as np
 from ding.envs import BaseEnv
 from ding.envs import BaseEnvManager
-from ding.torch_utils import to_item
+from ding.torch_utils import to_tensor, to_item
+
 from ding.utils import build_logger, EasyTimer, SERIAL_EVALUATOR_REGISTRY
 from ding.utils import get_world_size, get_rank, broadcast_object_list
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
@@ -201,20 +202,17 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             with self._timer:
                 while not eval_monitor.is_finished():
                     obs = self._env.ready_obs
-                    simulation_envs = {}
-                    for env_id in list(obs.keys()):
-                        # create the new simulation env instances from the current evaluate env using the same env_config.
-                        simulation_envs[env_id] = self._env._env_fn[env_id]()
 
                     # ==============================================================
                     # policy forward
                     # ==============================================================
-                    policy_output = self._policy.forward(simulation_envs, obs)
+                    policy_output = self._policy.forward(obs)
                     actions = {env_id: output['action'] for env_id, output in policy_output.items()}
                     # ==============================================================
                     # Interact with env.
                     # ==============================================================
                     timesteps = self._env.step(actions)
+                    timesteps = to_tensor(timesteps, dtype=torch.float32)
                     for env_id, t in timesteps.items():
                         if t.info.get('abnormal', False):
                             # If there is an abnormal timestep, reset all the related variables(including this env).
@@ -224,8 +222,10 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                             # Env reset is done by env_manager automatically.
                             self._policy.reset([env_id])
                             reward = t.info['eval_episode_return']
+                            saved_info = {'eval_episode_return': t.info['eval_episode_return']}
                             if 'episode_info' in t.info:
-                                eval_monitor.update_info(env_id, t.info['episode_info'])
+                                saved_info.update(t.info['episode_info'])
+                            eval_monitor.update_info(env_id, saved_info)
                             eval_monitor.update_reward(env_id, reward)
                             return_info.append(t.info)
                             self._logger.info(
@@ -277,7 +277,6 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                     ", so your AlphaZero agent is converged, you can refer to " +
                     "'log/evaluator/evaluator_logger.txt' for details."
                 )
-            # return stop_flag, return_info
 
             if get_world_size() > 1:
                 objects = [stop_flag, episode_info]

@@ -38,8 +38,8 @@ def eval_muzero(
         - policy (:obj:`Policy`): Converged policy.
     """
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero'], \
-        "LightZero now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero'"
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'stochastic_muzero', 'gumbel_muzero', 'sampled_efficientzero'], \
+        "LightZero now only support the following algo.: 'efficientzero', 'muzero', 'stochastic_muzero', 'gumbel_muzero', 'sampled_efficientzero'"
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
@@ -91,8 +91,9 @@ def eval_muzero(
         # ==============================================================
         returns = []
         for i in range(num_episodes_each_seed):
-            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter)
-            returns.append(reward)
+            stop_flag, episode_info = evaluator.eval(learner.save_checkpoint, learner.train_iter)
+            returns.append(episode_info['eval_episode_return'])
+
         returns = np.array(returns)
 
         if print_seed_details:

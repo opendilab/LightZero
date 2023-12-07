@@ -10,21 +10,37 @@ num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
+mcts_ctree = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 tictactoe_alphazero_config = dict(
-    exp_name='data_az_ptree/tictactoe_sp-mode_alphazero_seed0',
+    exp_name='data_az_ctree/tictactoe_sp-mode_alphazero_seed0',
     env=dict(
         board_size=3,
         battle_mode='self_play_mode',
-        channel_last=False,  # NOTE
+        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+        channel_last=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        # ==============================================================
+        # for the creation of simulation env
+        agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        scale=True,
+        alphazero_mcts_ctree=mcts_ctree,
+        # ==============================================================
     ),
     policy=dict(
+        mcts_ctree=mcts_ctree,
+        # ==============================================================
+        # for the creation of simulation env
+        simulation_env_name='tictactoe',
+        simulation_env_config_type='self_play',
+        # ==============================================================
         model=dict(
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),
@@ -67,7 +83,6 @@ tictactoe_alphazero_create_config = dict(
     ),
     collector=dict(
         type='episode_alphazero',
-        get_train_sample=False,
         import_names=['lzero.worker.alphazero_collector'],
     ),
     evaluator=dict(
