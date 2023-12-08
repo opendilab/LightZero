@@ -678,7 +678,8 @@ class MuZeroGameBuffer(GameBuffer):
                     policy_index += 1
 
                 batch_target_policies_non_re.append(target_policies)
-        batch_target_policies_non_re = np.asarray(batch_target_policies_non_re)
+        if not self._multi_agent:
+            batch_target_policies_non_re = np.asarray(batch_target_policies_non_re)
         return batch_target_policies_non_re
 
     def update_priority(self, train_data: List[np.ndarray], batch_priorities: Any) -> None:

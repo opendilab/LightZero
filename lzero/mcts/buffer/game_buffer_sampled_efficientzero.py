@@ -428,15 +428,16 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                         target_value_prefixs.append(value_prefix)
                     else:
                         target_values.append(np.zeros_like(value_list[0]))
-                        target_value_prefixs.append(value_prefix)
+                        target_value_prefixs.append(np.array([0,]))
 
                     value_index += 1
 
                 batch_value_prefixs.append(target_value_prefixs)
                 batch_target_values.append(target_values)
 
-        batch_value_prefixs = np.asarray(batch_value_prefixs, dtype=np.float32)
-        batch_target_values = np.asarray(batch_target_values, dtype=np.float32)
+        if not self._multi_agent:
+            batch_value_prefixs = np.asarray(batch_value_prefixs, dtype=np.float32)
+            batch_target_values = np.asarray(batch_target_values, dtype=np.float32)
 
         return batch_value_prefixs, batch_target_values
 
@@ -585,8 +586,8 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     policy_index += 1
 
                 batch_target_policies_re.append(target_policies)
-
-        batch_target_policies_re = np.array(batch_target_policies_re)
+        if not self._multi_agent:
+            batch_target_policies_re = np.array(batch_target_policies_re)
 
         return batch_target_policies_re, root_sampled_actions
 

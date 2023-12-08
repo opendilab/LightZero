@@ -139,8 +139,8 @@ def phi_transform(discrete_support: DiscreteSupport, x: torch.Tensor) -> torch.T
 
     target = torch.zeros(*x.shape, set_size).to(x.device)
     x_high_idx, x_low_idx = x_high - min / delta, x_low - min / delta
-    target.scatter_(2, x_high_idx.long().unsqueeze(-1), p_high.unsqueeze(-1))
-    target.scatter_(2, x_low_idx.long().unsqueeze(-1), p_low.unsqueeze(-1))
+    target.scatter_(target.dim()-1, x_high_idx.long().unsqueeze(-1), p_high.unsqueeze(-1))
+    target.scatter_(target.dim()-1, x_low_idx.long().unsqueeze(-1), p_low.unsqueeze(-1))
 
     return target
 

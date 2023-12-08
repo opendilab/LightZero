@@ -302,6 +302,22 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         )
         self._multi_agent = self._cfg.model.multi_agent
 
+    def _prepocess_data(self, data_list):
+        def get_depth(lst):
+            if not isinstance(lst, list):
+                return 0
+            return 1 + get_depth(lst[0])
+        for i in range(len(data_list)):
+            depth = get_depth(data_list[i])
+            if depth != 0:
+                for _ in range(depth):
+                    data_list[i] = default_collate(data_list[i])
+                data_list[i] = to_dtype(to_device(data_list[i], self._cfg.device), torch.float)
+                data_list[i] = data_list[i].permute(*range(depth-1, -1, -1), *range(depth, data_list[i].dim()))
+            else:
+                data_list[i] = to_dtype(to_device(to_tensor(data_list[i]), self._cfg.device), torch.float)
+        return data_list
+
     def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
         """
          Overview:
@@ -336,16 +352,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # shape: (batch_size, num_unroll_steps, action_dim)
         # NOTE: .float(), in continuous action space.
         if self._cfg.model.multi_agent:
-            action_batch = to_dtype(to_device(to_tensor(action_batch), self._cfg.device), torch.float)
-            action_batch = default_collate(default_collate(action_batch))   # (num_unroll_steps, batch_size, action_dim, 1)
-            action_batch = action_batch.transpose(0, 1)  # (batch_size, num_unroll_steps, action_dim, 1)
-            mask_batch = to_dtype(default_collate(mask_batch), torch.float)
-            data_list = [
-                target_value_prefix.astype('float32'),
-                target_value.astype('float32'), target_policy, weights
-            ]
-            [target_value_prefix, target_value, target_policy,
-            weights] = to_torch_float_tensor(data_list, self._cfg.device)
+            data_list = [action_batch, mask_batch, target_value_prefix, target_value, target_policy, weights, child_sampled_actions_batch]
+            [action_batch, mask_batch, target_value_prefix, target_value,
+                target_policy, weights, child_sampled_actions_batch] = self._prepocess_data(data_list)
         else:
             action_batch = torch.from_numpy(action_batch).to(self._cfg.device).float().unsqueeze(-1)
             data_list = [
@@ -355,15 +364,10 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             ]
             [mask_batch, target_value_prefix, target_value, target_policy,
             weights] = to_torch_float_tensor(data_list, self._cfg.device)
-        # ==============================================================
-        # sampled related core code
-        # ==============================================================
-        # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim, 1), e.g. (4, 6, 5, 1, 1)
-        if self._cfg.model.multi_agent:
-            child_sampled_actions_batch = default_collate(default_collate(child_sampled_actions_batch))
-            child_sampled_actions_batch = to_dtype(to_device(child_sampled_actions_batch, self._cfg.device), torch.float)
-            child_sampled_actions_batch = child_sampled_actions_batch.transpose(0, 1)
-        else:
+            # ==============================================================
+            # sampled related core code
+            # ==============================================================
+            # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim, 1), e.g. (4, 6, 5, 1, 1)
             child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device).unsqueeze(-1)
             target_value_prefix = target_value_prefix.view(self._cfg.batch_size, -1)
             target_value = target_value.view(self._cfg.batch_size, -1)
@@ -398,15 +402,32 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             ).detach().cpu()
 
         # calculate the new priorities for each transition.
-        value_priority = L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0])
-        value_priority = value_priority.data.cpu().numpy() + 1e-6
+        if self._cfg.use_priority:
+            value_priority = L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0])
+            value_priority = value_priority.data.cpu().numpy() + 1e-6
+        else:
+            value_priority = np.ones(self._cfg.model.agent_num*self._cfg.batch_size)
 
         # ==============================================================
         # calculate policy and value loss for the first step.
         # ==============================================================
-        value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
+        if self._multi_agent:
+            # (B, unroll_step, agent_num, 601) -> (B*agent_num, unroll_step, 601)
+            target_value_categorical = target_value_categorical.transpose(1, 2)
+            target_value_categorical = target_value_categorical.reshape((-1, *target_value_categorical.shape[2:]))
+            # (B, unroll_step, agent_num, action_dim) -> (B*agent_num, unroll_step, action_dim)
+            action_batch = action_batch.transpose(1,2)
+            action_batch = action_batch.reshape((-1, *action_batch.shape[2:]))
 
-        policy_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+            target_value_prefix_categorical = torch.repeat_interleave(target_value_prefix_categorical, repeats=self._cfg.model.agent_num, dim=0)
+
+            weights = torch.repeat_interleave(weights, repeats=self._cfg.model.agent_num)
+            # value shape (B*agent_num, 601)
+            value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
+            policy_loss = torch.zeros(self._cfg.batch_size*self._cfg.model.agent_num, device=self._cfg.device)
+        else:
+            value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
+            policy_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         # ==============================================================
         # sampled related core code: calculate policy loss, typically cross_entropy_loss
         # ==============================================================
@@ -421,8 +442,12 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 policy_loss, policy_logits, target_policy, mask_batch, child_sampled_actions_batch, unroll_step=0
             )
 
-        value_prefix_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
-        consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+        if self._multi_agent:
+            value_prefix_loss = torch.zeros(self._cfg.batch_size*self._cfg.model.agent_num, device=self._cfg.device)
+            consistency_loss = torch.zeros(self._cfg.batch_size*self._cfg.model.agent_num, device=self._cfg.device)
+        else:
+            value_prefix_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+            consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
 
         # ==============================================================
         # the core recurrent_inference in SampledEfficientZero policy.
@@ -494,10 +519,16 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
             # reset hidden states every ``lstm_horizon_len`` unroll steps.
             if (step_k + 1) % self._cfg.lstm_horizon_len == 0:
-                reward_hidden_state = (
-                    torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
-                    torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
+                if self._multi_agent:
+                    reward_hidden_state = (
+                    torch.zeros(1, self._cfg.batch_size*self._cfg.model.agent_num, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
+                    torch.zeros(1, self._cfg.batch_size*self._cfg.model.agent_num, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
                 )
+                else:
+                    reward_hidden_state = (
+                        torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
+                        torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
+                    )
 
             if self._cfg.monitor_extra_statistics:
                 original_value_prefixs = self.inverse_scalar_transform_handle(value_prefix)
@@ -629,7 +660,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
         # take the init hypothetical step k=unroll_step
         target_normalized_visit_count = target_policy[:, unroll_step]
-
+        if self._multi_agent:
+            target_normalized_visit_count = target_normalized_visit_count.reshape((self._cfg.batch_size*self._cfg.model.agent_num, -1))
+            mask_batch = torch.repeat_interleave(mask_batch, repeats=3, dim=0)
         # ******* NOTE: target_policy_entropy is only for debug.  ******
         non_masked_indices = torch.nonzero(mask_batch[:, unroll_step]).squeeze(-1)
         # Check if there are any unmasked rows
@@ -639,13 +672,17 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             )
             target_dist = Categorical(target_normalized_visit_count_masked)
             target_policy_entropy = target_dist.entropy().mean()
+
+            # shape: (batch_size, num_unroll_steps, num_agent, num_of_sampled_actions, action_dim, 1) -> (batch_size*num_agent,
+            # num_of_sampled_actions, action_dim) e.g. (4, 6, 3, 20, 2, 1) ->  (12, 20, 2)
+            target_sampled_actions = child_sampled_actions_batch[:, unroll_step].view(-1, *child_sampled_actions_batch[:, unroll_step].shape[2:])
         else:
             # Set target_policy_entropy to 0 if all rows are masked
             target_policy_entropy = 0
 
-        # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1) -> (batch_size,
-        # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2, 1) ->  (4, 20, 2)
-        target_sampled_actions = child_sampled_actions_batch[:, unroll_step].squeeze(-1)
+            # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1) -> (batch_size,
+            # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2, 1) ->  (4, 20, 2)
+            target_sampled_actions = child_sampled_actions_batch[:, unroll_step].squeeze(-1)
 
         policy_entropy = dist.entropy().mean()
         policy_entropy_loss = -dist.entropy()
@@ -669,7 +706,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
             # NOTE: for numerical stability.
             target_sampled_actions_clamped = torch.clamp(
-                target_sampled_actions[:, k, :], torch.tensor(-1 + 1e-6), torch.tensor(1 - 1e-6)
+                target_sampled_actions[:, k, :], torch.tensor(-1 + 1e-6).to(self._cfg.device), torch.tensor(1 - 1e-6).to(self._cfg.device)
             )
             target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
 

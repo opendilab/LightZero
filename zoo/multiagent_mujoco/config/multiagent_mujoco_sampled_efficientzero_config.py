@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '7'
+os.environ["CUDA_VISIBLE_DEVICES"] = '6'
 
 # options={'Hopper-v2', 'HalfCheetah-v2', 'Walker2d-v2', 'Ant-v2', 'Humanoid-v2'}
 env_name = 'Hopper-v2'
@@ -33,14 +33,14 @@ if env_name == 'HalfCheetah-v2':
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 seed = 0
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
+collector_env_num = 3
+n_episode = 3
+evaluator_env_num = 1
 continuous_action_space = True
 K = 20  # num_of_sampled_actions
 num_simulations = 50
-update_per_collect = 200
-batch_size = 256
+update_per_collect = 5
+batch_size = 16
 
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
@@ -86,6 +86,7 @@ mujoco_sampled_efficientzero_config = dict(
         cuda=True,
         multi_agent=True,
         use_priority=False,
+        ssl_loss_weight=0,
         policy_entropy_loss_weight=policy_entropy_loss_weight,
         ignore_done=ignore_done,
         env_type='not_board_games',
