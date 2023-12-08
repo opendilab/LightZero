@@ -1034,7 +1034,16 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                  ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
          """
         self._eval_model.eval()
-        active_eval_env_num = data.shape[0]
+        if isinstance(data, dict):
+            # If data is a dictionary, find the first non-dictionary element and get its shape[0]
+            for k, v in data.items():
+                if not isinstance(v, dict):
+                    active_eval_env_num = v.shape[0]*v.shape[1]
+                    agent_num = v.shape[1]  # multi-agent
+        elif isinstance(data, torch.Tensor):
+            # If data is a torch.tensor, directly return its shape[0]
+            active_eval_env_num =  data.shape[0]
+            agent_num = 1   # single-agent
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._eval_model.initial_inference(data)
@@ -1088,6 +1097,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             roots_sampled_actions = roots.get_sampled_actions(
             )  # shape: ``{list: batch_size} ->{list: action_space_size}``
 
+            if self._multi_agent:
+                active_eval_env_num = active_eval_env_num // agent_num
             data_id = [i for i in range(active_eval_env_num)]
             output = {i: None for i in data_id}
 
@@ -1095,44 +1106,56 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 ready_env_id = np.arange(active_eval_env_num)
 
             for i, env_id in enumerate(ready_env_id):
-                distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                try:
-                    root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
-                except Exception:
-                    # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
-                    root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
-                # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
-                # the index within the legal action set, rather than the index in the entire action set.
-                # Setting deterministic=True implies choosing the action with the highest value (argmax) rather than sampling during the evaluation phase.
-                action, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=1, deterministic=True
-                )
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-
-                try:
-                    action = roots_sampled_actions[i][action].value
-                    # logging.warning('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
-                except Exception:
-                    # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
-                    action = np.array(roots_sampled_actions[i][action])
-
-                if not self._cfg.model.continuous_action_space:
-                    if len(action.shape) == 0:
-                        action = int(action)
-                    elif len(action.shape) == 1:
-                        action = int(action[0])
-
                 output[env_id] = {
-                    'action': action,
-                    'visit_count_distributions': distributions,
-                    'root_sampled_actions': root_sampled_actions,
-                    'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'searched_value': value,
-                    'predicted_value': pred_values[i],
-                    'predicted_policy_logits': policy_logits[i],
+                    'action': [],
+                    'visit_count_distributions': [],
+                    'root_sampled_actions': [],
+                    'visit_count_distribution_entropy': [],
+                    'searched_value': [],
+                    'predicted_value': [],
+                    'predicted_policy_logits': [],
                 }
+                for j in range(agent_num):
+                    index = i * agent_num + j
+                    distributions, value = roots_visit_count_distributions[index], roots_values[index]
+                    try:
+                        root_sampled_actions = np.array([action.value for action in roots_sampled_actions[index]])
+                    except Exception:
+                        # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                        root_sampled_actions = np.array([action for action in roots_sampled_actions[index]])
+                    # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                    # the index within the legal action set, rather than the index in the entire action set.
+                    # Setting deterministic=True implies choosing the action with the highest value (argmax) rather than sampling during the evaluation phase.
+                    action, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=1, deterministic=True
+                    )
+                    # ==============================================================
+                    # sampled related core code
+                    # ==============================================================
+
+                    try:
+                        action = roots_sampled_actions[index][action].value
+                        # logging.warning('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
+                    except Exception:
+                        # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                        action = np.array(roots_sampled_actions[index][action])
+
+                    if not self._cfg.model.continuous_action_space:
+                        if len(action.shape) == 0:
+                            action = int(action)
+                        elif len(action.shape) == 1:
+                            action = int(action[0])
+
+                    output[env_id]['action'].append(action)
+                    output[env_id]['visit_count_distributions'].append(distributions)
+                    output[env_id]['root_sampled_actions'].append(root_sampled_actions)
+                    output[env_id]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
+                    output[env_id]['searched_value'].append(value)
+                    output[env_id]['predicted_value'].append(pred_values[index])
+                    output[env_id]['predicted_policy_logits'].append(policy_logits[index])
+                
+                for k,v in output[env_id].items():
+                    output[env_id][k] = np.array(v)
 
         return output
 
