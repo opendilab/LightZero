@@ -1,15 +1,16 @@
 import time
-from collections import deque, namedtuple
+from collections import deque, namedtuple, defaultdict
 from typing import Optional, Any, List
 
 import numpy as np
 import torch
 from ding.envs import BaseEnvManager
-from ding.torch_utils import to_ndarray
+from ding.torch_utils import to_ndarray, to_device
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, one_time_warning, get_rank, get_world_size, \
     broadcast_object_list, allreduce_data
 from ding.worker.collector.base_serial_collector import ISerialCollector
 from torch.nn import L1Loss
+from ding.utils.data import default_collate
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
@@ -56,6 +57,9 @@ class MuZeroCollector(ISerialCollector):
         self._collect_print_freq = collect_print_freq
         self._timer = EasyTimer()
         self._end_flag = False
+        self._multi_agent = policy_config.model.get('multi_agent', False)
+        if self._multi_agent:
+            self._agent_num = policy_config.model.agent_num
 
         self._rank = get_rank()
         self._world_size = get_world_size()
@@ -216,6 +220,8 @@ class MuZeroCollector(ISerialCollector):
             priorities = L1Loss(reduction='none'
                                 )(pred_values,
                                   search_values).detach().cpu().numpy() + 1e-6
+            if self._multi_agent:
+                priorities = priorities.reshape(-1, self._agent_num)
         else:
             # priorities is None -> use the max priority for all newly collected data
             priorities = None
@@ -368,7 +374,11 @@ class MuZeroCollector(ISerialCollector):
             improved_policy_lst = [[] for _ in range(env_nums)]
 
         # some logs
-        eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros(env_nums)
+        if self._multi_agent:
+            eps_steps_lst, visit_entropies_lst = np.zeros((env_nums, self._agent_num)), np.zeros(
+                (env_nums, self._agent_num))
+        else:
+            eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros(env_nums)
         if self.policy_config.gumbel_algo:
             completed_value_lst = np.zeros(env_nums)
         self_play_moves = 0.
@@ -388,8 +398,12 @@ class MuZeroCollector(ISerialCollector):
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
 
-                stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
+                stack_obs = {env_id: game_segments[env_id].get_obs()[0] for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
+                stack_obs = default_collate(stack_obs)
+                if not isinstance(stack_obs, dict):
+                    stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
+                stack_obs = to_device(stack_obs, self.policy_config.device)
 
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
                 to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
@@ -398,12 +412,6 @@ class MuZeroCollector(ISerialCollector):
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
                     chance_dict = {env_id: chance_dict[env_id] for env_id in ready_env_id}
                     chance = [chance_dict[env_id] for env_id in ready_env_id]
-
-                stack_obs = to_ndarray(stack_obs)
-
-                stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
-
-                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
 
                 # ==============================================================
                 # policy forward
@@ -638,15 +646,15 @@ class MuZeroCollector(ISerialCollector):
                         last_game_priorities[env_id] = None
 
                     # log
-                    self_play_moves_max = max(self_play_moves_max, eps_steps_lst[env_id])
+                    # self_play_moves_max = max(self_play_moves_max, eps_steps_lst[env_id])
                     self_play_visit_entropy.append(visit_entropies_lst[env_id] / eps_steps_lst[env_id])
                     self_play_moves += eps_steps_lst[env_id]
                     self_play_episodes += 1
 
                     pred_values_lst[env_id] = []
                     search_values_lst[env_id] = []
-                    eps_steps_lst[env_id] = 0
-                    visit_entropies_lst[env_id] = 0
+                    eps_steps_lst[env_id] = np.zeros(self._agent_num)
+                    visit_entropies_lst[env_id] = np.zeros(self._agent_num)
 
                     # Env reset is done by env_manager automatically
                     self._policy.reset([env_id])

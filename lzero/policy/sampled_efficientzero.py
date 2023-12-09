@@ -5,7 +5,8 @@ import numpy as np
 import torch
 import torch.optim as optim
 from ding.model import model_wrap
-from ding.torch_utils import to_tensor
+from ding.torch_utils import to_tensor, to_device, to_dtype, to_ndarray
+from ding.utils.data import default_collate, default_decollate
 from ding.utils import POLICY_REGISTRY
 from ditk import logging
 from torch.distributions import Categorical, Independent, Normal
@@ -226,7 +227,10 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         if self._cfg.model.model_type == "conv":
             return 'SampledEfficientZeroModel', ['lzero.model.sampled_efficientzero_model']
         elif self._cfg.model.model_type == "mlp":
-            return 'SampledEfficientZeroModelMLP', ['lzero.model.sampled_efficientzero_model_mlp']
+            if self._cfg.model.multi_agent is True:
+                return 'SampledEfficientZeroModelMLPMaIndependent', ['lzero.model.sampled_efficientzero_model_mlp_ma_independent']
+            else:
+                return 'SampledEfficientZeroModelMLP', ['lzero.model.sampled_efficientzero_model_mlp']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
@@ -298,6 +302,23 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         self.inverse_scalar_transform_handle = InverseScalarTransform(
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
+        self._multi_agent = self._cfg.model.multi_agent
+
+    def _prepocess_data(self, data_list):
+        def get_depth(lst):
+            if not isinstance(lst, list):
+                return 0
+            return 1 + get_depth(lst[0])
+        for i in range(len(data_list)):
+            depth = get_depth(data_list[i])
+            if depth != 0:
+                for _ in range(depth):
+                    data_list[i] = default_collate(data_list[i])
+                data_list[i] = to_dtype(to_device(data_list[i], self._cfg.device), torch.float)
+                data_list[i] = data_list[i].permute(*range(depth-1, -1, -1), *range(depth, data_list[i].dim()))
+            else:
+                data_list[i] = to_dtype(to_device(to_tensor(data_list[i]), self._cfg.device), torch.float)
+        return data_list
 
     def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
         """
@@ -332,24 +353,27 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
         # shape: (batch_size, num_unroll_steps, action_dim)
         # NOTE: .float(), in continuous action space.
-        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).float().unsqueeze(-1)
-        data_list = [
-            mask_batch,
-            target_value_prefix.astype('float32'),
-            target_value.astype('float32'), target_policy, weights
-        ]
-        [mask_batch, target_value_prefix, target_value, target_policy,
-         weights] = to_torch_float_tensor(data_list, self._cfg.device)
-        # ==============================================================
-        # sampled related core code
-        # ==============================================================
-        # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim, 1), e.g. (4, 6, 5, 1, 1)
-        child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device).unsqueeze(-1)
-
-        target_value_prefix = target_value_prefix.view(self._cfg.batch_size, -1)
-        target_value = target_value.view(self._cfg.batch_size, -1)
-
-        assert obs_batch.size(0) == self._cfg.batch_size == target_value_prefix.size(0)
+        if self._cfg.model.multi_agent:
+            data_list = [action_batch, mask_batch, target_value_prefix, target_value, target_policy, weights, child_sampled_actions_batch]
+            [action_batch, mask_batch, target_value_prefix, target_value,
+                target_policy, weights, child_sampled_actions_batch] = self._prepocess_data(data_list)
+        else:
+            action_batch = torch.from_numpy(action_batch).to(self._cfg.device).float().unsqueeze(-1)
+            data_list = [
+                mask_batch,
+                target_value_prefix.astype('float32'),
+                target_value.astype('float32'), target_policy, weights
+            ]
+            [mask_batch, target_value_prefix, target_value, target_policy,
+            weights] = to_torch_float_tensor(data_list, self._cfg.device)
+            # ==============================================================
+            # sampled related core code
+            # ==============================================================
+            # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim, 1), e.g. (4, 6, 5, 1, 1)
+            child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device).unsqueeze(-1)
+            target_value_prefix = target_value_prefix.view(self._cfg.batch_size, -1)
+            target_value = target_value.view(self._cfg.batch_size, -1)
+            assert obs_batch.size(0) == self._cfg.batch_size == target_value_prefix.size(0)
 
         # ``scalar_transform`` to transform the original value to the scaled value,
         # i.e. h(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -380,15 +404,32 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             ).detach().cpu()
 
         # calculate the new priorities for each transition.
-        value_priority = L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0])
-        value_priority = value_priority.data.cpu().numpy() + 1e-6
+        if self._cfg.use_priority:
+            value_priority = L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0])
+            value_priority = value_priority.data.cpu().numpy() + 1e-6
+        else:
+            value_priority = np.ones(self._cfg.model.agent_num*self._cfg.batch_size)
 
         # ==============================================================
         # calculate policy and value loss for the first step.
         # ==============================================================
-        value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
+        if self._multi_agent:
+            # (B, unroll_step, agent_num, 601) -> (B*agent_num, unroll_step, 601)
+            target_value_categorical = target_value_categorical.transpose(1, 2)
+            target_value_categorical = target_value_categorical.reshape((-1, *target_value_categorical.shape[2:]))
+            # (B, unroll_step, agent_num, action_dim) -> (B*agent_num, unroll_step, action_dim)
+            action_batch = action_batch.transpose(1,2)
+            action_batch = action_batch.reshape((-1, *action_batch.shape[2:]))
 
-        policy_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+            target_value_prefix_categorical = torch.repeat_interleave(target_value_prefix_categorical, repeats=self._cfg.model.agent_num, dim=0)
+
+            weights = torch.repeat_interleave(weights, repeats=self._cfg.model.agent_num)
+            # value shape (B*agent_num, 601)
+            value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
+            policy_loss = torch.zeros(self._cfg.batch_size*self._cfg.model.agent_num, device=self._cfg.device)
+        else:
+            value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
+            policy_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         # ==============================================================
         # sampled related core code: calculate policy loss, typically cross_entropy_loss
         # ==============================================================
@@ -403,8 +444,12 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 policy_loss, policy_logits, target_policy, mask_batch, child_sampled_actions_batch, unroll_step=0
             )
 
-        value_prefix_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
-        consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+        if self._multi_agent:
+            value_prefix_loss = torch.zeros(self._cfg.batch_size*self._cfg.model.agent_num, device=self._cfg.device)
+            consistency_loss = torch.zeros(self._cfg.batch_size*self._cfg.model.agent_num, device=self._cfg.device)
+        else:
+            value_prefix_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+            consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
 
         # ==============================================================
         # the core recurrent_inference in SampledEfficientZero policy.
@@ -476,10 +521,16 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
             # reset hidden states every ``lstm_horizon_len`` unroll steps.
             if (step_k + 1) % self._cfg.lstm_horizon_len == 0:
-                reward_hidden_state = (
-                    torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
-                    torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
+                if self._multi_agent:
+                    reward_hidden_state = (
+                    torch.zeros(1, self._cfg.batch_size*self._cfg.model.agent_num, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
+                    torch.zeros(1, self._cfg.batch_size*self._cfg.model.agent_num, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
                 )
+                else:
+                    reward_hidden_state = (
+                        torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
+                        torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
+                    )
 
             if self._cfg.monitor_extra_statistics:
                 original_value_prefixs = self.inverse_scalar_transform_handle(value_prefix)
@@ -611,7 +662,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
         # take the init hypothetical step k=unroll_step
         target_normalized_visit_count = target_policy[:, unroll_step]
-
+        if self._multi_agent:
+            target_normalized_visit_count = target_normalized_visit_count.reshape((self._cfg.batch_size*self._cfg.model.agent_num, -1))
+            mask_batch = torch.repeat_interleave(mask_batch, repeats=3, dim=0)
         # ******* NOTE: target_policy_entropy is only for debug.  ******
         non_masked_indices = torch.nonzero(mask_batch[:, unroll_step]).squeeze(-1)
         # Check if there are any unmasked rows
@@ -621,13 +674,17 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             )
             target_dist = Categorical(target_normalized_visit_count_masked)
             target_policy_entropy = target_dist.entropy().mean()
+
+            # shape: (batch_size, num_unroll_steps, num_agent, num_of_sampled_actions, action_dim, 1) -> (batch_size*num_agent,
+            # num_of_sampled_actions, action_dim) e.g. (4, 6, 3, 20, 2, 1) ->  (12, 20, 2)
+            target_sampled_actions = child_sampled_actions_batch[:, unroll_step].view(-1, *child_sampled_actions_batch[:, unroll_step].shape[2:])
         else:
             # Set target_policy_entropy to 0 if all rows are masked
             target_policy_entropy = 0
 
-        # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1) -> (batch_size,
-        # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2, 1) ->  (4, 20, 2)
-        target_sampled_actions = child_sampled_actions_batch[:, unroll_step].squeeze(-1)
+            # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1) -> (batch_size,
+            # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2, 1) ->  (4, 20, 2)
+            target_sampled_actions = child_sampled_actions_batch[:, unroll_step].squeeze(-1)
 
         policy_entropy = dist.entropy().mean()
         policy_entropy_loss = -dist.entropy()
@@ -651,7 +708,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
             # NOTE: for numerical stability.
             target_sampled_actions_clamped = torch.clamp(
-                target_sampled_actions[:, k, :], torch.tensor(-1 + 1e-6), torch.tensor(1 - 1e-6)
+                target_sampled_actions[:, k, :], torch.tensor(-1 + 1e-6).to(self._cfg.device), torch.tensor(1 - 1e-6).to(self._cfg.device)
             )
             target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
 
@@ -787,6 +844,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
         self._collect_mcts_temperature = 1
+        self._multi_agent = self._cfg.model.multi_agent
 
     def _forward_collect(
             self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1,
@@ -817,7 +875,18 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         """
         self._collect_model.eval()
         self._collect_mcts_temperature = temperature
-        active_collect_env_num = data.shape[0]
+        if isinstance(data, dict):
+            # If data is a dictionary, find the first non-dictionary element and get its shape[0]
+            # TODO(rjy): written in recursive form
+            for k, v in data.items():
+                if not isinstance(v, dict):
+                    active_collect_env_num = v.shape[0]*v.shape[1]
+                    agent_num = v.shape[1]  # multi-agent
+        elif isinstance(data, torch.Tensor):
+            # If data is a torch.tensor, directly return its shape[0]
+            active_collect_env_num =  data.shape[0]
+            agent_num = 1   # single-agent
+            
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
@@ -873,48 +942,62 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             roots_values = roots.get_values()  # shape: {list: batch_size}
             roots_sampled_actions = roots.get_sampled_actions()  # {list: 1}->{list:6}
 
+            if self._multi_agent:
+                active_collect_env_num = active_collect_env_num // agent_num
             data_id = [i for i in range(active_collect_env_num)]
             output = {i: None for i in data_id}
             if ready_env_id is None:
                 ready_env_id = np.arange(active_collect_env_num)
 
             for i, env_id in enumerate(ready_env_id):
-                distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                if self._cfg.mcts_ctree:
-                    # In ctree, the method roots.get_sampled_actions() returns a list object.
-                    root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
-                else:
-                    # In ptree, the same method roots.get_sampled_actions() returns an Action object.
-                    root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
-
-                # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
-                # the index within the legal action set, rather than the index in the entire action set.
-                action, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=self._collect_mcts_temperature, deterministic=False
-                )
-
-                if self._cfg.mcts_ctree:
-                    # In ctree, the method roots.get_sampled_actions() returns a list object.
-                    action = np.array(roots_sampled_actions[i][action])
-                else:
-                    # In ptree, the same method roots.get_sampled_actions() returns an Action object.
-                    action = roots_sampled_actions[i][action].value
-
-                if not self._cfg.model.continuous_action_space:
-                    if len(action.shape) == 0:
-                        action = int(action)
-                    elif len(action.shape) == 1:
-                        action = int(action[0])
-
                 output[env_id] = {
-                    'action': action,
-                    'visit_count_distributions': distributions,
-                    'root_sampled_actions': root_sampled_actions,
-                    'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'searched_value': value,
-                    'predicted_value': pred_values[i],
-                    'predicted_policy_logits': policy_logits[i],
+                    'action': [],
+                    'visit_count_distributions': [],
+                    'root_sampled_actions': [],
+                    'visit_count_distribution_entropy': [],
+                    'searched_value': [],
+                    'predicted_value': [],
+                    'predicted_policy_logits': [],
                 }
+                for j in range(agent_num):
+                    index = i * agent_num + j
+                    distributions, value = roots_visit_count_distributions[index], roots_values[index]
+                    if self._cfg.mcts_ctree:
+                        # In ctree, the method roots.get_sampled_actions() returns a list object.
+                        root_sampled_actions = np.array([action for action in roots_sampled_actions[index]])
+                    else:
+                        # In ptree, the same method roots.get_sampled_actions() returns an Action object.
+                        root_sampled_actions = np.array([action.value for action in roots_sampled_actions[index]])
+
+                    # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                    # the index within the legal action set, rather than the index in the entire action set.
+                    action, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=False
+                    )
+
+                    if self._cfg.mcts_ctree:
+                        # In ctree, the method roots.get_sampled_actions() returns a list object.
+                        action = np.array(roots_sampled_actions[index][action])
+                    else:
+                        # In ptree, the same method roots.get_sampled_actions() returns an Action object.
+                        action = roots_sampled_actions[index][action].value
+
+                    if not self._cfg.model.continuous_action_space:
+                        if len(action.shape) == 0:
+                            action = int(action)
+                        elif len(action.shape) == 1:
+                            action = int(action[0])
+
+                    output[env_id]['action'].append(action)
+                    output[env_id]['visit_count_distributions'].append(distributions)
+                    output[env_id]['root_sampled_actions'].append(root_sampled_actions)
+                    output[env_id]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
+                    output[env_id]['searched_value'].append(value)
+                    output[env_id]['predicted_value'].append(pred_values[index])
+                    output[env_id]['predicted_policy_logits'].append(policy_logits[index])
+                
+                for k,v in output[env_id].items():
+                    output[env_id][k] = np.array(v)
 
         return output
 
@@ -928,6 +1011,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             self._mcts_eval = MCTSCtree(self._cfg)
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
+        self._multi_agent = self._cfg.model.multi_agent
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None,):
         """
@@ -952,7 +1036,16 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                  ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
          """
         self._eval_model.eval()
-        active_eval_env_num = data.shape[0]
+        if isinstance(data, dict):
+            # If data is a dictionary, find the first non-dictionary element and get its shape[0]
+            for k, v in data.items():
+                if not isinstance(v, dict):
+                    active_eval_env_num = v.shape[0]*v.shape[1]
+                    agent_num = v.shape[1]  # multi-agent
+        elif isinstance(data, torch.Tensor):
+            # If data is a torch.tensor, directly return its shape[0]
+            active_eval_env_num =  data.shape[0]
+            agent_num = 1   # single-agent
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._eval_model.initial_inference(data)
@@ -1006,6 +1099,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             roots_sampled_actions = roots.get_sampled_actions(
             )  # shape: ``{list: batch_size} ->{list: action_space_size}``
 
+            if self._multi_agent:
+                active_eval_env_num = active_eval_env_num // agent_num
             data_id = [i for i in range(active_eval_env_num)]
             output = {i: None for i in data_id}
 
@@ -1013,44 +1108,56 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 ready_env_id = np.arange(active_eval_env_num)
 
             for i, env_id in enumerate(ready_env_id):
-                distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                try:
-                    root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
-                except Exception:
-                    # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
-                    root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
-                # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
-                # the index within the legal action set, rather than the index in the entire action set.
-                # Setting deterministic=True implies choosing the action with the highest value (argmax) rather than sampling during the evaluation phase.
-                action, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=1, deterministic=True
-                )
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-
-                try:
-                    action = roots_sampled_actions[i][action].value
-                    # logging.warning('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
-                except Exception:
-                    # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
-                    action = np.array(roots_sampled_actions[i][action])
-
-                if not self._cfg.model.continuous_action_space:
-                    if len(action.shape) == 0:
-                        action = int(action)
-                    elif len(action.shape) == 1:
-                        action = int(action[0])
-
                 output[env_id] = {
-                    'action': action,
-                    'visit_count_distributions': distributions,
-                    'root_sampled_actions': root_sampled_actions,
-                    'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'searched_value': value,
-                    'predicted_value': pred_values[i],
-                    'predicted_policy_logits': policy_logits[i],
+                    'action': [],
+                    'visit_count_distributions': [],
+                    'root_sampled_actions': [],
+                    'visit_count_distribution_entropy': [],
+                    'searched_value': [],
+                    'predicted_value': [],
+                    'predicted_policy_logits': [],
                 }
+                for j in range(agent_num):
+                    index = i * agent_num + j
+                    distributions, value = roots_visit_count_distributions[index], roots_values[index]
+                    try:
+                        root_sampled_actions = np.array([action.value for action in roots_sampled_actions[index]])
+                    except Exception:
+                        # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                        root_sampled_actions = np.array([action for action in roots_sampled_actions[index]])
+                    # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                    # the index within the legal action set, rather than the index in the entire action set.
+                    # Setting deterministic=True implies choosing the action with the highest value (argmax) rather than sampling during the evaluation phase.
+                    action, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=1, deterministic=True
+                    )
+                    # ==============================================================
+                    # sampled related core code
+                    # ==============================================================
+
+                    try:
+                        action = roots_sampled_actions[index][action].value
+                        # logging.warning('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
+                    except Exception:
+                        # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                        action = np.array(roots_sampled_actions[index][action])
+
+                    if not self._cfg.model.continuous_action_space:
+                        if len(action.shape) == 0:
+                            action = int(action)
+                        elif len(action.shape) == 1:
+                            action = int(action[0])
+
+                    output[env_id]['action'].append(action)
+                    output[env_id]['visit_count_distributions'].append(distributions)
+                    output[env_id]['root_sampled_actions'].append(root_sampled_actions)
+                    output[env_id]['visit_count_distribution_entropy'].append(visit_count_distribution_entropy)
+                    output[env_id]['searched_value'].append(value)
+                    output[env_id]['predicted_value'].append(pred_values[index])
+                    output[env_id]['predicted_policy_logits'].append(policy_logits[index])
+                
+                for k,v in output[env_id].items():
+                    output[env_id][k] = np.array(v)
 
         return output
 

@@ -5,6 +5,7 @@ import numpy as np
 from easydict import EasyDict
 
 from ding.utils.compression_helper import jpeg_data_decompressor
+from ding.torch_utils import to_ndarray
 
 
 class GameSegment:
@@ -96,12 +97,23 @@ class GameSegment:
         if padding:
             pad_len = self.frame_stack_num + num_unroll_steps - len(stacked_obs)
             if pad_len > 0:
-                pad_frames = np.array([stacked_obs[-1] for _ in range(pad_len)])
-                stacked_obs = np.concatenate((stacked_obs, pad_frames))
+                pad_frames = [stacked_obs[-1] for _ in range(pad_len)]
+                stacked_obs += pad_frames
         if self.transform2string:
             stacked_obs = [jpeg_data_decompressor(obs, self.gray_scale) for obs in stacked_obs]
         return stacked_obs
 
+    def _zero_obs(self, input_data):
+        if isinstance(input_data, dict):
+            # Process dict
+            return {k: self._zero_obs(v) for k, v in input_data.items()}
+        elif isinstance(input_data, (list, np.ndarray)):
+            # Process arrays or lists
+            return np.zeros_like(input_data)
+        else:
+            # Process other types (e.g. numbers, strings, etc.)
+            return input_data
+    
     def zero_obs(self) -> List:
         """
         Overview:
@@ -109,7 +121,7 @@ class GameSegment:
         Returns:
             ndarray: An array filled with zeros.
         """
-        return [np.zeros(self.zero_obs_shape, dtype=np.float32) for _ in range(self.frame_stack_num)]
+        return [self._zero_obs(self.obs_segment[0]) for _ in range(self.frame_stack_num)]
 
     def get_obs(self) -> List:
         """
@@ -212,9 +224,9 @@ class GameSegment:
         Overview:
             store the visit count distributions and value of the root node after MCTS.
         """
-        sum_visits = sum(visit_counts)
+        sum_visits = np.sum(visit_counts, axis=-1)
         if idx is None:
-            self.child_visit_segment.append([visit_count / sum_visits for visit_count in visit_counts])
+            self.child_visit_segment.append([visit_count / sum_visits[i] for i,visit_count in enumerate(visit_counts)])
             self.root_value_segment.append(root_value)
             if self.sampled_algo:
                 self.root_sampled_actions.append(root_sampled_actions)
@@ -272,26 +284,26 @@ class GameSegment:
             For environments with a variable action space, such as board games, the elements in `child_visit_segment` may have
             different lengths. In such scenarios, it is necessary to use the object data type for `self.child_visit_segment`.
         """
-        self.obs_segment = np.array(self.obs_segment)
-        self.action_segment = np.array(self.action_segment)
-        self.reward_segment = np.array(self.reward_segment)
+        self.obs_segment = to_ndarray(self.obs_segment)
+        self.action_segment = to_ndarray(self.action_segment)
+        self.reward_segment = to_ndarray(self.reward_segment)
 
         # Check if all elements in self.child_visit_segment have the same length
         if all(len(x) == len(self.child_visit_segment[0]) for x in self.child_visit_segment):
-            self.child_visit_segment = np.array(self.child_visit_segment)
+            self.child_visit_segment = to_ndarray(self.child_visit_segment)
         else:
             # In the case of environments with a variable action space, such as board games,
             # the elements in child_visit_segment may have different lengths.
             # In such scenarios, it is necessary to use the object data type.
-            self.child_visit_segment = np.array(self.child_visit_segment, dtype=object)
+            self.child_visit_segment = to_ndarray(self.child_visit_segment, dtype=object)
 
-        self.root_value_segment = np.array(self.root_value_segment)
-        self.improved_policy_probs = np.array(self.improved_policy_probs)
+        self.root_value_segment = to_ndarray(self.root_value_segment)
+        self.improved_policy_probs = to_ndarray(self.improved_policy_probs)
 
-        self.action_mask_segment = np.array(self.action_mask_segment)
-        self.to_play_segment = np.array(self.to_play_segment)
+        self.action_mask_segment = to_ndarray(self.action_mask_segment)
+        self.to_play_segment = to_ndarray(self.to_play_segment)
         if self.use_ture_chance_label_in_chance_encoder:
-            self.chance_segment = np.array(self.chance_segment)
+            self.chance_segment = to_ndarray(self.chance_segment)
 
     def reset(self, init_observations: np.ndarray) -> None:
         """

@@ -3,6 +3,8 @@ from typing import Any, List, Tuple
 import numpy as np
 import torch
 from ding.utils import BUFFER_REGISTRY
+from ding.utils.data import default_collate, default_decollate
+from ding.torch_utils import to_tensor, to_device, to_dtype, to_ndarray
 
 from lzero.mcts.tree_search.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTSCtree
 from lzero.mcts.tree_search.mcts_ptree_sampled import SampledEfficientZeroMCTSPtree as MCTSPtree
@@ -141,7 +143,9 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
             # sampled related core code
             # ==============================================================
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
-                                              self._cfg.num_unroll_steps].tolist()
+                                              self._cfg.num_unroll_steps]
+            if not isinstance(actions_tmp, list):
+                actions_tmp = actions_tmp.tolist()
 
             # NOTE: self._cfg.num_unroll_steps + 1
             root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_segment:pos_in_game_segment +
@@ -153,14 +157,25 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
 
             # pad random action
             if self._cfg.model.continuous_action_space:
-                actions_tmp += [
-                    np.random.randn(self._cfg.model.action_space_size)
+                if self._multi_agent:
+                    actions_tmp += [
+                    np.random.randn(self._cfg.model.agent_num, self._cfg.model.action_space_size)
                     for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
                 ]
-                root_sampled_actions_tmp += [
+                    root_sampled_actions_tmp += [
+                    np.random.rand(self._cfg.model.agent_num, self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size)
+                    for _ in range(self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp))
+                ]
+                else:
+                    actions_tmp += [
+                        np.random.randn(self._cfg.model.action_space_size)
+                        for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
+                    ]
+                    root_sampled_actions_tmp += [
                     np.random.rand(self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size)
                     for _ in range(self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp))
                 ]
+                
             else:
                 # generate random `padded actions_tmp`
                 actions_tmp += generate_random_actions_discrete(
@@ -193,7 +208,8 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
             mask_list.append(mask_tmp)
 
         # formalize the input observations
-        obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
+        if not self._multi_agent:
+            obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
         # ==============================================================
         # sampled related core code
         # ==============================================================
@@ -203,7 +219,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
         ]
 
         for i in range(len(current_batch)):
-            current_batch[i] = np.asarray(current_batch[i])
+            current_batch[i] = to_ndarray(current_batch[i])
 
         total_transitions = self.get_num_of_transitions()
 
@@ -273,16 +289,20 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
 
         batch_target_values, batch_value_prefixs = [], []
         with torch.no_grad():
-            value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
+            if not self._multi_agent:
+                value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
             slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
             network_output = []
             for i in range(slices):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
-                m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
+                m_obs = to_dtype(to_device(to_tensor(value_obs_list[beg_index:end_index]), self._cfg.device), torch.float)
 
                 # calculate the target value
+                m_obs = default_collate(m_obs)
+                if self._multi_agent:
+                    m_obs = m_obs[0]
                 m_output = model.initial_inference(m_obs)
 
                 # TODO(pu)
@@ -356,12 +376,20 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     ]
                 )
             else:
-                value_list = value_list.reshape(-1) * (
-                    np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list
-                )
+                if self._multi_agent:
+                    value_list = value_list.reshape(transition_batch_size, self._cfg.model.agent_num)
+                    factor = np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list
+                    value_list = value_list * factor.reshape(transition_batch_size, 1).astype(np.float32)
+                else:
+                    value_list = value_list.reshape(-1) * (
+                        np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list
+                    )
 
-            value_list = value_list * np.array(value_mask)
-            value_list = value_list.tolist()
+            if self._multi_agent:
+                value_list = value_list * np.array(value_mask)[:, np.newaxis]
+            else:
+                value_list = value_list * np.array(value_mask)
+                value_list = value_list.tolist()
 
             horizon_id, value_index = 0, 0
             for game_segment_len_non_re, reward_list, state_index, to_play_list in zip(game_segment_lens, rewards_list,
@@ -400,16 +428,17 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                                                     ]  # * config.discount_factor ** (current_index - base_index)
                         target_value_prefixs.append(value_prefix)
                     else:
-                        target_values.append(0)
-                        target_value_prefixs.append(value_prefix)
+                        target_values.append(np.zeros_like(value_list[0]))
+                        target_value_prefixs.append(np.array([0,]))
 
                     value_index += 1
 
                 batch_value_prefixs.append(target_value_prefixs)
                 batch_target_values.append(target_values)
 
-        batch_value_prefixs = np.asarray(batch_value_prefixs, dtype=object)
-        batch_target_values = np.asarray(batch_target_values, dtype=object)
+        if not self._multi_agent:
+            batch_value_prefixs = np.asarray(batch_value_prefixs, dtype=np.float32)
+            batch_target_values = np.asarray(batch_target_values, dtype=np.float32)
 
         return batch_value_prefixs, batch_target_values
 
@@ -558,8 +587,8 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     policy_index += 1
 
                 batch_target_policies_re.append(target_policies)
-
-        batch_target_policies_re = np.array(batch_target_policies_re)
+        if not self._multi_agent:
+            batch_target_policies_re = np.array(batch_target_policies_re)
 
         return batch_target_policies_re, root_sampled_actions
 

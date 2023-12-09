@@ -1,0 +1,1 @@
+from .multiagent_mujoco_lightzero_env import MAMujocoEnvLZ
