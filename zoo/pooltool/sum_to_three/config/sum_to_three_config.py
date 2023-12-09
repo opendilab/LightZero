@@ -10,17 +10,16 @@ continuous_action_space = True
 K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = None
-model_update_ratio = 0.25
 batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.0
-eval_freq = 100
+eval_freq = 1000
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 sumtothree_cont_sampled_efficientzero_config = dict(
-    exp_name=f"data_pooltool_ctree/sumtothree_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_seed0",
+    exp_name=f"data_pooltool_ctree/sumtothree_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0",
     env=dict(
         env_name="PoolTool-SumToThree",
         env_type="not_board_games",
@@ -63,10 +62,8 @@ sumtothree_cont_sampled_efficientzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=eval_freq,
-        model_update_ratio=model_update_ratio,
-        replay_buffer_size=int(
-            1e5
-        ),  # the size/capacity of replay_buffer, in the terms of transitions.
+        # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e5),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
