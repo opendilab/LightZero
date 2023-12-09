@@ -104,7 +104,8 @@ class LossWithIntermediateLosses:
         # Get a reference device from one of the provided losses
         device = next(iter(kwargs.values())).device
 
-        self.obs_loss_weight = 1.
+        # similar with ssl_loss in EZ
+        self.obs_loss_weight = 2.
         self.reward_loss_weight = 1.
         self.value_loss_weight = 0.25
         self.policy_loss_weight = 1.

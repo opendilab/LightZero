@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(1)
+torch.cuda.set_device(3)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -23,9 +23,12 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 1
 num_simulations = 50
-update_per_collect = 1000
+# update_per_collect = 2000
+update_per_collect = None
 model_update_ratio = 1
-batch_size = 64
+# batch_size = 32
+batch_size = 16
+
 max_env_step = int(1e6)
 reanalyze_ratio = 0
 num_unroll_steps = 5
@@ -43,7 +46,9 @@ num_unroll_steps = 5
 # num_unroll_steps = 5
 # # num_unroll_steps = 20
 
-eps_greedy_exploration_in_collect = False
+# eps_greedy_exploration_in_collect = False
+eps_greedy_exploration_in_collect = True
+
 
 
 # ==============================================================
@@ -51,9 +56,11 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 atari_muzero_config = dict(
-    # TODO: decode decode_obs_tokens
-    # TODO: tokenizer: lpips loss
-    exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_mcs5000_batch8_recons-obs-noaug_bs{batch_size}_adamw3e-3_seed0',
+    # TODO: world_model.py decode_obs_tokens
+    # TODO: tokenizer.py: lpips loss
+    exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd256_largenet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_seed0',
+    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_mcs500_batch8_obs-token-lw10_recons-obs-noaug_bs{batch_size}_adamw3e-3_seed0',
+    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_mcs5000_batch8_recons-obs-noaug_bs{batch_size}_adamw3e-3_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -105,8 +112,10 @@ atari_muzero_config = dict(
             # according to the characteristics of the environment and the algorithm
             type='linear',
             start=1.,
-            end=0.05,
-            decay=int(1e5),
+            end=0.01,
+            # decay=int(1e5),
+            decay=int(1e4),  # 10k
+
         ),
         # TODO: NOTE
         # use_augmentation=True,

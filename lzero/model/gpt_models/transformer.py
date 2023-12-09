@@ -80,6 +80,7 @@ class SelfAttention(nn.Module):
         super().__init__()
         assert config.embed_dim % config.num_heads == 0
         assert config.attention in ('causal', 'block_causal')
+        self.config = config
         self.num_heads = config.num_heads
         self.key = nn.Linear(config.embed_dim, config.embed_dim)
         self.query = nn.Linear(config.embed_dim, config.embed_dim)
@@ -108,11 +109,23 @@ class SelfAttention(nn.Module):
             kv_cache.update(k, v)
             k, v = kv_cache.get()
 
-        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        att = att.masked_fill(self.mask[L:L + T, :L + T] == 0, float('-inf'))
-        att = F.softmax(att, dim=-1)
-        att = self.attn_drop(att)
-        y = att @ v
+        # TODO
+        self.flash=False
+        # self.flash=True
+
+        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        if self.flash:
+            # TODO
+            # efficient attention using Flash Attention CUDA kernels
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_drop if self.training else 0, is_causal=True)
+        else:
+            # manual implementation of attention
+            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            att = att.masked_fill(self.mask[L:L + T, :L + T] == 0, float('-inf'))
+            att = F.softmax(att, dim=-1)
+            att = self.attn_drop(att)
+            y = att @ v
+
         y = rearrange(y, 'b h t e -> b t (h e)')
 
         y = self.resid_drop(self.proj(y))

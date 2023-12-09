@@ -489,12 +489,14 @@ class MuZeroGPTPolicy(Policy):
         # ==============================================================
         # TODO: train tokenlizer
         losses_tokenizer = self._learn_model.tokenizer.compute_loss(batch_for_gpt)
+        
         self._optimizer_tokenizer.zero_grad()
         losses_tokenizer.loss_total.backward()
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
             self._learn_model.tokenizer.parameters(), self._cfg.grad_clip_value
         )
         self._optimizer_tokenizer.step()
+
         intermediate_losses_tokenizer= defaultdict(float)
         for loss_name, loss_value in losses_tokenizer.intermediate_losses.items():
             intermediate_losses_tokenizer[f"{loss_name}"] = loss_value

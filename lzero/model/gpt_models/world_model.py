@@ -409,6 +409,7 @@ class WorldModel(nn.Module):
             batch['observations'] = expanded_observations
 
         with torch.no_grad():
+            # 目前这里是没有梯度的
             obs_tokens = tokenizer.encode(batch['observations'], should_preprocess=True).tokens  # (BL, K)
 
         act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
