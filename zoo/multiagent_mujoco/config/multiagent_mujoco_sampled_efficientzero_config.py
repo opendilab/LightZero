@@ -33,16 +33,16 @@ if env_name == 'HalfCheetah-v2':
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 seed = 0
-collector_env_num = 3
-n_episode = 3
-evaluator_env_num = 1
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
 continuous_action_space = True
 K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = 5
-batch_size = 16
+batch_size = 256
 
-max_env_step = int(5e6)
+max_env_step = int(5e5)
 reanalyze_ratio = 0.
 policy_entropy_loss_weight = 0.005
 
@@ -52,7 +52,7 @@ policy_entropy_loss_weight = 0.005
 
 mujoco_sampled_efficientzero_config = dict(
     exp_name=
-    f'marl_result/debug/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_pelw{policy_entropy_loss_weight}_seed{seed}',
+    f'marl_result/mamujoco/{env_name[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs-{batch_size}_pelw{policy_entropy_loss_weight}_seed{seed}',
     env=dict(
         env_name=env_name,
         scenario=env_name,
@@ -101,8 +101,8 @@ mujoco_sampled_efficientzero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        # eval_freq=int(2e3),
-        eval_freq=int(2),
+        eval_freq=int(2e3),
+        # eval_freq=int(2),
         replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
