@@ -1,52 +1,33 @@
 from __future__ import annotations
+
+import gc
+import shutil
 from pathlib import Path
 
-from typing import Tuple
-
 import attrs
-from hbutils.system.filesystem.directory import shutil
 import numpy as np
 from ding.envs import BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
-from gym import spaces
 from numpy.typing import NDArray
-from pooltool.ani.camera import camera_states
-from zoo.pooltool.datatypes import BasePoolToolEnv, ObservationDict, SimulationEnv
-
-import pooltool as pt
-from pooltool.ai.datatypes import State as PoolToolState
+from zoo.pooltool.datatypes import BasePoolToolEnv
 
 from pooltool import FrameStepper, ImageZip, image_stack
+from pooltool.ai.bot.sumtothree_rl.core import (
+    calc_reward,
+    reset_single_player_env,
+    single_player_env,
+)
+from pooltool.ai.datatypes import LightZeroEnv, ObservationDict
+from pooltool.ani.camera import camera_states
 from pooltool.ani.image.utils import gif
-
-def calc_reward(state: PoolToolState) -> float:
-    """Calculate the reward
-
-    A point is scored when both:
-
-        (1) The player contacts the object ball with the cue ball
-        (2) The sum of contacted rails by either balls is 3
-
-    This reward is designed to offer a small reward for contacting the object ball, and
-    a larger reward for scoring a point.
-    """
-    if not state.game.shot_info.turn_over:
-        return 1.0
-
-    if len(pt.filter_type(state.system.events, pt.EventType.BALL_BALL)):
-        return 0.1
-
-    return 0.0
+from pooltool.system.datatypes import MultiSystem
 
 
 @attrs.define
 class EpisodicTrackedStats:
     eval_episode_length: int = 0
     eval_episode_return: float = 0.0
-
-
-DUMMY_ENV = SimulationEnv.sum_to_three()
 
 
 @ENV_REGISTRY.register("pooltool_sumtothree")
@@ -60,9 +41,8 @@ class SumToThreeEnv(BasePoolToolEnv):
 
     def __init__(self, cfg: EasyDict) -> None:
         self.cfg = cfg
-        self._observation_space = DUMMY_ENV.spaces.observation
-        self._action_space = DUMMY_ENV.spaces.action
-        self._reward_space = DUMMY_ENV.spaces.reward
+        self._init_flag = False
+        self._env: LightZeroEnv
 
         self._save_replay_path = cfg.save_replay_path
         self._save_replay_count = 0
@@ -73,13 +53,42 @@ class SumToThreeEnv(BasePoolToolEnv):
         return "SumToThreeEnv"
 
     def close(self) -> None:
-        raise NotImplementedError()
+        # Trying to fix an apparent memory leak
+        for ball in self._env.system.balls.values():
+            del ball.state
+            del ball.history
+            del ball.history_cts
+            del ball
+        for pocket in self._env.system.table.pockets.values():
+            del pocket
+        for cushion in self._env.system.table.cushion_segments.linear.values():
+            del cushion
+        for cushion in self._env.system.table.cushion_segments.circular.values():
+            del cushion
+        del self._env.system.table
+        del self._env.system.cue
+        del self._env.system
+        del self._env.game
+        del self._env
+        gc.collect()
+
+        self._init_flag = False
 
     def reset(self) -> ObservationDict:
-        self._env = SimulationEnv.sum_to_three()
+        if not self._init_flag:
+            self._env = single_player_env()
+            self._init_flag = True
+        else:
+            self._env = reset_single_player_env(self._env)
+
         self.manage_seeds()
-        self.multisystem = pt.MultiSystem()
+        # self.multisystem = MultiSystem()
         self._tracked_stats = EpisodicTrackedStats()
+
+        self._observation_space = self._env.spaces.observation
+        self._action_space = self._env.spaces.action
+        self._reward_space = self._env.spaces.reward
+
         return self._env.observation()
 
     def step(self, action: NDArray[np.float32]) -> BaseEnvTimestep:
@@ -97,7 +106,7 @@ class SumToThreeEnv(BasePoolToolEnv):
 
         info = attrs.asdict(self._tracked_stats) if done else {}
 
-        self.multisystem.append(self._env.system.copy())
+        # self.multisystem.append(self._env.system.copy())
 
         return BaseEnvTimestep(
             obs=self._env.observation(),
@@ -120,7 +129,9 @@ class SumToThreeEnv(BasePoolToolEnv):
         STEPPER = FrameStepper()
         FPS = 6
         for i, system in enumerate(self.multisystem):
-            image_stack_path = Path(self._save_replay_path) / f"seed_{self._seed:03d}-shot_{i:03d}"
+            image_stack_path = (
+                Path(self._save_replay_path) / f"seed_{self._seed:03d}-shot_{i:03d}"
+            )
             exporter = ImageZip(image_stack_path, ext="jpg", compress=False)
             imgs = image_stack(
                 system=system,
@@ -131,6 +142,10 @@ class SumToThreeEnv(BasePoolToolEnv):
                 show_hud=False,
             )
             exporter.save(imgs)
-            gif(sorted(list(image_stack_path.glob("*.jpg"))), str(image_stack_path) + ".gif", fps=FPS)
+            gif(
+                sorted(list(image_stack_path.glob("*.jpg"))),
+                str(image_stack_path) + ".gif",
+                fps=FPS,
+            )
             shutil.rmtree(image_stack_path)
         self._save_replay_count += 1

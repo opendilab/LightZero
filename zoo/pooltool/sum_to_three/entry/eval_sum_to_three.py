@@ -3,10 +3,12 @@ from zoo.pooltool.sum_to_three.config.sum_to_three_config import main_config, cr
 from lzero.entry import eval_muzero
 import numpy as np
 
-if __name__ == "__main__":
-    model_path = './ckpt/ckpt_best.pth.tar'
+NUM = 10
 
-    seeds = np.random.randint(low=0, high=100, size=1)
+if __name__ == "__main__":
+    model_path = './ckpt/iteration_0.pth.tar'
+
+    seeds = np.random.randint(low=0, high=100, size=NUM)
 
     # Specify the number of environments for the evaluator to use
     main_config.env.evaluator_env_num = 1
