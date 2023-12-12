@@ -11,11 +11,11 @@ from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
 
-from zoo.box2d.lunarlander.envs.lunarlander_env import LunarLanderEnv
+from zoo.box2d.bipedalwalker.envs.bipedalwalker_env import BipedalWalkerEnv
 
 
 @ENV_REGISTRY.register('bipedalwalker_cont_disc')
-class BipedalWalkerDiscEnv(LunarLanderEnv):
+class BipedalWalkerDiscEnv(BipedalWalkerEnv):
     """
     Overview:
         The modified BipedalWalker environment with manually discretized action space. For each dimension, equally dividing the
@@ -48,9 +48,8 @@ class BipedalWalkerDiscEnv(LunarLanderEnv):
         replay_path=None,
         # (bool) If True, the action will be scaled.
         act_scale=True,
+        # (bool) If True, the reward will be clipped to [-10, +inf].
         rew_clip=True,
-        delay_reward_step=0,
-        prob_random_agent=0.,
         # (int) The maximum number of steps for each episode during collection.
         collect_max_episode_steps=int(1.08e5),
         # (int) The maximum number of steps for each episode during evaluation.

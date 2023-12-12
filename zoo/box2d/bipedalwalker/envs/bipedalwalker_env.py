@@ -1,7 +1,7 @@
 import copy
 import os
 from datetime import datetime
-from typing import List, Optional, Dict
+from typing import List, Dict
 
 import gymnasium as gym
 import numpy as np
@@ -25,8 +25,8 @@ class BipedalWalkerEnv(CartPoleEnv):
     config = dict(
         # (str) The gym environment name.
         env_name="BipedalWalker-v3",
-
-        env_type='normal',  # options={'normal', 'hardcore'}
+        # (str) The type of the environment. Options: {'normal', 'hardcore'}
+        env_type='normal',
         # (bool) If True, save the replay as a gif file.
         save_replay_gif=False,
         # (str or None) The path to save the replay gif. If None, the replay gif will not be saved.
@@ -36,9 +36,8 @@ class BipedalWalkerEnv(CartPoleEnv):
         replay_path=None,
         # (bool) If True, the action will be scaled.
         act_scale=True,
+        # (bool) If True, the reward will be clipped to [-10, +inf].
         rew_clip=True,
-        delay_reward_step=0,
-        prob_random_agent=0.,
         # (int) The maximum number of steps for each episode during collection.
         collect_max_episode_steps=int(1.08e5),
         # (int) The maximum number of steps for each episode during evaluation.
@@ -56,7 +55,7 @@ class BipedalWalkerEnv(CartPoleEnv):
         cfg = EasyDict(copy.deepcopy(cls.config))
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
-    
+
     def __init__(self, cfg: dict) -> None:
         """
         Overview:
@@ -90,7 +89,7 @@ class BipedalWalkerEnv(CartPoleEnv):
             self._observation_space = self._env.observation_space
             self._action_space = self._env.action_space
             self._reward_space = gym.spaces.Box(
-                low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1, ), dtype=np.float32
+                low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1,), dtype=np.float32
             )
             self._init_flag = True
         if self._replay_path is not None:
@@ -130,7 +129,7 @@ class BipedalWalkerEnv(CartPoleEnv):
             - timestep (:obj:`BaseEnvTimestep`): The timestep information including observation, reward, done flag, and info.
         """
         assert isinstance(action, np.ndarray), type(action)
-        if action.shape == (1, ):
+        if action.shape == (1,):
             action = action.squeeze()  # 0-dim array
         if self._act_scale:
             action = affine_transform(action, min_val=self.action_space.low, max_val=self.action_space.high)
@@ -189,7 +188,7 @@ class BipedalWalkerEnv(CartPoleEnv):
         return random_action
 
     def __repr__(self) -> str:
-        return "DI-engine BipedalWalker Env"
+        return "LightZero BipedalWalker Env"
 
     @staticmethod
     def create_collector_env_cfg(cfg: dict) -> List[dict]:
