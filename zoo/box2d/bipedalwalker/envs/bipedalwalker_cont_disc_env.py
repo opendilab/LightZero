@@ -1,9 +1,7 @@
-from datetime import datetime
-
 import copy
 import os
+from datetime import datetime
 from itertools import product
-from typing import List, Optional
 
 import gymnasium as gym
 import numpy as np
@@ -13,15 +11,16 @@ from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
 
-from zoo.box2d.lunarlander.envs.lunarlander_env import BipedalWalkerEnv
+from zoo.box2d.lunarlander.envs.lunarlander_env import LunarLanderEnv
+
 
 @ENV_REGISTRY.register('bipedalwalker_cont_disc')
-class BipedalWalkerDiscEnv(BipedalWalkerEnv):
+class BipedalWalkerDiscEnv(LunarLanderEnv):
     """
-        Overview:
-            The modified BipedalWalker environment with manually discretized action space. For each dimension, equally dividing the
-            original continuous action into ``each_dim_disc_size`` bins and using their Cartesian product to obtain
-            handcrafted discrete actions.
+    Overview:
+        The modified BipedalWalker environment with manually discretized action space. For each dimension, equally dividing the
+        original continuous action into ``each_dim_disc_size`` bins and using their Cartesian product to obtain
+        handcrafted discrete actions.
     """
 
     @classmethod
@@ -147,7 +146,7 @@ class BipedalWalkerDiscEnv(BipedalWalkerEnv):
         obs, rew, terminated, truncated, info = self._env.step(action)
         done = terminated or truncated
 
-        action_mask = None
+        action_mask = np.ones(self.K, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         self._eval_episode_return += rew
         if self._rew_clip:

@@ -71,7 +71,7 @@ class LunarLanderDiscEnv(LunarLanderEnv):
         self._save_replay_gif = cfg.save_replay_gif
         self._save_replay_count = 0
         if 'Continuous' in self._env_name:
-            self._act_scale = cfg.use_act_scale  # act_scale only works in continuous env
+            self._act_scale = cfg.act_scale  # act_scale only works in continuous env
         else:
             self._act_scale = False
 
