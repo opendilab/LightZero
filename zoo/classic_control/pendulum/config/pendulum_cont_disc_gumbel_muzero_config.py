@@ -1,6 +1,6 @@
 """
 NOTE: the pendulum_cont_disc in file name means we use the Pendulum-v1 continuous env
-with manually discretitze action space. That is to say, the final action space is discrete.
+with manually discretized action space. That is to say, the final action space is discrete.
 """
 from easydict import EasyDict
 

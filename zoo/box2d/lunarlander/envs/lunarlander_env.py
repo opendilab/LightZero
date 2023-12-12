@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from typing import List, Optional, Dict
 
-import gym
+import gymnasium as gym
 import numpy as np
 from ding.envs import BaseEnvTimestep
 from ding.envs import ObsPlusPrevActRewWrapper
@@ -101,10 +101,12 @@ class LunarLanderEnv(CartPoleEnv):
             self._init_flag = True
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
-            self._env.seed(self._seed + np_seed)
+            self._seed = self._seed + np_seed
+            obs, _ = self._env.reset(seed=self._seed)  # using the reset method of Gymnasium env
         elif hasattr(self, '_seed'):
-            self._env.seed(self._seed)
-        obs = self._env.reset()
+            obs, _ = self._env.reset(seed=self._seed)
+        else:
+            obs, _ = self._env.reset()
         obs = to_ndarray(obs)
         self._eval_episode_return = 0.
         if self._save_replay_gif:
@@ -133,9 +135,12 @@ class LunarLanderEnv(CartPoleEnv):
         if self._save_replay_gif:
             self._frames.append(self._env.render(mode='rgb_array'))
 
-        obs, rew, done, info = self._env.step(action)
+        obs, rew, terminated, truncated, info = self._env.step(action)
+        done = terminated or truncated
         if 'Continuous' not in self._env_name:
             action_mask = np.ones(4, 'int8')
+            # TODO: test the performance of varied_action_space.
+            # action_mask[0] = 0
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         else:
             action_mask = None

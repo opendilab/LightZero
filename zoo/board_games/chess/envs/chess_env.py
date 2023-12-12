@@ -8,7 +8,7 @@ import chess
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
-from gym import spaces
+from gymnasium import spaces
 from pettingzoo.classic.chess import chess_utils
 from pettingzoo.utils.agent_selector import agent_selector
 

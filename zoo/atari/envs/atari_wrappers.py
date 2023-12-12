@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 import cv2
+import gymnasium 
 import gym
 import numpy as np
 from ding.envs import NoopResetWrapper, MaxAndSkipWrapper, EpisodicLifeWrapper, FireResetWrapper, WarpFrameWrapper, \
@@ -90,10 +91,11 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
         - env (:obj:`gym.Env`): The wrapped Atari environment with the given configurations.
     """
     if config.render_mode_human:
-        env = gym.make(config.env_name, render_mode='human')
+        env = gymnasium.make(config.env_name, render_mode='human')
     else:
-        env = gym.make(config.env_name)
+        env = gymnasium.make(config.env_name)
     assert 'NoFrameskip' in env.spec.id
+    env = GymnasiumToGymWrapper(env)
     env = NoopResetWrapper(env, noop_max=30)
     env = MaxAndSkipWrapper(env, skip=config.frame_skip)
     if episode_life:
@@ -259,3 +261,48 @@ class GameWrapper(gym.Wrapper):
 
     def legal_actions(self):
         return [_ for _ in range(self.env.action_space.n)]
+
+class GymnasiumToGymWrapper(gym.Wrapper):
+    """
+    Overview:
+        A wrapper class that adapts a Gymnasium environment to the Gym interface.
+    Interface:
+        ``__init__``, ``reset``, ``seed``
+    Properties:
+        - _seed (:obj:`int` or None): The seed value for the environment.
+    """
+
+    def __init__(self, env):
+        """
+        Overview:
+            Initializes the GymnasiumToGymWrapper.
+        Arguments:
+            - env (:obj:`gymnasium.Env`): The Gymnasium environment to be wrapped.
+        """
+
+        assert isinstance(env, gymnasium.Env), type(env)
+        super().__init__(env)
+        self._seed = None
+
+    def seed(self, seed):
+        """
+        Overview:
+            Sets the seed value for the environment.
+        Arguments:
+            - seed (:obj:`int`): The seed value to use for random number generation.
+        """
+        self._seed = seed
+
+    def reset(self):
+        """
+        Overview:
+            Resets the environment and returns the initial observation.
+        Returns:
+            - observation (:obj:`Any`): The initial observation of the environment.
+        """
+        if self._seed is not None:
+            obs, _ = self.env.reset(seed=self._seed)
+            return obs
+        else:
+            obs, _ = self.env.reset()
+            return obs

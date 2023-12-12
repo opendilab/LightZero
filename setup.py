@@ -15,7 +15,6 @@ from distutils.core import setup
 
 import numpy as np
 from setuptools import find_packages, Extension
-# from setuptools.command.build_ext import build_ext
 from Cython.Build import cythonize  # this line should be after 'from setuptools import find_packages'
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -24,19 +23,6 @@ here = os.path.abspath(os.path.dirname(__file__))
 def _load_req(file: str):
     with open(file, 'r', encoding='utf-8') as f:
         return [line.strip() for line in f.readlines() if line.strip()]
-
-
-# class custom_build_ext(build_ext):
-#     def build_extensions(self):
-#         # Override the compiler executables. Importantly, this
-#         # removes the "default" compiler flags that would
-#         # otherwise get passed on to the compiler, i.e.,
-#         # distutils.sysconfig.get_var("CFLAGS").
-#         self.compiler.set_executable("compiler_so", "g++")
-#         self.compiler.set_executable("compiler_cxx", "g++")
-#         self.compiler.set_executable("linker_so", "g++")
-#         build_ext.build_extensions(self)
-
 
 requirements = _load_req('requirements.txt')
 
@@ -85,9 +71,8 @@ _LINETRACE = not not os.environ.get('LINETRACE', None)
 
 setup(
     name='LightZero',
-    version='0.0.2',
+    version='0.0.3',
     description='A lightweight and efficient MCTS/AlphaZero/MuZero algorithm toolkits.',
-    # long_description=readme,
     long_description_content_type='text/markdown',
     author='opendilab',
     author_email='opendilab@pjlab.org.cn',
@@ -115,7 +100,6 @@ setup(
             linetrace=_LINETRACE,
         ),
     ),
-    # cmdclass={"build_ext": custom_build_ext},
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         "Intended Audience :: Science/Research",

@@ -34,6 +34,7 @@ connect4_alphazero_config = dict(
         scale=True,
         screen_scaling=9,
         render_mode=None,
+        replay_path=None,
         alphazero_mcts_ctree=mcts_ctree,
         # ==============================================================
     ),
@@ -52,6 +53,7 @@ connect4_alphazero_config = dict(
         ),
         cuda=True,
         env_type='board_games',
+        action_type='varied_action_space',
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',

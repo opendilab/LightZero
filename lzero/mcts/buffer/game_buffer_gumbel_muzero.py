@@ -1,10 +1,11 @@
-from typing import Any, List, Tuple, Union, TYPE_CHECKING, Optional
+from typing import Any, Tuple
 
 import numpy as np
 from ding.utils import BUFFER_REGISTRY
 
-from lzero.mcts.utils import prepare_observation
 from lzero.mcts.buffer import MuZeroGameBuffer
+from lzero.mcts.utils import prepare_observation
+
 
 @BUFFER_REGISTRY.register('game_buffer_gumbel_muzero')
 class GumbelMuZeroGameBuffer(MuZeroGameBuffer):
