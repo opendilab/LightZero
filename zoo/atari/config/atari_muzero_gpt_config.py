@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(3)
+torch.cuda.set_device(0)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -19,38 +19,34 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 1
-num_simulations = 50
-# update_per_collect = 2000
-update_per_collect = None
-model_update_ratio = 1
-# batch_size = 32
-batch_size = 16
-
-max_env_step = int(1e6)
-reanalyze_ratio = 0
-num_unroll_steps = 5
-# num_unroll_steps = 20
-
-# collector_env_num = 1
-# n_episode = 1
+# collector_env_num = 8
+# n_episode = 8
 # evaluator_env_num = 1
 # num_simulations = 50
-# update_per_collect = 100
+# update_per_collect = 1000
+# # update_per_collect = None
 # model_update_ratio = 1
-# batch_size = 64
+# batch_size = 32
+# # batch_size = 16
 # max_env_step = int(1e6)
 # reanalyze_ratio = 0
 # num_unroll_steps = 5
 # # num_unroll_steps = 20
 
+# for debug
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 1
+num_simulations = 2
+update_per_collect = 1
+model_update_ratio = 1
+batch_size = 2
+max_env_step = int(1e6)
+reanalyze_ratio = 0
+num_unroll_steps = 5
+
 # eps_greedy_exploration_in_collect = False
 eps_greedy_exploration_in_collect = True
-
-
-
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -58,9 +54,12 @@ eps_greedy_exploration_in_collect = True
 atari_muzero_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer.py: lpips loss
-    exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd256_largenet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_seed0',
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_mcs500_batch8_obs-token-lw10_recons-obs-noaug_bs{batch_size}_adamw3e-3_seed0',
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_mcs5000_batch8_recons-obs-noaug_bs{batch_size}_adamw3e-3_seed0',
+    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_mcs1e4_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-10k_seed0',
+    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd256_largenet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_seed0',
+    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_mcs500_batch8_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-10k_seed0',
+    
+    exp_name=f'data_mz_gpt_ctree_debug/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_mcs500_batch8_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-0_seed0',
+    
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -73,13 +72,19 @@ atari_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        # collect_max_episode_steps=int(20),
-        # eval_max_episode_steps=int(20),
+        collect_max_episode_steps=int(20),
+        eval_max_episode_steps=int(20),
         # # TODO
-        collect_max_episode_steps=int(2e3),
-        eval_max_episode_steps=int(5e3),
+        # collect_max_episode_steps=int(2e3),
+        # eval_max_episode_steps=int(5e3),
     ),
     policy=dict(
+        tokenizer_start_after_envsteps=int(0),
+        transformer_start_after_envsteps=int(0),
+        # transformer_start_after_envsteps=int(1e4), # 10K
+        update_per_collect_transformer=update_per_collect,
+        update_per_collect_tokenizer=update_per_collect,
+        # transformer_start_after_envsteps=int(5e3),
         num_unroll_steps=num_unroll_steps,
         model=dict(
             # observation_shape=(4, 96, 96),
@@ -115,12 +120,11 @@ atari_muzero_config = dict(
             end=0.01,
             # decay=int(1e5),
             decay=int(1e4),  # 10k
-
         ),
         # TODO: NOTE
         # use_augmentation=True,
         use_augmentation=False,
-        update_per_collect=update_per_collect,
+        # update_per_collect=update_per_collect,
         model_update_ratio = model_update_ratio,
         batch_size=batch_size,
         # optim_type='SGD',

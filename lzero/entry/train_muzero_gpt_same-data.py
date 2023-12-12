@@ -168,49 +168,29 @@ def train_muzero_gpt(
         replay_buffer.remove_oldest_data_to_fit()
 
 
-        if collector.envstep > cfg.policy.transformer_start_after_envsteps:
-            # TODO：transformer tokenizer交替更新
-            # Learn policy from collected data.
-            for i in range(cfg.policy.update_per_collect_transformer):
-                # Learner will train ``update_per_collect`` times in one iteration.
-                if replay_buffer.get_num_of_transitions() > batch_size:
-                    train_data = replay_buffer.sample(batch_size, policy)
-                    train_data.append({'train_which_component':'transformer'})
-                else:
-                    logging.warning(
-                        f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                        f'batch_size: {batch_size}, '
-                        f'{replay_buffer} '
-                        f'continue to collect now ....'
-                    )
-                    break
-                # The core train steps for MCTS+RL algorithms.
-                log_vars = learner.train(train_data, collector.envstep)
-                if cfg.policy.use_priority:
-                    replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+        # Learn policy from collected data.
+        for i in range(update_per_collect):
+            # Learner will train ``update_per_collect`` times in one iteration.
+            if replay_buffer.get_num_of_transitions() > batch_size:
+                train_data = replay_buffer.sample(batch_size, policy)
+            else:
+                logging.warning(
+                    f'The data in replay_buffer is not sufficient to sample a mini-batch: '
+                    f'batch_size: {batch_size}, '
+                    f'{replay_buffer} '
+                    f'continue to collect now ....'
+                )
+                break
+
+            # The core train steps for MCTS+RL algorithms.
+            log_vars = learner.train(train_data, collector.envstep)
+
+            if cfg.policy.use_priority:
+                replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
         
         # NOTE: TODO
         # TODO: for batch world model ,to improve kv reuse, we could donot reset
         policy._learn_model.world_model.past_keys_values_cache.clear()
-
-        if collector.envstep > cfg.policy.tokenizer_start_after_envsteps:
-            # Learn policy from collected data.
-            for i in range(cfg.policy.update_per_collect_tokenizer):
-                # Learner will train ``update_per_collect`` times in one iteration.
-                if replay_buffer.get_num_of_transitions() > batch_size:
-                    train_data = replay_buffer.sample(batch_size, policy)
-                    train_data.append({'train_which_component':'tokenizer'})
-                else:
-                    logging.warning(
-                        f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                        f'batch_size: {batch_size}, '
-                        f'{replay_buffer} '
-                        f'continue to collect now ....'
-                    )
-                    break
-                # The core train steps for MCTS+RL algorithms.
-                log_vars = learner.train(train_data, collector.envstep)
-
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break

@@ -194,6 +194,7 @@ class WorldModel(nn.Module):
         frames = rearrange(frames, 'b c h w -> b h w c').mul(255).numpy().astype(np.uint8)
         return [Image.fromarray(frame) for frame in frames]
 
+    # only foe inference now, now is invalid
     @torch.no_grad()
     def decode_obs_tokens(self) -> List[Image.Image]:
         embedded_tokens = self.tokenizer.embedding(self.obs_tokens)  # (B, K, E)
@@ -219,6 +220,7 @@ class WorldModel(nn.Module):
 
     @torch.no_grad()
     def reset_from_initial_observations(self, observations: torch.FloatTensor) -> torch.FloatTensor:
+        # NOTE: should_preprocess=True is important
         obs_tokens = self.tokenizer.encode(observations, should_preprocess=True).tokens  # (B, C, H, W) -> (B, K)
         _, num_observations_tokens = obs_tokens.shape
         if self.num_observations_tokens is None:
@@ -379,7 +381,7 @@ class WorldModel(nn.Module):
         del self.obs_tokens
         self.obs_tokens = torch.cat(obs_tokens, dim=1)  # (B, K)
 
-        obs = self.decode_obs_tokens() if should_predict_next_obs else None
+        # obs = self.decode_obs_tokens() if should_predict_next_obs else None
 
         # cache_key = hash(self.obs_tokens.detach().cpu().numpy().astype('int'))
         cache_key = hash(self.obs_tokens.detach().cpu().numpy())

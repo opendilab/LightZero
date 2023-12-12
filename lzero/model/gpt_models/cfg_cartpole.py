@@ -42,6 +42,8 @@ cfg['world_model'] = {
 from easydict import EasyDict
 cfg = EasyDict(cfg)
 
+
+
 # # mediumnet
 # cfg = {}
 # cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',

@@ -37,10 +37,10 @@ num_unroll_steps = 5
 # ==============================================================
 
 cartpole_muzero_gpt_config = dict(
-    # TODO: decode decode_obs_tokens
+    # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer: lpips loss
-    exp_name=f'data_mz_gpt_ctree_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_batch8_obs-token-lw10_recons-obs_bs{batch_size}_seed0',
-    # exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_batch8_not-fixedtokenizer_bs{batch_size}_seed0',
+    exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs50_batch8_obs-token-lw2_recons-obs_bs{batch_size}_indep0_trans-wd0.01_seed0',
+    # exp_name=f'data_mz_gpt_ctree_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_batch8_obs-token-lw2_recons-obs_bs{batch_size}_indep_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -51,6 +51,11 @@ cartpole_muzero_gpt_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        tokenizer_start_after_envsteps=int(0),
+        transformer_start_after_envsteps=int(0),
+        update_per_collect_transformer=update_per_collect,
+        update_per_collect_tokenizer=update_per_collect,
+        # transformer_start_after_envsteps=int(5e3),
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/cartpole_muzero_gpt_ns25_upc20-mur1_rr0_H5_nlayers2_emd128_mediumnet_bs64_mcs25_fixedtokenizer_fixloss_fixlatent_seed0/ckpt/ckpt_best.pth.tar',
         num_unroll_steps=num_unroll_steps,
         model=dict(
@@ -73,7 +78,6 @@ cartpole_muzero_gpt_config = dict(
         # cuda=False,
         env_type='not_board_games',
         game_segment_length=50,
-        update_per_collect=update_per_collect,
         model_update_ratio=model_update_ratio,
         batch_size=batch_size,
         optim_type='Adam',

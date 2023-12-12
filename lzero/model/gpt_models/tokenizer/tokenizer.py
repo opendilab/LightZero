@@ -56,8 +56,25 @@ class Tokenizer(nn.Module):
         return outputs.z, outputs.z_quantized, reconstructions
 
     def compute_loss(self, batch, **kwargs: Any) -> LossWithIntermediateLosses:
+        if len(batch['observations'][0, 0].shape) == 3:
+            # obs is a 3-dimensional image
+            pass
+        elif len(batch['observations'][0, 0].shape) == 1:
+            # print('obs is a 1-dimensional vector.')
+            # TODO()
+            # obs is a 1-dimensional vector
+            original_shape = list(batch['observations'].shape)
+            desired_shape = original_shape + [64, 64]
+            expanded_observations = batch['observations'].unsqueeze(-1).unsqueeze(-1)
+            expanded_observations = expanded_observations.expand(*desired_shape)
+            batch['observations'] = expanded_observations
+
         assert self.lpips is not None
+        # IRIS original code
         observations = self.preprocess_input(rearrange(batch['observations'], 'b t c h w -> (b t) c h w'))
+        # TODO
+        # observations = rearrange(batch['observations'], 'b t c h w -> (b t) c h w')
+
         z, z_quantized, reconstructions = self(observations, should_preprocess=False, should_postprocess=False)
 
         # Codebook loss. Notes:
@@ -65,12 +82,12 @@ class Tokenizer(nn.Module):
         # - VQVAE uses 0.25 by default
         beta = 1.0
         commitment_loss = (z.detach() - z_quantized).pow(2).mean() + beta * (z - z_quantized.detach()).pow(2).mean()
-
+        # L1 loss
         reconstruction_loss = torch.abs(observations - reconstructions).mean()
-        # TODO: cartpole
+        # TODO: for atari pong
         perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
+        # TODO: only for cartpole
         # perceptual_loss = torch.zeros_like(reconstruction_loss)
-
 
         return LossWithIntermediateLosses(commitment_loss=commitment_loss, reconstruction_loss=reconstruction_loss, perceptual_loss=perceptual_loss)
 
@@ -112,8 +129,10 @@ class Tokenizer(nn.Module):
 
     def preprocess_input(self, x: torch.Tensor) -> torch.Tensor:
         """x is supposed to be channels first and in [0, 1]"""
+        # [0,1] -> [-1, 1]
         return x.mul(2).sub(1)
 
     def postprocess_output(self, y: torch.Tensor) -> torch.Tensor:
         """y is supposed to be channels first and in [-1, 1]"""
+        # [-1, 1] -> [0,1]
         return y.add(1).div(2)

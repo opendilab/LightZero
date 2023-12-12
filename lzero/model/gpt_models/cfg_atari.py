@@ -53,7 +53,6 @@ cfg = EasyDict(cfg)
 
 # # mediumnet
 # cfg = {}
-
 # cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',
 #                     # 'vocab_size': 512, # TODO: for atari
 #                     # 'embed_dim': 512,
@@ -148,9 +147,6 @@ cfg['world_model'] = {
                       'action_shape': 6,# TODO：for atari
                       'max_cache_size':5000,
                       "env_num":8,
-
                       }
-
 from easydict import EasyDict
-
 cfg = EasyDict(cfg)
