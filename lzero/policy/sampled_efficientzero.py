@@ -650,9 +650,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             y = 1 - target_sampled_actions[:, k, :].pow(2)
 
             # NOTE: for numerical stability.
-            target_sampled_actions_clamped = torch.clamp(
-                target_sampled_actions[:, k, :], torch.tensor(-1 + 1e-6), torch.tensor(1 - 1e-6)
-            )
+            min_val = torch.tensor(-1 + 1e-6).to(target_sampled_actions.device)
+            max_val = torch.tensor(1 - 1e-6).to(target_sampled_actions.device)
+            target_sampled_actions_clamped = torch.clamp(target_sampled_actions[:, k, :], min_val, max_val)
             target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
 
             # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
