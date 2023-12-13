@@ -21,7 +21,8 @@ from pooltool.ai.bot.sumtothree_rl.core import (
 from pooltool.ai.datatypes import LightZeroEnv, ObservationDict
 from pooltool.ani.camera import camera_states
 from pooltool.ani.image.utils import gif
-from pooltool.system.datatypes import MultiSystem
+
+# from pooltool.system.datatypes import MultiSystem
 
 
 @attrs.define
