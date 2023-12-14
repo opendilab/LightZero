@@ -25,7 +25,7 @@ update_per_collect = None
 batch_size = 256
 model_update_ratio = 0.25
 max_env_step = int(2e6)
-reanalyze_ratio = 1.0
+reanalyze_ratio = 0.0
 
 eps_greedy_exploration_in_collect = False
 # ==============================================================
@@ -34,7 +34,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/mzssl_ratio1',
+    f'data_mz_ctree/{env_name[:-14]}/mzssl0',
     env=dict(
         env_name=env_name,
         obs_shape=(4, 96, 96),

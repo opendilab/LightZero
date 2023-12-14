@@ -20,6 +20,31 @@ from lzero.worker import MACollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 
+def iter_filter(data, batch_size, K):
+    current_batch, target_batch = data
+    obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list = current_batch
+    batch_rewards, batch_target_values, batch_target_policies = target_batch
+    # print(f'batch rewards after sample is {batch_rewards}')
+    iter_data = []
+    for i in range(K+1):
+
+        rewards_temp = batch_rewards[i*batch_size:(i+1)*batch_size]
+        # print(f'a mini batch  is {rewards_temp}')
+        values_temp = batch_target_values[i*batch_size:(i+1)*batch_size]
+        policies_temp = batch_target_policies[i*batch_size:(i+1)*batch_size]
+        target_temp = [rewards_temp, values_temp, policies_temp]
+
+        obs_temp = obs_list[i*batch_size:(i+1)*batch_size]
+        action_temp = action_list[i*batch_size:(i+1)*batch_size]
+        mask_temp = mask_list[i*batch_size:(i+1)*batch_size]
+        index_temp = batch_index_list[i*batch_size:(i+1)*batch_size]
+        weight_temp = weights_list[i*batch_size:(i+1)*batch_size]
+        time_temp = make_time_list[i*batch_size:(i+1)*batch_size]
+        current_temp = [obs_temp, action_temp, mask_temp, index_temp, weight_temp, time_temp]
+        iter_data.append([current_temp, target_temp])
+    
+    return iter_data
+    
 
 def train_ma(
         input_cfg: Tuple[dict, dict],
@@ -180,19 +205,30 @@ def train_ma(
 
 
 
-
+        K = cfg.policy.K_batch
+        sample_batch_size = (K+1) * batch_size
         # Learn policy from collected data.
-        for i in range(update_per_collect):
+        for i in range(update_per_collect//(K+1)):
             # Learner will train ``update_per_collect`` times in one iteration.
-            if replay_buffer.get_num_of_transitions() > batch_size:
+            if replay_buffer.get_num_of_transitions() > sample_batch_size:
 
 
                 # print("remark 00000000")
                 # policy对sample的影响是什么？？？？？？？？？？？？？？？？？？？？？？？？？
                 #!!!!!!!!!!!!!!!!!!!!!!!!!value是sample时就计算好的所以如果一次sample多次训练的话会增强value的off-policy性？？？？？？？？？？？
                 # 在非reannalyze的情况一采多训会影响value,reanalyze的情况则会额外影响policy！！！！！！！！！！！！！！！
-                train_data = replay_buffer.sample(batch_size, policy)
+
+
+
+                # 修改_make_batch函数，将batch_size扩K+1倍，但是prepare出来的context分成K+1份
+                # 注意current_batch也要做对齐处理
+
+                train_data = replay_buffer.sample(sample_batch_size, policy)
+                iter_data = iter_filter(train_data, batch_size, K)
                 # print("remark 33333333333333333333")
+
+
+
 
 
 
@@ -206,11 +242,14 @@ def train_ma(
                 )
                 break
 
-            # The core train steps for MCTS+RL algorithms.
-            log_vars = learner.train(train_data, collector.envstep)
+            for i in range(K + 1):
+                
 
-            if cfg.policy.use_priority:
-                replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+                # The core train steps for MCTS+RL algorithms.
+                log_vars = learner.train(iter_data[i], collector.envstep)
+
+                if cfg.policy.use_priority:
+                    replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break

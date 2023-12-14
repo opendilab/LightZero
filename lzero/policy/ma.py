@@ -155,6 +155,9 @@ class MAPolicy(Policy):
         # (bool) Whether to use the true chance in MCTS.
         use_ture_chance_label_in_chance_encoder=False,
 
+        # ****** Bigbatch ******
+        K_batch = 5,
+
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
         use_priority=False,
@@ -275,6 +278,7 @@ class MAPolicy(Policy):
         current_batch, target_batch = data
         obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
+        # print(f'target _reward in learn function is {target_reward}')
 
         obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
