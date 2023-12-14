@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(2)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -19,31 +19,32 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 1
-# num_simulations = 50
-# update_per_collect = 1000
-# # update_per_collect = None
-# model_update_ratio = 1
-# batch_size = 32
-# # batch_size = 16
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0
-# num_unroll_steps = 5
-# # num_unroll_steps = 20
-
-# for debug
-collector_env_num = 2
-n_episode = 2
+collector_env_num = 8
+n_episode = 8
 evaluator_env_num = 1
-num_simulations = 2
-update_per_collect = 1
+num_simulations = 50
+# num_simulations = 25
+update_per_collect = 1000
+# update_per_collect = None
 model_update_ratio = 1
-batch_size = 2
+batch_size = 32
+# batch_size = 16
 max_env_step = int(1e6)
 reanalyze_ratio = 0
 num_unroll_steps = 5
+# num_unroll_steps = 20
+
+# for debug
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 1
+# num_simulations = 2
+# update_per_collect = 1
+# model_update_ratio = 1
+# batch_size = 2
+# max_env_step = int(1e6)
+# reanalyze_ratio = 0
+# num_unroll_steps = 5
 
 # eps_greedy_exploration_in_collect = False
 eps_greedy_exploration_in_collect = True
@@ -54,11 +55,11 @@ eps_greedy_exploration_in_collect = True
 atari_muzero_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer.py: lpips loss
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_mcs1e4_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-10k_seed0',
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd256_largenet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_seed0',
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_mcs500_batch8_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-10k_seed0',
+    # exp_name=f'data_mz_gpt_ctree_debug/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-20k-tokenizer-fixed_pt2_wd0.01_argmaxtoken_seed0',
     
-    exp_name=f'data_mz_gpt_ctree_debug/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_mcs500_batch8_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-0_seed0',
+    exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-trans-20k-tokenizer-not-fixed_pt2_wd0.01_argmaxtoken_seed0',
+    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd256_largenet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-20k-tokenizer-fixed_pt2_seed0',
+    
     
     env=dict(
         stop_value=int(1e6),
@@ -72,16 +73,19 @@ atari_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        collect_max_episode_steps=int(20),
-        eval_max_episode_steps=int(20),
-        # # TODO
-        # collect_max_episode_steps=int(2e3),
-        # eval_max_episode_steps=int(5e3),
+        # collect_max_episode_steps=int(20),
+        # eval_max_episode_steps=int(20),
+        # TODO
+        collect_max_episode_steps=int(2e3),
+        eval_max_episode_steps=int(2e4),
+        # collect_max_episode_steps=int(2e4),
+        # eval_max_episode_steps=int(108000),
+        clip_rewards=False,
     ),
     policy=dict(
         tokenizer_start_after_envsteps=int(0),
-        transformer_start_after_envsteps=int(0),
-        # transformer_start_after_envsteps=int(1e4), # 10K
+        # transformer_start_after_envsteps=int(0),
+        transformer_start_after_envsteps=int(2e4), # 20K
         update_per_collect_transformer=update_per_collect,
         update_per_collect_tokenizer=update_per_collect,
         # transformer_start_after_envsteps=int(5e3),
@@ -100,12 +104,12 @@ atari_muzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
             
-            reward_support_size=601,
-            value_support_size=601,
-            support_scale=300,
-            # reward_support_size=21,
-            # value_support_size=21,
-            # support_scale=10,
+            # reward_support_size=601,
+            # value_support_size=601,
+            # support_scale=300,
+            reward_support_size=21,
+            value_support_size=21,
+            support_scale=10,
         ),
         cuda=True,
         env_type='not_board_games',
@@ -119,7 +123,7 @@ atari_muzero_config = dict(
             start=1.,
             end=0.01,
             # decay=int(1e5),
-            decay=int(1e4),  # 10k
+            decay=int(2e4),  # 20k
         ),
         # TODO: NOTE
         # use_augmentation=True,

@@ -293,8 +293,8 @@ class MuZeroGPTPolicy(Policy):
         self._optimizer_world_model = configure_optimizer(
             model=self._model.world_model,
             learning_rate=self._cfg.learning_rate,
-            weight_decay=self._cfg.weight_decay,
-            # weight_decay=0.01,
+            # weight_decay=self._cfg.weight_decay,
+            weight_decay=0.01,
             exclude_submodules=['tokenizer']
         )
 
@@ -314,6 +314,11 @@ class MuZeroGPTPolicy(Policy):
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
+
+        # TODO: torch 2.0
+        self._model = torch.compile(self._model)
+        self._target_model = torch.compile(self._target_model)
+
 
         self._target_model = model_wrap(
             self._target_model,
@@ -916,6 +921,7 @@ class MuZeroGPTPolicy(Policy):
             tensorboard according to the return value ``_forward_learn``.
         """
         return [
+            'collect_epsilon',
             'collect_mcts_temperature',
             # 'cur_lr',
               'cur_lr_world_model',

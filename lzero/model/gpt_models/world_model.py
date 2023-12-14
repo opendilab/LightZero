@@ -371,9 +371,12 @@ class WorldModel(nn.Module):
 
             if k < self.num_observations_tokens:
                 # 一共产生16个obs_token，每次产生一个
-                token = Categorical(logits=outputs_wm.logits_observations).sample()
+                # TODO： sample or argmax
+                # token = Categorical(logits=outputs_wm.logits_observations).sample()
+                # Use argmax to select the most likely token
+                token = outputs_wm.logits_observations.argmax(-1, keepdim=True)
                 if len(token.shape) != 2:
-                    token = token.squeeze(-1)  # (B, 1)
+                    token = token.squeeze(-1)  # Ensure the token tensor shape is (B, 1)
                 obs_tokens.append(token)
 
         output_sequence = torch.cat(output_sequence, dim=1)  # (B, 1 + K, E)
