@@ -110,22 +110,19 @@ class SelfAttention(nn.Module):
             k, v = kv_cache.get()
 
         # TODO
-        y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_pdrop if self.training else 0, is_causal=True)
-        # self.flash=False
-        # self.flash=True
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        # if self.flash:
-        #     # TODO
-        #     # efficient attention using Flash Attention CUDA kernels
-        #     with torch.backends.cuda.sdp_kernel(enable_flash=True):
-        #         y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_drop if self.training else 0, is_causal=True)
-        # else:
-        #     manual implementation of attention
-        #     att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        #     att = att.masked_fill(self.mask[L:L + T, :L + T] == 0, float('-inf'))
-        #     att = F.softmax(att, dim=-1)
-        #     att = self.attn_drop(att)
-        #     y = att @ v
+
+        # method1: efficient attention using Flash Attention CUDA kernels
+        # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_pdrop if self.training else 0, is_causal=True)
+        # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_pdrop, is_causal=True)
+
+        # method2: manual implementation of attention
+        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        att = att.masked_fill(self.mask[L:L + T, :L + T] == 0, float('-inf'))
+        att = F.softmax(att, dim=-1)
+        att = self.attn_drop(att)
+        y = att @ v
+
 
         y = rearrange(y, 'b h t e -> b t (h e)')
 

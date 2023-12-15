@@ -194,6 +194,7 @@ def train_muzero_gpt(
         policy._learn_model.world_model.past_keys_values_cache.clear()
 
         if collector.envstep > cfg.policy.tokenizer_start_after_envsteps:
+        # fixed
         # if collector.envstep > cfg.policy.tokenizer_start_after_envsteps and collector.envstep < cfg.policy.transformer_start_after_envsteps:
             # Learn policy from collected data.
             for i in range(cfg.policy.update_per_collect_tokenizer):

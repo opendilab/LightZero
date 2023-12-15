@@ -499,10 +499,11 @@ class MuZeroGPTPolicy(Policy):
         # the core learn model update step.
         # ==============================================================
         """
-        for name, parameter in self._learn_model.named_parameters():
+        for name, parameter in self._learn_model.tokenizer.named_parameters():
             print(name)
         """
         gradient_scale = 1 / self._cfg.num_unroll_steps
+        # TODO(pu): test the effect of gradient scale.
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer_world_model.zero_grad()
         weighted_total_loss.backward()
