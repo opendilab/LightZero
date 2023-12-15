@@ -23,6 +23,7 @@ cfg = dict(
         env=dict(
             stop_value=int(1e6),
             env_id='PongNoFrameskip-v4',
+            env_name='PongNoFrameskip-v4',
             obs_shape=(4, 96, 96),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,

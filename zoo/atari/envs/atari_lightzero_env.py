@@ -31,7 +31,7 @@ class AtariLightZeroEnv(BaseEnv):
         # (int) The number of episodes to evaluate during each evaluation period.
         n_evaluator_episode=3,
         # (str) The name of the Atari game environment.
-        env_name='PongNoFrameskip-v4',
+        # env_name='PongNoFrameskip-v4',
         # (str) The type of the environment, here it's Atari.
         env_type='Atari',
         # (tuple) The shape of the observation space, which is a stacked frame of 4 images each of 96x96 pixels.

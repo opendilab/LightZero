@@ -81,7 +81,7 @@ class LunarLanderEnv(CartPoleEnv):
             - obs (:obj:`np.ndarray`): The initial observation after resetting.
         """
         if not self._init_flag:
-            self._env = gym.make(self._cfg.env_name)
+            self._env = gym.make(self._cfg.env_name, render_mode="rgb_array")
             if self._replay_path is not None:
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 video_name = f'{self._env.spec.id}-video-{timestamp}'

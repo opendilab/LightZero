@@ -334,6 +334,8 @@ class MuZeroAgent:
             reward_list.extend(reward['eval_episode_return'])
 
         if enable_save_replay:
+            if not os.path.exists(replay_save_path):
+                os.makedirs(replay_save_path)
             files = os.listdir(replay_save_path)
             files = [file for file in files if file.endswith('0.mp4')]
             files.sort()
