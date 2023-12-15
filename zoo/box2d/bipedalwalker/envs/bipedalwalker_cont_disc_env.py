@@ -1,9 +1,7 @@
-from datetime import datetime
-
 import copy
 import os
+from datetime import datetime
 from itertools import product
-from typing import List, Optional
 
 import gymnasium as gym
 import numpy as np
@@ -13,15 +11,16 @@ from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
 
-from zoo.box2d.lunarlander.envs.lunarlander_env import BipedalWalkerEnv
+from zoo.box2d.bipedalwalker.envs.bipedalwalker_env import BipedalWalkerEnv
+
 
 @ENV_REGISTRY.register('bipedalwalker_cont_disc')
 class BipedalWalkerDiscEnv(BipedalWalkerEnv):
     """
-        Overview:
-            The modified BipedalWalker environment with manually discretized action space. For each dimension, equally dividing the
-            original continuous action into ``each_dim_disc_size`` bins and using their Cartesian product to obtain
-            handcrafted discrete actions.
+    Overview:
+        The modified BipedalWalker environment with manually discretized action space. For each dimension, equally dividing the
+        original continuous action into ``each_dim_disc_size`` bins and using their Cartesian product to obtain
+        handcrafted discrete actions.
     """
 
     @classmethod
@@ -49,9 +48,8 @@ class BipedalWalkerDiscEnv(BipedalWalkerEnv):
         replay_path=None,
         # (bool) If True, the action will be scaled.
         act_scale=True,
+        # (bool) If True, the reward will be clipped to [-10, +inf].
         rew_clip=True,
-        delay_reward_step=0,
-        prob_random_agent=0.,
         # (int) The maximum number of steps for each episode during collection.
         collect_max_episode_steps=int(1.08e5),
         # (int) The maximum number of steps for each episode during evaluation.
@@ -147,7 +145,7 @@ class BipedalWalkerDiscEnv(BipedalWalkerEnv):
         obs, rew, terminated, truncated, info = self._env.step(action)
         done = terminated or truncated
 
-        action_mask = None
+        action_mask = np.ones(self.K, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         self._eval_episode_return += rew
         if self._rew_clip:
