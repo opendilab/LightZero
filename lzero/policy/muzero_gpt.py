@@ -286,15 +286,19 @@ class MuZeroGPTPolicy(Policy):
         #         device_type=self._cfg.device
         #     )
         
+        # self._optimizer_tokenizer = optim.Adam(
+        #     self._model.tokenizer.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
+        # )
         self._optimizer_tokenizer = optim.Adam(
-            self._model.tokenizer.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
+            self._model.tokenizer.parameters(), lr=self._cfg.learning_rate # weight_decay=0
         )
+
         # TODO: nanoGPT optimizer
         self._optimizer_world_model = configure_optimizer(
             model=self._model.world_model,
             learning_rate=self._cfg.learning_rate,
-            # weight_decay=self._cfg.weight_decay,
-            weight_decay=0.01,
+            weight_decay=self._cfg.weight_decay,
+            # weight_decay=0.01,
             exclude_submodules=['tokenizer']
         )
 
@@ -398,6 +402,8 @@ class MuZeroGPTPolicy(Policy):
         """
         self._learn_model.train()
         self._target_model.train()
+        self._learn_model.tokenizer.eval()
+
         if self._cfg.use_rnd_model:
             self._target_model_for_intrinsic_reward.train()
 
@@ -509,7 +515,7 @@ class MuZeroGPTPolicy(Policy):
         weighted_total_loss.backward()
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
-        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
+        total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
             self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
         )
         self._optimizer_world_model.step()
@@ -552,7 +558,7 @@ class MuZeroGPTPolicy(Policy):
             'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
             # 'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
             # 'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
-            'total_grad_norm_before_clip': total_grad_norm_before_clip.item(),
+            'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
         }
 
         return return_loss_dict
@@ -593,19 +599,20 @@ class MuZeroGPTPolicy(Policy):
 
         # shape: (batch_size, num_unroll_steps, action_dim)
         # NOTE: .long(), in discrete action space.
-        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
-        data_list = [
-            mask_batch,
-            target_reward.astype('float32'),
-            target_value.astype('float32'), target_policy, weights
-        ]
-        [mask_batch, target_reward, target_value, target_policy,
-         weights] = to_torch_float_tensor(data_list, self._cfg.device)
+        # action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
+        # data_list = [
+        #     mask_batch,
+        #     target_reward.astype('float32'),
+        #     target_value.astype('float32'), target_policy, weights
+        # ]
 
-        target_reward = target_reward.view(self._cfg.batch_size, -1)
-        target_value = target_value.view(self._cfg.batch_size, -1)
+        # [mask_batch, target_reward, target_value, target_policy,
+        #  weights] = to_torch_float_tensor(data_list, self._cfg.device)
 
-        assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
+        # target_reward = target_reward.view(self._cfg.batch_size, -1)
+        # target_value = target_value.view(self._cfg.batch_size, -1)
+
+        # assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
 
         batch_for_gpt = {}
@@ -624,10 +631,18 @@ class MuZeroGPTPolicy(Policy):
         # ==============================================================
         # TODO: train tokenlizer
         self._learn_model.tokenizer.train()
+        
+        # for name, param in self._learn_model.tokenizer.named_parameters():
+        #     if param.requires_grad:
+        #         print(name, param.shape)
+
         losses_tokenizer = self._learn_model.tokenizer.compute_loss(batch_for_gpt)
         
         self._optimizer_tokenizer.zero_grad()
-        losses_tokenizer.loss_total.backward()
+
+        weighted_total_loss_tokenizer = losses_tokenizer.loss_total
+        weighted_total_loss_tokenizer.backward()
+        # losses_tokenizer.loss_total.backward()
         total_grad_norm_before_clip_tokenizer = torch.nn.utils.clip_grad_norm_(
             self._learn_model.tokenizer.parameters(), self._cfg.grad_clip_value
         )
@@ -641,7 +656,6 @@ class MuZeroGPTPolicy(Policy):
         reconstruction_loss = intermediate_losses_tokenizer['reconstruction_loss']
         perceptual_loss = intermediate_losses_tokenizer['perceptual_loss']
 
-            
 
         # # ==============================================================
         # # the core target model update step.
@@ -678,7 +692,7 @@ class MuZeroGPTPolicy(Policy):
             # 'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
             # 'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
             # 'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
-            'total_grad_norm_before_clip': total_grad_norm_before_clip_tokenizer.item(),
+            'total_grad_norm_before_clip_tokenizer': total_grad_norm_before_clip_tokenizer.item(),
             'commitment_loss':commitment_loss,
             'reconstruction_loss':reconstruction_loss,
             'perceptual_loss': perceptual_loss,
@@ -944,7 +958,8 @@ class MuZeroGPTPolicy(Policy):
             # 'predicted_values',
             # 'transformed_target_reward',
             # 'transformed_target_value',
-            'total_grad_norm_before_clip',
+            'total_grad_norm_before_clip_tokenizer',
+            'total_grad_norm_before_clip_wm',
             # tokenizer
             'commitment_loss',
             'reconstruction_loss',

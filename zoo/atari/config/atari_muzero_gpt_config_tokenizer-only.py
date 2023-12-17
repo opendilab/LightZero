@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(2)
+torch.cuda.set_device(0)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -22,23 +22,16 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 1
-# num_simulations = 50
-# update_per_collect = 1000
-# num_simulations = 25
-# update_per_collect = 500
+num_simulations = 50
+# num_simulations = 5
+
+update_per_collect = None
 
 # model_update_ratio = 1
 # batch_size = 32
 
-# batch_size = 16
-batch_size = 32
-
-update_per_collect = None
-# model_update_ratio = 0.5
-# num_simulations = 50
-
-model_update_ratio = 0.25
-num_simulations = 50
+batch_size = 16
+model_update_ratio = 0.5
 
 max_env_step = int(1e6)
 reanalyze_ratio = 0
@@ -66,15 +59,11 @@ eps_greedy_exploration_in_collect = True
 atari_muzero_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer.py: lpips loss
-    # exp_name=f'data_mz_gpt_ctree_debug/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_orignet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-trans-0k-tokenizer-not-fixed_pt2_wd1e-4_argmaxtoken_origsdpa_seed0',
+    exp_name=f'data_mz_gpt_ctree_debug/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_orignet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-trans-0k-tokenizer-not-fixed_pt2_wd1e-4_argmaxtoken_origsdpa_seed0',
 
-    exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs{batch_size}_lr1e-4_tokenizer-wd0_pretrained-tokenizer-then-joint-train_obsw5_seed0',
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs{batch_size}_lr1e-4_tokenizer-wd0_tokenizer-train-20k-then-joint-train_seed0',
+    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs{batch_size}_lr1e-4_tokenizer-wd0_pretrained-tokenizer_seed0',
 
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_lr1e-4_indep-trans-wd1e-4-5k_tokenizer-wd0-not-fixed_pt2_argmaxtoken_origsdpa_perl_seed0',
-
-
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_lr1e-4_indep-trans-wd1e-4-5k_tokenizer-wd0-not-fixed_pt2_argmaxtoken_origsdpa_perl_tokenizer-only_seed0',
+    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs{batch_size}_lr3e-3_tokenizer-wd0_perl_tokenizer-only_seed0',
 
     # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-trans-20k-tokenizer-not-fixed_pt2_wd0.01_argmaxtoken_pt2sdpa-drop01_seed0',
     
@@ -105,20 +94,17 @@ atari_muzero_config = dict(
     ),
     policy=dict(
         # model_path=None,
-        model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns5_upcNone-mur0.5_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs16_lr1e-4_tokenizer-wd0_perl_tokenizer-only_seed0/ckpt/iteration_150000.pth.tar',
-
+        model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns5_upcNone-mur0.5_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs16_lr1e-4_tokenizer-wd0_perl_tokenizer-only_seed0/ckpt/iteration_5000.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns50_upcNone-mur0.5_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs16_adamw3e-3_indep-trans-20k-tokenizer-not-fixed_pt2_wd1e-4_argmaxtoken_origsdpa_seed0/ckpt/iteration_10000.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns50_upc1000-mur1_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs16_adamw3e-3_indep-trans-0k-tokenizer-not-fixed_pt2_wd1e-4_argmaxtoken_origsdpa_seed0/ckpt/iteration_30000.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns50_upc1000-mur1_rr0_H5_nlayers2_emd128_mediumnet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs8_adamw3e-3_indep-trans-0k-tokenizer-not-fixed_pt2_wd0.01_argmaxtoken_origsdpa_seed0/ckpt/ckpt_best.pth.tar',
-        # tokenizer_start_after_envsteps=int(9e9),
-        tokenizer_start_after_envsteps=int(0),
-        transformer_start_after_envsteps=int(0),
         # tokenizer_start_after_envsteps=int(0),
-        # transformer_start_after_envsteps=int(2e4), # 20K
-        # transformer_start_after_envsteps=int(5e3), # 5K   1K-5K 4000步
+        tokenizer_start_after_envsteps=int(9e9),
+        # TODO
+        transformer_start_after_envsteps=int(0),
+        # transformer_start_after_envsteps=int(5e9),
         update_per_collect_transformer=update_per_collect,
         update_per_collect_tokenizer=update_per_collect,
-        # transformer_start_after_envsteps=int(5e3),
         num_unroll_steps=num_unroll_steps,
         model=dict(
             # observation_shape=(4, 96, 96),
@@ -133,7 +119,6 @@ atari_muzero_config = dict(
             self_supervised_learning_loss=True,  # default is False
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
-            
             # reward_support_size=601,
             # value_support_size=601,
             # support_scale=300,

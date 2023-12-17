@@ -4,7 +4,17 @@ import matplotlib.pyplot as plt
 
 # 假设batch是一个字典，其中包含了observations键，
 # 并且它的形状是torch.Size([B, N, C, H, W])
-batch_observations = batch['observations']
+# batch_observations = batch_for_gpt['observations']
+# batch_observations = batch['observations']
+# batch_observations = obs.unsqueeze(0)
+batch_observations = rec_img.unsqueeze(0)
+
+# batch_observations = observations.unsqueeze(0)
+# batch_observations = x.unsqueeze(0)
+# batch_observations = reconstructions.unsqueeze(0)
+
+
+
 B, N, C, H, W = batch_observations.shape  # 自动检测维度
 
 # 分隔条的宽度（可以根据需要调整）

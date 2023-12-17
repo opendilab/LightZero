@@ -417,7 +417,7 @@ class WorldModel(nn.Module):
             # 目前这里是没有梯度的
             obs_tokens = tokenizer.encode(batch['observations'], should_preprocess=True).tokens  # (BL, K)
 
-#        act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
+        act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
         tokens = rearrange(torch.cat((obs_tokens, act_tokens), dim=2), 'b l k1 -> b (l k1)')  # (B, L(K+1))
 
         outputs = self.forward(tokens, is_root=False)

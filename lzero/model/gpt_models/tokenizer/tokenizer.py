@@ -94,6 +94,16 @@ class Tokenizer(nn.Module):
     def encode(self, x: torch.Tensor, should_preprocess: bool = False) -> TokenizerEncoderOutput:
         if should_preprocess:
             x = self.preprocess_input(x)
+        
+        # # only for debug
+        # observations = x
+        # z, z_quantized, reconstructions = self(observations, should_preprocess=False, should_postprocess=False)
+        # reconstruction_loss = torch.abs(observations - reconstructions).mean()
+        # perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
+        # rec_img = self.postprocess_output(reconstructions)
+        # # only for debug
+
+
         shape = x.shape  # (..., C, H, W)
         x = x.view(-1, *shape[-3:])
         z = self.encoder(x)

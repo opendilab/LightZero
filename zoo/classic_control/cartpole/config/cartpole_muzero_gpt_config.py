@@ -40,7 +40,7 @@ num_unroll_steps = 5
 cartpole_muzero_gpt_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer: lpips loss
-    exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs50_batch8_obs-token-lw2_recons-obs_bs{batch_size}_indep0_trans-wd0.01_pt2_argmaxtoken_pt2sdpa-drop0ineval_seed0',
+    exp_name=f'data_mz_gpt_ctree_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs50_batch8_obs-token-lw2_recons-obs_bs{batch_size}_indep0_trans-wd0.01_pt2_argmaxtoken_pt2sdpa-drop0ineval_seed0',
     # exp_name=f'data_mz_gpt_ctree_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_batch8_obs-token-lw2_recons-obs_bs{batch_size}_indep0_trans-wd0.01_pt2_argmaxtokenp_seed0',
     env=dict(
         env_name='CartPole-v0',
@@ -52,6 +52,7 @@ cartpole_muzero_gpt_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/cartpole_muzero_gpt_ns25_upc200-mur1_rr0_H5_nlayers2_emd64_smallnet_bs64_mcs50_batch8_obs-token-lw2_recons-obs_bs64_indep0_trans-wd0.01_pt2_argmaxtoken_pt2sdpa-drop0ineval_seed0/ckpt/ckpt_best.pth.tar',
         tokenizer_start_after_envsteps=int(0),
         transformer_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,
@@ -114,7 +115,7 @@ create_config = cartpole_muzero_gpt_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero_gpt
-    train_muzero_gpt([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero_gpt([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
     # 下面为cprofile的代码
     # from lzero.entry import train_muzero_gpt
