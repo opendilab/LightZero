@@ -128,6 +128,9 @@ def train_muzero_gpt(
     if cfg.policy.random_collect_episode_num > 0:
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
 
+    import copy
+    num_unroll_steps = copy.deepcopy(replay_buffer._cfg.num_unroll_steps)
+
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         collect_kwargs = {}
@@ -180,7 +183,8 @@ def train_muzero_gpt(
             # Learn policy from collected data.
             # for i in range(cfg.policy.update_per_collect_tokenizer):
             # for i in range(update_per_collect):
-            for _ in range(int(update_per_collect*0.5)):
+            # for _ in range(int(update_per_collect*0.5)):
+            for _ in range(int(update_per_collect)):
                 # Learner will train ``update_per_collect`` times in one iteration.
                 if replay_buffer.get_num_of_transitions() > batch_size:
                     train_data = replay_buffer.sample(batch_size, policy)
@@ -196,10 +200,10 @@ def train_muzero_gpt(
                 # The core train steps for MCTS+RL algorithms.
                 log_vars = learner.train(train_data, collector.envstep)
 
-        replay_buffer._cfg.num_unroll_steps = 5
-        batch_size = 32
-        # batch_size = 8
-        # batch_size = 5
+        replay_buffer._cfg.num_unroll_steps = num_unroll_steps
+        batch_size = 32 # for H5 H10 cartpole; for H5 pong
+        # batch_size = 8 # for H10 pong
+        # batch_size = 5 # for debug
         replay_buffer._cfg.batch_size = batch_size
         policy._cfg.batch_size = batch_size # policy._cfg.num_unroll_steps = 6
         if collector.envstep > cfg.policy.transformer_start_after_envsteps:

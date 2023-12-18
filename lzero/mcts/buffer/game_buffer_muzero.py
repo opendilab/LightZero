@@ -72,7 +72,7 @@ class MuZeroGameBuffer(GameBuffer):
 
         # target reward, target value
         batch_rewards, batch_target_values = self._compute_target_reward_value(
-            reward_value_context, policy._target_model, current_batch[1]
+            reward_value_context, policy._target_model, current_batch[1] # current_batch[1] is action_batch
         )
         # target policy
         batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
@@ -374,30 +374,50 @@ class MuZeroGameBuffer(GameBuffer):
         with torch.no_grad():
             value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
-            slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
+            # slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
+            # network_output = []
+            # for i in range(slices):
+            #     beg_index = self._cfg.mini_infer_size * i
+            #     end_index = self._cfg.mini_infer_size * (i + 1)
+
+            #     m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
+
+            #     # calculate the target value
+            #     # action_batch.shape (5, 5)
+            #     # m_obs.shape torch.Size([32, 3, 64, 64])
+            #     m_output = model.initial_inference(m_obs, action_batch)
+
+            #     if not model.training:
+            #         # if not in training, obtain the scalars of the value/reward
+            #         [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+            #             [
+            #                 m_output.latent_state,
+            #                 inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+            #                 m_output.policy_logits
+            #             ]
+            #         )
+            #     network_output.append(m_output)
+
             network_output = []
-            for i in range(slices):
-                beg_index = self._cfg.mini_infer_size * i
-                end_index = self._cfg.mini_infer_size * (i + 1)
+            m_obs = torch.from_numpy(value_obs_list).to(self._cfg.device).float()
 
-                m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
+            # calculate the target value
+            # action_batch.shape (32, 10)
+            # m_obs.shape torch.Size([352, 3, 64, 64])
+            # m_obs.shape torch.Size([352, 4])  32*11
 
-                # calculate the target value
-                # action_batch.shape (5, 5)
-                # m_obs.shape torch.Size([30, 3, 64, 64])
-                m_output = model.initial_inference(m_obs, action_batch)
+            m_output = model.initial_inference(m_obs, action_batch)
 
-                if not model.training:
-                    # if not in training, obtain the scalars of the value/reward
-                    [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                        [
-                            m_output.latent_state,
-                            inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
-                            m_output.policy_logits
-                        ]
-                    )
-
-                network_output.append(m_output)
+            if not model.training:
+                # if not in training, obtain the scalars of the value/reward
+                [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                    [
+                        m_output.latent_state,
+                        inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                        m_output.policy_logits
+                    ]
+                )
+            network_output.append(m_output)
 
             # concat the output slices after model inference
             if self._cfg.use_root_value:

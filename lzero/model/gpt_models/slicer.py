@@ -15,11 +15,11 @@ class Slicer(nn.Module):
 
         print("precompute_slices() begin")
         self.cache = {}
-        max_steps = max_blocks * self.block_size
+        max_steps = max_blocks * self.block_size # 5*17
         for num_steps in range(max_steps+1):
             for prev_steps in range(max_steps+1):
                 total_steps = num_steps + prev_steps
-                num_blocks = math.ceil(total_steps / self.block_size)
+                num_blocks = math.ceil(total_steps / self.block_size) # self.block_size=17
                 indices = self.indices[:num_blocks * self.num_kept_tokens]
                 result = indices[torch.logical_and(prev_steps <= indices, indices < total_steps)] - prev_steps
                 self.cache[(num_steps, prev_steps)] = result
@@ -58,5 +58,8 @@ class Embedder(nn.Module):
         output = torch.zeros(*tokens.size(), self.embedding_dim, device=tokens.device)
         for slicer, emb in zip(self.slicers, self.embedding_tables):
             s = slicer.compute_slice(num_steps, prev_steps)
-            output[:, s] = emb(tokens[:, s])
+            try:
+                output[:, s] = emb(tokens[:, s])
+            except:
+                print('debug')
         return output

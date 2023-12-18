@@ -75,6 +75,7 @@ class CartPoleEnv(BaseEnv):
 
         self._eval_episode_return += rew
         if done:
+            print('one episode done!')
             info['eval_episode_return'] = self._eval_episode_return
 
         action_mask = np.ones(self.action_space.n, 'int8')

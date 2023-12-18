@@ -19,31 +19,35 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 1
-# batch_size = 32
-# update_per_collect = None
-# # model_update_ratio = 0.25
-# model_update_ratio = 0.1
-# # num_simulations = 50
-# num_simulations = 25
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0
-# num_unroll_steps = 5
-# num_unroll_steps = 20
-
-# for debug
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 1
+update_per_collect = None
+# model_update_ratio = 0.25
+model_update_ratio = 0.0001
+# num_simulations = 50
+# num_simulations = 25
 num_simulations = 2
-update_per_collect = 1
-model_update_ratio = 1
-batch_size = 3
 max_env_step = int(1e6)
 reanalyze_ratio = 0
+
+batch_size = 32
 num_unroll_steps = 5
+
+# batch_size = 8
+# num_unroll_steps = 20
+
+# for debug
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 1
+# num_simulations = 2
+# update_per_collect = 1
+# model_update_ratio = 1
+# batch_size = 3
+# max_env_step = int(1e6)
+# reanalyze_ratio = 0
+# num_unroll_steps = 5
 
 eps_greedy_exploration_in_collect = True
 # ==============================================================
@@ -53,16 +57,9 @@ eps_greedy_exploration_in_collect = True
 atari_muzero_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer.py: lpips loss
-    # exp_name=f'data_mz_gpt_ctree_debug/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_orignet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-trans-0k-tokenizer-not-fixed_pt2_wd1e-4_argmaxtoken_origsdpa_seed0',
-
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs{batch_size}_lr1e-4_tokenizer-wd0_pretrained-tokenizer-then-joint-train_obsw5_seed0',
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-joint-train_obsw5_seed0',
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-not-train_obsw2_eps50k_env8_seed0',
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_onestep_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-not-train_obsw2_eps50k_seed0',
-    
-    exp_name=f'data_mz_gpt_ctree_debug/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_onestep_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-0.5upc-joint-train_obsw2_eps50k_seed0',
-
-    
+    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_seed0',
+    exp_name=f'data_mz_gpt_ctree_debug/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
+    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -87,8 +84,8 @@ atari_muzero_config = dict(
     policy=dict(
         # model_path=None,
         model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns5_upcNone-mur0.5_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs16_lr1e-4_tokenizer-wd0_perl_tokenizer-only_seed0/ckpt/iteration_150000.pth.tar',
-        tokenizer_start_after_envsteps=int(9e9),
-        # tokenizer_start_after_envsteps=int(0),
+        # tokenizer_start_after_envsteps=int(9e9),
+        tokenizer_start_after_envsteps=int(0),
         transformer_start_after_envsteps=int(0),
         # tokenizer_start_after_envsteps=int(0),
         # transformer_start_after_envsteps=int(2e4), # 20K

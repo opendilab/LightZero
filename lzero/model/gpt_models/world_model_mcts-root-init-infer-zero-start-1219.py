@@ -156,8 +156,6 @@ class WorldModel(nn.Module):
         import collections
         self.past_keys_values_cache = collections.OrderedDict()
         # TODO: Transformer更新后应该清除缓存
-        # NOTE
-        self.keys_values_wm = self.transformer.generate_empty_keys_values(n=8, max_tokens=self.config.max_tokens)
 
 
     def __repr__(self) -> str:
@@ -173,12 +171,12 @@ class WorldModel(nn.Module):
         # if prev_steps > 0:
         #     print('prev_steps > 0')
         # print(f'{num_steps}, {prev_steps}')
-        try:
-            sequences = self.embedder(tokens, num_steps, prev_steps) + self.pos_emb(prev_steps + torch.arange(num_steps, device=tokens.device))
-        except RuntimeError as e:
-            print(f'{num_steps}, {prev_steps}') 
+        # try:
+        sequences = self.embedder(tokens, num_steps, prev_steps) + self.pos_emb(prev_steps + torch.arange(num_steps, device=tokens.device))
+        # except RuntimeError as e:
+        #     print(f'{num_steps}, {prev_steps}') 
 
-        # print('transformer forward begin') 函数里面更新了update past_keys_values
+        # print('transformer forward begin')
         x = self.transformer(sequences, past_keys_values)
         # print('transformer forward done')
 
@@ -257,18 +255,24 @@ class WorldModel(nn.Module):
 
         if n <= self.env_num:
             # Compute the hash of obs_tokens
+            # if obs_tokens.shape[0] == 1:
+            #     # This branch will be executed only when env_num=1
+            #     # cache_key = hash(obs_tokens.squeeze(0).detach().cpu().numpy().astype('int'))
+            #     cache_key = hash(obs_tokens.detach().cpu().numpy())
+            # elif obs_tokens.shape[0] > 1 and obs_tokens.shape[0] <= self.env_num:
+            #     # This branch will be executed only when env_num=8
             # cache_key = hash(obs_tokens.detach().cpu().numpy().astype('int'))
             # # Try to get the value associated with the hash of latest_state
             # matched_value = self.past_keys_values_cache.get(cache_key)
             # if matched_value is not None:
             #     # If a matching value is found, do something with it
             #     self.keys_values_wm = copy.deepcopy(matched_value)
-            #     print('init inference: find matched_value!')
+            #     # print('init inference: find matched_value!')
             # else:
             #     self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
             #     # print('init inference: not find matched_value! reset!')
             
-            # MCTS root节点: 需要准确的估计 value, policy_logits 或许需要结合context的kv_cache进行更准确的估计，而不是当前的从0开始推理
+            # MCTS root节点
             self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
 
             outputs_wm = self.forward(obs_tokens, past_keys_values=self.keys_values_wm, is_root=False)  # Note: is_root=False
@@ -279,7 +283,7 @@ class WorldModel(nn.Module):
             outputs_wm = self.forward(obs_tokens, past_keys_values=self.keys_values_wm, is_root=False)  # Note: is_root=False
         elif n > self.env_num and n != int(256) and buffer_action is not None: 
             # TODO: n=256 means train tokenizer
-            # TODO: for n=32*6=192 means 通过unroll 5 steps，计算target value 
+            # TODO: for n=32*6=192 means 计算target value unroll 5 steps
             # obs_tokens = obs_tokens.reshape(32, 6, num_observations_tokens) # (BL, K)
             # obs_tokens = obs_tokens.view(-1, 6, num_observations_tokens) # (BL, K)
             
@@ -360,21 +364,20 @@ class WorldModel(nn.Module):
 
         outputs_wm, _, obs_tokens = self.reset_from_initial_observations(obs_act_dict)
 
-        if self.keys_values_wm.size > 0:
-            # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
-            if obs_tokens.shape[0] == 1:
-                # This branch will be executed only when env_num=1
-                # cache_key = hash(obs_tokens.squeeze(0).detach().cpu().numpy())
-                cache_key = hash(obs_tokens.detach().cpu().numpy())
+        # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
+        if obs_tokens.shape[0] == 1:
+            # This branch will be executed only when env_num=1
+            # cache_key = hash(obs_tokens.squeeze(0).detach().cpu().numpy())
+            cache_key = hash(obs_tokens.detach().cpu().numpy())
 
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
-            # elif obs_tokens.shape[0] == self.env_num:
-            # elif obs_tokens.shape[0] > self.env_num:
-            elif obs_tokens.shape[0] > 1 and obs_tokens.shape[0] <= self.env_num:
-                # This branch will be executed only when env_num=8
-                cache_key = hash(obs_tokens.detach().cpu().numpy().astype('int'))
-                # Store the KV_cache for all 8 samples together
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+        # elif obs_tokens.shape[0] == self.env_num:
+        # elif obs_tokens.shape[0] > self.env_num:
+        elif obs_tokens.shape[0] > 1 and obs_tokens.shape[0] <= self.env_num:
+            # This branch will be executed only when env_num=8
+            cache_key = hash(obs_tokens.detach().cpu().numpy().astype('int'))
+            # Store the KV_cache for all 8 samples together
+            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
 
         # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
         return outputs_wm.output_sequence, obs_tokens, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
@@ -415,9 +418,10 @@ class WorldModel(nn.Module):
             # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
             if latest_state.shape[0] == 1:
                 # This branch will be executed only when env_num=1
-                # cache_key = hash(latest_state.squeeze(0).astype('int'))
-                cache_key = hash(latest_state.astype('int'))
+                cache_key = hash(latest_state.squeeze(0).astype('int'))
                 self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+            # elif latest_state.shape[0] == self.env_num:
+            # elif latest_state.shape[0] > self.env_num:
             elif latest_state.shape[0] > 1 and latest_state.shape[0] <= self.env_num:
                 # This branch will be executed only when env_num=8
                 cache_key = hash(latest_state.astype('int'))
@@ -439,9 +443,10 @@ class WorldModel(nn.Module):
             # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
             if latest_state.shape[0] == 1:
                 # This branch will be executed only when env_num=1
-                # cache_key = hash(latest_state.squeeze(0).astype('int'))
-                cache_key = hash(latest_state.astype('int'))
+                cache_key = hash(latest_state.squeeze(0).astype('int'))
                 self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+            # elif latest_state.shape[0] == self.env_num:
+            # elif latest_state.shape[0] > self.env_num:
             elif latest_state.shape[0] > 1 and latest_state.shape[0] <= self.env_num:
                 # This branch will be executed only when env_num=8
                 cache_key = hash(latest_state.astype('int'))
@@ -458,10 +463,7 @@ class WorldModel(nn.Module):
             # action_token obs_token, ..., obs_token  1+16
 
             # obs is in token level
-            # act_token num_steps=1, prev_steps=16
-            # obs_token_0 num_steps=1, prev_steps=17
-            # obs_token_1 num_steps=1, prev_steps=18
-
+            # num_steps=1, prev_steps=16
             outputs_wm = self.forward(token, past_keys_values=self.keys_values_wm, is_root=False)
             # if k==0, action_token self.head_observations 1,...,0,1
             output_sequence.append(outputs_wm.output_sequence)

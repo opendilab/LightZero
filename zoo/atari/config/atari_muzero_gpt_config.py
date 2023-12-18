@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(1)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -22,16 +22,19 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 1
-batch_size = 32
 update_per_collect = None
-# model_update_ratio = 0.25
-model_update_ratio = 0.2
-# num_simulations = 50
-num_simulations = 25
+model_update_ratio = 0.25
+num_simulations = 50
+# num_simulations = 25
+
 max_env_step = int(1e6)
 reanalyze_ratio = 0
+
+batch_size = 32
 num_unroll_steps = 5
-# num_unroll_steps = 20
+
+# batch_size = 8
+# num_unroll_steps =10
 
 # for debug
 # collector_env_num = 8
@@ -53,31 +56,11 @@ eps_greedy_exploration_in_collect = True
 atari_muzero_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer.py: lpips loss
-    # exp_name=f'data_mz_gpt_ctree_debug/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_orignet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-trans-0k-tokenizer-not-fixed_pt2_wd1e-4_argmaxtoken_origsdpa_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd64-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll{num_unroll_steps}_mcs500_seed0',
 
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs{batch_size}_lr1e-4_tokenizer-wd0_pretrained-tokenizer-then-joint-train_obsw5_seed0',
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-joint-train_obsw5_seed0',
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-not-train_obsw2_eps50k_env8_seed0',
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_onestep_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-not-train_obsw2_eps50k_seed0',
-    
-    exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_seed0',
-
-
-    # exp_name=f'data_mz_gpt_ctree_debug/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-not-train_obsw2_eps50k_env8_seed0',
-
-
-
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs{batch_size}_lr1e-4_tokenizer-wd0_tokenizer-train-20k-then-joint-train_seed0',
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_lr1e-4_indep-trans-wd1e-4-5k_tokenizer-wd0-not-fixed_pt2_argmaxtoken_origsdpa_perl_seed0',
-
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_lr1e-4_indep-trans-wd1e-4-5k_tokenizer-wd0-not-fixed_pt2_argmaxtoken_origsdpa_perl_tokenizer-only_seed0',
-
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-trans-20k-tokenizer-not-fixed_pt2_wd0.01_argmaxtoken_pt2sdpa-drop01_seed0',
-    
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd128_mediumnet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-trans-20k-tokenizer-not-fixed_pt2_wd0.01_argmaxtoken_seed0',
-    # exp_name=f'data_mz_gpt_ctree/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd256_largenet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs{batch_size}_adamw3e-3_indep-20k-tokenizer-fixed_pt2_seed0',
-    
-    
+    exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-1upc-joint-train_obsw2_eps10k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-0.5upc-not-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -100,15 +83,9 @@ atari_muzero_config = dict(
         clip_rewards=False,
     ),
     policy=dict(
-        # model_path=None,
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns25_upcNone-mur0.25_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs32_lr1e-4-3e-3_tokenizer-wd0_tokenizer-not-train_obsw2_eps50k_env4_seed0_231218_010416/ckpt/iteration_40000.pth.tar',
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns50_upcNone-mur0.5_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs32_lr1e-4_tokenizer-wd0_pretrained-tokenizer-not-train_seed0/ckpt/iteration_60000.pth.tar',
-        model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns5_upcNone-mur0.5_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs16_lr1e-4_tokenizer-wd0_perl_tokenizer-only_seed0/ckpt/iteration_150000.pth.tar',
-
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns50_upcNone-mur0.5_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs16_adamw3e-3_indep-trans-20k-tokenizer-not-fixed_pt2_wd1e-4_argmaxtoken_origsdpa_seed0/ckpt/iteration_10000.pth.tar',
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns50_upc1000-mur1_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs16_adamw3e-3_indep-trans-0k-tokenizer-not-fixed_pt2_wd1e-4_argmaxtoken_origsdpa_seed0/ckpt/iteration_30000.pth.tar',
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns50_upc1000-mur1_rr0_H5_nlayers2_emd128_mediumnet_mcs500_batch8_obs-token-lw2_recons-obs-noaug_bs8_adamw3e-3_indep-trans-0k-tokenizer-not-fixed_pt2_wd0.01_argmaxtoken_origsdpa_seed0/ckpt/ckpt_best.pth.tar',
-        # tokenizer_start_after_envsteps=int(9e9),
+        model_path=None,
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns5_upcNone-mur0.5_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs16_lr1e-4_tokenizer-wd0_perl_tokenizer-only_seed0/ckpt/iteration_150000.pth.tar',
+        # tokenizer_start_after_envsteps=int(9e9), # not train tokenizer
         tokenizer_start_after_envsteps=int(0),
         transformer_start_after_envsteps=int(0),
         # tokenizer_start_after_envsteps=int(0),
@@ -151,8 +128,8 @@ atari_muzero_config = dict(
             start=1.,
             end=0.01,
             # decay=int(1e5),
-            # decay=int(2e4),  # 20k
-            decay=int(5e4),  # 50k
+            decay=int(1e4),  # 20k
+            # decay=int(5e4),  # 50k
             # decay=int(5e3),  # 5k
         ),
         # TODO: NOTE
