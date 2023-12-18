@@ -289,14 +289,28 @@ class MuZeroGPTPolicy(Policy):
         # self._optimizer_tokenizer = optim.Adam(
         #     self._model.tokenizer.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
         # )
+
+        # self._optimizer_tokenizer = optim.Adam(
+        #     self._model.tokenizer.parameters(), lr=self._cfg.learning_rate # weight_decay=0
+        # )
+
+        # # TODO: nanoGPT optimizer
+        # self._optimizer_world_model = configure_optimizer(
+        #     model=self._model.world_model,
+        #     learning_rate=self._cfg.learning_rate,
+        #     weight_decay=self._cfg.weight_decay,
+        #     # weight_decay=0.01,
+        #     exclude_submodules=['tokenizer']
+        # )
+
         self._optimizer_tokenizer = optim.Adam(
-            self._model.tokenizer.parameters(), lr=self._cfg.learning_rate # weight_decay=0
+            self._model.tokenizer.parameters(), lr=1e-4 # weight_decay=0
         )
 
         # TODO: nanoGPT optimizer
         self._optimizer_world_model = configure_optimizer(
             model=self._model.world_model,
-            learning_rate=self._cfg.learning_rate,
+            learning_rate=3e-3,
             weight_decay=self._cfg.weight_decay,
             # weight_decay=0.01,
             exclude_submodules=['tokenizer']
@@ -331,6 +345,7 @@ class MuZeroGPTPolicy(Policy):
             update_kwargs={'freq': self._cfg.target_update_freq}
         )
         self._learn_model = self._model
+
 
         # TODO: only for debug
         # for param in self._learn_model.tokenizer.parameters():
@@ -706,6 +721,7 @@ class MuZeroGPTPolicy(Policy):
             Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
         self._collect_model = self._model
+
         if self._cfg.mcts_ctree:
             self._mcts_collect = MCTSCtree(self._cfg)
         else:

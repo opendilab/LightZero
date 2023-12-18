@@ -179,7 +179,8 @@ def train_muzero_gpt(
         # if collector.envstep > cfg.policy.tokenizer_start_after_envsteps and collector.envstep < cfg.policy.transformer_start_after_envsteps:
             # Learn policy from collected data.
             # for i in range(cfg.policy.update_per_collect_tokenizer):
-            for i in range(update_per_collect):
+            # for i in range(update_per_collect):
+            for _ in range(int(update_per_collect*0.5)):
                 # Learner will train ``update_per_collect`` times in one iteration.
                 if replay_buffer.get_num_of_transitions() > batch_size:
                     train_data = replay_buffer.sample(batch_size, policy)
@@ -197,7 +198,7 @@ def train_muzero_gpt(
 
         replay_buffer._cfg.num_unroll_steps = 5
         batch_size = 32
-        # batch_size = 16
+        # batch_size = 8
         # batch_size = 5
         replay_buffer._cfg.batch_size = batch_size
         policy._cfg.batch_size = batch_size # policy._cfg.num_unroll_steps = 6
@@ -205,7 +206,7 @@ def train_muzero_gpt(
             # TODO：transformer tokenizer交替更新
             # Learn policy from collected data.
             # for i in range(cfg.policy.update_per_collect_transformer):
-            for i in range(update_per_collect):
+            for _ in range(update_per_collect):
                 # Learner will train ``update_per_collect`` times in one iteration.
                 if replay_buffer.get_num_of_transitions() > batch_size:
                     train_data = replay_buffer.sample(batch_size, policy)

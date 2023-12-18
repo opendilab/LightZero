@@ -101,6 +101,7 @@ class AtariLightZeroEnv(BaseEnv):
         self._eval_episode_return += self.reward
         observation = self.observe()
         if done:
+            print('one episode done!')
             info['eval_episode_return'] = self._eval_episode_return
 
         return BaseEnvTimestep(observation, self.reward, done, info)

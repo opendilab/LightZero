@@ -339,7 +339,7 @@ class MuZeroMCTSCtree(object):
                 latent_state_batch_in_search_path.append(network_output.latent_state)
 
                 # TODO
-                last_latent_state = network_output.latent_state
+                # last_latent_state = network_output.latent_state
 
                 # tolist() is to be compatible with cpp datatype.
                 reward_batch = network_output.reward.reshape(-1).tolist()

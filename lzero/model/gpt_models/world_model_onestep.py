@@ -147,11 +147,6 @@ class WorldModel(nn.Module):
                     nn.init.zeros_(layer.weight)
                     nn.init.zeros_(layer.bias)
                     break
-            for _, layer in enumerate(reversed(self.head_rewards.head_module)):
-                if isinstance(layer, nn.Linear):
-                    nn.init.zeros_(layer.weight)
-                    nn.init.zeros_(layer.bias)
-                    break
 
         import collections
         self.past_keys_values_cache = collections.OrderedDict()
@@ -224,85 +219,17 @@ class WorldModel(nn.Module):
         return self.reset_from_initial_observations(obs)
 
     @torch.no_grad()
-    def reset_from_initial_observations(self, obs_act_dict: torch.FloatTensor) -> torch.FloatTensor:
-        if isinstance(obs_act_dict, dict):
-            # obs_act_dict = {'obs':obs, 'action':action_batch}
-            observations = obs_act_dict['obs']
-            buffer_action = obs_act_dict['action']
-
-        else:
-            observations = obs_act_dict
-            buffer_action =None
+    def reset_from_initial_observations(self, observations: torch.FloatTensor) -> torch.FloatTensor:
         # NOTE: should_preprocess=True is important
         obs_tokens = self.tokenizer.encode(observations, should_preprocess=True).tokens  # (B, C, H, W) -> (B, K)
         _, num_observations_tokens = obs_tokens.shape
         if self.num_observations_tokens is None:
             self._num_observations_tokens = num_observations_tokens
 
-        outputs_wm = self.refresh_keys_values_with_initial_obs_tokens_for_init_infer(obs_tokens, buffer_action)
+        outputs_wm = self.refresh_keys_values_with_initial_obs_tokens(obs_tokens)
         self.obs_tokens = obs_tokens
 
         return outputs_wm, self.decode_obs_tokens(), self.obs_tokens
-
-    @torch.no_grad()
-    def refresh_keys_values_with_initial_obs_tokens_for_init_infer(self, obs_tokens: torch.LongTensor, buffer_action=None) -> torch.FloatTensor:
-        n, num_observations_tokens = obs_tokens.shape
-        assert num_observations_tokens == self.num_observations_tokens
-        # self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
-
-        if n <= self.env_num:
-            # Compute the hash of obs_tokens
-            if obs_tokens.shape[0] == 1:
-                # This branch will be executed only when env_num=1
-                cache_key = hash(obs_tokens.squeeze(0).detach().cpu().numpy().astype('int'))
-            elif obs_tokens.shape[0] > 1 and obs_tokens.shape[0] <= self.env_num:
-                # This branch will be executed only when env_num=8
-                cache_key = hash(obs_tokens.detach().cpu().numpy().astype('int'))
-            elif obs_tokens.shape[0] > self.env_num:
-                cache_key = hash(obs_tokens.detach().cpu().numpy().astype('int'))
-            
-            # Try to get the value associated with the hash of latest_state
-            matched_value = self.past_keys_values_cache.get(cache_key)
-            if matched_value is not None:
-                # If a matching value is found, do something with it
-                self.keys_values_wm = copy.deepcopy(matched_value)
-                # print('init inference: find matched_value!')
-            else:
-                self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
-                # print('init inference: not find matched_value! reset!')
-
-            outputs_wm = self.forward(obs_tokens, past_keys_values=self.keys_values_wm, is_root=False)  # Note: is_root=False
-        # elif n == 32 * 6:
-        elif n > self.env_num:
-            # TODO: note
-            # obs_tokens = obs_tokens.reshape(5, 6, num_observations_tokens) # (BL, K)
-            obs_tokens = obs_tokens.view(-1, 6, num_observations_tokens) # (BL, K)
-            obs_tokens = obs_tokens[:, :-1, :]
-            # obs_tokens = obs_tokens.reshape(32*6, num_observations_tokens) # (BL, K)
-            buffer_action = torch.from_numpy(buffer_action).to(obs_tokens.device)
-            act_tokens = rearrange(buffer_action, 'b l -> b l 1')
-
-            # # 选择每个样本的最后一步
-            # last_steps = act_tokens[:, -1:, :]  # 这将选择最后一列并保持维度不变
-            # # 使用torch.cat在第二个维度上连接原始act_tokens和last_steps
-            # act_tokens = torch.cat((act_tokens, last_steps), dim=1)
-
-            tokens = rearrange(torch.cat((obs_tokens, act_tokens), dim=2), 'b l k1 -> b (l k1)')  # (B, L(K+1))
-            # print('init inference: unroll 5 steps!')
-            outputs_wm = self.forward(tokens, is_root=False)  # Note: is_root=False
-
-            # 选择每个样本的最后一步
-            last_steps = outputs_wm.logits_value[:, -1:, :]  # 这将选择最后一列并保持维度不变
-            # 使用torch.cat在第二个维度上连接原始act_tokens和last_steps
-            outputs_wm.logits_value = torch.cat((outputs_wm.logits_value, last_steps), dim=1)
-
-            # Reshape your tensors
-            #  outputs_wm.logits_value.shape (30,21) = (B*6, 21)
-            outputs_wm.logits_value = rearrange(outputs_wm.logits_value, 'b t e -> (b t) e')
-
-
-        # return WorldModelOutput(x, logits_observations, logits_rewards, logits_ends, logits_policy, logits_value)
-        return outputs_wm
 
     @torch.no_grad()
     def refresh_keys_values_with_initial_obs_tokens(self, obs_tokens: torch.LongTensor) -> torch.FloatTensor:
@@ -316,13 +243,7 @@ class WorldModel(nn.Module):
         return outputs_wm
 
     @torch.no_grad()
-    def forward_initial_inference(self, obs_act_dict: torch.LongTensor, should_predict_next_obs: bool = True):
-
-        if isinstance(obs_act_dict, dict):
-            # obs_act_dict = {'obs':obs, 'action':action_batch}
-            obs = obs_act_dict['obs']
-        else:
-            obs = obs_act_dict
+    def forward_initial_inference(self, obs: torch.LongTensor, should_predict_next_obs: bool = True):
 
         if len(obs[0].shape) == 3:
             # obs is a 3-dimensional image, for atari
@@ -344,7 +265,7 @@ class WorldModel(nn.Module):
             # obs = repeated_observations.view(*desired_shape)  # 重新调整形状到3,64,64
             
 
-        outputs_wm, _, obs_tokens = self.reset_from_initial_observations(obs_act_dict)
+        outputs_wm, _, obs_tokens = self.reset_from_initial_observations(obs)
 
         # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
         if obs_tokens.shape[0] == 1:
@@ -364,8 +285,7 @@ class WorldModel(nn.Module):
 
 
     """
-    past-kv-dict-batch envnum8 latest multi-step
-    fix init infer
+    past-kv-dict-batch envnum8  one_step 每次都只考虑当前一步的obs_token
     把8个样本的self.keys_values_wm 看做一个整体来寻找
 
     TODO：很多时候都是执行的refresh_keys_values_with_initial_obs_tokens，导致没有充分利用序列建模能力？
@@ -383,31 +303,33 @@ class WorldModel(nn.Module):
         latest_state = state_action_history[-1][0]
 
         # Compute the hash of latest_state
-        hash_latest_state = hash(latest_state.astype('int'))
+        # hash_latest_state = hash(latest_state.astype('int'))
 
         # Try to get the value associated with the hash of latest_state
-        matched_value = self.past_keys_values_cache.get(hash_latest_state)
-        if matched_value is not None:
-            # If a matching value is found, do something with it
-            self.keys_values_wm = copy.deepcopy(matched_value)
-            # print('recurrent_inference:find matched_value!')
-        else:
-            # If no matching value is found, handle the case accordingly
-            # NOTE: very important
-            _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.long).to(self.device))
-            # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
-            if latest_state.shape[0] == 1:
-                # This branch will be executed only when env_num=1
-                cache_key = hash(latest_state.squeeze(0).astype('int'))
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
-            # elif latest_state.shape[0] == self.env_num:
-            # elif latest_state.shape[0] > self.env_num:
-            elif latest_state.shape[0] > 1 and latest_state.shape[0] <= self.env_num:
-                # This branch will be executed only when env_num=8
-                cache_key = hash(latest_state.astype('int'))
-                # Store the KV_cache for all 8 samples together
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
-            # print('recurrent_inference:not find matched_value!')
+        # matched_value = self.past_keys_values_cache.get(hash_latest_state)
+        # TODO: dont use cache step=1
+        # matched_value = None
+        # if matched_value is not None:
+        #     # If a matching value is found, do something with it
+        #     self.keys_values_wm = copy.deepcopy(matched_value)
+        #     print('find matched_value!')
+        # else:
+        # If no matching value is found, handle the case accordingly
+        # NOTE: very important
+        _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.long).to(self.device))
+        # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
+        # if latest_state.shape[0] == 1:
+        #     # This branch will be executed only when env_num=1
+        #     cache_key = hash(latest_state.squeeze(0).astype('int'))
+        #     self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+        # elif latest_state.shape[0] == self.env_num:
+        # elif latest_state.shape[0] > self.env_num:
+        # elif latest_state.shape[0] > 1 and latest_state.shape[0] <= self.env_num:
+        #     # This branch will be executed only when env_num=8
+        #     cache_key = hash(latest_state.astype('int'))
+        #     # Store the KV_cache for all 8 samples together
+        #     self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+        # print('not find matched_value!')
 
 
         assert self.keys_values_wm is not None and self.num_observations_tokens is not None
@@ -416,22 +338,22 @@ class WorldModel(nn.Module):
 
         output_sequence, obs_tokens = [], []
 
-        if self.keys_values_wm.size + num_passes > self.config.max_tokens:
-            # TODO: the impact
-            # _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
-            _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.long).to(self.device))
-            # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
-            if latest_state.shape[0] == 1:
-                # This branch will be executed only when env_num=1
-                cache_key = hash(latest_state.squeeze(0).astype('int'))
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
-            # elif latest_state.shape[0] == self.env_num:
-            # elif latest_state.shape[0] > self.env_num:
-            elif latest_state.shape[0] > 1 and latest_state.shape[0] <= self.env_num:
-                # This branch will be executed only when env_num=8
-                cache_key = hash(latest_state.astype('int'))
-                # Store the KV_cache for all 8 samples together
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+        # if self.keys_values_wm.size + num_passes > self.config.max_tokens:
+        #     # TODO: the impact
+        #     # _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
+        #     _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.long).to(self.device))
+        #     # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
+        #     if latest_state.shape[0] == 1:
+        #         # This branch will be executed only when env_num=1
+        #         cache_key = hash(latest_state.squeeze(0).astype('int'))
+        #         self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+        #     # elif latest_state.shape[0] == self.env_num:
+        #     # elif latest_state.shape[0] > self.env_num:
+        #     elif latest_state.shape[0] > 1 and latest_state.shape[0] <= self.env_num:
+        #         # This branch will be executed only when env_num=8
+        #         cache_key = hash(latest_state.astype('int'))
+        #         # Store the KV_cache for all 8 samples together
+        #         self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
 
         # TODO
         action = state_action_history[-1][-1]
@@ -472,13 +394,13 @@ class WorldModel(nn.Module):
         # obs = self.decode_obs_tokens() if should_predict_next_obs else None
 
         # cache_key = hash(self.obs_tokens.detach().cpu().numpy().astype('int'))
-        cache_key = hash(self.obs_tokens.detach().cpu().numpy())
+        # cache_key = hash(self.obs_tokens.detach().cpu().numpy())
 
-        # TODO: 在计算结束后，更新缓存. 是否需要deepcopy
-        self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
-        if len(self.past_keys_values_cache) > self.max_cache_size:
-            # TODO: lru_cache
-            self.past_keys_values_cache.popitem(last=False)  # Removes the earliest inserted item
+        # # TODO: 在计算结束后，更新缓存. 是否需要deepcopy
+        # self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+        # if len(self.past_keys_values_cache) > self.max_cache_size:
+        #     # TODO: lru_cache
+        #     self.past_keys_values_cache.popitem(last=False)  # Removes the earliest inserted item
 
         return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
 

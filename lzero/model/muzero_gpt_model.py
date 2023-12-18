@@ -211,7 +211,7 @@ class MuZeroModelGPT(nn.Module):
         #         nn.Linear(self.pred_hid, self.pred_out),
         #     )
 
-    def initial_inference(self, obs: torch.Tensor) -> MZNetworkOutput:
+    def initial_inference(self, obs: torch.Tensor, action_batch=None) -> MZNetworkOutput:
         """
         Overview:
             Initial inference of MuZero model, which is the first step of the MuZero model.
@@ -243,8 +243,11 @@ class MuZeroModelGPT(nn.Module):
         #     latent_state,
         # )
 
+        obs_act_dict = {'obs':obs, 'action':action_batch}
         x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
-            obs)
+            obs_act_dict)
+        # x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
+        #     obs, action_batch)
         reward, policy_logits, value = logits_rewards, logits_policy, logits_value
 
         # obs discrete distribution to one_hot latent state?
