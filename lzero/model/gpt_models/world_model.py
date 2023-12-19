@@ -173,10 +173,10 @@ class WorldModel(nn.Module):
         # if prev_steps > 0:
         #     print('prev_steps > 0')
         # print(f'{num_steps}, {prev_steps}')
-        try:
-            sequences = self.embedder(tokens, num_steps, prev_steps) + self.pos_emb(prev_steps + torch.arange(num_steps, device=tokens.device))
-        except RuntimeError as e:
-            print(f'{num_steps}, {prev_steps}') 
+        # try:
+        sequences = self.embedder(tokens, num_steps, prev_steps) + self.pos_emb(prev_steps + torch.arange(num_steps, device=tokens.device))
+        # except RuntimeError as e:
+        #     print(f'{num_steps}, {prev_steps}') 
 
         # print('transformer forward begin') 函数里面更新了update past_keys_values
         x = self.transformer(sequences, past_keys_values)

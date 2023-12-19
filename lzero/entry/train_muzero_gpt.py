@@ -183,8 +183,9 @@ def train_muzero_gpt(
             # Learn policy from collected data.
             # for i in range(cfg.policy.update_per_collect_tokenizer):
             # for i in range(update_per_collect):
-            # for _ in range(int(update_per_collect*0.5)):
-            for _ in range(int(update_per_collect)):
+            for _ in range(int(update_per_collect*0.5)):
+            # for _ in range(int(update_per_collect*0.1)):
+            # for _ in range(int(update_per_collect)):
                 # Learner will train ``update_per_collect`` times in one iteration.
                 if replay_buffer.get_num_of_transitions() > batch_size:
                     train_data = replay_buffer.sample(batch_size, policy)

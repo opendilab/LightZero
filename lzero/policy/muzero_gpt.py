@@ -311,6 +311,7 @@ class MuZeroGPTPolicy(Policy):
         self._optimizer_world_model = configure_optimizer(
             model=self._model.world_model,
             learning_rate=3e-3,
+            # learning_rate=1e-4,
             weight_decay=self._cfg.weight_decay,
             # weight_decay=0.01,
             exclude_submodules=['tokenizer']

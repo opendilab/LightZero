@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(1)
+torch.cuda.set_device(0)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -22,8 +22,11 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 1
-update_per_collect = None
+update_per_collect = 1000
+
+# update_per_collect = None
 model_update_ratio = 0.25
+
 num_simulations = 50
 # num_simulations = 25
 
@@ -48,7 +51,9 @@ num_unroll_steps = 5
 # reanalyze_ratio = 0
 # num_unroll_steps = 5
 
-eps_greedy_exploration_in_collect = True
+# eps_greedy_exploration_in_collect = True
+eps_greedy_exploration_in_collect = False
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -58,7 +63,11 @@ atari_muzero_config = dict(
     # TODO: tokenizer.py: lpips loss
     # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd64-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll{num_unroll_steps}_mcs500_seed0',
 
-    exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-1upc-joint-train_obsw2_eps10k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
+    exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-1e-4_tokenizer-wd0_tokenizer-0.5upc-joint-train_obsw2_eps-false-ftemp50k_multistep_initinfer-targetv-unroll5_mcs5000_seed0',
+
+    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs5000_seed0',
+
+    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
     # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-0.5upc-not-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
     # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
     env=dict(
@@ -128,8 +137,8 @@ atari_muzero_config = dict(
             start=1.,
             end=0.01,
             # decay=int(1e5),
-            decay=int(1e4),  # 20k
-            # decay=int(5e4),  # 50k
+            # decay=int(1e4),  # 20k
+            decay=int(5e4),  # 50k
             # decay=int(5e3),  # 5k
         ),
         # TODO: NOTE
@@ -141,6 +150,9 @@ atari_muzero_config = dict(
         # optim_type='SGD',
         # lr_piecewise_constant_decay=True,
         # learning_rate=0.2,
+        manual_temperature_decay=True,
+        threshold_training_steps_for_final_temperature=int(5e4), # 100k 1->0.5->0.25
+
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         # learning_rate=0.003,
