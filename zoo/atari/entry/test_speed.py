@@ -32,7 +32,12 @@ print(f'origin_search_time is {replay_buffer1.origin_search_time}')
 print(f'reuse_search_time is {replay_buffer1.reuse_search_time}')
 print(f'active_root_num is {replay_buffer1.active_root_num}')
 
-# # test ``_compute_target_policy_reanalyzed``
-# replay_buffer2 = GameBuffer(policy_config)
-# policy_re_context = np.load('policy_re_context.npy', allow_pickle=True)
-# replay_buffer2._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
+# test ``_compute_target_policy_reanalyzed``
+replay_buffer2 = GameBuffer(policy_config)
+policy_re_context = np.load('policy_re_context.npy', allow_pickle=True)
+for i in range(20):
+    replay_buffer2._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
+print(f'reanalyze time is {replay_buffer2.compute_target_re_time}')
+print(f'origin_search_time is {replay_buffer2.origin_search_time}')
+print(f'reuse_search_time is {replay_buffer2.reuse_search_time}')
+print(f'active_root_num is {replay_buffer2.active_root_num}')
