@@ -23,6 +23,7 @@ evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 1000
 batch_size = 256
+K_batch = 5
 max_env_step = int(8e5)
 reanalyze_ratio = 1.0
 eps_greedy_exploration_in_collect = False
@@ -32,7 +33,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/reuse_test',
+    f'data_mz_ctree/{env_name[:-14]}/reuse1_bigbatch6_test',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -68,6 +69,7 @@ atari_muzero_config = dict(
         use_augmentation=True,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
+        K_batch = K_batch,
         optim_type='SGD',
         lr_piecewise_constant_decay=True,
         learning_rate=0.2,

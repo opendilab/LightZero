@@ -20,6 +20,10 @@ from lzero.worker import MACollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 
+
+import pickle
+import numpy as np
+
 def iter_filter(data, batch_size, K):
     current_batch, target_batch = data
     obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list = current_batch
@@ -187,6 +191,11 @@ def train_ma(
 
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+
+        data = np.array(new_data)
+        np.save('collected data.npy', data)
+        breakpoint()
+
         # print("collected new data")
         if cfg.policy.update_per_collect is None:
             # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
@@ -227,6 +236,10 @@ def train_ma(
                 iter_data = iter_filter(train_data, batch_size, K)
                 # print("remark 33333333333333333333")
 
+                # with open('data.pkl', 'wb') as file:
+                #     pickle.dump(replay_buffer, file)
+                #     print("the buffer is saved")
+
 
 
 
@@ -236,7 +249,7 @@ def train_ma(
             else:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                    f'batch_size: {batch_size}, '
+                    f'batch_size: {sample_batch_size}, '
                     f'{replay_buffer} '
                     f'continue to collect now ....'
                 )
@@ -249,7 +262,7 @@ def train_ma(
                 log_vars = learner.train(iter_data[i], collector.envstep)
 
                 if cfg.policy.use_priority:
-                    replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+                    replay_buffer.update_priority(iter_data[i], log_vars[0]['value_priority_orig'])
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break

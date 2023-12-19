@@ -20,6 +20,30 @@ from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 
+def iter_filter(data, batch_size, K):
+    current_batch, target_batch = data
+    obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list = current_batch
+    batch_rewards, batch_target_values, batch_target_policies = target_batch
+    # print(f'batch rewards after sample is {batch_rewards}')
+    iter_data = []
+    for i in range(K+1):
+
+        rewards_temp = batch_rewards[i*batch_size:(i+1)*batch_size]
+        # print(f'a mini batch  is {rewards_temp}')
+        values_temp = batch_target_values[i*batch_size:(i+1)*batch_size]
+        policies_temp = batch_target_policies[i*batch_size:(i+1)*batch_size]
+        target_temp = [rewards_temp, values_temp, policies_temp]
+
+        obs_temp = obs_list[i*batch_size:(i+1)*batch_size]
+        action_temp = action_list[i*batch_size:(i+1)*batch_size]
+        mask_temp = mask_list[i*batch_size:(i+1)*batch_size]
+        index_temp = batch_index_list[i*batch_size:(i+1)*batch_size]
+        weight_temp = weights_list[i*batch_size:(i+1)*batch_size]
+        time_temp = make_time_list[i*batch_size:(i+1)*batch_size]
+        current_temp = [obs_temp, action_temp, mask_temp, index_temp, weight_temp, time_temp]
+        iter_data.append([current_temp, target_temp])
+    
+    return iter_data
 
 def train_reuse(
         input_cfg: Tuple[dict, dict],
@@ -168,25 +192,30 @@ def train_reuse(
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
+        K = cfg.policy.K_batch
+        sample_batch_size = (K+1) * batch_size
         # Learn policy from collected data.
-        for i in range(update_per_collect):
+        for i in range(update_per_collect//(K+1)):
             # Learner will train ``update_per_collect`` times in one iteration.
-            if replay_buffer.get_num_of_transitions() > batch_size:
-                train_data = replay_buffer.sample(batch_size, policy)
+            if replay_buffer.get_num_of_transitions() > sample_batch_size:
+                train_data = replay_buffer.sample(sample_batch_size, policy)
+                iter_data = iter_filter(train_data, batch_size, K)
             else:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                    f'batch_size: {batch_size}, '
+                    f'batch_size: {sample_batch_size}, '
                     f'{replay_buffer} '
                     f'continue to collect now ....'
                 )
                 break
 
-            # The core train steps for MCTS+RL algorithms.
-            log_vars = learner.train(train_data, collector.envstep)
+            for i in range(K + 1):
 
-            if cfg.policy.use_priority:
-                replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+                # The core train steps for MCTS+RL algorithms.
+                log_vars = learner.train(iter_data[i], collector.envstep)
+
+                if cfg.policy.use_priority:
+                    replay_buffer.update_priority(iter_data[i], log_vars[0]['value_priority_orig'])
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break

@@ -155,6 +155,9 @@ class MuZeroPolicy(Policy):
         # (bool) Whether to use the true chance in MCTS.
         use_ture_chance_label_in_chance_encoder=False,
 
+        # ****** Bigbatch ******
+        K_batch = 5,
+        
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
         use_priority=True,

@@ -198,6 +198,10 @@ class MAGameBuffer(GameBuffer):
                 batch_index_list[:reanalyze_num], game_segment_list[:reanalyze_num],
                 pos_in_game_segment_list[:reanalyze_num]
             )
+            # print(f"the reanalyze context is {policy_re_context}")
+            # data = np.array(policy_re_context)
+            # np.save('policy_re_context.npy', data)
+            # breakpoint()
         else:
             policy_re_context = None
 
@@ -886,6 +890,10 @@ class MAGameBuffer(GameBuffer):
                 to_play_by_iter = compute_all_filters(to_play, self._cfg.num_unroll_steps)
                 latent_state_roots_by_iter = compute_all_filters(latent_state_roots, self._cfg.num_unroll_steps)
                 true_action_by_iter = compute_all_filters(true_action, self._cfg.num_unroll_steps)
+                # print(f"legal_actions is {legal_actions_by_iter}")
+                # print(f"noises_by_iter is {noises_by_iter}")
+                # print(f"reward_pool_by_iter is {reward_pool_by_iter}")
+                # print(f"latent_state_roots_by_iter is {latent_state_roots_by_iter}")
 
                 temp_values = []
                 temp_distributions = []
@@ -896,6 +904,8 @@ class MAGameBuffer(GameBuffer):
                 for iter in range(self._cfg.num_unroll_steps + 1):
                     iter_batch_size = transition_batch_size / (self._cfg.num_unroll_steps + 1)
                     roots = MCTSCtree.roots(iter_batch_size, legal_actions_by_iter[iter])
+                    # print(f"the data type of roots is {roots}")
+                    # breakpoint()
 
                     roots.prepare(self._cfg.root_noise_weight, 
                                 noises_by_iter[iter], 
