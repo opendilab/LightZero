@@ -13,14 +13,15 @@ from numpy.typing import NDArray
 from zoo.pooltool.datatypes import BasePoolToolEnv
 
 from pooltool import FrameStepper, ImageZip, image_stack
-from pooltool.ai.bot.sumtothree_rl.coordinate_based import (
+from pooltool.ai.bot.sumtothree_rl.image_based import (
     calc_reward,
     reset_single_player_env,
     single_player_env,
 )
-from pooltool.ai.datatypes import LightZeroEnv, ObservationDict
+from pooltool.ai.datatypes import LightZeroImageEnv, ObservationDict
 from pooltool.ani.camera import camera_states
 from pooltool.ani.image.utils import gif
+from pooltool.terminal import TimeCode
 
 # from pooltool.system.datatypes import MultiSystem
 
@@ -31,10 +32,10 @@ class EpisodicTrackedStats:
     eval_episode_return: float = 0.0
 
 
-@ENV_REGISTRY.register("pooltool_sumtothree")
-class SumToThreeEnv(BasePoolToolEnv):
+@ENV_REGISTRY.register("pooltool_sumtothree_image")
+class SumToThreeImageEnv(BasePoolToolEnv):
     config = dict(
-        env_name="PoolTool-SumToThree",
+        env_name="PoolTool-SumToThree-Image",
         env_type="not_board_games",
         episode_length=10,
         save_replay_path=None,
@@ -43,7 +44,7 @@ class SumToThreeEnv(BasePoolToolEnv):
     def __init__(self, cfg: EasyDict) -> None:
         self.cfg = cfg
         self._init_flag = False
-        self._env: LightZeroEnv
+        self._env: LightZeroImageEnv
 
         self._save_replay_path = cfg.save_replay_path
         self._save_replay_count = 0
@@ -51,9 +52,11 @@ class SumToThreeEnv(BasePoolToolEnv):
         self._tracked_stats = EpisodicTrackedStats()
 
     def __repr__(self) -> str:
-        return "SumToThreeEnv"
+        return "SumToThreeEnvImage"
 
     def close(self) -> None:
+        self._env.renderer.close()
+
         # Trying to fix an apparent memory leak
         for ball in self._env.system.balls.values():
             del ball.state

@@ -6,11 +6,10 @@ from easydict import EasyDict
 collector_env_num = 6
 n_episode = 6
 evaluator_env_num = 6
-continuous_action_space = True
 K = 15  # num_of_sampled_actions
 num_simulations = 35
 update_per_collect = None
-batch_size = 256
+batch_size = 128
 max_env_step = int(5e6)
 reanalyze_ratio = 0.0
 eval_freq = 1000
@@ -19,9 +18,9 @@ eval_freq = 1000
 # ==============================================================
 
 sumtothree_cont_sampled_efficientzero_config = dict(
-    exp_name=f"data_pooltool_ctree/sumtothree_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0",
+    exp_name=f"data_pooltool_ctree/sumtothree_image_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0",
     env=dict(
-        env_name="PoolTool-SumToThree",
+        env_name="PoolTool-SumToThree-Image",
         env_type="not_board_games",
         continuous=True,
         manually_discretization=False,
@@ -34,14 +33,11 @@ sumtothree_cont_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=4,
+            observation_shape=(1, 20, 10),
             action_space_size=2,
-            continuous_action_space=continuous_action_space,
+            continuous_action_space=True,
             num_of_sampled_actions=K,
-            sigma_type="conditioned",
-            model_type="mlp",
-            lstm_hidden_size=256,
-            latent_state_dim=256,
+            model_type="conv",
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
             norm_type="BN",
@@ -74,10 +70,11 @@ sumtothree_cont_sampled_efficientzero_config = EasyDict(
 main_config = sumtothree_cont_sampled_efficientzero_config
 sumtothree_cont_sampled_efficientzero_create_config = dict(
     env=dict(
-        type="pooltool_sumtothree",
-        import_names=["zoo.pooltool.sum_to_three.envs.sum_to_three_env"],
+        type="pooltool_sumtothree_image",
+        import_names=["zoo.pooltool.sum_to_three.envs.sum_to_three_image_env"],
     ),
-    env_manager=dict(type="subprocess"),
+    #env_manager=dict(type="subprocess"),
+    env_manager=dict(type='base'),
     policy=dict(
         type="sampled_efficientzero",
         import_names=["lzero.policy.sampled_efficientzero"],
