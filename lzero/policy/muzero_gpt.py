@@ -307,6 +307,10 @@ class MuZeroGPTPolicy(Policy):
             self._model.tokenizer.parameters(), lr=1e-4 # weight_decay=0
         )
 
+        # self._optimizer_tokenizer = optim.Adam(
+        #         self._model.tokenizer.parameters(), lr=3e-3 # weight_decay=0
+        #     )
+
         # TODO: nanoGPT optimizer
         self._optimizer_world_model = configure_optimizer(
             model=self._model.world_model,

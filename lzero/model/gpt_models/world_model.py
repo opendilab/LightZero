@@ -116,9 +116,11 @@ class WorldModel(nn.Module):
         self.head_policy = Head(
             max_blocks=config.max_blocks,
             block_mask=value_policy_tokens_pattern,  # TODO: value_policy_tokens_pattern # [0,...,1,0]
-            head_module=nn.Sequential(
+            head_module=nn.Sequential( # （8, 5, 128）
+                # nn.BatchNorm1d(config.embed_dim), # TODO: 1
                 nn.Linear(config.embed_dim, config.embed_dim),
-                nn.ReLU(),
+                # nn.ReLU(),
+                nn.LeakyReLU(negative_slope=0.01), # TODO: 2
                 nn.Linear(config.embed_dim, self.action_shape)  # TODO(pu); action shape
             )
         )
@@ -126,8 +128,10 @@ class WorldModel(nn.Module):
             max_blocks=config.max_blocks,
             block_mask=value_policy_tokens_pattern,
             head_module=nn.Sequential(
+                # nn.BatchNorm1d(config.embed_dim), # TODO: 1
                 nn.Linear(config.embed_dim, config.embed_dim),
                 nn.ReLU(),
+                # nn.LeakyReLU(negative_slope=0.01), # TODO: 2
                 nn.Linear(config.embed_dim, self.support_size)  # TODO(pu): action shape
             )
         )
@@ -136,12 +140,13 @@ class WorldModel(nn.Module):
 
         last_linear_layer_init_zero = True  # TODO: is beneficial for convergence speed.
         if last_linear_layer_init_zero:
+            # TODO: policy init : 3
             # Locate the last linear layer and initialize its weights and biases to 0.
-            for _, layer in enumerate(reversed(self.head_policy.head_module)):
-                if isinstance(layer, nn.Linear):
-                    nn.init.zeros_(layer.weight)
-                    nn.init.zeros_(layer.bias)
-                    break
+            # for _, layer in enumerate(reversed(self.head_policy.head_module)):
+            #     if isinstance(layer, nn.Linear):
+            #         nn.init.zeros_(layer.weight)
+            #         nn.init.zeros_(layer.bias)
+            #         break
             for _, layer in enumerate(reversed(self.head_value.head_module)):
                 if isinstance(layer, nn.Linear):
                     nn.init.zeros_(layer.weight)
@@ -247,7 +252,9 @@ class WorldModel(nn.Module):
         outputs_wm = self.refresh_keys_values_with_initial_obs_tokens_for_init_infer(obs_tokens, buffer_action)
         self.obs_tokens = obs_tokens
 
-        return outputs_wm, self.decode_obs_tokens(), self.obs_tokens
+        # return outputs_wm, self.decode_obs_tokens(), self.obs_tokens
+        return outputs_wm, _, self.obs_tokens
+
 
     @torch.no_grad()
     def refresh_keys_values_with_initial_obs_tokens_for_init_infer(self, obs_tokens: torch.LongTensor, buffer_action=None) -> torch.FloatTensor:
@@ -547,6 +554,9 @@ class WorldModel(nn.Module):
 
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
         loss_policy = self.compute_cross_entropy_loss(outputs, labels_policy, batch, element='policy')
+        """torch.eq(labels_observations, logits_observations.argmax(-1)).sum().item() / labels_observations.shape[0]
+        F.cross_entropy(logits_observations, logits_observations.argmax(-1))
+        """
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
 
         return LossWithIntermediateLosses(loss_obs=loss_obs, loss_rewards=loss_rewards, loss_value=loss_value,
@@ -571,7 +581,7 @@ class WorldModel(nn.Module):
         mask_padding = rearrange(batch['mask_padding'], 'b t -> (b t)').unsqueeze(-1)
 
         loss_rewards = -(torch.log_softmax(logits_rewards, dim=1) * labels).sum(1)
-        loss_rewards = (loss_rewards * mask_padding.squeeze(-1)).mean()
+        loss_rewards = (loss_rewards * mask_padding.squeeze(-1).float()).mean()
 
         return loss_rewards
 

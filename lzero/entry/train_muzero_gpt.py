@@ -130,8 +130,9 @@ def train_muzero_gpt(
 
     import copy
     num_unroll_steps = copy.deepcopy(replay_buffer._cfg.num_unroll_steps)
-
+    collect_cnt = -1
     while True:
+        collect_cnt += 1
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         collect_kwargs = {}
         # set temperature for visit count distributions according to the train_iter,
@@ -171,37 +172,43 @@ def train_muzero_gpt(
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
-        # TODO
-        replay_buffer._cfg.num_unroll_steps = 1
-        batch_size = 256
-        # batch_size = 3
-        replay_buffer._cfg.batch_size = batch_size
-        policy._cfg.batch_size = batch_size  # policy._cfg.num_unroll_steps = 1
-        if collector.envstep > cfg.policy.tokenizer_start_after_envsteps:
-        # fixed
-        # if collector.envstep > cfg.policy.tokenizer_start_after_envsteps and collector.envstep < cfg.policy.transformer_start_after_envsteps:
-            # Learn policy from collected data.
-            # for i in range(cfg.policy.update_per_collect_tokenizer):
-            # for i in range(update_per_collect):
-            for _ in range(int(update_per_collect*0.5)):
-            # for _ in range(int(update_per_collect*0.1)):
-            # for _ in range(int(update_per_collect)):
-                # Learner will train ``update_per_collect`` times in one iteration.
-                if replay_buffer.get_num_of_transitions() > batch_size:
-                    train_data = replay_buffer.sample(batch_size, policy)
-                    train_data.append({'train_which_component':'tokenizer'})
-                else:
-                    logging.warning(
-                        f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                        f'batch_size: {batch_size}, '
-                        f'{replay_buffer} '
-                        f'continue to collect now ....'
-                    )
-                    break
-                # The core train steps for MCTS+RL algorithms.
-                log_vars = learner.train(train_data, collector.envstep)
+        # if collect_cnt % 3 == 0:
+        # if collect_cnt % 1 == 0:
+        if learner.train_iter <=  int(3e4) :  # 30K fixed
+
+            # TODO: 0, 2, 4 更新
+            replay_buffer._cfg.num_unroll_steps = 1
+            batch_size = 256
+            # batch_size = 3
+            replay_buffer._cfg.batch_size = batch_size
+            policy._cfg.batch_size = batch_size  # policy._cfg.num_unroll_steps = 1
+            if collector.envstep > cfg.policy.tokenizer_start_after_envsteps:
+                print(f'collect_cnt: {collect_cnt}, update tokenizer')
+            # fixed
+            # if collector.envstep > cfg.policy.tokenizer_start_after_envsteps and collector.envstep < cfg.policy.transformer_start_after_envsteps:
+                # Learn policy from collected data.
+                # for i in range(cfg.policy.update_per_collect_tokenizer):
+                # for i in range(update_per_collect):
+                # for _ in range(int(update_per_collect*0.5)):
+                # for _ in range(int(update_per_collect*0.1)):
+                for _ in range(int(update_per_collect)):
+                    # Learner will train ``update_per_collect`` times in one iteration.
+                    if replay_buffer.get_num_of_transitions() > batch_size:
+                        train_data = replay_buffer.sample(batch_size, policy)
+                        train_data.append({'train_which_component':'tokenizer'})
+                    else:
+                        logging.warning(
+                            f'The data in replay_buffer is not sufficient to sample a mini-batch: '
+                            f'batch_size: {batch_size}, '
+                            f'{replay_buffer} '
+                            f'continue to collect now ....'
+                        )
+                        break
+                    # The core train steps for MCTS+RL algorithms.
+                    log_vars = learner.train(train_data, collector.envstep)
 
         replay_buffer._cfg.num_unroll_steps = num_unroll_steps
+        # batch_size = 8 # for H5 pong, n_head=4, emdim=256
         batch_size = 32 # for H5 H10 cartpole; for H5 pong
         # batch_size = 8 # for H10 pong
         # batch_size = 5 # for debug

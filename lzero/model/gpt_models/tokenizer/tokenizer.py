@@ -85,9 +85,9 @@ class Tokenizer(nn.Module):
         # L1 loss
         reconstruction_loss = torch.abs(observations - reconstructions).mean()
         # TODO: for atari pong
-        # perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
+        perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
         # TODO: only for cartpole
-        perceptual_loss = torch.zeros_like(reconstruction_loss)
+        # perceptual_loss = torch.zeros_like(reconstruction_loss)
 
         return LossWithIntermediateLosses(commitment_loss=commitment_loss, reconstruction_loss=reconstruction_loss, perceptual_loss=perceptual_loss)
 

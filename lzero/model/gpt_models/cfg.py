@@ -89,6 +89,10 @@ cfg['world_model'] = {
                       'num_heads': 2,
                       'embed_dim': 128, # TODO：for atari H5
                       # 'embed_dim': 64, # TODO：for atari H10
+
+                      # 'num_heads': 4,
+                      # 'embed_dim': 256, # TODO：for atari H5
+
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
@@ -98,7 +102,8 @@ cfg['world_model'] = {
                       'support_size': 21,
                       'action_shape': 6,# TODO：for atari
                       # 'max_cache_size':500,
-                      'max_cache_size':5000,
+                      'max_cache_size':1000,
+                      # 'max_cache_size':5000,
                       "env_num":8,
                       }
 from easydict import EasyDict
