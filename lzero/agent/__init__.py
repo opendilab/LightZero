@@ -1,3 +1,4 @@
+from .alphazero import AlphaZeroAgent
 from .efficientzero import EfficientZeroAgent
 from .gumbel_muzero import GumbelMuZeroAgent
 from .muzero import MuZeroAgent
