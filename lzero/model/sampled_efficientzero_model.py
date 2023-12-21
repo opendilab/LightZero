@@ -182,6 +182,7 @@ class SampledEfficientZeroModel(nn.Module):
             self.reward_support_size,
             flatten_output_size_for_reward_head,
             downsample,
+            lstm_hidden_size=self.lstm_hidden_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             activation=activation,
             norm_type=norm_type
