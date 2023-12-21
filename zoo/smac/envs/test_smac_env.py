@@ -21,15 +21,12 @@ def test_samc():
     samc_env = SMACLZEnv(cfg)
     samc_env.seed(0)
     obs = samc_env.reset()
-    # assert obs.shape == (cfg.frame_stack, 84, 84)
-    act_dim = samc_env.action_space.n
-    i = 0
+    assert isinstance(obs, dict)
     while True:
-        # Both ``env.random_action()``, and utilizing ``np.random`` as well as action space,
-        # can generate legal random action.
-        random_action = samc_env.random_action()
+        random_action = np.random.randint(0, 6, size=(agent_num, ))
         timestep = samc_env.step(random_action)
-        assert timestep.obs.shape == (cfg.frame_stack, 84, 84)
+        assert isinstance(obs, dict)
+        assert set(['agent_state', 'global_state', 'agent_specifig_global_state']).issubset(timestep[0]['states'])
         assert timestep.reward.shape == (1, )
         if timestep.done:
             assert 'eval_episode_return' in timestep.info, timestep.info

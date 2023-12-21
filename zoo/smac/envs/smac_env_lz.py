@@ -505,7 +505,7 @@ class SMACLZEnv(SC2Env, BaseEnv):
         obs_marl['agent_specifig_global_state'] = np.concatenate((obs_marl['agent_state'], np.repeat(obs_marl['global_state'].reshape(1, -1), self.n_agents, axis=0)), axis=1)
         ori_obs['states'] = obs_marl
         return self.SMACTimestep(
-            obs=obs_marl, reward=reward.copy(), done=done, info=info, episode_steps=self._episode_steps
+            obs=ori_obs, reward=reward.copy(), done=done, info=info, episode_steps=self._episode_steps
         )
 
     def _process_actions(self, my_actions):
