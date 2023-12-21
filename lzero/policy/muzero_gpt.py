@@ -31,8 +31,8 @@ def configure_optimizer(model, learning_rate, weight_decay, exclude_submodules, 
     # Here, we make sure to exclude parameters from specified submodules when creating param_dict
     param_dict = {}
     for mn, m in model.named_modules():
-        if any(mn.startswith(module_name) for module_name in exclude_submodules):
-            continue  # skip parameters from excluded submodules
+        # if any(mn.startswith(module_name) for module_name in exclude_submodules):
+        #     continue  # skip parameters from excluded submodules
         for pn, p in m.named_parameters(recurse=False):
             fpn = f'{mn}.{pn}' if mn else pn  # full param name
             if not any(fpn.startswith(bl_module_name) for bl_module_name in blacklist_module_names):
@@ -312,13 +312,21 @@ class MuZeroGPTPolicy(Policy):
         #     )
 
         # TODO: nanoGPT optimizer
+        # self._optimizer_world_model = configure_optimizer(
+        #     model=self._model.world_model,
+        #     learning_rate=3e-3,
+        #     # learning_rate=1e-4,
+        #     weight_decay=self._cfg.weight_decay,
+        #     # weight_decay=0.01,
+        #     exclude_submodules=['tokenizer']
+        # )
         self._optimizer_world_model = configure_optimizer(
             model=self._model.world_model,
             learning_rate=3e-3,
             # learning_rate=1e-4,
             weight_decay=self._cfg.weight_decay,
             # weight_decay=0.01,
-            exclude_submodules=['tokenizer']
+            exclude_submodules=['none'] # NOTE
         )
 
         # self._optimizer_world_model = configure_optimizers(

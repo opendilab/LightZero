@@ -211,13 +211,16 @@ class WorldModel(nn.Module):
             act_tokens = obs_embeddings_or_act_tokens['act_tokens']
             num_steps = act_tokens.size(1)  # (B, T)
             # act_embeddings = self.act_embedder(act_tokens, num_steps, prev_steps)
-            act_embeddings = self.act_embedding_table(act_tokens.unsqueeze(-1))
+            act_embeddings = self.act_embedding_table(act_tokens)
 
             sequences = act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=act_tokens.device))
         else:
             obs_embeddings_and_act_tokens = obs_embeddings_or_act_tokens['obs_embeddings_and_act_tokens']
             # obs_embeddings: (B, L, K=16, E), act_tokens: (B, L, 1)
             obs_embeddings, act_tokens = obs_embeddings_and_act_tokens
+            if len(obs_embeddings.shape)==3: # for batch compute loss
+                obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1], 16, -1)
+
             num_steps = int(obs_embeddings.size(1)*(obs_embeddings.size(2)+1)) # L(k+1)
             assert num_steps <= self.config.max_tokens
             # Rearrange observation embeddings from (B, L, K, E) to (B, L*K, E)
@@ -227,24 +230,29 @@ class WorldModel(nn.Module):
             # (B, L, 1) -> (B, L, 1, E) 
             act_embeddings = self.act_embedding_table(act_tokens)
 
-            # 已知obs_embeddings的维度为 (B, L, K, E), act_tokens的维度为(B, L, 1, E) 我希望得到一个bs_act_embeddings向量的维度为 (B, L(K+1), E) 
-            # 而且让第2个维度的数据为：obs act, obs, act, ..., obs, act，即 L, 1, L,1 ... 这样的排列顺序
+            # 已知obs_embeddings的维度为 (B, L, K, E), act_embeddings的维度为(B, L, 1, E) 希望得到一个obs_act_embeddings向量的维度为 (B, L(K+1), E) 
+            # 而且让得到的obs_act_embeddings的第2个维度的数据为：obs act, obs, act, ..., obs, act，即 L, 1, L,1 ... 这样的排列顺序。请给出高效的实现，用中文回答
 
-            # 初始化目标张量
-            obs_act_embeddings = torch.empty(obs_embeddings.size(0), obs_embeddings.size(1) * (obs_embeddings.size(2) + 1), obs_embeddings.size(3))
+            B, L, K, E = obs_embeddings.size()
+            # _, _, _, _ = act_embeddings.size()
 
-            # 交错拼接obs和act
+            # 初始化一个新的空tensor，用于存放最终的拼接结果
+            obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=obs_embeddings.device)
+
+            # 对每一个序列长度L进行循环
             for i in range(L):
-                # 取出第i个obs_embedding
-                obs = obs_embeddings[:, i, :, :]  # (B, K, E)
-                # 取出第i个act_token
-                act = act_tokens[:, i, :, :]  # (B, 1, E)
-                # 在K和1之间交错拼接
-                combined = torch.cat((obs, act), dim=1)  # (B, K+1, E)
-                # 插入到目标张量中
-                obs_act_embeddings[:, i*(K+1):(i+1)*(K+1), :] = combined
+                # 获取当前时刻的obs和act embeddings
+                obs = obs_embeddings[:, i, :, :]  # Shape: (B, K, E)
+                act = act_embeddings[:, i, 0, :].unsqueeze(1)  # Shape: (B, 1, E), 补充维度以便拼接
 
-            print(obs_act_embeddings.shape)
+                # 交替拼接obs和act
+                obs_act = torch.cat([obs, act], dim=1)  # Shape: (B, K + 1, E)
+
+                # 将结果填充到最终的tensor中
+                obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
+
+            # 确保形状正确无误
+            # assert obs_act_embeddings.shape == (B, L * (K + 1), E)
 
             # Add positional embeddings
             sequences = obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device))
@@ -631,11 +639,22 @@ class WorldModel(nn.Module):
         >>> loss.backward()
         """
         logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o')
-
+        labels_observations = labels_observations.contiguous().view(-1, 64)
         # loss_obs = F.cross_entropy(logits_observations, labels_observations)
 
         # TODO: EZ consistency loss; TWM loss
-        loss_obs = self.negative_cosine_similarity(logits_observations, labels_observations.detach())
+        loss_obs = self.negative_cosine_similarity(logits_observations, labels_observations.detach())  # 2528 = 32 * 79 = 32, 5*16-1
+        # batch['mask_padding'] shape 32, 5
+        # loss_obs = (loss_obs* batch['mask_padding']).mean()
+
+        # Step 1: 扩展mask_padding
+        # 除去最后一个time step，每个time step 重复16次  NOTE检查shape是否reshape正确
+        mask_padding_expanded = batch['mask_padding'].unsqueeze(-1).repeat(1, 1, 16).reshape(32, -1)[:, :-1].contiguous().view(-1)
+
+        # Step 4: 应用mask到loss_obs
+        # 使用inverted mask，因为我们想要保留非padding的loss
+        loss_obs = (loss_obs * mask_padding_expanded).mean(-1)
+
 
         # loss_ends = F.cross_entropy(rearrange(outputs.logits_ends, 'b t e -> (b t) e'), labels_ends)
 
@@ -670,20 +689,22 @@ class WorldModel(nn.Module):
         labels = labels.reshape(-1, labels.shape[-1])  # Assuming labels originally has shape [b, t, reward_dim]
 
         # Reshape your mask. True means valid data.
-        mask_padding = rearrange(batch['mask_padding'], 'b t -> (b t)').unsqueeze(-1)
+        mask_padding = rearrange(batch['mask_padding'], 'b t -> (b t)')
 
         loss_rewards = -(torch.log_softmax(logits_rewards, dim=1) * labels).sum(1)
-        loss_rewards = (loss_rewards * mask_padding.squeeze(-1).float()).mean()
+        # loss_rewards = (loss_rewards * mask_padding.squeeze(-1).float()).mean()
+        loss_rewards = (loss_rewards * mask_padding).mean()
+
 
         return loss_rewards
 
-    def compute_labels_world_model(self, obs_tokens: torch.Tensor, rewards: torch.Tensor, ends: torch.Tensor,
+    def compute_labels_world_model(self, obs_embeddings: torch.Tensor, rewards: torch.Tensor, ends: torch.Tensor,
                                    mask_padding: torch.BoolTensor) -> Tuple[
         torch.Tensor, torch.Tensor, torch.Tensor]:
         assert torch.all(ends.sum(dim=1) <= 1)  # each sequence sample has at most 1 done
         mask_fill = torch.logical_not(mask_padding)
-        labels_observations = rearrange(obs_tokens.masked_fill(mask_fill.unsqueeze(-1).expand_as(obs_tokens), -100),
-                                        'b t k -> b (t k)')[:, 1:]
+        labels_observations = obs_embeddings.contiguous().view(rewards.shape[0], -1, 64)[:, 1:]
+
 
         # labels_rewards = (rewards.sign() + 1).masked_fill(mask_fill, -100).long()  # Rewards clipped to {-1, 0, 1} TODO(pu)
 
@@ -691,7 +712,7 @@ class WorldModel(nn.Module):
         labels_rewards = rewards.masked_fill(mask_fill_rewards, -100)
 
         labels_ends = ends.masked_fill(mask_fill, -100)
-        return labels_observations.reshape(-1), labels_rewards.reshape(-1, self.support_size), labels_ends.reshape(-1)
+        return labels_observations, labels_rewards.reshape(-1, self.support_size), labels_ends.reshape(-1)
 
     def compute_labels_world_model_value_policy(self, target_value: torch.Tensor, target_policy: torch.Tensor,
                                                 mask_padding: torch.BoolTensor) -> Tuple[
