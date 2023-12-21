@@ -64,3 +64,25 @@ class Embedder(nn.Module):
             # except:
             #     print('debug')
         return output
+
+class ActEmbedder(nn.Module):
+    def __init__(self, max_blocks: int, block_masks: List[torch.Tensor], embedding_tables: List[nn.Embedding]) -> None:
+        super().__init__()
+        assert len(block_masks) == len(embedding_tables)
+        # assert (sum(block_masks) == 1).all()  # block mask are a partition of a block
+        self.embedding_dim = embedding_tables[0].embedding_dim
+        assert all([e.embedding_dim == self.embedding_dim for e in embedding_tables])
+        self.embedding_tables = embedding_tables
+        self.slicers = [Slicer(max_blocks, block_mask) for block_mask in block_masks]
+
+    def forward(self, tokens: torch.Tensor, num_steps: int, prev_steps: int) -> torch.Tensor:
+        assert tokens.ndim == 2  # x is (B, T)
+        output = torch.zeros(*tokens.size(), self.embedding_dim, device=tokens.device)
+        for slicer, emb in zip(self.slicers, self.embedding_tables):
+            s = slicer.compute_slice(num_steps, prev_steps)
+            output[:, s] = emb(tokens[:, s])
+            # try:
+            #     output[:, s] = emb(tokens[:, s])
+            # except:
+            #     print('debug')
+        return output

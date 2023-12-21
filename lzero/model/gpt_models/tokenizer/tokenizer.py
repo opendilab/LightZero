@@ -85,9 +85,9 @@ class Tokenizer(nn.Module):
         # L1 loss
         reconstruction_loss = torch.abs(observations - reconstructions).mean()
         # TODO: for atari pong
-        perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
-        # TODO: only for cartpole
-        # perceptual_loss = torch.zeros_like(reconstruction_loss)
+        # perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
+        # TODO: NOTE only for cartpole
+        perceptual_loss = torch.zeros_like(reconstruction_loss)
 
         return LossWithIntermediateLosses(commitment_loss=commitment_loss, reconstruction_loss=reconstruction_loss, perceptual_loss=perceptual_loss)
 
@@ -102,7 +102,6 @@ class Tokenizer(nn.Module):
         # perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
         # rec_img = self.postprocess_output(reconstructions)
         # # only for debug
-
 
         shape = x.shape  # (..., C, H, W)
         x = x.view(-1, *shape[-3:])
@@ -121,6 +120,42 @@ class Tokenizer(nn.Module):
         tokens = tokens.reshape(*shape[:-3], -1)
 
         return TokenizerEncoderOutput(z, z_q, tokens)
+
+    def encode_to_obs_embeddings(self, x: torch.Tensor, should_preprocess: bool = False):
+        if should_preprocess:
+            x = self.preprocess_input(x)
+        
+        # # only for debug
+        # observations = x
+        # z, z_quantized, reconstructions = self(observations, should_preprocess=False, should_postprocess=False)
+        # reconstruction_loss = torch.abs(observations - reconstructions).mean()
+        # perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
+        # rec_img = self.postprocess_output(reconstructions)
+        # # only for debug
+
+        shape = x.shape  # (..., C, H, W)
+        x = x.view(-1, *shape[-3:])
+        z = self.encoder(x)
+        z = self.pre_quant_conv(z)
+        b, e, h, w = z.shape
+        # z_flattened = rearrange(z, 'b e h w -> (b h w) e')
+        # dist_to_embeddings = torch.sum(z_flattened ** 2, dim=1, keepdim=True) + torch.sum(self.embedding.weight**2, dim=1) - 2 * torch.matmul(z_flattened, self.embedding.weight.t())
+
+        # tokens = dist_to_embeddings.argmin(dim=-1)
+        # z_q = rearrange(self.embedding(tokens), '(b h w) e -> b e h w', b=b, e=e, h=h, w=w).contiguous()
+
+        # Reshape to original
+        # z = z.reshape(*shape[:-3], *z.shape[1:])
+        # return z
+
+        # z_q = z_q.reshape(*shape[:-3], *z_q.shape[1:])
+        # tokens = tokens.reshape(*shape[:-3], -1)
+
+        # obs_embeddings = z.reshape(*shape[:-3], -1, e)
+        obs_embeddings = rearrange(z, 'b e h w -> b (h w) e')  # 3, 16, 64
+
+
+        return obs_embeddings
 
     def decode(self, z_q: torch.Tensor, should_postprocess: bool = False) -> torch.Tensor:
         shape = z_q.shape  # (..., E, h, w)
