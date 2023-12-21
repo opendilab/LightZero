@@ -67,6 +67,7 @@ class WorldModel(nn.Module):
         # value_policy_tokens_pattern = torch.zeros(config.tokens_per_block)
         # value_policy_tokens_pattern[-1] = 1  # [0,...,0,1]
 
+        obs_per_embdding_dim=config.embed_dim
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim)
 
         self.embedder = Embedder(
@@ -92,7 +93,7 @@ class WorldModel(nn.Module):
         #         nn.Linear(config.embed_dim, obs_vocab_size)
         #     )
         # )
-        self.obs_per_embdding_dim = 64 # 16*64=1024
+        self.obs_per_embdding_dim = config.embed_dim # 16*64=1024
         self.head_observations = Head( # TODO
             max_blocks=config.max_blocks,
             block_mask=all_but_last_obs_tokens_pattern, # 1,...,0,1 # https://github.com/eloialonso/iris/issues/19
@@ -125,7 +126,6 @@ class WorldModel(nn.Module):
             )
         )
 
-        obs_per_embdding_dim = 64 # 16*64=1024
         self.head_observations_for_root = Head( # TODO
             max_blocks=config.max_blocks,
             block_mask=obs_tokens_pattern,  # 1,...,1,0
@@ -222,7 +222,7 @@ class WorldModel(nn.Module):
                 obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1], 16, -1)
 
             num_steps = int(obs_embeddings.size(1)*(obs_embeddings.size(2)+1)) # L(k+1)
-            assert num_steps <= self.config.max_tokens
+            # assert num_steps <= self.config.max_tokens
             # Rearrange observation embeddings from (B, L, K, E) to (B, L*K, E)
             # obs_embeddings = rearrange(obs_embeddings, 'b l k e -> b (l k) e')
 

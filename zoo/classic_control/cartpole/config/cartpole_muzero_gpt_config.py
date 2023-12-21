@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(5)
 # torch.cuda.empty_cache()
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -23,7 +23,7 @@ reanalyze_ratio = 0
 # num_unroll_steps = 5
 
 batch_size = 32
-num_unroll_steps = 10
+num_unroll_steps = 5
 
 
 
@@ -46,7 +46,7 @@ num_unroll_steps = 10
 cartpole_muzero_gpt_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer: lpips loss
-    exp_name=f'data_mz_gpt_ctree_1219/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs50_batch8_obs-token-lw2_recons-obs_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_multistep_initinfer-targetv-unroll{num_unroll_steps}_seed0',
+    exp_name=f'data_mz_gpt_ctree_1220/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_seed0',
 
     # exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs50_batch8_obs-token-lw2_recons-obs_bs{batch_size}_indep0_trans-wd0.01_pt2_argmaxtoken_orig-sdpa_onestep_seed0',
     # exp_name=f'data_mz_gpt_ctree_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_batch8_obs-token-lw2_recons-obs_bs{batch_size}_indep0_trans-wd0.01_pt2_argmaxtokenp_seed0',
