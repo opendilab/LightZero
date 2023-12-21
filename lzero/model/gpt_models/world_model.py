@@ -130,8 +130,8 @@ class WorldModel(nn.Module):
             head_module=nn.Sequential(
                 # nn.BatchNorm1d(config.embed_dim), # TODO: 1
                 nn.Linear(config.embed_dim, config.embed_dim),
-                nn.ReLU(),
-                # nn.LeakyReLU(negative_slope=0.01), # TODO: 2
+                # nn.ReLU(),
+                nn.LeakyReLU(negative_slope=0.01), # TODO: 2
                 nn.Linear(config.embed_dim, self.support_size)  # TODO(pu): action shape
             )
         )
