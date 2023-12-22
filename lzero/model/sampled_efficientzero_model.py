@@ -405,7 +405,10 @@ class SampledEfficientZeroModel(nn.Module):
                 ) / self.action_space_size
         else:
             # continuous action space
-            if len(action.shape) == 2:
+            if len(action.shape) == 3:
+                # <Added condition>
+                action = action.unsqueeze(-1)
+            elif len(action.shape) == 2:
                 # (batch_size, action_dim) -> (batch_size, action_dim, 1, 1)
                 # e.g.,  torch.Size([8, 2]) ->  torch.Size([8, 2, 1, 1])
                 action = action.unsqueeze(-1).unsqueeze(-1)
