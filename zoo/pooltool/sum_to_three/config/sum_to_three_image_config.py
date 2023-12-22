@@ -9,7 +9,7 @@ evaluator_env_num = 6
 K = 15  # num_of_sampled_actions
 num_simulations = 35
 update_per_collect = None
-batch_size = 128
+batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.0
 eval_freq = 1000
@@ -22,8 +22,6 @@ sumtothree_cont_sampled_efficientzero_config = dict(
     env=dict(
         env_name="PoolTool-SumToThree-Image",
         env_type="not_board_games",
-        continuous=True,
-        manually_discretization=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -33,11 +31,15 @@ sumtothree_cont_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(1, 20, 10),
+            observation_shape=(1, 200, 100),
             action_space_size=2,
             continuous_action_space=True,
+            categorical_distribution=False,
             num_of_sampled_actions=K,
+            sigma_type="conditioned",
             model_type="conv",
+            lstm_hidden_size=512,
+            latent_state_dim=512,
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
             norm_type="BN",
@@ -50,8 +52,6 @@ sumtothree_cont_sampled_efficientzero_config = dict(
         optim_type="Adam",
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        # NOTE: this parameter is important for stability in bipedalwalker.
-        grad_clip_value=0.5,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
         num_simulations=num_simulations,
@@ -73,8 +73,7 @@ sumtothree_cont_sampled_efficientzero_create_config = dict(
         type="pooltool_sumtothree_image",
         import_names=["zoo.pooltool.sum_to_three.envs.sum_to_three_image_env"],
     ),
-    #env_manager=dict(type="subprocess"),
-    env_manager=dict(type='base'),
+    env_manager=dict(type="subprocess"),
     policy=dict(
         type="sampled_efficientzero",
         import_names=["lzero.policy.sampled_efficientzero"],
