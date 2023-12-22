@@ -11,7 +11,7 @@ from ding.envs import NoopResetWrapper, MaxAndSkipWrapper, EpisodicLifeWrapper, 
     ClipRewardWrapper, FrameStackWrapper
 from ding.utils.compression_helper import jpeg_data_compressor
 from easydict import EasyDict
-from gym.wrappers import RecordVideo
+from gymnasium.wrappers import RecordVideo
 
 
 # only for reference now
@@ -93,8 +93,17 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
     if config.render_mode_human:
         env = gymnasium.make(config.env_name, render_mode='human')
     else:
-        env = gymnasium.make(config.env_name)
+        env = gymnasium.make(config.env_name, render_mode='rgb_array')
     assert 'NoFrameskip' in env.spec.id
+    if config.save_replay:
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        video_name = f'{env.spec.id}-video-{timestamp}'
+        env = RecordVideo(
+            env,
+            video_folder=config.replay_path,
+            episode_trigger=lambda episode_id: True,
+            name_prefix=video_name
+        )
     env = GymnasiumToGymWrapper(env)
     env = NoopResetWrapper(env, noop_max=30)
     env = MaxAndSkipWrapper(env, skip=config.frame_skip)
@@ -108,15 +117,6 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
         env = ScaledFloatFrameWrapper(env)
     if clip_rewards:
         env = ClipRewardWrapper(env)
-    if config.save_replay:
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        video_name = f'{env.spec.id}-video-{timestamp}'
-        env = RecordVideo(
-            env,
-            video_folder=config.replay_path,
-            episode_trigger=lambda episode_id: True,
-            name_prefix=video_name
-        )
 
     env = JpegWrapper(env, transform2string=config.transform2string)
     if config.game_wrapper:
