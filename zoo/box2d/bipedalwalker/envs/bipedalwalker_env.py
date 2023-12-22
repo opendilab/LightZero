@@ -178,7 +178,7 @@ class BipedalWalkerEnv(CartPoleEnv):
     @staticmethod
     def display_frames_as_gif(frames: list, path: str) -> None:
         import imageio
-        imageio.mimsave(path, frames, duration=50)
+        imageio.mimsave(path, frames, fps=20)
 
     def random_action(self) -> np.ndarray:
         random_action = self.action_space.sample()
