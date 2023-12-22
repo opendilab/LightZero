@@ -81,7 +81,7 @@ class LunarLanderEnv(CartPoleEnv):
             - obs (:obj:`np.ndarray`): The initial observation after resetting.
         """
         if not self._init_flag:
-            self._env = gym.make(self._cfg.env_name)
+            self._env = gym.make(self._cfg.env_name, render_mode="rgb_array")
             if self._replay_path is not None:
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 video_name = f'{self._env.spec.id}-video-{timestamp}'
@@ -133,7 +133,7 @@ class LunarLanderEnv(CartPoleEnv):
         if self._act_scale:
             action = affine_transform(action, min_val=-1, max_val=1)
         if self._save_replay_gif:
-            self._frames.append(self._env.render(mode='rgb_array'))
+            self._frames.append(self._env.render())
 
         obs, rew, terminated, truncated, info = self._env.step(action)
         done = terminated or truncated
@@ -174,7 +174,7 @@ class LunarLanderEnv(CartPoleEnv):
     @staticmethod
     def display_frames_as_gif(frames: list, path: str) -> None:
         import imageio
-        imageio.mimsave(path, frames, fps=20)
+        imageio.mimsave(path, frames, duration=50)
 
     def random_action(self) -> np.ndarray:
         random_action = self.action_space.sample()

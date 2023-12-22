@@ -4,6 +4,7 @@ import gymnasium as gym
 import copy
 import os
 import numpy as np
+from itertools import product
 from ding.envs import BaseEnvTimestep
 from ding.envs import ObsPlusPrevActRewWrapper
 from ding.envs.common import affine_transform
@@ -83,7 +84,7 @@ class LunarLanderDiscEnv(LunarLanderEnv):
             - info_dict (:obj:`Dict[str, Any]`): Including observation, action_mask, and to_play label.
         """
         if not self._init_flag:
-            self._env = gym.make(self._cfg.env_name)
+            self._env = gym.make(self._cfg.env_name, render_mode="rgb_array")
             if self._replay_path is not None:
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 video_name = f'{self._env.spec.id}-video-{timestamp}'
@@ -146,7 +147,7 @@ class LunarLanderDiscEnv(LunarLanderEnv):
         if self._act_scale:
             action = affine_transform(action, min_val=-1, max_val=1)
         if self._save_replay_gif:
-            self._frames.append(self._env.render(mode='rgb_array'))
+            self._frames.append(self._env.render())
         obs, rew, terminated, truncated, info = self._env.step(action)
         done = terminated or truncated
 
