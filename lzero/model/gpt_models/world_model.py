@@ -44,7 +44,9 @@ class WorldModel(nn.Module):
         self.config = config
 
         self.transformer = Transformer(config)
-        self.num_observations_tokens = 16
+        # self.num_observations_tokens = 16
+        self.num_observations_tokens = config.tokens_per_block -1
+
         self.device = config.device
         self.support_size = config.support_size
         self.action_shape = config.action_shape
@@ -69,6 +71,9 @@ class WorldModel(nn.Module):
 
         obs_per_embdding_dim=config.embed_dim
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim)
+        if self.num_observations_tokens == 1:
+            self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim*16)  # 1024
+
 
         self.embedder = Embedder(
             max_blocks=config.max_blocks,
@@ -188,6 +193,24 @@ class WorldModel(nn.Module):
         # NOTE
         self.keys_values_wm = self.transformer.generate_empty_keys_values(n=8, max_tokens=self.config.max_tokens)
 
+        self.projection_input_dim = 128
+        self.proj_hid = 1024
+        self.proj_out = 1024
+        self.pred_hid = 512
+        self.pred_out = 1024
+        activation = nn.ReLU()
+        self.projection = nn.Sequential(
+                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
+            )
+        self.prediction_head = nn.Sequential(
+            nn.Linear(self.proj_out, self.pred_hid),
+            nn.BatchNorm1d(self.pred_hid),
+            activation,
+            nn.Linear(self.pred_hid, self.pred_out),
+        )
+
 
     def __repr__(self) -> str:
         return "world_model"
@@ -219,7 +242,7 @@ class WorldModel(nn.Module):
             # obs_embeddings: (B, L, K=16, E), act_tokens: (B, L, 1)
             obs_embeddings, act_tokens = obs_embeddings_and_act_tokens
             if len(obs_embeddings.shape)==3: # for batch compute loss
-                obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1], 16, -1)
+                obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1], self.num_observations_tokens, -1)
 
             num_steps = int(obs_embeddings.size(1)*(obs_embeddings.size(2)+1)) # L(k+1)
             # assert num_steps <= self.config.max_tokens
@@ -323,10 +346,10 @@ class WorldModel(nn.Module):
         # _, num_observations_tokens = obs_tokens.shape
 
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(observations, should_preprocess=True) # (B, C, H, W) -> (B, K, E)
-        num_observations_tokens = obs_embeddings.shape[1]
+        # num_observations_tokens = obs_embeddings.shape[1]
 
-        if self.num_observations_tokens is None:
-            self._num_observations_tokens = num_observations_tokens
+        # if self.num_observations_tokens is None:
+        #     self._num_observations_tokens = num_observations_tokens
 
         # outputs_wm = self.refresh_keys_values_with_initial_obs_tokens_for_init_infer(obs_tokens, buffer_action)
         outputs_wm = self.refresh_keys_values_with_initial_obs_tokens_for_init_infer(obs_embeddings, buffer_action)
@@ -639,17 +662,25 @@ class WorldModel(nn.Module):
         >>> loss.backward()
         """
         logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o')
-        labels_observations = labels_observations.contiguous().view(-1, 64)
+        labels_observations = labels_observations.contiguous().view(-1, self.projection_input_dim)  # TODO:
         # loss_obs = F.cross_entropy(logits_observations, labels_observations)
 
         # TODO: EZ consistency loss; TWM loss
-        loss_obs = self.negative_cosine_similarity(logits_observations, labels_observations.detach())  # 2528 = 32 * 79 = 32, 5*16-1
+        # loss_obs = self.negative_cosine_similarity(logits_observations, labels_observations.detach())  # 2528 = 32 * 79 = 32, 5*16-1
+        
+        
+        obs_projection = self.projection(logits_observations)
+        obs_prediction = self.prediction_head(obs_projection)
+        obs_target =  self.projection(labels_observations).detach()
+        loss_obs = self.negative_cosine_similarity(obs_prediction, obs_target)
+
+        
         # batch['mask_padding'] shape 32, 5
         # loss_obs = (loss_obs* batch['mask_padding']).mean()
 
         # Step 1: 扩展mask_padding
         # 除去最后一个time step，每个time step 重复16次  NOTE检查shape是否reshape正确
-        mask_padding_expanded = batch['mask_padding'].unsqueeze(-1).repeat(1, 1, 16).reshape(32, -1)[:, :-1].contiguous().view(-1)
+        mask_padding_expanded = batch['mask_padding'].unsqueeze(-1).repeat(1, 1, self.num_observations_tokens).reshape(32, -1)[:, :-1].contiguous().view(-1)
 
         # Step 4: 应用mask到loss_obs
         # 使用inverted mask，因为我们想要保留非padding的loss
@@ -703,7 +734,7 @@ class WorldModel(nn.Module):
         torch.Tensor, torch.Tensor, torch.Tensor]:
         assert torch.all(ends.sum(dim=1) <= 1)  # each sequence sample has at most 1 done
         mask_fill = torch.logical_not(mask_padding)
-        labels_observations = obs_embeddings.contiguous().view(rewards.shape[0], -1, 64)[:, 1:]
+        labels_observations = obs_embeddings.contiguous().view(rewards.shape[0], -1, self.projection_input_dim)[:, 1:] # self.projection_input_dim
 
 
         # labels_rewards = (rewards.sign() + 1).masked_fill(mask_fill, -100).long()  # Rewards clipped to {-1, 0, 1} TODO(pu)

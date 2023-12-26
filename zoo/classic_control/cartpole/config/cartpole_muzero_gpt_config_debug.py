@@ -55,8 +55,8 @@ cartpole_muzero_gpt_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        collect_max_episode_steps=int(20),
-        eval_max_episode_steps=int(20),
+        collect_max_episode_steps=int(10),
+        eval_max_episode_steps=int(10),
     ),
     policy=dict(
         model_path=None,
