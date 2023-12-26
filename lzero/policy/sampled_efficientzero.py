@@ -332,7 +332,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
         # shape: (batch_size, num_unroll_steps, action_dim)
         # NOTE: .float(), in continuous action space.
-        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).float().unsqueeze(-1)
+        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).float()
         data_list = [
             mask_batch,
             target_value_prefix.astype('float32'),
@@ -343,8 +343,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # ==============================================================
         # sampled related core code
         # ==============================================================
-        # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim, 1), e.g. (4, 6, 5, 1, 1)
-        child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device).unsqueeze(-1)
+        # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim), e.g. (4, 6, 5, 1)
+        child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device)
 
         target_value_prefix = target_value_prefix.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
@@ -625,9 +625,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             # Set target_policy_entropy to 0 if all rows are masked
             target_policy_entropy = 0
 
-        # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1) -> (batch_size,
-        # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2, 1) ->  (4, 20, 2)
-        target_sampled_actions = child_sampled_actions_batch[:, unroll_step].squeeze(-1)
+        # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim) -> (batch_size,
+        # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2) ->  (4, 20, 2)
+        target_sampled_actions = child_sampled_actions_batch[:, unroll_step]
 
         policy_entropy = dist.entropy().mean()
         policy_entropy_loss = -dist.entropy()
@@ -724,9 +724,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         target_dist = Categorical(target_normalized_visit_count_masked)
         target_policy_entropy = target_dist.entropy().mean()
 
-        # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1) -> (batch_size,
-        # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2, 1) ->  (4, 20, 2)
-        target_sampled_actions = child_sampled_actions_batch[:, unroll_step].squeeze(-1)
+        # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim) -> (batch_size,
+        # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2) ->  (4, 20, 2)
+        target_sampled_actions = child_sampled_actions_batch[:, unroll_step]
 
         policy_entropy = dist.entropy().mean()
         policy_entropy_loss = -dist.entropy()
