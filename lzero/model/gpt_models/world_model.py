@@ -70,9 +70,8 @@ class WorldModel(nn.Module):
         # value_policy_tokens_pattern[-1] = 1  # [0,...,0,1]
 
         obs_per_embdding_dim=config.embed_dim
+
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim)
-        if self.num_observations_tokens == 1:
-            self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim*16)  # 1024
 
 
         self.embedder = Embedder(
@@ -193,7 +192,11 @@ class WorldModel(nn.Module):
         # NOTE
         self.keys_values_wm = self.transformer.generate_empty_keys_values(n=8, max_tokens=self.config.max_tokens)
 
-        self.projection_input_dim = 128
+        if self.num_observations_tokens==16:
+            self.projection_input_dim = 128
+        elif self.num_observations_tokens==1:
+            self.projection_input_dim = 1024
+
         self.proj_hid = 1024
         self.proj_out = 1024
         self.pred_hid = 512

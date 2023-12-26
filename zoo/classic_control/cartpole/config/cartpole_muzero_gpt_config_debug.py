@@ -25,10 +25,10 @@ torch.cuda.set_device(0)
 collector_env_num = 4
 n_episode = 4
 evaluator_env_num = 1
-num_simulations = 5
+num_simulations = 1
 update_per_collect = None
 model_update_ratio = 0.01
-batch_size = 32
+batch_size = 5
 max_env_step = int(2e5)
 reanalyze_ratio = 0
 num_unroll_steps = 5
@@ -55,8 +55,8 @@ cartpole_muzero_gpt_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        collect_max_episode_steps=int(10),
-        eval_max_episode_steps=int(10),
+        collect_max_episode_steps=int(6),
+        eval_max_episode_steps=int(6),
     ),
     policy=dict(
         model_path=None,
@@ -84,8 +84,8 @@ cartpole_muzero_gpt_config = dict(
             value_support_size=21,
             support_scale=10,
         ),
-        # cuda=True,
-        cuda=False,
+        cuda=True,
+        # cuda=False,
         env_type='not_board_games',
         game_segment_length=50,
         model_update_ratio=model_update_ratio,

@@ -30,8 +30,11 @@ cfg['world_model'] = {
                       'num_heads': 2,
                       # 'num_layers': 10,# TODO：for atari
                       'num_layers': 2, # TODO：for debug
-                      # 'embed_dim': 128, # TODO: for cartpole
-                      'embed_dim': 64, # TODO: for cartpole
+                      
+                      # 'embed_dim': 64, # TODO: for cartpole
+                      'embed_dim': 1024, # TODO: for cartpole
+
+
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
