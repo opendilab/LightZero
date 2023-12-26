@@ -2,14 +2,65 @@
 from __future__ import annotations
 
 import copy
-from typing import List
+import random
+from typing import Any, Dict, List
 
+import attrs
 import numpy as np
 from ding.envs import BaseEnv
 from easydict import EasyDict
 from gym import spaces
+from numpy.typing import NDArray
 
-class BasePoolToolEnv(BaseEnv):
+import pooltool as pt
+
+ObservationDict = Dict[str, Any]
+
+
+@attrs.define
+class Spaces:
+    observation: spaces.Space
+    action: spaces.Space
+    reward: spaces.Space
+
+
+@attrs.define
+class PoolToolGym(pt.State):
+    spaces: Spaces
+
+    def observation(self) -> ObservationDict:
+        return dict(
+            observation=self.observation_array(),
+            action_mask=None,
+            to_play=-1,
+        )
+
+    def scale_action(self, action: NDArray[np.float32]) -> NDArray[np.float32]:
+        """Scale the action from [-1, 1] to the given range [low, high]"""
+        low = self.spaces.action.low  # type: ignore
+        high = self.spaces.action.high  # type: ignore
+        assert np.all(action >= -1) and np.all(action <= 1), f"{action=}"
+        scaled_action = low + (0.5 * (action + 1.0) * (high - low))
+        return np.clip(scaled_action, low, high)
+
+    def simulate(self) -> None:
+        """Simulate the system"""
+        pt.simulate(self.system, inplace=True, max_events=200)
+        self.game.process_shot(self.system)
+        self.game.advance(self.system)
+
+    def seed(self, seed_value: int) -> None:
+        random.seed(seed_value)
+        np.random.seed(seed_value)
+
+    def observation_array(self) -> Any:
+        raise NotImplementedError("Inheriting classes must define this")
+
+    def set_action(self, scaled_action: NDArray[np.float32]) -> None:
+        raise NotImplementedError("Inheriting classes must define this")
+
+
+class PoolToolEnv(BaseEnv):
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
         self._seed = seed
         self._dynamic_seed = dynamic_seed

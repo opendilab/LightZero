@@ -9,19 +9,23 @@ evaluator_env_num = 6
 K = 15  # num_of_sampled_actions
 num_simulations = 35
 update_per_collect = None
-batch_size = 256
+batch_size = 128
 max_env_step = int(5e6)
 reanalyze_ratio = 0.0
 eval_freq = 1000
+px = 10
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
+
+assert (px % 2) == 0, "Choose an even px value"
 
 sumtothree_cont_sampled_efficientzero_config = dict(
     exp_name=f"data_pooltool_ctree/sumtothree_image_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0",
     env=dict(
         env_name="PoolTool-SumToThree-Image",
         env_type="not_board_games",
+        px=px,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -31,7 +35,7 @@ sumtothree_cont_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(1, 200, 100),
+            observation_shape=(1, px, px // 2),
             action_space_size=2,
             continuous_action_space=True,
             categorical_distribution=False,
@@ -73,7 +77,8 @@ sumtothree_cont_sampled_efficientzero_create_config = dict(
         type="pooltool_sumtothree_image",
         import_names=["zoo.pooltool.sum_to_three.envs.sum_to_three_image_env"],
     ),
-    env_manager=dict(type="subprocess"),
+    #env_manager=dict(type="subprocess"),
+    env_manager=dict(type="base"),
     policy=dict(
         type="sampled_efficientzero",
         import_names=["lzero.policy.sampled_efficientzero"],

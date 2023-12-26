@@ -1,28 +1,191 @@
 from __future__ import annotations
 
 import gc
-import shutil
-from pathlib import Path
+from typing import Any, Dict
 
 import attrs
 import numpy as np
 from ding.envs import BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
+from gym import spaces
 from numpy.typing import NDArray
-from zoo.pooltool.datatypes import BasePoolToolEnv
-
-from pooltool import FrameStepper, ImageZip, image_stack
-from pooltool.ai.bot.sumtothree_rl.coordinate_based import (
-    calc_reward,
-    reset_single_player_env,
-    single_player_env,
+from zoo.pooltool.datatypes import (
+    ObservationDict,
+    PoolToolEnv,
+    PoolToolGym,
+    Spaces,
 )
-from pooltool.ai.datatypes import LightZeroEnv, ObservationDict
-from pooltool.ani.camera import camera_states
-from pooltool.ani.image.utils import gif
+
+import pooltool as pt
+import pooltool.constants as const
 
 # from pooltool.system.datatypes import MultiSystem
+
+
+def calc_reward(state: pt.State) -> float:
+    """Calculate the reward
+
+    A point is scored when both:
+
+        (1) The player contacts the object ball with the cue ball
+        (2) The sum of contacted rails by either balls is 3
+
+    This reward is designed to offer a small reward for contacting the object ball, and
+    a larger reward for scoring a point.
+    """
+    if not state.game.shot_info.turn_over:
+        return 1.0
+
+    if len(pt.filter_type(state.system.events, pt.EventType.BALL_BALL)):
+        return 0.1
+
+    return 0.0
+
+
+BALL_DIM = 2
+
+
+@attrs.define
+class SumToThreeGym(PoolToolGym):
+    def _slice(self, ball_idx: int) -> slice:
+        return slice(ball_idx * BALL_DIM, (ball_idx + 1) * BALL_DIM)
+
+    def _null_obs(self) -> NDArray[np.float32]:
+        return np.empty(len(self.system.balls) * BALL_DIM, dtype=np.float32)
+
+    def set_action(self, scaled_action: NDArray[np.float32]) -> None:
+        self.system.cue.set_state(
+            V0=scaled_action[0],
+            phi=pt.aim.at_ball(self.system, "object", cut=scaled_action[1]),
+        )
+
+    def observation_array(self) -> NDArray[np.float32]:
+        """Return the system state as a 1D array of ball coordinates"""
+        obs = self._null_obs()
+        for ball_idx, ball_id in enumerate(self.system.balls.keys()):
+            obs[self._slice(ball_idx)] = self.system.balls[ball_id].state.rvw[
+                0, :BALL_DIM
+            ]
+
+        return obs
+
+    def set_observation(self, obs: NDArray[np.float32]) -> None:
+        """Set the system state from an observation array"""
+        for ball_idx, ball_id in enumerate(self.system.balls.keys()):
+            self.system.balls[ball_id].state.rvw[0, :BALL_DIM] = obs[
+                self._slice(ball_idx)
+            ]
+
+    @staticmethod
+    def get_obs_space(balls: Dict[str, pt.Ball], table: pt.Table) -> Any:
+        table_length = table.l
+        table_width = table.l
+        ball_radius = balls["cue"].params.R
+
+        xmin, ymin = ball_radius, ball_radius
+        xmax, ymax = table_width - ball_radius, table_length - ball_radius
+
+        return spaces.Box(
+            low=np.array([xmin, ymin] * len(balls), dtype=np.float32),
+            high=np.array([xmax, ymax] * len(balls), dtype=np.float32),
+            shape=(BALL_DIM * len(balls),),
+            dtype=np.float32,
+        )
+
+    def reset(self) -> None:
+        if len(self.game.players) == 1:
+            self.reset_single_player_env()
+        else:
+            raise NotImplementedError()
+
+    def reset_single_player_env(self) -> None:
+        """Reset things to an initial state"""
+        del self.game
+        self.game = pt.get_ruleset(pt.GameType.SUMTOTHREE)(
+            players=[pt.Player("Player 1")],
+            win_condition=-1,  # type: ignore
+        )
+
+        R = self.system.balls["cue"].params.R
+
+        cue_pos = (
+            self.system.table.w / 2,
+            self.system.table.l / 4,
+            R,
+        )
+
+        object_pos = (
+            self.system.table.w / 2,
+            self.system.table.l * 3 / 4,
+            R,
+        )
+
+        self.system.reset_history()
+        self.system.stop_balls()
+
+        self.system.balls["cue"].state.rvw[0] = cue_pos
+        self.system.balls["object"].state.rvw[0] = object_pos
+
+        assert self.system.balls["cue"].state.s == const.stationary
+        assert self.system.balls["object"].state.s == const.stationary
+        assert not np.isnan(self.system.balls["cue"].state.rvw).any()
+        assert not np.isnan(self.system.balls["object"].state.rvw).any()
+
+    @classmethod
+    def from_state(cls, state: pt.State) -> SumToThreeGym:
+        """Create a SumToThree environment from a State"""
+        return cls(
+            system=state.system,
+            game=state.game,
+            spaces=Spaces(
+                observation=cls.get_obs_space(
+                    state.system.balls,
+                    state.system.table,
+                ),
+                action=spaces.Box(
+                    low=np.array([0.5, -70], dtype=np.float32),
+                    high=np.array([3, +70], dtype=np.float32),
+                    shape=(2,),
+                    dtype=np.float32,
+                ),
+                reward=spaces.Box(
+                    low=0.0,
+                    high=1.0,
+                    shape=(1,),
+                    dtype=np.float32,
+                ),
+            ),
+        )
+
+    @classmethod
+    def single_player_env(cls, random_pos: bool = False) -> SumToThreeGym:
+        """Create a 1 player environment (for training, evaluation, etc)"""
+        gametype = pt.GameType.SUMTOTHREE
+        game = pt.get_ruleset(gametype)(
+            players=[pt.Player("Player 1")],
+            win_condition=-1,  # type: ignore
+        )
+        system = pt.System(
+            cue=pt.Cue.default(),
+            table=(table := pt.Table.from_game_type(gametype)),
+            balls=pt.get_rack(gametype, table),
+        )
+
+        if random_pos:
+            get_pos = lambda table, ball: (
+                (table.w - 2 * ball.params.R) * np.random.rand() + ball.params.R,
+                (table.l - 2 * ball.params.R) * np.random.rand() + ball.params.R,
+                ball.params.R,
+            )
+            system.balls["cue"].state.rvw[0] = get_pos(
+                system.table, system.balls["cue"]
+            )
+            system.balls["object"].state.rvw[0] = get_pos(
+                system.table, system.balls["object"]
+            )
+
+        return cls.from_state(pt.State(system, game))
 
 
 @attrs.define
@@ -32,29 +195,25 @@ class EpisodicTrackedStats:
 
 
 @ENV_REGISTRY.register("pooltool_sumtothree")
-class SumToThreeEnv(BasePoolToolEnv):
+class SumToThreeEnv(PoolToolEnv):
     config = dict(
         env_name="PoolTool-SumToThree",
         env_type="not_board_games",
         episode_length=10,
-        save_replay_path=None,
     )
 
     def __init__(self, cfg: EasyDict) -> None:
         self.cfg = cfg
         self._init_flag = False
-        self._env: LightZeroEnv
-
-        self._save_replay_path = cfg.save_replay_path
-        self._save_replay_count = 0
-
         self._tracked_stats = EpisodicTrackedStats()
+
+        self._env: SumToThreeGym
 
     def __repr__(self) -> str:
         return "SumToThreeEnv"
 
     def close(self) -> None:
-        # Trying to fix an apparent memory leak
+        # Probably not necessary
         for ball in self._env.system.balls.values():
             del ball.state
             del ball.history
@@ -77,10 +236,10 @@ class SumToThreeEnv(BasePoolToolEnv):
 
     def reset(self) -> ObservationDict:
         if not self._init_flag:
-            self._env = single_player_env()
+            self._env = SumToThreeGym.single_player_env()
             self._init_flag = True
         else:
-            self._env = reset_single_player_env(self._env)
+            self._env.reset()
 
         self.manage_seeds()
         # self.multisystem = MultiSystem()
@@ -102,8 +261,6 @@ class SumToThreeEnv(BasePoolToolEnv):
         self._tracked_stats.eval_episode_return += rew
 
         done = self._tracked_stats.eval_episode_length == self.cfg["episode_length"]
-        if done and self._save_replay_path is not None:
-            self.save_episode_replay()
 
         info = attrs.asdict(self._tracked_stats) if done else {}
 
@@ -115,38 +272,3 @@ class SumToThreeEnv(BasePoolToolEnv):
             done=done,
             info=info,
         )
-
-    def save_episode_replay(self):
-        """This barely works!
-
-        FrameStepper inherits from ShowBase, which can only be spawned once per
-        instance. This makes rendering difficult. On top of that, rendering multiple
-        shots with the same FrameStepper leads to overlapping nodes, leading to a
-        "brightening" of the scene with each shot passed through FrameStepper
-
-        That said, this still works if you pass num_episodes_each_seed = 1 to
-        eval_muzero, but use at your own risk.
-        """
-        STEPPER = FrameStepper()
-        FPS = 6
-        for i, system in enumerate(self.multisystem):
-            image_stack_path = (
-                Path(self._save_replay_path) / f"seed_{self._seed:03d}-shot_{i:03d}"
-            )
-            exporter = ImageZip(image_stack_path, ext="jpg", compress=False)
-            imgs = image_stack(
-                system=system,
-                interface=STEPPER,
-                size=(int(360 * 1.6), 360),
-                fps=FPS,
-                camera_state=camera_states["10_foot_overhead"],
-                show_hud=False,
-            )
-            exporter.save(imgs)
-            gif(
-                sorted(list(image_stack_path.glob("*.jpg"))),
-                str(image_stack_path) + ".gif",
-                fps=FPS,
-            )
-            shutil.rmtree(image_stack_path)
-        self._save_replay_count += 1
