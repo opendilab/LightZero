@@ -45,9 +45,9 @@ class PendulumEnv(CartPoleEnv):
         self._cfg = cfg
         self._act_scale = cfg.act_scale
         try:
-            self._env = gym.make('Pendulum-v1')
+            self._env = gym.make('Pendulum-v1', render_mode="rgb_array")
         except:
-            self._env = gym.make('Pendulum-v0')
+            self._env = gym.make('Pendulum-v0', render_mode="rgb_array")
         self._init_flag = False
         self._replay_path = cfg.replay_path
         self._continuous = cfg.get("continuous", True)
@@ -71,9 +71,9 @@ class PendulumEnv(CartPoleEnv):
         """
         if not self._init_flag:
             try:
-                self._env = gym.make('Pendulum-v1')
+                self._env = gym.make('Pendulum-v1', render_mode="rgb_array")
             except:
-                self._env = gym.make('Pendulum-v0')
+                self._env = gym.make('Pendulum-v0', render_mode="rgb_array")
             if self._replay_path is not None:
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 video_name = f'{self._env.spec.id}-video-{timestamp}'
