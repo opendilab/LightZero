@@ -5,14 +5,26 @@ cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',
                     # 'embed_dim': 512,
                     # 'vocab_size': 128,  # TODO: for atari debug
                     # 'embed_dim': 128,
+                    # 'vocab_size': 64,  # TODO: for cartpole
+                    # 'embed_dim': 64,
+                    # 'encoder':
+                    #     {'resolution': 1, 'in_channels': 4, 'z_channels': 64, 'ch': 64,
+                    #      'ch_mult': [1, 1, 1, 1, 1], 'num_res_blocks': 2, 'attn_resolutions': [8, 16],
+                    #      'out_ch': 4, 'dropout': 0.0},# TODO: for cartpole
+                    # 'decoder':
+                    #     {'resolution': 1, 'in_channels': 4, 'z_channels': 64, 'ch': 64,
+                    #      'ch_mult': [1, 1, 1, 1, 1], 'num_res_blocks': 2, 'attn_resolutions': [8, 16],
+                    #      'out_ch': 4, 'dropout': 0.0}} # TODO: for cartpole
                     'vocab_size': 64,  # TODO: for cartpole
-                    'embed_dim': 64,
+                    # 'embed_dim': 64,
+                    'embed_dim': 16,
+
                     'encoder':
-                        {'resolution': 1, 'in_channels': 4, 'z_channels': 64, 'ch': 64,
+                        {'resolution': 1, 'in_channels': 4, 'z_channels': 16, 'ch': 64,
                          'ch_mult': [1, 1, 1, 1, 1], 'num_res_blocks': 2, 'attn_resolutions': [8, 16],
                          'out_ch': 4, 'dropout': 0.0},# TODO: for cartpole
                     'decoder':
-                        {'resolution': 1, 'in_channels': 4, 'z_channels': 64, 'ch': 64,
+                        {'resolution': 1, 'in_channels': 4, 'z_channels': 16, 'ch': 64,
                          'ch_mult': [1, 1, 1, 1, 1], 'num_res_blocks': 2, 'attn_resolutions': [8, 16],
                          'out_ch': 4, 'dropout': 0.0}} # TODO: for cartpole
 cfg['world_model'] = {
@@ -32,8 +44,8 @@ cfg['world_model'] = {
                       'num_layers': 2, # TODO：for debug
                       
                       # 'embed_dim': 64, # TODO: for cartpole
-                      'embed_dim': 1024, # TODO: for cartpole
-
+                      # 'embed_dim': 1024, # TODO: for cartpole
+                      'embed_dim': 256, # TODO: for cartpole
 
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,

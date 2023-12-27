@@ -192,10 +192,12 @@ class WorldModel(nn.Module):
         # NOTE
         self.keys_values_wm = self.transformer.generate_empty_keys_values(n=8, max_tokens=self.config.max_tokens)
 
-        if self.num_observations_tokens==16:
+        if self.num_observations_tokens==16:  # k=16
             self.projection_input_dim = 128
-        elif self.num_observations_tokens==1:
-            self.projection_input_dim = 1024
+        elif self.num_observations_tokens==1:  # K=1
+            # self.projection_input_dim = 1024 # for atari
+            self.projection_input_dim = 256 # for cartpole
+
 
         self.proj_hid = 1024
         self.proj_out = 1024
@@ -366,7 +368,7 @@ class WorldModel(nn.Module):
     @torch.no_grad()
     def refresh_keys_values_with_initial_obs_tokens_for_init_infer(self, obs_tokens: torch.LongTensor, buffer_action=None) -> torch.FloatTensor:
         n, num_observations_tokens, _ = obs_tokens.shape
-        assert num_observations_tokens == self.num_observations_tokens
+        # assert num_observations_tokens == self.num_observations_tokens
         # self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
 
         if n <= self.env_num:
@@ -644,7 +646,7 @@ class WorldModel(nn.Module):
 
         # NOTE: 这里是需要梯度的
         # obs_tokens = tokenizer.encode(batch['observations'], should_preprocess=True).tokens  # (BL, K)
-        obs_embeddings = tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=True) # (B, C, H, W) -> (B, K, E)
+        obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=True) # (B, C, H, W) -> (B, K, E)
 
 
         act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
@@ -683,7 +685,10 @@ class WorldModel(nn.Module):
 
         # Step 1: 扩展mask_padding
         # 除去最后一个time step，每个time step 重复16次  NOTE检查shape是否reshape正确
-        mask_padding_expanded = batch['mask_padding'].unsqueeze(-1).repeat(1, 1, self.num_observations_tokens).reshape(32, -1)[:, :-1].contiguous().view(-1)
+        # mask_padding_expanded = batch['mask_padding'].unsqueeze(-1).repeat(1, 1, self.num_observations_tokens).reshape(32, -1)[:, :-1].contiguous().view(-1)
+
+        mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1) # TODO:
+        # mask_padding_expanded = batch['mask_padding'][:, :-1].contiguous().view(-1)
 
         # Step 4: 应用mask到loss_obs
         # 使用inverted mask，因为我们想要保留非padding的loss

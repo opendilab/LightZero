@@ -1,11 +1,11 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(2)
+torch.cuda.set_device(5)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-# env_name = 'PongNoFrameskip-v4'
+env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
-env_name = 'SpaceInvadersNoFrameskip-v4'
+# env_name = 'SpaceInvadersNoFrameskip-v4'
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -63,7 +63,9 @@ eps_greedy_exploration_in_collect = False
 atari_muzero_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer.py: lpips loss
-    exp_name=f'data_mz_gpt_ctree_1226/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_per-obs-emd-dim-128_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok1e-4-tra3e-3_temp025_mcs1000_contembdings_ez-ssl-loss_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1226/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_per-obs-emd-dim-128_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok1e-4-tra3e-3_temp025_mcs1000_contembdings_ez-ssl-loss_lsd1024_seed0',
+    exp_name=f'data_mz_gpt_ctree_1226/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_per-obs-emd-dim-128_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok1e-4-tra3e-3_temp025_mcs1000_contembdings_ez-ssl-loss_notokenizer_seed0',
+
 
     # exp_name=f'data_mz_gpt_ctree_1220/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok1e-4-tra3e-3_tokenizer-joint-train-100kfixed-upcr1_eps-false-ftemp50k_mcs1000_policy-value-leakyrelu_seed0',
 

@@ -152,11 +152,8 @@ class Tokenizer(nn.Module):
         # tokens = tokens.reshape(*shape[:-3], -1)
 
         # obs_embeddings = z.reshape(*shape[:-3], -1, e)
-        # obs_embeddings = rearrange(z, 'b e h w -> b (h w) e')  # 3, 16, 64  K=16
-        # obs_embeddings = rearrange(z, 'b e h w -> b (h w e)')  # 3, 16, 64  k=1
-        obs_embeddings = rearrange(z, 'b e h w -> b 1 (h w e)')  # 3, 16, 64  k=1
-
-        
+        # obs_embeddings = rearrange(z, 'b e h w -> b (h w) e')  # 3, 16, 64  TODO: K=16
+        obs_embeddings = rearrange(z, 'b e h w -> b 1 (h w e)')  # 3, 16, 64 TODO: K=1
 
 
         return obs_embeddings
