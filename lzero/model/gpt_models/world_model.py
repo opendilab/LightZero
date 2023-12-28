@@ -542,9 +542,16 @@ class WorldModel(nn.Module):
         >>> target = torch.randn(3, 5).softmax(dim=1)
         >>> loss = F.cross_entropy(input, target)
         >>> loss.backward()
-        """
-        logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o')
+        """ # 按79,79,79，...这样reshape  logits_observations[79][:10] == outputs.logits_observations[1][0][:10]
+        logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o') # (32, 5*16, 256) -> (32, 80, 256) -> (32, 79, 256) -> (32*79, 256)
+        # labels_observations[79:79*2]  batch['mask_padding'][:5] 
         loss_obs = F.cross_entropy(logits_observations, labels_observations)
+
+        # loss_obs = torch.nn.functional.mse_loss(logits_observations, labels_observations.detach(), reduction='none').mean(-1)
+        # mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1) # TODO:
+        # # 使用inverted mask，因为我们想要保留非padding的loss
+        # loss_obs = (loss_obs * mask_padding_expanded).mean(-1)
+
         # loss_ends = F.cross_entropy(rearrange(outputs.logits_ends, 'b t e -> (b t) e'), labels_ends)
 
 

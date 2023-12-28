@@ -158,7 +158,7 @@ class MuZeroModelGPT(nn.Module):
         from .gpt_models.world_model import WorldModel
         from .gpt_models.tokenizer.tokenizer import Tokenizer
         from .gpt_models.tokenizer.nets import Encoder, Decoder
-        from .gpt_models.cfg import cfg
+        from .gpt_models.cfg_atari import cfg
 
         Encoder = Encoder(cfg.tokenizer.encoder)
         Decoder = Decoder(cfg.tokenizer.decoder)
