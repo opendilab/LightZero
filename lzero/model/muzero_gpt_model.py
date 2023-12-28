@@ -132,14 +132,7 @@ class MuZeroModelGPT(nn.Module):
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
 
-        self.representation_network = RepresentationNetwork(
-            observation_shape,
-            num_res_blocks,
-            num_channels,
-            downsample,
-            activation=activation,
-            norm_type=norm_type,
-        )
+
         # self.dynamics_network = DynamicsNetwork(
         #     observation_shape,
         #     self.action_encoding_dim,
@@ -161,6 +154,16 @@ class MuZeroModelGPT(nn.Module):
         # from .gpt_models.cfg_cartpole import cfg
         from .gpt_models.cfg_atari import cfg
 
+        self.representation_network = RepresentationNetwork(
+            observation_shape,
+            num_res_blocks,
+            num_channels,
+            downsample,
+            activation=activation,
+            norm_type=norm_type,
+            # embedding_dim=cfg.embedding_dim,
+            embedding_dim=cfg.world_model.embed_dim,
+        )
 
         Encoder = Encoder(cfg.tokenizer.encoder)
         Decoder = Decoder(cfg.tokenizer.decoder)

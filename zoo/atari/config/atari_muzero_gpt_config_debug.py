@@ -29,7 +29,7 @@ update_per_collect = 2
 
 # num_simulations = 50
 # num_simulations = 25
-num_simulations = 1
+num_simulations = 6
 max_env_step = int(1e6)
 reanalyze_ratio = 0
 
@@ -87,7 +87,9 @@ atari_muzero_config = dict(
         clip_rewards=False,
     ),
     policy=dict(
-        model_path=None,
+        # model_path=None,
+        model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree_1226/Pong_muzero_gpt_ns50_upc1000-mur0.25_rr0_H5_bs32_mcs1000_contembdings_mz-repenet-lastlinear-lsd256_obsmseloss_rep-robustscaling-norm_prior-false_obsloss2-avgl1norm_seed0_240101_133235/ckpt/iteration_90000.pth.tar',
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree_1226/Pong_muzero_gpt_ns50_upc1000-mur0.25_rr0_H5_per-obs-emd-dim-128_tran-nlayers2-emd128-nh2_batch8_bs32_tok1e-4-tra3e-3_temp025_mcs1000_contembdings_mz-repenet_obsmseloss-lastlinear_lsd256_trans-obs-emb-init0_rep-robustscaling-norm_prior-false_seed0/ckpt/iteration_135000.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns5_upcNone-mur0.5_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs16_lr1e-4_tokenizer-wd0_perl_tokenizer-only_seed0/ckpt/iteration_150000.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree_1219/Pong_muzero_gpt_ns50_upcNone-mur0.25_rr0_H5_orignet_tran-nlayers2-emd128-nh2_batch8_bs32_lr1e-4-3e-3_tokenizer-wd0_tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs500_seed0/ckpt/iteration_50000.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree_1219/Pong_muzero_gpt_ns50_upcNone-mur0.25_rr0_H5_orignet_tran-nlayers2-emd128-nh2_batch8_bs32_lr1e-4-3e-3_tokenizer-wd0_tokenizer-0.1upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs500_seed0/ckpt/iteration_40000.pth.tar',
@@ -125,6 +127,8 @@ atari_muzero_config = dict(
             reward_support_size=21,
             value_support_size=21,
             support_scale=10,
+            # embedding_dim=1024,
+            embedding_dim=256,
         ),
         cuda=True,
         env_type='not_board_games',

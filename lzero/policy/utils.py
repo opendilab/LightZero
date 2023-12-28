@@ -258,6 +258,82 @@ def configure_optimizers(
 
     return optimizer
 
+def prepare_obs_for_gpt(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Overview:
+        Prepare the observations for the model, including:
+        1. convert the obs to torch tensor
+        2. stack the obs
+        3. calculate the consistency loss
+    Arguments:
+        - obs_batch_ori (:obj:`np.ndarray`): the original observations in a batch style
+        - cfg (:obj:`EasyDict`): the config dict
+    Returns:
+        - obs_batch (:obj:`torch.Tensor`): the stacked observations
+        - obs_target_batch (:obj:`torch.Tensor`): the stacked observations for calculating consistency loss
+    """
+    obs_target_batch = None
+    if cfg.model.model_type == 'conv':
+        # for 3-dimensional image obs
+        """
+        ``obs_batch_ori`` is the original observations in a batch style, shape is:
+        (batch_size, stack_num+num_unroll_steps, W, H, C) -> (batch_size, (stack_num+num_unroll_steps)*C, W, H )
+
+        e.g. in pong: stack_num=4, num_unroll_steps=5
+        (4, 9, 96, 96, 3) -> (4, 9*3, 96, 96) = (4, 27, 96, 96)
+
+        the second dim of ``obs_batch_ori``:
+        timestep t:     1,   2,   3,  4,    5,   6,   7,   8,     9
+        channel_num:    3    3    3   3     3    3    3    3      3
+                       ---, ---, ---, ---,  ---, ---, ---, ---,   ---
+        """
+        obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
+        # ``obs_batch`` is used in ``initial_inference()``, which is the first stacked obs at timestep t in
+        # ``obs_batch_ori``. shape is (4, 4*3, 96, 96) = (4, 12, 96, 96)
+        obs_batch = obs_batch_ori[:, 0:cfg.model.frame_stack_num * cfg.model.image_channel, :, :]
+
+        if cfg.model.self_supervised_learning_loss:
+            # ``obs_target_batch`` is only used for calculate consistency loss, which take the all obs other than
+            # timestep t1, and is only performed in the last 8 timesteps in the second dim in ``obs_batch_ori``.
+            # obs_target_batch = obs_batch_ori[:, cfg.model.image_channel:, :, :]
+            # 初始化一个空的target batch，其形状为 (32, 4*5, 64, 64)
+            obs_target_batch = torch.empty(
+                (obs_batch_ori.shape[0], cfg.model.frame_stack_num * (obs_batch_ori.shape[1]-cfg.model.frame_stack_num), obs_batch_ori.shape[2], obs_batch_ori.shape[3]),
+                device=cfg.device
+            )
+
+            # 用obs_batch_ori中的连续4帧填充obs_target_batch
+            for i in range(int(obs_batch_ori.shape[1]-cfg.model.frame_stack_num)):  # 总共要有5组连续的4帧，对应于时间步 1-4, 2-5, 3-6, 4-7, 5-8
+                start_idx = i + 1
+                end_idx = start_idx + cfg.model.frame_stack_num
+                # 选择合适的帧并堆叠到obs_target_batch的相应位置
+                obs_target_batch[:, i * cfg.model.frame_stack_num:(i + 1) * cfg.model.frame_stack_num, :, :] = \
+                    obs_batch_ori[:, start_idx:end_idx, :, :].reshape(obs_batch_ori.shape[0], -1, obs_batch_ori.shape[2], obs_batch_ori.shape[3])
+    elif cfg.model.model_type == 'mlp':
+        # for 1-dimensional vector obs
+        """
+        ``obs_batch_ori`` is the original observations in a batch style, shape is:
+        (batch_size, stack_num+num_unroll_steps, obs_shape) -> (batch_size, (stack_num+num_unroll_steps)*obs_shape)
+
+        e.g. in cartpole: stack_num=1, num_unroll_steps=5, obs_shape=4
+        (4, 6, 4) -> (4, 6*4) = (4, 24)
+
+        the second dim of ``obs_batch_ori``:
+        timestep t:     1,   2,      3,     4,    5,   6,
+        obs_shape:      4    4       4      4     4    4
+                       ----, ----,  ----, ----,  ----,  ----,
+        """
+        obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
+        # ``obs_batch`` is used in ``initial_inference()``, which is the first stacked obs at timestep t1 in
+        # ``obs_batch_ori``. shape is (4, 4*3) = (4, 12)
+        obs_batch = obs_batch_ori[:, 0:cfg.model.frame_stack_num * cfg.model.observation_shape]
+
+        if cfg.model.self_supervised_learning_loss:
+            # ``obs_target_batch`` is only used for calculate consistency loss, which take the all obs other than
+            # timestep t1, and is only performed in the last 8 timesteps in the second dim in ``obs_batch_ori``.
+            obs_target_batch = obs_batch_ori[:, cfg.model.observation_shape:]
+
+    return obs_batch, obs_target_batch
 
 def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
     """

@@ -137,6 +137,64 @@ class DownSample(nn.Module):
         output = self.pooling2(x)
         return output
 
+# def renormalize(inputs: torch.Tensor, first_dim: int = 1) -> torch.Tensor:
+#     """
+#     Overview:
+#         Normalize the input data using the max-min-normalization.
+#     Arguments:
+#         - inputs (:obj:`torch.Tensor`): The input data needs to be normalized.
+#         - first_dim (:obj:`int`): The first dimension of flattening the input data.
+#     Returns:
+#         - output (:obj:`torch.Tensor`): The normalized data.
+#     """
+#     if first_dim < 0:
+#         first_dim = len(inputs.shape) + first_dim
+#     flat_input = inputs.view(*inputs.shape[:first_dim], -1)
+#     max_val = torch.max(flat_input, first_dim, keepdim=True).values
+#     min_val = torch.min(flat_input, first_dim, keepdim=True).values
+#     flat_input = (flat_input - min_val) / (max_val - min_val)
+
+#     return flat_input.view(*input.shape)
+
+# def renormalize(x): # min-max
+#     # x is a 2D tensor of shape (batch_size, num_features)
+#     # Compute the min and max for each feature across the batch
+#     x_min = torch.min(x, dim=0, keepdim=True).values
+#     x_max = torch.max(x, dim=0, keepdim=True).values
+
+#     # Apply min-max normalization
+#     x_std = (x - x_min) / (x_max - x_min + 1e-8)  # Add a small epsilon to avoid division by zero
+#     x_scaled = x_std * (1 - 0) + 0  # Assuming you want to scale between 0 and 1
+
+#     return x_scaled
+
+# def renormalize(x): # z-score
+#     # x is a 2D tensor of shape (batch_size, num_features)
+#     # Compute the mean and standard deviation for each feature across the batch
+#     mean = torch.mean(x, dim=0, keepdim=True)
+#     std = torch.std(x, dim=0, keepdim=True)
+
+#     # Apply z-score normalization
+#     x_normalized = (x - mean) / (std + 1e-8)  # Add a small epsilon to avoid division by zero
+
+#     return x_normalized
+
+def renormalize(x): # robust scaling
+    # x is a 2D tensor of shape (batch_size, num_features)
+    # Compute the 1st and 3rd quartile
+    q1 = torch.quantile(x, 0.25, dim=0, keepdim=True)
+    q3 = torch.quantile(x, 0.75, dim=0, keepdim=True)
+
+    # Compute the interquartile range (IQR)
+    iqr = q3 - q1
+
+    # Apply robust scaling
+    x_scaled = (x - q1) / (iqr + 1e-8)  # Again, add epsilon to avoid division by zero
+
+    return x_scaled
+
+def AvgL1Norm(x, eps=1e-8):
+	return x/x.abs().mean(-1,keepdim=True).clamp(min=eps)
 
 class RepresentationNetwork(nn.Module):
 
@@ -146,8 +204,10 @@ class RepresentationNetwork(nn.Module):
             num_res_blocks: int = 1,
             num_channels: int = 64,
             downsample: bool = True,
-            activation: nn.Module = nn.ReLU(inplace=True),
+            # activation: nn.Module = nn.ReLU(inplace=True),
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),
             norm_type: str = 'BN',
+            embedding_dim: int = 256,
     ) -> None:
         """
         Overview:
@@ -194,8 +254,17 @@ class RepresentationNetwork(nn.Module):
             ]
         )
         self.activation = activation
+        self.embedding_dim = embedding_dim
         # (B,64,4,4) -> (B,64*4*4) -> (B,64,4,4)
-        self.last_linear = nn.Linear(64*4*4, 64*4*4)
+        # self.last_linear = nn.Linear(64*4*4, 64*4*4)
+
+        # self.last_linear = nn.Linear(64*4*4, 256)
+        self.last_linear = nn.Linear(64*4*4, self.embedding_dim)
+
+        # TODO
+        # nn.init.zeros_(self.last_linear.weight)
+        nn.init.zeros_(self.last_linear.bias)
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -216,8 +285,21 @@ class RepresentationNetwork(nn.Module):
             x = block(x)
 
         # NOTE: very important. for muzero_gpt atari
+        # x = self.last_linear(x.contiguous().view(-1,64*4*4))
+        # x = x.view(-1, 64, 4, 4)
+
         x = self.last_linear(x.contiguous().view(-1,64*4*4))
-        x = x.view(-1, 64, 4, 4)
+        # x = x.view(-1, 256)
+        x = x.view(-1, self.embedding_dim)
+        # print(x.max(), x.min())
+        # x = renormalize(x)
+
+        print('cont embediings', x.max(), x.min(), x.mean())
+
+        # x = AvgL1Norm(x)
+        # print('after AvgL1Norm', x.max(), x.min())
+        # x = torch.tanh(x)
+        # print('after tanh', x.max(), x.min(),x.mean())
         
         return x
 
@@ -284,7 +366,20 @@ class RepresentationNetworkMLP(nn.Module):
             - x (:obj:`torch.Tensor`): :math:`(B, N)`, where B is batch size, N is the length of vector observation.
             - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
         """
-        return self.fc_representation(x)
+        x = self.fc_representation(x)
+        # print('no AvgL1Norm', x.max(), x.min())
+
+        print('cont embediings', x.max(), x.min(), x.mean())
+        # print('before tanh', x.max(), x.min(),x.mean())
+
+        # x = AvgL1Norm(x)
+        # print('after AvgL1Norm', x.max(), x.min())
+        # x = torch.tanh(x)
+        # print('after tanh', x.max(), x.min(),x.mean())
+
+
+
+        return x
 
 
 class PredictionNetwork(nn.Module):

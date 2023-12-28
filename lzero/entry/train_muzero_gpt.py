@@ -240,6 +240,12 @@ def train_muzero_gpt(
         # TODO: for batch world model ,to improve kv reuse, we could donot reset
         policy._learn_model.world_model.past_keys_values_cache.clear()
 
+        # if collector.envstep > 10000:
+        #     # TODO: only for debug
+        #     for param in policy._learn_model.world_model.tokenizer.parameters():
+        #         param.requires_grad = False
+        #     print("train some steps before collector.envstep > 10000, then fixed")
+
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break
 

@@ -100,11 +100,11 @@ def wrap_lightzero(config, episode_life, clip_rewards):
         env = EpisodicLifeWrapper(env)
     env = TimeLimit(env, max_episode_steps=config.max_episode_steps)
     # TODO: LightZero
-    # if config.warp_frame:
-    #     # we must set WarpFrame before ScaledFloatFrameWrapper
-    #     env = WarpFrame(env, width=config.observation_shape[1], height=config.observation_shape[2], grayscale=config.gray_scale)
+    if config.warp_frame:
+        # we must set WarpFrame before ScaledFloatFrameWrapper # (84,84,3) -> (64,64,1)?
+        env = WarpFrame(env, width=config.observation_shape[1], height=config.observation_shape[2], grayscale=config.gray_scale)
     # TODO: IRIS
-    env = ResizeObsWrapper(env, (config.observation_shape[1], config.observation_shape[2]))
+    # env = ResizeObsWrapper(env, (config.observation_shape[1], config.observation_shape[2]))
 
     if config.scale:
         env = ScaledFloatFrameWrapper(env)

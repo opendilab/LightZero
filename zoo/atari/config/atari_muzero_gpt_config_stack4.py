@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(6)
+torch.cuda.set_device(5)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -28,8 +28,8 @@ update_per_collect = 1000
 # update_per_collect = None
 # model_update_ratio = 0.25
 model_update_ratio = 0.25
-num_simulations = 50
-# num_simulations = 25
+# num_simulations = 50
+num_simulations = 1
 max_env_step = int(1e6)
 reanalyze_ratio = 0
 
@@ -63,7 +63,7 @@ eps_greedy_exploration_in_collect = False
 atari_muzero_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer.py: lpips loss
-    exp_name=f'data_mz_gpt_ctree_0105/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs1000_contembdings_mz-repenet-lastlinear-lsd1024_obsmseloss_rep-no-avgl1norm_obsloss2_10kthenfixed-false_kll01-noseclatstd01_rep-sigmoid_seed0',
+    exp_name=f'data_mz_gpt_ctree_0105/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs1000_contembdings_mz-repenet-lastlinear-lsd256_obsmseloss_rep-no-avgl1norm_obsloss2_kll01-seclatstd01_stack4_seed0',
     # exp_name=f'data_mz_gpt_ctree_0105/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs1000_contembdings_mz-repenet-lastlinear-lsd256_obsmseloss_rep-avgl1norm_obsloss2_10kthenfixed_kll01-seclatstd01_seed0',
 
     # exp_name=f'data_mz_gpt_ctree_1226/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_per-obs-emd-dim-128_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok1e-4-tra3e-3_temp025_mcs1000_contembdings_ez-ssl-loss_lsd1024_seed0',
@@ -89,8 +89,12 @@ atari_muzero_config = dict(
         env_name=env_name,
         # obs_shape=(4, 96, 96),
         # obs_shape=(1, 96, 96),
-        observation_shape=(3, 64, 64),
-        gray_scale=False,
+        # observation_shape=(3, 64, 64),
+        # gray_scale=False,
+
+        observation_shape=(4, 64, 64),
+        gray_scale=True,
+
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -123,10 +127,15 @@ atari_muzero_config = dict(
             # observation_shape=(4, 96, 96),
             # frame_stack_num=4,
             # observation_shape=(1, 96, 96),
-            observation_shape=(3, 64, 64),
-            image_channel=3,
-            frame_stack_num=1,
-            gray_scale=False,
+            observation_shape=(4, 64, 64),
+            # image_channel=3,
+            # frame_stack_num=1,
+            # gray_scale=False,
+            # NOTE: very important
+            image_channel=1,
+            frame_stack_num=4,
+            gray_scale=True,
+
             action_space_size=action_space_size,
             downsample=True,
             self_supervised_learning_loss=True,  # default is False

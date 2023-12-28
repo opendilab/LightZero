@@ -17,7 +17,7 @@ from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
-    prepare_obs, configure_optimizers
+    prepare_obs, prepare_obs_for_gpt, configure_optimizers
 
 
 def configure_optimizer(model, learning_rate, weight_decay, exclude_submodules, *blacklist_module_names):
@@ -442,7 +442,11 @@ class MuZeroGPTPolicy(Policy):
         obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
-        obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+        if self._cfg.model.frame_stack_num == 4:
+            obs_batch, obs_target_batch = prepare_obs_for_gpt(obs_batch_ori, self._cfg)
+        else:
+            obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+
 
         # do augmentations
         if self._cfg.use_augmentation:
@@ -530,6 +534,7 @@ class MuZeroGPTPolicy(Policy):
         reward_loss = intermediate_losses['loss_rewards']
         policy_loss = intermediate_losses['loss_policy']
         value_loss = intermediate_losses['loss_value']
+        rep_kl_loss = intermediate_losses['rep_kl_loss']
 
         # ==============================================================
         # the core learn model update step.
@@ -569,6 +574,7 @@ class MuZeroGPTPolicy(Policy):
 
             'weighted_total_loss': weighted_total_loss.item(),
             'obs_loss': obs_loss,
+            'rep_kl_loss': rep_kl_loss,
             'policy_loss': policy_loss,
             'target_policy_entropy': average_target_policy_entropy,
             # 'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),
@@ -979,6 +985,7 @@ class MuZeroGPTPolicy(Policy):
             # 'total_loss',
             'obs_loss',
             'policy_loss',
+            'rep_kl_loss',
             # 'policy_entropy',
             'target_policy_entropy',
             'reward_loss',

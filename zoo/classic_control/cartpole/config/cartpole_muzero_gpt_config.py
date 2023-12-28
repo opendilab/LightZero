@@ -19,11 +19,11 @@ max_env_step = int(2e5)
 reanalyze_ratio = 0
 # num_unroll_steps = 20
 
-# batch_size = 32
-# num_unroll_steps = 5
-
 batch_size = 32
-num_unroll_steps = 10
+num_unroll_steps = 5
+
+# batch_size = 32
+# num_unroll_steps = 10
 
 
 
@@ -46,7 +46,12 @@ num_unroll_steps = 10
 cartpole_muzero_gpt_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer: lpips loss
-    exp_name=f'data_mz_gpt_ctree_1226/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_ez-ssl-loss-k1_lsd256_fixmask_mz-repenet_obsmseloss_seed0',
+    exp_name=f'data_mz_gpt_ctree_0105/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_trans-obs-emb-init0_rep-noavgl1norm-klloss0-noseclatstd01_seed0',
+
+    # exp_name=f'data_mz_gpt_ctree_0105/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_trans-obs-emb-init0_rep-avgl1norm-only-train-first-step_seed0',
+    # exp_name=f'data_mz_gpt_ctree_0105/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_trans-obs-emb-init0_rep-avgl1norm-2k-then-fixed_seed0',
+
+    # exp_name=f'data_mz_gpt_ctree_1226/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_trans-obs-emb-init0_rep-robustscaling-norm_seed0',
 
     # exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs50_batch8_obs-token-lw2_recons-obs_bs{batch_size}_indep0_trans-wd0.01_pt2_argmaxtoken_orig-sdpa_onestep_seed0',
     # exp_name=f'data_mz_gpt_ctree_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_batch8_obs-token-lw2_recons-obs_bs{batch_size}_indep0_trans-wd0.01_pt2_argmaxtokenp_seed0',

@@ -656,6 +656,14 @@ class WorldModel(nn.Module):
         # obs_tokens = tokenizer.encode(batch['observations'], should_preprocess=True).tokens  # (BL, K)
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=True) # (B, C, H, W) -> (B, K, E)
 
+        # 首先改变形状
+        # obs_embeddings = obs_embeddings.view(32, 5, 256)
+        # # 现在创建一个新的Tensor，使得除了第一步之外，其余步骤都不保留梯度
+        # # 使用clone创建obs_embeddings的副本，然后使用detach()来确保梯度不会被保留
+        # # 注意这里我们不需要再次调用view方法，因为我们希望保持形状不变
+        # obs_embeddings_no_grad = obs_embeddings.clone().detach()
+        # # 将第一步之后的所有步骤替换为没有梯度的版本
+        # obs_embeddings[:, 1:, :] = obs_embeddings_no_grad[:, 1:, :]
 
         # 计算KL散度损失
         # 假设 obs_embeddings.shape = (160, 1, 256)
@@ -670,16 +678,10 @@ class WorldModel(nn.Module):
         kl_loss = torch.distributions.kl.kl_divergence(model_dist, prior_dist)
         # 因为 kl_loss 的形状是 (1, 1, 256)，我们可以对所有特征求平均来得到一个标量损失
         rep_kl_loss = kl_loss.mean()
-        print(f'rep_kl_loss:, {rep_kl_loss}')
-        if torch.isnan(rep_kl_loss) or torch.isinf(rep_kl_loss):
-            print("NaN or inf detected in rep_kl_loss!")
 
-        # TODO
-        # obs_embeddings = AvgL1Norm(obs_embeddings)
-
-        # second to last 增加高斯噪声 TODO
+        # second to last 增加高斯噪声
         noise_std = 0.1
-        obs_embeddings = obs_embeddings.view(32, 5, -1)
+        obs_embeddings = obs_embeddings.view(32, 5, 256)
         noise = torch.randn_like(obs_embeddings[:, 1:, :]) * noise_std
        # 修改后的代码，不使用原地操作
         obs_embeddings = obs_embeddings.clone()  # 克隆obs_embeddings来创建一个新的变量
