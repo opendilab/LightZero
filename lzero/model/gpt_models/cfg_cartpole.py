@@ -35,8 +35,8 @@ cfg['world_model'] = {
                       # 'max_blocks': 5,
                       #   "max_tokens": 17 * 5,  # TODO： horizon
 
-                        'max_blocks': 5,
-                        "max_tokens": 2 * 5,  # TODO： horizon
+                        'max_blocks': 10,
+                        "max_tokens": 2 * 10,  # TODO： horizon
 
                       'attention': 'causal',
                       'num_heads': 2,

@@ -128,7 +128,9 @@ atari_muzero_config = dict(
         ),
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=400,
+        # game_segment_length=400,
+        game_segment_length=50,
+
         random_collect_episode_num=0,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,

@@ -194,6 +194,8 @@ class RepresentationNetwork(nn.Module):
             ]
         )
         self.activation = activation
+        # (B,64,4,4) -> (B,64*4*4) -> (B,64,4,4)
+        self.last_linear = nn.Linear(64*4*4, 64*4*4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -212,6 +214,11 @@ class RepresentationNetwork(nn.Module):
 
         for block in self.resblocks:
             x = block(x)
+
+        # NOTE: very important. for muzero_gpt atari
+        x = self.last_linear(x.contiguous().view(-1,64*4*4))
+        x = x.view(-1, 64, 4, 4)
+        
         return x
 
     def get_param_mean(self) -> float:

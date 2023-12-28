@@ -37,7 +37,7 @@ class WorldModelOutput:
 
 
 class WorldModel(nn.Module):
-    def __init__(self, obs_vocab_size: int, act_vocab_size: int, config: TransformerConfig, tokenizer) -> None:
+    def __init__(self, obs_vocab_size: int, act_vocab_size: int, config: TransformerConfig, tokenizer, representation_network=None) -> None:
         super().__init__()
         self.tokenizer = tokenizer
         self.obs_vocab_size, self.act_vocab_size = obs_vocab_size, act_vocab_size
@@ -195,7 +195,7 @@ class WorldModel(nn.Module):
         if self.num_observations_tokens==16:  # k=16
             self.projection_input_dim = 128
         elif self.num_observations_tokens==1:  # K=1
-            # self.projection_input_dim = 1024 # for atari
+            # self.projection_input_dim = 1024 # for atari #TODO
             self.projection_input_dim = 256 # for cartpole
 
 
@@ -459,16 +459,17 @@ class WorldModel(nn.Module):
         if len(obs[0].shape) == 3:
             # obs is a 3-dimensional image, for atari
             pass
-        elif len(obs[0].shape) == 1:
-            # TODO(): for cartpole, 4 -> 4,64,64
-            # obs is a 1-dimensional vector
-            original_shape = list(obs.shape)
-            desired_shape = original_shape + [64, 64]
-            expanded_observations = obs.unsqueeze(-1).unsqueeze(-1)
-            expanded_observations = expanded_observations.expand(*desired_shape)
-            obs = expanded_observations
+        # elif len(obs[0].shape) == 1:
+        #     # TODO(): for cartpole, 4 -> 4,64,64
+        #     # obs is a 1-dimensional vector
+        #     original_shape = list(obs.shape)
+        #     desired_shape = original_shape + [64, 64]
+        #     expanded_observations = obs.unsqueeze(-1).unsqueeze(-1)
+        #     expanded_observations = expanded_observations.expand(*desired_shape)
+        #     obs = expanded_observations
 
-            obs_act_dict['obs'] = obs
+        #     obs_act_dict['obs'] = obs
+            
             # for cartpole, 4 -> 3,64,64
             # obs is a 1-dimensional vector
             # original_shape = list(obs.shape)
@@ -625,20 +626,20 @@ class WorldModel(nn.Module):
         return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
 
 
-    def compute_loss(self, batch, tokenizer: Tokenizer, **kwargs: Any) -> LossWithIntermediateLosses:
+    def compute_loss(self, batch, tokenizer: Tokenizer=None, **kwargs: Any) -> LossWithIntermediateLosses:
 
         if len(batch['observations'][0, 0].shape) == 3:
             # obs is a 3-dimensional image
             pass
-        elif len(batch['observations'][0, 0].shape) == 1:
-            # print('obs is a 1-dimensional vector.')
-            # TODO()
-            # obs is a 1-dimensional vector
-            original_shape = list(batch['observations'].shape)
-            desired_shape = original_shape + [64, 64]
-            expanded_observations = batch['observations'].unsqueeze(-1).unsqueeze(-1)
-            expanded_observations = expanded_observations.expand(*desired_shape)
-            batch['observations'] = expanded_observations
+        # elif len(batch['observations'][0, 0].shape) == 1:
+        #     # print('obs is a 1-dimensional vector.')
+        #     # TODO()
+        #     # obs is a 1-dimensional vector
+        #     original_shape = list(batch['observations'].shape)
+        #     desired_shape = original_shape + [64, 64]
+        #     expanded_observations = batch['observations'].unsqueeze(-1).unsqueeze(-1)
+        #     expanded_observations = expanded_observations.expand(*desired_shape)
+        #     batch['observations'] = expanded_observations
 
         # with torch.no_grad():
         #     # 目前这里是没有梯度的
@@ -674,10 +675,13 @@ class WorldModel(nn.Module):
         # loss_obs = self.negative_cosine_similarity(logits_observations, labels_observations.detach())  # 2528 = 32 * 79 = 32, 5*16-1
         
         
-        obs_projection = self.projection(logits_observations)
-        obs_prediction = self.prediction_head(obs_projection)
-        obs_target =  self.projection(labels_observations).detach()
-        loss_obs = self.negative_cosine_similarity(obs_prediction, obs_target)
+        # obs_projection = self.projection(logits_observations)
+        # obs_prediction = self.prediction_head(obs_projection)
+        # obs_target =  self.projection(labels_observations).detach()
+        # loss_obs = self.negative_cosine_similarity(obs_prediction, obs_target)
+
+
+        loss_obs = torch.nn.functional.mse_loss(logits_observations, labels_observations.detach(), reduction='none').mean(-1)
 
         
         # batch['mask_padding'] shape 32, 5
@@ -690,10 +694,11 @@ class WorldModel(nn.Module):
         mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1) # TODO:
         # mask_padding_expanded = batch['mask_padding'][:, :-1].contiguous().view(-1)
 
-        # Step 4: 应用mask到loss_obs
+        # 应用mask到loss_obs
         # 使用inverted mask，因为我们想要保留非padding的loss
         loss_obs = (loss_obs * mask_padding_expanded).mean(-1)
-
+        # if loss_obs > 10:
+        #     print('debug')
 
         # loss_ends = F.cross_entropy(rearrange(outputs.logits_ends, 'b t e -> (b t) e'), labels_ends)
 

@@ -101,9 +101,9 @@ class MuZeroModelGPT(nn.Module):
         self.state_norm = state_norm
         self.res_connection_in_dynamics = res_connection_in_dynamics
 
-        # self.representation_network = RepresentationNetworkMLP(
-        #     observation_shape=observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
-        # )
+        self.representation_network = RepresentationNetworkMLP(
+            observation_shape=observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
+        )
 
         # self.dynamics_network = DynamicsNetwork(
         #     action_encoding_dim=self.action_encoding_dim,
@@ -124,7 +124,7 @@ class MuZeroModelGPT(nn.Module):
 
         Encoder = Encoder(cfg.tokenizer.encoder)
         Decoder = Decoder(cfg.tokenizer.decoder)
-        self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True)
+        self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network)
         self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
                                       config=cfg.world_model, tokenizer=self.tokenizer)
         print(f'{sum(p.numel() for p in self.tokenizer.parameters())} parameters in agent.tokenizer')

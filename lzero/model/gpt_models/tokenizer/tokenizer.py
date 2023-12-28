@@ -35,7 +35,7 @@ class TokenizerEncoderOutput:
 
 
 class Tokenizer(nn.Module):
-    def __init__(self, vocab_size: int, embed_dim: int, encoder: Encoder, decoder: Decoder, with_lpips: bool = True) -> None:
+    def __init__(self, vocab_size: int, embed_dim: int, encoder: Encoder, decoder: Decoder, with_lpips: bool = True, representation_network = None) -> None:
         super().__init__()
         self.vocab_size = vocab_size
         self.encoder = encoder
@@ -45,6 +45,7 @@ class Tokenizer(nn.Module):
         self.decoder = decoder
         self.embedding.weight.data.uniform_(-1.0 / vocab_size, 1.0 / vocab_size)
         self.lpips = LPIPS().eval() if with_lpips else None
+        self.representation_network = representation_network
 
     def __repr__(self) -> str:
         return "tokenizer"
@@ -134,10 +135,13 @@ class Tokenizer(nn.Module):
         # # only for debug
 
         shape = x.shape  # (..., C, H, W)
-        x = x.view(-1, *shape[-3:])
-        z = self.encoder(x)
-        z = self.pre_quant_conv(z)
-        b, e, h, w = z.shape
+        # x = x.view(-1, *shape[-3:])
+
+        #===============
+        # z = self.encoder(x)
+        # z = self.pre_quant_conv(z)
+        # b, e, h, w = z.shape
+
         # z_flattened = rearrange(z, 'b e h w -> (b h w) e')
         # dist_to_embeddings = torch.sum(z_flattened ** 2, dim=1, keepdim=True) + torch.sum(self.embedding.weight**2, dim=1) - 2 * torch.matmul(z_flattened, self.embedding.weight.t())
 
@@ -153,7 +157,31 @@ class Tokenizer(nn.Module):
 
         # obs_embeddings = z.reshape(*shape[:-3], -1, e)
         # obs_embeddings = rearrange(z, 'b e h w -> b (h w) e')  # 3, 16, 64  TODO: K=16
-        obs_embeddings = rearrange(z, 'b e h w -> b 1 (h w e)')  # 3, 16, 64 TODO: K=1
+        # obs_embeddings = rearrange(z, 'b e h w -> b 1 (h w e)')  # 3, 16, 64 TODO: K=1
+        #===============
+
+        #===============
+        if len(shape) == 2:
+            # x shape (4,4)
+            obs_embeddings = self.representation_network(x)
+            obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 (e)')  # (4,1,256)
+        elif len(shape) == 3:
+            # x shape (32,5,4)
+            x = x.view(-1, shape[-1]) # (32,5,4) -> (160, 4)
+            obs_embeddings = self.representation_network(x) # (160, 4) -> (160, 256)
+            obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 (e)')  # ()
+
+        if len(shape) == 4:
+            # x shape (4,3,64,64)
+            obs_embeddings = self.representation_network(x) # (4,3,64,64) -> (4,64,4,4)
+            obs_embeddings = rearrange(obs_embeddings, 'b c h w -> b 1 (c h w)')  # (4,1,1024)
+        elif len(shape) == 5:
+            # x shape (32,5,3,64,64)
+            x = x.view(-1, *shape[-3:]) # (32,5,3,64,64) -> (160,3,64,64)
+            obs_embeddings = self.representation_network(x) # (160,3,64,64) -> (160,64,4,4)
+            obs_embeddings = rearrange(obs_embeddings, 'b c h w -> b 1 (c h w)')  # (160,1,1024)
+            
+        #===============
 
 
         return obs_embeddings
