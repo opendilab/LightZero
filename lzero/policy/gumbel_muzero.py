@@ -575,6 +575,7 @@ class GumbelMuZeroPolicy(MuZeroPolicy):
                 # entire action set.
                 valid_value = np.where(action_mask[i] == 1.0, improved_policy_probs, 0.0)
                 action = np.argmax([v for v in valid_value])
+                roots_completed_value = np.where(action_mask[i] == 1.0, roots_completed_value, 0.0)
 
                 output[env_id] = {
                     'action': action,
