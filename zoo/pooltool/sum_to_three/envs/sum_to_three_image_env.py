@@ -48,7 +48,7 @@ class SumToThreeImageGym(PoolToolGym):
         self.renderer.render()
         obs = self.renderer.observation()
         assert obs.any()
-        return self.renderer.observation()
+        return obs
 
     def set_action(self, scaled_action: NDArray[np.float32]) -> None:
         self.system.cue.set_state(
@@ -172,10 +172,10 @@ class SumToThreeImageGym(PoolToolGym):
         channels = 1 if renderer.render_config.grayscale else 3
 
         return spaces.Box(
-            low=0,
-            high=255,
+            low=0.0,
+            high=1.0,
             shape=(channels, renderer.height, renderer.width),
-            dtype=np.uint8,
+            dtype=np.float32,
         )
 
 
