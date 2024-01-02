@@ -325,17 +325,17 @@ class SampledEfficientZeroModelMLP(nn.Module):
                 action_encoding = action / self.action_space_size
                 if len(action_encoding.shape) == 1:
                     # (batch_size, ) -> (batch_size, 1)
-                    # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
+                    # e.g., torch.Size([8]) ->  torch.Size([8, 1])
                     action_encoding = action_encoding.unsqueeze(-1)
         else:
             # continuous action space
             if len(action.shape) == 1:
                 # (batch_size, ) -> (batch_size, 1)
-                # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
+                # e.g., torch.Size([8]) ->  torch.Size([8, 1])
                 action = action.unsqueeze(-1)
             elif len(action.shape) == 3:
                 # (batch_size, action_dim, 1) -> (batch_size,  action_dim)
-                # e.g.,  torch.Size([8, 2, 1]) ->  torch.Size([8, 2])
+                # e.g., torch.Size([8, 2, 1]) ->  torch.Size([8, 2])
                 action = action.squeeze(-1)
 
             action_encoding = action

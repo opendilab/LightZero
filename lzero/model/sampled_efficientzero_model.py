@@ -182,6 +182,7 @@ class SampledEfficientZeroModel(nn.Module):
             self.reward_support_size,
             flatten_output_size_for_reward_head,
             downsample,
+            lstm_hidden_size=self.lstm_hidden_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             activation=activation,
             norm_type=norm_type
@@ -396,7 +397,7 @@ class SampledEfficientZeroModel(nn.Module):
                     action = action.unsqueeze(-1).unsqueeze(-1)
                 elif len(action.shape) == 1:
                     # (batch_size,) -> (batch_size, 1, 1, 1)
-                    # e.g.,  -> torch.Size([8, 1, 1, 1])
+                    # e.g., torch.Size([8])  -> torch.Size([8, 1, 1, 1])
                     action = action.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
 
                 action_encoding = action.expand(
@@ -404,14 +405,18 @@ class SampledEfficientZeroModel(nn.Module):
                 ) / self.action_space_size
         else:
             # continuous action space
-            if len(action.shape) == 2:
-                # (batch_size, action_dim) -> (batch_size, action_dim, 1, 1)
-                # e.g.,  torch.Size([8, 2]) ->  torch.Size([8, 2, 1, 1])
-                action = action.unsqueeze(-1).unsqueeze(-1)
-            elif len(action.shape) == 1:
+            if len(action.shape) == 1:
                 # (batch_size,) -> (batch_size, action_dim=1, 1, 1)
-                # e.g.,  -> torch.Size([8, 2, 1, 1])
+                # e.g., torch.Size([8]) -> torch.Size([8, 1, 1, 1])
                 action = action.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+            elif len(action.shape) == 2:
+                # (batch_size, action_dim) -> (batch_size, action_dim, 1, 1)
+                # e.g., torch.Size([8, 2]) ->  torch.Size([8, 2, 1, 1])
+                action = action.unsqueeze(-1).unsqueeze(-1)
+            elif len(action.shape) == 3:
+                # (batch_size, action_dim, 1) -> (batch_size, action_dim)
+                # e.g., torch.Size([8, 2, 1]) ->  torch.Size([8, 2, 1, 1])
+                action = action.unsqueeze(-1)
 
             action_encoding_tmp = action
             action_encoding = action_encoding_tmp.expand(

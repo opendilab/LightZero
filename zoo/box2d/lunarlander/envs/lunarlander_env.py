@@ -133,7 +133,7 @@ class LunarLanderEnv(CartPoleEnv):
         if self._act_scale:
             action = affine_transform(action, min_val=-1, max_val=1)
         if self._save_replay_gif:
-            self._frames.append(self._env.render(mode='rgb_array'))
+            self._frames.append(self._env.render())
 
         obs, rew, terminated, truncated, info = self._env.step(action)
         done = terminated or truncated
