@@ -19,11 +19,11 @@ eps_greedy_exploration_in_collect = False
 
 cfg = dict(
     main_config=dict(
-        exp_name='BreakoutNoFrameskip-v4-EfficientZero',
+        exp_name='PongNoFrameskip-v4-EfficientZero',
         seed=0,
         env=dict(
-            env_id='BreakoutNoFrameskip-v4',
-            env_name='BreakoutNoFrameskip-v4',
+            env_id='PongNoFrameskip-v4',
+            env_name='PongNoFrameskip-v4',
             obs_shape=(4, 96, 96),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
