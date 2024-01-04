@@ -10,12 +10,13 @@ num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
-mcts_ctree = True
+num_of_sampled_actions = 5
+mcts_ctree = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-tictactoe_alphazero_config = dict(
-    exp_name='data_az_ctree/tictactoe_sp-mode_alphazero_seed0',
+tictactoe_sampled_alphazero_config = dict(
+    exp_name=f'data_az_ctree/tictactoe_sampled_alphazero_sp-mode_na{num_of_sampled_actions}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         board_size=3,
         battle_mode='self_play_mode',
@@ -37,7 +38,6 @@ tictactoe_alphazero_config = dict(
         # ==============================================================
     ),
     policy=dict(
-        mcts_ctree=mcts_ctree,
         # ==============================================================
         # for the creation of simulation env
         simulation_env_name='tictactoe',
@@ -52,6 +52,9 @@ tictactoe_alphazero_config = dict(
             fc_value_layers=[8],
             fc_policy_layers=[8],
         ),
+        sampled_algo=True,
+        mcts_ctree=mcts_ctree,
+        policy_loss_type='KL',
         cuda=True,
         board_size=3,
         update_per_collect=update_per_collect,
@@ -70,18 +73,18 @@ tictactoe_alphazero_config = dict(
     ),
 )
 
-tictactoe_alphazero_config = EasyDict(tictactoe_alphazero_config)
-main_config = tictactoe_alphazero_config
+tictactoe_sampled_alphazero_config = EasyDict(tictactoe_sampled_alphazero_config)
+main_config = tictactoe_sampled_alphazero_config
 
-tictactoe_alphazero_create_config = dict(
+tictactoe_sampled_alphazero_create_config = dict(
     env=dict(
         type='tictactoe',
         import_names=['zoo.board_games.tictactoe.envs.tictactoe_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='alphazero',
-        import_names=['lzero.policy.alphazero'],
+        type='sampled_alphazero',
+        import_names=['lzero.policy.sampled_alphazero'],
     ),
     collector=dict(
         type='episode_alphazero',
@@ -92,8 +95,8 @@ tictactoe_alphazero_create_config = dict(
         import_names=['lzero.worker.alphazero_evaluator'],
     )
 )
-tictactoe_alphazero_create_config = EasyDict(tictactoe_alphazero_create_config)
-create_config = tictactoe_alphazero_create_config
+tictactoe_sampled_alphazero_create_config = EasyDict(tictactoe_sampled_alphazero_create_config)
+create_config = tictactoe_sampled_alphazero_create_config
 
 if __name__ == '__main__':
     from lzero.entry import train_alphazero
