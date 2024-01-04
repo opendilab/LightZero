@@ -303,6 +303,7 @@ class SampledEfficientZeroAgent:
                 self.exp_name, 'videos'
             )
             deply_configs[0]['replay_path'] = replay_save_path
+            deply_configs[0]['save_replay'] = True
 
         for seed in seed_list:
 

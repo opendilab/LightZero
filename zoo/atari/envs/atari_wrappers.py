@@ -95,7 +95,8 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
     else:
         env = gymnasium.make(config.env_name, render_mode='rgb_array')
     assert 'NoFrameskip' in env.spec.id
-    if config.save_replay:
+    if hasattr(config, 'save_replay') and config.save_replay \
+            and hasattr(config, 'replay_path') and config.replay_path is not None:
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         video_name = f'{env.spec.id}-video-{timestamp}'
         env = RecordVideo(
@@ -117,15 +118,6 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
         env = ScaledFloatFrameWrapper(env)
     if clip_rewards:
         env = ClipRewardWrapper(env)
-    if hasattr(config, 'replay_path') and config.replay_path is not None:
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        video_name = f'{env.spec.id}-video-{timestamp}'
-        env = RecordVideo(
-            env,
-            video_folder=config.replay_path,
-            episode_trigger=lambda episode_id: True,
-            name_prefix=video_name
-        )
 
     env = JpegWrapper(env, transform2string=config.transform2string)
     if config.game_wrapper:
