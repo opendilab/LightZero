@@ -17,7 +17,13 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
     DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, negative_cosine_similarity, \
     prepare_obs, \
     configure_optimizers
+<<<<<<< HEAD
+from collections import defaultdict
+from ding.torch_utils import to_device, to_tensor
+from ding.utils.data import default_collate
+=======
 from lzero.policy.muzero import MuZeroPolicy
+>>>>>>> origin
 
 
 @POLICY_REGISTRY.register('efficientzero')
@@ -193,6 +199,9 @@ class EfficientZeroPolicy(MuZeroPolicy):
             # (int) The decay steps from start to end eps.
             decay=int(1e5),
         ),
+
+        # (bool) Whether it is a multi-agent environment.
+        multi_agent=False,
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
@@ -311,7 +320,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
 
         target_value_prefix = target_value_prefix.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
-        assert obs_batch.size(0) == self._cfg.batch_size == target_value_prefix.size(0)
+        assert self._cfg.batch_size == target_value_prefix.size(0)
 
         # ``scalar_transform`` to transform the original value to the scaled value,
         # i.e. h(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -397,9 +406,40 @@ class EfficientZeroPolicy(MuZeroPolicy):
             # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
             # ==============================================================
             if self._cfg.ssl_loss_weight > 0:
-                # obtain the oracle latent states from representation function.
-                beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
-                network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
+                # obtain the oracle hidden states from representation function.
+                if self._cfg.model.model_type == 'conv':
+                    beg_index = self._cfg.model.image_channel * step_i
+                    end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
+                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index, :, :])
+                elif self._cfg.model.model_type == 'mlp':
+                    beg_index = self._cfg.model.observation_shape * step_i
+                    end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
+                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
+                elif self._cfg.model.model_type == 'structure':
+                    obs_target_batch_new = {}
+                    for k, v in obs_target_batch.items():
+                        if k == 'action_mask': 
+                            obs_target_batch_new[k] = v
+                            continue
+                        if isinstance(v, dict):
+                            obs_target_batch_new[k] = {}
+                            for k1, v1 in v.items():
+                                if len(v1.shape) == 1:
+                                    observation_shape = v1.shape[0]//self._cfg.num_unroll_steps
+                                    beg_index = observation_shape * step_i
+                                    end_index = observation_shape * (step_i + self._cfg.model.frame_stack_num)
+                                    obs_target_batch_new[k][k1] = v1[beg_index:end_index]
+                                else:
+                                    observation_shape = v1.shape[1]//self._cfg.num_unroll_steps
+                                    beg_index = observation_shape * step_i
+                                    end_index = observation_shape * (step_i + self._cfg.model.frame_stack_num)
+                                    obs_target_batch_new[k][k1] = v1[:, beg_index:end_index]
+                        else:
+                            observation_shape = v.shape[1]//self._cfg.num_unroll_steps
+                            beg_index = observation_shape * step_i
+                            end_index = observation_shape * (step_i + self._cfg.model.frame_stack_num)
+                            obs_target_batch_new[k] = v[:, beg_index:end_index]
+                    network_output = self._learn_model.initial_inference(obs_target_batch_new)
 
                 latent_state = to_tensor(latent_state)
                 representation_state = to_tensor(network_output.latent_state)
@@ -737,6 +777,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
          """
         return [
             'collect_mcts_temperature',
+            'collect_epsilon',
             'cur_lr',
             'weighted_total_loss',
             'total_loss',

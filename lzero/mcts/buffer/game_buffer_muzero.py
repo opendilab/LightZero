@@ -9,6 +9,8 @@ from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation
 from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
 from .game_buffer import GameBuffer
+from ding.torch_utils import to_device, to_tensor
+from ding.utils.data import default_collate
 
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
@@ -48,6 +50,8 @@ class MuZeroGameBuffer(GameBuffer):
         self.game_segment_buffer = []
         self.game_pos_priorities = []
         self.game_segment_game_pos_look_up = []
+
+        self.tmp_obs = None # a tmp value which records obs when value obs list [current_index + 4(td_step)] > 50(game_segment)
 
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
@@ -199,7 +203,6 @@ class MuZeroGameBuffer(GameBuffer):
             - reward_value_context (:obj:`list`): value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens,
               td_steps_list, action_mask_segment, to_play_segment
         """
-        zero_obs = game_segment_list[0].zero_obs()
         value_obs_list = []
         # the value is valid or not (out of game_segment)
         value_mask = []
@@ -239,11 +242,12 @@ class MuZeroGameBuffer(GameBuffer):
                     end_index = beg_index + self._cfg.model.frame_stack_num
                     # the stacked obs in time t
                     obs = game_obs[beg_index:end_index]
+                    self.tmp_obs = obs  # will be masked
                 else:
                     value_mask.append(0)
-                    obs = zero_obs
+                    obs = self.tmp_obs  # will be masked
 
-                value_obs_list.append(obs)
+                value_obs_list.append(obs.tolist())
 
         reward_value_context = [
             value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list,
@@ -377,8 +381,14 @@ class MuZeroGameBuffer(GameBuffer):
             for i in range(slices):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
-
-                m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
+                
+                if self._cfg.model.model_type and self._cfg.model.model_type in ['conv', 'mlp']:
+                    m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
+                elif self._cfg.model.model_type and self._cfg.model.model_type == 'structure':
+                    m_obs = value_obs_list[beg_index:end_index]
+                    m_obs = sum(m_obs, [])
+                    m_obs = default_collate(m_obs)
+                    m_obs = to_device(m_obs, self._cfg.device)
 
                 # calculate the target value
                 m_output = model.initial_inference(m_obs)

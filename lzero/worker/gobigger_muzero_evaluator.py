@@ -1,12 +1,12 @@
 import copy
 import time
 from collections import namedtuple
-from typing import Optional, Callable, Tuple
+from typing import Optional, Callable, Tuple, Any, List, Dict
 
 import numpy as np
 import torch
 from ding.envs import BaseEnvManager
-from ding.torch_utils import to_ndarray, to_item, to_tensor
+from ding.torch_utils import to_ndarray, to_item
 from ding.utils import build_logger, EasyTimer
 from ding.utils import get_world_size, get_rank, broadcast_object_list
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
@@ -16,193 +16,21 @@ from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
 from collections import defaultdict
 
+from zoo.gobigger.env.gobigger_rule_bot import GoBiggerBot
+from collections import namedtuple, deque
+from .muzero_evaluator import MuZeroEvaluator
 
-class MuZeroEvaluator(ISerialEvaluator):
-    """
-    Overview:
-        The Evaluator for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
-    Interfaces:
-        __init__, reset, reset_policy, reset_env, close, should_eval, eval
-    Property:
-        env, policy
-    """
 
-    @classmethod
-    def default_config(cls: type) -> EasyDict:
-        """
-        Overview:
-            Get evaluator's default config. We merge evaluator's default config with other default configs\
-                and user's config to get the final config.
-        Return:
-            cfg (:obj:`EasyDict`): evaluator's default config
-        """
-        cfg = EasyDict(copy.deepcopy(cls.config))
-        cfg.cfg_type = cls.__name__ + 'Dict'
-        return cfg
-
-    config = dict(
-        # Evaluate every "eval_freq" training iterations.
-        eval_freq=50,
-    )
-
-    def __init__(
-            self,
-            eval_freq: int = 1000,
-            n_evaluator_episode: int = 3,
-            stop_value: int = 1e6,
-            env: BaseEnvManager = None,
-            policy: namedtuple = None,
-            tb_logger: 'SummaryWriter' = None,  # noqa
-            exp_name: Optional[str] = 'default_experiment',
-            instance_name: Optional[str] = 'evaluator',
-            policy_config: 'policy_config' = None,  # noqa
-    ) -> None:
-        """
-        Overview:
-            Init method. Load config and use ``self._cfg`` setting to build common serial evaluator components,
-            e.g. logger helper, timer.
-        Arguments:
-            - eval_freq (:obj:`int`): evaluation frequency in terms of training steps.
-            - n_evaluator_episode (:obj:`int`): the number of episodes to eval in total.
-            - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
-            - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
-            - tb_logger (:obj:`SummaryWriter`): tensorboard handle
-            - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
-            - instance_name (:obj:`Optional[str]`): Name of this instance.
-            - policy_config: Config of game.
-        """
-        self._eval_freq = eval_freq
-        self._exp_name = exp_name
-        self._instance_name = instance_name
-
-        # Logger (Monitor will be initialized in policy setter)
-        # Only rank == 0 learner needs monitor and tb_logger, others only need text_logger to display terminal output.
-        if get_rank() == 0:
-            if tb_logger is not None:
-                self._logger, _ = build_logger(
-                    './{}/log/{}'.format(self._exp_name, self._instance_name), self._instance_name, need_tb=False
-                )
-                self._tb_logger = tb_logger
-            else:
-                self._logger, self._tb_logger = build_logger(
-                    './{}/log/{}'.format(self._exp_name, self._instance_name), self._instance_name
-                )
-        else:
-            self._logger, self._tb_logger = None, None  # for close elegantly
-
-        self.reset(policy, env)
-
-        self._timer = EasyTimer()
-        self._default_n_episode = n_evaluator_episode
-        self._stop_value = stop_value
-
-        # ==============================================================
-        # MCTS+RL related core code
-        # ==============================================================
-        self.policy_config = policy_config
-
-        if 'multi_agent' in self.policy_config.keys() and self.policy_config.multi_agent:
-            self._multi_agent = self.policy_config.multi_agent
-        else:
-            self._multi_agent = False
-        
-    def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
-        """
-        Overview:
-            Reset evaluator's environment. In some case, we need evaluator use the same policy in different \
-                environments. We can use reset_env to reset the environment.
-            If _env is None, reset the old environment.
-            If _env is not None, replace the old environment in the evaluator with the \
-                new passed in environment and launch.
-        Arguments:
-            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-                env_manager(BaseEnvManager)
-        """
-        if _env is not None:
-            self._env = _env
-            self._env.launch()
-            self._env_num = self._env.env_num
-        else:
-            self._env.reset()
-
-    def reset_policy(self, _policy: Optional[namedtuple] = None) -> None:
-        """
-        Overview:
-            Reset evaluator's policy. In some case, we need evaluator work in this same environment but use\
-                different policy. We can use reset_policy to reset the policy.
-            If _policy is None, reset the old policy.
-            If _policy is not None, replace the old policy in the evaluator with the new passed in policy.
-        Arguments:
-            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of eval_mode policy
-        """
-        assert hasattr(self, '_env'), "please set env first"
-        if _policy is not None:
-            self._policy = _policy
-        self._policy.reset()
-
-    def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
-        """
-        Overview:
-            Reset evaluator's policy and environment. Use new policy and environment to collect data.
-            If _env is None, reset the old environment.
-            If _env is not None, replace the old environment in the evaluator with the new passed in \
-                environment and launch.
-            If _policy is None, reset the old policy.
-            If _policy is not None, replace the old policy in the evaluator with the new passed in policy.
-        Arguments:
-            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of eval_mode policy
-            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-                env_manager(BaseEnvManager)
-        """
-        if _env is not None:
-            self.reset_env(_env)
-        if _policy is not None:
-            self.reset_policy(_policy)
-        self._max_episode_return = float("-inf")
-        self._last_eval_iter = 0
-        self._end_flag = False
-
-    def close(self) -> None:
-        """
-        Overview:
-            Close the evaluator. If end_flag is False, close the environment, flush the tb_logger\
-                and close the tb_logger.
-        """
-        if self._end_flag:
-            return
-        self._end_flag = True
-        self._env.close()
-        if self._tb_logger:
-            self._tb_logger.flush()
-            self._tb_logger.close()
-
-    def __del__(self):
-        """
-        Overview:
-            Execute the close command and close the evaluator. __del__ is automatically called \
-                to destroy the evaluator instance when the evaluator finishes its work
-        """
-        self.close()
-
-    def should_eval(self, train_iter: int) -> bool:
-        """
-        Overview:
-            Determine whether you need to start the evaluation mode, if the number of training has reached\
-                the maximum number of times to start the evaluator, return True
-        Arguments:
-            - train_iter (:obj:`int`): Current training iteration.
-        """
-        if train_iter == self._last_eval_iter:
-            return False
-        if (train_iter - self._last_eval_iter) < self._eval_freq and train_iter != 0:
-            return False
-        self._last_eval_iter = train_iter
-        return True
+class GoBiggerMuZeroEvaluator(MuZeroEvaluator):
     
     def _add_info(self, last_timestep, info):
+        # add eat info
+        for i in range(len(last_timestep.info['eats']) // 2):
+            for k, v in last_timestep.info['eats'][i].items():
+                info['agent_{}_{}'.format(i, k)] = v
         return info
-
-    def eval(
+    
+    def eval_vsbot(
             self,
             save_ckpt_fn: Callable = None,
             train_iter: int = -1,
@@ -219,9 +47,8 @@ class MuZeroEvaluator(ISerialEvaluator):
             - n_episode (:obj:`int`): Number of evaluation episodes.
         Returns:
             - stop_flag (:obj:`bool`): Whether this training program can be ended.
-            - episode_info (:obj:`Dict[str, List]`): Current evaluation episode information.
+            - eval_reward (:obj:`float`): Current eval_reward.
         """
-        # evaluator only work on rank0
         episode_info = None
         stop_flag = False
         if get_rank() == 0:
@@ -229,7 +56,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                 n_episode = self._default_n_episode
             assert n_episode is not None, "please indicate eval n_episode"
             envstep_count = 0
-            eval_monitor = VectorEvalMonitor(self._env.env_num, n_episode)
+            # specifically for vs bot
+            eval_monitor = GoBiggerVectorEvalMonitor(self._env.env_num, n_episode)
             env_nums = self._env.env_num
 
             self._env.reset()
@@ -247,15 +75,27 @@ class MuZeroEvaluator(ISerialEvaluator):
                 time.sleep(retry_waiting_time)
                 self._logger.info('=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
                 self._logger.info(
-                    'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time,
-                                                                               self._env._env_states)
+                    'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time, self._env._env_states)
                 )
                 init_obs = self._env.ready_obs
+
+            # specifically for vs bot
+            agent_num = self.policy_config['model']['agent_num']
+            team_num = self.policy_config['model']['team_num']
+            self._bot_policy = GoBiggerBot(env_nums, agent_id=[i for i in range(agent_num//team_num, agent_num)])  #TODO only support t2p2
+            self._bot_policy.reset()
+
+            # specifically for vs bot
+            for i in range(env_nums):
+                for k, v in init_obs[i].items():
+                    if k != 'raw_obs':
+                        init_obs[i][k] = v[:agent_num]
 
             action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
 
             to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
             dones = np.array([False for _ in range(env_nums)])
+
 
             if self._multi_agent:
                 agent_num = len(init_obs[0]['action_mask'])
@@ -292,11 +132,15 @@ class MuZeroEvaluator(ISerialEvaluator):
 
             ready_env_id = set()
             remain_episode = n_episode
+            # specifically for vs bot
+            eat_info = defaultdict()
 
             with self._timer:
                 while not eval_monitor.is_finished():
                     # Get current ready env obs.
                     obs = self._env.ready_obs
+                    # specifically for vs bot
+                    raw_obs = [v['raw_obs'] for k, v in obs.items()]
                     new_available_env_id = set(obs.keys()).difference(ready_env_id)
                     ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                     remain_episode -= min(len(new_available_env_id), remain_episode)
@@ -321,6 +165,11 @@ class MuZeroEvaluator(ISerialEvaluator):
                         stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
 
                     # ==============================================================
+                    # bot forward
+                    # ==============================================================
+                    bot_actions = self._bot_policy.forward(raw_obs)
+
+                    # ==============================================================
                     # policy forward
                     # ==============================================================
                     policy_output = self._policy.forward(stack_obs, action_mask, to_play)
@@ -338,8 +187,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                             for k, v in policy_output.items()
                         }
 
-                    value_dict_no_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
-                    pred_value_dict_no_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
+                    value_dict_no_env_id = {k: v['value'] for k, v in policy_output.items()}
+                    pred_value_dict_no_env_id = {k: v['pred_value'] for k, v in policy_output.items()}
                     visit_entropy_dict_no_env_id = {
                         k: v['visit_count_distribution_entropy']
                         for k, v in policy_output.items()
@@ -364,8 +213,12 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     # Interact with env.
                     # ==============================================================
+                    # specifically for vs bot
+                    for env_id, v in bot_actions.items():
+                        actions[env_id].update(v)
+
                     timesteps = self._env.step(actions)
-                    timesteps = to_tensor(timesteps, dtype=torch.float32)
+
                     for env_id, t in timesteps.items():
                         obs, reward, done, info = t.obs, t.reward, t.done, t.info
                         if self._multi_agent:
@@ -384,7 +237,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                         # game_segments[env_id].obs_segment.append(to_ndarray(obs['observation']))
 
                         # NOTE: the position of code snippet is very important.
-                        # the obs['action_mask'] and obs['to_play'] are corresponding to next action
+                        # the obs['action_mask'] and obs['to_play'] is corresponding to next action
                         action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                         to_play_dict[env_id] = to_ndarray(obs['to_play'])
 
@@ -393,13 +246,16 @@ class MuZeroEvaluator(ISerialEvaluator):
                             # Env reset is done by env_manager automatically.
                             self._policy.reset([env_id])
                             reward = t.info['eval_episode_return']
-                            saved_info = {'eval_episode_return': t.info['eval_episode_return']}
+                            # specifically for vs bot
+                            bot_reward = t.info['eval_bot_episode_return']
+                            eat_info[env_id] = t.info['eats']
                             if 'episode_info' in t.info:
-                                saved_info.update(t.info['episode_info'])
-                            eval_monitor.update_info(env_id, saved_info)
+                                eval_monitor.update_info(env_id, t.info['episode_info'])
                             eval_monitor.update_reward(env_id, reward)
+                            # specifically for vs bot
+                            eval_monitor.update_bot_reward(env_id, bot_reward)
                             self._logger.info(
-                                "[EVALUATOR]env {} finish episode, final reward: {}, current episode: {}".format(
+                                "[EVALUATOR vsbot]env {} finish episode, final reward: {}, current episode: {}".format(
                                     env_id, eval_monitor.get_latest_reward(env_id), eval_monitor.get_current_episode()
                                 )
                             )
@@ -464,6 +320,8 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                             # Env reset is done by env_manager automatically.
                             self._policy.reset([env_id])
+                            # specifically for vs bot
+                            self._bot_policy.reset([env_id])
                             # TODO(pu): subprocess mode, when n_episode > self._env_num, occasionally the ready_env_id=()
                             # and the stack_obs is np.array(None, dtype=object)
                             ready_env_id.remove(env_id)
@@ -471,6 +329,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                         envstep_count += 1
             duration = self._timer.value
             episode_return = eval_monitor.get_episode_return()
+            # specifically for vs bot
+            bot_episode_return = eval_monitor.get_bot_episode_return()
             info = {
                 'train_iter': train_iter,
                 'ckpt_name': 'iteration_{}.pth.tar'.format(train_iter),
@@ -484,11 +344,23 @@ class MuZeroEvaluator(ISerialEvaluator):
                 'reward_std': np.std(episode_return),
                 'reward_max': np.max(episode_return),
                 'reward_min': np.min(episode_return),
-                # 'each_reward': episode_return,
+                # specifically for vs bot
+                'bot_reward_mean': np.mean(bot_episode_return),
+                'bot_reward_std': np.std(bot_episode_return),
+                'bot_reward_max': np.max(bot_episode_return),
+                'bot_reward_min': np.min(bot_episode_return),
             }
+            # specifically for vs bot
+            # add eat info
+            for k, v in eat_info.items():
+                for i in range(len(v)):
+                    for k1, v1 in v[i].items():
+                        info['agent_{}_{}'.format(i, k1)] = info.get('agent_{}_{}'.format(i, k1), []) + [v1]
 
-            # add other info
-            info = self._add_info(t, info)
+            for k, v in info.items():
+                if 'agent' in k:
+                    info[k] = np.mean(v)
+
             episode_info = eval_monitor.get_episode_info()
             if episode_info is not None:
                 info.update(episode_info)
@@ -510,8 +382,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             if stop_flag:
                 self._logger.info(
                     "[LightZero serial pipeline] " +
-                    "Current episode_return: {} is greater than stop_value: {}".format(episode_return,
-                                                                                       self._stop_value) +
+                    "Current episode_return: {} is greater than stop_value: {}".format(episode_return, self._stop_value) +
                     ", so your MCTS/RL agent is converged, you can refer to 'log/evaluator/evaluator_logger.txt' for details."
                 )
 
@@ -522,3 +393,29 @@ class MuZeroEvaluator(ISerialEvaluator):
 
         episode_info = to_item(episode_info)
         return stop_flag, episode_info
+
+class GoBiggerVectorEvalMonitor(VectorEvalMonitor):
+
+    def __init__(self, env_num: int, n_episode: int) -> None:
+        super().__init__(env_num, n_episode)
+        each_env_episode = [n_episode // env_num for _ in range(env_num)]
+        self._bot_reward = {env_id: deque(maxlen=maxlen) for env_id, maxlen in enumerate(each_env_episode)}
+
+    def get_bot_episode_return(self) -> list:
+        """
+        Overview:
+            Sum up all reward and get the total return of one episode.
+        """
+        return sum([list(v) for v in self._bot_reward.values()], [])  # sum(iterable, start)
+
+    def update_bot_reward(self, env_id: int, reward: Any) -> None:
+        """
+        Overview:
+            Update the reward indicated by env_id.
+        Arguments:
+            - env_id: (:obj:`int`): the id of the environment we need to update the reward
+            - reward: (:obj:`Any`): the reward we need to update
+        """
+        if isinstance(reward, torch.Tensor):
+            reward = reward.item()
+        self._bot_reward[env_id].append(reward)

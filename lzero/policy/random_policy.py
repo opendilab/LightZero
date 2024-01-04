@@ -22,10 +22,10 @@ class LightZeroRandomPolicy(Policy):
         enable_field: Optional[List[str]] = None,
         action_space: Any = None,
     ):
-        if cfg.type == 'muzero':
+        if 'muzero' in cfg.type:
             from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
             from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
-        elif cfg.type == 'efficientzero':
+        elif 'efficientzero' in cfg.type:
             from lzero.mcts import EfficientZeroMCTSCtree as MCTSCtree
             from lzero.mcts import EfficientZeroMCTSPtree as MCTSPtree
         elif cfg.type == 'sampled_efficientzero':
@@ -66,6 +66,13 @@ class LightZeroRandomPolicy(Policy):
                 return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
             elif self._cfg.type == 'sampled_efficientzero':
                 return 'SampledEfficientZeroModelMLP', ['lzero.model.sampled_efficientzero_model_mlp']
+            else:
+                raise NotImplementedError("need to implement pipeline: {}".format(self._cfg.type))
+        elif self._cfg.model.model_type == 'structure':
+            if 'efficientzero' in self._cfg.type: # efficientzero or multi_agent_efficientzero
+                return 'EfficientZeroModelStructure', ['lzero.model.efficientzero_model_structure']
+            elif 'muzero' in self._cfg.type:  # muzero or multi_agent_muzero
+                return 'MuZeroModelStructure', ['lzero.model.muzero_model_structure']
             else:
                 raise NotImplementedError("need to implement pipeline: {}".format(self._cfg.type))
 

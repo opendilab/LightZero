@@ -9,6 +9,8 @@ import torch.nn as nn
 from easydict import EasyDict
 from scipy.stats import entropy
 from torch.nn import functional as F
+from ding.torch_utils import to_device, to_tensor
+from ding.utils.data import default_collate
 
 
 def pad_and_get_lengths(inputs, num_of_sampled_actions):
@@ -325,6 +327,7 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
             # ``obs_target_batch`` is only used for calculate consistency loss, which take the all obs other than
             # timestep t1, and is only performed in the last 8 timesteps in the second dim in ``obs_batch_ori``.
             obs_target_batch = obs_batch_ori[:, cfg.model.image_channel:, :, :]
+        return obs_batch, obs_target_batch
     elif cfg.model.model_type == 'mlp':
         # for 1-dimensional vector obs
         """
@@ -348,8 +351,50 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
             # ``obs_target_batch`` is only used for calculate consistency loss, which take the all obs other than
             # timestep t1, and is only performed in the last 8 timesteps in the second dim in ``obs_batch_ori``.
             obs_target_batch = obs_batch_ori[:, cfg.model.observation_shape:]
+        return obs_batch, obs_target_batch
+    elif cfg.model.model_type == 'structure':
+        # dict obs_shape = 1
+        batch_size = obs_batch_ori.shape[0]
+        obs_batch = obs_batch_ori[:, 0:cfg.model.frame_stack_num]
+        if cfg.model.self_supervised_learning_loss:
+            obs_target_batch = obs_batch_ori[:, cfg.model.frame_stack_num:]
 
-    return obs_batch, obs_target_batch
+        # obs_batch
+        obs_batch = obs_batch.tolist()
+        obs_batch = sum(obs_batch, [])
+        obs_batch = default_collate(obs_batch)
+        obs_batch_new = {}
+        for k, v in obs_batch.items():
+            if isinstance(v, dict):   # espaecially for gobigger obs, { {'k':{'k1':[], 'k2':[]},}
+                obs_batch_new[k] = {}
+                for k1, v1 in v.items():
+                    if len(v1.shape) == 1:
+                        obs_batch_new[k][k1] = v1
+                    else:
+                        obs_batch_new[k][k1] = v1.reshape(batch_size, -1)
+            else:  # espaecially for ptz obs, {'k1':[], 'k2':[]}
+                obs_batch_new[k] = v.reshape(batch_size, -1)
+        obs_batch_new = to_device(obs_batch_new, device=cfg.device)
+
+        # obs_target_batch
+        obs_target_batch_new = None
+        if cfg.model.self_supervised_learning_loss:
+            obs_target_batch = obs_target_batch.tolist()
+            obs_target_batch = sum(obs_target_batch, [])
+            obs_target_batch = default_collate(obs_target_batch)
+            obs_target_batch_new = {}
+            for k, v in obs_target_batch.items():
+                if isinstance(v, dict):   # espaecially for gobigger obs, { {'k':{'k1':[], 'k2':[]},}
+                    obs_target_batch_new[k] = {}
+                    for k1, v1 in v.items():
+                        if len(v1.shape) == 1:
+                            obs_target_batch_new[k][k1] = v1
+                        else:
+                            obs_target_batch_new[k][k1] = v1.reshape(batch_size, -1)
+                else:  # espaecially for ptz obs, {'k1':[], 'k2':[]}
+                    obs_target_batch_new[k] = v.reshape(batch_size, -1)
+            obs_target_batch_new = to_device(obs_target_batch_new, device=cfg.device)
+        return obs_batch_new, obs_target_batch_new
 
 
 def negative_cosine_similarity(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:

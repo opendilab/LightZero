@@ -15,8 +15,16 @@ from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
+<<<<<<< HEAD
+    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, prepare_obs, \
+    configure_optimizers
+from collections import defaultdict
+from ding.torch_utils import to_device
+from ding.utils.data import default_collate
+=======
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
     prepare_obs
+>>>>>>> origin
 
 
 @POLICY_REGISTRY.register('muzero')
@@ -197,6 +205,9 @@ class MuZeroPolicy(Policy):
             # (int) The decay steps from start to end eps.
             decay=int(1e5),
         ),
+
+        # (bool) Whether it is a multi-agent environment.
+        multi_agent=False,
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
@@ -325,7 +336,7 @@ class MuZeroPolicy(Policy):
         target_reward = target_reward.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
 
-        assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
+        assert self._cfg.batch_size == target_reward.size(0)
 
         # ``scalar_transform`` to transform the original value to the scaled value,
         # i.e. h(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -394,9 +405,28 @@ class MuZeroPolicy(Policy):
                 # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
                 # ==============================================================
                 if self._cfg.ssl_loss_weight > 0:
-                    # obtain the oracle latent states from representation function.
-                    beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
-                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
+                    # obtain the oracle hidden states from representation function.
+                    if self._cfg.model.model_type == 'conv':
+                        beg_index = self._cfg.model.image_channel * step_i
+                        end_index = self._cfg.model.image_channel * (step_i + self._cfg.model.frame_stack_num)
+                        network_output = self._learn_model.initial_inference(
+                            obs_target_batch[:, beg_index:end_index, :, :]
+                        )
+                    elif self._cfg.model.model_type == 'mlp':
+                        beg_index = self._cfg.model.observation_shape * step_i
+                        end_index = self._cfg.model.observation_shape * (step_i + self._cfg.model.frame_stack_num)
+                        network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
+                    elif self._cfg.model.model_type == 'structure':
+                        obs_target_batch_new = {}
+                        for k, v in obs_target_batch.items():
+                            if k == 'action_mask': 
+                                obs_target_batch_new[k] = v
+                                continue
+                            observation_shape = v.shape[1]//self._cfg.num_unroll_steps
+                            beg_index = observation_shape * step_i
+                            end_index = observation_shape * (step_i + self._cfg.model.frame_stack_num)
+                            obs_target_batch_new[k] = v[:, beg_index:end_index]
+                        network_output = self._learn_model.initial_inference(obs_target_batch_new)
 
                     latent_state = to_tensor(latent_state)
                     representation_state = to_tensor(network_output.latent_state)
@@ -735,6 +765,7 @@ class MuZeroPolicy(Policy):
         """
         return [
             'collect_mcts_temperature',
+            'collect_epsilon',
             'cur_lr',
             'weighted_total_loss',
             'total_loss',

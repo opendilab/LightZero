@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 from ding.torch_utils import MLP
 from ding.utils import MODEL_REGISTRY, SequenceType
+from ding.utils.default_helper import get_shape0
+
 from numpy import ndarray
 
 from .common import EZNetworkOutput, RepresentationNetworkMLP, PredictionNetworkMLP
@@ -36,6 +38,7 @@ class EfficientZeroModelMLP(nn.Module):
         norm_type: Optional[str] = 'BN',
         discrete_action_encoding_type: str = 'one_hot',
         res_connection_in_dynamics: bool = False,
+        state_encoder=None,
         *args,
         **kwargs,
     ):
@@ -104,9 +107,12 @@ class EfficientZeroModelMLP(nn.Module):
         self.state_norm = state_norm
         self.res_connection_in_dynamics = res_connection_in_dynamics
 
-        self.representation_network = RepresentationNetworkMLP(
-            observation_shape=observation_shape, hidden_channels=latent_state_dim, norm_type=norm_type
-        )
+        if state_encoder == None:
+            self.representation_network = RepresentationNetworkMLP(
+                observation_shape=observation_shape, hidden_channels=latent_state_dim, norm_type=norm_type
+            )
+        else:
+            self.representation_network = state_encoder
 
         self.dynamics_network = DynamicsNetworkMLP(
             action_encoding_dim=self.action_encoding_dim,
@@ -171,15 +177,16 @@ class EfficientZeroModelMLP(nn.Module):
             - latent_state (:obj:`torch.Tensor`): :math:`(B, H)`, where B is batch_size, H is the dimension of latent state.
             - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The shape of each element is :math:`(1, B, lstm_hidden_size)`, where B is batch_size.
         """
-        batch_size = obs.size(0)
+        batch_size = get_shape0(obs)
         latent_state = self._representation(obs)
+        device = latent_state.device
         policy_logits, value = self._prediction(latent_state)
         # zero initialization for reward hidden states
         # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
         reward_hidden_state = (
             torch.zeros(1, batch_size,
-                        self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
-                                                                           self.lstm_hidden_size).to(obs.device)
+                        self.lstm_hidden_size).to(device), torch.zeros(1, batch_size,
+                                                                           self.lstm_hidden_size).to(device)
         )
         return EZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, latent_state, reward_hidden_state)
 

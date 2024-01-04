@@ -92,7 +92,7 @@ def prepare_observation(observation_list, model_type='conv'):
         - observation_list (:obj:`List`): list of observations.
         - model_type (:obj:`str`): type of the model. (default is 'conv')
     """
-    assert model_type in ['conv', 'mlp']
+    assert model_type in ['conv', 'mlp', 'structure']
     observation_array = np.array(observation_list)
 
     if model_type == 'conv':
@@ -126,6 +126,9 @@ def prepare_observation(observation_list, model_type='conv'):
         # print(observation_array.shape)
         observation_array = observation_array.reshape(observation_array.shape[0], -1)
         # print(observation_array.shape)
+
+    elif model_type == 'structure':
+        return observation_list
 
     return observation_array
 

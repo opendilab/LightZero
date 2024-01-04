@@ -18,10 +18,13 @@ from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
-from .utils import random_collect
+from lzero.entry.utils import random_collect
 
+import copy
+from lzero.worker import GoBiggerMuZeroEvaluator
+from zoo.gobigger.model import GoBiggerEncoder
 
-def train_muzero(
+def train_muzero_gobigger(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -31,7 +34,7 @@ def train_muzero(
 ) -> 'Policy':  # noqa
     """
     Overview:
-        The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel Muzero.
+        The train entry for GoBigger MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
             ``Tuple[dict, dict]`` type means [user_config, create_cfg].
@@ -47,19 +50,19 @@ def train_muzero(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
-        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'"
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'multi_agent_efficientzero', 'multi_agent_muzero'], \
+        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'multi_agent_efficientzero', 'multi_agent_muzero'"
 
     if create_cfg.policy.type == 'muzero' or create_cfg.policy.type == 'multi_agent_muzero':
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
+        from lzero.model.muzero_model_mlp import MuZeroModelMLP as Encoder
     elif create_cfg.policy.type == 'efficientzero' or create_cfg.policy.type == 'multi_agent_efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
+        from lzero.model.efficientzero_model_mlp import EfficientZeroModelMLP as Encoder
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'gumbel_muzero':
         from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'stochastic_muzero':
-        from lzero.mcts import StochasticMuZeroGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
@@ -73,10 +76,17 @@ def train_muzero(
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
+    env_cfg = copy.deepcopy(evaluator_env_cfg[0])
+    env_cfg.contain_raw_obs = True
+    vsbot_evaluator_env_cfg = [env_cfg for _ in range(len(evaluator_env_cfg))]
+    vsbot_evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in vsbot_evaluator_env_cfg])
+
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
+    vsbot_evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
 
+    model = Encoder(**cfg.policy.model, state_encoder=GoBiggerEncoder())
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
@@ -84,7 +94,7 @@ def train_muzero(
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
-    tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
+    tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
     # ==============================================================
@@ -101,7 +111,7 @@ def train_muzero(
         exp_name=cfg.exp_name,
         policy_config=policy_config
     )
-    evaluator = Evaluator(
+    evaluator = GoBiggerMuZeroEvaluator(
         eval_freq=cfg.policy.eval_freq,
         n_evaluator_episode=cfg.env.n_evaluator_episode,
         stop_value=cfg.env.stop_value,
@@ -112,18 +122,30 @@ def train_muzero(
         policy_config=policy_config
     )
 
+    vsbot_evaluator = GoBiggerMuZeroEvaluator(
+        eval_freq=cfg.policy.eval_freq,
+        n_evaluator_episode=cfg.env.n_evaluator_episode,
+        stop_value=cfg.env.stop_value,
+        env=vsbot_evaluator_env,
+        policy=policy.eval_mode,
+        tb_logger=tb_logger,
+        exp_name=cfg.exp_name,
+        policy_config=policy_config,
+        instance_name='vsbot_evaluator'
+    )
+
     # ==============================================================
     # Main loop
     # ==============================================================
     # Learner's before_run hook.
     learner.call_hook('before_run')
-    
+
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
 
     # The purpose of collecting random data before training:
-    # Exploration: Collecting random data helps the agent explore the environment and avoid getting stuck in a suboptimal policy prematurely.
-    # Comparison: By observing the agent's performance during random action-taking, we can establish a baseline to evaluate the effectiveness of reinforcement learning algorithms.
+    # Exploration: The collection of random data aids the agent in exploring the environment and prevents premature convergence to a suboptimal policy.
+    # Comparation: The agent's performance during random action-taking can be used as a reference point to evaluate the efficacy of reinforcement learning algorithms.
     if cfg.policy.random_collect_episode_num > 0:
         if policy_config.multi_agent:
             from lzero.policy.multi_agent_random_policy import MultiAgentLightZeroRandomPolicy as RandomPolicy
@@ -156,7 +178,8 @@ def train_muzero(
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
-            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+            stop, reward = evaluator.eval(None, learner.train_iter, collector.envstep) # save_ckpt_fn = None 
+            stop, reward = vsbot_evaluator.eval_vsbot(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
                 break
 
