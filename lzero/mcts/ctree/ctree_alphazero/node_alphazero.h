@@ -29,19 +29,19 @@ public:
     }
 
     // Recursively updates the value and visit count of the node and its parent nodes
-    void update_recursive(float leaf_value, std::string mcts_mode) {
+    void update_recursive(float leaf_value, std::string battle_mode_in_simulation_env) {
         // If the mode is "self_play_mode", the leaf_value is subtracted from the parent's value
-        if (mcts_mode == "self_play_mode") {
+        if (battle_mode_in_simulation_env == "self_play_mode") {
             update(leaf_value);
             if (!is_root()) {
-                parent->update_recursive(-leaf_value, mcts_mode);
+                parent->update_recursive(-leaf_value, battle_mode_in_simulation_env);
             }
         }
         // If the mode is "play_with_bot_mode", the leaf_value is added to the parent's value
-        else if (mcts_mode == "play_with_bot_mode") {
+        else if (battle_mode_in_simulation_env == "play_with_bot_mode") {
             update(leaf_value);
             if (!is_root()) {
-                parent->update_recursive(leaf_value, mcts_mode);
+                parent->update_recursive(leaf_value, battle_mode_in_simulation_env);
             }
         }
     }

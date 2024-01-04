@@ -32,6 +32,8 @@ tictactoe_alphazero_config = dict(
         prob_expert_agent=0,
         scale=True,
         alphazero_mcts_ctree=mcts_ctree,
+        save_replay_gif=False,
+        replay_path_gif='./replay_gif',
         # ==============================================================
     ),
     policy=dict(
