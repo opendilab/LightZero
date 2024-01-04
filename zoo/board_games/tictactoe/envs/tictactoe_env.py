@@ -44,8 +44,8 @@ class TicTacToeEnv(BaseEnv):
         env_name="TicTacToe",
         # battle_mode (str): The mode of the battle. Choices are 'self_play_mode' or 'alpha_beta_pruning'.
         battle_mode='self_play_mode',
-        # mcts_mode (str): The mode of Monte Carlo Tree Search. This is only used in AlphaZero.
-        mcts_mode='self_play_mode',
+        # battle_mode_in_simulation_env (str): The mode of Monte Carlo Tree Search. This is only used in AlphaZero.
+        battle_mode_in_simulation_env='self_play_mode',
         # bot_action_type (str): The type of action the bot should take. Choices are 'v0' or 'alpha_beta_pruning'.
         bot_action_type='v0',
         # replay_path (str): The folder path where replay video saved, if None, will not save replay video.
@@ -80,7 +80,7 @@ class TicTacToeEnv(BaseEnv):
         # The mode of interaction between the agent and the environment.
         assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
         # The mode of MCTS is only used in AlphaZero.
-        self.mcts_mode = 'self_play_mode'
+        self.battle_mode_in_simulation_env = 'self_play_mode'
         self.board_size = 3
         self.players = [1, 2]
         self.total_num_actions = 9

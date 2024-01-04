@@ -170,7 +170,7 @@ public:
             state_config_for_env_reset["katago_policy_init"].cast<bool>(),
             katago_game_state
         );
-            simulate_env.attr("battle_mode") = simulate_env.attr("mcts_mode");
+            simulate_env.attr("battle_mode") = simulate_env.attr("battle_mode_in_simulation_env");
             _simulate(root, simulate_env, policy_value_func);
         }
 
@@ -228,14 +228,14 @@ public:
             leaf_value = _expand_leaf_node(node, simulate_env, policy_value_func);
         }
         else {
-             if (simulate_env.attr("mcts_mode").cast<std::string>() == "self_play_mode") {
+             if (simulate_env.attr("battle_mode_in_simulation_env").cast<std::string>() == "self_play_mode") {
                 if (winner == -1) {
                     leaf_value = 0;
                 } else {
                     leaf_value = (simulate_env.attr("current_player").cast<int>() == winner) ? 1 : -1;
                 }
             }
-            else if (simulate_env.attr("mcts_mode").cast<std::string>() == "play_with_bot_mode") {
+            else if (simulate_env.attr("battle_mode_in_simulation_env").cast<std::string>() == "play_with_bot_mode") {
                 if (winner == -1) {
                     leaf_value = 0;
                 } else if (winner == 1) {
@@ -245,11 +245,11 @@ public:
                 }
             }
         }
-    if (simulate_env.attr("mcts_mode").cast<std::string>() == "play_with_bot_mode") {
-        node->update_recursive(leaf_value, simulate_env.attr("mcts_mode").cast<std::string>());
+    if (simulate_env.attr("battle_mode_in_simulation_env").cast<std::string>() == "play_with_bot_mode") {
+        node->update_recursive(leaf_value, simulate_env.attr("battle_mode_in_simulation_env").cast<std::string>());
     }
-    else if (simulate_env.attr("mcts_mode").cast<std::string>() == "self_play_mode") {
-        node->update_recursive(-leaf_value, simulate_env.attr("mcts_mode").cast<std::string>());
+    else if (simulate_env.attr("battle_mode_in_simulation_env").cast<std::string>() == "self_play_mode") {
+        node->update_recursive(-leaf_value, simulate_env.attr("battle_mode_in_simulation_env").cast<std::string>());
     }
    }
 

@@ -55,7 +55,7 @@ class Connect4Env(BaseEnv):
         # (str) The mode of the environment when take a step.
         battle_mode='self_play_mode',
         # (str) The mode of the environment when doing the MCTS.
-        mcts_mode='self_play_mode',
+        battle_mode_in_simulation_env='self_play_mode',
         # (str) The render mode. Options are 'None', 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.
         # If None, then the game will not be rendered.
         render_mode=None,
@@ -110,7 +110,7 @@ class Connect4Env(BaseEnv):
         self.battle_mode = cfg.battle_mode
         assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
         # The mode of MCTS is only used in AlphaZero.
-        self.mcts_mode = 'self_play_mode'
+        self.battle_mode_in_simulation_env = 'self_play_mode'
 
         # In ``eval_mode``, we can choose to play with the agent.
         self.agent_vs_human = cfg.agent_vs_human
