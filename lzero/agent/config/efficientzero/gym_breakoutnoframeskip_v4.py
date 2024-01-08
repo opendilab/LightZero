@@ -11,8 +11,7 @@ update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
-
-eps_greedy_exploration_in_collect = False
+eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -29,6 +28,8 @@ cfg = dict(
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False, ),
+            collect_max_episode_steps=int(5e3),
+            eval_max_episode_steps=int(2e4),
         ),
         policy=dict(
             model=dict(
