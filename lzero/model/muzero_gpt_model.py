@@ -11,7 +11,7 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
-from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork
+from .common import MZNetworkOutput, RepresentationNetworkGPT, PredictionNetwork
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -154,7 +154,7 @@ class MuZeroModelGPT(nn.Module):
         # from .gpt_models.cfg_cartpole import cfg
         from .gpt_models.cfg_atari import cfg
 
-        self.representation_network = RepresentationNetwork(
+        self.representation_network = RepresentationNetworkGPT(
             observation_shape,
             num_res_blocks,
             num_channels,

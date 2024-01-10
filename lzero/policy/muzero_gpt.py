@@ -414,6 +414,15 @@ class MuZeroGPTPolicy(Policy):
         
         return return_loss_dict
 
+    def monitor_weights_and_grads(self, model):
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                print(f"Layer: {name} | "
+                    f"Weight mean: {param.data.mean():.4f} | "
+                    f"Weight std: {param.data.std():.4f} | "
+                    f"Grad mean: {param.grad.mean():.4f} | "
+                    f"Grad std: {param.grad.std():.4f}")
+                    
 
     def _forward_learn_transformer(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -428,6 +437,7 @@ class MuZeroGPTPolicy(Policy):
             - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
                 current learning loss and learning statistics.
         """
+
         self._learn_model.train()
         self._target_model.train()
         self._learn_model.tokenizer.eval()
@@ -548,6 +558,10 @@ class MuZeroGPTPolicy(Policy):
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer_world_model.zero_grad()
         weighted_total_loss.backward()
+
+        # 在训练循环中使用
+        # self.monitor_weights_and_grads(self._learn_model.tokenizer.representation_network)
+
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(

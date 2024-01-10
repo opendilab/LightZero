@@ -180,7 +180,9 @@ class MuZeroModel(nn.Module):
                 # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
                 # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
                 ceil_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
-                self.projection_input_dim = num_channels * ceil_size
+                # self.projection_input_dim = num_channels * ceil_size
+                self.projection_input_dim = 4096 # TODO
+
             else:
                 self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
@@ -449,6 +451,9 @@ class DynamicsNetwork(nn.Module):
 
         self.num_channels = num_channels
         self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
+        self.flatten_output_size_for_reward_head = 16*8*8 # TODO: only for obs (4,64,64)
+
+
         self.action_encoding_dim = action_encoding_dim
 
         self.conv = nn.Conv2d(num_channels, num_channels - self.action_encoding_dim, kernel_size=3, stride=1, padding=1, bias=False)

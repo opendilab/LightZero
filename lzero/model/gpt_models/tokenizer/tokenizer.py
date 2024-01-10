@@ -123,8 +123,8 @@ class Tokenizer(nn.Module):
         return TokenizerEncoderOutput(z, z_q, tokens)
 
     def encode_to_obs_embeddings(self, x: torch.Tensor, should_preprocess: bool = False):
-        if should_preprocess:
-            x = self.preprocess_input(x)
+        # if should_preprocess:
+        #     x = self.preprocess_input(x)
         
         # # only for debug
         # observations = x
@@ -179,7 +179,7 @@ class Tokenizer(nn.Module):
 
         elif len(shape) == 5:
             # x shape (32,5,3,64,64)
-            x = x.view(-1, *shape[-3:]) # (32,5,3,64,64) -> (160,3,64,64)
+            x = x.contiguous().view(-1, *shape[-3:]) # (32,5,3,64,64) -> (160,3,64,64)
             obs_embeddings = self.representation_network(x) # (160,3,64,64) -> (160,64,4,4)
             # obs_embeddings = rearrange(obs_embeddings, 'b c h w -> b 1 (c h w)')  # (160,1,1024)
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')  # (4,1,256) # TODO

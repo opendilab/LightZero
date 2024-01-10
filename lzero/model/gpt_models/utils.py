@@ -49,15 +49,17 @@ def configure_optimizer(model, learning_rate, weight_decay, *blacklist_module_na
     optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate)
     return optimizer
 
+from lzero.model.common import RepresentationNetwork
 
 def init_weights(module):
-    if isinstance(module, (nn.Linear, nn.Embedding)):
-        module.weight.data.normal_(mean=0.0, std=0.02)
-        if isinstance(module, nn.Linear) and module.bias is not None:
+    if not isinstance(module, RepresentationNetwork):
+        if isinstance(module, (nn.Linear, nn.Embedding)):
+            module.weight.data.normal_(mean=0.0, std=0.02)
+            if isinstance(module, nn.Linear) and module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
-    elif isinstance(module, nn.LayerNorm):
-        module.bias.data.zero_()
-        module.weight.data.fill_(1.0)
+            module.weight.data.fill_(1.0)
 
 
 def extract_state_dict(state_dict, module_name):
@@ -120,7 +122,8 @@ class LossWithIntermediateLosses:
         self.policy_loss_weight = 1.
         # self.ends_loss_weight = 1.
         self.ends_loss_weight = 0.
-        self.rep_kl_loss_weight = 0.1
+        self.rep_kl_loss_weight = 0.1 # for lunarlander
+
         # self.rep_kl_loss_weight = 0.5
 
 

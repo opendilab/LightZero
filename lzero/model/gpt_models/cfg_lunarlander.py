@@ -52,8 +52,8 @@ cfg['world_model'] = {
                       'attn_pdrop': 0.1,
                       "device": 'cuda:3',
                       # "device": 'cpu',
-                      # 'support_size': 601,
-                      'support_size': 21,
+                      'support_size': 601,
+                      # 'support_size': 21,
                       'action_shape': 4, # TODO: for lunarlander
                       'max_cache_size': 500,
                       # 'max_cache_size': 50,

@@ -663,7 +663,10 @@ class WorldModel(nn.Module):
         mean = obs_embeddings.mean(dim=0, keepdim=True)
         std = obs_embeddings.std(dim=0, keepdim=True)
         # 创建标准正态分布作为先验分布
-        prior_dist = torch.distributions.Normal(torch.zeros_like(mean), torch.ones_like(std))
+        # prior_dist = torch.distributions.Normal(torch.zeros_like(mean), torch.ones_like(std))
+        prior_dist = torch.distributions.Normal(torch.ones_like(mean)*0.1, torch.ones_like(std))
+
+
         # 创建模型输出的分布
         model_dist = torch.distributions.Normal(mean, std)
         # 计算KL散度损失，对每个样本的每个特征进行计算
@@ -673,17 +676,19 @@ class WorldModel(nn.Module):
         print(f'rep_kl_loss:, {rep_kl_loss}')
         if torch.isnan(rep_kl_loss) or torch.isinf(rep_kl_loss):
             print("NaN or inf detected in rep_kl_loss!")
+            # 使用 torch.tensor(0) 创建一个同设备，同数据类型的零张量，并确保不需要梯度
+            rep_kl_loss = torch.tensor(0., device=rep_kl_loss.device, dtype=rep_kl_loss.dtype)
 
         # TODO
         # obs_embeddings = AvgL1Norm(obs_embeddings)
 
         # second to last 增加高斯噪声 TODO
-        noise_std = 0.1
-        obs_embeddings = obs_embeddings.view(32, 5, -1)
-        noise = torch.randn_like(obs_embeddings[:, 1:, :]) * noise_std
-       # 修改后的代码，不使用原地操作
-        obs_embeddings = obs_embeddings.clone()  # 克隆obs_embeddings来创建一个新的变量
-        obs_embeddings[:, 1:, :] = obs_embeddings[:, 1:, :] + noise
+    #     noise_std = 0.1
+    #     obs_embeddings = obs_embeddings.view(32, 5, -1)
+    #     noise = torch.randn_like(obs_embeddings[:, 1:, :]) * noise_std
+    #    # 修改后的代码，不使用原地操作
+    #     obs_embeddings = obs_embeddings.clone()  # 克隆obs_embeddings来创建一个新的变量
+    #     obs_embeddings[:, 1:, :] = obs_embeddings[:, 1:, :] + noise
 
 
         act_tokens = rearrange(batch['actions'], 'b l -> b l 1')

@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import SequenceType
-
+import torch.nn.init as init
 
 # use dataclass to make the output of network more convenient to use
 @dataclass
@@ -80,14 +80,14 @@ class DownSample(nn.Module):
                 ) for _ in range(1)
             ]
         )
-        self.conv2 = nn.Conv2d(
-            out_channels // 2,
-            out_channels,
-            kernel_size=3,
-            stride=2,
-            padding=1,
-            bias=False,
-        )
+        # self.conv2 = nn.Conv2d(
+        #     out_channels // 2,
+        #     out_channels,
+        #     kernel_size=3,
+        #     stride=2,
+        #     padding=1,
+        #     bias=False,
+        # )
         self.downsample_block = ResBlock(
             in_channels=out_channels // 2,
             out_channels=out_channels,
@@ -111,7 +111,7 @@ class DownSample(nn.Module):
                 ) for _ in range(1)
             ]
         )
-        self.pooling2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
+        # self.pooling2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
         self.activation = activation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -134,7 +134,9 @@ class DownSample(nn.Module):
         x = self.pooling1(x)
         for block in self.resblocks3:
             x = block(x)
-        output = self.pooling2(x)
+        # output = self.pooling2(x) 
+        output = x # TODO: for (4,64,64) obs
+
         return output
 
 # def renormalize(inputs: torch.Tensor, first_dim: int = 1) -> torch.Tensor:
@@ -196,7 +198,7 @@ def renormalize(x): # robust scaling
 def AvgL1Norm(x, eps=1e-8):
 	return x/x.abs().mean(-1,keepdim=True).clamp(min=eps)
 
-class RepresentationNetwork(nn.Module):
+class RepresentationNetworkGPT(nn.Module):
 
     def __init__(
             self,
@@ -259,12 +261,14 @@ class RepresentationNetwork(nn.Module):
         # self.last_linear = nn.Linear(64*4*4, 64*4*4)
 
         # self.last_linear = nn.Linear(64*4*4, 256)
-        self.last_linear = nn.Linear(64*4*4, self.embedding_dim)
+        self.last_linear = nn.Linear(64*8*8, self.embedding_dim)
 
         # TODO
-        # nn.init.zeros_(self.last_linear.weight)
-        nn.init.zeros_(self.last_linear.bias)
-
+        # Initialize weights using He initialization
+        init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
+        
+        # Initialize biases to zero
+        init.zeros_(self.last_linear.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -280,21 +284,18 @@ class RepresentationNetwork(nn.Module):
             x = self.conv(x)
             x = self.norm(x)
             x = self.activation(x)
-
+        print('after downsample_net:', x.max(), x.min(), x.mean())
         for block in self.resblocks:
             x = block(x)
 
-        # NOTE: very important. for muzero_gpt atari
-        # x = self.last_linear(x.contiguous().view(-1,64*4*4))
-        # x = x.view(-1, 64, 4, 4)
+        # NOTE: very important. for muzero_gpt atari 64,8,8 = 4096 -> 1024
+        x = self.last_linear(x.contiguous().view(-1, 64*8*8))
 
-        x = self.last_linear(x.contiguous().view(-1,64*4*4))
-        # x = x.view(-1, 256)
         x = x.view(-1, self.embedding_dim)
         # print(x.max(), x.min())
         # x = renormalize(x)
 
-        print('cont embediings', x.max(), x.min(), x.mean())
+        print('cont embedings', x.max(), x.min(), x.mean())
 
         # x = AvgL1Norm(x)
         # print('after AvgL1Norm', x.max(), x.min())
@@ -377,8 +378,6 @@ class RepresentationNetworkMLP(nn.Module):
         # x = torch.tanh(x)
         # print('after tanh', x.max(), x.min(),x.mean())
 
-
-
         return x
 
 
@@ -455,6 +454,10 @@ class PredictionNetwork(nn.Module):
         
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
+
+        self.flatten_output_size_for_value_head = 16*8*8 # TODO: only for obs (4,64,64)
+        self.flatten_output_size_for_policy_head = 16*8*8 # TODO: only for obs (4,64,64)
+
         self.activation = activation
 
         self.fc_value = MLP(
@@ -600,3 +603,92 @@ class PredictionNetworkMLP(nn.Module):
         value = self.fc_value_head(x_prediction_common)
         policy = self.fc_policy_head(x_prediction_common)
         return policy, value
+
+class RepresentationNetwork(nn.Module):
+
+    def __init__(
+            self,
+            observation_shape: SequenceType = (12, 96, 96),
+            num_res_blocks: int = 1,
+            num_channels: int = 64,
+            downsample: bool = True,
+            activation: nn.Module = nn.ReLU(inplace=True),
+            norm_type: str = 'BN',
+    ) -> None:
+        """
+        Overview:
+            Representation network used in MuZero and derived algorithms. Encode the 2D image obs into hidden state.
+        Arguments:
+            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[12, 96, 96]
+                for video games like atari, RGB 3 channel times stack 4 frames.
+            - num_res_blocks (:obj:`int`): The number of residual blocks.
+            - num_channels (:obj:`int`): The channel of output hidden state.
+            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
+                defaults to True. This option is often used in video games like Atari. In board games like go, \
+                we don't need this module.
+            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
+                Use the inplace operation to speed up.
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+        """
+        super().__init__()
+        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+
+        self.downsample = downsample
+        if self.downsample:
+            self.downsample_net = DownSample(
+                observation_shape,
+                num_channels,
+                activation=activation,
+                norm_type=norm_type,
+            )
+        else:
+            self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
+
+            if norm_type == 'BN':
+                self.norm = nn.BatchNorm2d(num_channels)
+            elif norm_type == 'LN':
+                if downsample:
+                    self.norm = nn.LayerNorm([num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                else:
+                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]])
+            
+        self.resblocks = nn.ModuleList(
+            [
+                ResBlock(
+                    in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
+                ) for _ in range(num_res_blocks)
+            ]
+        )
+        self.activation = activation
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Shapes:
+            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \
+                H is height.
+            - output (:obj:`torch.Tensor`): :math:`(B, C_out, W_, H_)`, where B is batch size, C_out is channel, W_ is \
+                output width, H_ is output height.
+        """
+        if self.downsample:
+            x = self.downsample_net(x)
+        else:
+            x = self.conv(x)
+            x = self.norm(x)
+            x = self.activation(x)
+
+        for block in self.resblocks:
+            x = block(x)
+        return x
+
+    def get_param_mean(self) -> float:
+        """
+        Overview:
+            Get the mean of parameters in the network for debug and visualization.
+        Returns:
+            - mean (:obj:`float`): The mean of parameters in the network.
+        """
+        mean = []
+        for name, param in self.named_parameters():
+            mean += np.abs(param.detach().cpu().numpy().reshape(-1)).tolist()
+        mean = sum(mean) / len(mean)
+        return mean

@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(2)
+torch.cuda.set_device(0)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -66,9 +66,7 @@ eps_greedy_exploration_in_collect = False
 atari_muzero_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer.py: lpips loss
-    exp_name=f'data_mz_gpt_ctree_0110/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs500_contembdings_mz-repenet-lastlinear-lsd1024-6488-kaiming-lerelu_obsmseloss_obsloss2_kll01-0.1_stack4_seed0',
-
-    # exp_name=f'data_mz_gpt_ctree_0110/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs500_contembdings_mz-repenet-lastlinear-lsd1024-10k-thenfixed_obsmseloss_obsloss2_rep-no-avgl1norm-no-neg1_kll01-inf2zero-noseclatstd01_stack4_seed0',
+    exp_name=f'data_mz_gpt_ctree_0110_debug/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs500_contembdings_mz-repenet-lastlinear-6488-lsd1024-10k-thenfixed_obsmseloss_obsloss2_rep-no-avgl1norm-no-neg1_kll01-inf2zero-noseclatstd01_stack4_seed0',
 
     # exp_name=f'data_mz_gpt_ctree_0105/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs1000_contembdings_mz-repenet-lastlinear-lsd1024_obsmseloss_obsloss2_rep-no-avgl1norm-no-neg1_kll01-inf2zero-noseclatstd01_stack4_noapply_seed0',
     # exp_name=f'data_mz_gpt_ctree_0105_debug/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs1000_contembdings_mz-repenet-lastlinear-lsd256_obsmseloss_rep-no-avgl1norm-no-neg1_obsloss2_kll01-inf2zero-noseclatstd01_stack4_aug_seed0',
@@ -89,11 +87,11 @@ atari_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        # collect_max_episode_steps=int(50),
-        # eval_max_episode_steps=int(50),
+        collect_max_episode_steps=int(50),
+        eval_max_episode_steps=int(50),
         # TODO: run
-        collect_max_episode_steps=int(2e4),
-        eval_max_episode_steps=int(1e4),
+        # collect_max_episode_steps=int(2e4),
+        # eval_max_episode_steps=int(1e4),
         # collect_max_episode_steps=int(2e4),
         # eval_max_episode_steps=int(108000),
         # clip_rewards=False,
@@ -126,7 +124,6 @@ atari_muzero_config = dict(
             gray_scale=True,
 
             action_space_size=action_space_size,
-            downsample=True,
             self_supervised_learning_loss=True,  # default is False
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
@@ -139,6 +136,7 @@ atari_muzero_config = dict(
             support_scale=10,
             embedding_dim=1024,
             # embedding_dim=256,
+            downsample=True,
         ),
         use_priority=False,
         cuda=True,

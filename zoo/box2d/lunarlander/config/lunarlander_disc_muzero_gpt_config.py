@@ -11,12 +11,11 @@ num_simulations = 50
 # num_simulations = 1
 
 update_per_collect = 200
-max_env_step = int(5e6)
 reanalyze_ratio = 0.
 
 update_per_collect = None
 model_update_ratio = 0.5
-max_env_step = int(1e6)
+max_env_step = int(3e6)
 reanalyze_ratio = 0
 batch_size = 32
 num_unroll_steps = 5
@@ -26,7 +25,7 @@ num_unroll_steps = 5
 
 lunarlander_muzero_config = dict(
     # exp_name=f'data_mz_gpt_ctree_0105/lunarlander_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_rep-noavgl1norm-klloss0-noseclatstd01_seed0',
-    exp_name=f'data_mz_gpt_ctree_0105/lunarlander_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_rep-noavgl1norm-klloss01-noseclatstd01_susc10_seed0',
+    exp_name=f'data_mz_gpt_ctree_0105/lunarlander_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_rep-noavgl1norm-klloss0-noseclatstd01_susc300_seed0',
     env=dict(
         env_name='LunarLander-v2',
         continuous=False,
@@ -56,12 +55,12 @@ lunarlander_muzero_config = dict(
             discrete_action_encoding_type='one_hot',
             res_connection_in_dynamics=True,
             norm_type='BN', 
-            reward_support_size=21,
-            value_support_size=21,
-            support_scale=10,
-            # reward_support_size=601,
-            # value_support_size=601,
-            # support_scale=300,
+            # reward_support_size=21,
+            # value_support_size=21,
+            # support_scale=10,
+            reward_support_size=601,
+            value_support_size=601,
+            support_scale=300,
         ),
         cuda=True,
         env_type='not_board_games',

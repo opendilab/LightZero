@@ -51,7 +51,7 @@ def train_muzero_gpt(
         "train_muzero_gpt entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'"
 
     if create_cfg.policy.type == 'muzero_gpt':
-        from lzero.mcts import MuZeroGameBuffer as GameBuffer
+        from lzero.mcts import MuZeroGameBufferGPT as GameBuffer
     elif create_cfg.policy.type == 'efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'sampled_efficientzero':
