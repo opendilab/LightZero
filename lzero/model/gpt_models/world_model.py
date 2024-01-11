@@ -639,72 +639,27 @@ class WorldModel(nn.Module):
         if len(batch['observations'][0, 0].shape) == 3:
             # obs is a 3-dimensional image
             pass
-        # elif len(batch['observations'][0, 0].shape) == 1:
-        #     # print('obs is a 1-dimensional vector.')
-        #     # TODO()
-        #     # obs is a 1-dimensional vector
-        #     original_shape = list(batch['observations'].shape)
-        #     desired_shape = original_shape + [64, 64]
-        #     expanded_observations = batch['observations'].unsqueeze(-1).unsqueeze(-1)
-        #     expanded_observations = expanded_observations.expand(*desired_shape)
-        #     batch['observations'] = expanded_observations
-
-        # with torch.no_grad():
-        #     # 目前这里是没有梯度的
-        #     obs_tokens = tokenizer.encode(batch['observations'], should_preprocess=True).tokens  # (BL, K)
 
         # NOTE: 这里是需要梯度的
-        # obs_tokens = tokenizer.encode(batch['observations'], should_preprocess=True).tokens  # (BL, K)
-        with torch.no_grad():  # TODO
+        with torch.no_grad():  # TODO: 非常重要
             obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False) # (B, C, H, W) -> (B, K, E)
-
         # obs_embeddings.register_hook(lambda grad: grad * 1/5)  # TODO：只提供重建损失更新表征网络
+        # obs_embeddings.register_hook(lambda grad: grad * 1)  # TODO：只提供重建损失更新表征网络
 
         # Assume that 'cont_embeddings' and 'original_images' are available from prior code
         # Decode the embeddings to reconstruct the images
         reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
 
         # Calculate the reconstruction loss
-        latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].contiguous().view(-1, 4, 64, 64), reconstructed_images)
+        # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].contiguous().view(-1, 4, 64, 64), reconstructed_images)
+        latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # TODO
 
 
-        # 计算KL散度损失
-        # 假设 obs_embeddings.shape = (160, 1, 256)
-        # 这里我们首先计算每个特征维度的均值和方差
-        mean = obs_embeddings.mean(dim=0, keepdim=True)
-        std = obs_embeddings.std(dim=0, keepdim=True)
-        # 创建标准正态分布作为先验分布
-        prior_dist = torch.distributions.Normal(torch.zeros_like(mean), torch.ones_like(std))
-
-
-        # 创建模型输出的分布
-        model_dist = torch.distributions.Normal(mean, std)
-        # 计算KL散度损失，对每个样本的每个特征进行计算
-        kl_loss = torch.distributions.kl.kl_divergence(model_dist, prior_dist)
-        # 因为 kl_loss 的形状是 (1, 1, 256)，我们可以对所有特征求平均来得到一个标量损失
-        latent_kl_loss = kl_loss.mean()
-        # print(f'latent_kl_loss:, {latent_kl_loss}')
-        if torch.isnan(latent_kl_loss) or torch.isinf(latent_kl_loss):
-            print("NaN or inf detected in latent_kl_loss!")
-            # 使用 torch.tensor(0) 创建一个同设备，同数据类型的零张量，并确保不需要梯度
-            latent_kl_loss = torch.tensor(0., device=latent_kl_loss.device, dtype=latent_kl_loss.dtype)
-
-        # TODO
-        # obs_embeddings = AvgL1Norm(obs_embeddings)
-
-        # second to last 增加高斯噪声 TODO
-    #     noise_std = 0.1
-    #     obs_embeddings = obs_embeddings.view(32, 5, -1)
-    #     noise = torch.randn_like(obs_embeddings[:, 1:, :]) * noise_std
-    #    # 修改后的代码，不使用原地操作
-    #     obs_embeddings = obs_embeddings.clone()  # 克隆obs_embeddings来创建一个新的变量
-    #     obs_embeddings[:, 1:, :] = obs_embeddings[:, 1:, :] + noise
+        latent_kl_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)
 
 
         act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
 
-        # tokens = rearrange(torch.cat((obs_tokens, act_tokens), dim=2), 'b l k1 -> b (l k1)')  # (B, L(K+1))
-        # outputs = self.forward(tokens, is_root=False)
         # TODO: 只提供重建损失更新表征网络
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens)}, is_root=False)
 
@@ -712,58 +667,23 @@ class WorldModel(nn.Module):
                                                                                            batch['ends'],
                                                                                            batch['mask_padding'])
 
-        """
-        >>> # Example of target with class probabilities
-        >>> input = torch.randn(3, 5, requires_grad=True)
-        >>> target = torch.randn(3, 5).softmax(dim=1)
-        >>> loss = F.cross_entropy(input, target)
-        >>> loss.backward()
-        """
         logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o')
-        labels_observations = labels_observations.contiguous().view(-1, self.projection_input_dim)  # TODO:
-        # loss_obs = F.cross_entropy(logits_observations, labels_observations)
+        # labels_observations = labels_observations.contiguous().view(-1, self.projection_input_dim)  # TODO:
+        labels_observations = labels_observations.reshape(-1, self.projection_input_dim)  # TODO:
 
-        # TODO: EZ consistency loss; TWM loss
-        # loss_obs = self.negative_cosine_similarity(logits_observations, labels_observations.detach())  # 2528 = 32 * 79 = 32, 5*16-1
         
-        
-        # obs_projection = self.projection(logits_observations)
-        # obs_prediction = self.prediction_head(obs_projection)
-        # obs_target =  self.projection(labels_observations).detach()
-        # loss_obs = self.negative_cosine_similarity(obs_prediction, obs_target)
-
-
         loss_obs = torch.nn.functional.mse_loss(logits_observations, labels_observations.detach(), reduction='none').mean(-1)
-
-        
-        # batch['mask_padding'] shape 32, 5
-        # loss_obs = (loss_obs* batch['mask_padding']).mean()
-
-        # Step 1: 扩展mask_padding
-        # 除去最后一个time step，每个time step 重复16次  NOTE检查shape是否reshape正确
-        # mask_padding_expanded = batch['mask_padding'].unsqueeze(-1).repeat(1, 1, self.num_observations_tokens).reshape(32, -1)[:, :-1].contiguous().view(-1)
-
         mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1) # TODO:
-        # mask_padding_expanded = batch['mask_padding'][:, :-1].contiguous().view(-1)
+        # mask_padding_expanded = batch['mask_padding'][:, 1:].reshape(-1)
 
         # 应用mask到loss_obs
-        # 使用inverted mask，因为我们想要保留非padding的loss
         loss_obs = (loss_obs * mask_padding_expanded).mean(-1)
-        # if loss_obs > 10:
-        #     print('debug')
-
-        # loss_ends = F.cross_entropy(rearrange(outputs.logits_ends, 'b t e -> (b t) e'), labels_ends)
-
-
         labels_policy, labels_value = self.compute_labels_world_model_value_policy(batch['target_value'],
                                                                                    batch['target_policy'],
                                                                                    batch['mask_padding'])
 
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
         loss_policy = self.compute_cross_entropy_loss(outputs, labels_policy, batch, element='policy')
-        """torch.eq(labels_observations, logits_observations.argmax(-1)).sum().item() / labels_observations.shape[0]
-        F.cross_entropy(logits_observations, logits_observations.argmax(-1))
-        """
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
 
         return LossWithIntermediateLosses(loss_obs=loss_obs, loss_rewards=loss_rewards, loss_value=loss_value,

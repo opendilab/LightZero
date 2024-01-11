@@ -126,8 +126,8 @@ class LossWithIntermediateLosses:
         # self.latent_kl_loss_weight = 0.1 # for lunarlander
         self.latent_kl_loss_weight = 0. # for lunarlander
 
-        # self.latent_recon_loss_weight = 1
-        self.latent_recon_loss_weight = 0.1
+        self.latent_recon_loss_weight = 0.
+        # self.latent_recon_loss_weight = 0.1
 
 
         # Initialize the total loss tensor on the correct device

@@ -239,6 +239,8 @@ def train_muzero_gpt(
         # NOTE: TODO
         # TODO: for batch world model ,to improve kv reuse, we could donot reset
         policy._learn_model.world_model.past_keys_values_cache.clear()
+        
+        torch.cuda.empty_cache() # TODO
 
         # if collector.envstep > 0:
         #     # TODO: only for debug

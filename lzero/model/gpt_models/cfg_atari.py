@@ -66,7 +66,7 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:2',
+                      "device": 'cuda:1',
                     #   "device": 'cpu',
                       'support_size': 21,
                       'action_shape': 6,# TODO：for atari

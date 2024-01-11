@@ -265,51 +265,9 @@ class MuZeroGPTPolicy(Policy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
-        # assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
-        # # NOTE: in board_games, for fixed lr 0.003, 'Adam' is better than 'SGD'.
-        # if self._cfg.optim_type == 'SGD':
-        #     self._optimizer = optim.SGD(
-        #         self._model.parameters(),
-        #         lr=self._cfg.learning_rate,
-        #         momentum=self._cfg.momentum,
-        #         weight_decay=self._cfg.weight_decay,
-        #     )
-        # elif self._cfg.optim_type == 'Adam':
-        #     self._optimizer = optim.Adam(
-        #         self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
-        #     )
-        # elif self._cfg.optim_type == 'AdamW':
-        #     self._optimizer = configure_optimizers(
-        #         model=self._model,
-        #         weight_decay=self._cfg.weight_decay,
-        #         learning_rate=self._cfg.learning_rate,
-        #         device_type=self._cfg.device
-        #     )
-        
-        # self._optimizer_tokenizer = optim.Adam(
-        #     self._model.tokenizer.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
-        # )
-
-        # self._optimizer_tokenizer = optim.Adam(
-        #     self._model.tokenizer.parameters(), lr=self._cfg.learning_rate # weight_decay=0
-        # )
-
-        # # TODO: nanoGPT optimizer
-        # self._optimizer_world_model = configure_optimizer(
-        #     model=self._model.world_model,
-        #     learning_rate=self._cfg.learning_rate,
-        #     weight_decay=self._cfg.weight_decay,
-        #     # weight_decay=0.01,
-        #     exclude_submodules=['tokenizer']
-        # )
-
         self._optimizer_tokenizer = optim.Adam(
             self._model.tokenizer.parameters(), lr=1e-4 # weight_decay=0
         )
-
-        # self._optimizer_tokenizer = optim.Adam(
-        #         self._model.tokenizer.parameters(), lr=3e-3 # weight_decay=0
-        #     )
 
         # TODO: nanoGPT optimizer
         # self._optimizer_world_model = configure_optimizer(
@@ -322,26 +280,13 @@ class MuZeroGPTPolicy(Policy):
         # )
         self._optimizer_world_model = configure_optimizer(
             model=self._model.world_model,
-            # learning_rate=3e-3,
-            learning_rate=1e-4,
+            learning_rate=3e-3,
+            # learning_rate=1e-4, # NOTE: TODO
             weight_decay=self._cfg.weight_decay,
             # weight_decay=0.01,
             exclude_submodules=['none'] # NOTE
         )
 
-        # self._optimizer_world_model = configure_optimizers(
-        #     model=self._model.world_model,
-        #     weight_decay=self._cfg.weight_decay,
-        #     learning_rate=self._cfg.learning_rate,
-        #     device_type=self._cfg.device
-        # )
-
-        # if self._cfg.lr_piecewise_constant_decay:
-        #     from torch.optim.lr_scheduler import LambdaLR
-        #     max_step = self._cfg.threshold_training_steps_for_final_lr
-        #     # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
-        #     lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
-        #     self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
@@ -358,7 +303,6 @@ class MuZeroGPTPolicy(Policy):
             update_kwargs={'freq': self._cfg.target_update_freq}
         )
         self._learn_model = self._model
-
 
         # TODO: only for debug
         # for param in self._learn_model.tokenizer.parameters():

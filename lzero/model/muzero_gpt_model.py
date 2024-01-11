@@ -178,48 +178,6 @@ class MuZeroModelGPT(nn.Module):
         print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
 
 
-        # self.prediction_network = PredictionNetwork(
-        #     observation_shape,
-        #     action_space_size,
-        #     num_res_blocks,
-        #     num_channels,
-        #     value_head_channels,
-        #     policy_head_channels,
-        #     fc_value_layers,
-        #     fc_policy_layers,
-        #     self.value_support_size,
-        #     flatten_output_size_for_value_head,
-        #     flatten_output_size_for_policy_head,
-        #     downsample,
-        #     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-        #     activation=activation,
-        #     norm_type=norm_type
-        # )
-
-        # if self.self_supervised_learning_loss:
-        #     # projection used in EfficientZero
-        #     if self.downsample:
-        #         # In Atari, if the observation_shape is set to (12, 96, 96), which indicates the original shape of
-        #         # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
-        #         # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
-        #         # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
-        #         ceil_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
-        #         self.projection_input_dim = num_channels * ceil_size
-        #     else:
-        #         self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
-
-        #     self.projection = nn.Sequential(
-        #         nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-        #         nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-        #         nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
-        #     )
-        #     self.prediction_head = nn.Sequential(
-        #         nn.Linear(self.proj_out, self.pred_hid),
-        #         nn.BatchNorm1d(self.pred_hid),
-        #         activation,
-        #         nn.Linear(self.pred_hid, self.pred_out),
-        #     )
-
     def initial_inference(self, obs: torch.Tensor, action_batch=None) -> MZNetworkOutput:
         """
         Overview:

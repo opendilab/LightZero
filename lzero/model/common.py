@@ -293,18 +293,14 @@ class RepresentationNetworkGPT(nn.Module):
         # print('cont embedings before last_linear', x.max(), x.min(), x.mean())
 
         # NOTE: very important. for muzero_gpt atari 64,8,8 = 4096 -> 1024
-        x = self.last_linear(x.contiguous().view(-1, 64*8*8))
+        # x = self.last_linear(x.contiguous().view(-1, 64*8*8))
+        x = self.last_linear(x.reshape(-1, 64*8*8)) # TODO
 
         x = x.view(-1, self.embedding_dim)
-        # print(x.max(), x.min())
-        # x = renormalize(x)
 
         # print('cont embedings before renormalize', x.max(), x.min(), x.mean())
-        # x = AvgL1Norm(x)
-        # print('after AvgL1Norm', x.max(), x.min())
         # x = torch.tanh(x)
         x = renormalize(x)
-
         # print('after renormalize', x.max(), x.min(),x.mean())
         
         return x
