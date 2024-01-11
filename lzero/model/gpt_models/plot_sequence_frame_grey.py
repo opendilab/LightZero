@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
-batch_observations = batch['observations'][:,:,0:1,:,:]
+batch_observations = reconstructed_images.detach().view(32, 5, 4, 64, 64)[:,:,0:1,:,:]
+# batch_observations = batch['observations'][:,:,0:1,:,:]
 B, N, C, H, W = batch_observations.shape  # 自动检测维度
 
 # 分隔条的宽度（可以根据需要调整）
@@ -35,7 +36,7 @@ for i in range(B):
     plt.show()
 
     # 保存图像到文件
-    concat_image.save(f'sample_{i+1}_0110.png')
+    concat_image.save(f'sample_{i+1}_recs_0110.png')
 
 
 

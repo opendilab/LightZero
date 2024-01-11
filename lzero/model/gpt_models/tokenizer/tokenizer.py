@@ -35,7 +35,7 @@ class TokenizerEncoderOutput:
 
 
 class Tokenizer(nn.Module):
-    def __init__(self, vocab_size: int, embed_dim: int, encoder: Encoder, decoder: Decoder, with_lpips: bool = True, representation_network = None) -> None:
+    def __init__(self, vocab_size: int, embed_dim: int, encoder: Encoder, decoder: Decoder, with_lpips: bool = True, representation_network = None, decoder_network =None) -> None:
         super().__init__()
         self.vocab_size = vocab_size
         self.encoder = encoder
@@ -46,6 +46,8 @@ class Tokenizer(nn.Module):
         self.embedding.weight.data.uniform_(-1.0 / vocab_size, 1.0 / vocab_size)
         self.lpips = LPIPS().eval() if with_lpips else None
         self.representation_network = representation_network
+        self.decoder_network = decoder_network
+
 
     def __repr__(self) -> str:
         return "tokenizer"
@@ -184,11 +186,19 @@ class Tokenizer(nn.Module):
             # obs_embeddings = rearrange(obs_embeddings, 'b c h w -> b 1 (c h w)')  # (160,1,1024)
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')  # (4,1,256) # TODO
 
-            
-        #===============
-
 
         return obs_embeddings
+
+    def decode_to_obs(self, embeddings: torch.Tensor) -> torch.Tensor:
+        return self.decoder_network(embeddings)
+
+
+    def reconstruction_loss(self, original_images: torch.Tensor, reconstructed_images: torch.Tensor) -> torch.Tensor:
+        # Mean Squared Error (MSE) is commonly used as a reconstruction loss
+        # loss = nn.MSELoss()(original_images, reconstructed_images) # L1 loss
+        loss = torch.abs(original_images - reconstructed_images).mean()
+        return loss
+
 
     def decode(self, z_q: torch.Tensor, should_postprocess: bool = False) -> torch.Tensor:
         shape = z_q.shape  # (..., E, h, w)

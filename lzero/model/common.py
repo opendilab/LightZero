@@ -139,6 +139,7 @@ class DownSample(nn.Module):
 
         return output
 
+# EZ original
 # def renormalize(inputs: torch.Tensor, first_dim: int = 1) -> torch.Tensor:
 #     """
 #     Overview:
@@ -158,17 +159,17 @@ class DownSample(nn.Module):
 
 #     return flat_input.view(*input.shape)
 
-# def renormalize(x): # min-max
-#     # x is a 2D tensor of shape (batch_size, num_features)
-#     # Compute the min and max for each feature across the batch
-#     x_min = torch.min(x, dim=0, keepdim=True).values
-#     x_max = torch.max(x, dim=0, keepdim=True).values
+def renormalize(x): # min-max
+    # x is a 2D tensor of shape (batch_size, num_features)
+    # Compute the min and max for each feature across the batch
+    x_min = torch.min(x, dim=0, keepdim=True).values
+    x_max = torch.max(x, dim=0, keepdim=True).values
 
-#     # Apply min-max normalization
-#     x_std = (x - x_min) / (x_max - x_min + 1e-8)  # Add a small epsilon to avoid division by zero
-#     x_scaled = x_std * (1 - 0) + 0  # Assuming you want to scale between 0 and 1
+    # Apply min-max normalization
+    x_std = (x - x_min) / (x_max - x_min + 1e-8)  # Add a small epsilon to avoid division by zero
+    x_scaled = x_std * (1 - 0) + 0  # Assuming you want to scale between 0 and 1
 
-#     return x_scaled
+    return x_scaled
 
 # def renormalize(x): # z-score
 #     # x is a 2D tensor of shape (batch_size, num_features)
@@ -181,19 +182,19 @@ class DownSample(nn.Module):
 
 #     return x_normalized
 
-def renormalize(x): # robust scaling
-    # x is a 2D tensor of shape (batch_size, num_features)
-    # Compute the 1st and 3rd quartile
-    q1 = torch.quantile(x, 0.25, dim=0, keepdim=True)
-    q3 = torch.quantile(x, 0.75, dim=0, keepdim=True)
+# def renormalize(x): # robust scaling
+#     # x is a 2D tensor of shape (batch_size, num_features)
+#     # Compute the 1st and 3rd quartile
+#     q1 = torch.quantile(x, 0.25, dim=0, keepdim=True)
+#     q3 = torch.quantile(x, 0.75, dim=0, keepdim=True)
 
-    # Compute the interquartile range (IQR)
-    iqr = q3 - q1
+#     # Compute the interquartile range (IQR)
+#     iqr = q3 - q1
 
-    # Apply robust scaling
-    x_scaled = (x - q1) / (iqr + 1e-8)  # Again, add epsilon to avoid division by zero
+#     # Apply robust scaling
+#     x_scaled = (x - q1) / (iqr + 1e-8)  # Again, add epsilon to avoid division by zero
 
-    return x_scaled
+#     return x_scaled
 
 def AvgL1Norm(x, eps=1e-8):
 	return x/x.abs().mean(-1,keepdim=True).clamp(min=eps)
@@ -261,14 +262,15 @@ class RepresentationNetworkGPT(nn.Module):
         # self.last_linear = nn.Linear(64*4*4, 64*4*4)
 
         # self.last_linear = nn.Linear(64*4*4, 256)
-        self.last_linear = nn.Linear(64*8*8, self.embedding_dim)
+        # self.last_linear = nn.Linear(64*8*8, self.embedding_dim)
+        self.last_linear = nn.Linear(64*8*8, self.embedding_dim, bias=False)
 
         # TODO
         # Initialize weights using He initialization
         init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
         
         # Initialize biases to zero
-        init.zeros_(self.last_linear.bias)
+        # init.zeros_(self.last_linear.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -284,9 +286,11 @@ class RepresentationNetworkGPT(nn.Module):
             x = self.conv(x)
             x = self.norm(x)
             x = self.activation(x)
-        print('after downsample_net:', x.max(), x.min(), x.mean())
+        # print('after downsample_net:', x.max(), x.min(), x.mean())
         for block in self.resblocks:
             x = block(x)
+
+        # print('cont embedings before last_linear', x.max(), x.min(), x.mean())
 
         # NOTE: very important. for muzero_gpt atari 64,8,8 = 4096 -> 1024
         x = self.last_linear(x.contiguous().view(-1, 64*8*8))
@@ -295,12 +299,13 @@ class RepresentationNetworkGPT(nn.Module):
         # print(x.max(), x.min())
         # x = renormalize(x)
 
-        print('cont embedings', x.max(), x.min(), x.mean())
-
+        # print('cont embedings before renormalize', x.max(), x.min(), x.mean())
         # x = AvgL1Norm(x)
         # print('after AvgL1Norm', x.max(), x.min())
         # x = torch.tanh(x)
-        # print('after tanh', x.max(), x.min(),x.mean())
+        x = renormalize(x)
+
+        # print('after renormalize', x.max(), x.min(),x.mean())
         
         return x
 
@@ -317,6 +322,44 @@ class RepresentationNetworkGPT(nn.Module):
         mean = sum(mean) / len(mean)
         return mean
 
+
+class LatentDecoder(nn.Module):
+    def __init__(self, embedding_dim: int, output_shape: SequenceType, num_channels: int = 64):
+        super().__init__()
+        self.embedding_dim = embedding_dim
+        self.output_shape = output_shape  # (C, H, W)
+        self.num_channels = num_channels
+        
+        # Assuming that the output shape is (C, H, W) = (12, 96, 96) and embedding_dim is 256
+        # We will reverse the process of the representation network
+        self.initial_size = (num_channels, output_shape[1] // 8, output_shape[2] // 8)  # This should match the last layer of the encoder
+        self.fc = nn.Linear(self.embedding_dim, np.prod(self.initial_size))
+        
+        # Upsampling blocks
+        self.conv_blocks = nn.ModuleList([
+            # Block 1: (num_channels, H/8, W/8) -> (num_channels//2, H/4, W/4)
+            nn.ConvTranspose2d(num_channels, num_channels // 2, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(num_channels // 2),
+            # Block 2: (num_channels//2, H/4, W/4) -> (num_channels//4, H/2, W/2)
+            nn.ConvTranspose2d(num_channels // 2, num_channels // 4, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(num_channels // 4),
+            # Block 3: (num_channels//4, H/2, W/2) -> (output_shape[0], H, W)
+            nn.ConvTranspose2d(num_channels // 4, output_shape[0], kernel_size=3, stride=2, padding=1, output_padding=1),
+        ])
+        
+    def forward(self, embeddings: torch.Tensor) -> torch.Tensor:
+        # Map embeddings back to the image space
+        x = self.fc(embeddings)  # (B, embedding_dim) -> (B, C*H/8*W/8)
+        x = x.view(-1, *self.initial_size)  # (B, C*H/8*W/8) -> (B, C, H/8, W/8)
+        
+        # Apply conv blocks
+        for block in self.conv_blocks:
+            x = block(x)  # Upsample progressively
+        
+        # The output x should have the shape of (B, output_shape[0], output_shape[1], output_shape[2])
+        return x
 
 class RepresentationNetworkMLP(nn.Module):
 

@@ -322,8 +322,8 @@ class MuZeroGPTPolicy(Policy):
         # )
         self._optimizer_world_model = configure_optimizer(
             model=self._model.world_model,
-            learning_rate=3e-3,
-            # learning_rate=1e-4,
+            # learning_rate=3e-3,
+            learning_rate=1e-4,
             weight_decay=self._cfg.weight_decay,
             # weight_decay=0.01,
             exclude_submodules=['none'] # NOTE
@@ -440,7 +440,9 @@ class MuZeroGPTPolicy(Policy):
 
         self._learn_model.train()
         self._target_model.train()
-        self._learn_model.tokenizer.eval()
+        # self._learn_model.tokenizer.eval()
+        self._learn_model.tokenizer.train()
+
 
         if self._cfg.use_rnd_model:
             self._target_model_for_intrinsic_reward.train()
@@ -544,7 +546,9 @@ class MuZeroGPTPolicy(Policy):
         reward_loss = intermediate_losses['loss_rewards']
         policy_loss = intermediate_losses['loss_policy']
         value_loss = intermediate_losses['loss_value']
-        rep_kl_loss = intermediate_losses['rep_kl_loss']
+        latent_kl_loss = intermediate_losses['latent_kl_loss']
+        latent_recon_loss = intermediate_losses['latent_recon_loss']
+
 
         # ==============================================================
         # the core learn model update step.
@@ -561,12 +565,18 @@ class MuZeroGPTPolicy(Policy):
 
         # 在训练循环中使用
         # self.monitor_weights_and_grads(self._learn_model.tokenizer.representation_network)
+        # print('torch.cuda.memory_summary():', torch.cuda.memory_summary())
 
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
             self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
         )
+
+        total_grad_norm_before_clip_rep_net = torch.nn.utils.clip_grad_norm_(self._learn_model.tokenizer.representation_network.parameters(), max_norm=1.0)
+        # print('total_grad_norm_before_clip_rep_net:', total_grad_norm_before_clip_rep_net)
+
+
         self._optimizer_world_model.step()
         if self._cfg.lr_piecewise_constant_decay:
                 self.lr_scheduler.step()
@@ -588,7 +598,8 @@ class MuZeroGPTPolicy(Policy):
 
             'weighted_total_loss': weighted_total_loss.item(),
             'obs_loss': obs_loss,
-            'rep_kl_loss': rep_kl_loss,
+            'latent_kl_loss': latent_kl_loss,
+            'latent_recon_loss':latent_recon_loss,
             'policy_loss': policy_loss,
             'target_policy_entropy': average_target_policy_entropy,
             # 'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),
@@ -609,6 +620,7 @@ class MuZeroGPTPolicy(Policy):
             # 'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
             # 'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
+            'total_grad_norm_before_clip_rep_net': total_grad_norm_before_clip_rep_net.item(),  
         }
 
         return return_loss_dict
@@ -693,9 +705,12 @@ class MuZeroGPTPolicy(Policy):
         weighted_total_loss_tokenizer = losses_tokenizer.loss_total
         weighted_total_loss_tokenizer.backward()
         # losses_tokenizer.loss_total.backward()
+
         total_grad_norm_before_clip_tokenizer = torch.nn.utils.clip_grad_norm_(
             self._learn_model.tokenizer.parameters(), self._cfg.grad_clip_value
         )
+
+
         self._optimizer_tokenizer.step()
 
         intermediate_losses_tokenizer= defaultdict(float)
@@ -999,7 +1014,8 @@ class MuZeroGPTPolicy(Policy):
             # 'total_loss',
             'obs_loss',
             'policy_loss',
-            'rep_kl_loss',
+            'latent_kl_loss',
+            'latent_recon_loss',
             # 'policy_entropy',
             'target_policy_entropy',
             'reward_loss',
@@ -1014,6 +1030,7 @@ class MuZeroGPTPolicy(Policy):
             # 'transformed_target_value',
             'total_grad_norm_before_clip_tokenizer',
             'total_grad_norm_before_clip_wm',
+            'total_grad_norm_before_clip_rep_net',
             # tokenizer
             'commitment_loss',
             'reconstruction_loss',
@@ -1034,18 +1051,71 @@ class MuZeroGPTPolicy(Policy):
             'optimizer_tokenizer': self._optimizer_tokenizer.state_dict(),
 
         }
+    # TODO:
+    # def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
+    #     """
+    #     Overview:
+    #         Load the state_dict variable into policy learn mode.
+    #     Arguments:
+    #         - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
+    #     """
+    #     self._learn_model.load_state_dict(state_dict['model'])
+    #     self._target_model.load_state_dict(state_dict['target_model'])
+    #     self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
+    #     self._optimizer_tokenizer.load_state_dict(state_dict['optimizer_tokenizer'])
 
     def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
         """
         Overview:
-            Load the state_dict variable into policy learn mode.
+            Load the state_dict variable into policy learn mode, specifically loading only the 
+            representation network of the tokenizer within model and target_model.
         Arguments:
             - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
         """
-        self._learn_model.load_state_dict(state_dict['model'])
-        self._target_model.load_state_dict(state_dict['target_model'])
-        self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
-        self._optimizer_tokenizer.load_state_dict(state_dict['optimizer_tokenizer'])
+        # Extract the relevant sub-state-dicts for representation_network from the state_dict
+        # model_rep_network_state = state_dict['model']['tokenizer']['representation_network']
+        # target_model_rep_network_state = state_dict['target_model']['tokenizer']['representation_network']
+
+        # # Load the state into the model's representation network
+        # self._learn_model.tokenizer.representation_network.load_state_dict(model_rep_network_state)
+        # self._target_model.tokenizer.representation_network.load_state_dict(target_model_rep_network_state)
+
+        # Assuming self._learn_model and self._target_model have a 'representation_network' submodule
+        self._load_representation_network_state(state_dict['model'], self._learn_model.tokenizer.representation_network)
+        self._load_representation_network_state(state_dict['target_model'], self._target_model.tokenizer.representation_network)
+
+
+    def _load_representation_network_state(self, state_dict, model_submodule):
+        """
+        This function filters the state_dict to only include the state of the representation_network
+        and loads it into the given model submodule.
+        """
+        from collections import OrderedDict
+
+        # Filter the state_dict to only include keys that start with 'representation_network'
+        representation_network_keys = {k: v for k, v in state_dict.items() if k.startswith('representation_network')}
+        
+        # Load the state into the model's representation_network submodule
+        # model_submodule.load_state_dict(OrderedDict(representation_network_keys))
+
+        # 去掉键名前缀
+        new_state_dict = OrderedDict()
+        for key, value in representation_network_keys.items():
+            new_key = key.replace('representation_network.', '')  # 去掉前缀
+            new_state_dict[new_key] = value
+
+        # # 如果模型在特定的设备上，确保状态字典也在那个设备上
+        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # new_state_dict = {key: value.to(device) for key, value in new_state_dict.items()}
+
+        # 尝试加载状态字典
+        try:
+            # model_submodule.load_state_dict(new_state_dict)
+            # 使用 strict=False 参数忽略缺少的键
+            model_submodule.load_state_dict(new_state_dict, strict=False)
+        except RuntimeError as e:
+            print("加载失败: ", e)
+
 
     def _process_transition(self, obs, policy_output, timestep):
         # be compatible with DI-engine Policy class

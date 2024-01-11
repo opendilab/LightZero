@@ -11,7 +11,7 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
-from .common import MZNetworkOutput, RepresentationNetworkGPT, PredictionNetwork
+from .common import MZNetworkOutput, RepresentationNetworkGPT, PredictionNetwork, LatentDecoder
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -164,10 +164,14 @@ class MuZeroModelGPT(nn.Module):
             # embedding_dim=cfg.embedding_dim,
             embedding_dim=cfg.world_model.embed_dim,
         )
+        # Instantiate the decoder
+        decoder_network = LatentDecoder(embedding_dim=1024, output_shape=(4, 64, 64))
+
 
         Encoder = Encoder(cfg.tokenizer.encoder)
         Decoder = Decoder(cfg.tokenizer.decoder)
-        self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network)
+        self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network,
+                            decoder_network=decoder_network)
         self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
                                       config=cfg.world_model, tokenizer=self.tokenizer)
         print(f'{sum(p.numel() for p in self.tokenizer.parameters())} parameters in agent.tokenizer')

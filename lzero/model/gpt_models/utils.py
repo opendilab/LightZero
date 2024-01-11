@@ -122,9 +122,12 @@ class LossWithIntermediateLosses:
         self.policy_loss_weight = 1.
         # self.ends_loss_weight = 1.
         self.ends_loss_weight = 0.
-        self.rep_kl_loss_weight = 0.1 # for lunarlander
 
-        # self.rep_kl_loss_weight = 0.5
+        # self.latent_kl_loss_weight = 0.1 # for lunarlander
+        self.latent_kl_loss_weight = 0. # for lunarlander
+
+        # self.latent_recon_loss_weight = 1
+        self.latent_recon_loss_weight = 0.1
 
 
         # Initialize the total loss tensor on the correct device
@@ -140,8 +143,10 @@ class LossWithIntermediateLosses:
                 self.loss_total += self.value_loss_weight * v
             elif k == 'loss_ends':
                 self.loss_total += self.ends_loss_weight * v
-            elif k == 'rep_kl_loss':
-                self.loss_total += self.rep_kl_loss_weight * v
+            elif k == 'latent_kl_loss':
+                self.loss_total += self.latent_kl_loss_weight * v
+            elif k == 'latent_recon_loss':
+                self.loss_total += self.latent_recon_loss_weight * v
             else:
                 raise ValueError(f"Unknown loss type : {k}")
 

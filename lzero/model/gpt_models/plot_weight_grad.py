@@ -30,8 +30,6 @@ print(f"Average similarity ratio between all pairs of samples: {average_similari
 
 
 
-
-
 x = torch.randn(192, 64, 8, 8).to('cuda:0')
 
 def check_layer_output(model, x):

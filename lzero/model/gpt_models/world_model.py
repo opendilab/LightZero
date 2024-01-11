@@ -107,7 +107,8 @@ class WorldModel(nn.Module):
                 # nn.ReLU(),
                 # nn.Linear(config.embed_dim, obs_vocab_size)
                 nn.LeakyReLU(negative_slope=0.01), # TODO: 2
-                nn.Linear(config.embed_dim, self.obs_per_embdding_dim)
+                nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
+                # nn.Tanh(), # TODO
             )
         )
 
@@ -654,7 +655,17 @@ class WorldModel(nn.Module):
 
         # NOTE: 这里是需要梯度的
         # obs_tokens = tokenizer.encode(batch['observations'], should_preprocess=True).tokens  # (BL, K)
-        obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=True) # (B, C, H, W) -> (B, K, E)
+        with torch.no_grad():  # TODO
+            obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False) # (B, C, H, W) -> (B, K, E)
+
+        # obs_embeddings.register_hook(lambda grad: grad * 1/5)  # TODO：只提供重建损失更新表征网络
+
+        # Assume that 'cont_embeddings' and 'original_images' are available from prior code
+        # Decode the embeddings to reconstruct the images
+        reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+
+        # Calculate the reconstruction loss
+        latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].contiguous().view(-1, 4, 64, 64), reconstructed_images)
 
 
         # 计算KL散度损失
@@ -663,8 +674,7 @@ class WorldModel(nn.Module):
         mean = obs_embeddings.mean(dim=0, keepdim=True)
         std = obs_embeddings.std(dim=0, keepdim=True)
         # 创建标准正态分布作为先验分布
-        # prior_dist = torch.distributions.Normal(torch.zeros_like(mean), torch.ones_like(std))
-        prior_dist = torch.distributions.Normal(torch.ones_like(mean)*0.1, torch.ones_like(std))
+        prior_dist = torch.distributions.Normal(torch.zeros_like(mean), torch.ones_like(std))
 
 
         # 创建模型输出的分布
@@ -672,12 +682,12 @@ class WorldModel(nn.Module):
         # 计算KL散度损失，对每个样本的每个特征进行计算
         kl_loss = torch.distributions.kl.kl_divergence(model_dist, prior_dist)
         # 因为 kl_loss 的形状是 (1, 1, 256)，我们可以对所有特征求平均来得到一个标量损失
-        rep_kl_loss = kl_loss.mean()
-        print(f'rep_kl_loss:, {rep_kl_loss}')
-        if torch.isnan(rep_kl_loss) or torch.isinf(rep_kl_loss):
-            print("NaN or inf detected in rep_kl_loss!")
+        latent_kl_loss = kl_loss.mean()
+        # print(f'latent_kl_loss:, {latent_kl_loss}')
+        if torch.isnan(latent_kl_loss) or torch.isinf(latent_kl_loss):
+            print("NaN or inf detected in latent_kl_loss!")
             # 使用 torch.tensor(0) 创建一个同设备，同数据类型的零张量，并确保不需要梯度
-            rep_kl_loss = torch.tensor(0., device=rep_kl_loss.device, dtype=rep_kl_loss.dtype)
+            latent_kl_loss = torch.tensor(0., device=latent_kl_loss.device, dtype=latent_kl_loss.dtype)
 
         # TODO
         # obs_embeddings = AvgL1Norm(obs_embeddings)
@@ -695,7 +705,8 @@ class WorldModel(nn.Module):
 
         # tokens = rearrange(torch.cat((obs_tokens, act_tokens), dim=2), 'b l k1 -> b (l k1)')  # (B, L(K+1))
         # outputs = self.forward(tokens, is_root=False)
-        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, is_root=False)
+        # TODO: 只提供重建损失更新表征网络
+        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens)}, is_root=False)
 
         labels_observations, labels_rewards, labels_ends = self.compute_labels_world_model(obs_embeddings, batch['rewards'],
                                                                                            batch['ends'],
@@ -756,7 +767,7 @@ class WorldModel(nn.Module):
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
 
         return LossWithIntermediateLosses(loss_obs=loss_obs, loss_rewards=loss_rewards, loss_value=loss_value,
-                                          loss_policy=loss_policy, rep_kl_loss=rep_kl_loss)
+                                          loss_policy=loss_policy, latent_kl_loss=latent_kl_loss, latent_recon_loss=latent_recon_loss)
 
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
         # Assume outputs.logits_rewards and labels are your predictions and targets

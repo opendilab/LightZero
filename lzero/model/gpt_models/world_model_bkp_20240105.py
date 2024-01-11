@@ -677,7 +677,7 @@ class WorldModel(nn.Module):
         # 计算KL散度损失，对每个样本的每个特征进行计算
         kl_loss = torch.distributions.kl.kl_divergence(model_dist, prior_dist)
         # 因为 kl_loss 的形状是 (1, 1, 256)，我们可以对所有特征求平均来得到一个标量损失
-        rep_kl_loss = kl_loss.mean()
+        latent_kl_loss = kl_loss.mean()
 
         # second to last 增加高斯噪声
         noise_std = 0.1
@@ -753,7 +753,7 @@ class WorldModel(nn.Module):
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
 
         return LossWithIntermediateLosses(loss_obs=loss_obs, loss_rewards=loss_rewards, loss_value=loss_value,
-                                          loss_policy=loss_policy, rep_kl_loss=rep_kl_loss)
+                                          loss_policy=loss_policy, latent_kl_loss=latent_kl_loss)
 
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
         # Assume outputs.logits_rewards and labels are your predictions and targets
