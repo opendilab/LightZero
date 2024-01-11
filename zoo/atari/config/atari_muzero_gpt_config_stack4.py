@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(1)
+torch.cuda.set_device(0)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -64,9 +64,13 @@ eps_greedy_exploration_in_collect = False
 atari_muzero_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer.py: lpips loss
-    # exp_name=f'data_mz_gpt_ctree_0111/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs500_contembdings_mz-repenet-lastlinear-lsd1024-6488-kaiming-lerelu_obsmseloss_obsloss2_kllw0-lr3e-3-gcv05-reconslossw01-minmax-latentgrad02_stack4_upc1000_seed0',
+    # exp_name=f'data_mz_gpt_ctree_0111_debug/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_mz-repenet-lastlinear-lsd1024-6488-kaiming-lerelu_obsmseloss-obsloss2_kllw0-lr1e-4-gcv05-biasfalse-reconslossw0-minmax_stack4_mcs500_seed0',
 
-    exp_name=f'data_mz_gpt_ctree_0111/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs500_contembdings_mz-repenet-lastlinear-lsd1024-6488-kaiming-lerelu_obsmseloss_obsloss2_kllw0-lr3e-3-gcv05-biasfalse-minmax-iter60k-fixed_stack4_seed0',
+    # exp_name=f'data_mz_gpt_ctree_0111/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_mz-repenet-lastlinear-lsd1024-6488-kaiming-lerelu_obsmseloss-obsloss2_kllw0-lr1e-4-gcv05-biasfalse-reconslossw01-minmax-latentgrad1_stack4_mcs500_seed0',
+
+    # exp_name=f'data_mz_gpt_ctree_0111/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs500_contembdings_mz-repenet-lastlinear-lsd1024-6488-kaiming-lerelu_obsmseloss-obsloss2_kllw0-lr1e-4-gcv05-reconslossw01-minmax-latentgrad02-iter60ktrain_stack4_emptycache-per200_seed0',
+
+    exp_name=f'data_mz_gpt_ctree_0111/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_mz-repenet-lastlinear-lsd1024-6488-kaiming-lerelu_obsmseloss-obsloss2_kllw0-lr1e-4-gcv05-biasfalse-reconslossw0-minmax-iter60k-fixed_stack4_mcs500_emptycache-per1_seed0',
 
     # exp_name=f'data_mz_gpt_ctree_0111/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs500_contembdings_mz-repenet-lastlinear-lsd1024-6488-kaiming-lerelu_obsmseloss_obsloss2_kllw0-lr1e-4-gcv05-reconslossw01-minmax-latentgrad0.2-fromm60ktrain_stack4_upc1000_seed0',
     # exp_name=f'data_mz_gpt_ctree_0111/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs500_contembdings_mz-repenet-lastlinear-lsd1024-6488-kaiming-lerelu_obsmseloss_obsloss2_kllw0-lr1e-4-gcv05-onlyreconslossw1-biasfalse-minmax_stack4_seed0',

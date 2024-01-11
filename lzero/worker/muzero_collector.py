@@ -510,6 +510,12 @@ class MuZeroCollector(ISerialCollector):
                         completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
 
                     eps_steps_lst[env_id] += 1
+
+                    if eps_steps_lst[env_id] % 200==0:
+                        torch.cuda.empty_cache() # TODO: NOTE
+                        print('torch.cuda.empty_cache()')
+                    # print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
+
                     total_transitions += 1
 
                     if self.policy_config.use_priority:

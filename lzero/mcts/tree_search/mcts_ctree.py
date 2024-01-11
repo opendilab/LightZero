@@ -286,6 +286,7 @@ class MuZeroMCTSCtree(object):
             # _ = model.world_model.refresh_keys_values_with_initial_obs_tokens(model.world_model.obs_tokens)
             
             # model.world_model.past_keys_values_cache.clear()  # 清除缓存
+            # del model.world_model.keys_values_wm # TODO: 清除缓存
             for simulation_index in range(self._cfg.num_simulations):
                 # In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.
 

@@ -24,7 +24,9 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 1
-update_per_collect = 1000
+# update_per_collect = 1000
+update_per_collect = 10
+
 # update_per_collect = None
 # model_update_ratio = 0.25
 model_update_ratio = 0.25

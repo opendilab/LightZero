@@ -280,8 +280,8 @@ class MuZeroGPTPolicy(Policy):
         # )
         self._optimizer_world_model = configure_optimizer(
             model=self._model.world_model,
-            learning_rate=3e-3,
-            # learning_rate=1e-4, # NOTE: TODO
+            # learning_rate=3e-3,
+            learning_rate=1e-4, # NOTE: TODO
             weight_decay=self._cfg.weight_decay,
             # weight_decay=0.01,
             exclude_submodules=['none'] # NOTE
@@ -534,7 +534,22 @@ class MuZeroGPTPolicy(Policy):
             self._target_model_for_intrinsic_reward.update(self._learn_model.state_dict())
 
 
+        # 确保所有的CUDA核心完成工作，以便准确统计显存使用情况
+        torch.cuda.synchronize()
+        # 获取当前分配的显存总量（字节）
+        current_memory_allocated = torch.cuda.memory_allocated()
+        # 获取程序运行到目前为止分配过的最大显存量（字节）
+        max_memory_allocated = torch.cuda.max_memory_allocated()
+
+        # 将显存使用量从字节转换为GB
+        current_memory_allocated_gb = current_memory_allocated / (1024**3)
+        max_memory_allocated_gb = max_memory_allocated / (1024**3)
+        # 使用SummaryWriter记录当前和最大显存使用量
+
+
         return_loss_dict = {
+            'Current_GPU': current_memory_allocated_gb,
+            'Max_GPU': max_memory_allocated_gb,
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
             'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
@@ -948,6 +963,8 @@ class MuZeroGPTPolicy(Policy):
             tensorboard according to the return value ``_forward_learn``.
         """
         return [
+            'Current_GPU',
+            'Max_GPU',
             'collect_epsilon',
             'collect_mcts_temperature',
             # 'cur_lr',

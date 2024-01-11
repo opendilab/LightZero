@@ -630,8 +630,46 @@ class WorldModel(nn.Module):
         if len(self.past_keys_values_cache) > self.max_cache_size:
             # TODO: lru_cache
             self.past_keys_values_cache.popitem(last=False)  # Removes the earliest inserted item
+                # popitem返回一个键值对，其中第二个元素是值
+            # _, popped_kv_cache = self.past_keys_values_cache.popitem(last=False)
+            # 如果popped_kv_cache是一个包含张量或复杂对象的容器，您可能需要进一步删除这些对象
+            # 例如：
+            # del popped_kv_cache # 不要这一行
+            # torch.cuda.empty_cache()  # 请注意，频繁调用可能会影响性能, 先del反而清除不掉占用的2MB缓存
+
+        # Example usage:
+        # Assuming `past_keys_values_cache` is a populated instance of `KeysValues`
+        # and `num_layers` is the number of transformer layers
+        # cuda_memory_gb = self.calculate_cuda_memory_gb(self.past_keys_values_cache, num_layers=2)
+        # print(f'len(self.past_keys_values_cache): {len(self.past_keys_values_cache)}, Memory used by past_keys_values_cache: {cuda_memory_gb:.2f} GB')
 
         return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
+
+
+    # 计算显存使用量的函数
+    def calculate_cuda_memory_gb(self, past_keys_values_cache, num_layers: int):
+        total_memory_bytes = 0
+        
+        # 遍历OrderedDict中所有的KeysValues实例
+        for kv_instance in past_keys_values_cache.values():
+            num_layers = len(kv_instance)  # 获取层数
+            for layer in range(num_layers):
+                kv_cache = kv_instance[layer]
+                k_shape = kv_cache._k_cache.shape  # 获取keys缓存的形状
+                v_shape = kv_cache._v_cache.shape  # 获取values缓存的形状
+
+                # 计算元素个数并乘以每个元素的字节数
+                k_memory = torch.prod(torch.tensor(k_shape)) * 4
+                v_memory = torch.prod(torch.tensor(v_shape)) * 4
+                
+                # 累加keys和values缓存的内存
+                layer_memory = k_memory + v_memory
+                total_memory_bytes += layer_memory.item()  # .item()确保转换为Python标准数字
+        
+        # 将总内存从字节转换为吉字节
+        total_memory_gb = total_memory_bytes / (1024 ** 3)
+        return total_memory_gb
+
 
 
     def compute_loss(self, batch, tokenizer: Tokenizer=None, **kwargs: Any) -> LossWithIntermediateLosses:

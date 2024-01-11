@@ -66,11 +66,12 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:1',
+                      "device": 'cuda:0',
                     #   "device": 'cpu',
                       'support_size': 21,
                       'action_shape': 6,# TODO：for atari
                       'max_cache_size':500,
+                      # 'max_cache_size':100,
                       # 'max_cache_size':1000,
                       "env_num":8,
                       }
