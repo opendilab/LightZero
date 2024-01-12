@@ -10,16 +10,33 @@ from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
 from gym import spaces
 from numpy.typing import NDArray
-from zoo.pooltool.datatypes import ObservationDict, PoolToolEnv, PoolToolGym, Spaces
+from zoo.pooltool.datatypes import (
+    ObservationDict,
+    PoolToolEnv,
+    PoolToolGym,
+    Spaces,
+    State,
+)
+from zoo.pooltool.image_representation import PygameRenderer, RenderConfig, RenderPlane
 
 import pooltool as pt
 import pooltool.constants as const
-from pooltool.ai.image_representation import PygameRenderer, RenderConfig
 
-# from pooltool.system.datatypes import MultiSystem
+RENDER_CONFIG = RenderConfig(
+    planes=[
+        RenderPlane(ball_ids=["cue"]),
+        RenderPlane(ball_ids=["object"]),
+        RenderPlane(ball_ids=["cue", "object"]),
+        RenderPlane(ball_ball_lines=[("cue", "object")]),
+        RenderPlane(cushion_ids=["3", "12", "9", "18"]),
+    ],
+    line_width=1,
+    antialias_circle=True,
+    antialias_line=True,
+)
 
 
-def calc_reward(state: pt.State) -> float:
+def calc_reward(state: State) -> float:
     """Calculate the reward
 
     A point is scored when both:
@@ -43,12 +60,9 @@ def calc_reward(state: pt.State) -> float:
 class SumToThreeImageGym(PoolToolGym):
     renderer: PygameRenderer
 
-    def observation_array(self) -> NDArray[np.uint8]:
+    def observation_array(self) -> NDArray[np.float32]:
         """Return the system state as an image array"""
-        self.renderer.render()
-        obs = self.renderer.observation()
-        assert obs.any()
-        return obs
+        return self.renderer.observation()
 
     def set_action(self, scaled_action: NDArray[np.float32]) -> None:
         self.system.cue.set_state(
@@ -96,22 +110,9 @@ class SumToThreeImageGym(PoolToolGym):
         assert not np.isnan(self.system.balls["object"].state.rvw).any()
 
     @classmethod
-    def from_state(cls, state: pt.State, px: int) -> SumToThreeImageGym:
+    def from_state(cls, state: State, px: int) -> SumToThreeImageGym:
         """Create a SumToThree environment from a State"""
-
-        WHITE = (255, 255, 255)
-        GRAY = (128, 128, 128)
-
-        render_config = RenderConfig(
-            grayscale=True,
-            cushion_color=WHITE,
-            ball_color=lambda ball_id, _: WHITE if ball_id == "cue" else GRAY,
-            render_cushions=False,
-            offscreen=True,
-            single_pixel_ball=True,
-        )
-
-        renderer = PygameRenderer.build(state.system.table, px, render_config)
+        renderer = PygameRenderer.build(state.system.table, px, RENDER_CONFIG)
         renderer.init()
 
         env = cls(
@@ -120,8 +121,8 @@ class SumToThreeImageGym(PoolToolGym):
             spaces=Spaces(
                 observation=SumToThreeImageGym.get_obs_space(renderer),
                 action=spaces.Box(
-                    low=np.array([0.5, -70], dtype=np.float32),
-                    high=np.array([3, +70], dtype=np.float32),
+                    low=np.array([0.3, -70], dtype=np.float32),
+                    high=np.array([3.0, +70], dtype=np.float32),
                     shape=(2,),
                     dtype=np.float32,
                 ),
@@ -165,16 +166,16 @@ class SumToThreeImageGym(PoolToolGym):
                 system.table, system.balls["object"]
             )
 
-        return cls.from_state(pt.State(system, game), px=px)
+        return cls.from_state(State(system, game), px=px)
 
     @staticmethod
     def get_obs_space(renderer: PygameRenderer) -> Any:
-        channels = 1 if renderer.render_config.grayscale else 3
+        channels = len(renderer.render_config.planes)
 
         return spaces.Box(
             low=0.0,
             high=1.0,
-            shape=(channels, renderer.height, renderer.width),
+            shape=(channels, renderer.coordinates.height, renderer.coordinates.width),
             dtype=np.float32,
         )
 
@@ -236,7 +237,6 @@ class SumToThreeImageEnv(PoolToolEnv):
             self._env.reset()
 
         self.manage_seeds()
-        # self.multisystem = MultiSystem()
         self._tracked_stats = EpisodicTrackedStats()
 
         self._observation_space = self._env.spaces.observation
@@ -257,8 +257,6 @@ class SumToThreeImageEnv(PoolToolEnv):
         done = self._tracked_stats.eval_episode_length == self.cfg["episode_length"]
 
         info = attrs.asdict(self._tracked_stats) if done else {}
-
-        # self.multisystem.append(self._env.system.copy())
 
         return BaseEnvTimestep(
             obs=self._env.observation(),

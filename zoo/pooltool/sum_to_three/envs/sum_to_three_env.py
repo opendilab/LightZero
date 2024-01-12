@@ -15,15 +15,14 @@ from zoo.pooltool.datatypes import (
     PoolToolEnv,
     PoolToolGym,
     Spaces,
+    State,
 )
 
 import pooltool as pt
 import pooltool.constants as const
 
-# from pooltool.system.datatypes import MultiSystem
 
-
-def calc_reward(state: pt.State) -> float:
+def calc_reward(state: State) -> float:
     """Calculate the reward
 
     A point is scored when both:
@@ -133,7 +132,7 @@ class SumToThreeGym(PoolToolGym):
         assert not np.isnan(self.system.balls["object"].state.rvw).any()
 
     @classmethod
-    def from_state(cls, state: pt.State) -> SumToThreeGym:
+    def from_state(cls, state: State) -> SumToThreeGym:
         """Create a SumToThree environment from a State"""
         return cls(
             system=state.system,
@@ -144,8 +143,8 @@ class SumToThreeGym(PoolToolGym):
                     state.system.table,
                 ),
                 action=spaces.Box(
-                    low=np.array([0.5, -70], dtype=np.float32),
-                    high=np.array([3, +70], dtype=np.float32),
+                    low=np.array([0.3, -70], dtype=np.float32),
+                    high=np.array([3.0, +70], dtype=np.float32),
                     shape=(2,),
                     dtype=np.float32,
                 ),
@@ -185,7 +184,7 @@ class SumToThreeGym(PoolToolGym):
                 system.table, system.balls["object"]
             )
 
-        return cls.from_state(pt.State(system, game))
+        return cls.from_state(State(system, game))
 
 
 @attrs.define
@@ -242,7 +241,6 @@ class SumToThreeEnv(PoolToolEnv):
             self._env.reset()
 
         self.manage_seeds()
-        # self.multisystem = MultiSystem()
         self._tracked_stats = EpisodicTrackedStats()
 
         self._observation_space = self._env.spaces.observation
@@ -263,8 +261,6 @@ class SumToThreeEnv(PoolToolEnv):
         done = self._tracked_stats.eval_episode_length == self.cfg["episode_length"]
 
         info = attrs.asdict(self._tracked_stats) if done else {}
-
-        # self.multisystem.append(self._env.system.copy())
 
         return BaseEnvTimestep(
             obs=self._env.observation(),

@@ -13,7 +13,8 @@ batch_size = 128
 max_env_step = int(5e6)
 reanalyze_ratio = 0.0
 eval_freq = 1000
-px = 10
+px = 100
+channels = 5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -35,24 +36,30 @@ sumtothree_cont_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(1, px, px // 2),
+            image_channel=channels,
+            observation_shape=(channels, px, px // 2),
+            downsample=True,
             action_space_size=2,
             continuous_action_space=True,
             categorical_distribution=False,
             num_of_sampled_actions=K,
             sigma_type="conditioned",
             model_type="conv",
-            lstm_hidden_size=512,
-            latent_state_dim=512,
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
             norm_type="BN",
+            # -------------------------
+            num_res_blocks=1,
+            num_channels=16,
+            fc_value_layers=[8],
+            fc_policy_layers=[8],
         ),
         cuda=True,
         env_type="not_board_games",
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
+        # Optimizer
         optim_type="Adam",
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,

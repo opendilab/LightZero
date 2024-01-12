@@ -18,6 +18,12 @@ ObservationDict = Dict[str, Any]
 
 
 @attrs.define
+class State:
+    system: pt.System
+    game: pt.Ruleset
+
+
+@attrs.define
 class Spaces:
     observation: spaces.Space
     action: spaces.Space
@@ -25,7 +31,7 @@ class Spaces:
 
 
 @attrs.define
-class PoolToolGym(pt.State):
+class PoolToolGym(State):
     spaces: Spaces
 
     def observation(self) -> ObservationDict:
