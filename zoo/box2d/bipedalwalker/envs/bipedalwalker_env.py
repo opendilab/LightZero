@@ -83,9 +83,9 @@ class BipedalWalkerEnv(CartPoleEnv):
         if not self._init_flag:
             assert self._cfg.env_type in ['normal', 'hardcore'], "env_type must be in ['normal', 'hardcore']"
             if self._cfg.env_type == 'normal':
-                self._env = gym.make('BipedalWalker-v3')
+                self._env = gym.make('BipedalWalker-v3', render_mode="rgb_array")
             elif self._cfg.env_type == 'hardcore':
-                self._env = gym.make('BipedalWalker-v3', hardcore=True)
+                self._env = gym.make('BipedalWalker-v3', hardcore=True, render_mode="rgb_array")
             self._observation_space = self._env.observation_space
             self._action_space = self._env.action_space
             self._reward_space = gym.spaces.Box(
@@ -134,7 +134,7 @@ class BipedalWalkerEnv(CartPoleEnv):
         if self._act_scale:
             action = affine_transform(action, min_val=self.action_space.low, max_val=self.action_space.high)
         if self._save_replay_gif:
-            self._frames.append(self._env.render(mode='rgb_array'))
+            self._frames.append(self._env.render())
 
         obs, rew, terminated, truncated, info = self._env.step(action)
         done = terminated or truncated

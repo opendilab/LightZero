@@ -171,7 +171,8 @@ class MiniGridEnvLightZero(MiniGridEnv):
         if self._save_replay_gif:
             self._frames.append(self._env.render())
         # using the step method of Gymnasium env, return is (observation, reward, terminated, truncated, info)
-        obs, rew, done, _, info = self._env.step(action)
+        obs, rew, terminated, truncated, info = self._env.step(action)
+        done = terminated or truncated
         rew = float(rew)
         self._eval_episode_return += rew
         self._current_step += 1

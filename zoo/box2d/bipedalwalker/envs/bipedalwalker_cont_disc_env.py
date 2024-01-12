@@ -82,7 +82,7 @@ class BipedalWalkerDiscEnv(BipedalWalkerEnv):
             - info_dict (:obj:`Dict[str, Any]`): Including observation, action_mask, and to_play label.
         """
         if not self._init_flag:
-            self._env = gym.make('BipedalWalker-v3', hardcore=True)
+            self._env = gym.make('BipedalWalker-v3', hardcore=True, render_mode="rgb_array")
             self._observation_space = self._env.observation_space
             self._action_space = self._env.action_space
             self._reward_space = gym.spaces.Box(
@@ -141,7 +141,7 @@ class BipedalWalkerDiscEnv(BipedalWalkerEnv):
         if self._act_scale:
             action = affine_transform(action, min_val=self._raw_action_space.low, max_val=self._raw_action_space.high)
         if self._save_replay_gif:
-            self._frames.append(self._env.render(mode='rgb_array'))
+            self._frames.append(self._env.render())
         obs, rew, terminated, truncated, info = self._env.step(action)
         done = terminated or truncated
 

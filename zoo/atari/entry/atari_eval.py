@@ -42,7 +42,7 @@ if __name__ == "__main__":
     # A boolean flag indicating whether to save the video of the environment.
     main_config.env.save_replay = True
     # The path where the recorded video will be saved.
-    main_config.env.save_path = './video'
+    main_config.env.replay_path = './video'
     # The maximum number of steps for each episode during evaluation. This may need to be adjusted based on the specific characteristics of the environment.
     main_config.env.eval_max_episode_steps = int(20)
 

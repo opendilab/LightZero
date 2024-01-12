@@ -58,7 +58,7 @@ class GumbelMuZeroPolicy(MuZeroPolicy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
-            norm_type='BN', 
+            norm_type='BN',
         ),
         # ****** common ******
         # (bool) Whether to use multi-gpu training.
@@ -230,7 +230,8 @@ class GumbelMuZeroPolicy(MuZeroPolicy):
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
         elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay, learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
+            self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay,
+                                                   learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
 
         if self._cfg.lr_piecewise_constant_decay:
             from torch.optim.lr_scheduler import LambdaLR
@@ -346,10 +347,12 @@ class GumbelMuZeroPolicy(MuZeroPolicy):
         # The core difference between GumbelMuZero and MuZero
         # ==============================================================
         # In Gumbel MuZero, the policy loss is defined as the KL loss between current policy and improved policy calculated in MCTS.
-        policy_loss = self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)), torch.from_numpy(improved_policy_batch[:, 0]).to(self._cfg.device).detach().float())
-        policy_loss = policy_loss.mean(dim=-1)*mask_batch[:,0]
+        policy_loss = self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)),
+                                   torch.from_numpy(improved_policy_batch[:, 0]).to(self._cfg.device).detach().float())
+        policy_loss = policy_loss.mean(dim=-1) * mask_batch[:, 0]
         # Output the entropy for experimental observation.
-        entropy_loss = -torch.sum(torch.softmax(policy_logits, dim=1) * torch.log(torch.softmax(policy_logits, dim=1)), dim=-1)
+        entropy_loss = -torch.sum(torch.softmax(policy_logits, dim=1) * torch.log(torch.softmax(policy_logits, dim=1)),
+                                  dim=-1)
 
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
@@ -394,10 +397,13 @@ class GumbelMuZeroPolicy(MuZeroPolicy):
             # calculate policy loss for the next ``num_unroll_steps`` unroll steps.
             # NOTE: the +=.
             # ==============================================================
-            policy_loss += self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)),torch.from_numpy(improved_policy_batch[:, step_k + 1]).to(self._cfg.device).detach().float()).mean(dim=-1) * mask_batch[:,step_k+1]
+            policy_loss += self.kl_loss(torch.log(torch.softmax(policy_logits, dim=1)),
+                                        torch.from_numpy(improved_policy_batch[:, step_k + 1]).to(
+                                            self._cfg.device).detach().float()).mean(dim=-1) * mask_batch[:, step_k + 1]
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
-            entropy_loss += -torch.sum(torch.softmax(policy_logits, dim=1) * torch.log(torch.softmax(policy_logits, dim=1)), dim=-1)
+            entropy_loss += -torch.sum(
+                torch.softmax(policy_logits, dim=1) * torch.log(torch.softmax(policy_logits, dim=1)), dim=-1)
 
             # Follow MuZero, set half gradient
             # hidden_state.register_hook(lambda grad: grad * 0.5)
@@ -418,8 +424,8 @@ class GumbelMuZeroPolicy(MuZeroPolicy):
         # ==============================================================
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
+                self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
         )
         weighted_total_loss = (weights * loss).mean()
 
@@ -547,13 +553,15 @@ class GumbelMuZeroPolicy(MuZeroPolicy):
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
-            roots_completed_values = roots.get_children_values(self._cfg.discount_factor, self._cfg.model.action_space_size)
+            roots_completed_values = roots.get_children_values(self._cfg.discount_factor,
+                                                               self._cfg.model.action_space_size)
 
             # ==============================================================
             # The core difference between GumbelMuZero and MuZero
             # ==============================================================
             # Gumbel MuZero selects the action according to the improved policy
-            roots_improved_policy_probs = roots.get_policies(self._cfg.discount_factor, self._cfg.model.action_space_size) # new policy constructed with completed Q in gumbel muzero
+            roots_improved_policy_probs = roots.get_policies(self._cfg.discount_factor,
+                                                             self._cfg.model.action_space_size)  # new policy constructed with completed Q in gumbel muzero
             roots_improved_policy_probs = np.array(roots_improved_policy_probs)
 
             data_id = [i for i in range(active_collect_env_num)]
@@ -563,7 +571,8 @@ class GumbelMuZeroPolicy(MuZeroPolicy):
                 ready_env_id = np.arange(active_collect_env_num)
 
             for i, env_id in enumerate(ready_env_id):
-                distributions, value, improved_policy_probs = roots_visit_count_distributions[i], roots_values[i], roots_improved_policy_probs[i]
+                distributions, value, improved_policy_probs = roots_visit_count_distributions[i], roots_values[i], \
+                roots_improved_policy_probs[i]
 
                 roots_completed_value = roots_completed_values[i]
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
@@ -575,6 +584,7 @@ class GumbelMuZeroPolicy(MuZeroPolicy):
                 # entire action set.
                 valid_value = np.where(action_mask[i] == 1.0, improved_policy_probs, 0.0)
                 action = np.argmax([v for v in valid_value])
+                roots_completed_value = np.where(action_mask[i] == 1.0, roots_completed_value, 0.0)
 
                 output[env_id] = {
                     'action': action,
@@ -600,7 +610,8 @@ class GumbelMuZeroPolicy(MuZeroPolicy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1, ready_env_id: np.array = None,) -> Dict:
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
+                      ready_env_id: np.array = None, ) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -653,7 +664,8 @@ class GumbelMuZeroPolicy(MuZeroPolicy):
             # The core difference between GumbelMuZero and MuZero
             # ==============================================================
             # Gumbel MuZero selects the action according to the improved policy
-            roots_improved_policy_probs = roots.get_policies(self._cfg.discount_factor, self._cfg.model.action_space_size) # new policy constructed with completed Q in gumbel muzero
+            roots_improved_policy_probs = roots.get_policies(self._cfg.discount_factor,
+                                                             self._cfg.model.action_space_size)  # new policy constructed with completed Q in gumbel muzero
             roots_improved_policy_probs = np.array(roots_improved_policy_probs)
 
             data_id = [i for i in range(active_eval_env_num)]
@@ -663,7 +675,8 @@ class GumbelMuZeroPolicy(MuZeroPolicy):
                 ready_env_id = np.arange(active_eval_env_num)
 
             for i, env_id in enumerate(ready_env_id):
-                distributions, value, improved_policy_probs = roots_visit_count_distributions[i], roots_values[i], roots_improved_policy_probs[i]
+                distributions, value, improved_policy_probs = roots_visit_count_distributions[i], roots_values[i], \
+                roots_improved_policy_probs[i]
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
                 #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than
