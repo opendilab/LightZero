@@ -240,6 +240,10 @@ def train_muzero_gpt(
         # TODO: for batch world model ,to improve kv reuse, we could donot reset
         policy._learn_model.world_model.past_keys_values_cache.clear() # very important
         del policy._learn_model.world_model.keys_values_wm
+
+        policy._collect_model.world_model.past_keys_values_cache.clear() # very important
+        # del policy._collect_model.world_model.keys_values_wm
+
         torch.cuda.empty_cache() # TODO: NOTE
 
         # if collector.envstep > 0:

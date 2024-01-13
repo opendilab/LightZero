@@ -46,13 +46,13 @@ cfg['world_model'] = {
                       # 'embed_dim': 128, # TODO：for atari
 
                       # 'tokens_per_block': 2,
-                      # 'max_blocks': 10,
-                      # "max_tokens": 2 * 10,  # TODO： horizon
-                      # 'embed_dim': 1024, # TODO：for atari
+                      # 'max_blocks': 20,
+                      # "max_tokens": 2 * 20,  # TODO： horizon
 
                       'tokens_per_block': 2,
                       'max_blocks': 5,
                       "max_tokens": 2 * 5,  # TODO： horizon
+
                       # 'embed_dim':2048, # TODO：for atari
                       'embed_dim':1024, # TODO：for atari
                       # 'embed_dim':256, # TODO：for atari
@@ -71,9 +71,9 @@ cfg['world_model'] = {
                       'support_size': 21,
                       'action_shape': 6,# TODO：for atari
                       'max_cache_size':500,
-                      # 'max_cache_size':100,
-                      # 'max_cache_size':1000,
+                      # 'max_cache_size':5000,
                       "env_num":8,
+                      'latent_recon_loss_weight':0,
                       }
 from easydict import EasyDict
 cfg = EasyDict(cfg)

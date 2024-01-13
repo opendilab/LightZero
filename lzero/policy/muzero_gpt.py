@@ -938,8 +938,13 @@ class MuZeroGPTPolicy(Policy):
                 # the index within the legal action set, rather than the index in the entire action set.
                 #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than
                 # sampling during the evaluation phase.
+                
+                # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                #     distributions, temperature=1, deterministic=True
+                # )
+                # TODO: eval
                 action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=1, deterministic=True
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=False
                 )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.

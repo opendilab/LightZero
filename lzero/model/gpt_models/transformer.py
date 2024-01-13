@@ -12,6 +12,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from .kv_caching import KeysValues, KVCache
+from line_profiler import line_profiler
 
 
 @dataclass
@@ -93,6 +94,8 @@ class SelfAttention(nn.Module):
         block_causal_mask = torch.max(causal_mask, torch.block_diag(*[torch.ones(config.tokens_per_block, config.tokens_per_block) for _ in range(config.max_blocks)]))
         self.register_buffer('mask', causal_mask if config.attention == 'causal' else block_causal_mask)
 
+
+    # @profile
     def forward(self, x: torch.Tensor, kv_cache: Optional[KVCache] = None) -> torch.Tensor:
         B, T, C = x.size()
         if kv_cache is not None:

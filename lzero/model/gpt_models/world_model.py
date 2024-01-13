@@ -22,8 +22,9 @@ from .slicer import Embedder, Head, ActEmbedder
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
-
+from ding.torch_utils import to_device
 # from memory_profiler import profile
+from line_profiler import line_profiler
 
 @dataclass
 class WorldModelOutput:
@@ -47,6 +48,7 @@ class WorldModel(nn.Module):
         # self.num_observations_tokens = 16
         self.num_observations_tokens = config.tokens_per_block -1
 
+        self.latent_recon_loss_weight = config.latent_recon_loss_weight
         self.device = config.device
         self.support_size = config.support_size
         self.action_shape = config.action_shape
@@ -233,6 +235,7 @@ class WorldModel(nn.Module):
     #             is_root=False) -> WorldModelOutput:
     # def forward(self, obs_embeddings, act_tokens, past_keys_values: Optional[KeysValues] = None,
     #         is_root=False) -> WorldModelOutput:
+    # @profile
     def forward(self, obs_embeddings_or_act_tokens, past_keys_values: Optional[KeysValues] = None,
             is_root=False) -> WorldModelOutput:
         
@@ -344,6 +347,8 @@ class WorldModel(nn.Module):
             0)  # (1, C, H, W) in [0., 1.]
         return self.reset_from_initial_observations(obs)
 
+
+    # @profile
     @torch.no_grad()
     def reset_from_initial_observations(self, obs_act_dict: torch.FloatTensor) -> torch.FloatTensor:
         if isinstance(obs_act_dict, dict):
@@ -373,6 +378,7 @@ class WorldModel(nn.Module):
         return outputs_wm, self.obs_tokens
 
 
+    # @profile
     @torch.no_grad()
     def refresh_keys_values_with_initial_obs_tokens_for_init_infer(self, obs_tokens: torch.LongTensor, buffer_action=None) -> torch.FloatTensor:
         n, num_observations_tokens, _ = obs_tokens.shape
@@ -443,6 +449,8 @@ class WorldModel(nn.Module):
         # return WorldModelOutput(x, logits_observations, logits_rewards, logits_ends, logits_policy, logits_value)
         return outputs_wm
 
+
+    # @profile
     @torch.no_grad()
     def refresh_keys_values_with_initial_obs_tokens(self, obs_tokens: torch.LongTensor) -> torch.FloatTensor:
         n, num_observations_tokens, _ = obs_tokens.shape
@@ -455,6 +463,7 @@ class WorldModel(nn.Module):
         # return outputs_wm.output_sequence  # (B, K, E)
         return outputs_wm
 
+    # @profile
     @torch.no_grad()
     def forward_initial_inference(self, obs_act_dict: torch.LongTensor, should_predict_next_obs: bool = True):
 
@@ -495,14 +504,14 @@ class WorldModel(nn.Module):
                 # cache_key = hash(obs_tokens.squeeze(0).detach().cpu().numpy())
                 cache_key = hash(obs_tokens.detach().cpu().numpy())
 
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
             # elif obs_tokens.shape[0] == self.env_num:
             # elif obs_tokens.shape[0] > self.env_num:
             elif obs_tokens.shape[0] > 1 and obs_tokens.shape[0] <= self.env_num:
                 # This branch will be executed only when env_num=8
                 cache_key = hash(obs_tokens.detach().cpu().numpy())
                 # Store the KV_cache for all 8 samples together
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
 
         # return outputs_wm.output_sequence, outputs_wm.logits_observations, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
         return outputs_wm.output_sequence, obs_tokens, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
@@ -518,6 +527,9 @@ class WorldModel(nn.Module):
 
     # @profile
     # TODO: only for inference, not for training
+
+
+    # @profile
     @torch.no_grad()
     def forward_recurrent_inference(self, state_action_history, should_predict_next_obs: bool = True):
         # 一般来讲，在一次 MCTS search中，我们需要维护H长度的context来使用transformer进行推理。
@@ -534,23 +546,20 @@ class WorldModel(nn.Module):
         matched_value = self.past_keys_values_cache.get(hash_latest_state)
         if matched_value is not None:
             # If a matching value is found, do something with it
-            self.keys_values_wm = copy.deepcopy(matched_value)
+            
+            # self.keys_values_wm = copy.deepcopy(matched_value)
+            self.keys_values_wm = copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda') )
+
             # print('recurrent_inference:find matched_value!')
         else:
             # If no matching value is found, handle the case accordingly
             # NOTE: very important
             _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.float32).to(self.device))
             # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
-            if latest_state.shape[0] == 1:
-                # This branch will be executed only when env_num=1
-                # cache_key = hash(latest_state.squeeze(0))
-                cache_key = hash(latest_state)
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
-            elif latest_state.shape[0] > 1 and latest_state.shape[0] <= self.env_num:
-                # This branch will be executed only when env_num=8
-                cache_key = hash(latest_state)
-                # Store the KV_cache for all 8 samples together
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+            # This branch will be executed only when env_num=1
+            # cache_key = hash(latest_state.squeeze(0))
+            cache_key = hash(latest_state)
+            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
             # print('recurrent_inference:not find matched_value!')
 
 
@@ -561,20 +570,14 @@ class WorldModel(nn.Module):
         output_sequence, obs_tokens = [], []
 
         if self.keys_values_wm.size + num_passes > self.config.max_tokens:
+            del self.keys_values_wm # TODO
             # TODO: the impact
             # _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
             _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.float32).to(self.device))
             # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
-            if latest_state.shape[0] == 1:
-                # This branch will be executed only when env_num=1
-                # cache_key = hash(latest_state.squeeze(0))
-                cache_key = hash(latest_state)
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
-            elif latest_state.shape[0] > 1 and latest_state.shape[0] <= self.env_num:
-                # This branch will be executed only when env_num=8
-                cache_key = hash(latest_state)
-                # Store the KV_cache for all 8 samples together
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+            cache_key = hash(latest_state)
+            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
+
 
         # TODO
         action = state_action_history[-1][-1]
@@ -625,16 +628,16 @@ class WorldModel(nn.Module):
         # cache_key = hash(self.obs_tokens.detach().cpu().numpy())
         cache_key = hash(self.obs_tokens.detach().cpu().numpy())
 
-        # TODO: 在计算结束后，更新缓存. 是否需要deepcopy
-        self.past_keys_values_cache[cache_key] = copy.deepcopy(self.keys_values_wm)
+        # TODO: 在计算结束后，是否需要更新最新的缓存. 是否需要deepcopy
+        self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
         if len(self.past_keys_values_cache) > self.max_cache_size:
             # TODO: lru_cache
-            self.past_keys_values_cache.popitem(last=False)  # Removes the earliest inserted item
+            # self.past_keys_values_cache.popitem(last=False)  # Removes the earliest inserted item
                 # popitem返回一个键值对，其中第二个元素是值
-            # _, popped_kv_cache = self.past_keys_values_cache.popitem(last=False)
+            _, popped_kv_cache = self.past_keys_values_cache.popitem(last=False)
             # 如果popped_kv_cache是一个包含张量或复杂对象的容器，您可能需要进一步删除这些对象
             # 例如：
-            # del popped_kv_cache # 不要这一行
+            del popped_kv_cache # 不要这一行
             # torch.cuda.empty_cache()  # 请注意，频繁调用可能会影响性能, 先del反而清除不掉占用的2MB缓存
 
         # Example usage:
@@ -644,6 +647,26 @@ class WorldModel(nn.Module):
         # print(f'len(self.past_keys_values_cache): {len(self.past_keys_values_cache)}, Memory used by past_keys_values_cache: {cuda_memory_gb:.2f} GB')
 
         return outputs_wm.output_sequence, self.obs_tokens, reward, outputs_wm.logits_policy, outputs_wm.logits_value
+
+
+    def to_device_for_kvcache(self, keys_values: KeysValues, device: str) -> KeysValues:
+        """
+        Transfer all KVCache objects within the KeysValues object to a certain device.
+
+        Arguments:
+            - keys_values (KeysValues): The KeysValues object to be transferred.
+            - device (str): The device to transfer to.
+
+        Returns:
+            - keys_values (KeysValues): The KeysValues object with its caches transferred to the specified device.
+        """
+        # Check if CUDA is available and select the first available CUDA device
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        for kv_cache in keys_values:
+            kv_cache._k_cache._cache = kv_cache._k_cache._cache.to(device)
+            kv_cache._v_cache._cache = kv_cache._v_cache._cache.to(device)
+        return keys_values
 
 
     # 计算显存使用量的函数
@@ -672,6 +695,7 @@ class WorldModel(nn.Module):
 
 
 
+    # @profile
     def compute_loss(self, batch, tokenizer: Tokenizer=None, **kwargs: Any) -> LossWithIntermediateLosses:
 
         if len(batch['observations'][0, 0].shape) == 3:
@@ -679,9 +703,9 @@ class WorldModel(nn.Module):
             pass
 
         # NOTE: 这里是需要梯度的
-        with torch.no_grad():  # TODO: 非常重要
-            obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False) # (B, C, H, W) -> (B, K, E)
-        # obs_embeddings.register_hook(lambda grad: grad * 1/5)  # TODO：只提供重建损失更新表征网络
+        # with torch.no_grad():  # TODO: 非常重要
+        obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False) # (B, C, H, W) -> (B, K, E)
+        obs_embeddings.register_hook(lambda grad: grad * 1/5)  # TODO：只提供重建损失更新表征网络
         # obs_embeddings.register_hook(lambda grad: grad * 1)  # TODO：只提供重建损失更新表征网络
 
         # Assume that 'cont_embeddings' and 'original_images' are available from prior code
@@ -724,7 +748,7 @@ class WorldModel(nn.Module):
         loss_policy = self.compute_cross_entropy_loss(outputs, labels_policy, batch, element='policy')
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
 
-        return LossWithIntermediateLosses(loss_obs=loss_obs, loss_rewards=loss_rewards, loss_value=loss_value,
+        return LossWithIntermediateLosses(latent_recon_loss_weight=self.latent_recon_loss_weight, loss_obs=loss_obs, loss_rewards=loss_rewards, loss_value=loss_value,
                                           loss_policy=loss_policy, latent_kl_loss=latent_kl_loss, latent_recon_loss=latent_recon_loss)
 
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
