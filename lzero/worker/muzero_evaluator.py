@@ -199,6 +199,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             train_iter: int = -1,
             envstep: int = -1,
             n_episode: Optional[int] = None,
+            return_trajectory: bool = False,
     ) -> Tuple[bool, float]:
         """
         Overview:
@@ -455,4 +456,6 @@ class MuZeroEvaluator(ISerialEvaluator):
             stop_flag, episode_info = objects
 
         episode_info = to_item(episode_info)
+        if return_trajectory:
+            episode_info['trajectory'] = game_segments
         return stop_flag, episode_info
