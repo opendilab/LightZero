@@ -348,8 +348,8 @@ class WorldModel(nn.Module):
         return self.reset_from_initial_observations(obs)
 
 
-    # @profile
     @torch.no_grad()
+    # @profile
     def reset_from_initial_observations(self, obs_act_dict: torch.FloatTensor) -> torch.FloatTensor:
         if isinstance(obs_act_dict, dict):
             # obs_act_dict = {'obs':obs, 'action':action_batch}
@@ -378,8 +378,8 @@ class WorldModel(nn.Module):
         return outputs_wm, self.obs_tokens
 
 
-    # @profile
     @torch.no_grad()
+    # @profile
     def refresh_keys_values_with_initial_obs_tokens_for_init_infer(self, obs_tokens: torch.LongTensor, buffer_action=None) -> torch.FloatTensor:
         n, num_observations_tokens, _ = obs_tokens.shape
         # assert num_observations_tokens == self.num_observations_tokens
@@ -450,8 +450,8 @@ class WorldModel(nn.Module):
         return outputs_wm
 
 
-    # @profile
     @torch.no_grad()
+    # @profile
     def refresh_keys_values_with_initial_obs_tokens(self, obs_tokens: torch.LongTensor) -> torch.FloatTensor:
         n, num_observations_tokens, _ = obs_tokens.shape
         assert num_observations_tokens == self.num_observations_tokens
@@ -463,8 +463,8 @@ class WorldModel(nn.Module):
         # return outputs_wm.output_sequence  # (B, K, E)
         return outputs_wm
 
-    # @profile
     @torch.no_grad()
+    # @profile
     def forward_initial_inference(self, obs_act_dict: torch.LongTensor, should_predict_next_obs: bool = True):
 
         if isinstance(obs_act_dict, dict):
@@ -525,12 +525,9 @@ class WorldModel(nn.Module):
     TODO：很多时候都是执行的refresh_keys_values_with_initial_obs_tokens，导致没有充分利用序列建模能力？
     """
 
-    # @profile
-    # TODO: only for inference, not for training
 
-
-    # @profile
     @torch.no_grad()
+    # @profile
     def forward_recurrent_inference(self, state_action_history, should_predict_next_obs: bool = True):
         # 一般来讲，在一次 MCTS search中，我们需要维护H长度的context来使用transformer进行推理。
         # 由于在一次search里面。agent最多访问sim个不同的节点，因此我们只需维护一个 {(state:kv_cache)}的列表。
@@ -693,14 +690,12 @@ class WorldModel(nn.Module):
         total_memory_gb = total_memory_bytes / (1024 ** 3)
         return total_memory_gb
 
-
-
     # @profile
     def compute_loss(self, batch, tokenizer: Tokenizer=None, **kwargs: Any) -> LossWithIntermediateLosses:
 
-        if len(batch['observations'][0, 0].shape) == 3:
-            # obs is a 3-dimensional image
-            pass
+        # if len(batch['observations'][0, 0].shape) == 3:
+        #     # obs is a 3-dimensional image
+        #     pass
 
         # NOTE: 这里是需要梯度的
         # with torch.no_grad():  # TODO: 非常重要
@@ -714,7 +709,8 @@ class WorldModel(nn.Module):
 
         # Calculate the reconstruction loss
         # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].contiguous().view(-1, 4, 64, 64), reconstructed_images)
-        latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # TODO
+        # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # TODO: for stack=4
+        latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # TODO: for stack=1
 
 
         latent_kl_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)
@@ -722,8 +718,9 @@ class WorldModel(nn.Module):
 
         act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
 
-        # TODO: 只提供重建损失更新表征网络
-        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens)}, is_root=False)
+        # TODO: 是否只用重建损失更新表征网络 非常重要
+        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, is_root=False)
+        # outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens)}, is_root=False)
 
         labels_observations, labels_rewards, labels_ends = self.compute_labels_world_model(obs_embeddings, batch['rewards'],
                                                                                            batch['ends'],

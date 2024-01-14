@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(7)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -75,10 +75,9 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 atari_muzero_config = dict(
-    # TODO: world_model.py decode_obs_tokens
-    # TODO: tokenizer.py: lpips loss
+    # TODO: muzero_gpt_model.py world_model.py (4,64,64)
 
-    exp_name=f'data_mz_gpt_ctree_0113/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_contembdings_lsd1024_lr1e-4-gcv05-reconslossw0-minmax-jointtrain_mcs5e2_collectper200-clear_evalsample_seed0',
+    exp_name=f'data_mz_gpt_ctree_0113/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_contembdings_lsd1024_lr1e-4-gcv05-reconslossw01-minmax-jointtrain-true-useaug_mcs5e2_collectper200-clear_evalmax_seed0',
 
     # exp_name=f'data_mz_gpt_ctree_0113/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024_lr1e-4-gcv05-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_evalsample_seed0',
 
@@ -179,8 +178,8 @@ atari_muzero_config = dict(
             # decay=int(5e3),  # 5k
         ),
         # TODO: NOTE
-        # use_augmentation=True,
-        use_augmentation=False,
+        use_augmentation=True,
+        # use_augmentation=False,
         update_per_collect=update_per_collect,
         model_update_ratio = model_update_ratio,
         batch_size=batch_size,
