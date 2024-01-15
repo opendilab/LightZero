@@ -1,4 +1,3 @@
-"""This would be a great place to create PoolToolEnv and observation/action vector building"""
 from __future__ import annotations
 
 import copy
@@ -22,12 +21,51 @@ class State:
     system: pt.System
     game: pt.Ruleset
 
+    @classmethod
+    def example(cls, game_type: pt.GameType = pt.GameType.SUMTOTHREE) -> State:
+        game = pt.get_ruleset(game_type)()
+        game.players = [pt.Player("Player")]
+        table = pt.Table.from_game_type(game_type)
+        balls = pt.get_rack(
+            game_type=game_type,
+            table=table,
+            params=None,
+            ballset=None,
+            spacing_factor=1e-3,
+        )
+        cue = pt.Cue(cue_ball_id=game.shot_constraints.cueball(balls))
+        system = pt.System(table=table, balls=balls, cue=cue)
+        return cls(system, game)
+
 
 @attrs.define
 class Spaces:
     observation: spaces.Space
     action: spaces.Space
     reward: spaces.Space
+
+    @classmethod
+    def dummy(cls) -> Spaces:
+        return cls(
+            observation=spaces.Box(
+                low=np.array([0.0] * 4, dtype=np.float32),
+                high=np.array([1.0] * 4, dtype=np.float32),
+                shape=(4,),
+                dtype=np.float32,
+            ),
+            action=spaces.Box(
+                low=np.array([-0.3, 70], dtype=np.float32),
+                high=np.array([-0.3, 70], dtype=np.float32),
+                shape=(2,),
+                dtype=np.float32,
+            ),
+            reward=spaces.Box(
+                low=0.0,
+                high=1.0,
+                shape=(1,),
+                dtype=np.float32,
+            ),
+        )
 
 
 @attrs.define
@@ -62,8 +100,17 @@ class PoolToolGym(State):
     def observation_array(self) -> Any:
         raise NotImplementedError("Inheriting classes must define this")
 
-    def set_action(self, scaled_action: NDArray[np.float32]) -> None:
+    def set_action(self, rescaled_action: NDArray[np.float32]) -> None:
         raise NotImplementedError("Inheriting classes must define this")
+
+    @classmethod
+    def dummy(cls) -> PoolToolGym:
+        state = State.example()
+        return cls(
+            state.system,
+            state.game,
+            Spaces.dummy(),
+        )
 
 
 class PoolToolEnv(BaseEnv):
