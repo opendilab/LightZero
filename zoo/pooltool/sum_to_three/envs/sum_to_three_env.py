@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import gc
-from typing import Any, Dict
+from typing import Dict
 
 import attrs
 import numpy as np
@@ -20,6 +20,18 @@ from zoo.pooltool.datatypes import (
 
 import pooltool as pt
 import pooltool.constants as const
+
+
+@attrs.define
+class Bounds:
+    low: float
+    high: float
+
+
+V0_INIT = 0.0
+V0_BOUNDS = Bounds(0.3, 3.0)
+ANGLE_BOUNDS = Bounds(-70, 70)
+BALL_DIM = 2
 
 
 def calc_reward(state: State) -> float:
@@ -42,7 +54,64 @@ def calc_reward(state: State) -> float:
     return 0.0
 
 
-BALL_DIM = 2
+def get_obs_space(balls: Dict[str, pt.Ball], table: pt.Table) -> spaces.Box:
+    table_length = table.l
+    table_width = table.w
+    ball_radius = balls["cue"].params.R
+
+    xmin, ymin = ball_radius, ball_radius
+    xmax, ymax = table_width - ball_radius, table_length - ball_radius
+
+    return spaces.Box(
+        low=np.array([xmin, ymin] * len(balls), dtype=np.float32),
+        high=np.array([xmax, ymax] * len(balls), dtype=np.float32),
+        shape=(BALL_DIM * len(balls),),
+        dtype=np.float32,
+    )
+
+
+def get_action_space(
+    V0: Bounds = V0_BOUNDS, angle: Bounds = ANGLE_BOUNDS
+) -> spaces.Box:
+    return spaces.Box(
+        low=np.array([V0.low, angle.low], dtype=np.float32),
+        high=np.array([V0.high, angle.high], dtype=np.float32),
+        shape=(2,),
+        dtype=np.float32,
+    )
+
+
+def create_initial_state(random_pos: bool) -> State:
+    gametype = pt.GameType.SUMTOTHREE
+    players = [pt.Player("Player 1")]
+
+    game = pt.get_ruleset(gametype)(
+        players=players,
+        win_condition=-1,  # type: ignore
+    )
+
+    system = pt.System(
+        cue=pt.Cue.default(),
+        table=(table := pt.Table.from_game_type(gametype)),
+        balls=pt.get_rack(gametype, table),
+    )
+
+    system.cue.set_state(V0=V0_INIT)
+
+    if random_pos:
+        get_pos = lambda table, ball: (
+            (table.w - 2 * ball.params.R) * np.random.rand() + ball.params.R,
+            (table.l - 2 * ball.params.R) * np.random.rand() + ball.params.R,
+            ball.params.R,
+        )
+        system.balls["cue"].state.rvw[0] = get_pos(
+            system.table, system.balls["cue"]
+        )
+        system.balls["object"].state.rvw[0] = get_pos(
+            system.table, system.balls["object"]
+        )
+
+    return State(system, game)
 
 
 @attrs.define
@@ -53,10 +122,10 @@ class SumToThreeGym(PoolToolGym):
     def _null_obs(self) -> NDArray[np.float32]:
         return np.empty(len(self.system.balls) * BALL_DIM, dtype=np.float32)
 
-    def set_action(self, scaled_action: NDArray[np.float32]) -> None:
+    def set_action(self, rescaled_action: NDArray[np.float32]) -> None:
         self.system.cue.set_state(
-            V0=scaled_action[0],
-            phi=pt.aim.at_ball(self.system, "object", cut=scaled_action[1]),
+            V0=rescaled_action[0],
+            phi=pt.aim.at_ball(self.system, "object", cut=rescaled_action[1]),
         )
 
     def observation_array(self) -> NDArray[np.float32]:
@@ -68,29 +137,6 @@ class SumToThreeGym(PoolToolGym):
             ]
 
         return obs
-
-    def set_observation(self, obs: NDArray[np.float32]) -> None:
-        """Set the system state from an observation array"""
-        for ball_idx, ball_id in enumerate(self.system.balls.keys()):
-            self.system.balls[ball_id].state.rvw[0, :BALL_DIM] = obs[
-                self._slice(ball_idx)
-            ]
-
-    @staticmethod
-    def get_obs_space(balls: Dict[str, pt.Ball], table: pt.Table) -> Any:
-        table_length = table.l
-        table_width = table.l
-        ball_radius = balls["cue"].params.R
-
-        xmin, ymin = ball_radius, ball_radius
-        xmax, ymax = table_width - ball_radius, table_length - ball_radius
-
-        return spaces.Box(
-            low=np.array([xmin, ymin] * len(balls), dtype=np.float32),
-            high=np.array([xmax, ymax] * len(balls), dtype=np.float32),
-            shape=(BALL_DIM * len(balls),),
-            dtype=np.float32,
-        )
 
     def reset(self) -> None:
         if len(self.game.players) == 1:
@@ -126,6 +172,8 @@ class SumToThreeGym(PoolToolGym):
         self.system.balls["cue"].state.rvw[0] = cue_pos
         self.system.balls["object"].state.rvw[0] = object_pos
 
+        self.system.cue.set_state(V0=V0_INIT)
+
         assert self.system.balls["cue"].state.s == const.stationary
         assert self.system.balls["object"].state.s == const.stationary
         assert not np.isnan(self.system.balls["cue"].state.rvw).any()
@@ -138,16 +186,11 @@ class SumToThreeGym(PoolToolGym):
             system=state.system,
             game=state.game,
             spaces=Spaces(
-                observation=cls.get_obs_space(
+                observation=get_obs_space(
                     state.system.balls,
                     state.system.table,
                 ),
-                action=spaces.Box(
-                    low=np.array([0.3, -70], dtype=np.float32),
-                    high=np.array([3.0, +70], dtype=np.float32),
-                    shape=(2,),
-                    dtype=np.float32,
-                ),
+                action=get_action_space(),
                 reward=spaces.Box(
                     low=0.0,
                     high=1.0,
@@ -160,32 +203,7 @@ class SumToThreeGym(PoolToolGym):
     @classmethod
     def single_player_env(cls, random_pos: bool = False) -> SumToThreeGym:
         """Create a 1 player environment (for training, evaluation, etc)"""
-        gametype = pt.GameType.SUMTOTHREE
-        game = pt.get_ruleset(gametype)(
-            players=[pt.Player("Player 1")],
-            win_condition=-1,  # type: ignore
-        )
-        system = pt.System(
-            cue=pt.Cue.default(),
-            table=(table := pt.Table.from_game_type(gametype)),
-            balls=pt.get_rack(gametype, table),
-        )
-
-        if random_pos:
-            get_pos = lambda table, ball: (
-                (table.w - 2 * ball.params.R) * np.random.rand() + ball.params.R,
-                (table.l - 2 * ball.params.R) * np.random.rand() + ball.params.R,
-                ball.params.R,
-            )
-            system.balls["cue"].state.rvw[0] = get_pos(
-                system.table, system.balls["cue"]
-            )
-            system.balls["object"].state.rvw[0] = get_pos(
-                system.table, system.balls["object"]
-            )
-
-        return cls.from_state(State(system, game))
-
+        return cls.from_state(create_initial_state(random_pos))
 
 @attrs.define
 class EpisodicTrackedStats:
