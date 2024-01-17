@@ -7,8 +7,8 @@ collector_env_num = 6
 n_episode = 6
 evaluator_env_num = 6
 continuous_action_space = True
-K = 15  # num_of_sampled_actions
-num_simulations = 35
+K = 20  # num_of_sampled_actions
+num_simulations = 50
 update_per_collect = None
 batch_size = 256
 max_env_step = int(5e6)
@@ -40,7 +40,7 @@ sumtothree_cont_sampled_efficientzero_config = dict(
             num_of_sampled_actions=K,
             sigma_type="conditioned",
             model_type="mlp",
-            lstm_hidden_size=256,
+            lstm_hidden_size=512,
             latent_state_dim=256,
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
@@ -77,7 +77,8 @@ sumtothree_cont_sampled_efficientzero_create_config = dict(
         type="pooltool_sumtothree",
         import_names=["zoo.pooltool.sum_to_three.envs.sum_to_three_env"],
     ),
-    env_manager=dict(type="subprocess"),
+    #env_manager=dict(type="subprocess"),
+    env_manager=dict(type="base"),
     policy=dict(
         type="sampled_efficientzero",
         import_names=["lzero.policy.sampled_efficientzero"],
