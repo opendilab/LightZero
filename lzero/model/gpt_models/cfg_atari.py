@@ -65,7 +65,7 @@ cfg['world_model'] = {
                       # 'num_layers': 1, # TODO：for atari debug
                       # 'num_heads': 1,
                       'num_layers': 2, # TODO：for atari debug
-                      'num_heads': 4,
+                      'num_heads': 2,
 
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,

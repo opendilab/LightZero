@@ -25,11 +25,13 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 1
 # update_per_collect = 1000
-update_per_collect = 10
+update_per_collect = 1
+
 
 # update_per_collect = None
 # model_update_ratio = 0.25
 model_update_ratio = 0.25
+
 # num_simulations = 50
 # num_simulations = 25
 
@@ -79,11 +81,11 @@ atari_muzero_config = dict(
         # obs_shape=(4, 96, 96),
         # obs_shape=(1, 96, 96),
 
-        observation_shape=(3, 64, 64),
-        gray_scale=False,
+        # observation_shape=(3, 64, 64),
+        # gray_scale=False,
 
-        # observation_shape=(4, 64, 64),
-        # gray_scale=True,
+        observation_shape=(4, 64, 64),
+        gray_scale=True,
 
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -121,16 +123,16 @@ atari_muzero_config = dict(
             # observation_shape=(1, 96, 96),
  
             # stack=1
-            observation_shape=(3, 64, 64),
-            image_channel=3,
-            frame_stack_num=1,
-            gray_scale=False,
+            # observation_shape=(3, 64, 64),
+            # image_channel=3,
+            # frame_stack_num=1,
+            # gray_scale=False,
 
             # NOTE: very important stack=4
-            # observation_shape=(4, 64, 64),
-            # image_channel=1,
-            # frame_stack_num=4,
-            # gray_scale=True,
+            observation_shape=(4, 64, 64),
+            image_channel=1,
+            frame_stack_num=4,
+            gray_scale=True,
 
             action_space_size=action_space_size,
             self_supervised_learning_loss=True,  # default is False
@@ -143,15 +145,15 @@ atari_muzero_config = dict(
             reward_support_size=21,
             value_support_size=21,
             support_scale=10,
-            embedding_dim=1024,
-            # embedding_dim=256,
+            # embedding_dim=1024,
+            embedding_dim=512,
             downsample=True,
         ),
         use_priority=False,
         cuda=True,
         env_type='not_board_games',
         # game_segment_length=400,
-        game_segment_length=10,
+        game_segment_length=20,
         random_collect_episode_num=0,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
