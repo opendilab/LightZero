@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(4)
+torch.cuda.set_device(6)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -24,7 +24,10 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 1
-update_per_collect = 1000
+# update_per_collect = 1000
+update_per_collect = None
+model_update_ratio = 0.25
+
 # update_per_collect = 500
 
 
@@ -42,7 +45,6 @@ update_per_collect = 1000
 
 # update_per_collect = None
 # model_update_ratio = 0.25
-model_update_ratio = 0.25
 num_simulations = 50
 # num_simulations = 25
 
@@ -79,7 +81,7 @@ atari_muzero_config = dict(
 
     # exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd512_lr1e-4-gcv10-reconslossw0-minmax-iter60k-jointtrain_stack4_mcs5e2_collectper200-clear_seed0',
 
-    exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd512-nh1-nl1_lr1e-4-gcv10-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_seed0',
+    exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd512-nl2-nh4_lr1e-4-gcv10-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_collect-segments_seed0',
 
     # exp_name=f'data_mz_gpt_ctree_0113/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024_lr1e-4-gcv05-biasfalse-reconslossw01-minmax-jointtrain_stack4_mcs500_emptycache-per200-del-tocpu-envnum{collector_env_num}_maxtokendel_collectper200-clear_seed0',
     # exp_name=f'data_mz_gpt_ctree_0113/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024_lr1e-4-gcv05-biasfalse-reconslossw0-minmax-iter60k-fixed_stack4_mcs500_emptycache-per200-del-tocpu-envnum{collector_env_num}_maxtokendel_collectper200-clear_evalsample_seed0',

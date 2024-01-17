@@ -62,13 +62,15 @@ cfg['world_model'] = {
                       # 'num_layers': 10,# TODO：for atari
                       # 'num_layers': 2, # TODO：for atari debug
                       # 'num_heads': 4,
-                      'num_layers': 1, # TODO：for atari debug
-                      'num_heads': 1,
+                      # 'num_layers': 1, # TODO：for atari debug
+                      # 'num_heads': 1,
+                      'num_layers': 2, # TODO：for atari debug
+                      'num_heads': 4,
 
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:4',
+                      "device": 'cuda:6',
                     #   "device": 'cpu',
                       'support_size': 21,
                       'action_shape': 6,# TODO：for atari

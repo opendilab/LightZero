@@ -116,6 +116,7 @@ class SelfAttention(nn.Module):
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
 
         # method1: efficient attention using Flash Attention CUDA kernels
+        # attn_mask = self.mask[L:L + T, :L + T].bool()  # assuming your mask is a ByteTensor
         # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_pdrop if self.training else 0, is_causal=True)
         # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_pdrop, is_causal=True)
 

@@ -380,7 +380,6 @@ class MuZeroCollector(ISerialCollector):
         ready_env_id = set()
         remain_episode = n_episode
 
-        collected_game_segment = 0
         while True:
             with self._timer:
                 # Get current ready env obs.
@@ -537,8 +536,6 @@ class MuZeroCollector(ISerialCollector):
 
                     # if game segment is full, we will save the last game segment
                     if game_segments[env_id].is_full():
-                        collected_game_segment += 1
-
                         # pad over last segment trajectory
                         if last_game_segments[env_id] is not None:
                             # TODO(pu): return the one game segment
@@ -590,7 +587,6 @@ class MuZeroCollector(ISerialCollector):
                     # NOTE: put the penultimate game segment in one episode into the trajectory_pool
                     # pad over 2th last game_segment using the last game_segment
                     if last_game_segments[env_id] is not None:
-                        collected_game_segment += 1
                         self.pad_and_save_last_trajectory(
                             env_id, last_game_segments, last_game_priorities, game_segments, dones
                         )
@@ -668,8 +664,7 @@ class MuZeroCollector(ISerialCollector):
                     # and the stack_obs is np.array(None, dtype=object)
                     ready_env_id.remove(env_id)
 
-            # if collected_episode >= n_episode:
-            if collected_game_segment >= n_episode: # game_segment_length = 400
+            if collected_episode >= n_episode:
                 # [data, meta_data]
                 return_data = [self.game_segment_pool[i][0] for i in range(len(self.game_segment_pool))], [
                     {
