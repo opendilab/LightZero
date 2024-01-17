@@ -63,7 +63,7 @@ sumtothree_cont_sampled_efficientzero_config = dict(
         n_episode=n_episode,
         eval_freq=eval_freq,
         # the size/capacity of replay_buffer, in the terms of transitions.
-        replay_buffer_size=int(1e5),
+        replay_buffer_size=int(3e5),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
@@ -77,8 +77,8 @@ sumtothree_cont_sampled_efficientzero_create_config = dict(
         type="pooltool_sumtothree",
         import_names=["zoo.pooltool.sum_to_three.envs.sum_to_three_env"],
     ),
-    #env_manager=dict(type="subprocess"),
-    env_manager=dict(type="base"),
+    env_manager=dict(type="subprocess"),
+    #env_manager=dict(type="base"),
     policy=dict(
         type="sampled_efficientzero",
         import_names=["lzero.policy.sampled_efficientzero"],
