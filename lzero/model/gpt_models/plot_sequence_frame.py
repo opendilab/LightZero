@@ -6,9 +6,11 @@ import matplotlib.pyplot as plt
 # 并且它的形状是torch.Size([B, N, C, H, W])
 
 # batch_observations = batch_for_gpt['observations']
-# batch_observations = batch['observations']
+batch_observations = batch['observations']
+# batch_observations = reconstructed_images.view(32, 5, 3, 64, 64).detach().cpu()
 
-batch_observations = obs.unsqueeze(0)
+
+# batch_observations = obs.unsqueeze(0)
 # batch_observations = rec_img.unsqueeze(0)
 # batch_observations = observations.unsqueeze(0)
 # batch_observations = x.unsqueeze(0)
@@ -22,7 +24,7 @@ B, N, C, H, W = batch_observations.shape  # 自动检测维度
 separator_width = 2
 
 # 遍历每个样本
-for i in range(B):
+for i in range(B): # B
     # 提取当前样本中的所有帧
     frames = batch_observations[i]
 
@@ -48,4 +50,4 @@ for i in range(B):
     plt.show()
 
     # 保存图像到文件
-    concat_image.save(f'sample_{i+1}_0105.png')
+    concat_image.save(f'sample_{i+1}_0116.png')

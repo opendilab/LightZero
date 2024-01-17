@@ -53,27 +53,31 @@ cfg['world_model'] = {
                       'max_blocks': 5,
                       "max_tokens": 2 * 5,  # TODO： horizon
 
-                      # 'embed_dim':2048, # TODO：for atari
-                      'embed_dim':1024, # TODO：for atari
+                      'embed_dim':512, # TODO：for atari
+                      # 'embed_dim':1024, # TODO：for atari
                       # 'embed_dim':256, # TODO：for atari
 
 
                       'attention': 'causal',
                       # 'num_layers': 10,# TODO：for atari
-                      'num_layers': 2, # TODO：for atari debug
-                      'num_heads': 2,
+                      # 'num_layers': 2, # TODO：for atari debug
+                      # 'num_heads': 4,
+                      'num_layers': 1, # TODO：for atari debug
+                      'num_heads': 1,
 
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:7',
+                      "device": 'cuda:4',
                     #   "device": 'cpu',
                       'support_size': 21,
                       'action_shape': 6,# TODO：for atari
                       'max_cache_size':500,
                       # 'max_cache_size':5000,
                       "env_num":8,
-                      'latent_recon_loss_weight':0.1,
+                      # 'latent_recon_loss_weight':0.05,
+                      'latent_recon_loss_weight':0.,
+
                       }
 from easydict import EasyDict
 cfg = EasyDict(cfg)
