@@ -24,8 +24,8 @@ num_simulations = 50
 update_per_collect = 1000
 K_batch = 23
 batch_size = 256
-max_env_step = int(8e5)
-reanalyze_ratio = 1.0
+max_env_step = int(1e6)
+reanalyze_ratio = 0
 eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -33,7 +33,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/savedata_test',
+    f'data_mz_ctree/{env_name[:-14]}/final_ma_test',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,

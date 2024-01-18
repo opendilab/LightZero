@@ -413,6 +413,13 @@ class MuZeroPolicy(Policy):
         )
         weighted_total_loss = (weights * loss).mean()
 
+        loss_priority = (
+                        self._cfg.policy_loss_weight * policy_loss +
+                        self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
+        )
+        loss_priority = loss_priority.data.cpu().numpy() + 1e-6
+
+
         gradient_scale = 1 / self._cfg.num_unroll_steps
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
@@ -451,6 +458,7 @@ class MuZeroPolicy(Policy):
             # ==============================================================
             'value_priority_orig': value_priority,
             'value_priority': value_priority.mean().item(),
+            'loss_priority': loss_priority,
             'target_reward': target_reward.detach().cpu().numpy().mean().item(),
             'target_value': target_value.detach().cpu().numpy().mean().item(),
             'transformed_target_reward': transformed_target_reward.detach().cpu().numpy().mean().item(),

@@ -122,6 +122,8 @@ class GameBuffer(ABC, object):
 
         # sample according to transition index
         # TODO(pu): replace=True
+        # print(f"num transitions is {num_of_transitions}")
+        # print(f"length of probs is {len(probs)}")
         batch_index_list = np.random.choice(num_of_transitions, batch_size, p=probs, replace=False)
 
         if self._cfg.reanalyze_outdated is True:
@@ -146,6 +148,50 @@ class GameBuffer(ABC, object):
 
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
         return orig_data
+    
+    def _sample_orig_reanalyze_data(self, batch_size: int) -> Tuple:
+            """
+            Overview:
+                sample orig_data that contains:
+                    game_segment_list: a list of game segments
+                    pos_in_game_segment_list: transition index in game (relative index)
+                    batch_index_list: the index of start transition of sampled minibatch in replay buffer
+                    weights_list: the weight concerning the priority
+                    make_time: the time the batch is made (for correctly updating replay buffer when data is deleted)
+            Arguments:
+                - batch_size (:obj:`int`): batch size
+                - beta: float the parameter in PER for calculating the priority
+            """
+            segment_length = (self.get_num_of_transitions()//2000)
+            assert self._beta > 0
+            num_of_transitions = self.get_num_of_transitions()
+            sample_points = num_of_transitions // segment_length
+        
+            batch_index_list = np.random.choice(2000, batch_size, replace=False)
+
+
+            if self._cfg.reanalyze_outdated is True:
+                # NOTE: used in reanalyze part
+                batch_index_list.sort()
+
+            # weights_list = (num_of_transitions * probs[batch_index_list]) ** (-self._beta)
+            # weights_list /= weights_list.max()
+
+            game_segment_list = []
+            pos_in_game_segment_list = []
+
+            for idx in batch_index_list:
+                game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx*segment_length]
+                game_segment_idx -= self.base_idx
+                game_segment = self.game_segment_buffer[game_segment_idx]
+
+                game_segment_list.append(game_segment)
+                pos_in_game_segment_list.append(pos_in_game_segment)
+
+            make_time = [time.time() for _ in range(len(batch_index_list))]
+
+            orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, [], make_time)
+            return orig_data
 
     def _preprocess_to_play_and_action_mask(
         self, game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
@@ -332,6 +378,7 @@ class GameBuffer(ABC, object):
             valid_len = len(data)
         else:
             valid_len = len(data) - meta['unroll_plus_td_steps']
+            # print(f'valid_len is {valid_len}')
 
         if meta['priorities'] is None:
             max_prio = self.game_pos_priorities.max() if self.game_segment_buffer else 1
@@ -352,6 +399,8 @@ class GameBuffer(ABC, object):
         self.game_segment_game_pos_look_up += [
             (self.base_idx + len(self.game_segment_buffer) - 1, step_pos) for step_pos in range(len(data))
         ]
+        # print(f'potioritys is {self.game_pos_priorities}')
+        # print(f'num of transitions is {len(self.game_segment_game_pos_look_up)}')
 
     def remove_oldest_data_to_fit(self) -> None:
         """

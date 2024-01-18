@@ -192,9 +192,9 @@ def train_ma(
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
-        data = np.array(new_data)
-        np.save('collected data.npy', data)
-        breakpoint()
+        # data = np.array(new_data)
+        # np.save('collected data.npy', data)
+        # breakpoint()
 
         # print("collected new data")
         if cfg.policy.update_per_collect is None:
@@ -211,15 +211,17 @@ def train_ma(
         replay_buffer.remove_oldest_data_to_fit()
         # print("remark 22222222222222222222")
 
+        # print("hhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
+        # print(replay_buffer.get_num_of_transitions())
+        if replay_buffer.get_num_of_transitions()>2000:
+            replay_buffer.reanalyze_buffer(2000, policy)
 
-
-
-        K = cfg.policy.K_batch
-        sample_batch_size = (K+1) * batch_size
+        # K = cfg.policy.K_batch
+        # sample_batch_size = (K+1) * batch_size
         # Learn policy from collected data.
-        for i in range(update_per_collect//(K+1)):
+        for i in range(update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
-            if replay_buffer.get_num_of_transitions() > sample_batch_size:
+            if replay_buffer.get_num_of_transitions() > batch_size:
 
 
                 # print("remark 00000000")
@@ -232,8 +234,8 @@ def train_ma(
                 # 修改_make_batch函数，将batch_size扩K+1倍，但是prepare出来的context分成K+1份
                 # 注意current_batch也要做对齐处理
 
-                train_data = replay_buffer.sample(sample_batch_size, policy)
-                iter_data = iter_filter(train_data, batch_size, K)
+                train_data = replay_buffer.sample(batch_size, policy)
+                # iter_data = iter_filter(train_data, batch_size, K)
                 # print("remark 33333333333333333333")
 
                 # with open('data.pkl', 'wb') as file:
@@ -249,20 +251,18 @@ def train_ma(
             else:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                    f'batch_size: {sample_batch_size}, '
+                    f'batch_size: {batch_size}, '
                     f'{replay_buffer} '
                     f'continue to collect now ....'
                 )
                 break
 
-            for i in range(K + 1):
-                
+            
+            # The core train steps for MCTS+RL algorithms.
+            log_vars = learner.train(train_data, collector.envstep)
 
-                # The core train steps for MCTS+RL algorithms.
-                log_vars = learner.train(iter_data[i], collector.envstep)
-
-                if cfg.policy.use_priority:
-                    replay_buffer.update_priority(iter_data[i], log_vars[0]['value_priority_orig'])
+            if cfg.policy.use_priority:
+                replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break

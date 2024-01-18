@@ -168,6 +168,9 @@ def train_muzero(
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
+        # replay_buffer.reanalyze_buffer(replay_buffer.get_num_of_transitions(), policy)
+        
+
         # Learn policy from collected data.
         for i in range(update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
@@ -186,7 +189,11 @@ def train_muzero(
             log_vars = learner.train(train_data, collector.envstep)
 
             if cfg.policy.use_priority:
+                # replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+                # priority 是一个数组里面对应着traindata里每个单个样本的priority
+                # p = log_vars[0]['loss_priority']
+                # print(f'priority is loss {p}')
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break

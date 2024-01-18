@@ -24,17 +24,17 @@ num_simulations = 50
 update_per_collect = None
 batch_size = 256
 model_update_ratio = 0.25
-max_env_step = int(2e6)
+max_env_step = int(8e5)
 reanalyze_ratio = 0.0
 
-eps_greedy_exploration_in_collect = True
+eps_greedy_exploration_in_collect = False 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/ratio0',
+    f'data_mz_ctree/{env_name[:-14]}/ma_final',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -107,4 +107,4 @@ create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_ma
-    train_ma([main_config, create_config], seed=1, max_env_step=max_env_step)
+    train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)

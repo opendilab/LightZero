@@ -40,12 +40,12 @@ writer = SummaryWriter(log_dir)
 sample_batch_size = 25600
 for i in range(2):
     memory_usage = get_memory_usage()
-    # print(f"初始内存使用量: {memory_usage} 字节")
+    print(f"初始内存使用量: {memory_usage} 字节")
     replay_buffer1.sample(sample_batch_size*(i+1), policy)
     temp = memory_usage
     memory_usage = get_memory_usage()
     memory_cost = memory_usage - temp
-    # print(f"sample后内存使用量: {memory_usage} 字节")
+    print(f"sample后内存使用量: {memory_usage} 字节")
     print(f"sample的内存使用量: {float(memory_cost)/1e9} G")
     writer.add_scalar("sample的内存使用量", float(memory_cost)/1e9, i+1)
     # print(f'reanalyze time is {replay_buffer1.compute_target_re_time}')
