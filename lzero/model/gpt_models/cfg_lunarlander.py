@@ -40,7 +40,6 @@ cfg['world_model'] = {
 
                       'attention': 'causal',
                       'num_heads': 2,
-                      # 'num_layers': 10,# TODO：for atari
                       'num_layers': 2, # TODO：for debug
                       
                       # 'embed_dim': 64, # TODO: for cartpole
@@ -53,11 +52,14 @@ cfg['world_model'] = {
                       "device": 'cuda:3',
                       # "device": 'cpu',
                       'support_size': 601,
-                      # 'support_size': 21,
-                      'action_shape': 4, # TODO: for lunarlander
+                      # 'action_shape': 4, # TODO: for lunarlander
+                      'action_shape': 2, # TODO: for memory_length
+
                       'max_cache_size': 500,
                       # 'max_cache_size': 50,
                       "env_num":8,
+                      'latent_recon_loss_weight':0.0,
+                      'perceptual_loss_weight':0.0,
                       }
 from easydict import EasyDict
 cfg = EasyDict(cfg)

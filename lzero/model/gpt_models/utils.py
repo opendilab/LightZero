@@ -96,7 +96,7 @@ def compute_lambda_returns(rewards, values, ends, gamma, lambda_):
 
 
 class LossWithIntermediateLosses:
-    def __init__(self, latent_recon_loss_weight=0, **kwargs):
+    def __init__(self, latent_recon_loss_weight=0, perceptual_loss_weight=0, **kwargs):
         # self.loss_total = sum(kwargs.values())
 
         # Ensure that kwargs is not empty
@@ -127,6 +127,7 @@ class LossWithIntermediateLosses:
         self.latent_kl_loss_weight = 0. # for lunarlander
 
         self.latent_recon_loss_weight = latent_recon_loss_weight
+        self.perceptual_loss_weight = perceptual_loss_weight
         # self.latent_recon_loss_weight = 0.1
 
 
@@ -147,6 +148,8 @@ class LossWithIntermediateLosses:
                 self.loss_total += self.latent_kl_loss_weight * v
             elif k == 'latent_recon_loss':
                 self.loss_total += self.latent_recon_loss_weight * v
+            elif k == 'perceptual_loss':
+                self.loss_total += self.perceptual_loss_weight * v
             else:
                 raise ValueError(f"Unknown loss type : {k}")
 

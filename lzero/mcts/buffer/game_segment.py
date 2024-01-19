@@ -214,10 +214,10 @@ class GameSegment:
         """
         sum_visits = sum(visit_counts)
         if idx is None:
-            try:
-                self.child_visit_segment.append([visit_count / sum_visits for visit_count in visit_counts])
-            except Exception as e:
-                print(e)
+            # try:
+            self.child_visit_segment.append([visit_count / sum_visits for visit_count in visit_counts])
+            # except Exception as e:
+            #     print(e)
             self.root_value_segment.append(root_value)
             if self.sampled_algo:
                 self.root_sampled_actions.append(root_sampled_actions)

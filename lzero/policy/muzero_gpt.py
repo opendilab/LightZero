@@ -296,11 +296,18 @@ class MuZeroGPTPolicy(Policy):
         self._target_model = torch.compile(self._target_model)
 
 
+        # self._target_model = model_wrap(
+        #     self._target_model,
+        #     wrapper_name='target',
+        #     update_type='assign',
+        #     update_kwargs={'freq': self._cfg.target_update_freq}
+        # )
+        # TODO: soft target
         self._target_model = model_wrap(
             self._target_model,
             wrapper_name='target',
-            update_type='assign',
-            update_kwargs={'freq': self._cfg.target_update_freq}
+            update_type='momentum',
+            update_kwargs={'theta': 0.005}
         )
         self._learn_model = self._model
 
@@ -480,7 +487,7 @@ class MuZeroGPTPolicy(Policy):
         # ==============================================================
         intermediate_losses = defaultdict(float)
         # losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._learn_model.tokenizer)
-        losses = self._learn_model.world_model.compute_loss(batch_for_gpt)
+        losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer)
 
         weighted_total_loss = losses.loss_total
         for loss_name, loss_value in losses.intermediate_losses.items():
@@ -492,6 +499,7 @@ class MuZeroGPTPolicy(Policy):
         value_loss = intermediate_losses['loss_value']
         latent_kl_loss = intermediate_losses['latent_kl_loss']
         latent_recon_loss = intermediate_losses['latent_recon_loss']
+        perceptual_loss = intermediate_losses['perceptual_loss']
 
 
         # ==============================================================
@@ -516,7 +524,6 @@ class MuZeroGPTPolicy(Policy):
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
             self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
         )
-
         total_grad_norm_before_clip_rep_net = torch.nn.utils.clip_grad_norm_(self._learn_model.tokenizer.representation_network.parameters(), max_norm=1.0)
         # print('total_grad_norm_before_clip_rep_net:', total_grad_norm_before_clip_rep_net)
 
@@ -559,6 +566,7 @@ class MuZeroGPTPolicy(Policy):
             'obs_loss': obs_loss,
             'latent_kl_loss': latent_kl_loss,
             'latent_recon_loss':latent_recon_loss,
+            'perceptual_loss':perceptual_loss,
             'policy_loss': policy_loss,
             'target_policy_entropy': average_target_policy_entropy,
             # 'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),

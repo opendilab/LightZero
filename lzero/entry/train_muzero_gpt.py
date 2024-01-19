@@ -19,6 +19,7 @@ from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
+import torch.nn as nn
 
 
 def train_muzero_gpt(
@@ -208,10 +209,7 @@ def train_muzero_gpt(
         #             log_vars = learner.train(train_data, collector.envstep)
 
         replay_buffer._cfg.num_unroll_steps = num_unroll_steps
-        # batch_size = 8 # for H5 pong, n_head=4, emdim=256
-        batch_size = 32 # for H5 H10 cartpole; for H5 pong
-        # batch_size = 8 # for H10 pong
-        # batch_size = 5 # for debug
+        batch_size = 64
         replay_buffer._cfg.batch_size = batch_size
         policy._cfg.batch_size = batch_size # policy._cfg.num_unroll_steps = 6
         if collector.envstep > cfg.policy.transformer_start_after_envsteps:
@@ -233,6 +231,23 @@ def train_muzero_gpt(
                     break
                 # The core train steps for MCTS+RL algorithms.
                 log_vars = learner.train(train_data, collector.envstep)
+                # if learner.train_iter % 20000 ==0:  # replay_ratio=16 40000; replay_ratio=8 20000; replay_ratio=4 10000; replay_ratio=2 5000; replay_ratio=1 2500
+                # if learner.train_iter % 2500 ==0:
+                # if learner.train_iter % 5000 ==0: # replay_ratio=2
+                #     nn.init.zeros_(policy._learn_model.world_model.head_value.head_module[-1].weight)
+                #     nn.init.zeros_(policy._learn_model.world_model.head_value.head_module[-1].bias)
+                #     nn.init.zeros_(policy._learn_model.world_model.head_policy.head_module[-1].weight)
+                #     nn.init.zeros_(policy._learn_model.world_model.head_policy.head_module[-1].bias)
+                    # nn.init.zeros_(policy._learn_model.world_model.tokenizer.representation_network[-1].weight)
+                    # 获取 representation_network 的最后一层权重和偏置
+                    # last_layer_weights = policy._learn_model.world_model.tokenizer.representation_network.last_linear.weight
+                    # # 计算新的权重和偏置
+                    # new_weights = 0.2 * 0.02 * torch.randn_like(last_layer_weights) + 0.8 * last_layer_weights
+                    # # 用新的权重和偏置替换原来的参数
+                    # with torch.no_grad(): # 确保不会跟踪这些操作的梯度
+                    #     policy._learn_model.world_model.tokenizer.representation_network.last_linear.weight.copy_(new_weights)
+
+
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
         

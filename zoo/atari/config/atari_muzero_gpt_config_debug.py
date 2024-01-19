@@ -81,11 +81,11 @@ atari_muzero_config = dict(
         # obs_shape=(4, 96, 96),
         # obs_shape=(1, 96, 96),
 
-        # observation_shape=(3, 64, 64),
-        # gray_scale=False,
+        observation_shape=(3, 64, 64),
+        gray_scale=False,
 
-        observation_shape=(4, 64, 64),
-        gray_scale=True,
+        # observation_shape=(4, 64, 64),
+        # gray_scale=True,
 
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -103,9 +103,9 @@ atari_muzero_config = dict(
         clip_rewards=True,
     ),
     policy=dict(
-        # model_path=None,
+        model_path=None,
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_ctree/Pong_muzero_ns50_upc1000_rr0.0_46464_seed0_240110_140819/ckpt/iteration_20000.pth.tar',
-        model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree_0113_k1/Pong_muzero_gpt_envnum8_ns50_upc1000-mur0.25_rr0_H5_bs32_stack1_contembdings_lsd1024_lr1e-4-gcv10-reconslossw005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_seed0/ckpt/iteration_110000.pth.tar',
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree_0113_k1/Pong_muzero_gpt_envnum8_ns50_upc1000-mur0.25_rr0_H5_bs32_stack1_contembdings_lsd1024_lr1e-4-gcv10-reconslossw005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_seed0/ckpt/iteration_110000.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns5_upcNone-mur0.5_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs16_lr1e-4_tokenizer-wd0_perl_tokenizer-only_seed0/ckpt/iteration_150000.pth.tar',
         # tokenizer_start_after_envsteps=int(9e9), # not train tokenizer
         tokenizer_start_after_envsteps=int(0),
@@ -123,37 +123,37 @@ atari_muzero_config = dict(
             # observation_shape=(1, 96, 96),
  
             # stack=1
-            # observation_shape=(3, 64, 64),
-            # image_channel=3,
-            # frame_stack_num=1,
-            # gray_scale=False,
+            observation_shape=(3, 64, 64),
+            image_channel=3,
+            frame_stack_num=1,
+            gray_scale=False,
 
             # NOTE: very important stack=4
-            observation_shape=(4, 64, 64),
-            image_channel=1,
-            frame_stack_num=4,
-            gray_scale=True,
+            # observation_shape=(4, 64, 64),
+            # image_channel=1,
+            # frame_stack_num=4,
+            # gray_scale=True,
 
             action_space_size=action_space_size,
             self_supervised_learning_loss=True,  # default is False
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
             
-            # reward_support_size=601,
-            # value_support_size=601,
-            # support_scale=300,
-            reward_support_size=21,
-            value_support_size=21,
-            support_scale=10,
-            # embedding_dim=1024,
-            embedding_dim=512,
+            reward_support_size=601,
+            value_support_size=601,
+            support_scale=300,
+            # reward_support_size=21,
+            # value_support_size=21,
+            # support_scale=10,
+            embedding_dim=1024,
+            # embedding_dim=512,
             downsample=True,
         ),
         use_priority=False,
         cuda=True,
         env_type='not_board_games',
-        # game_segment_length=400,
-        game_segment_length=20,
+        game_segment_length=400,
+        # game_segment_length=20,
         random_collect_episode_num=0,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,

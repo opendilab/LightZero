@@ -1,8 +1,16 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(1)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_name = 'PongNoFrameskip-v4'
+# env_name = 'PongNoFrameskip-v4'
+env_name = 'MsPacmanNoFrameskip-v4'
+# env_name = 'BreakoutNoFrameskip-v4'
+# env_name = 'QbertNoFrameskip-v4'
+# env_name = 'SeaquestNoFrameskip-v4'
+# env_name = 'BoxingNoFrameskip-v4'
+
+
+
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -14,6 +22,10 @@ elif env_name == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
 elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
+elif env_name == 'SeaquestNoFrameskip-v4':
+    action_space_size = 18
+elif env_name == 'BoxingNoFrameskip-v4':
+    action_space_size = 18
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -29,13 +41,15 @@ batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = False
+# eps_greedy_exploration_in_collect = True
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_46464_stack1_seed0',
+    f'data_mz_ctree_stack1/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_46464_stack1_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -51,6 +65,8 @@ atari_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        collect_max_episode_steps=int(2e4),
+        eval_max_episode_steps=int(1e4),
         # TODO: debug
         # collect_max_episode_steps=int(50),
         # eval_max_episode_steps=int(50),
@@ -85,7 +101,7 @@ atari_muzero_config = dict(
             type='linear',
             start=1.,
             end=0.05,
-            decay=int(1e5),
+            decay=int(5e4),
         ),
         use_augmentation=True,
         update_per_collect=update_per_collect,

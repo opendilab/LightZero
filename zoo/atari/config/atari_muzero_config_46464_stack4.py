@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(2)
+torch.cuda.set_device(5)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
 
@@ -20,22 +20,39 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 3
+evaluator_env_num = 1
 num_simulations = 50
-# num_simulations = 1 # TODO: only for debug
 
 update_per_collect = 1000
+
+update_per_collect = None
+model_update_ratio = 0.05
+# model_update_ratio = 1
+
+
+# num_simulations = 1 # TODO: only for debug
+# update_per_collect = 1
+
+
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
+# reanalyze_ratio = 1
+
 eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=
-    f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_46464_seed0',
+    # mcts_ctree, muzero_collector: empty_cache
+    # exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_46464_train-per-collect-one-segment_tep025_gsl50_noprio_target200_start2000_sgd-1e-4_wd1e-4_seed0',
+
+    exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_46464_train-per-collect-one-segment_tep025_gsl50_noprio_target200_start2000_adamw1e-4_wd1e-4_seed0',
+
+    # exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_46464_train-per-collect-one-segment_temdecy-50k_seed0',
+    # exp_name=f'data_mz_ctree_debug/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_46464_collect-orig_seed0',
+    
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -47,9 +64,9 @@ atari_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-                # TODO: debug
-        # collect_max_episode_steps=int(50),
-        # eval_max_episode_steps=int(50),
+        # TODO: debug
+        # collect_max_episode_steps=int(100),
+        # eval_max_episode_steps=int(100),
     ),
     policy=dict(
         model=dict(
@@ -66,7 +83,8 @@ atari_muzero_config = dict(
         ),
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=400,
+        # game_segment_length=400,
+        game_segment_length=50,
         random_collect_episode_num=0,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
@@ -78,11 +96,33 @@ atari_muzero_config = dict(
             decay=int(1e5),
         ),
         use_augmentation=True,
+        model_update_ratio = model_update_ratio,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,
+
+        # optim_type='SGD',
+        # lr_piecewise_constant_decay=True,
+        # learning_rate=0.2,
+
+        # optim_type='SGD',
+        # lr_piecewise_constant_decay=False,
+        # learning_rate=1e-4,
+        # weight_decay=1e-4,
+
+
+        optim_type='AdamW',
+        lr_piecewise_constant_decay=False,
+        learning_rate=1e-4,
+        weight_decay=1e-4,
+        # weight_decay=0.1,
+
+
+        # manual_temperature_decay=True,
+        # threshold_training_steps_for_final_temperature=int(5e4),
+        target_update_freq=200,
+        use_priority=False,
+
+
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         ssl_loss_weight=2,  # default is 0

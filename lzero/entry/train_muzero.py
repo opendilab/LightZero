@@ -167,25 +167,26 @@ def train_muzero(
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
-        # Learn policy from collected data.
-        for i in range(update_per_collect):
-            # Learner will train ``update_per_collect`` times in one iteration.
-            if replay_buffer.get_num_of_transitions() > batch_size:
-                train_data = replay_buffer.sample(batch_size, policy)
-            else:
-                logging.warning(
-                    f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                    f'batch_size: {batch_size}, '
-                    f'{replay_buffer} '
-                    f'continue to collect now ....'
-                )
-                break
+        if replay_buffer.get_num_of_transitions() > 2000:
+            # Learn policy from collected data.
+            for i in range(update_per_collect):
+                # Learner will train ``update_per_collect`` times in one iteration.
+                if replay_buffer.get_num_of_transitions() > batch_size:
+                    train_data = replay_buffer.sample(batch_size, policy)
+                else:
+                    logging.warning(
+                        f'The data in replay_buffer is not sufficient to sample a mini-batch: '
+                        f'batch_size: {batch_size}, '
+                        f'{replay_buffer} '
+                        f'continue to collect now ....'
+                    )
+                    break
 
-            # The core train steps for MCTS+RL algorithms.
-            log_vars = learner.train(train_data, collector.envstep)
+                # The core train steps for MCTS+RL algorithms.
+                log_vars = learner.train(train_data, collector.envstep)
 
-            if cfg.policy.use_priority:
-                replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+                if cfg.policy.use_priority:
+                    replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break

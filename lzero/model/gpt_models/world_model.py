@@ -49,6 +49,8 @@ class WorldModel(nn.Module):
         self.num_observations_tokens = config.tokens_per_block -1
 
         self.latent_recon_loss_weight = config.latent_recon_loss_weight
+        self.perceptual_loss_weight = config.perceptual_loss_weight
+
         self.device = config.device
         self.support_size = config.support_size
         self.action_shape = config.action_shape
@@ -691,27 +693,28 @@ class WorldModel(nn.Module):
         return total_memory_gb
 
     # @profile
-    def compute_loss(self, batch, tokenizer: Tokenizer=None, **kwargs: Any) -> LossWithIntermediateLosses:
+    def compute_loss(self, batch, target_tokenizer: Tokenizer=None, **kwargs: Any) -> LossWithIntermediateLosses:
 
         # if len(batch['observations'][0, 0].shape) == 3:
         #     # obs is a 3-dimensional image
         #     pass
 
         # NOTE: 这里是需要梯度的
-        with torch.no_grad():  # TODO: 非常重要
-            obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False) # (B, C, H, W) -> (B, K, E)
-        # obs_embeddings.register_hook(lambda grad: grad * 1/5)  # TODO：只提供重建损失更新表征网络
+        #with torch.no_grad():  # TODO: 非常重要
+        obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False) # (B, C, H, W) -> (B, K, E)
+        obs_embeddings.register_hook(lambda grad: grad * 1/5)  # TODO：只提供重建损失更新表征网络
         # obs_embeddings.register_hook(lambda grad: grad * 1)  # TODO：只提供重建损失更新表征网络
 
         # Assume that 'cont_embeddings' and 'original_images' are available from prior code
         # Decode the embeddings to reconstruct the images
-        reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
-
-        # Calculate the reconstruction loss
-        # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].contiguous().view(-1, 4, 64, 64), reconstructed_images)
-        latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # TODO: for stack=4
+        # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+        # # Calculate the reconstruction loss
+        # # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # TODO: for stack=4
         # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # TODO: for stack=1
-
+        # perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # TODO: for stack=1
+        
+        latent_recon_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)
+        perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)
 
         latent_kl_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)
 
@@ -722,9 +725,15 @@ class WorldModel(nn.Module):
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, is_root=False)
         # outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens)}, is_root=False)
 
-        labels_observations, labels_rewards, labels_ends = self.compute_labels_world_model(obs_embeddings, batch['rewards'],
+        with torch.no_grad(): 
+            traget_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False) # (B, C, H, W) -> (B, K, E)
+
+        labels_observations, labels_rewards, labels_ends = self.compute_labels_world_model(traget_obs_embeddings, batch['rewards'],
                                                                                            batch['ends'],
                                                                                            batch['mask_padding'])
+        # labels_observations, labels_rewards, labels_ends = self.compute_labels_world_model(obs_embeddings, batch['rewards'],
+        #                                                                                    batch['ends'],
+        #                                                                                    batch['mask_padding'])
 
         logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o')
         # labels_observations = labels_observations.contiguous().view(-1, self.projection_input_dim)  # TODO:
@@ -745,8 +754,8 @@ class WorldModel(nn.Module):
         loss_policy = self.compute_cross_entropy_loss(outputs, labels_policy, batch, element='policy')
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
 
-        return LossWithIntermediateLosses(latent_recon_loss_weight=self.latent_recon_loss_weight, loss_obs=loss_obs, loss_rewards=loss_rewards, loss_value=loss_value,
-                                          loss_policy=loss_policy, latent_kl_loss=latent_kl_loss, latent_recon_loss=latent_recon_loss)
+        return LossWithIntermediateLosses(latent_recon_loss_weight=self.latent_recon_loss_weight, perceptual_loss_weight=self.perceptual_loss_weight, loss_obs=loss_obs, loss_rewards=loss_rewards, loss_value=loss_value,
+                                          loss_policy=loss_policy, latent_kl_loss=latent_kl_loss, latent_recon_loss=latent_recon_loss, perceptual_loss=perceptual_loss)
 
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
         # Assume outputs.logits_rewards and labels are your predictions and targets

@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(6)
+torch.cuda.set_device(5)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -24,8 +24,8 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 1
-# update_per_collect = 1000
-update_per_collect = None
+update_per_collect = 1000
+# update_per_collect = None
 model_update_ratio = 0.25
 
 # update_per_collect = 500
@@ -50,7 +50,7 @@ num_simulations = 50
 
 # TODO: debug
 # num_simulations = 1
-max_env_step = int(2e6)
+max_env_step = int(1e6)
 reanalyze_ratio = 0
 
 batch_size = 32  # for num_head=2, emmbding_dim=128
@@ -77,11 +77,14 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 atari_muzero_config = dict(
-    # TODO: muzero_gpt_model.py world_model.py (4,64,64)
+    # TODO: stack muzero_gpt_model.py world_model.py (4,64,64)
+    # mz: mcts_ctree, muzero_collector: empty_cache
+    exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024-nl1-nh1_lr1e-4-gcv10-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_sdpa_seed0',
 
     # exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd512_lr1e-4-gcv10-reconslossw0-minmax-iter60k-jointtrain_stack4_mcs5e2_collectper200-clear_seed0',
+    # exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd512-nl2-nh2_lr1e-4-gcv10-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_sdpa_seed0',
 
-    exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd512-nl2-nh4_lr1e-4-gcv10-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_collect-segments_seed0',
+    # exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd512-nl2-nh2_lr1e-4-gcv10-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_train-per-collect-one-segment_seed0',
 
     # exp_name=f'data_mz_gpt_ctree_0113/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024_lr1e-4-gcv05-biasfalse-reconslossw01-minmax-jointtrain_stack4_mcs500_emptycache-per200-del-tocpu-envnum{collector_env_num}_maxtokendel_collectper200-clear_seed0',
     # exp_name=f'data_mz_gpt_ctree_0113/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024_lr1e-4-gcv05-biasfalse-reconslossw0-minmax-iter60k-fixed_stack4_mcs500_emptycache-per200-del-tocpu-envnum{collector_env_num}_maxtokendel_collectper200-clear_evalsample_seed0',
@@ -158,8 +161,8 @@ atari_muzero_config = dict(
             reward_support_size=21,
             value_support_size=21,
             support_scale=10,
-            # embedding_dim=1024,
-            embedding_dim=512,
+            embedding_dim=1024,
+            # embedding_dim=512,
             # embedding_dim=256,
         ),
         use_priority=False,

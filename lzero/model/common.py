@@ -408,10 +408,11 @@ class RepresentationNetworkMLP(nn.Module):
         """
         x = self.fc_representation(x)
         # print('no AvgL1Norm', x.max(), x.min())
+        print('before cont embediings', x.max(), x.min(), x.mean())
+        x = renormalize(x)
 
-        print('cont embediings', x.max(), x.min(), x.mean())
+        print('after cont embediings', x.max(), x.min(), x.mean())
         # print('before tanh', x.max(), x.min(),x.mean())
-
         # x = AvgL1Norm(x)
         # print('after AvgL1Norm', x.max(), x.min())
         # x = torch.tanh(x)

@@ -88,7 +88,7 @@ class Tokenizer(nn.Module):
         # L1 loss
         reconstruction_loss = torch.abs(observations - reconstructions).mean()
         # TODO: for atari pong
-        # perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
+        perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
         # TODO: NOTE only for cartpole
         perceptual_loss = torch.zeros_like(reconstruction_loss)
 
@@ -169,7 +169,7 @@ class Tokenizer(nn.Module):
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 (e)')  # (4,1,256)
         elif len(shape) == 3:
             # x shape (32,5,4)
-            x = x.view(-1, shape[-1]) # (32,5,4) -> (160, 4)
+            x = x.contiguous().view(-1, shape[-1]) # (32,5,4) -> (160, 4)
             obs_embeddings = self.representation_network(x) # (160, 4) -> (160, 256)
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 (e)')  # ()
 
@@ -198,6 +198,14 @@ class Tokenizer(nn.Module):
         # loss = nn.MSELoss()(original_images, reconstructed_images) # L1 loss
         loss = torch.abs(original_images - reconstructed_images).mean()
         return loss
+
+
+
+    def perceptual_loss(self, original_images: torch.Tensor, reconstructed_images: torch.Tensor) -> torch.Tensor:
+        # Mean Squared Error (MSE) is commonly used as a reconstruction loss
+        perceptual_loss = torch.mean(self.lpips(original_images, reconstructed_images))
+        return perceptual_loss
+
 
 
     def decode(self, z_q: torch.Tensor, should_postprocess: bool = False) -> torch.Tensor:
