@@ -511,12 +511,13 @@ class MuZeroCollector(ISerialCollector):
 
                     eps_steps_lst[env_id] += 1
 
-                    if eps_steps_lst[env_id] % 200 == 0:
-                        self._policy.get_attribute('collect_model').world_model.past_keys_values_cache.clear()
-                        # self._policy._learn_model.world_model.past_keys_values_cache.clear() # very important
-                        # del self._policy.get_attribute('collect_model').world_model.keys_values_wm
-                        torch.cuda.empty_cache() # TODO: NOTE
-                        print('torch.cuda.empty_cache()')
+                    # if eps_steps_lst[env_id] % 200 == 0:
+                    #     self._policy.get_attribute('collect_model').world_model.past_keys_values_cache.clear()
+                    #     # self._policy._learn_model.world_model.past_keys_values_cache.clear() # very important
+                    #     # del self._policy.get_attribute('collect_model').world_model.keys_values_wm
+                    #     torch.cuda.empty_cache() # TODO: NOTE
+                    #     print('collect collect_model past_keys_values_cache.clear()')
+
                     # print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
 
                     total_transitions += 1

@@ -408,6 +408,22 @@ class WorldModel(nn.Module):
             self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
             # print('init inference: not find matched_value! reset!')
             outputs_wm = self.forward({'obs_embeddings': obs_tokens}, past_keys_values=self.keys_values_wm, is_root=False)  # Note: is_root=False
+        # elif n > self.env_num and n != int(256) and buffer_action is not None: 
+        #     # transformer只能unroll 5步
+        #     # TODO: n=256 means train tokenizer
+        #     # TODO: for n=32*6=192 means 通过unroll 5 steps，计算target value 
+        #     # [192, 16, 64] -> [32, 6, 16, 64]
+        #     obs_tokens = obs_tokens.contiguous().view(buffer_action.shape[0], -1, num_observations_tokens, self.obs_per_embdding_dim) # (BL, K) for unroll_step=1
+        #     buffer_action = torch.from_numpy(buffer_action).to(obs_tokens.device)
+        #     act_tokens = rearrange(buffer_action, 'b l -> b l 1')
+        #     # 将5步动作的最后一步，重复一次，以拼接为6步的动作
+        #     act_tokens = torch.cat((act_tokens, act_tokens[:, -1:, :]), dim=1)
+        #     obs_embeddings = obs_tokens
+        #     outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, is_root=False)
+        #     # Reshape your tensors
+        #     #  outputs_wm.logits_value.shape (30,21) = (B*6, 21)
+        #     outputs_wm.logits_value = rearrange(outputs_wm.logits_value, 'b t e -> (b t) e')
+        #     outputs_wm.logits_policy = rearrange(outputs_wm.logits_policy, 'b t e -> (b t) e')
         elif n > self.env_num and n != int(256) and buffer_action is not None: 
             # TODO: n=256 means train tokenizer
             # TODO: for n=32*6=192 means 通过unroll 5 steps，计算target value 
@@ -427,25 +443,26 @@ class WorldModel(nn.Module):
             act_tokens = rearrange(buffer_action, 'b l -> b l 1')
 
             # # 选择每个样本的最后一步
-            # last_steps = act_tokens[:, -1:, :]  # 这将选择最后一列并保持维度不变
-            # # 使用torch.cat在第二个维度上连接原始act_tokens和last_steps
-            # act_tokens = torch.cat((act_tokens, last_steps), dim=1)
+            last_steps = act_tokens[:, -1:, :]  # 这将选择最后一列并保持维度不变, 最后一步的target policy/value本身就没有用到
+            # 使用torch.cat在第二个维度上连接原始act_tokens和last_steps
+            act_tokens = torch.cat((act_tokens, last_steps), dim=1)
 
             # print('init inference: unroll 5 steps!')  17*6=102  17*5=85
             obs_embeddings = obs_tokens
             outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, is_root=False)
 
-
-            # outputs_wm = self.forward(tokens, is_root=False)  # Note: is_root=False
-
             # 选择每个样本的最后一步
-            last_steps = outputs_wm.logits_value[:, -1:, :]  # 这将选择最后一列并保持维度不变
+            last_steps_value = outputs_wm.logits_value[:, -1:, :]  # 这将选择最后一列并保持维度不变
             # 使用torch.cat在第二个维度上连接原始act_tokens和last_steps
-            outputs_wm.logits_value = torch.cat((outputs_wm.logits_value, last_steps), dim=1)
+            outputs_wm.logits_value = torch.cat((outputs_wm.logits_value, last_steps_value), dim=1)
+
+            last_steps_policy = outputs_wm.logits_policy[:, -1:, :]  # 这将选择最后一列并保持维度不变
+            outputs_wm.logits_policy = torch.cat((outputs_wm.logits_policy, last_steps_policy), dim=1)
 
             # Reshape your tensors
             #  outputs_wm.logits_value.shape (30,21) = (B*6, 21)
             outputs_wm.logits_value = rearrange(outputs_wm.logits_value, 'b t e -> (b t) e')
+            outputs_wm.logits_policy = rearrange(outputs_wm.logits_policy, 'b t e -> (b t) e')
 
 
         # return WorldModelOutput(x, logits_observations, logits_rewards, logits_ends, logits_policy, logits_value)
@@ -707,14 +724,14 @@ class WorldModel(nn.Module):
 
         # Assume that 'cont_embeddings' and 'original_images' are available from prior code
         # Decode the embeddings to reconstruct the images
-        # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
-        # # Calculate the reconstruction loss
-        # # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # TODO: for stack=4
-        # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # TODO: for stack=1
-        # perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # TODO: for stack=1
+        reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+        # Calculate the reconstruction loss
+        # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # TODO: for stack=4
+        latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # TODO: for stack=1
+        perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # TODO: for stack=1
         
-        latent_recon_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)
-        perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)
+        # latent_recon_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)
+        # perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)
 
         latent_kl_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)
 

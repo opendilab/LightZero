@@ -39,6 +39,7 @@ model_update_ratio = 0.25
 num_simulations = 1
 max_env_step = int(1e6)
 reanalyze_ratio = 0
+reanalyze_ratio = 1
 
 batch_size = 32 # for num_head=2, emmbding_dim=128
 # batch_size = 8  # for num_head=4, emmbding_dim=256

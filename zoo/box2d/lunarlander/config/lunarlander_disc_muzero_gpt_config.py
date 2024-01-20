@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(2)
+torch.cuda.set_device(6)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -14,8 +14,8 @@ num_simulations = 50
 reanalyze_ratio = 0.
 
 update_per_collect = None
-model_update_ratio = 1
-# model_update_ratio = 0.5
+# model_update_ratio = 1
+model_update_ratio = 0.5
 
 max_env_step = int(1e6)
 reanalyze_ratio = 0
@@ -26,7 +26,7 @@ num_unroll_steps = 5
 # ==============================================================
 
 lunarlander_muzero_config = dict(
-    exp_name=f'data_mz_gpt_ctree_0119_state-obs/lunarlander_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd256_lr1e-4-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_latenttarget100_seed0',
+    exp_name=f'data_mz_gpt_ctree_0119_state-obs/lunarlander_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd256_lr1e-4-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_latent-softarget_mantrans_seed0',
     # exp_name=f'data_mz_gpt_ctree_0105/lunarlander_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_rep-noavgl1norm-klloss0-noseclatstd01_seed0',
     # exp_name=f'data_mz_gpt_ctree_0119_state-obs/lunarlander_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_rep-noavgl1norm-klloss0-noseclatstd01_susc300_seed0',
     env=dict(

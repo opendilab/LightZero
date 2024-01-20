@@ -75,7 +75,7 @@ class MuZeroGameBufferGPT(GameBuffer):
             reward_value_context, policy._target_model, current_batch[1] # current_batch[1] is action_batch
         )
         # target policy
-        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
+        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1])
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
             policy_non_re_context, self._cfg.model.action_space_size
         )
@@ -507,7 +507,7 @@ class MuZeroGameBufferGPT(GameBuffer):
         batch_target_values = np.asarray(batch_target_values, dtype=object)
         return batch_rewards, batch_target_values
 
-    def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any) -> np.ndarray:
+    def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any, action_batch) -> np.ndarray:
         """
         Overview:
             prepare policy targets from the reanalyzed context of policies
@@ -546,28 +546,38 @@ class MuZeroGameBufferGPT(GameBuffer):
         with torch.no_grad():
             policy_obs_list = prepare_observation(policy_obs_list, self._cfg.model.model_type)
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
-            slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
-            network_output = []
-            for i in range(slices):
-                beg_index = self._cfg.mini_infer_size * i
-                end_index = self._cfg.mini_infer_size * (i + 1)
-                m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device).float()
-                m_output = model.initial_inference(m_obs)
-                if not model.training:
-                    # if not in training, obtain the scalars of the value/reward
-                    [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                        [
-                            m_output.latent_state,
-                            inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
-                            m_output.policy_logits
-                        ]
-                    )
+            # slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
+            # network_output = []
+            # for i in range(slices):
+            #     beg_index = self._cfg.mini_infer_size * i
+            #     end_index = self._cfg.mini_infer_size * (i + 1)
+            #     m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device).float()
 
-                network_output.append(m_output)
+            #     m_output = model.initial_inference(m_obs)
+
+            network_output = []
+            m_obs = torch.from_numpy(policy_obs_list).to(self._cfg.device).float()
+            # calculate the target value
+            # action_batch.shape (32, 10)
+            # m_obs.shape torch.Size([352, 3, 64, 64])
+            # m_obs.shape torch.Size([352, 4])  32*11
+            m_output = model.initial_inference(m_obs, action_batch)
+
+            if not model.training:
+                # if not in training, obtain the scalars of the value/reward
+                [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                    [
+                        m_output.latent_state,
+                        inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                        m_output.policy_logits
+                    ]
+                )
+
+            network_output.append(m_output)
 
             _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(network_output, data_type='muzero')
             reward_pool = reward_pool.squeeze().tolist()
-            policy_logits_pool = policy_logits_pool.tolist()
+            policy_logits_pool = policy_logits_pool.tolist() 
             noises = [
                 np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
                                     ).astype(np.float32).tolist() for _ in range(transition_batch_size)
@@ -588,16 +598,19 @@ class MuZeroGameBufferGPT(GameBuffer):
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
             policy_index = 0
-            for state_index, game_index in zip(pos_in_game_segment_list, batch_index_list):
+            # very important: use latest MCTS visit count distribution
+            for state_index, child_visit, game_index in zip(pos_in_game_segment_list, child_visits, batch_index_list):
                 target_policies = []
-
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     distributions = roots_distributions[policy_index]
-
                     if policy_mask[policy_index] == 0:
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
                         target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
                     else:
+                        # very important: use latest MCTS visit count distribution
+                        # if current_index < len(child_visit):
+                        child_visit[current_index] = distributions
+
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
                             target_policies.append(

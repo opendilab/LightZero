@@ -179,6 +179,7 @@ class AtariLightZeroEnv(BaseEnv):
         evaluator_env_num = cfg.pop('evaluator_env_num')
         cfg = copy.deepcopy(cfg)
         cfg.max_episode_steps = cfg.eval_max_episode_steps
-        cfg.episode_life = False
+        # cfg.episode_life = False
+        cfg.episode_life = True
         cfg.clip_rewards = False
         return [cfg for _ in range(evaluator_env_num)]

@@ -53,6 +53,10 @@ cfg['world_model'] = {
                       'max_blocks': 5,
                       "max_tokens": 2 * 5,  # TODO： horizon
 
+                      # 'tokens_per_block': 2,
+                      # 'max_blocks': 6,
+                      # "max_tokens": 2 * 6,  # TODO： horizon
+
                       # 'embed_dim':512, # TODO：for atari
                       'embed_dim':1024, # TODO：for atari
                       # 'embed_dim':256, # TODO：for atari
@@ -75,9 +79,10 @@ cfg['world_model'] = {
                       # 'support_size': 21,
                       'support_size': 601,
 
-                      'action_shape': 6,# TODO：for pong, qbert spaceinvaders
+                      # 'action_shape': 18,# TODO：for Seaquest boxing
                       # 'action_shape': 9,# TODO：for mspacman
                       # 'action_shape': 4,# TODO：for breakout
+                      'action_shape': 6,# TODO：for pong qbert 
 
 
                       'max_cache_size':500,

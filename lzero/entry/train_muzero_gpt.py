@@ -216,10 +216,15 @@ def train_muzero_gpt(
             # TODO：transformer tokenizer交替更新
             # Learn policy from collected data.
             # for i in range(cfg.policy.update_per_collect_transformer):
-            for _ in range(update_per_collect):
+            for i in range(update_per_collect):
                 # Learner will train ``update_per_collect`` times in one iteration.
                 if replay_buffer.get_num_of_transitions() > batch_size:
                     train_data = replay_buffer.sample(batch_size, policy)
+                    # if i % 2 == 0: # for reanalyze_ratio>0
+                    policy._target_model.world_model.past_keys_values_cache.clear()
+                    torch.cuda.empty_cache() # TODO: NOTE
+                    print('sample target_model past_keys_values_cache.clear()')
+
                     train_data.append({'train_which_component':'transformer'})
                 else:
                     logging.warning(
@@ -232,8 +237,7 @@ def train_muzero_gpt(
                 # The core train steps for MCTS+RL algorithms.
                 log_vars = learner.train(train_data, collector.envstep)
                 # if learner.train_iter % 20000 ==0:  # replay_ratio=16 40000; replay_ratio=8 20000; replay_ratio=4 10000; replay_ratio=2 5000; replay_ratio=1 2500
-                # if learner.train_iter % 2500 ==0:
-                # if learner.train_iter % 5000 ==0: # replay_ratio=2
+                # if learner.train_iter % 2500 ==0: # replay_ratio=1
                 #     nn.init.zeros_(policy._learn_model.world_model.head_value.head_module[-1].weight)
                 #     nn.init.zeros_(policy._learn_model.world_model.head_value.head_module[-1].bias)
                 #     nn.init.zeros_(policy._learn_model.world_model.head_policy.head_module[-1].weight)
@@ -255,10 +259,8 @@ def train_muzero_gpt(
         # TODO: for batch world model ,to improve kv reuse, we could donot reset
         policy._learn_model.world_model.past_keys_values_cache.clear() # very important
         del policy._learn_model.world_model.keys_values_wm
-
         policy._collect_model.world_model.past_keys_values_cache.clear() # very important
         # del policy._collect_model.world_model.keys_values_wm
-
         torch.cuda.empty_cache() # TODO: NOTE
 
         # if collector.envstep > 0:

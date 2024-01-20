@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(5)
+torch.cuda.set_device(0)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
 
@@ -20,13 +20,13 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 1
+evaluator_env_num = 3
 num_simulations = 50
 
-update_per_collect = 1000
+# update_per_collect = 1000
 
 update_per_collect = None
-model_update_ratio = 0.05
+model_update_ratio = 0.25
 # model_update_ratio = 1
 
 
@@ -36,7 +36,7 @@ model_update_ratio = 0.05
 
 batch_size = 256
 max_env_step = int(1e6)
-reanalyze_ratio = 0.
+reanalyze_ratio = 0.5
 # reanalyze_ratio = 1
 
 eps_greedy_exploration_in_collect = False
@@ -46,9 +46,9 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     # mcts_ctree, muzero_collector: empty_cache
-    # exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_46464_train-per-collect-one-segment_tep025_gsl50_noprio_target200_start2000_sgd-1e-4_wd1e-4_seed0',
+    # exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl50_noprio_target100_start2000_adamw1e-4_wd1e-4_seed0',
 
-    exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_46464_train-per-collect-one-segment_tep025_gsl50_noprio_target200_start2000_adamw1e-4_wd1e-4_seed0',
+    exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_train-per-collect-one-segment_tep025_gsl50_noprio_target100_start2000_adamw1e-4_wd1e-4_seed0',
 
     # exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_46464_train-per-collect-one-segment_temdecy-50k_seed0',
     # exp_name=f'data_mz_ctree_debug/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_46464_collect-orig_seed0',
@@ -119,7 +119,7 @@ atari_muzero_config = dict(
 
         # manual_temperature_decay=True,
         # threshold_training_steps_for_final_temperature=int(5e4),
-        target_update_freq=200,
+        target_update_freq=100,
         use_priority=False,
 
 

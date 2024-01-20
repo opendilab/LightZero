@@ -6,8 +6,11 @@ torch.cuda.set_device(7)
 env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
 # env_name = 'BreakoutNoFrameskip-v4'
+# env_name = 'QbertNoFrameskip-v4'
+# env_name = 'SeaquestNoFrameskip-v4'
+# env_name = 'BoxingNoFrameskip-v4'
 
-# env_name = 'SpaceInvadersNoFrameskip-v4'
+
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -19,13 +22,19 @@ elif env_name == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
 elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
+elif env_name == 'SeaquestNoFrameskip-v4':
+    action_space_size = 18
+elif env_name == 'BoxingNoFrameskip-v4':
+    action_space_size = 18
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 1
+evaluator_env_num = 2
+# evaluator_env_num = 1
+
 
 
 # collector_env_num = 2
@@ -37,8 +46,10 @@ evaluator_env_num = 1
 
 update_per_collect = None
 # update_per_collect = 1000
-model_update_ratio = 2
-# model_update_ratio = 0.25 # for pong
+
+# model_update_ratio = 1 # for qbet squest
+model_update_ratio = 0.25 # for pong boxing
+
 
 num_simulations = 50
 # num_simulations = 25
@@ -46,7 +57,9 @@ num_simulations = 50
 # TODO: debug
 # num_simulations = 1
 max_env_step = int(3e6)
-reanalyze_ratio = 0
+reanalyze_ratio = 0.5
+# reanalyze_ratio = 1
+
 
 batch_size = 64
 num_unroll_steps = 5
@@ -73,8 +86,11 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     # TODO: muzero_gpt_model.py world_model.py (3,64,64)
+    # exp_name=f'data_mz_gpt_ctree_0121_k1/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_scale300_latent-softarget_mantran_seed0',
 
-    exp_name=f'data_mz_gpt_ctree_0119_k1/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_scale300_latent-softarget_reset-pv-last_seed0',
+    exp_name=f'data_mz_gpt_ctree_0121_k1/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_scale300_latent-softarget_pttran_seed0',
+
+    # exp_name=f'data_mz_gpt_ctree_0119_k1/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_scale300_latent-softarget_reset-pv-last_seed0',
 
     # exp_name=f'data_mz_gpt_ctree_0113/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024_lr1e-4-gcv05-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_evalsample_seed0',
     # exp_name=f'data_mz_gpt_ctree_0113/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024_lr1e-4-gcv05-biasfalse-reconslossw01-minmax-jointtrain_stack4_mcs500_emptycache-per200-del-tocpu-envnum{collector_env_num}_maxtokendel_collectper200-clear_seed0',
@@ -201,6 +217,7 @@ atari_muzero_config = dict(
         ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
         eval_freq=int(5e3),
+        # eval_freq=int(1e5),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
