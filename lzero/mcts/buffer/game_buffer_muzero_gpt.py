@@ -162,6 +162,7 @@ class MuZeroGameBufferGPT(GameBuffer):
         0: reanalyze_num -> reanalyzed policy, reanalyze_num:end -> non reanalyzed policy
         """
         reanalyze_num = int(batch_size * reanalyze_ratio)
+        self.reanalyze_num = reanalyze_num
         # reanalyzed policy
         if reanalyze_num > 0:
             # obtain the context of reanalyzed policy targets
@@ -561,7 +562,7 @@ class MuZeroGameBufferGPT(GameBuffer):
             # action_batch.shape (32, 10)
             # m_obs.shape torch.Size([352, 3, 64, 64])
             # m_obs.shape torch.Size([352, 4])  32*11
-            m_output = model.initial_inference(m_obs, action_batch)
+            m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
 
             if not model.training:
                 # if not in training, obtain the scalars of the value/reward
