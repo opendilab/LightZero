@@ -182,4 +182,4 @@ If anyone is able to take a look, please follow the install instructions above. 
 
 I also think a future direction could be including pooltool as a supported environment for LightZero. It represents a continuous action space with scalable complexity (all the way from sum to three to advanced planning required for 8-ball and 9-ball pool). If anyone has suggestions for making this happen, I am very interested in collaborating.
 
-Thanks for reading and looking forward to any discussions this sparks. To comment, visit the discussion page: 
+Thanks for reading and looking forward to any discussions this sparks. To comment, visit the discussion page: https://github.com/opendilab/LightZero/discussions/182
