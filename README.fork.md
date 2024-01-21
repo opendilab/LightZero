@@ -146,9 +146,9 @@ I created 5 feature planes, each 100 x 50 pixels which are the relative dimensio
 
 Here is an example:
 
-<img src="assets/pooltool/features_planes.png" width="600" />
+<img src="assets/pooltool/feature_planes.png" width="600" />
 
-The code relevant that creates these feature planes can be found at `./zoo/pooltool/image_representation.py`. If you run this file, you can produce the above plot for several frames.
+The code relevant that creates these feature planes can be found at `./zoo/pooltool/image_representation.py`. If you run this file, you can produce the above plot for several frames to see exactly how the above plot is produced.
 
 The environment for this observation space can be found in `./zoo/pooltool/sum_to_three/envs/sum_to_three_image_env.py` and the config can be found in `./zoo/pooltool/sum_to_three/config/sum_to_three_image_config.py`.
 
