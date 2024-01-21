@@ -118,11 +118,23 @@ You can run the experiment like so:
 python ./zoo/pooltool/sum_to_three/config/sum_to_three_config.py
 ```
 
-The results end up in `data_pooltool_ctree/`
+## Results
+
+The results end up in `./data_pooltool_ctree/`.
+
+Here are the trajectories for the 3 experiments I ran longest:
+
+<img src="assets/pooltool/cts.png" width="600" />
+
+Here are the same trajectories zoomed into the first 10k iterations:
+
+<img src="assets/pooltool/cts_zoom.png" width="600" />
+
+Unfortunately, the agent doesn't converge to perfect play.
 
 # Experiment 2: discrete (image) observation space
 
-The continuous observation space works OK for a simple game like sum to three, but it will probably suffer for real billiards games with multiple balls and obstacles. So as a second experiment, I created a discrete observation space with several feature planes.
+The continuous observation space will not work for real billiards games with multiple balls and obstacles. So as a second experiment, I created a discrete observation space with several feature planes.
 
 I created 5 feature planes, each 100 x 50 pixels which are the relative dimensions of the table:
 
@@ -136,3 +148,38 @@ Here is an example:
 
 <img src="assets/pooltool/features_planes.png" width="600" />
 
+The code relevant that creates these feature planes can be found at `./zoo/pooltool/image_representation.py`. If you run this file, you can produce the above plot for several frames.
+
+The environment for this observation space can be found in `./zoo/pooltool/sum_to_three/envs/sum_to_three_image_env.py` and the config can be found in `./zoo/pooltool/sum_to_three/config/sum_to_three_image_config.py`.
+
+You can run the experiment like so:
+
+```bash
+python ./zoo/pooltool/sum_to_three/config/sum_to_three_image_config.py
+```
+
+## Results
+
+The results end up in `./data_pooltool_ctree/`.
+
+Despite my best efforts, I am unable to observe any learning using this observation space. Here are the results of the longest experiment I attempted:
+
+<img src="assets/pooltool/discrete.png" width="600" />
+
+
+# Summary and Future Direction
+
+Currently `zoo/pooltool` contains unit-tested modules for discrete (image-based) and continuous (coordinate-based) pool experiments for the "hello world" game I made called sum to three.
+
+But there are problems:
+
+1. The continuous environment learns something, but does not converge
+1. The discrete environment doesn't learn anything
+
+I think to proceed I need the help of experts to look at the config and environment for each experiment type.
+
+If anyone is able to take a look, please follow the install instructions above. I purposefully created a fork that does not touch any of the upstream code. The only modifications I made were the addition of `zoo/pooltool`, so it is a faithful clone of the main repo.
+
+I also think a future direction could be including pooltool as a supported environment for LightZero. It represents a continuous action space with scalable complexity (all the way from sum to three to advanced planning required for 8-ball and 9-ball pool). If anyone has suggestions for making this happen, I am very interested in collaborating.
+
+Thanks for reading and looking forward to any discussions this sparks. To comment, visit the discussion page: 
